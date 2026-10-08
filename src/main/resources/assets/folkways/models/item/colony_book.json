@@ -1,0 +1,8 @@
+{
+  "__comment": "殖民地之书 (指着那一档), 并按 folkways:mode 切到画盒子、画点列那两档的那本。该谓词读 Shape.Gesture —— 指着 0、盒子 1、点列 2, 由 FolkwaysClientRegistry 注册。",
+  "parent": "folkways:item/colony_book_shape",
+  "overrides": [
+    { "predicate": { "folkways:mode": 1 }, "model": "folkways:item/colony_book_zone" },
+    { "predicate": { "folkways:mode": 2 }, "model": "folkways:item/colony_book_line" }
+  ]
+}

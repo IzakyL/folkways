@@ -1,0 +1,25 @@
+{
+  "//": "Typecheck-only config for the promo takes. Same reason as tests/tsconfig.e2e.json: Playwright transpiles without checking, so a wrong argument count only shows up after booting Minecraft — here after staging an entire settlement. Includes tests/e2e/ and tests/visual/ because the takes reuse the e2e fixtures and the visual suite's VisualRun.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": [
+      "node"
+    ],
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "promo.config.ts",
+    "out-paths.ts",
+    "promo/**/*.ts",
+    "visual/**/*.ts",
+    "e2e/**/*.ts",
+    "shared/**/*.ts"
+  ]
+}

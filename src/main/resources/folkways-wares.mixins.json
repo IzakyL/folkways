@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.plugins.wares.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "CraftingTableBlockMixin",
+    "StonecutterBlockMixin",
+    "FurnaceAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,166 @@
+[neoforge]
+minecraft_version = "1.21.1"
+loader_version = "21.1.233"
+jvm_args = ["-Xmx2G"]
+
+[neoforge.server]
+eula = true
+world = "flat"
+properties = { "online-mode" = "false", "level-seed" = "folkways-e2e", "allow-flight" = "true" }
+
+[neoforge.client]
+connect = "127.0.0.1:25565"
+options = { guiScale = "1", fullscreen = "false", overrideWidth = "1280", overrideHeight = "720" }
+
+[mods.folkways]
+path = "build/libs/folkways-*.jar"
+
+[mods.ldlib2]
+path = "build/deps/ldlib2-*.jar"
+
+# The fixture mods every test instance runs (Modrinth downloads); client-only ones stay off the server.
+[mods.create]
+url = "https://cdn.modrinth.com/data/LNytGWDc/versions/UjX6dr61/create-1.21.1-6.0.10.jar"
+sha512 = "11cc8fc049d2f67f6548c7abfada6b82a3adb5c7ca410a742de04bbca76e03862c518721b88d806f6e6d768a4d68531fdb903a85859b25d1484d550cc7bafd4b"
+
+[mods.emi]
+url = "https://cdn.modrinth.com/data/fRiHVvU7/versions/5sIPA1To/emi-1.1.24%2B1.21.1%2Bneoforge.jar"
+sha512 = "f4c45ed686fe617311d6debadcb6ace5963e66f8cfe0cfed398231f081f87407070efc7a73c8b695d158f1d87a97180737b9107a46771e77df2bc9a7dc715ebd"
+
+[mods.geckolib]
+url = "https://cdn.modrinth.com/data/8BmcQJ2H/versions/tPkJmim6/geckolib-neoforge-1.21.1-4.9.2.jar"
+sha512 = "c91012b16cc40c8f48f69b78cb8e2e5c006486ae2431fbd289dfc01be7a4217294becea22d83a155d6b32b3969450df871352a3695e1452168b84f41355f7b9e"
+target = ["client"]
+
+[mods.jei]
+url = "https://cdn.modrinth.com/data/u6dRKJwZ/versions/zHNxmOqp/jei-1.21.1-neoforge-19.39.0.372.jar"
+sha512 = "27ce1556b304ecfa828f1440b6142d0672f285c860436182328e9dd3e7f8011d0f962109553a59b1944494af70f784b9b16ce626fd011cc9ee54cda39650a0f5"
+target = ["client"]
+
+[mods.modulargolems]
+url = "https://cdn.modrinth.com/data/gtGDlsAD/versions/zNXsPDeF/modulargolems-3.1.43.jar"
+sha512 = "7ef533432d5ec91441e449cfadbd78b0e470c90a690c28e1e2cf3ce0de7374bef0a7e44ffcb399752bbef06b8dfa287ea5080e2f14c10ea2a120a493dc4af0d9"
+
+[mods.l2library]
+url = "https://cdn.modrinth.com/data/4Vh3BQ3F/versions/640EOvKh/l2library-3.0.8.jar"
+sha512 = "fcae5931448a60ec2fedca5b04a6e9b489090b1b4b251be8aae216fbda4add9155bb6b1045c7171ef7c99cad979c4e88ed0acfa9ea10ac7fe4452d81f1a861cf"
+
+[mods.xaeroworldmap]
+url = "https://cdn.modrinth.com/data/NcUtCpym/versions/fOv9QzLO/xaeroworldmap-neoforge-1.21.1-1.45.0.jar"
+sha512 = "57a3175d91c237682b65e1b9df78be23ad8cd03f1c8ca074fc61e1672d280df8fa7335c88a173b46b1e17834af621e5121b80ac0d12cd7c9aba3e3ceb367d1eb"
+target = ["client"]
+
+# Built against by gradle (compileOnly); installed only where a profile targets them.
+[mods.l2core]
+from = "l2library"
+entry = "META-INF/jarjar/l2core-*.jar"
+target = []
+
+[mods.l2serial]
+from = "l2library"
+entry = "META-INF/jarjar/l2serial-*.jar"
+target = []
+
+[mods.sable]
+url = "https://cdn.modrinth.com/data/T9PomCSv/versions/fg9dTRz9/sable-neoforge-1.21.1-2.0.6.jar"
+sha512 = "76d293ce751a01cb9c095a3659b0a41e03e005480bc9d76dfdc73ec7c2eabf7923740c7b077921d42616673c496cd5143569f2085ddcebe174fd91d81e2a04b8"
+target = []
+
+[mods.sable-companion]
+from = "sable"
+entry = "META-INF/jarjar/sable-companion-*.jar"
+target = []
+
+[mods.create-aeronautics]
+url = "https://cdn.modrinth.com/data/oWaK0Q19/versions/44pLdPGg/create-aeronautics-bundled-1.21.1-1.3.2.jar"
+sha512 = "dc7e8e1148fa442243889ba29412207137e1bb86206e6c92bc0a589f1374a466e93de22bdbf14f753984d86c29308fbbdc0f14a4b9618b14c0ac1666a36b46f5"
+target = []
+
+# Sable 2.x's Veil requires Sodium >=0.8.12-alpha.2; keep Iris on its Sodium 0.8-compatible line.
+[mods.sodium]
+url = "https://cdn.modrinth.com/data/AANobbMI/versions/uMOpc5uV/sodium-neoforge-0.8.13%2Bmc1.21.1.jar"
+sha512 = "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390"
+target = []
+
+# 1.8.14-beta.1 is the NeoForge 1.21.1 release supporting Sodium 0.8.
+[mods.iris]
+url = "https://cdn.modrinth.com/data/YL57xq9U/versions/KduFYu4t/iris-neoforge-1.8.14-beta.1%2Bmc1.21.1.jar"
+sha512 = "33fddb430e16222902eac75b8b3d57c381b0f3cc729f3b56c4628df12ca108f23a0b11e2feb167923d6d14d1fc7e8ee1a977ec421b19d1951bdca74c4092b9c5"
+target = []
+
+[mods.shaderpack]
+url = "https://cdn.modrinth.com/data/HVnmMxH1/versions/yCCduG44/ComplementaryReimagined_r5.8.1.zip"
+sha512 = "6bd95215755d25812556ce790d976221f7d677d63112e3e4d3e70b08a62ed41348fa3792dd31bbe720d1e46fe2d525cadb4f66e6358118e1f4aa8e0d11f25c39"
+target = []
+
+# Measures folkways itself, mixins included; off unless BLOCKWRIGHT_COVERAGE=1 (npm run test:coverage).
+[coverage]
+mods = ["folkways"]
+sources = ["src/main/java"]
+
+[profile.bench.neoforge]
+jvm_args = ["-Xmx3G"]
+
+[profile.bench.neoforge.server]
+world = "vanilla"
+properties = { "level-seed" = "folkways-bench", "generate-structures" = "false", "max-tick-time" = "-1", "view-distance" = "20", "entity-broadcast-range-percentage" = "300" }
+
+[profile.bench.neoforge.client]
+options = { overrideWidth = "1920", overrideHeight = "1080", renderDistance = "24", entityDistanceScaling = "5.0", fov = "0.0", particles = "1" }
+
+[profile.promo.neoforge]
+jvm_args = ["-Xmx3G"]
+
+[profile.promo.neoforge.server]
+world = "vanilla"
+properties = { "level-seed" = "folkways-promo", "view-distance" = "12", "level-type" = "minecraft:flat", "generator-settings" = '{"biome":"minecraft:plains","features":false,"lakes":false,"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":3},{"block":"minecraft:grass_block","height":1}],"structure_overrides":[]}' }
+
+[profile.promo.neoforge.client]
+game_args = ["--width", "1920", "--height", "1080"]
+options = { guiScale = "2", overrideWidth = "1920", overrideHeight = "1080", maxFps = "260", renderDistance = "12", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "4.0", biomeBlendRadius = "3", ao = "true", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", fovEffectScale = "0.0", soundCategory_music = "0.0", soundCategory_record = "0.0", soundCategory_ambient = "0.0" }
+
+[profile.promo.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+[profile.promo.mods]
+sodium = { target = ["client"] }
+iris = { target = ["client"] }
+sable = { target = ["server", "client"] }
+create-aeronautics = { target = ["server", "client"] }
+
+# The promo profile over generated terrain, for shots that fly above the landscape.
+[profile.promo-sky.neoforge]
+jvm_args = ["-Xmx3G"]
+
+[profile.promo-sky.neoforge.server]
+world = "vanilla"
+properties = { "level-seed" = "folkways-promo", "view-distance" = "12" }
+
+[profile.promo-sky.neoforge.client]
+game_args = ["--width", "1920", "--height", "1080"]
+options = { guiScale = "2", overrideWidth = "1920", overrideHeight = "1080", maxFps = "260", renderDistance = "12", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "4.0", biomeBlendRadius = "3", ao = "true", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", fovEffectScale = "0.0", soundCategory_music = "0.0", soundCategory_record = "0.0", soundCategory_ambient = "0.0" }
+
+[profile.promo-sky.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+[profile.promo-sky.mods]
+sodium = { target = ["client"] }
+iris = { target = ["client"] }
+sable = { target = ["server", "client"] }
+create-aeronautics = { target = ["server", "client"] }
+
+# The fuzzers (tests/fuzz): a server alone, over an empty flat world, running the mod jar that also carries the
+# fuzzers' in-game classes (gradle fuzzJar).
+[profile.fuzz.neoforge]
+jvm_args = ["-Xmx3G"]
+
+[profile.fuzz.neoforge.server]
+world = "vanilla"
+properties = { "level-seed" = "folkways-fuzz", "generate-structures" = "false", "spawn-monsters" = "false", "spawn-animals" = "false", "spawn-npcs" = "false", "max-tick-time" = "-1", "view-distance" = "4", "level-type" = "minecraft:flat", "generator-settings" = '{"biome":"minecraft:plains","features":false,"lakes":false,"layers":[{"block":"minecraft:bedrock","height":1}],"structure_overrides":[]}' }
+
+[profile.fuzz.mods.folkways]
+path = "build/fuzz/folkways-*.jar"

@@ -1,0 +1,7 @@
+{
+  "__comment": "殖民地之书 (盒子那一档): 与另外两本同一副形状、同一张书皮, 只换摊开那页的贴图 —— 页上是圈出来的一片地。",
+  "parent": "folkways:item/colony_book_shape",
+  "textures": {
+    "page": "folkways:item/colony_book_page_zone"
+  }
+}

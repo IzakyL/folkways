@@ -1,0 +1,17 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.plugins.rail.domain.mixin",
+  "plugin": "io.github.izakyl.folkways.plugins.rail.domain.mixin.RailMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AbstractContraptionEntityMixin",
+    "TrainMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "client": [
+    "TrainMapManagerMixin"
+  ]
+}

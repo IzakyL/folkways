@@ -1,0 +1,7 @@
+{
+  "__comment": "殖民地之书 (点列那一档): 与另外两本同一副形状、同一张书皮, 只换摊开那页的贴图 —— 页上是点过的几个点, 与穿过它们的那条线。",
+  "parent": "folkways:item/colony_book_shape",
+  "textures": {
+    "page": "folkways:item/colony_book_symbol_line"
+  }
+}

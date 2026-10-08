@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.core.shell.mixin",
+  "plugin": "io.github.izakyl.folkways.core.shell.mixin.CoreMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "SableAssemblyMixin",
+    "LevelMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

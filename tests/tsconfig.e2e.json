@@ -1,0 +1,23 @@
+{
+  "//": "Typecheck-only config for the e2e specs. Playwright transpiles without checking types, so a broken import or a wrong argument count otherwise only shows up after booting Minecraft.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": [
+      "node"
+    ],
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "blockwright.config.ts",
+    "out-paths.ts",
+    "e2e/**/*.ts",
+    "shared/**/*.ts"
+  ]
+}

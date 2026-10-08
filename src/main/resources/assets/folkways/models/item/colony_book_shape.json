@@ -1,0 +1,119 @@
+{
+  "__comment": "殖民地之书的形状: 原生 JSON cuboid 摊开书模型 (无 loader 依赖)。指着、盒子、点列三档共用 #book 这张书皮, 各有一个薄 child 只覆写 #page —— 摊开那页上画的东西。V 形张开: 书脊居中偏低, 左右书页向外上翘, 书脊尾端垂一条金色书签。书皮一个贴图像素对一个模型像素; 三张书页贴图也是 16x16, 一页只摊开约两个贴图像素对一个模型像素 —— 比书皮细一档, 刚够画出箭头、方框角与折线, 又不至于细到与整本书的像素颗粒不搭; 页上的图都是无抗锯齿的平涂。右半的封面与书页在 u 上镜像, 于是装订线落在贴着书脊的那一侧。display 只写右手: 左手缺省沿用右手那组, ItemTransform 自会把 y、z 旋转与 x 平移取反成镜像; 若另写一份手动取反过的左手, 会被再翻一次, 书就拧反了。",
+  "textures": {
+    "book": "folkways:item/colony_book",
+    "page": "folkways:item/colony_book_page_member",
+    "particle": "folkways:item/colony_book"
+  },
+  "elements": [
+    {
+      "__comment": "左书封, 沿书脊向外上翘 22.5 度",
+      "from": [1, 2.5, 3],
+      "to": [8, 4, 13],
+      "rotation": { "origin": [8, 3.5, 8], "axis": "z", "angle": -22.5 },
+      "faces": {
+        "up":    { "uv": [0, 0, 7, 10], "texture": "#book" },
+        "down":  { "uv": [0, 0, 7, 10], "texture": "#book" },
+        "north": { "uv": [0, 12, 7, 13], "texture": "#book" },
+        "south": { "uv": [0, 12, 7, 13], "texture": "#book" },
+        "east":  { "uv": [0, 12, 10, 13], "texture": "#book" },
+        "west":  { "uv": [0, 12, 10, 13], "texture": "#book" }
+      }
+    },
+    {
+      "__comment": "右书封, 镜像上翘",
+      "from": [8, 2.5, 3],
+      "to": [15, 4, 13],
+      "rotation": { "origin": [8, 3.5, 8], "axis": "z", "angle": 22.5 },
+      "faces": {
+        "up":    { "uv": [7, 0, 0, 10], "texture": "#book" },
+        "down":  { "uv": [7, 0, 0, 10], "texture": "#book" },
+        "north": { "uv": [0, 12, 7, 13], "texture": "#book" },
+        "south": { "uv": [0, 12, 7, 13], "texture": "#book" },
+        "east":  { "uv": [0, 12, 10, 13], "texture": "#book" },
+        "west":  { "uv": [0, 12, 10, 13], "texture": "#book" }
+      }
+    },
+    {
+      "__comment": "左书页, 叠在左书封上, 上翘同角度; 比书封小一圈, 于是皮革在四周露出来",
+      "from": [1.9, 4, 4],
+      "to": [7.3, 4.7, 12],
+      "rotation": { "origin": [8, 3.5, 8], "axis": "z", "angle": -22.5 },
+      "faces": {
+        "up":    { "uv": [0, 0, 11, 16], "texture": "#page" },
+        "down":  { "uv": [0, 0, 11, 16], "texture": "#page" },
+        "north": { "uv": [0, 13, 5, 14], "texture": "#book" },
+        "south": { "uv": [0, 13, 5, 14], "texture": "#book" },
+        "east":  { "uv": [0, 13, 8, 14], "texture": "#book" },
+        "west":  { "uv": [0, 13, 8, 14], "texture": "#book" }
+      }
+    },
+    {
+      "__comment": "右书页, 镜像",
+      "from": [8.7, 4, 4],
+      "to": [14.1, 4.7, 12],
+      "rotation": { "origin": [8, 3.5, 8], "axis": "z", "angle": 22.5 },
+      "faces": {
+        "up":    { "uv": [11, 0, 0, 16], "texture": "#page" },
+        "down":  { "uv": [11, 0, 0, 16], "texture": "#page" },
+        "north": { "uv": [0, 13, 5, 14], "texture": "#book" },
+        "south": { "uv": [0, 13, 5, 14], "texture": "#book" },
+        "east":  { "uv": [0, 13, 8, 14], "texture": "#book" },
+        "west":  { "uv": [0, 13, 8, 14], "texture": "#book" }
+      }
+    },
+    {
+      "__comment": "书脊, 居中, 不旋转, 连接左右两半",
+      "from": [7.3, 2.5, 3],
+      "to": [8.7, 4.7, 13],
+      "faces": {
+        "up":    { "uv": [7, 0, 9, 10], "texture": "#book" },
+        "down":  { "uv": [7, 0, 9, 10], "texture": "#book" },
+        "north": { "uv": [10, 10, 12, 12], "texture": "#book" },
+        "south": { "uv": [10, 10, 12, 12], "texture": "#book" },
+        "east":  { "uv": [0, 10, 10, 12], "texture": "#book" },
+        "west":  { "uv": [0, 10, 10, 12], "texture": "#book" }
+      }
+    },
+    {
+      "__comment": "书签, 从书脊尾端伸出并垂在书下",
+      "from": [7.6, 1.8, 11.5],
+      "to": [8.4, 2.5, 15.5],
+      "faces": {
+        "up":    { "uv": [0, 14, 2, 16], "texture": "#book" },
+        "down":  { "uv": [0, 14, 2, 16], "texture": "#book" },
+        "north": { "uv": [0, 14, 2, 16], "texture": "#book" },
+        "south": { "uv": [0, 14, 2, 16], "texture": "#book" },
+        "east":  { "uv": [0, 14, 2, 16], "texture": "#book" },
+        "west":  { "uv": [0, 14, 2, 16], "texture": "#book" }
+      }
+    }
+  ],
+  "display": {
+    "gui": {
+      "rotation": [30, 45, 0],
+      "translation": [0, 0, 0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    "ground": {
+      "rotation": [0, 0, 0],
+      "translation": [0, 2, 0],
+      "scale": [0.6, 0.6, 0.6]
+    },
+    "fixed": {
+      "rotation": [0, 180, 0],
+      "translation": [0, 0, 0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    "thirdperson_righthand": {
+      "rotation": [75, 0, 0],
+      "translation": [0, 3.5, 1.0],
+      "scale": [0.7, 0.7, 0.7]
+    },
+    "firstperson_righthand": {
+      "rotation": [0, -50, 0],
+      "translation": [0, 3.0, -2.5],
+      "scale": [0.75, 0.75, 0.75]
+    }
+  }
+}

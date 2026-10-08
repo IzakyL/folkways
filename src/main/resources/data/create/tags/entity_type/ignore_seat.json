@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "folkways:resident",
+      "required": false
+    }
+  ]
+}

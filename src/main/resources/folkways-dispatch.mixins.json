@@ -1,0 +1,9 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.plugins.dispatch.mixin",
+  "plugin": "io.github.izakyl.folkways.plugins.dispatch.mixin.DispatchMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["PackagePortBlockEntityMixin", "StockTickerBlockEntityMixin"],
+  "injectors": { "defaultRequire": 0 }
+}

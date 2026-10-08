@@ -1,0 +1,16 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.plugins.build.mixin",
+  "plugin": "io.github.izakyl.folkways.plugins.build.mixin.BuildMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "GrowingPlantBlockAccess"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "client": [
+    "ToolTypeMixin"
+  ]
+}

@@ -1,0 +1,82 @@
+{
+ "scenes": [
+  {
+   "x": -48,
+   "bank": 1,
+   "dx": 0,
+   "z": 20,
+   "top": "grass",
+   "knobs": {}
+  },
+  {
+   "x": -24,
+   "bank": 1,
+   "dx": 0,
+   "z": 22,
+   "top": "grass",
+   "knobs": {
+    "width": 5,
+    "shelter": true
+   }
+  },
+  {
+   "x": 0,
+   "bank": 0,
+   "dx": 0,
+   "z": 18,
+   "top": "sand",
+   "knobs": {
+    "head": "l",
+    "shelter": true
+   }
+  },
+  {
+   "x": 24,
+   "bank": 2,
+   "dx": 0,
+   "z": 18,
+   "top": "grass",
+   "knobs": {
+    "head": "square",
+    "width": 4,
+    "deck": [
+     "minecraft:oak_planks"
+    ],
+    "beam": [
+     "minecraft:stripped_oak_log"
+    ],
+    "pile": [
+     "minecraft:oak_log"
+    ],
+    "rail": [
+     "minecraft:oak_fence"
+    ],
+    "landing": [
+     "minecraft:stone_bricks"
+    ]
+   }
+  },
+  {
+   "x": 48,
+   "bank": 1,
+   "dx": 6,
+   "z": 18,
+   "top": "grass",
+   "knobs": {
+    "head": "none",
+    "width": 4
+   }
+  }
+ ],
+ "sections": [
+  10,
+  17
+ ],
+ "shots": [
+  -48,
+  -24,
+  0,
+  24,
+  48
+ ]
+}

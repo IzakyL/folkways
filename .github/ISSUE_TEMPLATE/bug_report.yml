@@ -1,0 +1,28 @@
+name: Bug report
+description: Something in Folkways misbehaves or crashes
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: Minecraft 1.21.1, NeoForge 21.1.233, Folkways 0.1.0, LDLib2 2.2.37
+    validations:
+      required: true
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other mods installed
+      description: At least Create, Sable, Modular Golems, GeckoLib, JEI and EMI if you have them.
+  - type: textarea
+    id: log
+    attributes:
+      label: Log or crash report
+      description: Attach `logs/latest.log`, and the file from `crash-reports/` if the game crashed.

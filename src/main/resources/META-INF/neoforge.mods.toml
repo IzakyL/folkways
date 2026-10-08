@@ -1,0 +1,106 @@
+modLoader = "javafml"
+loaderVersion = "${loader_version_range}"
+license = "MIT"
+issueTrackerURL = "https://github.com/IzakyL/folkways/issues"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${version}"
+displayName = "Folkways"
+displayURL = "https://github.com/IzakyL/folkways"
+description = "Settlers who plan their own work. Found a colony, mark out fields, pens and fishing waters, and the settlement schedules the whole day's labour for itself."
+authors = "IzakyL"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neoforge_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "ldlib2"
+type = "required"
+reason = "Folkways' player-facing screens are LDLib2 UI. Unlike Ponder, LDLib2 has a standalone release, so it is installed alongside Folkways rather than shipped inside its jar."
+versionRange = "${ldlib_requirement}"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "create"
+type = "optional"
+reason = "Two entries need Create: the one that hands a schematic to a colony sits in Create's own row of schematic tools, and the one that hands a train over sits on the driver seat of an assembled train. Everything else, tutorials included, runs without it."
+versionRange = "[6.0.0,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "ponder"
+type = "required"
+reason = "Folkways' in-game tutorial scenes are Ponder scenes. Folkways ships Ponder inside its own jar, so installing Folkways satisfies this."
+versionRange = "[1.0.82,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.${mod_id}]]
+modId = "geckolib"
+type = "optional"
+reason = "Resident looks that name a bedrock model instead of a skin are rendered by GeckoLib. Without it those looks fall back to a plain player skin; everything else is unaffected."
+versionRange = "[4.9,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.${mod_id}]]
+modId = "jei"
+type = "optional"
+reason = "The colony book's item filters open JEI's ingredient list, and JEI is told which parts of a Folkways screen it may draw over. Without it the filters fall back to Folkways' own picker."
+versionRange = "[19.39.0,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.${mod_id}]]
+modId = "emi"
+type = "optional"
+reason = "Same as JEI, through EMI's own exclusion hook. Folkways works with either, both, or neither installed."
+versionRange = "[1.1.24,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.${mod_id}]]
+modId = "modulargolems"
+type = "optional"
+reason = "Golems become a second sort of resident: they take trades, join the roster and are dispatched like people. Without it the colony is settled by people alone."
+versionRange = "[3.1.43,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[mixins]]
+config = "folkways.mixins.json"
+
+[[mixins]]
+config = "folkways-front.mixins.json"
+
+[[mixins]]
+config = "folkways-optional.mixins.json"
+
+[[mixins]]
+config = "folkways-rail.mixins.json"
+
+[[mixins]]
+config = "folkways-dispatch.mixins.json"
+
+[[mixins]]
+config = "folkways-build.mixins.json"
+
+[[mixins]]
+config = "folkways-wares.mixins.json"
+
+[[mixins]]
+config = "folkways-person.mixins.json"

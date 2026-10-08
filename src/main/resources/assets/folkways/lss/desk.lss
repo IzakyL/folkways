@@ -1,0 +1,83 @@
+.folkways_desk .panel_bg {
+  background: sdf(#202b30, 3, 1, #63736e);
+  padding-all: 6;
+  gap-all: 6;
+}
+.folkways_desk .__dialog_title__ {
+  background: sdf(#303f43, 2);
+}
+.folkways_desk text, .folkways_desk label {
+  text-color: #f0eee6;
+  text-shadow: false;
+}
+.folkways_desk .preview_bg {
+  background: sdf(#192328, 2);
+  padding-all: 4;
+}
+.folkways_desk button:host {
+  base-background: sdf(#35464a, 2, 1, #61736f);
+  hover-background: sdf(#4b6466, 2, 1, #e0bc76);
+  pressed-background: sdf(#62766b, 2, 1, #e0bc76);
+  height: 20;
+  padding-all: 3;
+}
+.folkways_desk button.__disabled__ .__button_text__ {
+  text-color: #84918e;
+}
+.folkways_desk button.folkways_nav {
+  base-background: empty;
+  hover-background: sdf(#35494c, 2);
+  pressed-background: sdf(#465950, 2);
+}
+.folkways_desk button.folkways_selected {
+  base-background: sdf(#465950, 2);
+}
+.folkways_desk button.folkways_chosen {
+  base-background: sdf(#465950, 2, 1, #e0bc76);
+}
+.folkways_desk .folkways_list {
+  background: color(#2e3d41);
+}
+.folkways_desk .folkways_row {
+  background: color(#202b30);
+}
+.folkways_desk .folkways_card {
+  background: sdf(#26363b, 2);
+}
+.folkways_desk .folkways_priority {
+  background: sdf(#1b292e, 1, 1, #405251);
+}
+.folkways_desk .folkways_link {
+  text-color: #e0bc76;
+}
+.folkways_desk button.folkways_danger .__button_text__ {
+  text-color: #f0a38e;
+}
+.folkways_desk text-field:host, .folkways_desk .__search-component_text-field__ {
+  background: sdf(#152226, 2, 1, #61736f);
+  focus-overlay: sdf(#00000000, 2, 1, #e0bc76);
+  padding-all: 3;
+}
+.folkways_desk .__scroller_view_view-port__ {
+  background: empty;
+  padding-all: 0;
+}
+.folkways_desk .__scroller_scroll_container__ {
+  background: sdf(#152226, 2);
+  padding-all: 1;
+}
+.folkways_desk scroller-vertical .__scroller_scroll_bar__, .folkways_desk scroller-horizontal .__scroller_scroll_bar__ {
+  base-background: sdf(#637870, 2);
+  hover-background: sdf(#e0bc76, 2);
+  pressed-background: sdf(#e0bc76, 2);
+}
+.folkways_desk .__selector_dialog__, .folkways_desk .__search-component_dialog__, .folkways_desk menu {
+  background: sdf(#202b30, 2, 1, #63736e);
+}
+.folkways_desk .__dialog_content-container__, .folkways_desk .__dialog_button-container__ {
+  background: sdf(#202b30, 2, 1, #63736e);
+}
+
+.folkways_desk label, .folkways_desk .__button_text__ {
+  min-height: 12;
+}

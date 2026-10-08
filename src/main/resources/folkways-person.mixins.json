@@ -1,0 +1,16 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.plugins.person.mixin",
+  "plugin": "io.github.izakyl.folkways.plugins.person.mixin.PersonMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "PathNavigationMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "client": [
+    "FontManagerMixin"
+  ]
+}

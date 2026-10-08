@@ -1,0 +1,59 @@
+name: Build
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: gradle/actions/setup-gradle@v5
+      - uses: actions/cache@v5
+        with:
+          path: .blockwright-store
+          key: blockwright-mods-${{ hashFiles('blockwright.toml') }}
+      - run: npm ci
+      - run: npm run setup
+      - run: ./gradlew build
+      - run: npm run typecheck
+      - run: npm run test:unit
+      - uses: actions/upload-artifact@v6
+        with:
+          name: folkways-jar
+          path: build/libs/*.jar
+          if-no-files-found: error
+  nightly:
+    # Every push to master replaces the "nightly" prerelease with that commit's jar.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: nightly
+      cancel-in-progress: true
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: folkways-jar
+          path: jars
+      - name: Replace the nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          rm -f jars/*-sources.jar
+          gh release delete nightly --cleanup-tag --yes || true
+          gh release create nightly jars/*.jar --prerelease --target "$GITHUB_SHA" \
+            --title "Nightly build" \
+            --notes "Built automatically from master at ${GITHUB_SHA::7}. Untested pre-release; back up your world before trying it."

@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.core.shell.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "MobAccessor",
+    "PathfindingContextMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,262 @@
+plugins {
+    id "net.neoforged.moddev" version "2.0.141"
+    id "java-library"
+    id "maven-publish"
+}
+
+group = project.maven_group
+version = project.mod_version
+
+base {
+    archivesName = "${project.archives_base_name}-neoforge-${project.minecraft_version}"
+}
+
+repositories {
+    mavenCentral()
+    maven { url = "https://libraries.minecraft.net/" }
+    maven { url = "https://maven.createmod.net" }
+    maven { url = "https://maven.firstdark.dev/snapshots" }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(project.java_release.toInteger())
+    }
+    withSourcesJar()
+}
+
+sourceSets {
+    gametest
+    // The fuzzers' in-game half (tests/fuzz): packaged with the mod into build/fuzz by fuzzJar, so it reaches
+    // package-private planning, travel and build code; the blockwright#fuzz profile loads that jar instead.
+    fuzz {
+        java {
+            srcDirs = ["tests/fuzz/java"]
+        }
+        resources {
+            srcDirs = []
+        }
+    }
+}
+
+neoForge {
+    version = project.neoforge_version
+
+    addModdingDependenciesTo sourceSets.gametest
+    addModdingDependenciesTo sourceSets.fuzz
+
+    mods {
+        folkways {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.gametest
+        }
+    }
+
+    runs {
+        gameTestServer {
+            type = "gameTestServer"
+            gameDirectory = layout.projectDirectory.dir("run/gametest")
+            programArgument "--nogui"
+            systemProperty "neoforge.enabledGameTestNamespaces", "folkways,ldlib2"
+            sourceSet = sourceSets.gametest
+        }
+    }
+}
+
+def ldlib2Coordinate = "com.lowdragmc.ldlib2:ldlib2-neoforge-${project.minecraft_version}:${project.ldlib_version}:all"
+
+configurations {
+    gametestCompileOnly.extendsFrom compileOnly
+    gametestImplementation.extendsFrom implementation
+    gametestRuntimeOnly.extendsFrom runtimeOnly
+    fuzzCompileOnly.extendsFrom compileOnly
+    fuzzImplementation.extendsFrom implementation
+
+    instanceMod {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+}
+
+def modsManifest = file(".blockwright/mods.json")
+def modPaths = modsManifest.isFile() ? new groovy.json.JsonSlurper().parse(modsManifest) : [:]
+def lib = { String name ->
+    def paths = modPaths[name]
+    if (!paths) {
+        throw new GradleException("mod ${name} is missing from ${modsManifest}; run  npm run setup  first")
+    }
+    files(paths)
+}
+
+dependencies {
+    gametestImplementation sourceSets.main.output
+    fuzzImplementation sourceSets.main.output
+
+    compileOnly lib("emi")
+
+    compileOnly lib("jei")
+
+    compileOnly lib("geckolib")
+
+    compileOnly lib("create")
+    gametestRuntimeOnly lib("create")
+
+    compileOnly lib("sable"), lib("sable-companion")
+
+    compileOnly lib("modulargolems"), lib("l2library"), lib("l2core"), lib("l2serial")
+
+    compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
+        transitive = false
+    }
+    jarJar("net.createmod.ponder:ponder-neoforge") {
+        version {
+            strictly "[${project.ponder_version},)"
+            prefer project.ponder_version
+        }
+        transitive = false
+    }
+    implementation("com.eed3si9n.starlark:starlark:${project.starlark_version}") {
+        transitive = false
+    }
+    additionalRuntimeClasspath("com.eed3si9n.starlark:starlark:${project.starlark_version}") {
+        transitive = false
+    }
+    jarJar("com.eed3si9n.starlark:starlark") {
+        version {
+            strictly "[${project.starlark_version},5.0)"
+            prefer project.starlark_version
+        }
+        transitive = false
+    }
+    jarJar("dev.engine-room.flywheel:flywheel-neoforge-${project.minecraft_version}") {
+        version {
+            strictly "[${project.flywheel_version},2.0)"
+            prefer project.flywheel_version
+        }
+        transitive = false
+    }
+
+    implementation(ldlib2Coordinate)
+
+    instanceMod(ldlib2Coordinate) {
+        transitive = false
+    }
+}
+
+tasks.register("copyInstanceMods", Copy) {
+    from configurations.instanceMod
+    into layout.buildDirectory.dir("deps")
+}
+
+tasks.named("build") {
+    dependsOn "copyInstanceMods"
+}
+
+tasks.register("fuzzJar", Jar) {
+    group = "verification"
+    description = "Packages the mod jar together with the fuzzers' in-game classes, for the blockwright#fuzz profile."
+    def modJar = tasks.named("jar", Jar)
+    dependsOn modJar
+    archiveBaseName = base.archivesName
+    archiveClassifier = "fuzz"
+    destinationDirectory = layout.buildDirectory.dir("fuzz")
+    from({ zipTree(modJar.get().archiveFile) }) {
+        exclude "META-INF/MANIFEST.MF"
+    }
+    from sourceSets.fuzz.output
+}
+
+tasks.named("jar", Jar) {
+    from("LICENSE") {
+        into "META-INF"
+        rename { "LICENSE_folkways.txt" }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.release = project.java_release.toInteger()
+}
+
+def apiPackages = [
+    "io/github/izakyl/folkways/Declaring.class",
+    "io/github/izakyl/folkways/Relating.class",
+    "io/github/izakyl/folkways/core/api/**",
+    "io/github/izakyl/folkways/front/api/**",
+]
+
+def apiJar = tasks.register("apiJar", Jar) {
+    archiveClassifier = "api"
+    from sourceSets.main.output
+    include apiPackages
+    includeEmptyDirs = false
+}
+
+publishing {
+    publications {
+        folkways(MavenPublication) {
+            artifactId = project.archives_base_name
+            from components.java
+            artifact apiJar
+        }
+    }
+    repositories {
+        maven {
+            name = "local"
+            url = layout.buildDirectory.dir("repo")
+        }
+    }
+}
+
+def expandedModId = project.mod_id
+def expandedModVersion = project.version
+def expandedLoaderVersionRange = project.loader_version_range
+def expandedMinecraftRequirement = project.minecraft_requirement
+def expandedNeoForgeRequirement = project.neoforge_requirement
+def expandedLdLibRequirement = project.ldlib_requirement
+
+processResources {
+    inputs.property "mod_id", expandedModId
+    inputs.property "version", expandedModVersion
+    inputs.property "loader_version_range", expandedLoaderVersionRange
+    inputs.property "minecraft_requirement", expandedMinecraftRequirement
+    inputs.property "neoforge_requirement", expandedNeoForgeRequirement
+    inputs.property "ldlib_requirement", expandedLdLibRequirement
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand(
+            "mod_id": expandedModId,
+            "version": expandedModVersion,
+            "loader_version_range": expandedLoaderVersionRange,
+            "minecraft_requirement": expandedMinecraftRequirement,
+            "neoforge_requirement": expandedNeoForgeRequirement,
+            "ldlib_requirement": expandedLdLibRequirement,
+        )
+    }
+}
+
+tasks.register("lintScaffold") {
+    group = "verification"
+    description = "Checks scaffold sources for tabs and trailing whitespace."
+    inputs.files(fileTree(projectDir) {
+        include "**/*.java", "**/*.md", "**/*.gradle", "**/*.properties", "**/*.json", "**/*.toml"
+        exclude "**/.gradle/**", "**/build/**", "**/run/**",
+                "**/node_modules/**", "**/.blockwright/**", "**/.blockwright-store/**",
+                "tests/out/**",
+                "**/.claude/**", "tests/e2e/assets/resident-models/**",
+                "tests/promo/models/*/**"
+    })
+    doLast {
+        inputs.files.files.each { file ->
+            file.eachLine { line, number ->
+                if (line.contains("\t")) {
+                    throw new GradleException("Tab character in ${file}:${number}")
+                }
+                if (line != line.stripTrailing()) {
+                    throw new GradleException("Trailing whitespace in ${file}:${number}")
+                }
+            }
+        }
+    }
+}
+
+check.dependsOn tasks.named("lintScaffold")

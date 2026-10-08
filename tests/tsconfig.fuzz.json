@@ -1,0 +1,24 @@
+{
+  "//": "Typecheck-only config for the fuzzers. Same reason as tests/tsconfig.e2e.json: Playwright transpiles without checking, so a wrong argument count only shows up after booting Minecraft.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": [
+      "node"
+    ],
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "fuzz.config.ts",
+    "out-paths.ts",
+    "fuzz/**/*.ts",
+    "e2e/global-setup.ts",
+    "shared/**/*.ts"
+  ]
+}

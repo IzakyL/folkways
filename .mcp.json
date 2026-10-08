@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "blockwright": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "node_modules/@izakyl/blockwright-mcp/dist/main.js",
+        "--config",
+        "blockwright.toml",
+        "--ui-adapter",
+        "tests/ldlib2/index.ts"
+      ]
+    }
+  }
+}
