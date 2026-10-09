@@ -13,9 +13,12 @@ import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Fronts;
+import io.github.izakyl.folkways.front.api.Placard;
 import io.github.izakyl.folkways.front.api.notice.Line;
+import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -23,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -163,7 +167,7 @@ final class WaresPresence implements Facing {
             rows.add(new Board.Row(new ItemStack(state.getBlock()),
                 state.getBlock().getName(),
                 fuelLine(level, cell.block(level)),
-                List.of(new Board.Act.Ping(cell.block(level)))).told(told(level, cell.block(level), fuel)));
+                List.of(new Board.Act.Ping(cell.block(level)))).told(Hearths.told(level, cell.block(level), fuel)));
         }
         return Optional.of(new Board(
             List.of(new Board.Figure("folkways.page.wares.stations",
@@ -184,21 +188,17 @@ final class WaresPresence implements Facing {
                 held.getHoverName());
     }
 
-    // A cooker looked at tells its fuel, its load turning and how far through it is; a store, what it holds most of.
+    // A cooker looked at tells its load and fuel turning and how far through it is; a store, what it holds most of.
     @Override
     public List<Line> blockLines(BlockPos at, ColonyView view) {
         ServerLevel level = view.level();
         if (stations.containsKey(WorldPos.of(level, at))) {
             List<Line> lines = new ArrayList<>();
-            Sentence fired = Hearths.fired(level, at, fuel());
-            Sentence cooking = Hearths.cooking(level, at);
-            if (!fired.isEmpty()) {
-                lines.add(Line.told(fired));
+            Sentence told = Hearths.told(level, at, fuel());
+            if (!told.isEmpty()) {
+                lines.add(Line.told(told));
             }
-            if (!cooking.isEmpty()) {
-                lines.add(Line.told(cooking));
-                Hearths.progress(level, at).ifPresent(lines::add);
-            }
+            Hearths.progress(level, at).ifPresent(lines::add);
             return List.copyOf(lines);
         }
         BlockPos anchor = Containers.anchor(level, at);
@@ -207,6 +207,39 @@ final class WaresPresence implements Facing {
         }
         List<Sentence.Token.Ware> most = stock(level, anchor);
         return most.isEmpty() ? List.of() : List.of(Line.told(Sentence.wares(Sentence.glyph("stock"), most)));
+    }
+
+    // Over every cooker and every store, a card naming it with what its own look card tells, the store's box taking in
+    // both halves of a double chest.
+    @Override
+    public List<Placard> placards(ColonyView view) {
+        ServerLevel level = view.level();
+        List<Placard> placards = new ArrayList<>();
+        for (Map.Entry<WorldPos, StationHost> station : stations.entrySet()) {
+            WorldPos cell = station.getKey();
+            if (!(station.getValue() instanceof CookHost) || !cell.in(level) || !level.isLoaded(cell.block(level))) {
+                continue;
+            }
+            BlockPos at = cell.block(level);
+            placards.add(placard(level, at, at, blockLines(at, view)));
+        }
+        for (BlockPos anchor : view.blocks(WaresContent.STORE)) {
+            if (!level.isLoaded(anchor)) {
+                continue;
+            }
+            placards.add(placard(level, anchor, WaresPlugin.otherHalf(level, anchor, level.getBlockState(anchor))
+                .orElse(anchor), blockLines(anchor, view)));
+        }
+        return List.copyOf(placards);
+    }
+
+    private static Placard placard(ServerLevel level, BlockPos min, BlockPos max, List<Line> told) {
+        List<Line> lines = new ArrayList<>();
+        lines.add(Line.said(new Notice(level.getBlockState(min).getBlock().getDescriptionId(), List.of())));
+        lines.addAll(told);
+        UUID id = UUID.nameUUIDFromBytes(("folkways:wares/" + level.dimension().location() + "/" + min.asLong())
+            .getBytes(StandardCharsets.UTF_8));
+        return new Placard(id, new Placard.Outline.Box(min, max), lines);
     }
 
     private static List<Sentence.Token.Ware> stock(ServerLevel level, BlockPos at) {
@@ -224,11 +257,6 @@ final class WaresPresence implements Facing {
             .limit(STOCK_SHOWN)
             .map(entry -> new Sentence.Token.Ware(BuiltInRegistries.ITEM.getKey(entry.getKey()), entry.getValue()))
             .toList();
-    }
-
-    // The fuel a cooker burns, then the load it is cooking turning into what it makes.
-    private static Sentence told(ServerLevel level, BlockPos at, Optional<ItemSpec> fuel) {
-        return Hearths.fired(level, at, fuel).then(Hearths.cooking(level, at));
     }
 
     private Optional<ItemSpec> fuel() {

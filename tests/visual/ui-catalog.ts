@@ -119,7 +119,9 @@ export async function capturePageWindows(server: MinecraftServer, client: Minecr
     const opened = await panelElements(client);
     const windows = opened.filter(element =>
       [element, ...ancestorsOf(opened, element)].every(one => one.displayed !== false && one.visible !== false) && visibleBox(opened, element)
-      && element.id?.startsWith("folkways.window.close.") && element.id !== "folkways.window.close.colony");
+      // A setting that names one item opens the item search in place of a window; it closes the same way.
+      && (element.id?.startsWith("folkways.window.close.") || element.id === "folkways.selector.close")
+      && element.id !== "folkways.window.close.colony");
     expect(windows.length, `Opening ${opener.id} did not expose a window; add a scenario for inline editors`).toBeGreaterThan(0);
     const name = `page-${page.name}-open-${opener.id}`;
     await input.move(client, { x: 0, y: 0 });

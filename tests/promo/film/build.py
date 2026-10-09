@@ -48,22 +48,43 @@ def px(v):
     return int(round(v * K))
 
 # One unbroken slice of one take per shot. A slice is a run of (start, end, speed) pieces of its take, played back
-# to back, so a wait in the middle is fast-forwarded rather than cut out. A shot may carry several sections of
+# to back, so a wait in the middle is fast-forwarded rather than cut out; a gap between two pieces is a cut, for a
+# wait with nothing on screen to watch. A shot may carry several sections of
 # promo-text.toml one after another, each over its own pieces.
 # place is where the words sit, picked from what is empty in that shot: tl/tr/tc top, bl/br/bc bottom.
 # (file name, take, [(section, pieces), ...], game-audio gain, place)
+def declared(shot, lead=0.5, ui=1.0, work=2.0):
+    """A declaration shot cut by the moments its take stamped: the player's gesture at near speed, the colony's work
+    sped up, and whatever follows it (the finished result, the chest opened on it) at speed again."""
+    marks = json.load(open(os.path.join(T, "declare", "index.json")))["context"]["shots"][shot]["marks"]
+    said, done, end = marks["declared"], marks["done"], marks["end"]
+    return [(lead, said, ui), (said, done, work), (done, end, 1.0)]
+
+def household(lead=0.5, work=2.0):
+    """The workforce page browsed at its own pace, then the homestead at work, sped up until everything it shows has
+    happened, and at its own pace again after: two sections, so the words stay off the panel."""
+    marks = json.load(open(os.path.join(T, "household", "index.json")))["context"]["shot"]["marks"]
+    closed, done, end = marks["closed"], marks["done"], marks["end"]
+    return [("workforce", [(lead, closed, 1.0)]), ("household", [(closed, done, work), (done, end, 1.0)])]
+
 SHOTS = [
     ("card:disclaimer",),
+    ("household", "household/01-household.mp4", household(), 0.4, "bl"),          # grass left of the beds
+    ("workshop", "declare/01-workshop.mp4", [("workshop", declared("workshop"))], 0.4, "tl"),
+    ("field", "declare/02-field.mp4", [("field", declared("field"))], 0.4, "tl"),
+    ("woodlot", "declare/03-woodlot.mp4", [("woodlot", declared("woodlot"))], 0.4, "tl"),
     ("tour", "tour/01-colony.mp4", [("tour", [(0.0, 15.8, 1.0)])], 0.6, "bl"),     # grass along the near edge
     ("patterns", "patterns/01-patterns.mp4", [                                       # open sky over the meadow
-        ("schematic", [(0.5, 15.8, 1.5)]),
-        ("draft", [(15.8, 24.0, 1.25), (24.0, 37.0, 5.0), (37.0, 58.0, 1.5)]),
+        ("schematic", [(0.5, 15.8, 1.25)]),
+        ("draft", [(15.8, 24.0, 1.25), (24.0, 37.0, 3.0), (37.0, 58.0, 1.25)]),
     ], 0.5, "tl"),
-    ("logistics", "logistics/01-logistics.mp4", [("logistics", [(0.0, 36.0, 3.0)])], 0.0, "tr"),  # sky right of the chains
+    ("logistics", "logistics/01-logistics.mp4", [("logistics", [(0.0, 36.0, 2.0)])], 0.0, "tr"),  # sky right of the chains
     ("rail", "rail/01-rail.mp4", [                                                   # grass outside the station fence
-        ("rail", [(0.0, 7.2, 1.0), (7.2, 18.8, 5.0), (18.8, 24.2, 1.0)]),
+        # the wait on the platform sped up, the riders boarding at speed, then a cut from the last one seated to the
+        # train pulling out
+        ("rail", [(0.0, 7.5, 1.0), (7.5, 13.0, 4.0), (13.0, 15.5, 1.0), (20.0, 24.5, 1.0)]),
     ], 0.7, "bl"),
-    ("models", "models/01-models.mp4", [("models", [(0.0, 45.0, 3.0)])], 0.0, "tc"),  # bare grass above the fence
+    ("models", "models/01-models.mp4", [("models", [(0.0, 45.0, 2.0)])], 0.0, "tc"),  # bare grass above the fence
     ("airship", "airship/01-airship.mp4", [("airship", [(2.0, 31.8, 1.3)])], 0.5, "tl"),  # fog left of the ship
     ("card:ending",),
 ]
@@ -234,12 +255,16 @@ def render_card(key):
             continue
         weight, size, color = CARD_STYLE[style]
         blocks.append(((weight, px(size), color, text), block_height(text, px(size)) + px(28)))
-    y = (H - sum(h for _, h in blocks)) // 2
+    # centred on the screen, unless the card names where its top-left corner sits (in 1920x1080 pixels)
+    if "left" in card or "top" in card:
+        horiz, edge, y = "l", px(card.get("left", MARGIN_X)), px(card.get("top", MARGIN_Y))
+    else:
+        horiz, edge, y = "c", W // 2, (H - sum(h for _, h in blocks)) // 2
     filters = []
     for spec, h in blocks:
         if spec:
             weight, size, color, text = spec
-            filters += text_block(weight, text, size, "c", W // 2, y, al, color=color, shadow=0)
+            filters += text_block(weight, text, size, horiz, edge, y, al, color=color, shadow=0)
         y += h
     inputs = ["-f", "lavfi", "-i", f"color=0x0b0b0c:s={W}x{H}:r=60:d={length}",
               "-f", "lavfi", "-t", str(length), "-i", "anullsrc=r=48000:cl=stereo"]

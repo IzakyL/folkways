@@ -1,9 +1,11 @@
 package io.github.izakyl.folkways.front.client;
 
 import com.lowdragmc.lowdraglib2.gui.holder.IModularUIHolderMenu;
+import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import io.github.izakyl.folkways.front.engine.net.FilterAction;
 import io.github.izakyl.folkways.front.engine.net.FilterActionPacket;
 import io.github.izakyl.folkways.front.ui.menu.FilterSlot;
+import io.github.izakyl.folkways.front.ui.screen.ItemDrops;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
@@ -18,13 +20,46 @@ public final class FilterTargets {
     private FilterTargets() {
     }
 
-    public record Target(Rect2i area, FilterSlot slot) {
+    // Where a dragged item can land: a filter slot of the menu, or a panel element that names one item.
+    public sealed interface Target {
+        Rect2i area();
+
+        boolean accepts(ItemStack stack);
+
+        void drop(ItemStack stack);
+
+        default boolean contains(int x, int y) {
+            return area().contains(x, y);
+        }
+    }
+
+    record Slot(Rect2i area, FilterSlot slot) implements Target {
+        @Override
         public boolean accepts(ItemStack stack) {
             return slot.canSetFilterTo(stack);
         }
 
+        @Override
         public void drop(ItemStack stack) {
             PacketDistributor.sendToServer(new FilterActionPacket(FilterAction.DROP, slot.index, stack.copy()));
+        }
+    }
+
+    record Element(Rect2i area, ItemDrops.Target target) implements Target {
+        @Override
+        public boolean accepts(ItemStack stack) {
+            return target.drop().accepts(stack);
+        }
+
+        @Override
+        public void drop(ItemStack stack) {
+            target.drop().take(stack.copy());
+        }
+
+        // Clipped by whatever it sits in, so a button scrolled out of view takes nothing.
+        @Override
+        public boolean contains(int x, int y) {
+            return ItemDrops.contains(target.element(), x, y);
         }
     }
 
@@ -41,8 +76,13 @@ public final class FilterTargets {
                         y = Math.round(element.getPositionY() + holder.getModularUI().getTopPos());
                     }
                 }
-                targets.add(new Target(new Rect2i(x, y, 16, 16), filterSlot));
+                targets.add(new Slot(new Rect2i(x, y, 16, 16), filterSlot));
             }
+        }
+        for (ItemDrops.Target target : ItemDrops.shown(ModularUI.of(screen))) {
+            var element = target.element();
+            targets.add(new Element(new Rect2i(Math.round(element.getPositionX()), Math.round(element.getPositionY()),
+                Math.round(element.getSizeWidth()), Math.round(element.getSizeHeight())), target));
         }
         return List.copyOf(targets);
     }
@@ -52,7 +92,7 @@ public final class FilterTargets {
             return false;
         }
         for (Target target : of(screen)) {
-            if (target.area().contains(mouseX, mouseY) && target.accepts(stack)) {
+            if (target.contains(mouseX, mouseY) && target.accepts(stack)) {
                 target.drop(stack);
                 return true;
             }

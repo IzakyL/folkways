@@ -112,9 +112,10 @@ final class WorldCards {
             CardBackdrop.grey(Math.round(Mth.lerp(INK_EASE, was.bodyColor() & 0xFF, wanted.bodyColor() & 0xFF))));
     }
 
-    // A card is known across frames by its title, which for a resident is the name.
+    // A card is known across frames by its title, which for a resident is the name. A placard stays where it is
+    // and shares its title with others, a chest's with every chest's, so it is known by where it stands.
     private static String key(Queued card) {
-        return !card.rows().isEmpty() && card.rows().getFirst() instanceof Row.Text title
+        return card.look() != Look.PLACARD && !card.rows().isEmpty() && card.rows().getFirst() instanceof Row.Text title
             ? title.text() : card.anchor().toString();
     }
 

@@ -59,6 +59,15 @@ public final class SelectorDialog {
     private static final float HOST_GAP = 4f;
 
     public static Dialog open(UIElement host, Consumer<ItemStack> chosen) {
+        return open(host, candidate -> true, chosen);
+    }
+
+    // For a setting that names one item: tags are left out, since they name many.
+    public static Dialog openItems(UIElement host, Consumer<ItemStack> chosen) {
+        return open(host, candidate -> !candidate.tag(), chosen);
+    }
+
+    private static Dialog open(UIElement host, Predicate<Candidate> offered, Consumer<ItemStack> chosen) {
         UIElement screen = host;
         while (screen.getParent() != null) {
             screen = screen.getParent();
@@ -67,11 +76,14 @@ public final class SelectorDialog {
         float left = host.getPositionX() - HOST_GAP - WINDOW_WIDTH;
         float width = screen.getSizeWidth();
         float height = screen.getSizeHeight();
-        float x = width <= 0f || right + WINDOW_WIDTH <= width ? right : Math.max(0f, left);
+        // Toward the middle of the screen: EMI keeps the screen's edges, and a dialog laid over its index loses
+        // its clicks and keys to it.
+        boolean rightHalf = width > 0f && host.getPositionX() + host.getSizeWidth() / 2f > width / 2f;
+        float x = width <= 0f || (!rightHalf && right + WINDOW_WIDTH <= width) ? right : Math.max(0f, left);
         float y = height <= 0f
             ? host.getPositionY()
             : Math.max(0f, Math.min(host.getPositionY(), height - WINDOW_HEIGHT));
-        return open(host.getModularUI(), x, y, chosen);
+        return open(host.getModularUI(), x, y, offered, chosen);
     }
 
     public static Dialog open(@Nullable ModularUI ui, Consumer<ItemStack> chosen) {
@@ -79,6 +91,11 @@ public final class SelectorDialog {
     }
 
     public static Dialog open(@Nullable ModularUI ui, float x, float y, Consumer<ItemStack> chosen) {
+        return open(ui, x, y, candidate -> true, chosen);
+    }
+
+    private static Dialog open(@Nullable ModularUI ui, float x, float y, Predicate<Candidate> offered,
+            Consumer<ItemStack> chosen) {
         Dialog dialog = new Dialog();
         int[] fits = { ROWS_BEFORE_LAYOUT };
         UIElementProvider<Candidate> rows = UIElementProvider.iconText(
@@ -102,7 +119,7 @@ public final class SelectorDialog {
 
                 @Override
                 public void search(String word, IResultHandler<Candidate> found) {
-                    Predicate<Candidate> matches = matching(word);
+                    Predicate<Candidate> matches = offered.and(matching(word));
                     int room = fits[0];
                     int shown = 0;
                     for (Candidate candidate : pool()) {

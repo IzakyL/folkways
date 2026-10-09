@@ -6,56 +6,21 @@ import io.github.izakyl.folkways.front.api.notice.Meter;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.ui.Signs;
 import io.github.izakyl.folkways.front.api.ui.Signs.Sign;
-import io.github.izakyl.folkways.front.engine.net.ZoneSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.inventory.tooltip.TooltipRenderUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 public final class ColonyLookCard {
-    private static final int CROSSHAIR_OFFSET_Y = 12;
     static final int TITLE_COLOR = 0xFFFFFFFF;
     static final int TEXT_COLOR = 0xFFAAAAAA;
     static final int WARN_COLOR = 0xFFFF5555;
 
     private ColonyLookCard() {
-    }
-
-    public static void render(GuiGraphics graphics) {
-        Optional<ZoneSnapshot> focused = ZoneSelection.focusedZone();
-        List<Row> rows = focused.map(ColonyLookCard::describe).orElseGet(ColonyLookCard::lookRows);
-        if (rows.isEmpty()) {
-            return;
-        }
-
-        Font font = Minecraft.getInstance().font;
-        LookCardLayout.Laid card = LookCardLayout.of(font, rows);
-        int x = (graphics.guiWidth() - card.width()) / 2;
-        int y = graphics.guiHeight() / 2 + CROSSHAIR_OFFSET_Y + TooltipRenderUtil.PADDING_TOP;
-
-        TooltipRenderUtil.renderTooltipBackground(graphics, x, y, card.width(), card.height(), 0);
-        for (LookCardLayout.Piece piece : card.pieces()) {
-            switch (piece) {
-                case LookCardLayout.Piece.Text text ->
-                    graphics.drawString(font, text.text(), x + text.x(), y + text.y(), text.color(), true);
-                case LookCardLayout.Piece.Fill fill ->
-                    graphics.fill(x + fill.x0(), y + fill.y0(), x + fill.x1(), y + fill.y1(), fill.color());
-                case LookCardLayout.Piece.Icon icon ->
-                    graphics.blitSprite(icon.sprite(), x + icon.x(), y + icon.y(), icon.width(), icon.height());
-                case LookCardLayout.Piece.Item item -> graphics.renderItem(item.stack(), x + item.x(), y + item.y());
-            }
-        }
-    }
-
-    private static List<Row> lookRows() {
-        return rows(ColonyLookState.lines());
     }
 
     static List<Row> rows(List<Line> lines) {
@@ -110,18 +75,6 @@ public final class ColonyLookCard {
     private static long gameTime() {
         Minecraft minecraft = Minecraft.getInstance();
         return minecraft.level == null ? 0L : minecraft.level.getGameTime();
-    }
-
-    private static List<Row> describe(ZoneSnapshot zone) {
-        return List.of(
-            new Row.Signs(Signs.of(DelegationNames.told(zone.delegation()), TITLE_COLOR)),
-            new Row.Text(dimensions(zone), TEXT_COLOR));
-    }
-
-    private static String dimensions(ZoneSnapshot zone) {
-        int dx = zone.max().getX() - zone.min().getX() + 1;
-        int dz = zone.max().getZ() - zone.min().getZ() + 1;
-        return dx + "x" + dz;
     }
 
     sealed interface Row {

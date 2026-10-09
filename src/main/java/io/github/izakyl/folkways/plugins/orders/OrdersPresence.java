@@ -422,15 +422,16 @@ final class OrdersPresence implements Facing {
         rows.add(new Board.Row(ItemStack.EMPTY,
             Component.translatable("folkways.panel.orders.file"),
             Component.empty(),
-            List.of(new Board.Act.Do(new OrderAct.Maintain().key(), "folkways.orders.maintain"),
-                new Board.Act.Do(new OrderAct.Deliver().key(), "folkways.orders.deliver"))));
+            List.of(new Board.Act.Do(new OrderAct.Maintain().key(), "folkways.orders.maintain", icon("repeater")),
+                new Board.Act.Do(new OrderAct.Deliver().key(), "folkways.orders.deliver",
+                    icon("chest_minecart")))));
         for (Order order : here) {
             rows.add(new Board.Row(iconOf(order.what()),
                 Component.translatable("folkways.panel.orders.row", order.high(),
                     nameOf(order.what())),
                 progressOf(order, level.getServer()),
                 List.of(new Board.Act.Do(OrderAct.withdrawing(order.what()).key(),
-                    "folkways.action.delete")))
+                    "folkways.action.delete", icon("barrier"))))
                 .told(toldOf(order, level.getServer())));
         }
         rows.addAll(shelfRows(shelfAt(into)));
@@ -445,10 +446,12 @@ final class OrdersPresence implements Facing {
         List<Board.Row> rows = new ArrayList<>();
         rows.add(Board.Row.heading(Component.translatable("folkways.panel.orders.shelf")));
         List<Board.Act> admitting = new ArrayList<>(List.of(
-            new Board.Act.Do(new OrderAct.Admit(true).key(), "folkways.orders.admit_only"),
-            new Board.Act.Do(new OrderAct.Admit(false).key(), "folkways.orders.admit_except")));
+            new Board.Act.Do(new OrderAct.Admit(true).key(), "folkways.orders.admit_only", icon("hopper")),
+            new Board.Act.Do(new OrderAct.Admit(false).key(), "folkways.orders.admit_except",
+                icon("iron_bars"))));
         if (shelf.admitting().isPresent()) {
-            admitting.add(new Board.Act.Do(new OrderAct.AdmitAny().key(), "folkways.orders.admit_any"));
+            admitting.add(new Board.Act.Do(new OrderAct.AdmitAny().key(), "folkways.orders.admit_any",
+                icon("bucket")));
         }
         rows.add(new Board.Row(
             shelf.admitting().map(admit -> iconOf(admit.goods())).orElse(ItemStack.EMPTY),
@@ -465,9 +468,10 @@ final class OrdersPresence implements Facing {
         List<Board.Act> spanning = new ArrayList<>(List.of(
             new Board.Act.Edit(OrdersContent.FIRST_SLOT.key()),
             new Board.Act.Edit(OrdersContent.LAST_SLOT.key()),
-            new Board.Act.Do(new OrderAct.Slots().key(), "folkways.orders.slots")));
+            new Board.Act.Do(new OrderAct.Slots().key(), "folkways.orders.slots", icon("item_frame"))));
         if (shelf.slots().isPresent()) {
-            spanning.add(new Board.Act.Do(new OrderAct.AllSlots().key(), "folkways.orders.all_slots"));
+            spanning.add(new Board.Act.Do(new OrderAct.AllSlots().key(), "folkways.orders.all_slots",
+                icon("chest")));
         }
         rows.add(new Board.Row(ItemStack.EMPTY,
             Component.translatable("folkways.panel.orders.slots"),
@@ -577,6 +581,10 @@ final class OrdersPresence implements Facing {
                 order.low(), order.high(), order.rank())
             : Component.translatable("folkways.panel.orders.once", present,
                 order.high(), order.rank());
+    }
+
+    private static ResourceLocation icon(String path) {
+        return ResourceLocation.withDefaultNamespace(path);
     }
 
     private static ItemStack iconOf(ItemSpec spec) {

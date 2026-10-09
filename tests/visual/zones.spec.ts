@@ -70,7 +70,7 @@ test("world rendering on camera", async ({}, testInfo) => {
 
     const card = await standLookingAt(server, client, playerName, zoneCentre, 3, groundY, { aimBlock: zoneMin, elevation: 1 });
     await run.shot(client, "01-look-card", {
-      subject: "Info card: crosshair on a zone, card drawn below the crosshair showing what the zone is and its size",
+      subject: "Crosshair on a zone: no card hangs under the crosshair; the zone's own world card names it",
       worldState: { ...card, zoneMin, zoneMax, aimedAt: zoneMin },
       hard: true,
     });

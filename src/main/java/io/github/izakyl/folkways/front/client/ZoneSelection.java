@@ -255,14 +255,6 @@ public final class ZoneSelection {
         return Optional.ofNullable(best);
     }
 
-    public static Optional<ZoneSnapshot> focusedZone() {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || HeldBook.bound(minecraft.player).isEmpty()) {
-            return Optional.empty();
-        }
-        return aimedZone(minecraft.player);
-    }
-
     private static AABB boxOfMarked() {
         return AABB.encapsulatingFullBlocks(min, max);
     }

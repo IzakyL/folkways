@@ -13,9 +13,9 @@ public final class OrdersContent {
     public static final ResourceLocation ID =
         ResourceLocation.fromNamespaceAndPath("folkways", "orders");
 
-    static final Schema.Setting ITEM = new Schema.Setting.Items(
+    static final Schema.Setting ITEM = Schema.Setting.Items.one(
         "item", "folkways.settings.orders.item",
-        ResourceLocation.withDefaultNamespace("chest"), List.of());
+        ResourceLocation.withDefaultNamespace("chest"));
 
     static final Schema.Setting LOW = new Schema.Setting.Count(
         "low", "folkways.settings.orders.low",

@@ -497,6 +497,57 @@ public final class HaulExecutionGameTests {
         return ticks;
     }
 
+    // Work that reaches into stores where it stands turns, in its one wind-up, from the store it takes from to the
+    // work, and on to the store what it makes goes into.
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void workAtHandTurnsBetweenItsStoresAndTheWork(GameTestHelper helper)
+            throws ReflectiveOperationException {
+        var level = helper.getLevel();
+        BlockPos site = helper.absolutePos(new BlockPos(2, 1, 2));
+        BlockPos source = helper.absolutePos(new BlockPos(0, 1, 2));
+        BlockPos sink = helper.absolutePos(new BlockPos(4, 1, 2));
+        AtomicBoolean done = new AtomicBoolean();
+        NodeSpec spec = NodeSpec.of(UUID.randomUUID(), ResourceLocation.withDefaultNamespace("test"),
+            WorkSite.at(level, site), Stances.WHEREVER, Workload.Once.of(20))
+            .gesture(io.github.izakyl.folkways.core.api.work.WorkGesture.SWING).focus(site).done();
+        Node work = new Node() {
+            public NodeSpec spec() { return spec; }
+            public Outcome commit(ServerLevel ignored, Worker who) {
+                done.set(true);
+                return Outcome.done();
+            }
+        };
+        var from = io.github.izakyl.folkways.core.api.terms.Stash.at(WorldPos.of(level, source));
+        var into = io.github.izakyl.folkways.core.api.terms.Stash.at(WorldPos.of(level, sink));
+        var placement = new Placement(Set.of(), List.of(), List.of(from), List.of(into),
+            List.of(new Placement.Draw(Optional.of(from),
+                io.github.izakyl.folkways.core.api.terms.ItemSpec.of(ResourceLocation.withDefaultNamespace("cobblestone")), 1)));
+        ColonyLabor labor = labor(level);
+        apply(labor, level, new Weave(Map.of(work.id(), new Vertex(work.id(), work, placement)), List.of(),
+            List.of()));
+        var body = PersonBody.RESIDENT.get().create(level);
+        body.moveTo(site.getX() + 0.5, site.getY(), site.getZ() + 2.5);
+        BodyRunner runner = new BodyRunner(body.getUUID());
+        runner.follow(List.of(work.id()));
+        List<BlockPos> looked = new ArrayList<>();
+        for (int ticks = 0; !done.get() && ticks < 60; ticks++) {
+            runner.tick(labor, level, body);
+            var look = body.getLookControl();
+            if (look.isLookingAtTarget()) {
+                BlockPos at = BlockPos.containing(look.getWantedX(), look.getWantedY(), look.getWantedZ());
+                if (looked.isEmpty() || !looked.getLast().equals(at)) {
+                    looked.add(at);
+                }
+            }
+        }
+        helper.assertTrue(done.get(), "the work is done");
+        helper.assertValueEqual(looked, List.of(source, site, sink),
+            "the body turns from the store it takes from, to the work, to the store it puts into");
+        labor.close();
+        body.discard();
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void durableProductsAreCargoButVocationToolsStayEquipped(GameTestHelper helper) {
         var resident = PersonBody.RESIDENT.get().create(helper.getLevel());

@@ -16,8 +16,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /**
- * Something told in pictures, read left to right: glyphs, items with their counts, a plus between items, an arrow
- * from what is used to what is made, and words where no picture will do. A glyph is a gui sprite by id, a doing's
+ * Something told in pictures, read left to right: glyphs, items with their counts, an arrow from what is used to
+ * what is made with a plus between the items on either side of it, and words where no picture will do. A glyph is a gui sprite by id, a doing's
  * {@code <namespace>:doing/<path>} and anything else's {@code <namespace>:glyph/<name>}; where the sprite is not
  * drawn, the glyph says its {@code otherwise} words, or nothing.
  */
@@ -90,11 +90,11 @@ public record Sentence(List<Token> tokens) {
         return new Token.Word(new Notice(AS_IS, List.of(said)));
     }
 
-    /** {@code lead}, then the wares with a plus between each two. */
+    /** {@code lead}, then the wares side by side: a plus is only said where items turn into others. */
     public static Sentence wares(Token lead, List<Token.Ware> wares) {
         List<Token> tokens = new ArrayList<>();
         tokens.add(lead);
-        joined(tokens, wares);
+        tokens.addAll(wares);
         return new Sentence(tokens);
     }
 

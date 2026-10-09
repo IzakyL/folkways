@@ -35,6 +35,7 @@ import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
@@ -73,6 +74,7 @@ public final class DomainPage implements Draw {
     private static final String RAW = "raw";
     private static final String SETTING = "setting";
     private static final String CHOSEN = "chosen";
+    private static final String PICKS = "picks";
 
     private static final int KIND_NONE = 0;
     private static final int KIND_DO = 1;
@@ -184,6 +186,18 @@ public final class DomainPage implements Draw {
                 }
             });
 
+            ItemDrops.on(press, new ItemDrops.Drop() {
+                @Override
+                public boolean accepts(ItemStack stack) {
+                    return !stack.isEmpty() && drawn.picks[index][slot] != null;
+                }
+
+                @Override
+                public void take(ItemStack stack) {
+                    drawn.pickAt(index, slot, stack);
+                }
+            });
+
             row.acts.add(shown);
             row.presses.add(press);
             element.addChildren(press);
@@ -291,6 +305,10 @@ public final class DomainPage implements Draw {
                         entry.putString(CHOSEN, SettingsPage.choiceOf(
                             player, new SettingsPage.Scope.AtColony(pair.scope()), choice).toString());
                     }
+                    if (pair.setting() instanceof Schema.Setting.Items items && items.single()) {
+                        entry.putString(SETTING, items.key());
+                        entry.putBoolean(PICKS, true);
+                    }
                 });
             }
             if (act instanceof Board.Act.Ping ping) {
@@ -316,7 +334,7 @@ public final class DomainPage implements Draw {
 
     private ItemStack iconOf(Board.Act act) {
         return switch (act) {
-            case Board.Act.Do ignored -> SettingsPage.iconOf(vanilla("lever"));
+            case Board.Act.Do carry -> SettingsPage.iconOf(carry.icon());
             case Board.Act.Admit ignored -> SettingsPage.iconOf(vanilla("bell"));
             case Board.Act.Ping ignored -> SettingsPage.iconOf(vanilla("compass"));
             case Board.Act.Open open -> pageIcon(open.page());
@@ -386,7 +404,9 @@ public final class DomainPage implements Draw {
     }
 
     private boolean itemList(String key) {
-        return setting(key).filter(pair -> pair.setting() instanceof Schema.Setting.Items).isPresent();
+        return setting(key)
+            .filter(pair -> pair.setting() instanceof Schema.Setting.Items items && !items.single())
+            .isPresent();
     }
 
     private void carryOut(Player player, int index, int slot) {
@@ -415,7 +435,11 @@ public final class DomainPage implements Draw {
             case Board.Act.Edit edit -> setting(edit.settingKey()).ifPresent(pair -> {
                 SettingsPage.Scope where = new SettingsPage.Scope.AtColony(pair.scope());
                 switch (pair.setting()) {
-                    case Schema.Setting.Items items -> ItemListEditor.open(player, pair.scope(), items.key());
+                    case Schema.Setting.Items items -> {
+                        if (!items.single()) {
+                            ItemListEditor.open(player, pair.scope(), items.key());
+                        }
+                    }
                     case Schema.Setting.Flag flag ->
                         SettingsPage.setFlag(player, where, flag, !SettingsPage.flagOf(player, where, flag));
                     case Schema.Setting.Choice ignored -> {
@@ -433,8 +457,12 @@ public final class DomainPage implements Draw {
 
     private void choose(Player player, String key, ResourceLocation option) {
         setting(key).ifPresent(pair -> {
+            SettingsPage.Scope where = new SettingsPage.Scope.AtColony(pair.scope());
             if (pair.setting() instanceof Schema.Setting.Choice choice) {
-                SettingsPage.setChoice(player, new SettingsPage.Scope.AtColony(pair.scope()), choice, option);
+                SettingsPage.setChoice(player, where, choice, option);
+            }
+            if (pair.setting() instanceof Schema.Setting.Items items && items.single()) {
+                SettingsPage.setItem(player, where, items, option);
             }
         });
     }
@@ -469,6 +497,7 @@ public final class DomainPage implements Draw {
         private BlockPos[][] pings = new BlockPos[ROW_SLOTS][ACT_SLOTS];
         private String[][] lists = new String[ROW_SLOTS][ACT_SLOTS];
         private String[][] choices = new String[ROW_SLOTS][ACT_SLOTS];
+        private String[][] picks = new String[ROW_SLOTS][ACT_SLOTS];
         private ResourceLocation[][] chosen = new ResourceLocation[ROW_SLOTS][ACT_SLOTS];
         private ChoicePicker.Asking asking;
         private final String[][] typed = new String[ROW_SLOTS][ACT_SLOTS];
@@ -514,6 +543,9 @@ public final class DomainPage implements Draw {
             if (key != null) {
                 setting(key).ifPresent(pair -> ItemListEditor.open(player, pair.scope(), key));
             }
+            if (picks[index][slot] != null) {
+                SelectorDialog.openItems(press, stack -> pickAt(index, slot, stack));
+            }
             String choosing = choices[index][slot];
             if (choosing != null) {
                 setting(choosing).ifPresent(pair -> {
@@ -522,6 +554,14 @@ public final class DomainPage implements Draw {
                             option -> asking.ask(choice.key(), option));
                     }
                 });
+            }
+        }
+
+        // An item for a setting naming one, from its search or dragged onto its button from a recipe viewer.
+        private void pickAt(int index, int slot, ItemStack stack) {
+            String picking = picks[index][slot];
+            if (picking != null && !stack.isEmpty()) {
+                asking.ask(picking, BuiltInRegistries.ITEM.getKey(stack.getItem()));
             }
         }
 
@@ -664,6 +704,7 @@ public final class DomainPage implements Draw {
                     lists[index][slot] = null;
                     choices[index][slot] = null;
                     chosen[index][slot] = null;
+                    picks[index][slot] = null;
                     forget(index, slot);
                     continue;
                 }
@@ -683,6 +724,8 @@ public final class DomainPage implements Draw {
                 boolean choosing = kinds[index][slot] == KIND_EDIT && entry.contains(CHOSEN);
                 choices[index][slot] = choosing ? entry.getString(SETTING) : null;
                 chosen[index][slot] = choosing ? ResourceLocation.tryParse(entry.getString(CHOSEN)) : null;
+                picks[index][slot] = kinds[index][slot] == KIND_EDIT && entry.getBoolean(PICKS)
+                    ? entry.getString(SETTING) : null;
 
                 boolean counts = number != null && kinds[index][slot] == KIND_EDIT
                     && entry.contains(RAW);

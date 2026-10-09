@@ -1,16 +1,14 @@
 import { screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement } from "../ldlib2";
-import { optInViaBook, pickViaSelector } from "./colony-founding";
+import { chooseInSelector, optInViaBook } from "./colony-founding";
 import {
   boardAct,
   boardActs,
   boardRows,
-  firstEmptyGridSlot,
   openSite,
-  slotItem,
   typeCell,
 } from "./site-panel";
-import { frames, safeAction, tryCommand, softly } from "../shared/bw-helpers";
+import { frames, safeAction, tryCommand, softly, waitForElement } from "../shared/bw-helpers";
 
 type Vec = { x: number; y: number; z: number };
 
@@ -32,6 +30,14 @@ export async function setMaintainDemandViaUI(
   return fileOrderViaSitePanel(server, client, playerName, chest, itemId, count, ACT_MAINTAIN);
 }
 
+// The same order, filed from wherever the player stands and looks: a filmed shot keeps its camera still, and
+// holds each step for beatMs so a viewer can follow it.
+export async function setMaintainDemandInView(
+  server: MinecraftServer, client: MinecraftClient, chest: Vec, itemId: string, count = 1, beatMs = 0,
+) {
+  return fileOrderViaSitePanel(server, client, null, chest, itemId, count, ACT_MAINTAIN, beatMs);
+}
+
 export async function deliverOrderViaSitePanel(
   server: MinecraftServer, client: MinecraftClient, playerName: string, chest: Vec,
   itemId: string, count = 1,
@@ -39,31 +45,32 @@ export async function deliverOrderViaSitePanel(
   return fileOrderViaSitePanel(server, client, playerName, chest, itemId, count, ACT_DELIVER);
 }
 
-export async function openOrderDraftGrid(
+// The site's panel open on its order draft, with the draft's item button: what an item dragged in lands on.
+export async function openOrderDraft(
   server: MinecraftServer, client: MinecraftClient, chest: Vec,
 ) {
   const evidence: any = { chest };
   evidence.open = await openSite(server, client, chest);
-  const draftRow = await firstOrdersRow(client);
-  const wanted = await boardAct(client, "edit", ORDERS_PAGE, draftRow, 0);
-  evidence.edit_item = wanted.id;
-  await softly(() => clickElement(client, { id: wanted.id }));
-  await tick.sprint(server, 5);
-  await safeAction(() => frames(client, 3));
-  evidence.slot = await firstEmptyGridSlot(client);
+  evidence.row = await firstOrdersRow(client);
+  evidence.edit_item = (await boardAct(client, "edit", ORDERS_PAGE, evidence.row, 0)).id;
+  evidence.row_id = `folkways.board.row.${ORDERS_PAGE}.${evidence.row}`;
   return evidence;
 }
 
 async function fileOrderViaSitePanel(
-  server: MinecraftServer, client: MinecraftClient, playerName: string, chest: Vec,
-  itemId: string, count: number, act: number,
+  server: MinecraftServer, client: MinecraftClient, playerName: string | null, chest: Vec,
+  itemId: string, count: number, act: number, beatMs = 0,
 ) {
   const evidence: any = { chest, itemId, count, act };
-  await tryCommand(server, `tp ${playerName} ${chest.x + 0.5} ${chest.y} ${chest.z + 1.5} 180 30`);
+  const beat = () => (beatMs > 0 ? new Promise((resolve) => setTimeout(resolve, beatMs)) : Promise.resolve());
+  if (playerName !== null) {
+    await tryCommand(server, `tp ${playerName} ${chest.x + 0.5} ${chest.y} ${chest.z + 1.5} 180 30`);
+  }
   await tick.sprint(server, 5);
   await screen.dismiss(client);
 
   evidence.open = await openSite(server, client, chest);
+  await beat();
   const before = await ordersRowCount(client);
   evidence.rows_before = before;
 
@@ -73,19 +80,14 @@ async function fileOrderViaSitePanel(
   await softly(() => clickElement(client, { id: wanted.id }));
   await tick.sprint(server, 5);
   await safeAction(() => frames(client, 3));
+  await beat();
 
-  const slot = await firstEmptyGridSlot(client);
-  evidence.slot = slot;
-  evidence.pick = await pickViaSelector(client, slot, itemId, `*${itemId}`);
-  await tick.sprint(server, 5);
-  evidence.settled = await slotItem(client, slot);
-  if (evidence.settled?.id !== itemId) {
-    throw new Error(`order draft: slot ${slot} holds ${JSON.stringify(evidence.settled)}, expected ${itemId}`
-      + ` (evidence: ${JSON.stringify(evidence)})`);
-  }
-  evidence.back = await softly(() => clickElement(client, { id: "folkways.settings.back" }));
+  // The draft names one item, picked straight from the selector the item act opens.
+  evidence.pick = await chooseInSelector(client, itemId, `*${itemId}`, evidence.edit_item);
+  await waitForElement(client, { id: "folkways.selector.close" }, { state: "absent", timeoutMs: 8_000 });
   await tick.sprint(server, 5);
   await safeAction(() => frames(client, 3));
+  await beat();
 
   const countRow = await firstOrdersRow(client);
   const howMany = await boardAct(client, "edit", ORDERS_PAGE, countRow, 2);
@@ -94,7 +96,9 @@ async function fileOrderViaSitePanel(
     const low = await boardAct(client, "edit", ORDERS_PAGE, countRow, 1);
     evidence.set_low = await typeCell(server, client, low.id, "1");
   }
+  await beat();
   evidence.set_count = await typeCell(server, client, howMany.id, String(count));
+  await beat();
 
   const fileRow = await fileRowIndex(client);
   const pressed = await boardAct(client, "do", ORDERS_PAGE, fileRow, act);
@@ -109,6 +113,7 @@ async function fileOrderViaSitePanel(
       break;
     }
   }
+  await beat();
   await screen.dismiss(client);
   await tick.sprint(server, 20);
 

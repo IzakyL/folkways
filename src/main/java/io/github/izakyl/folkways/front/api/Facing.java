@@ -41,7 +41,7 @@ public interface Facing {
         return List.of();
     }
 
-    // Lines under the card of a colony block the book is aimed at, telling what that block holds or does right now.
+    // Lines on the card over a colony block, telling what that block holds or does right now.
     default List<Line> blockLines(BlockPos at, ColonyView colony) {
         return List.of();
     }

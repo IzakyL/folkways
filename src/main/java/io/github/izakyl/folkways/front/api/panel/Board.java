@@ -97,7 +97,12 @@ public record Board(List<Figure> figures, List<Row> rows, Optional<Component> wh
         record Open(ResourceLocation page) implements Act {
         }
 
-        record Do(String actionKey, String labelKey) implements Act {
+        // The icon tells acts on one row apart; without one, every act showed the same lever.
+        record Do(String actionKey, String labelKey, ResourceLocation icon) implements Act {
+
+            public Do(String actionKey, String labelKey) {
+                this(actionKey, labelKey, ResourceLocation.withDefaultNamespace("lever"));
+            }
         }
     }
 }

@@ -15,7 +15,6 @@ import io.github.izakyl.folkways.front.api.notice.Sentence;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
@@ -27,23 +26,6 @@ public final class ColonyLooks {
     private static final double RANGE_SQR = 32.0D * 32.0D;
 
     private ColonyLooks() {
-    }
-
-    public static List<Line> at(ServerLevel level, Colony colony, BlockPos pos) {
-        if (ColonyGround.holds(level, colony, pos)) {
-            List<Line> lines = new ArrayList<>(List.of(Line.of(LookNotice.MEMBER)));
-            for (ColonyView view : colony.views(level.getServer())) {
-                if (view.level() == level) {
-                    for (Facing facing : Facing.all(colony)) {
-                        lines.addAll(facing.blockLines(pos, view));
-                    }
-                }
-            }
-            return List.copyOf(lines);
-        }
-        return MemberToggle.enrollable(level, pos)
-            ? List.of(Line.of(LookNotice.NON_MEMBER))
-            : List.of();
     }
 
     public static List<Body> nearest(ServerLevel level, Colony colony, Player player, int most) {

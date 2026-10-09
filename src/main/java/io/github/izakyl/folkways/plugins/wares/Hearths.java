@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.plugins.wares.mixin.FurnaceAccessor;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -17,14 +18,14 @@ import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 
-// What a cooker has in it now, told in pictures: the fuel it burns, and the load it cooks turning into what it makes.
+// What a cooker has in it now, told in pictures: the load it cooks and the fuel it burns turning into what it makes.
 final class Hearths {
 
     private Hearths() {
     }
 
     // The fuel in its slot; where there is none, a cross and the colony's fuel.
-    static Sentence fired(ServerLevel level, BlockPos at, Optional<ItemSpec> fuel) {
+    private static Sentence fired(ServerLevel level, BlockPos at, Optional<ItemSpec> fuel) {
         Optional<Container> machine = cooker(level, at);
         if (machine.isEmpty()) {
             return Sentence.EMPTY;
@@ -38,26 +39,43 @@ final class Hearths {
             .orElse(Sentence.EMPTY);
     }
 
-    // The load in the input slot, an arrow, and what it cooks into; nothing while the cooker has no load.
+    // While it has a load: the load plus the fuel it burns, an arrow, and what it cooks into, then a cross and the
+    // colony's fuel when its fuel slot is empty. With no load, only the fuel.
+    static Sentence told(ServerLevel level, BlockPos at, Optional<ItemSpec> fuel) {
+        Optional<Sentence.Token.Ware> made = made(level, at);
+        Optional<Container> machine = cooker(level, at);
+        if (made.isEmpty() || machine.isEmpty()) {
+            return fired(level, at, fuel);
+        }
+        ItemStack load = machine.get().getItem(Machines.INPUT_SLOT);
+        ItemStack held = machine.get().getItem(Machines.FUEL_SLOT);
+        List<Sentence.Token.Ware> used = new ArrayList<>();
+        used.add(ware(load.getItem(), load.getCount()));
+        if (!held.isEmpty()) {
+            used.add(ware(held.getItem(), held.getCount()));
+        }
+        Sentence turning = Sentence.turning(used, List.of(made.get()));
+        return held.isEmpty() ? turning.then(fired(level, at, fuel)) : turning;
+    }
+
+    // What the load in the input slot cooks into; nothing while the cooker has no load.
     @SuppressWarnings("unchecked")
-    static Sentence cooking(ServerLevel level, BlockPos at) {
+    private static Optional<Sentence.Token.Ware> made(ServerLevel level, BlockPos at) {
         Optional<Container> machine = cooker(level, at);
         RecipeType<? extends AbstractCookingRecipe> type = Stations.COOKERS.get(level.getBlockState(at).getBlock());
         if (machine.isEmpty() || type == null) {
-            return Sentence.EMPTY;
+            return Optional.empty();
         }
         ItemStack load = machine.get().getItem(Machines.INPUT_SLOT);
         if (load.isEmpty()) {
-            return Sentence.EMPTY;
+            return Optional.empty();
         }
         SingleRecipeInput input = new SingleRecipeInput(load);
         return level.getRecipeManager()
             .getRecipeFor((RecipeType<AbstractCookingRecipe>) type, input, level)
             .map(holder -> holder.value().assemble(input, level.registryAccess()))
             .filter(made -> !made.isEmpty())
-            .map(made -> Sentence.turning(List.of(ware(load.getItem(), load.getCount())),
-                List.of(ware(made.getItem(), 0))))
-            .orElse(Sentence.EMPTY);
+            .map(made -> ware(made.getItem(), 0));
     }
 
     // How far through its current item the cooker is, while it has a load to cook.

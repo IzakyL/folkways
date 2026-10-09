@@ -4,8 +4,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 public final class Footing {
+
+    private static final double NEARLY_FULL = 14.0D / 16.0D;
 
     private Footing() {
     }
@@ -23,7 +26,19 @@ public final class Footing {
         BlockState state = blocks.getBlockState(floor);
         return state.isFaceSturdy(blocks, floor, Direction.UP)
             || ClimbableBlocks.offersFloor(state)
-            || !state.getCollisionShape(blocks, floor).getFaceShape(Direction.UP).isEmpty();
+            || !state.getCollisionShape(blocks, floor).getFaceShape(Direction.UP).isEmpty()
+            || nearlyFull(state.getCollisionShape(blocks, floor));
+    }
+
+    // Farmland, a dirt path, soul sand or a chest tops out a little short of the block above: a face cut at the
+    // top of the block finds nothing there, yet whoever stands on it has their feet in the cell above, as on a full
+    // block. Without this, a cell of farmland with farmland all round has nowhere to stand to sow it.
+    private static boolean nearlyFull(VoxelShape shape) {
+        if (shape.isEmpty()) {
+            return false;
+        }
+        double top = shape.max(Direction.Axis.Y);
+        return top >= NEARLY_FULL && top <= 1.0D;
     }
 
     public static boolean isPassable(BlockGetter blocks, BlockPos pos) {

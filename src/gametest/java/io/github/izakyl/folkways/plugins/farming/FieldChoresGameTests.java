@@ -89,6 +89,27 @@ public final class FieldChoresGameTests {
         helper.succeed();
     }
 
+    // Farmland stops short of a full block. The middle of a wide field has nothing but farmland round it, and must
+    // still offer somewhere to stand: sown from the edge alone, it would be left bare once the edge was done.
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void theMiddleOfAWideFieldIsSownToo(GameTestHelper helper) throws ReflectiveOperationException {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 1, 1));
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        for (BlockPos cell : BlockPos.betweenClosed(origin, origin.offset(6, 0, 6))) {
+            level.setBlockAndUpdate(cell, Blocks.FARMLAND.defaultBlockState());
+            level.setBlockAndUpdate(cell.above(), Blocks.AIR.defaultBlockState());
+            level.setBlockAndUpdate(cell.above(2), Blocks.AIR.defaultBlockState());
+            cells.add(cell.immutable());
+        }
+
+        Set<BlockPos> covered = cellsOf(sweep(level, zone(level, cells), cells, "wheat", 1));
+        helper.assertTrue(covered.contains(origin.offset(3, 0, 3)),
+            "the middle of a 7x7 field must be sown, got " + covered.size() + " of " + cells.size() + " cells");
+        helper.assertTrue(covered.equals(cells), "every cell of the field must be sown: " + covered);
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 20)
     public static void aFelledTreeTakesTheLeavesItHoldsUpAndNoOthers(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

@@ -30,6 +30,8 @@ public final class Signs {
     public static final int COUNT_COLOR = 0xFFFFFFFF;
     private static final int TEXT_INK = 8;
     private static final int GAP = 2;
+    // Items side by side, with no plus between them, stand further apart so a count is not read as the next item's.
+    private static final int WARE_GAP = 5;
     private static final int SUBSCRIPT_TUCK = 1;
     private static final int SUBSCRIPT_DROP = 1;
     private static final String MORE = "…";
@@ -127,7 +129,10 @@ public final class Signs {
         }
         List<Placed> placed = new ArrayList<>();
         int x = 0;
+        Sign before = null;
         for (Sign sign : signs.subList(0, shown)) {
+            x += gap(before, sign);
+            before = sign;
             switch (sign) {
                 case Sign.Mark mark ->
                     placed.add(new Placed.Glyph(x, (ITEM_SIZE - mark.height() + 1) / 2, mark.width(), mark.height(),
@@ -142,13 +147,13 @@ public final class Signs {
                 case Sign.Word word ->
                     placed.add(new Placed.Text(x, (ITEM_SIZE - TEXT_INK) / 2, word.text(), word.color()));
             }
-            x += width(font, sign) + GAP;
+            x += width(font, sign);
         }
-        if (shown < signs.size() && x + font.width(MORE) <= room) {
-            placed.add(new Placed.Text(x, (ITEM_SIZE - TEXT_INK) / 2, MORE, WORD_COLOR));
-            x += font.width(MORE) + GAP;
+        if (shown < signs.size() && x + GAP + font.width(MORE) <= room) {
+            placed.add(new Placed.Text(x + GAP, (ITEM_SIZE - TEXT_INK) / 2, MORE, WORD_COLOR));
+            x += GAP + font.width(MORE);
         }
-        return new Laid(Math.max(0, x - GAP), List.copyOf(placed));
+        return new Laid(x, List.copyOf(placed));
     }
 
     public static void draw(GuiGraphics graphics, Font font, Laid laid, int x, int y) {
@@ -165,10 +170,19 @@ public final class Signs {
 
     private static int width(Font font, List<Sign> signs, int count) {
         int width = 0;
+        Sign before = null;
         for (Sign sign : signs.subList(0, count)) {
-            width += width(font, sign) + GAP;
+            width += gap(before, sign) + width(font, sign);
+            before = sign;
         }
-        return Math.max(0, width - GAP);
+        return width;
+    }
+
+    private static int gap(Sign before, Sign sign) {
+        if (before == null) {
+            return 0;
+        }
+        return before instanceof Sign.Ware && sign instanceof Sign.Ware ? WARE_GAP : GAP;
     }
 
     private static int width(Font font, Sign sign) {

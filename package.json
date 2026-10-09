@@ -11,7 +11,6 @@
     "test:coverage": "npm run coverage:reset && BLOCKWRIGHT_COVERAGE=1 npm run test:e2e; status=$?; npm run coverage:report && exit $status",
     "coverage:report": "node_modules/@izakyl/blockwright-client/dist/blockwright coverage report --config blockwright.toml",
     "coverage:reset": "node_modules/@izakyl/blockwright-client/dist/blockwright coverage reset --config blockwright.toml",
-    "test:all": "sh scripts/test-all.sh",
     "visual:take": "npm exec -- playwright test --config tests/visual.config.ts",
     "bench:take": "npm exec -- playwright test --config tests/bench.config.ts",
     "promo:take": "npm exec -- playwright test --config tests/promo.config.ts",

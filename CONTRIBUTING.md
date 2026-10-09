@@ -45,7 +45,6 @@ downloads, as pinned in `blockwright.toml`.
 | `npm run bench:take` | Performance benchmarks on a large colony |
 | `npm run promo:take` | Films the promotional takes |
 | `npm run fuzz:run` | Planner, travel and build fuzzers on a headless server |
-| `npm run test:all` | e2e, visual, bench and promo in a row |
 
 The game suites download Minecraft, NeoForge and the fixture mods on first run, and their
 test servers accept the [Minecraft EULA](https://www.minecraft.net/eula) through

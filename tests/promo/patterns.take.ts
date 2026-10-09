@@ -682,7 +682,9 @@ const PLACARDS = defineTask<Record<string, any>, Record<string, any>>({
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
 var view=colony.view(level);var out=new ArrayList<Object>();
-for(var facing:Facing.all(colony))for(var placard:facing.placards(view)){
+// The building sites' cards only: stores and cookers carry cards of their own.
+for(var facing:Facing.all(colony))if(facing.getClass().getSimpleName().equals("BuildPresence"))
+for(var placard:facing.placards(view)){
   var lines=new ArrayList<Object>();
   for(var line:placard.lines())lines.add(switch(line){
     case Line.Said said->said.notice().component().getString();

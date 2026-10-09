@@ -13,7 +13,6 @@ import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.client.ColonyHighlightState;
 import io.github.izakyl.folkways.front.client.ColonyLookState;
 import io.github.izakyl.folkways.front.client.SiteEntryInjector;
-import io.github.izakyl.folkways.front.engine.authority.AtBlock;
 import io.github.izakyl.folkways.front.engine.authority.AtBody;
 import io.github.izakyl.folkways.front.engine.authority.ColonyAuthority;
 import io.github.izakyl.folkways.front.engine.colony.ColonyBoards;
@@ -32,6 +31,7 @@ import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
 import io.github.izakyl.folkways.front.ui.menu.FilterSlot;
 import io.github.izakyl.folkways.front.ui.screen.ColonyShell;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -207,8 +207,17 @@ public final class FolkwaysUiNetworkEvents {
         for (Facing facing : facings) {
             placards.addAll(facing.placards(view));
         }
+        // The packet carries only so many: the ones nearest the player go first.
+        placards.sort(Comparator.comparingDouble(placard -> corner(placard.outline()).distSqr(near)));
         return new ColonyOverviewPacket(ColonyGround.cells(level, colony), zones, ghosts,
             paths.stream().map(ColonyPath::save).toList(), notes, placards);
+    }
+
+    private static BlockPos corner(Placard.Outline outline) {
+        return switch (outline) {
+            case Placard.Outline.Box box -> box.min();
+            case Placard.Outline.Path path -> path.points().getFirst();
+        };
     }
 
     private static void noted(List<Placards.Note> notes, UUID id, List<Facing> facings,
@@ -223,20 +232,9 @@ public final class FolkwaysUiNetworkEvents {
     }
 
     private static void requestLookAt(RequestLookAtPacket packet, ServerPlayer player) {
-        Optional<ColonyAuthority> aimed = ColonyAuthority.ofHeldBook(player, packet.colonyId(), packet.blockPos());
-        Optional<ColonyAuthority> held = aimed.isPresent()
-            ? aimed
-            : ColonyAuthority.ofHeldBook(player, packet.colonyId());
-        held.ifPresent(authority -> PacketDistributor.sendToPlayer(player, new LookAtSnapshotPacket(
-            aimed.map(at -> lookLines(player.serverLevel(), at)).orElseGet(List::of),
-            buildResidentLooks(player.serverLevel(), authority, player))));
-    }
-
-    private static List<Line> lookLines(ServerLevel level, ColonyAuthority authority) {
-        return authority.at()
-            .map(AtBlock::pos)
-            .map(pos -> ColonyLooks.at(level, authority.colony(), pos))
-            .orElseGet(List::of);
+        ColonyAuthority.ofHeldBook(player, packet.colonyId())
+            .ifPresent(authority -> PacketDistributor.sendToPlayer(player, new LookAtSnapshotPacket(
+                buildResidentLooks(player.serverLevel(), authority, player))));
     }
 
     static List<LookLines> buildResidentLooks(ServerLevel level, ColonyAuthority authority,

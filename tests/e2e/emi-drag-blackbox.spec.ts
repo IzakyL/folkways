@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { slotItem } from "./site-panel";
-import { openOrderDraftGrid } from "./membership-optin";
+import { openOrderDraft } from "./membership-optin";
 import { input, media, screen, tick } from "@izakyl/blockwright-minecraft";
 import { panelElements } from "../ldlib2";
 import { writeFileSync } from "node:fs";
@@ -17,7 +16,7 @@ const CONFIG_PATH = "blockwright.toml";
 
 const SYNC_ROUNDS = 12;
 
-test("dragging an EMI index cell onto the demand slot creates the pinned MAINTAIN order", async ({}, testInfo) => {
+test("dragging an EMI index cell onto the order draft's item button names that item", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
@@ -63,29 +62,26 @@ test("dragging an EMI index cell onto the demand slot creates the pinned MAINTAI
     await tryCommand(server, `tp ${playerName} ${chest.x + 0.5} ${chest.y} ${chest.z + 1.5} 180 30`);
     await tick.sprint(server, 5);
     await screen.dismiss(client);
-    evidence.enter = await openOrderDraftGrid(server, client, chest);
+    evidence.enter = await openOrderDraft(server, client, chest);
     expect(screenOpen(await safeScreen(client)), "this site's panel should be open").toBe(true);
     evidence.panel_elements = (await panelElements(client).catch(() => []))
       .map((element) => element.id ?? element.className);
     const elements = await panelElements(client);
-    const demandSlot = evidence.enter.slot as number;
-    evidence.demand_slot = demandSlot;
-    const emptySlot = elements
-      .filter((element) => element.className.endsWith(".ItemSlot"))
-      .filter((element) => element.displayed && element.visible && element.width > 0)[demandSlot];
-    expect(emptySlot, "the item grid should have an empty slot").toBeTruthy();
-    const slotBounds = { x: emptySlot!.x, y: emptySlot!.y, width: emptySlot!.width, height: emptySlot!.height };
+    const button = elements.find((element) => element.id === evidence.enter.edit_item);
+    expect(button, "the order draft should have an item button").toBeTruthy();
+    const draftRow = elements.find((element) => element.id === evidence.enter.row_id);
+    expect(draftRow, "the order draft's row should be on the panel").toBeTruthy();
+    const rowBounds = { x: draftRow!.x, y: draftRow!.y, width: draftRow!.width, height: draftRow!.height };
     const sitePanel = elements.find((element) => element.id === "folkways.site.panel");
     expect(sitePanel, "this site's panel should be next to the chest").toBeTruthy();
     const dropTarget = {
-      x: slotBounds.x + slotBounds.width / 2,
-      y: slotBounds.y + slotBounds.height / 2,
+      x: button!.x + button!.width / 2,
+      y: button!.y + button!.height / 2,
     };
     evidence.drop_target = dropTarget;
 
     const before = await captureHud(client);
-    evidence.slot_icon_before = iconsIn(before, slotBounds);
-    expect(evidence.slot_icon_before.length, "an empty demand slot should draw no icon").toBe(0);
+    evidence.row_icons_before = iconsIn(before, rowBounds);
 
     const found = await findHoveredIndexCell(client, sitePanel!.x + sitePanel!.width, dropTarget);
     evidence.cell_search = found.search;
@@ -93,6 +89,10 @@ test("dragging an EMI index cell onto the demand slot creates the pinned MAINTAI
     const dragSource = found.cell!;
     evidence.drag_source = dragSource;
     evidence.hovered_tooltip = found.tooltip;
+    const draggedId = `minecraft:${found.tooltip[0].toLowerCase().replace(/ /g, "_")}`;
+    evidence.dragged_id = draggedId;
+    expect(evidence.row_icons_before.map((icon: any) => icon.id), "the draft should not name the item yet")
+      .not.toContain(draggedId);
 
     evidence.shot_before_drag = await shoot(client, shotPath("e2e", "emi-drag-before"));
 
@@ -103,12 +103,10 @@ test("dragging an EMI index cell onto the demand slot creates the pinned MAINTAI
 
     evidence.shot_after_drag = await shoot(client, shotPath("e2e", "emi-drag-after"));
 
-    const held = await waitForDemandTier(server, client, demandSlot);
-    evidence.held = held;
-    expect(held, "after the EMI drop the server should write that item into this keep-stocked slot").toBeTruthy();
-
-    expect(held!.id, "the dropped demand should carry the item from the dragged cell")
-      .toBe(`minecraft:${found.tooltip[0].toLowerCase().replace(/ /g, "_")}`);
+    const named = await waitForDraftIcon(server, client, rowBounds, draggedId);
+    evidence.row_icons_after = named;
+    expect(named.map((icon) => icon.id), "after the EMI drop the order draft should name the dragged item")
+      .toContain(draggedId);
   } catch (error) {
     pair?.failing(error);
     throw error;
@@ -173,16 +171,20 @@ function iconsIn(capture: DrawCaptureResult, rect: { x: number; y: number; width
   return [...seen.values()];
 }
 
-async function waitForDemandTier(server: any, client: any, slotIndex: number) {
+async function waitForDraftIcon(
+  server: any, client: any, rect: { x: number; y: number; width: number; height: number }, id: string,
+) {
+  let icons: { id: string; x: number; y: number }[] = [];
   for (let round = 0; round < SYNC_ROUNDS; round++) {
-    const held = await slotItem(client, slotIndex);
-    if (held) {
-      return held;
+    await input.move(client, { x: 0, y: 0 });
+    icons = iconsIn(await captureHud(client), rect);
+    if (icons.some((icon) => icon.id === id)) {
+      return icons;
     }
     await sleepMs(500);
     await tick.sprint(server, 5);
   }
-  return undefined;
+  return icons;
 }
 
 async function flattenPlot(server: any, origin: Vec) {

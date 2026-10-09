@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.Stand;
+import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Balk;
@@ -30,8 +31,10 @@ import io.github.izakyl.folkways.core.api.work.WorkExertion;
 import io.github.izakyl.folkways.core.api.work.Xp;
 import io.github.izakyl.folkways.core.engine.travel.Trip;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -39,6 +42,7 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 
 final class BodyRunner {
@@ -48,6 +52,13 @@ final class BodyRunner {
     private static final long AWAY_TICKS = 100L;
 
     private static final int STALL_POLL_TICKS = 4;
+
+    // How long one beat of work held open lasts before the body turns to the next store or back to the work.
+    private static final int BEAT_TICKS = 10;
+
+    // One turn of the body while it works: toward a store it reaches into, or toward the work itself.
+    private record Beat(Optional<BlockPos> at, boolean store) {
+    }
 
     private record Own(ResourceLocation urge) {
     }
@@ -66,6 +77,7 @@ final class BodyRunner {
     private boolean joining;
     private int windup;
     private int windupTicks;
+    private List<Beat> beats = List.of();
     private boolean committing;
     private int stalled;
     private boolean rerouted;
@@ -380,6 +392,7 @@ final class BodyRunner {
         carrying = null;
         windup = 0;
         body.mob().getNavigation().stop();
+        beats = beatsOf(level, body);
         present(body);
         NodeSpec spec = current.spec();
         if (ongoing != null) {
@@ -422,13 +435,76 @@ final class BodyRunner {
         WorkExertion.performed(body.mob(), done, windup, 0);
     }
 
+    // Work that reaches into stores where it stands, rather than having goods carried to it, shows each reach in
+    // the one wind-up: the body turns to a store it takes from, back to the work, and on to a store it puts into,
+    // reaching each time. Work without stores at hand plays its gesture once, as it always has.
     private void perform(Body body) {
-        current.spec().gesture().perform(body.mob(), windup, cellOf(body));
-        current.spec().focus().ifPresent(cell -> {
-            WorldPos focus = current.spec().site().where().at(cell);
-            WorldSpaces.world(body.mob().level(), focus)
-                .map(BlockPos::containing).ifPresent(target -> Gaze.turnTo(body.mob(), target));
+        if (beats.size() <= 1) {
+            current.spec().gesture().perform(body.mob(), windup, cellOf(body));
+            focusOf(body).ifPresent(target -> Gaze.turnTo(body.mob(), target));
+            return;
+        }
+        int length = ongoing != null ? BEAT_TICKS : Math.max(1, (windupTicks + 1) / beats.size());
+        int index = windup / length;
+        Beat beat = beats.get(ongoing != null ? index % beats.size() : Math.min(index, beats.size() - 1));
+        int into = ongoing != null || index < beats.size() ? windup % length : windup - (beats.size() - 1) * length;
+        beat.at().ifPresent(target -> Gaze.turnTo(body.mob(), target));
+        if (!beat.store()) {
+            current.spec().gesture().perform(body.mob(), into, cellOf(body));
+        } else if (into == 0) {
+            body.mob().swing(InteractionHand.MAIN_HAND);
+        }
+    }
+
+    private Optional<BlockPos> focusOf(Body body) {
+        return current.spec().focus()
+            .flatMap(cell -> WorldSpaces.world(body.mob().level(), current.spec().site().where().at(cell)))
+            .map(BlockPos::containing);
+    }
+
+    // The stores the work takes from and puts into where it stands, with the work between each: from one store to
+    // the work, to the next store, back to the work, and on to the store what it makes goes into.
+    private List<Beat> beatsOf(ServerLevel level, Body body) {
+        Set<BlockPos> from = new LinkedHashSet<>();
+        for (Placement.Draw draw : placement.draws()) {
+            draw.from().flatMap(stash -> cellOf(level, stash)).ifPresent(from::add);
+        }
+        Set<BlockPos> into = new LinkedHashSet<>();
+        for (Stash stash : placement.into()) {
+            cellOf(level, stash).ifPresent(into::add);
+        }
+        Optional<BlockPos> focus = focusOf(body);
+        Optional<BlockPos> work = focus.isPresent() ? focus : Optional.of(cellOf(body))
+            .filter(cell -> current.spec().site() instanceof WorkSite.AtBlock);
+        work.ifPresent(cell -> {
+            from.remove(cell);
+            into.remove(cell);
         });
+        Beat working = new Beat(work, false);
+        List<Beat> beats = new ArrayList<>();
+        for (BlockPos store : from) {
+            beats.add(new Beat(Optional.of(store), true));
+            beats.add(working);
+        }
+        if (beats.isEmpty()) {
+            beats.add(working);
+        }
+        for (BlockPos store : into) {
+            if (beats.getLast().store()) {
+                beats.add(working);
+            }
+            beats.add(new Beat(Optional.of(store), true));
+        }
+        // Work over before every turn could be shown, such as one joined onto the last, shows only its own.
+        if (ongoing == null && windupTicks + 1 < beats.size()) {
+            return List.of(working);
+        }
+        return List.copyOf(beats);
+    }
+
+    private static Optional<BlockPos> cellOf(ServerLevel level, Stash stash) {
+        return stash.pos().in(level) ? WorldSpaces.world(level, stash.pos()).map(BlockPos::containing)
+            : Optional.empty();
     }
 
     private void commit(ColonyLabor labor, ServerLevel level, Body body) {
@@ -543,6 +619,7 @@ final class BodyRunner {
         joining = false;
         windup = 0;
         windupTicks = 0;
+        beats = List.of();
         committing = false;
         body.clearDoing();
         body.clearHandPresentation();

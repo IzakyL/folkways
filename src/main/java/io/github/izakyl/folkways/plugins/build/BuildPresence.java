@@ -588,7 +588,8 @@ final class BuildPresence implements Facing {
                 ? Component.translatable("folkways.page.build.cleanup")
                 : detailOf(site),
             List.of(new Board.Act.Ping(order.anchor().cell()),
-                new Board.Act.Do(BuildAct.cancelling(order.id()), "folkways.action.delete")));
+                new Board.Act.Do(BuildAct.cancelling(order.id()), "folkways.action.delete",
+                    ResourceLocation.withDefaultNamespace("barrier"))));
         return cancelled.contains(order.id()) || site == null || site.progress().isEmpty()
             ? row
             : row.told(toldOf(site, owed.getOrDefault(order.id(), Map.of())));
@@ -603,7 +604,8 @@ final class BuildPresence implements Facing {
             Component.literal(one.name()),
             detail,
             List.of(new Board.Act.Ping(one.anchor().cell()),
-                new Board.Act.Do(BuildAct.stopping(one.id()), "folkways.action.delete")));
+                new Board.Act.Do(BuildAct.stopping(one.id()), "folkways.action.delete",
+                    ResourceLocation.withDefaultNamespace("barrier"))));
     }
 
     // The building glyph and the first of what is owed, or how far it has come when nothing is; then how many

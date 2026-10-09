@@ -21,7 +21,6 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
@@ -143,13 +142,6 @@ public final class FolkwaysClientGameEvents {
         LookLineCards.render(event);
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
             WorldCards.flush(Minecraft.getInstance(), event.getPoseStack(), event.getCamera().getPosition());
-        }
-    }
-
-    @SubscribeEvent
-    public static void onRenderGui(RenderGuiEvent.Post event) {
-        if (Minecraft.getInstance().screen == null) {
-            ColonyLookCard.render(event.getGuiGraphics());
         }
     }
 }

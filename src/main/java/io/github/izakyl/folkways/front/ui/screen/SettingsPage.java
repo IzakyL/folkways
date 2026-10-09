@@ -8,6 +8,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Switch;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
@@ -19,6 +20,7 @@ import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySchemas;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.front.engine.colony.ColonyZone;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -188,6 +190,13 @@ public final class SettingsPage implements Draw {
     static void setChoice(Player player, Scope where, Schema.Setting.Choice choice, ResourceLocation option) {
         if (choice.options().contains(option)) {
             put(player, where, choice, choice.key(), new ColonySettings.Value.Choice(option));
+        }
+    }
+
+    static void setItem(Player player, Scope where, Schema.Setting.Items items, ResourceLocation item) {
+        if (BuiltInRegistries.ITEM.containsKey(item)) {
+            put(player, where, items, items.key(),
+                new ColonySettings.Value.Items(List.of(ItemFilter.item(item))));
         }
     }
 

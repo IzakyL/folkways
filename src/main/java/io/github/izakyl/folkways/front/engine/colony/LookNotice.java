@@ -5,10 +5,6 @@ import java.util.Locale;
 
 public enum LookNotice implements NoticeKind {
 
-    MEMBER,
-
-    NON_MEMBER,
-
     LACKING,
 
     NO_ROOM;
