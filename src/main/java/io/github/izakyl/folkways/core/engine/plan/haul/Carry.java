@@ -39,8 +39,10 @@ final class Carry implements Carrying {
             case To.Feeding(Edge edge) -> switch (transfer.from()) {
                 case From.Stocked(Stash where) ->
                     fromStash(plan, where, edge, transfer.goods(), transfer.count(), false);
-                case From.Made(UUID maker, long yield) ->
-                    fromMaker(plan, maker, yield, edge, transfer.goods(), transfer.count());
+                case From.Made(UUID maker, long yield, boolean shared) ->
+                    fromMaker(plan, maker, yield, shared, edge, transfer.goods(), transfer.count());
+                case From.LeftBy(List<UUID> suppliers, Stash out) ->
+                    leftBy(plan, suppliers, out, edge, transfer.goods(), transfer.count());
                 case From.Carried(UUID hand, List<ItemStack> stacks) -> fromHand(plan, hand, stacks, edge.consumer());
             };
             case To.Stored(Stash into) -> stow(plan, transfer.from(), into);
@@ -204,9 +206,10 @@ final class Carry implements Carrying {
 
     // From its maker: handed over when one worker can carry what is made on to the consumer, or else put into a
     // store the maker reaches and carried on from there.
-    private static long fromMaker(Laying plan, UUID maker, long yield, Edge edge, ItemSpec concrete, long count) {
+    private static long fromMaker(Laying plan, UUID maker, long yield, boolean shared, Edge edge, ItemSpec concrete,
+                                  long count) {
         UUID consumer = edge.consumer();
-        if (plan.putsInto(maker).isEmpty()) {
+        if (!shared && plan.putsInto(maker).isEmpty()) {
             Laying.Mark mark = plan.mark();
             plan.carry(maker, new Amount(concrete, yield));
             spend(plan, consumer, concrete, count);
@@ -229,27 +232,7 @@ final class Carry implements Carrying {
             plan.book(new Resource.Space(out, concrete), maker, yield);
             plan.stand(maker, at);
             plan.into(maker, out);
-            Laying.Mark before = plan.mark();
-            long moved = 0;
-            while (moved < count) {
-                long step = fromStash(plan, out, edge, concrete, count - moved, true);
-                if (step <= 0) {
-                    break;
-                }
-                moved += step;
-            }
-            boolean picked = false;
-            for (UUID id : plan.laidSince(before)) {
-                if (plan.node(id) instanceof TransferNode transfer
-                        && transfer.spec().site().equals(new WorkSite.AtBlock(out.pos()))) {
-                    plan.flow(Flow.from(maker, id, concrete, transfer.amount()));
-                    picked = true;
-                }
-            }
-            if (!picked) {
-                plan.flow(Flow.from(maker, consumer, concrete, moved));
-            }
-            return moved;
+            return takenFrom(plan, List.of(maker), out, edge, concrete, count);
         }
         if (plan.putsInto(maker).isEmpty()) {
             return carriedOn(plan, maker, yield, edge, concrete, count);
@@ -258,16 +241,57 @@ final class Carry implements Carrying {
         return 0;
     }
 
+    // The consumer's share of what is left in `out`, taken from there as from any store once `suppliers` put it there.
+    private static long takenFrom(Laying plan, List<UUID> suppliers, Stash out, Edge edge, ItemSpec concrete,
+                                  long count) {
+        Laying.Mark before = plan.mark();
+        long moved = 0;
+        while (moved < count) {
+            long step = fromStash(plan, out, edge, concrete, count - moved, true);
+            if (step <= 0) {
+                break;
+            }
+            moved += step;
+        }
+        boolean picked = false;
+        for (UUID id : plan.laidSince(before)) {
+            if (plan.node(id) instanceof TransferNode transfer
+                    && transfer.spec().site().equals(new WorkSite.AtBlock(out.pos()))) {
+                suppliers.forEach(supplier -> plan.flow(Flow.from(supplier, id, concrete, transfer.amount())));
+                picked = true;
+            }
+        }
+        if (!picked) {
+            for (UUID supplier : suppliers) {
+                plan.flow(Flow.from(supplier, edge.consumer(), concrete, moved));
+            }
+        }
+        return moved;
+    }
+
+    // A further consumer of goods already left in `out`: the store must still feed it and let them go.
+    private static long leftBy(Laying plan, List<UUID> suppliers, Stash out, Edge edge, ItemSpec concrete,
+                               long count) {
+        if (!plan.feeds(out, edge.consumer(), concrete) || !leaves(plan, out, edge, concrete, count)) {
+            plan.because(Why.NO_ROOM);
+            return 0;
+        }
+        return takenFrom(plan, suppliers, out, edge, concrete, count);
+    }
+
     // No store beside the maker, and no one pack for the maker's work and the consumer's together: whoever makes
-    // the goods carries them on to a store the consumer draws from, nearest the consumer first, and the consumer
-    // takes them from there as from any store.
+    // the goods carries them on to a store the consumer draws from, and the consumer takes them from there as from
+    // any store. The store is the one that costs the two of them the least walking, the maker's counted twice: it
+    // goes back to its work, where the consumer goes on with the goods. So what a kitchen makes for many is put
+    // down by the kitchen, for each to fetch, not carried to a store by each of them.
     private static long carriedOn(Laying plan, UUID maker, long yield, Edge edge, ItemSpec concrete, long count) {
         UUID consumer = edge.consumer();
         WorkSite near = plan.node(consumer).spec().site();
+        WorkSite made = plan.node(maker).spec().site();
         List<Stash> stores = new ArrayList<>(plan.stores());
         stores.sort(Comparator.comparingLong((Stash one) ->
                 edge.carried() || plan.reaching(consumer, one).isEmpty() ? 1 : 0)
-            .thenComparingLong(one -> Transfer.walk(one.pos(), near)));
+            .thenComparingLong(one -> 2 * Transfer.walk(one.pos(), made) + Transfer.walk(one.pos(), near)));
         for (Stash into : stores) {
             Set<Stand> unloading = plan.around(into);
             if (unloading.isEmpty() || plan.cutOff(into, unloading) || plan.roomFor(into, concrete) < yield

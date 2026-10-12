@@ -160,7 +160,7 @@ public final class FarmingScene {
         scene.idle(20);
         scene.overlay().showOutline(PonderPalette.OUTPUT, wood, wood, 120);
         scene.overlay().showText(90)
-            .text("A wood lot is a plot whose crop is a sapling. The same cycle: every log of the tree is felled with the leaves it holds up, all of it carried off, and a sapling goes back where one has room to grow.")
+            .text("A wood lot is a plot whose crop is a sapling. The same cycle: every log of the tree is felled with the leaves it holds up, all of it carried off, and a sapling goes back where one has room to grow. Dark oak goes in four to a square, and jungle and spruce can too.")
             .pointAt(util.vector().topOf(TRUNK, 3, TRUNK_Z))
             .placeNearTarget()
             .attachKeyFrame();
@@ -173,6 +173,8 @@ public final class FarmingScene {
             scene.world().destroyBlock(util.grid().at(TRUNK, y, TRUNK_Z));
             scene.idle(6);
         }
+        scene.world().setBlocks(util.select().fromTo(TRUNK - 1, 4, TRUNK_Z - 1, TRUNK + 1, 5, TRUNK_Z + 1),
+            Blocks.AIR.defaultBlockState(), true);
         resident.hold(scene, new ItemStack(Items.OAK_LOG, 4));
         scene.idle(35);
         resident.hold(scene, ItemStack.EMPTY);

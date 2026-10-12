@@ -4,7 +4,6 @@ import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Release;
 import io.github.izakyl.folkways.core.api.perk.GlobalPerks;
 import io.github.izakyl.folkways.core.api.perk.Perks;
 import io.github.izakyl.folkways.core.api.resident.ResidentKind;
@@ -48,6 +47,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
 public class ResidentEntity extends PathfinderMob implements Body {
+
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("folkways-labor");
 
     private static final String TAG_LOOK = "Look";
     private static final String TAG_GIVEN = "GivenName";
@@ -186,9 +187,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
         super.onRemovedFromLevel();
         if (level() instanceof ServerLevel serverLevel) {
             colonyId().flatMap(id -> Colonies.of(serverLevel.getServer(), id))
-                .ifPresent(colony -> Release.fromWorld(getRemovalReason())
-                    .ifPresentOrElse(why -> colony.holdingOf(getUUID())
-                        .ifPresent(held -> colony.release(held.id(), why)), () -> colony.exited(getUUID())));
+                .ifPresent(colony -> colony.removed(getUUID(), getRemovalReason()));
         }
     }
 
@@ -370,6 +369,10 @@ public class ResidentEntity extends PathfinderMob implements Body {
     public void die(DamageSource cause) {
         super.die(cause);
         if (level() instanceof ServerLevel serverLevel) {
+            // The obituary reaches only who carries the colony's book; the log keeps how and where for the rest.
+            LOGGER.info("resident died id={} cause={} at={}, {}, {} in={}", getUUID(), cause.getMsgId(),
+                blockPosition().getX(), blockPosition().getY(), blockPosition().getZ(),
+                serverLevel.getBlockState(blockPosition()).getBlock().builtInRegistryHolder().key().location());
             ResidentObituary.announce(serverLevel, this);
         }
     }

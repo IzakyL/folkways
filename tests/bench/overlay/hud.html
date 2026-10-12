@@ -1,0 +1,134 @@
+<!doctype html>
+<!-- The film's overlay, drawn on a clear page one frame at a time: overlay.ts calls render(state) and takes a picture. -->
+<html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;background:transparent;overflow:hidden}
+body{font-family:Lato,sans-serif;color:#fff;font-variant-numeric:tabular-nums;text-shadow:0 1px 3px rgba(0,0,0,.55)}
+.scrim{position:absolute;left:0;right:0}
+.scrim.top{top:0;height:300px;background:linear-gradient(rgba(8,12,16,.62),rgba(8,12,16,0))}
+.scrim.bot{bottom:0;height:230px;background:linear-gradient(rgba(8,12,16,0),rgba(8,12,16,.74))}
+.lab{white-space:nowrap;font-size:15px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.66)}
+.acc{color:#f4c95d}
+.brand{position:absolute;left:56px;top:44px}
+.brand h1{font-size:34px;font-weight:900;letter-spacing:.2em}
+.clock{margin-top:12px;display:flex;align-items:center;gap:14px;font-size:22px;font-weight:700}
+.sun{width:18px;height:18px;border-radius:50%;background:#f4c95d;box-shadow:0 0 12px #f4c95d}
+.moon{width:18px;height:18px;border-radius:50%;background:#cfd8ea;box-shadow:inset -6px -2px 0 #6b7690}
+.badge{font-size:15px;font-weight:900;letter-spacing:.08em;padding:3px 10px;border:1.5px solid rgba(255,255,255,.7);border-radius:4px}
+.sys{margin-top:30px;display:grid;grid-template-columns:repeat(3,auto);column-gap:52px;row-gap:20px;justify-content:start}
+.sys .lab{font-size:13px}
+.sys .sv{font-size:21px;font-weight:700;margin-top:3px;white-space:nowrap}
+.perf{position:absolute;right:56px;top:40px;text-align:right}
+.perf .big{display:flex;justify-content:flex-end;align-items:baseline;gap:26px}
+.perf .n{display:inline-block;min-width:118px;font-size:54px;font-weight:900;line-height:1}
+.perf .n.over{color:#ff5a4d}
+.perf .u{font-size:17px;font-weight:700;letter-spacing:.14em;color:rgba(255,255,255,.66);margin-left:8px}
+.perf svg{overflow:visible;display:block;margin:12px 0 0 auto}
+.people{width:420px;margin:16px 0 0 auto}
+.people .stack{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:0 0 7px;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.people .key{display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:rgba(255,255,255,.88)}
+.people .key i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
+.row{position:absolute;left:56px;right:56px;bottom:48px;display:flex;align-items:flex-end;justify-content:space-between}
+.cell .v{font-size:36px;font-weight:900;line-height:1.1;margin-top:5px;white-space:nowrap}
+.cell .v small{font-size:19px;font-weight:500;color:rgba(255,255,255,.72);margin:0 4px 0 2px}
+.cell .v .sep{color:rgba(255,255,255,.3);font-weight:300;margin:0 12px}
+.count{display:flex;align-items:flex-end;width:330px}
+.tick{position:relative;overflow:hidden;width:204px;height:54px;margin-left:14px;margin-bottom:-8px}
+.icon{position:absolute;top:0;width:44px;height:50px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+.icon i{position:absolute;left:0;top:0;transform-origin:0 0;image-rendering:pixelated;background-repeat:no-repeat}
+</style></head><body>
+<div class="scrim top"></div><div class="scrim bot"></div>
+<div class="brand"><h1>FOLKWAYS</h1>
+  <div class="clock"><span id="orb"></span><span id="clock"></span><span class="badge" id="speed"></span></div>
+  <div class="sys" id="sys"></div></div>
+<div class="perf"><div class="big"><div><span class="n" id="tps"></span><span class="u">TPS</span></div><div><span class="n" id="mspt"></span><span class="u">MS / TICK</span></div></div>
+  <svg id="spark" width="420" height="46"></svg>
+  <div class="people"><div class="stack" id="stack"></div><div class="key" id="key"></div></div></div>
+<div class="row">
+  <div class="cell"><div class="lab">Tasks</div><div class="v"><span id="submitted"></span><small>submitted</small><span class="sep">/</span><span id="planned"></span><small>planned</small><span class="sep">/</span><span class="acc" id="done"></span><small>done</small></div></div>
+  <div class="cell"><div class="lab">Items made</div><div class="count"><div class="v" id="items"></div><div class="tick" id="made"></div></div></div>
+  <div class="cell"><div class="lab">Blocks dug</div><div class="count"><div class="v" id="dug"></div><div class="tick" id="dugs"></div></div></div>
+  <div class="cell"><div class="lab">Blocks placed</div><div class="count"><div class="v" id="placed"></div><div class="tick" id="placeds"></div></div></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id), count = (n) => Math.round(n).toLocaleString("en-US");
+const BUDGET = 50, W = 420, H = 46, TOP = 100;
+// How bright a picture is by its place in its row: the newest stands first, and each gives way to the right and fades.
+const FADE = [0, 1, 0.72, 0.45, 0.22, 0], STEP = 51;
+
+/** What never changes over the film: the machine, the versions, how much faster than life it plays. */
+function setup(fixed) {
+  $("speed").textContent = `${fixed.speed}× SPEED`;
+  $("sys").innerHTML = fixed.system.map(([label, value]) => `<div><div class="lab">${label}</div><div class="sv">${value}</div></div>`).join("");
+}
+
+// A block as an inventory shows it: seen from above one corner, its top lit and its two sides in shade. The block is
+// one box or two (a stair), each box three faces, each face its texture sheared into place. AX and AY are how far a
+// step along the block's edge goes across and down the picture, UP how tall its upright edge is, T the texture's side.
+const AX = 22, AY = 11, UP = 27, T = 32;
+function sheared(face, w, h, u, v, matrix, shade) {
+  const sheet = `url('${face.texture}')`, place = `${-u * T}px ${-v * T}px / ${T}px ${T}px`;
+  const colour = face.tint ? `background-color:${face.tint};background-blend-mode:multiply;-webkit-mask:${sheet} ${place} no-repeat;` : "";
+  return `<i style="width:${w * T}px;height:${h * T}px;background:${sheet} ${place};${colour}transform:matrix(${matrix.map((n) => n.toFixed(4)).join(",")});filter:brightness(${shade})"></i>`;
+}
+function box(icon, x0, x1, y0, y1, z0, z1) {
+  const at = (x, y, z) => [22 + (x - z) * AX, 0.5 + UP + (x + z) * AY - y * UP];
+  return sheared(icon.top, x1 - x0, z1 - z0, x0, z0, [AX / T, AY / T, -AX / T, AY / T, ...at(x0, y1, z0)], 1)
+    + sheared(icon.left, x1 - x0, y1 - y0, x0, 1 - y1, [AX / T, AY / T, 0, UP / T, ...at(x0, y1, z1)], 0.8)
+    + sheared(icon.right, z1 - z0, y1 - y0, 1 - z1, 1 - y1, [AX / T, -AY / T, 0, UP / T, ...at(x1, y1, z1)], 0.6);
+}
+function drawing(icon) {
+  if (icon.kind === "flat") return sheared(icon.face, 1, 1, 0, 0, [40 / T, 0, 0, 40 / T, 2, 5], 1);
+  if (icon.kind === "slab") return box(icon, 0, 1, 0, 0.5, 0, 1);
+  if (icon.kind === "stairs") return box(icon, 0, 1, 0, 0.5, 0, 1) + box(icon, 0, 1, 0.5, 1, 0, 0.5);
+  return box(icon, 0, 1, 0, 1, 0, 1);
+}
+
+// A row of what is being made, dug or placed. `row.shown` is the newest first (a place may stand empty); `row.moved`
+// runs from 0 to 1 as the newest grows into the first place and the rest give way to the right.
+function strip(id, row) {
+  $(id).innerHTML = row.shown.map((icon, i) => {
+    if (!icon) return "";
+    // The newest waits for the one before it to be half way out of the first place.
+    const grown = Math.max(0, row.moved * 2 - 1);
+    if (i === 0) return grown ? `<div class="icon" style="left:0;opacity:${grown.toFixed(3)};transform:scale(${(0.6 + 0.4 * grown).toFixed(3)})">${drawing(icon)}</div>` : "";
+    const at = i + row.moved, low = Math.floor(at), part = at - low;
+    const opacity = FADE[low] + ((FADE[low + 1] ?? 0) - FADE[low]) * part;
+    return `<div class="icon" style="left:${((at - 1) * STEP).toFixed(1)}px;opacity:${opacity.toFixed(3)}">${drawing(icon)}</div>`;
+  }).join("");
+}
+
+const loaded = new Set();
+function render(s) {
+  const hour = (s.day_time / 1000 + 6) % 24, time = s.day_time % 24000;
+  $("orb").className = time >= 13000 && time < 23000 ? "moon" : "sun";
+  // The day turns at midnight, as the clock beside it reads, and not at the game's own dawn.
+  $("clock").textContent = `DAY ${Math.floor((s.day_time + 6000) / 24000) + 1} · ${String(Math.floor(hour)).padStart(2, "0")}:${String(Math.floor(hour % 1 * 60)).padStart(2, "0")}`;
+  $("tps").textContent = s.tps.toFixed(1);
+  $("mspt").textContent = s.mspt.toFixed(1);
+  $("mspt").className = s.mspt > BUDGET ? "n over" : "n";
+  // The last minute's ticks, the newest at the right: gold under the budget and red over it.
+  const y = (ms) => H - Math.min(ms, TOP) / TOP * H;
+  const points = s.spark.map(([age, ms]) => `${(W - age * W / s.spark_ticks).toFixed(2)},${y(ms).toFixed(1)}`).join(" ");
+  const line = (colour, clip) => `<polyline fill="none" stroke="${colour}" stroke-width="2" stroke-linejoin="round" points="${points}" clip-path="url(#${clip})"/>`;
+  $("spark").innerHTML = `<clipPath id="under"><rect x="0" y="${y(BUDGET)}" width="${W}" height="${H}"/></clipPath>`
+    + `<clipPath id="over"><rect x="0" y="-4" width="${W}" height="${y(BUDGET) + 4}"/></clipPath>`
+    + `<line x1="0" x2="${W}" y1="${y(BUDGET)}" y2="${y(BUDGET)}" stroke="rgba(255,255,255,.45)" stroke-dasharray="3 5"/>`
+    + line("#f4c95d", "under") + line("#ff5a4d", "over");
+  for (const id of ["submitted", "planned", "done", "items", "dug", "placed"]) $(id).textContent = count(s[id]);
+  strip("made", s.made); strip("dugs", s.dugs); strip("placeds", s.placeds);
+  const st = s.standing, urges = Object.entries(st).filter(([k]) => k.startsWith("urge/")).reduce((sum, [, v]) => sum + v, 0);
+  const parts = [["working", "#f4c95d", st.working || 0], ["walking", "#8fd0a8", (st.walking || 0) + (st.riding || 0)],
+    ["waiting", "#9aa7b8", (st.idle || 0) + (st.stalled || 0)], ["resting", "#7f8fd6", urges]];
+  $("stack").innerHTML = parts.map(([, colour, k]) => `<div style="flex:${k};background:${colour}"></div>`).join("");
+  $("key").innerHTML = parts.map(([name, colour, k]) => `<span><i style="background:${colour}"></i>${k} ${name}</span>`).join("");
+  // Every texture the frame shows has loaded before the frame is taken.
+  const sheets = new Set([s.made, s.dugs, s.placeds].flatMap((row) => row.shown).filter(Boolean)
+    .flatMap((icon) => icon.kind === "flat" ? [icon.face.texture] : [icon.top.texture, icon.left.texture, icon.right.texture]));
+  return Promise.all([...sheets].filter((sheet) => !loaded.has(sheet)).map((sheet) => new Promise((done) => {
+    const img = new Image();
+    img.onload = img.onerror = () => { loaded.add(sheet); done(); };
+    img.src = sheet;
+  })));
+}
+</script></body></html>

@@ -1,7 +1,9 @@
 import {
-  Draft, STYLES, Works, catalogue, grow, hall, placeLots, routeRoads,
+  CHEST_TIERS, ISLAND, Draft, Frame, HOUSE_STYLES, STYLES, WORKS_ROW, Works, yard, catalogue, grow, hall, levelCity, levelled,
+  mineLots, placeGrid, placeLots, routeRoads, worksPlan,
   type Box, type Counts, type Lot, type LotKind, type SiteChoice, type Terrain, type Vec,
 } from "./town.ts";
+import { railBands, type Halt, type Network } from "./network.ts";
 
 // What each lot holds, laid by Mason and remembered for the colony's save.
 export type Cooker = { pos: Vec; kind: "furnace" | "blast_furnace" | "smoker" };
@@ -14,7 +16,6 @@ export type BlueprintCell = { x: number; y: number; z: number; state: string };
 export const ANIMALS = { breed: ["sheep", "cow"], cull: ["pig", "chicken"] } as const;
 export const BREED = { heads: 4, target: 12 };
 export const CULL = { heads: 10, target: 4 };
-export const ROLE_CHESTS = ["seed", "log", "plank", "iron", "stone", "meat", "feed", "tool", "output", "smeltOut", "food", "dairy"] as const;
 
 // Captures what a builder would lay instead of laying it, for blueprints residents build themselves.
 export class Recorder extends Works {
@@ -34,9 +35,12 @@ const FLOWERS = ["minecraft:poppy", "minecraft:dandelion", "minecraft:cornflower
 
 class Builder {
   readonly roleChests: Array<{ role: string; pos: Vec }> = [];
-  readonly stores: Array<{ role: string; pos: Vec }> = [];
+  readonly stores: Array<{ role: string; pos: Vec; lot: string }> = [];
   readonly outputChests: Vec[] = [];
   readonly yardChests: Vec[] = [];
+  /** Each kept chest's other half, and the cells of the chests no one keeps (those topping a stack up to its height). */
+  readonly chestHalves: Array<{ anchor: Vec; other: Vec }> = [];
+  readonly spareChests: Vec[] = [];
   readonly cookers: Cooker[] = [];
   readonly tables: Table[] = [];
   readonly stonecutters: Vec[] = [];
@@ -47,27 +51,21 @@ class Builder {
   readonly grove: Vec[] = [];
   readonly ponds: Array<{ water: Vec[]; cells: Vec[] }> = [];
   readonly spawns: Vec[] = [];
-  readonly fields: Array<{ lot: Lot; crop: string; zone: [Vec, Vec] }> = [];
-  quarry: { anchor: Vec; blocks: BlueprintCell[] } | undefined;
-  site: { anchor: Vec; blocks: BlueprintCell[]; lot: Lot } | undefined;
-  wall: { lot: Lot; points: Vec[] } | undefined;
-  dispatchOrigin: Vec | undefined;
-  private cookerQueue: Cooker["kind"][];
-  private tableQueue: Table["kind"][];
+  readonly fields: Array<{ lot: Lot; zone: [Vec, Vec] }> = [];
+  /** Houses left for the builders: the new quarter's, each with its own earthwork. */
+  readonly houses: Array<{ anchor: Vec; blocks: BlueprintCell[]; lot: Lot; style: string }> = [];
   private penQueue: Array<{ animal: string; heads: number; target: number }> = [];
-  private smokers: number;
-  private cutters: number;
+  private readonly counts: Counts;
   private bedsLeft: number;
   private seed = 7;
 
   readonly works: Works;
+  readonly terrain: Terrain;
 
-  constructor(works: Works, n: Counts) {
+  constructor(works: Works, n: Counts, terrain: Terrain) {
     this.works = works;
-    this.cookerQueue = [...Array(n.cookers.blast).fill("blast_furnace"), ...Array(n.cookers.furnace).fill("furnace")];
-    this.smokers = n.cookers.smoker;
-    this.tableQueue = [...Array(n.tables.smithing).fill("smithing_table"), ...Array(n.tables.crafting).fill("crafting_table")];
-    this.cutters = n.stonecutters;
+    this.terrain = terrain;
+    this.counts = n;
     this.bedsLeft = n.humans;
     for (let i = 0; i < n.pens; i++) {
       const breed = i < n.pens / 2;
@@ -79,7 +77,7 @@ class Builder {
 
   apron(lot: Lot) {
     const f = lot.frame;
-    if (["lodge", "warehouse", "store", "smithy", "kitchen", "workshop", "masonry", "yard"].includes(lot.kind)) {
+    if (["lodge", "store", "yard"].includes(lot.kind)) {
       // Occupy the hall's aisles instead of lining everyone up against exterior walls.
       const mid = Math.floor(f.d / 2);
       for (let u = 3; u <= f.w - 4; u += 2) for (let v = mid - 1; v <= mid + 1; v++) this.spawns.push(f.at(u, 0, v));
@@ -94,69 +92,35 @@ class Builder {
     const f = lot.frame;
     switch (lot.kind) {
       case "plaza": return this.plaza(lot, t);
-      case "warehouse": {
-        hall(t, 1, 1, f.w - 2, f.d - 2, { style: STYLES.timber, height: 4, open: false, doors: ["west", "east", "south"] });
-        const door = Math.floor(f.w / 2);
-        for (let u = 3; u <= f.w - 4 && this.outputChests.length < 19; u++) {
-          if (Math.abs(u - door) <= 1) continue;
-          t.set(u, 0, 2, "minecraft:chest[facing=south]");
-          this.outputChests.push(f.at(u, 0, 2));
-        }
-        for (let u = 3; u <= f.w - 4; u += 3) if (Math.abs(u - door) > 2) t.set(u, 0, f.d - 3, "minecraft:barrel[facing=up]");
-        return this.apron(lot);
-      }
+      case "works": return this.worksLot(lot, t);
       case "store": {
-        hall(t, 1, 1, f.w - 2, f.d - 2, { style: STYLES.spruce, height: 4, open: false, doors: ["south"] });
-        for (let i = 0; i < 4; i++) {
-          const u = 3 + i + (i >= 2 ? 1 : 0);
-          t.set(u, 0, 2, "minecraft:chest[facing=south]");
-          this.stores.push({ role: lot.role!, pos: f.at(u, 0, 2) });
-        }
-        t.set(2, 0, 2, "minecraft:barrel[facing=up]");
-        t.set(f.w - 3, 0, 2, "minecraft:barrel[facing=up]");
+        yard(t, 1, 1, f.w - 2, f.d - 2, "minecraft:oak_planks");
+        for (const pos of this.chests(t, Math.floor(f.w / 2) - 1, 3, lot.chests ?? 4)) this.stores.push({ role: lot.role!, pos, lot: lot.name });
         return this.apron(lot);
       }
-      case "smithy": case "kitchen": case "workshop": case "masonry": return this.workshop(lot, t);
       case "lodge": return this.lodge(lot, t, false);
       case "paddock": return this.paddock(lot, t);
       case "field":
-        this.fields.push({ lot, crop: lot.crop!, zone: [f.at(2, -1, 2), f.at(f.w - 3, -1, f.d - 3)] });
+        this.fields.push({ lot, zone: [f.at(2, -1, 2), f.at(f.w - 3, -1, f.d - 3)] });
         return;
       case "garden": return this.garden(lot, t);
       case "grove": return this.groveLot(lot, t);
-      case "quarry": return this.quarryLot(lot, t);
-      case "site": {
-        const rec = new Recorder();
-        this.lodge(lot, new Draft(lot.frame, rec), true);
-        const blocks = [...rec.cells.values()];
-        const anchor = { x: Math.min(...blocks.map((c) => c.x)), y: Math.min(...blocks.map((c) => c.y)), z: Math.min(...blocks.map((c) => c.z)) };
-        this.site = { anchor, blocks, lot };
-        for (const [u, v] of [[0, 0], [f.w - 1, 0], [0, f.d - 1], [f.w - 1, f.d - 1]]) t.set(u, 0, v, "minecraft:oak_fence");
-        return this.apron(lot);
-      }
+      case "house": return this.house(lot);
       case "yard": {
-        hall(t, 1, 1, f.w - 2, f.d - 2, { style: STYLES.spruce, height: 4, open: true, doors: [] });
-        for (let u = 3; u <= f.w - 4; u++) {
-          t.set(u, 0, 2, "minecraft:chest[facing=south]");
-          this.yardChests.push(f.at(u, 0, 2));
-        }
+        yard(t, 1, 1, f.w - 2, f.d - 2, "minecraft:spruce_planks");
+        this.yardChests.push(...this.chests(t, Math.floor(f.w / 2) - 2, 3, 4 * CHEST_TIERS));
         t.fill(3, 0, f.d - 4, 5, 1, f.d - 3, "minecraft:oak_log[axis=x]");
         t.fill(f.w - 6, 0, f.d - 4, f.w - 4, 0, f.d - 3, "minecraft:stone_bricks");
         return this.apron(lot);
       }
-      case "post": {
-        this.dispatchOrigin = f.at(Math.floor(f.w / 2), 0, Math.floor(f.d / 2));
-        t.fill(0, -1, 0, f.w - 1, -1, 0, "minecraft:stone_bricks");
-        t.fill(0, -1, f.d - 1, f.w - 1, -1, f.d - 1, "minecraft:stone_bricks");
+      case "ponds": return this.pondLot(lot, t);
+      case "halt":
+        // The station's forecourt: lamp posts at the corners, a bench by the platform.
         for (const [u, v] of [[0, 0], [f.w - 1, 0], [0, f.d - 1], [f.w - 1, f.d - 1]]) {
           t.fill(u, 0, v, u, 1, v, "minecraft:spruce_fence");
           t.set(u, 2, v, "minecraft:lantern");
         }
-        return this.apron(lot);
-      }
-      case "ponds": return this.pondLot(lot, t);
-      case "wall":
-        this.wall = { lot, points: [f.at(1, -1, Math.floor(f.d / 2)), f.at(f.w - 2, -1, Math.floor(f.d / 2))] };
+        t.set(Math.floor(f.w / 2), 0, 0, "minecraft:spruce_stairs[facing=south]");
         return;
     }
   }
@@ -180,17 +144,11 @@ class Builder {
     t.fill(11, 4, 11, 19, 4, 19, "minecraft:spruce_slab[type=bottom]");
     t.fill(13, 4, 13, 17, 4, 17, "minecraft:spruce_planks");
     t.set(15, 5, 15, "minecraft:lantern");
-    // Market stalls, three role chests under each awning.
-    const wool = ["minecraft:red_wool", "minecraft:yellow_wool", "minecraft:blue_wool", "minecraft:green_wool"];
+    // A planted bed in each quarter of the square: a flowering azalea and flowers round it.
     [[4, 4], [22, 4], [4, 22], [22, 22]].forEach(([u0, v0], i) => {
-      for (const [du, dv] of [[0, 0], [4, 0], [0, 4], [4, 4]]) t.fill(u0 + du, 0, v0 + dv, u0 + du, 2, v0 + dv, "minecraft:oak_fence");
-      t.fill(u0, 3, v0, u0 + 4, 3, v0 + 4, wool[i]);
-      t.fill(u0 + 1, 3, v0 + 1, u0 + 3, 3, v0 + 3, "minecraft:white_wool");
-      for (let k = 0; k < 3; k++) {
-        t.set(u0 + 1 + k, 0, v0 + 1, "minecraft:chest[facing=south]");
-        this.roleChests.push({ role: ROLE_CHESTS[i * 3 + k], pos: f.at(u0 + 1 + k, 0, v0 + 1) });
-      }
-      t.set(u0 + 2, 0, v0 + 3, "minecraft:potted_red_tulip");
+      t.fill(u0 + 1, -1, v0 + 1, u0 + 3, -1, v0 + 3, "minecraft:moss_block");
+      t.set(u0 + 2, 0, v0 + 2, "minecraft:flowering_azalea");
+      for (const [du, dv] of [[1, 2], [3, 2], [2, 1], [2, 3]]) t.set(u0 + du, 0, v0 + dv, FLOWERS[(i + du + dv) % FLOWERS.length]);
     });
     for (const [u, v] of [[9, 2], [21, 2], [9, 28], [21, 28], [2, 9], [2, 21], [28, 9], [28, 21]]) {
       t.fill(u, 0, v, u, 2, v, "minecraft:spruce_fence");
@@ -204,66 +162,61 @@ class Builder {
     }
   }
 
-  workshop(lot: Lot, t: Draft) {
-    const f = lot.frame;
-    const hot = lot.kind === "smithy" || lot.kind === "kitchen";
-    const v1 = f.d - 2;
-    hall(t, 1, 1, f.w - 2, v1, { style: hot ? STYLES.forge : STYLES.spruce, height: 4, open: true, doors: [] });
-    const rows = lot.kind === "masonry" ? [2] : [2, v1 - 1];
-    // Working stock belongs inside each hall. The market and bulk stores still supply
-    // the wider town, but every firing must not start with a cross-town fuel errand.
-    const supplies = lot.kind === "smithy" ? ["iron", "fuel"]
-      : lot.kind === "kitchen" ? ["meat", "fuel"]
-      : lot.kind === "workshop" ? ["log", "plank"] : ["stone"];
-    for (const [i, role] of [...supplies, "food"].entries()) {
-      const u = 5 + i * 3;
-      t.set(u, 0, 5, "minecraft:chest[facing=south]");
-      this.stores.push({ role, pos: f.at(u, 0, 5) });
+  /**
+   * Double chests in a wall along u from u0, two cells thick (v and v + 1) and CHEST_TIERS high, each chest lying across
+   * the wall with its long sides against its neighbours'. Answers where each of the n chests is kept: the half the
+   * colony marks a double chest by. Every stack stands its full height, the last topped up with chests no one keeps.
+   */
+  chests(t: Draft, u0: number, v: number, n: number): Vec[] {
+    const f = t.f, kept: Vec[] = [];
+    for (let i = 0; i < Math.ceil(n / CHEST_TIERS) * CHEST_TIERS; i++) {
+      const u = u0 + Math.floor(i / CHEST_TIERS), dy = i % CHEST_TIERS;
+      t.set(u, dy, v, "minecraft:chest[facing=west,type=right]");
+      t.set(u, dy, v + 1, "minecraft:chest[facing=west,type=left]");
+      const a = f.at(u, dy, v), b = f.at(u, dy, v + 1);
+      if (i >= n) { this.spareChests.push(a, b); continue; }
+      const [anchor, other] = (a.z === b.z ? a.x < b.x : a.z < b.z) ? [a, b] : [b, a];
+      kept.push(anchor);
+      this.chestHalves.push({ anchor, other });
     }
-    for (const v of rows) for (let u = 3; u <= f.w - 4; u += 2) {
-      const p = f.at(u, 0, v);
-      const facing = v === 2 ? "south" : "north";
-      if (lot.kind === "smithy") {
-        const kind = this.cookerQueue.shift();
-        if (!kind) continue;
-        t.set(u, 0, v, `minecraft:${kind}[facing=${facing}]`);
-        this.cookers.push({ pos: p, kind });
-      } else if (lot.kind === "kitchen") {
-        if (this.smokers <= 0) continue;
-        this.smokers--;
-        t.set(u, 0, v, `minecraft:smoker[facing=${facing}]`);
-        this.cookers.push({ pos: p, kind: "smoker" });
-      } else if (lot.kind === "workshop") {
-        const kind = this.tableQueue.shift();
-        if (!kind) continue;
+    return kept;
+  }
+
+  worksLot(lot: Lot, t: Draft) {
+    const f = lot.frame, plan = worksPlan(this.counts);
+    yard(t, 1, 1, f.w - 2, f.d - 2, "minecraft:smooth_stone");
+    // The benches: each row faces its own aisle, its back to the other row's.
+    plan.stations.forEach(({ kind, bench, row, along }) => {
+      const u = plan.first + along, v = plan.band(plan.benchBand(bench)) + row;
+      const pos = f.at(u, 0, v), facing = row ? "south" : "north";
+      if (kind === "stonecutter") {
+        t.set(u, 0, v, `minecraft:stonecutter[facing=${facing}]`);
+        this.stonecutters.push(pos);
+      } else if (kind === "crafting_table" || kind === "smithing_table") {
         t.set(u, 0, v, `minecraft:${kind}`);
-        this.tables.push({ pos: p, kind });
+        this.tables.push({ pos, kind });
       } else {
-        if (this.cutters <= 0) continue;
-        this.cutters--;
-        t.set(u, 0, v, "minecraft:stonecutter[facing=south]");
-        this.stonecutters.push(p);
+        t.set(u, 0, v, `minecraft:${kind}[facing=${facing}]`);
+        this.cookers.push({ pos, kind });
       }
+    });
+    const perWall = plan.stacks.length * CHEST_TIERS, perIsland = ISLAND * CHEST_TIERS;
+    for (let wall = 0; wall < plan.walls; wall++) {
+      const part = plan.chests.slice(wall * perWall, (wall + 1) * perWall);
+      const at: Vec[] = [];
+      for (let i = 0; i < part.length; i += perIsland)
+        at.push(...this.chests(t, plan.first + plan.stacks[i / CHEST_TIERS], plan.band(plan.wallBand(wall)), Math.min(perIsland, part.length - i)));
+      part.forEach((c, i) => {
+        if (c.keep === "role") this.roleChests.push({ role: c.role, pos: at[i] });
+        else if (c.keep === "output") this.outputChests.push(at[i]);
+        else this.stores.push({ role: c.role, pos: at[i], lot: c.lot });
+      });
     }
-    if (hot) {
-      // A chimney at each gable, a smouldering campfire on its crown.
-      const v = Math.floor(f.d / 2);
-      for (const u of [0, f.w - 1]) {
-        t.fill(u, 0, v, u, 10, v, "minecraft:bricks");
-        if (this.campfires.length < 8) {
-          t.set(u, 11, v, "minecraft:campfire[lit=true]");
-          this.campfires.push(f.at(u, 11, v));
-        }
-      }
-      if (lot.kind === "smithy") {
-        t.set(Math.floor(f.w / 2), 0, v, "minecraft:anvil[facing=east]");
-        t.set(Math.floor(f.w / 2) + 2, 0, v, "minecraft:grindstone[face=floor,facing=north]");
-      }
+    // People start the day in the aisles, off the kerb where the lamp posts stand.
+    for (let k = 0; k <= plan.benches + plan.walls; k++) for (let v = plan.band(k) - 3; v < plan.band(k); v++) {
+      if (v <= 1 || v >= f.d - 2) continue;
+      for (let u = plan.first; u < plan.first + WORKS_ROW; u += 2) this.spawns.push(f.at(u, 0, v));
     }
-    if (lot.kind === "masonry") {
-      for (let u = 3; u <= f.w - 5; u += 4) t.fill(u, 0, v1 - 2, u + 1, 0, v1 - 1, "minecraft:smooth_stone");
-    }
-    this.apron(lot);
   }
 
   lodge(lot: Lot, t: Draft, blueprint: boolean) {
@@ -352,32 +305,45 @@ class Builder {
     this.apron(lot);
   }
 
+  /** A wood rather than an orchard: trunks a few blocks off a five-block grid, a third of them still saplings. */
   groveLot(lot: Lot, t: Draft) {
     const f = lot.frame;
     let k = 0;
     for (let u = 3; u <= f.w - 4; u += 5) for (let v = 3; v <= f.d - 4; v += 5) {
-      this.grove.push(f.at(u, -1, v));
-      if (k++ % 3 !== 2) this.works.tree(f.at(u, 0, v), 0);
-      else t.set(u, 0, v, "minecraft:oak_sapling[stage=1]");
+      const at = { u: u + Math.floor(this.random() * 3) - 1, v: v + Math.floor(this.random() * 3) - 1 };
+      this.grove.push(f.at(at.u, -1, at.v));
+      if (k++ % 3 !== 2) this.works.tree(f.at(at.u, 0, at.v), 0);
+      else t.set(at.u, 0, at.v, "minecraft:oak_sapling[stage=1]");
     }
     t.fill(1, 0, f.d - 2, 3, 0, f.d - 2, "minecraft:oak_log[axis=x]");
     this.apron(lot);
   }
 
-  quarryLot(lot: Lot, t: Draft) {
-    const f = lot.frame;
-    const rocks = ["minecraft:stone", "minecraft:stone", "minecraft:andesite", "minecraft:cobblestone", "minecraft:granite", "minecraft:stone"];
-    const blocks: BlueprintCell[] = [];
-    for (let u = 3; u <= 18; u++) for (let v = 3; v <= 10; v++) {
-      const height = Math.max(1, Math.min(4, 1 + Math.floor(3.5 * Math.sin(u * 0.35) * Math.cos(v * 0.45) + 2.5 * this.random())));
-      for (let dy = 0; dy < 5; dy++) {
-        if (dy < height) t.set(u, dy, v, rocks[Math.floor(this.random() * rocks.length)]);
-        blocks.push({ ...f.at(u, dy, v), state: "minecraft:air" });
-      }
+  /**
+   * A house on the ground as it lies, as a blueprint the builders work through: a cobblestone footing up to the floor
+   * where the ground falls away, the hill dug out where it rises, then the house itself in its style.
+   */
+  house(lot: Lot) {
+    const f = lot.frame, rec = new Recorder(), t = new Draft(f, rec);
+    const style = HOUSE_STYLES[lot.role ?? "oak"] ?? HOUSE_STYLES.oak;
+    const floor = lot.y - 1;
+    const dug: BlueprintCell[] = [];
+    for (let u = 0; u < f.w; u++) for (let v = 0; v < f.d; v++) {
+      const p = f.at(u, 0, v), g = this.terrain.ground(p.x, p.z);
+      if (g < floor) rec.fill({ x: p.x, y: g + 1, z: p.z }, { x: p.x, y: floor, z: p.z }, style.base);
+      for (let y = Math.max(lot.y, floor + 1); y <= Math.min(g, lot.y + 14); y++) dug.push({ x: p.x, y, z: p.z, state: "minecraft:air" });
     }
+    const height = f.w * f.d >= 180 ? 5 : 4;
+    hall(t, 1, 1, f.w - 2, f.d - 2, { style, height, open: false, doors: ["south"] });
+    t.set(2, 0, 2, "minecraft:white_bed[part=head,facing=north]");
+    t.set(2, 0, 3, "minecraft:white_bed[part=foot,facing=north]");
+    t.set(f.w - 3, 0, 2, "minecraft:crafting_table");
+    t.set(Math.floor(f.w / 2) + 2, 2, f.d - 1, "minecraft:wall_torch[facing=south]");
+    // What the house stands in replaces the dug cells; the rest of the cut is left open air.
+    const built = new Set([...rec.cells.keys()]);
+    const blocks = [...dug.filter((c) => !built.has(`${c.x},${c.y},${c.z}`)), ...rec.cells.values()];
     const anchor = { x: Math.min(...blocks.map((c) => c.x)), y: Math.min(...blocks.map((c) => c.y)), z: Math.min(...blocks.map((c) => c.z)) };
-    this.quarry = { anchor, blocks };
-    this.apron(lot);
+    this.houses.push({ anchor, blocks, lot, style: lot.role ?? "oak" });
   }
 
   pondLot(lot: Lot, t: Draft) {
@@ -400,34 +366,91 @@ class Builder {
 }
 
 const TOPS: Partial<Record<LotKind, string>> = {
-  plaza: "minecraft:polished_andesite", post: "minecraft:polished_andesite", paddock: "minecraft:grass_block",
+  plaza: "minecraft:polished_andesite", paddock: "minecraft:grass_block",
   lodge: "minecraft:grass_block", grove: "minecraft:grass_block", garden: "minecraft:grass_block", ponds: "minecraft:grass_block",
-  site: "minecraft:coarse_dirt", yard: "minecraft:coarse_dirt",
+  yard: "minecraft:coarse_dirt", halt: "minecraft:polished_andesite",
 };
 
 export type TownPlan = ReturnType<typeof planTown>;
 
-export function planTown(t: Terrain, site: SiteChoice, counts: Counts, half: number) {
-  const placed = placeLots(t, site, catalogue(counts), half);
-  const pads = new Works(), works = new Works();
-  const b = new Builder(works, counts);
-  // Pads first, so the roads grade up to them; the buildings go on after the roads.
-  for (const lot of placed.lots) {
-    pads.clear(grow(lot.box, 3));
+export function planTown(t: Terrain, site: SiteChoice, counts: Counts) {
+  return planSettlement(t, site, counts);
+}
+
+const FACING_ROT = { south: 0, west: 1, north: 2, east: 3 } as const;
+
+/** A halt as a lot: a pad at its platform's height, its door away from the track. */
+function haltLot(name: string, h: Halt): Lot {
+  const rot = FACING_ROT[h.door];
+  const dx = h.box.maxX - h.box.minX + 1, dz = h.box.maxZ - h.box.minZ + 1;
+  const [w, d] = rot % 2 ? [dz, dx] : [dx, dz];
+  const frame = new Frame(h.box.minX, h.box.minZ, h.y, rot, w, d);
+  const door = frame.at(Math.floor(w / 2), 0, d - 1), out = frame.at(Math.floor(w / 2), 0, d + 1);
+  return { kind: "halt", name, w, d, ring: [0, 0], range: 0, pad: true, frame, box: frame.box(), y: h.y,
+    door: { x: door.x, z: door.z, out: { x: out.x, z: out.z } } };
+}
+
+export type District = { name: string; site: SiteChoice; box: Box; lots: Lot[]; halt: Lot };
+
+/**
+ * The city on its grid, and with a railway, the station on its west edge and the mine out at the mountain: the mine's
+ * store stands by the halt its line sets down at, fitted to the ground there, and keeps off the track.
+ */
+export function planSettlement(t: Terrain, site: SiteChoice, counts: Counts, net?: Network) {
+  const bands = net ? railBands(net) : [];
+  const placed = placeGrid(site, catalogue(counts));
+  const city = placed.grid.box;
+  const townHalts = (net?.lines ?? []).flatMap((l) => l.halts.filter((h) => h.town)
+    .map((h) => haltLot(`halt-${h.stop.toLowerCase().replace(/\s+/g, "-")}`, h.halt)));
+  const skipped: string[] = [];
+  const works: District[] = (net?.lines ?? []).flatMap((l) => l.works.map((w) => {
+    const h = l.halts.find((x) => x.stop === w.stop)!;
+    const halt = haltLot(`halt-${w.name.toLowerCase().replace(/\s+/g, "-")}`, h.halt);
+    // The store gathers round the halt, on ground near its level.
+    const mid = { x: Math.round((halt.box.minX + halt.box.maxX) / 2), z: Math.round((halt.box.minZ + halt.box.maxZ) / 2) };
+    const at: SiteChoice = { x: mid.x, z: mid.z, level: halt.y - 1, sea: site.sea };
+    const lots = placeLots(t, at, mineLots(), 48, [...bands, grow(halt.box, 3)]);
+    const name = w.name.toLowerCase().replace(/\s+/g, "-");
+    skipped.push(...lots.skipped.map((n) => `${name}:${n}`));
+    const box = grow({ minX: w.x - w.half, maxX: w.x + w.half, minZ: w.z - w.half, maxZ: w.z + w.half }, 32);
+    return { name, site: at, box, lots: lots.lots, halt };
+  }));
+  const allLots = [...placed.lots, ...townHalts, ...works.flatMap((w) => [...w.lots, w.halt])];
+  const pads = new Works(), lay = new Works();
+  const b = new Builder(lay, counts, levelled(t, city, site.level));
+  // The city's ground first, then each lot's own pad on it, so the streets run level between them; the buildings go on
+  // after the streets.
+  const railway = [...bands, ...townHalts.map((h) => grow(h.box, 1))];
+  const eased = levelCity(t, city, site.level, pads,
+    (x, z) => railway.some((r) => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ));
+  // Each block is floored for what it holds, edge to edge, so a building or an area fills its block.
+  for (const block of placed.grid.blocks)
+    if (block.pad && block.kind !== "common") pads.pad(block.box, site.level + 1, TOPS[block.kind] ?? "minecraft:gravel", "minecraft:dirt", "minecraft:dirt", 12);
+  for (const lot of allLots) {
+    if (!placed.lots.includes(lot)) pads.clear(grow(lot.box, 3));
     if (lot.pad) pads.pad(lot.box, lot.y, TOPS[lot.kind] ?? "minecraft:gravel", "minecraft:dirt", "minecraft:stone_bricks", 12);
   }
-  for (const lot of placed.lots) b.lot(lot);
-  const { roads, unrouted } = routeRoads(t, placed.lots, grow(placed.core, 60), site.level);
-  const boxes = placed.lots.map((l) => l.box);
+  for (const lot of allLots) b.lot(lot);
+  const roads = [...placed.grid.streets], unrouted: string[] = [];
+  for (const w of works) {
+    const r = routeRoads(t, [w.halt, ...w.lots], w.box, w.site.level, net ? railBands(net, 0) : []);
+    roads.push(...r.roads.map((road) => ({ ...road, name: `${w.name}-${road.name}` })));
+    unrouted.push(...r.unrouted.map((n) => `${w.name}:${n}`));
+  }
+  const boxes = [city, ...townHalts.map((l) => l.box)];
   const key = (p: Vec) => `${p.x},${p.y},${p.z}`;
   const occupied = new Set([...b.roleChests.map(c => c.pos), ...b.stores.map(c => c.pos), ...b.outputChests, ...b.yardChests,
+    ...b.chestHalves.map(c => c.other), ...b.spareChests,
     ...b.cookers.map(c => c.pos), ...b.tables.map(c => c.pos), ...b.stonecutters, ...b.beds.flatMap(bed => [bed.foot, bed.head])].map(key));
   const spawns = b.spawns.filter(p => !occupied.has(key(p)));
   const extent: Box = { minX: Math.min(...boxes.map((x) => x.minX)), maxX: Math.max(...boxes.map((x) => x.maxX)),
     minZ: Math.min(...boxes.map((x) => x.minZ)), maxZ: Math.max(...boxes.map((x) => x.maxZ)) };
-  return { site, lots: placed.lots, skipped: placed.skipped, core: placed.core, pads, works, roads, unrouted, extent,
+  return { site, lots: allLots, skipped, core: city, grid: placed.grid, eased, pads, works: lay, roads, unrouted, extent, network: net ?? null,
+    districts: works.map((w) => ({ name: w.name, site: w.site, box: w.box, halt: w.halt.box, y: w.halt.y,
+      door: w.halt.door, lots: w.lots.map((l) => ({ kind: l.kind, name: l.name, box: l.box })) })),
     roleChests: b.roleChests, stores: b.stores, outputChests: b.outputChests, yardChests: b.yardChests,
+    chestHalves: b.chestHalves, spareChests: b.spareChests,
     cookers: b.cookers, tables: b.tables, stonecutters: b.stonecutters, campfires: b.campfires, beds: b.beds,
     pens: b.pens, plots: b.plots, grove: b.grove, ponds: b.ponds, spawns, fields: b.fields,
-    quarry: b.quarry, construction: b.site, wall: b.wall, dispatchOrigin: b.dispatchOrigin };
+    houses: b.houses };
 }

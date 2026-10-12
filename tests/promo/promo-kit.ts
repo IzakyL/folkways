@@ -1,5 +1,6 @@
 import { launchPair, type E2EPair } from "../shared/pair";
-import { input, player, reflect, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { camera, input, player, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { stillWorld, walkSpeed } from "@izakyl/blockwright-cinema";
 import { sleepMs } from "../e2e/draw-capture";
 import { VisualRun } from "../visual/visual-kit";
 import { outPath, tracePath } from "../out-paths";
@@ -52,13 +53,7 @@ export function promoClip(run: VisualRun, client: any, server: any, name: string
 }
 
 export async function cinematicWorld(server: MinecraftServer) {
-  await tryCommand(server, "gamerule doDaylightCycle false");
-  await tryCommand(server, "gamerule doWeatherCycle false");
-  await tryCommand(server, "gamerule doMobSpawning false");
-  await tryCommand(server, "gamerule sendCommandFeedback false");
-  await tryCommand(server, "weather clear");
-  await tryCommand(server, "time set noon");
-  await tryCommand(server, "difficulty peaceful");
+  await stillWorld(server);
 }
 
 export async function setTickRate(server: MinecraftServer, rate: number) {
@@ -68,22 +63,17 @@ export async function setTickRate(server: MinecraftServer, rate: number) {
 export type Look = { yaw: number; pitch: number };
 
 export async function setWalkSpeed(server: MinecraftServer, playerName: string, blocksPerSecond: number) {
-  const value = (WALK_ATTRIBUTE * blocksPerSecond) / WALK_SPEED;
-  await world.command(server, `attribute ${playerName} minecraft:generic.movement_speed base set ${round(value)}`);
-  return { blocks_per_second: blocksPerSecond, attribute: round(value) };
+  return { blocks_per_second: blocksPerSecond, attribute: await walkSpeed(server, playerName, blocksPerSecond) };
 }
 
-const WALK_ATTRIBUTE = 0.1;
-const WALK_SPEED = 4.317;
-
-function round(value: number) {
-  return Math.round(value * 10_000) / 10_000;
-}
-
-const KEY_F1 = 290;
+// The takes call this in pairs, as F1 is pressed: once to clear the picture, once more to bring the GUI back.
+const hudHidden = new WeakSet<MinecraftClient>();
 
 export async function hideHud(client: MinecraftClient) {
-  return safeAction(() => input.key(client, { keyCode: KEY_F1 }));
+  const hide = !hudHidden.has(client);
+  const result = await safeAction(() => camera.hud(client, !hide));
+  if (hide) hudHidden.add(client); else hudHidden.delete(client);
+  return result;
 }
 
 export async function writeLook(client: MinecraftClient, look: Look) {
@@ -91,15 +81,7 @@ export async function writeLook(client: MinecraftClient, look: Look) {
 }
 
 export async function setFov(client: MinecraftClient, degrees: number) {
-  const integer = await reflect.invoke(client, {
-    target: { kind: "static", className: "java.lang.Integer" },
-    method: "valueOf", args: [degrees], argTypes: ["int"], returnHandle: true,
-  });
-  await reflect.invoke(client, {
-    target: { kind: "static", className: "net.minecraft.client.Minecraft" },
-    path: "getInstance().options.fov()", method: "set",
-    args: [{ $handle: integer.handle }], argTypes: ["java.lang.Object"],
-  });
+  await camera.fov(client, degrees);
 }
 
 export async function setKey(client: MinecraftClient, keybind: string, pressed: boolean) {

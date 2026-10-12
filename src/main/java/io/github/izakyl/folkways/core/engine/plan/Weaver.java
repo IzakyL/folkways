@@ -22,6 +22,7 @@ import io.github.izakyl.folkways.core.api.work.Refinements;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Unmet;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
+import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import io.github.izakyl.folkways.core.engine.plan.Expansion.Touch;
 import io.github.izakyl.folkways.core.engine.plan.Transfer.From;
@@ -74,7 +75,11 @@ public final class Weaver {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-labor");
 
+    // Open edges fed in one weave before it gives up as not converging: a floor, and so many more for each node
+    // asked of the plan, as like demands joined onto one making still feed each of their edges.
     private static final int MOST_FILLS = 50_000;
+    private static final int FILLS_PER_ASK = 24;
+    private static final int MOST_JOINS_TRIED = 4;
 
     private final Refining refining = new Refining(rules(), this::lent);
     private final Carrying carrying = Haul.CARRYING;
@@ -87,6 +92,8 @@ public final class Weaver {
     private final Map<UUID, List<Expansion>> feeding = new LinkedHashMap<>();
     private final Set<Expansion> live = new LinkedHashSet<>();
     private final Map<UUID, List<Touch>> touched = new LinkedHashMap<>();
+    // The live makings by the goods they make, so a further edge for those goods can be added onto one.
+    private final Map<ItemSpec, List<Expansion>> makings = new LinkedHashMap<>();
 
     // Who has work in hand: carrying goods for it, or merely at it.
     private final Map<UUID, UUID> pinned = new LinkedHashMap<>();
@@ -118,6 +125,7 @@ public final class Weaver {
     private Situation now;
     private Crew crew;
     private Costs costs;
+    private List<Workshop> costedFor = List.of();
     private PackSizing sizing = new PackSizing(new Crew(List.of()));
     // What the crew could do when the plan was last checked against it, and whether it can do something else now.
     private List<Able> fitFor = List.of();
@@ -125,15 +133,53 @@ public final class Weaver {
     // Residents the plan already has at work: in hand, or bound to work on the graph.
     private final Set<UUID> occupied = new LinkedHashSet<>();
     private final Map<Stash, Boolean> unreachable = new HashMap<>();
+    // The walk bringing each input to each workshop, read once a round: stock taken during the round is not seen.
+    private record WalkIn(ItemSpec input, WorldPos at) {
+    }
+
+    private final Map<WalkIn, Long> walkIns = new HashMap<>();
 
     private Choice choosing;
     private Why lastWhy = Why.NO_SOURCE;
     private boolean weaving;
     private int fills;
+    // What the last open edges before giving up fed, so the error names what kept growing.
+    private final Map<String, Integer> lastFed = new LinkedHashMap<>();
+    // How each try at joining an edge onto a live making went this weave.
+    private final Map<String, Integer> joinsWent = new java.util.TreeMap<>();
+    // Makings a join was tried on and failed this weave, by the edge they were first grown for; and whether a making
+    // is being put back as it was, when nothing is joined onto anything.
+    private final Set<UUID> joinFailed = new HashSet<>();
+    private boolean restoring;
+    private String madeShort = "";
+
+    // What live growths bind, kept as they change; and what changed since the plan was last shown.
+    private final Bonds bonds = new Bonds(new Bonds.Heard() {
+        @Override
+        public void ordered(Before order) {
+            reordered.add(order);
+        }
+
+        @Override
+        public void bound(UUID node) {
+            dirty.add(node);
+        }
+    });
+    private final Set<UUID> dirty = new LinkedHashSet<>();
+    private final Set<Before> reordered = new LinkedHashSet<>();
+
+    // What was last shown of the plan, so that only what changes is shown again.
+    private final Map<UUID, Vertex> shown = new HashMap<>();
+    private final Map<UUID, Set<UUID>> shownGroups = new HashMap<>();
+    private final Map<UUID, UUID> shownPins = new HashMap<>();
+    private final Map<UUID, Set<UUID>> shownAfter = new HashMap<>();
+    private final Map<UUID, Set<UUID>> shownBefore = new HashMap<>();
+    private Set<UUID> shownHeld = Set.of();
 
     public Weaver(Claims claims, Cooldowns cooldowns) {
         this.claims = claims;
         this.cooldowns = cooldowns;
+        claims.watch(dirty::add);
     }
 
     // The core's own rules - deliveries - come before anything a plugin declares.
@@ -186,7 +232,15 @@ public final class Weaver {
         refitting |= !able.equals(fitFor);
         fitFor = able;
         unreachable.clear();
-        this.costs = new Costs(now.workshops(), this::drawableAnywhere, claims::revision);
+        walkIns.clear();
+        // What workshops offer is learned once for as long as the same workshops stand; the stock it is priced
+        // against is read again every round.
+        if (costs == null || !now.workshops().equals(costedFor)) {
+            costedFor = now.workshops();
+            costs = new Costs(costedFor, this::drawableAnywhere, claims::revision);
+        } else {
+            costs.restock();
+        }
         occupied.clear();
         for (Crew.Hand hand : crew.hands()) {
             hand.holding().ifPresent(held -> occupied.add(hand.id()));
@@ -196,7 +250,7 @@ public final class Weaver {
         }
     }
 
-    public Weave grow(boolean retry) {
+    public WeaveDelta grow(boolean retry) {
         if (weaving) {
             rollBack();
         }
@@ -207,6 +261,9 @@ public final class Weaver {
         grownNow.clear();
         madeNow.clear();
         fills = 0;
+        lastFed.clear();
+        joinsWent.clear();
+        joinFailed.clear();
         choosing = null;
 
         if (refitting && !crew.hands().isEmpty()) {
@@ -227,7 +284,6 @@ public final class Weaver {
         if (!crew.hands().isEmpty()) {
             List<UUID> due = new ArrayList<>(sprouting);
             sprouting.clear();
-            due.sort(Comparator.comparingInt(id -> asked.containsKey(id) ? asked.get(id).work.rank() : 0));
             // What comes after other asked work is grown once that work stands; until then it waits its turn.
             boolean grew = true;
             while (grew) {
@@ -255,7 +311,10 @@ public final class Weaver {
         }
         recover(retry);
         weaving = false;
-        return projection();
+        if (fills > 2_000 && !joinsWent.isEmpty()) {
+            LOGGER.info("weave fed {} open edges; joining like demands went {}", fills, joinsWent);
+        }
+        return publish();
     }
 
     private void rollBack() {
@@ -285,7 +344,7 @@ public final class Weaver {
         for (Node node : work.nodes()) {
             Request was = asked.get(node.id());
             regrow(node.id(), Ending.REVOKED);
-            Request request = new Request(owner, new Grown(List.of(node), List.of(), work.rank(), List.of()));
+            Request request = new Request(owner, Grown.of(node));
             if (was != null) {
                 request.after.addAll(was.after);
             }
@@ -435,12 +494,20 @@ public final class Weaver {
         }
         for (UUID id : together(node)) {
             (carrying ? pinned : holding).put(id, worker);
+            dirty.add(id);
+            Expansion grown = grownBy.get(id);
+            if (grown != null) {
+                grown.started = true;
+            }
         }
     }
 
     public void released(UUID node) {
         if (nodes.containsKey(node)) {
-            together(node).forEach(holding::remove);
+            for (UUID id : together(node)) {
+                holding.remove(id);
+                dirty.add(id);
+            }
         }
     }
 
@@ -448,15 +515,21 @@ public final class Weaver {
         unask(node);
         handOff(node);
         for (Expansion fed : List.copyOf(feeding.getOrDefault(node, List.of()))) {
-            undo(fed, Ending.DONE);
+            // A making shared with other consumers goes on for them: this one only had its share.
+            if (fed.shared()) {
+                detach(fed, node);
+            } else {
+                undo(fed, Ending.DONE);
+            }
         }
         Expansion grown = grownBy.get(node);
         forget(node);
         if (grown != null) {
+            grown.started = true;
             grown.nodes.remove(node);
             if (grown.nodes.isEmpty()) {
                 settle(grown, Ending.DONE);
-                if (grown.isRequest() || !nodes.containsKey(grown.serves.consumer())) {
+                if (grown.isRequest() || grown.fed().stream().noneMatch(edge -> nodes.containsKey(edge.consumer()))) {
                     remove(grown);
                 }
             }
@@ -474,7 +547,13 @@ public final class Weaver {
     }
 
     public void left(UUID resident) {
-        holding.values().removeIf(resident::equals);
+        holding.entrySet().removeIf(held -> {
+            if (resident.equals(held.getValue())) {
+                dirty.add(held.getKey());
+                return true;
+            }
+            return false;
+        });
         stowing.remove(resident);
         stowFresh.remove(resident);
         List<UUID> stranded = new ArrayList<>();
@@ -546,6 +625,7 @@ public final class Weaver {
         nodes.clear();
         grownBy.clear();
         feeding.clear();
+        makings.clear();
         live.clear();
         touched.clear();
         pinned.clear();
@@ -563,6 +643,15 @@ public final class Weaver {
         noted.clear();
         looks.clear();
         madeNow.clear();
+        bonds.clear();
+        dirty.clear();
+        reordered.clear();
+        shown.clear();
+        shownGroups.clear();
+        shownPins.clear();
+        shownAfter.clear();
+        shownBefore.clear();
+        shownHeld = Set.of();
         weaving = false;
         sizing = new PackSizing(new Crew(List.of()));
         fitFor = List.of();
@@ -625,8 +714,10 @@ public final class Weaver {
             drop(grown.asked, how);
             return;
         }
-        if (nodes.containsKey(grown.serves.consumer())) {
-            reopened.add(grown.reopened());
+        for (Edge edge : grown.fed()) {
+            if (nodes.containsKey(edge.consumer())) {
+                reopened.add(edge);
+            }
         }
         undo(grown, how);
     }
@@ -755,7 +846,7 @@ public final class Weaver {
         }
         int mark = noted.size();
         choosing = choice;
-        Expansion grown = begin(new Expansion(id, work.rank()));
+        Expansion grown = begin(new Expansion(id));
         grown.holds.addAll(result.holds());
         try {
             place(grown, work);
@@ -797,7 +888,7 @@ public final class Weaver {
                     bound.addAll(other.nodes);
                 }
             }
-            grown.together.add(bound);
+            grown.together(bound);
         }
     }
 
@@ -826,7 +917,7 @@ public final class Weaver {
             if (node == null) {
                 continue;
             }
-            for (Edge edge : Edge.into(node, grown.rank, trail)) {
+            for (Edge edge : Edge.into(node, trail)) {
                 if (fill(edge) > 0) {
                     return false;
                 }
@@ -856,18 +947,34 @@ public final class Weaver {
 
     private long feed(Edge edge) {
         lastWhy = Why.NO_SOURCE;
-        if (++fills > MOST_FILLS) {
-            if (fills == MOST_FILLS + 1) {
+        int most = MOST_FILLS + FILLS_PER_ASK * asked.size();
+        if (++fills > most) {
+            if (fills == most + 1) {
                 LOGGER.error("the plan gave up after {} open edges with {} nodes on the graph - growth is not"
-                    + " converging; this is a bug, not a shortage", MOST_FILLS, nodes.size());
+                    + " converging; this is a bug, not a shortage; the last edges fed {}", most, nodes.size(),
+                    lastFed.entrySet().stream().sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                        .limit(15).map(one -> one.getKey() + "=" + one.getValue()).toList());
             }
             return edge.count();
+        }
+        if (fills > most - 2_000) {
+            Node consumer = nodes.get(edge.consumer());
+            lastFed.merge((consumer == null ? "?" : consumer.getClass().getSimpleName()) + "<-"
+                + edge.need().spec().describe() + "x" + edge.count() + " trail=" + edge.trail().size(), 1, Integer::sum);
         }
         if (edge.loops() || !nodes.containsKey(edge.consumer())) {
             return edge.count();
         }
         long whole = edge.count();
         long left = whole - fromPack(edge, whole);
+        if (left > 0 && !restoring && joinable(edge.spec())) {
+            List<Source> ranked = sources(edge, left, whole);
+            if (!ranked.isEmpty() && ranked.getFirst() instanceof Source.Offered(Costs.Offer cheapest)) {
+                left -= joined(edge, cheapest, left);
+            } else {
+                joinsWent.merge(ranked.isEmpty() ? "no source" : "a lot is cheaper", 1, Integer::sum);
+            }
+        }
         Why why = Why.NO_SOURCE;
         boolean grew = left > 0;
         while (left > 0 && grew) {
@@ -892,8 +999,18 @@ public final class Weaver {
         return left;
     }
 
+    // Whether some live making makes goods the edge would take.
+    private boolean joinable(ItemSpec wanted) {
+        for (ItemSpec made : makings.keySet()) {
+            if (admits(wanted, made)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // Every way the edge could be fed, cheapest first: lots in stock cost the walk to the consumer, workshop offers
-    // their work and inputs besides. Offers are asked for again with what is left each time round.
+    // their work and inputs besides, the walk bringing those inputs to the workshop, and the walk on to the consumer. Offers are asked for again with what is left each time round.
     private List<Source> sources(Edge edge, long left, long whole) {
         record Ranked(Source source, long cost, int kind, long plenty, String name) {
         }
@@ -916,7 +1033,7 @@ public final class Weaver {
                 long cost = costs.of(made, near, edge.upstream());
                 if (cost != Costs.UNREACHABLE) {
                     ranked.add(new Ranked(new Source.Offered(offer),
-                        Costs.plus(cost, walkFrom(made, edge.spec(), near)), 1, 0, ""));
+                        Costs.plus(Costs.plus(cost, walkIn(made)), walkFrom(made, edge.spec(), near)), 1, 0, ""));
                 }
             }
         }
@@ -1009,11 +1126,18 @@ public final class Weaver {
     // A workshop's offer, taken: its work, the carry of what it makes to the consumer, and the work's own needs
     // fed in turn - all of it, or none.
     private long fromWorkshop(Edge edge, Costs.Offer offer, long left) {
+        return make(edge, left, List.of(), offer);
+    }
+
+    // A workshop's offer taken for one edge first and then for every further edge in `also`, each fed whole from the
+    // one making: what the primary edge gets is returned, or nothing, when any part could not be laid.
+    private long make(Edge edge, long left, List<Edge> also, Costs.Offer offer) {
         Refinement.Change change = offer.change();
         ItemSpec made = concreteOf(change.replacement(), edge.spec());
         Choice choice = new Choice(edge.id(), made, offer.from().key());
         if (cooldowns.shut(choice)) {
             lastWhy = new Why.Cooling(choice);
+            madeShort = "cooling";
             return 0;
         }
         Refining.Result expanded;
@@ -1031,7 +1155,8 @@ public final class Weaver {
         holds.addAll(expanded.holds());
         Optional<RefusalKind> turned = take(holds);
         Set<UUID> after = after(holds);
-        if (turned.isEmpty() && reaches(edge.consumer(), after)) {
+        if (turned.isEmpty() && (reaches(edge.consumer(), after)
+                || also.stream().anyMatch(further -> reaches(further.consumer(), after)))) {
             release(holds, Ending.DROPPED);
             turned = Optional.of(LaborRefusal.WAITS_ON_ITSELF);
         }
@@ -1050,24 +1175,208 @@ public final class Weaver {
             if (!fitsAll(work)) {
                 undo(grown, Ending.DROPPED);
                 lastWhy = Why.NO_HAND;
+                madeShort = "no hand";
                 return 0;
             }
             long yield = yieldOf(work, made);
             long covers = Math.min(left, yield);
             UUID maker = makerOf(work, made);
+            boolean shared = !also.isEmpty();
             if (maker == null
-                    || transfer(grown, new Transfer(new From.Made(maker, yield), new To.Feeding(edge), made,
-                        covers)) < covers
-                    || !open(grown, edge.upstream())) {
+                    || transfer(grown, new Transfer(new From.Made(maker, yield, shared), new To.Feeding(edge), made,
+                        covers)) < covers) {
                 undo(grown, Ending.DROPPED);
+                madeShort = maker == null ? "no maker" : "carry to the first consumer: " + lastWhy;
                 return 0;
             }
             grown.covers = covers;
+            Left lying = leftIn(grown, maker);
+            Stash out = lying == null ? null : lying.out();
+            for (Edge further : also) {
+                attach(grown, further);
+                if (lying == null || transfer(grown, new Transfer(new From.LeftBy(lying.suppliers(), lying.out()),
+                        new To.Feeding(further), made, further.count())) < further.count()) {
+                    undo(grown, Ending.DROPPED);
+                    madeShort = out == null ? "no store beside the maker: " + grown.flows.stream()
+                        .filter(flow -> flow.after().filter(maker::equals).isPresent())
+                        .map(flow -> String.valueOf(nodes.get(flow.to()) == null ? "?"
+                            : nodes.get(flow.to()).getClass().getSimpleName()))
+                        .toList() + " touches " + grown.touches.stream().filter(t -> t.into() != null)
+                        .map(t -> nodes.get(t.node()) == null ? "?" : nodes.get(t.node()).getClass().getSimpleName())
+                        .toList() : "carry to a further consumer: " + lastWhy;
+                    return 0;
+                }
+            }
+            int mark = noted.size();
+            if (!open(grown, edge.upstream())) {
+                madeShort = "inputs: " + (noted.size() > mark ? noted.getLast().spec().describe() + " x"
+                    + noted.getLast().count() + " " + noted.getLast().why() : lastWhy);
+                undo(grown, Ending.DROPPED);
+                return 0;
+            }
+            grown.making = new Expansion.Making(made, maker, out, offer);
+            makings.computeIfAbsent(made, key -> new ArrayList<>()).add(grown);
             return covers;
         } catch (RuntimeException | LinkageError broken) {
             undo(grown, Ending.DROPPED);
             throw broken;
         }
+    }
+
+    // Where what the maker makes is left for its consumers, and whose work leaves it there.
+    private record Left(Stash out, List<UUID> suppliers) {
+    }
+
+    // The store this growth leaves what its maker makes in, if it has one: beside the maker, or one the made goods are
+    // carried on into.
+    private Left leftIn(Expansion grown, UUID maker) {
+        for (Touch touch : grown.touches) {
+            if (touch.node().equals(maker) && touch.into() != null) {
+                return new Left(touch.into(), List.of(maker));
+            }
+        }
+        Stash out = null;
+        List<UUID> puts = new ArrayList<>();
+        for (Flow flow : grown.flows) {
+            if (flow.after().filter(maker::equals).isEmpty() || puts.contains(flow.to())) {
+                continue;
+            }
+            for (Touch touch : grown.touches) {
+                if (touch.node().equals(flow.to()) && touch.into() != null
+                        && (out == null || out.equals(touch.into()))) {
+                    out = touch.into();
+                    puts.add(flow.to());
+                    break;
+                }
+            }
+        }
+        return out == null ? null : new Left(out, puts);
+    }
+
+    // An edge wanting what a live making already makes, at the workshop the edge would take it from anyway, is added
+    // onto that making: the workshop is asked for the whole again, the making is laid afresh to feed every edge it
+    // fed and this one, each from the store beside the maker, and its own needs are fed in turn - so like demands
+    // share one way of making rather than each growing its own. A making is joined only while none of its work, or of
+    // what feeds it, is done or in hand, and only when the workshop makes enough in one go; otherwise the edge is fed
+    // on its own. Returns what it got: all of `left`, or nothing.
+    private long joined(Edge edge, Costs.Offer cheapest, long left) {
+        ItemSpec made = concreteOf(cheapest.change().replacement(), edge.spec());
+        WorkSite wants = nodes.get(edge.consumer()).spec().site();
+        // The making at the workshop the edge would choose first, then the nearest others, a few at most.
+        List<Expansion> candidates = new ArrayList<>(makings.getOrDefault(made, List.of()));
+        candidates.sort(Comparator.comparingInt((Expansion one) ->
+                one.making.offer().from().key().equals(cheapest.from().key()) ? 0 : 1)
+            .thenComparingLong(one -> Transfer.walk(one.making.offer().from().site().where(), wants)));
+        int tried = 0;
+        for (Expansion into : candidates) {
+            Expansion.Making making = into.making;
+            if (!live.contains(into)) {
+                List<Expansion> same = makings.get(made);
+                if (same != null) {
+                    same.remove(into);
+                }
+                joinsWent.merge("skipped: gone", 1, Integer::sum);
+                continue;
+            }
+            String skip = into.full ? "full" : joinFailed.contains(into.serves.id()) ? "failed before"
+                : !into.serves.trail().equals(edge.trail()) ? "other trail"
+                : into.consumers().contains(edge.consumer()) ? "same consumer" : !untouched(into) ? "in hand"
+                : reaches(edge.consumer(), into.nodes) ? "would loop" : null;
+            if (skip != null) {
+                joinsWent.merge("skipped: " + skip, 1, Integer::sum);
+                continue;
+            }
+            if (++tried > MOST_JOINS_TRIED) {
+                break;
+            }
+            List<Edge> fed = into.fed();
+            if (fed.isEmpty() || !fed.getFirst().consumer().equals(into.serves.consumer())) {
+                continue;
+            }
+            long total = left;
+            for (Edge one : fed) {
+                total += one.count();
+            }
+            WorkSite near = nodes.get(into.serves.consumer()).spec().site();
+            Costs.Offer bigger = null;
+            for (Costs.Offer offer : costs.offers(Produce.of(OWNER, near, made, total, sizing.batching(total)))) {
+                if (offer.from().key().equals(making.offer().from().key())
+                        && yieldOf(offer.change().replacement(), made) >= total) {
+                    bigger = offer;
+                    break;
+                }
+            }
+            if (bigger == null) {
+                into.full = true;
+                List<Expansion> same = makings.get(made);
+                if (same != null) {
+                    same.remove(into);
+                }
+                tried--;
+                joinsWent.merge("workshop makes too few at once", 1, Integer::sum);
+                continue;
+            }
+            int waiting = reopened.size();
+            undo(into, Ending.DROPPED);
+            List<Edge> also = new ArrayList<>(fed.subList(1, fed.size()));
+            also.add(edge.covering(left));
+            long got = make(fed.getFirst(), fed.getFirst().count(), also, bigger);
+            if (got <= 0) {
+                // Put the making back as it was, from the offer it was taken from, joining nothing onto anything.
+                Why why = lastWhy;
+                String short_ = madeShort;
+                joinFailed.add(fed.getFirst().id());
+                boolean was = restoring;
+                restoring = true;
+                try {
+                    if (make(fed.getFirst(), fed.getFirst().count(), fed.subList(1, fed.size()), making.offer()) <= 0) {
+                        reopened.addAll(fed);
+                    }
+                } finally {
+                    restoring = was;
+                }
+                lastWhy = why;
+                madeShort = short_;
+            }
+            // What the old making's shared feeders also fed is fed again now.
+            List<Edge> again = new ArrayList<>(reopened.subList(waiting, reopened.size()));
+            reopened.subList(waiting, reopened.size()).clear();
+            boolean was = restoring;
+            restoring = true;
+            try {
+                for (Edge one : again) {
+                    if (nodes.containsKey(one.consumer()) && fill(one) > 0) {
+                        reopened.add(one);
+                    }
+                }
+            } finally {
+                restoring = was;
+            }
+            if (got > 0) {
+                joinsWent.merge("joined", 1, Integer::sum);
+                return left;
+            }
+            joinsWent.merge("laying afresh failed: " + madeShort, 1, Integer::sum);
+        }
+        return 0;
+    }
+
+    // Whether nothing of a growth, nor of anything feeding it, is done or in hand: it may still be laid afresh.
+    private boolean untouched(Expansion grown) {
+        if (grown.started) {
+            return false;
+        }
+        for (UUID id : grown.nodes) {
+            if (holding.containsKey(id) || pinned.containsKey(id)) {
+                return false;
+            }
+            for (Expansion fed : feeding.getOrDefault(id, List.of())) {
+                if (!untouched(fed)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     // ---- the transfer ----
@@ -1153,12 +1462,12 @@ public final class Weaver {
 
         @Override
         public void flow(Flow flow) {
-            grown.flows.add(flow);
+            grown.flow(flow);
         }
 
         @Override
         public void together(UUID one, UUID other) {
-            grown.together.add(Set.of(one, other));
+            grown.together(Set.of(one, other));
         }
 
         @Override
@@ -1257,7 +1566,7 @@ public final class Weaver {
                 }
             }
             stores.sort(Comparator.comparingInt(RecoveryStore::ticks));
-            Expansion grown = begin(new Expansion(hand.id(), 0));
+            Expansion grown = begin(new Expansion(hand.id()));
             List<Gap> short_ = new ArrayList<>();
             UUID before = null;
             Map<ItemSpec, Long> reserved = new LinkedHashMap<>();
@@ -1284,7 +1593,7 @@ public final class Weaver {
                     }
                     UUID stow = grown.nodes.getLast();
                     if (before != null) {
-                        grown.links.add(new Before(before, stow));
+                        grown.link(new Before(before, stow));
                     }
                     before = stow;
                     left -= count;
@@ -1330,6 +1639,7 @@ public final class Weaver {
 
     private Expansion begin(Expansion grown) {
         live.add(grown);
+        grown.bind(bonds);
         if (grown.isRequest()) {
             answering.put(grown.asked, grown);
         } else {
@@ -1339,12 +1649,27 @@ public final class Weaver {
         return grown;
     }
 
+    // A further edge the growth feeds, from the same making.
+    private void attach(Expansion grown, Edge edge) {
+        grown.also.add(edge);
+        feeding.computeIfAbsent(edge.consumer(), key -> new ArrayList<>()).add(grown);
+    }
+
+    // A consumer finished with its share of a shared making: the making goes on for the rest.
+    private void detach(Expansion grown, UUID consumer) {
+        grown.detached.add(consumer);
+        List<Expansion> fed = feeding.get(consumer);
+        if (fed != null && fed.remove(grown) && fed.isEmpty()) {
+            feeding.remove(consumer);
+        }
+    }
+
     private void place(Expansion grown, Grown work) {
         for (Node node : work.nodes()) {
             add(grown, node);
         }
-        grown.links.addAll(work.links());
-        grown.together.addAll(work.workerGroups());
+        work.links().forEach(grown::link);
+        work.workerGroups().forEach(grown::together);
     }
 
     private void add(Expansion grown, Node node) {
@@ -1353,12 +1678,14 @@ public final class Weaver {
         grownBy.put(id, grown);
         grown.nodes.add(id);
         grownNow.add(id);
+        dirty.add(id);
         if (choosing != null) {
             cooldowns.made(id, choosing);
         }
     }
 
     private void touch(Expansion grown, Touch touch) {
+        dirty.add(touch.node());
         grown.touches.add(touch);
         touched.computeIfAbsent(touch.node(), key -> new ArrayList<>()).add(touch);
     }
@@ -1372,13 +1699,21 @@ public final class Weaver {
         grown.claims.add(claim);
     }
 
-    // Takes a growth back: what was grown to feed its nodes first, then its nodes, bookings, touches and holds.
+    // Takes a growth back: what was grown to feed its nodes first, then its nodes, bookings, touches and holds. A
+    // making it shared with consumers of other growths goes too, and their edges are open again.
     private void undo(Expansion grown, Ending how) {
         if (!live.contains(grown)) {
             return;
         }
         for (UUID id : List.copyOf(grown.nodes)) {
             for (Expansion fed : List.copyOf(feeding.getOrDefault(id, List.of()))) {
+                if (fed.shared()) {
+                    for (Edge edge : fed.fed()) {
+                        if (!grown.nodes.contains(edge.consumer()) && nodes.containsKey(edge.consumer())) {
+                            reopened.add(edge);
+                        }
+                    }
+                }
                 undo(fed, Ending.REVOKED);
             }
         }
@@ -1399,7 +1734,9 @@ public final class Weaver {
     }
 
     private void remove(Expansion grown) {
+        grown.unbind();
         for (Touch touch : grown.touches) {
+            dirty.add(touch.node());
             List<Touch> on = touched.get(touch.node());
             if (on != null && on.remove(touch) && on.isEmpty()) {
                 touched.remove(touch.node());
@@ -1409,9 +1746,17 @@ public final class Weaver {
         if (grown.isRequest()) {
             answering.remove(grown.asked, grown);
         } else {
-            List<Expansion> fed = feeding.get(grown.serves.consumer());
-            if (fed != null && fed.remove(grown) && fed.isEmpty()) {
-                feeding.remove(grown.serves.consumer());
+            for (UUID consumer : grown.consumers()) {
+                List<Expansion> fed = feeding.get(consumer);
+                if (fed != null && fed.remove(grown) && fed.isEmpty()) {
+                    feeding.remove(consumer);
+                }
+            }
+            if (grown.making != null) {
+                List<Expansion> same = makings.get(grown.making.made());
+                if (same != null && same.remove(grown) && same.isEmpty()) {
+                    makings.remove(grown.making.made());
+                }
             }
         }
         madeNow.remove(grown);
@@ -1429,18 +1774,18 @@ public final class Weaver {
         booked.clear();
         List<Touch> said = grown.touches.subList(mark.touches(), grown.touches.size());
         for (Touch touch : said) {
+            dirty.add(touch.node());
             List<Touch> on = touched.get(touch.node());
             if (on != null && on.remove(touch) && on.isEmpty()) {
                 touched.remove(touch.node());
             }
         }
         said.clear();
-        grown.links.subList(mark.links(), grown.links.size()).clear();
-        grown.flows.subList(mark.flows(), grown.flows.size()).clear();
-        grown.together.subList(mark.together(), grown.together.size()).clear();
+        grown.truncate(mark);
     }
 
     private void forget(UUID node) {
+        dirty.add(node);
         claims.release(node);
         cooldowns.forget(node);
         Node gone = nodes.remove(node);
@@ -1498,7 +1843,7 @@ public final class Weaver {
         work.links().forEach(link -> first.remove(link.to()));
         for (UUID before : after) {
             for (UUID id : first) {
-                grown.links.add(new Before(before, id));
+                grown.link(new Before(before, id));
             }
         }
     }
@@ -1506,27 +1851,7 @@ public final class Weaver {
     // Whether any of `targets` comes after `from` on the graph: work that waits on them and feeds `from` would wait
     // on itself.
     private boolean reaches(UUID from, Set<UUID> targets) {
-        if (targets.isEmpty()) {
-            return false;
-        }
-        Map<UUID, List<UUID>> next = new HashMap<>();
-        for (Expansion grown : expansions()) {
-            for (Before order : orders(grown)) {
-                next.computeIfAbsent(order.from(), key -> new ArrayList<>()).add(order.to());
-            }
-        }
-        Set<UUID> seen = new LinkedHashSet<>();
-        List<UUID> pending = new ArrayList<>(List.of(from));
-        while (!pending.isEmpty()) {
-            UUID id = pending.removeLast();
-            if (targets.contains(id)) {
-                return true;
-            }
-            if (seen.add(id)) {
-                pending.addAll(next.getOrDefault(id, List.of()));
-            }
-        }
-        return false;
+        return bonds.reaches(from, targets);
     }
 
     private static void release(List<Hold> holds, Ending how) {
@@ -1541,35 +1866,9 @@ public final class Weaver {
 
     // ---- reading the graph ----
 
-    // What a growth says must come before what: its links, and its flows from work to work.
-    private static List<Before> orders(Expansion grown) {
-        List<Before> orders = new ArrayList<>(grown.links);
-        for (Flow flow : grown.flows) {
-            flow.after().ifPresent(from -> orders.add(new Before(from, flow.to())));
-        }
-        return orders;
-    }
-
-    private List<Expansion> expansions() {
-        return List.copyOf(live);
-    }
-
     // The nodes one worker must do together with this one.
     private Set<UUID> together(UUID first) {
-        Set<UUID> group = new LinkedHashSet<>(List.of(first));
-        List<Set<UUID>> sets = new ArrayList<>();
-        for (Expansion grown : expansions()) {
-            sets.addAll(grown.together);
-        }
-        boolean grew;
-        do {
-            grew = false;
-            for (Set<UUID> set : sets) {
-                if (!Collections.disjoint(set, group)) {
-                    grew |= group.addAll(set);
-                }
-            }
-        } while (grew);
+        Set<UUID> group = bonds.fellows(first);
         group.removeIf(id -> !id.equals(first) && !nodes.containsKey(id));
         return group;
     }
@@ -1711,81 +2010,136 @@ public final class Weaver {
         return draws;
     }
 
-    private Weave projection() {
-        Map<UUID, Vertex> vertices = new LinkedHashMap<>();
-        nodes.forEach((id, node) -> {
-            Node worked = node instanceof TransferNode transfer && transfer.handedOn()
-                ? transfer.resolved(cargoOf(id)) : node;
-            vertices.put(id, new Vertex(id, worked, placement(id)));
-        });
-        Set<Before> links = new LinkedHashSet<>();
-        List<Flow> flows = new ArrayList<>();
-        Map<UUID, Set<UUID>> groups = new LinkedHashMap<>();
-        for (Expansion grown : expansions()) {
-            for (Before link : grown.links) {
-                if (vertices.containsKey(link.from()) && vertices.containsKey(link.to())) {
-                    links.add(link);
-                }
-            }
-            for (Flow flow : grown.flows) {
-                if (vertices.containsKey(flow.to()) && flow.after().map(vertices::containsKey).orElse(true)) {
-                    flows.add(flow);
-                }
-            }
-            for (Set<UUID> set : grown.together) {
-                Set<UUID> group = new LinkedHashSet<>();
-                for (UUID id : set) {
-                    if (nodes.containsKey(id)) {
-                        group.addAll(groups.getOrDefault(id, Set.of(id)));
-                    }
-                }
-                for (UUID id : group) {
-                    groups.put(id, group);
-                }
-            }
+    // ---- what the plan shows ----
+
+    // The node as the schedule takes it: a carry whose goods are handed on to it shows those goods.
+    private Vertex vertexOf(UUID id) {
+        Node node = nodes.get(id);
+        Node worked = node instanceof TransferNode transfer && transfer.handedOn()
+            ? transfer.resolved(cargoOf(id)) : node;
+        return new Vertex(id, worked, placement(id));
+    }
+
+    // Shows what changed since the plan was last shown: each piece of work touched since, with its old group's and
+    // its new group's work, as a group is shown whole and bound to one worker; and each order said or unsaid since.
+    private WeaveDelta publish() {
+        Set<UUID> due = new LinkedHashSet<>(dirty);
+        for (UUID id : dirty) {
+            due.addAll(shownGroups.getOrDefault(id, Set.of()));
         }
-        // A group is done by one resident: whoever has some of it in hand, or else whoever any of it is bound to.
-        // Two of them in one group is a plan the schedule cannot keep, and a bug in how it was grown.
-        List<Set<UUID>> together = List.copyOf(new LinkedHashSet<>(groups.values()));
-        Map<UUID, UUID> pins = new LinkedHashMap<>();
-        for (Set<UUID> group : together) {
+        dirty.clear();
+        Map<UUID, Vertex> put = new LinkedHashMap<>();
+        Set<UUID> removed = new LinkedHashSet<>();
+        Set<UUID> arrived = new LinkedHashSet<>();
+        Map<UUID, Set<UUID>> groups = new LinkedHashMap<>();
+        Map<UUID, Optional<UUID>> pins = new LinkedHashMap<>();
+        Set<UUID> grouped = new HashSet<>();
+        Set<UUID> fresh = new LinkedHashSet<>(grownNow);
+        fresh.retainAll(nodes.keySet());
+        for (UUID id : due) {
+            if (!nodes.containsKey(id)) {
+                if (shown.remove(id) != null) {
+                    removed.add(id);
+                    unshowOrdersOf(id);
+                }
+                shownGroups.remove(id);
+                shownPins.remove(id);
+                continue;
+            }
+            Vertex vertex = vertexOf(id);
+            Vertex was = shown.put(id, vertex);
+            if (was == null) {
+                arrived.add(id);
+            }
+            if (!vertex.equals(was) || fresh.contains(id)) {
+                put.put(id, vertex);
+            }
+            if (grouped.contains(id)) {
+                continue;
+            }
+            // Groups are shown joined only through work still on the graph: work done binds nothing together.
+            Set<UUID> group = bonds.fellows(id, nodes::containsKey);
+            grouped.addAll(group);
+            // A group is done by one resident: whoever has some of it in hand, or else whoever any of it is bound
+            // to. Two of them in one group is a plan the schedule cannot keep, and a bug in how it was grown.
             SequencedSet<UUID> owners = new LinkedHashSet<>();
             group.stream().map(holding::get).filter(Objects::nonNull).forEach(owners::add);
-            group.forEach(id -> ownerOf(id).ifPresent(owners::add));
+            group.forEach(member -> ownerOf(member).ifPresent(owners::add));
             if (owners.size() > 1) {
                 LOGGER.error("work that one resident must do together is bound to {}: {}", owners, group);
             }
-            if (!owners.isEmpty()) {
-                UUID owner = owners.getFirst();
-                group.forEach(id -> pins.put(id, owner));
+            Set<UUID> together = group.size() > 1 ? Set.copyOf(group) : null;
+            for (UUID member : group) {
+                UUID pin = together == null ? ownerOf(member).orElse(null)
+                    : owners.isEmpty() ? null : owners.getFirst();
+                if (!Objects.equals(together, shownGroups.get(member))) {
+                    if (together == null) {
+                        shownGroups.remove(member);
+                    } else {
+                        shownGroups.put(member, together);
+                    }
+                    groups.put(member, together == null ? Set.of() : together);
+                }
+                if (!Objects.equals(pin, shownPins.get(member))) {
+                    if (pin == null) {
+                        shownPins.remove(member);
+                    } else {
+                        shownPins.put(member, pin);
+                    }
+                    pins.put(member, Optional.ofNullable(pin));
+                }
             }
         }
-        for (UUID id : nodes.keySet()) {
-            if (!groups.containsKey(id)) {
-                ownerOf(id).ifPresent(owner -> pins.put(id, owner));
+        for (UUID id : arrived) {
+            bonds.forEachOrderOf(id, reordered::add);
+        }
+        Set<Before> linked = new LinkedHashSet<>();
+        Set<Before> unlinked = new LinkedHashSet<>();
+        for (Before order : reordered) {
+            boolean should = bonds.ordered(order) && nodes.containsKey(order.from()) && nodes.containsKey(order.to());
+            boolean is = shownAfter.getOrDefault(order.from(), Set.of()).contains(order.to());
+            if (should && !is) {
+                shownAfter.computeIfAbsent(order.from(), key -> new LinkedHashSet<>()).add(order.to());
+                shownBefore.computeIfAbsent(order.to(), key -> new LinkedHashSet<>()).add(order.from());
+                linked.add(order);
+            } else if (!should && is) {
+                unshow(order);
+                unlinked.add(order);
             }
         }
-        pins.keySet().retainAll(vertices.keySet());
-        Set<UUID> fresh = new LinkedHashSet<>(grownNow);
-        fresh.retainAll(vertices.keySet());
-        Map<UUID, Grown> pending = new LinkedHashMap<>();
-        asked.forEach((id, request) -> {
-            if (request.pending != null) {
-                pending.put(id, request.pending.graph());
-            }
-        });
-        Map<UUID, Integer> ranks = new LinkedHashMap<>();
-        for (UUID id : vertices.keySet()) {
-            int rank = grownBy.get(id).rank;
-            if (rank != 0) {
-                ranks.put(id, rank);
-            }
-        }
+        reordered.clear();
         List<Gone> gone = List.copyOf(going);
         going.clear();
         Set<UUID> held = new LinkedHashSet<>(awaiting.keySet());
         held.retainAll(asked.keySet());
-        return new Weave(vertices, List.copyOf(links), together, pins, fresh, pending, ranks, gone, flows, held);
+        Optional<Set<UUID>> heldNow = held.equals(shownHeld) ? Optional.empty() : Optional.of(Set.copyOf(held));
+        heldNow.ifPresent(now -> shownHeld = now);
+        return new WeaveDelta(put, removed, linked, unlinked, groups, pins, fresh, gone, heldNow);
+    }
+
+    private void unshowOrdersOf(UUID id) {
+        for (UUID to : List.copyOf(shownAfter.getOrDefault(id, Set.of()))) {
+            unshow(new Before(id, to));
+        }
+        for (UUID from : List.copyOf(shownBefore.getOrDefault(id, Set.of()))) {
+            unshow(new Before(from, id));
+        }
+    }
+
+    private void unshow(Before order) {
+        Set<UUID> out = shownAfter.get(order.from());
+        if (out != null && out.remove(order.to()) && out.isEmpty()) {
+            shownAfter.remove(order.from());
+        }
+        Set<UUID> in = shownBefore.get(order.to());
+        if (in != null && in.remove(order.from()) && in.isEmpty()) {
+            shownBefore.remove(order.to());
+        }
+    }
+
+    // How many pieces of work the plan holds now.
+    public int size() {
+        return nodes.size();
     }
 
     // ---- stock, room and reach ----
@@ -1889,10 +2243,10 @@ public final class Weaver {
                 after.put(id, new LinkedHashSet<>());
             }
         }
-        for (Expansion grown : expansions()) {
-            for (Before order : orders(grown)) {
-                if (after.containsKey(order.from()) && after.containsKey(order.to())) {
-                    after.get(order.to()).add(order.from());
+        for (UUID id : after.keySet()) {
+            for (UUID earlier : bonds.before(id)) {
+                if (after.containsKey(earlier)) {
+                    after.get(id).add(earlier);
                 }
             }
         }
@@ -1957,6 +2311,43 @@ public final class Weaver {
     }
 
     // ---- what work makes ----
+
+    // What bringing a workshop's inputs to it takes: each input walked from the nearest store or pack holding it to
+    // the work that needs it, the dearest input setting it as the dearest sets an offer's cost. An input the offer
+    // makes itself, or that nothing holds yet, walks nothing here; Costs prices its making.
+    private long walkIn(Grown made) {
+        long dearest = 0;
+        for (Node node : made.nodes()) {
+            WorkSite site = node.spec().site();
+            for (Need need : node.spec().needs()) {
+                ItemSpec input = need.spec();
+                if (made.nodes().stream().anyMatch(maker -> maker.spec().gives().stream()
+                        .anyMatch(gives -> admits(input, gives.spec())))) {
+                    continue;
+                }
+                long nearest = walkIns.computeIfAbsent(new WalkIn(input, site.where()), ignored -> nearestHeld(input, site));
+                if (nearest != Long.MAX_VALUE) {
+                    dearest = Math.max(dearest, nearest);
+                }
+            }
+        }
+        return dearest;
+    }
+
+    private long nearestHeld(ItemSpec input, WorkSite site) {
+        long nearest = Long.MAX_VALUE;
+        for (Stock.Lot lot : now.stock().lotsOf(input)) {
+            if (drawable(lot.where(), lot.concrete()) > 0) {
+                nearest = Math.min(nearest, Transfer.walk(lot.where().pos(), site));
+            }
+        }
+        for (Crew.Hand hand : crew.hands()) {
+            if (hand.cargo().stream().anyMatch(stack -> Goods.matches(stack, input))) {
+                nearest = Math.min(nearest, Transfer.walk(hand.at(), site));
+            }
+        }
+        return nearest;
+    }
 
     private static long walkFrom(Grown made, ItemSpec asked, WorkSite near) {
         long nearest = Long.MAX_VALUE;

@@ -93,6 +93,23 @@ url = "https://cdn.modrinth.com/data/HVnmMxH1/versions/yCCduG44/ComplementaryRei
 sha512 = "6bd95215755d25812556ce790d976221f7d677d63112e3e4d3e70b08a62ed41348fa3792dd31bbe720d1e46fe2d525cadb4f66e6358118e1f4aa8e0d11f25c39"
 target = []
 
+# Terrain for the bench's town: Terralith's biomes over Tectonic's landforms, vanilla blocks only, so the
+# colony farms, fells and builds with what it already knows. Both need Lithostitched.
+[mods.lithostitched]
+url = "https://cdn.modrinth.com/data/XaDC71GB/versions/sPmtDq1X/lithostitched-1.8.0-neoforge-21.1.jar"
+sha512 = "0ba80383039270dec739f669fe936d091b87027c350972c88085729333e73e723e0c722d734c0592c08ffd6c5a21c16099f2e54cf7cfbcbd3061f5e3cbd62cb4"
+target = []
+
+[mods.terralith]
+url = "https://cdn.modrinth.com/data/8oi3bsk5/versions/IY93YaEe/Terralith_1.21.1_v2.6.2_Neoforge.jar"
+sha512 = "35298f1682567f63dc16658b04cee5498b30819f1c05f9712b4480d7f5eb17059db3b13ab14f81a05fe257149d11ced2cce2030d3727c1747edd8657c53e2a85"
+target = []
+
+[mods.tectonic]
+url = "https://cdn.modrinth.com/data/lWDHr9jE/versions/n4iyW7aB/tectonic-3.0.28-neoforge-21.1.jar"
+sha512 = "e07b9cb54f078b7bf74c925c5cebd6643f0b4c210b8f94474e68659b69468ece7d61432f70eafe7abaa1dfa798e4638aad297987c121dc127588c2623b7f7a81"
+target = []
+
 # Measures folkways itself, mixins included; off unless BLOCKWRIGHT_COVERAGE=1 (npm run test:coverage).
 [coverage]
 mods = ["folkways"]
@@ -103,10 +120,68 @@ jvm_args = ["-Xmx3G"]
 
 [profile.bench.neoforge.server]
 world = "vanilla"
-properties = { "level-seed" = "folkways-bench", "generate-structures" = "false", "max-tick-time" = "-1", "view-distance" = "20", "entity-broadcast-range-percentage" = "300" }
+properties = { "level-seed" = "folkways-promo-land", "generate-structures" = "false", "max-tick-time" = "-1", "view-distance" = "20", "entity-broadcast-range-percentage" = "300" }
 
+# The bench films its run through the promo's shaders. The film is sped up, so the camera holds a low frame rate and
+# leaves the GPU and the CPU to the server being measured.
 [profile.bench.neoforge.client]
-options = { overrideWidth = "1920", overrideHeight = "1080", renderDistance = "24", entityDistanceScaling = "5.0", fov = "0.0", particles = "1" }
+game_args = ["--width", "1920", "--height", "1080"]
+options = { overrideWidth = "1920", overrideHeight = "1080", maxFps = "20", renderDistance = "24", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "5.0", biomeBlendRadius = "3", ao = "true", fov = "0.0", particles = "1", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", soundCategory_master = "0.0" }
+
+[profile.bench.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+# The town stands on modded land (Terralith biomes over Tectonic landforms).
+[profile.bench.mods]
+lithostitched = { target = ["server", "client"] }
+terralith = { target = ["server", "client"] }
+tectonic = { target = ["server", "client"] }
+sodium = { target = ["client"] }
+iris = { target = ["client"] }
+
+# The bench's roaming cameras: each is one more client joined to the bench server, sent from spot to spot as the run
+# goes. A camera is a player of its own, so each has its own account; the rest is the bench client's.
+[profile.bench-cam-1.neoforge]
+jvm_args = ["-Xmx2G"]
+
+[profile.bench-cam-1.neoforge.client]
+account = { username = "BenchCam1", uuid = "0000000000000000000000000000be01" }
+game_args = ["--width", "1920", "--height", "1080"]
+options = { overrideWidth = "1920", overrideHeight = "1080", maxFps = "20", renderDistance = "24", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "5.0", biomeBlendRadius = "3", ao = "true", fov = "0.0", particles = "1", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", soundCategory_master = "0.0" }
+
+[profile.bench-cam-1.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+[profile.bench-cam-1.mods]
+lithostitched = { target = ["client"] }
+terralith = { target = ["client"] }
+tectonic = { target = ["client"] }
+sodium = { target = ["client"] }
+iris = { target = ["client"] }
+
+[profile.bench-cam-2.neoforge]
+jvm_args = ["-Xmx2G"]
+
+[profile.bench-cam-2.neoforge.client]
+account = { username = "BenchCam2", uuid = "0000000000000000000000000000be02" }
+game_args = ["--width", "1920", "--height", "1080"]
+options = { overrideWidth = "1920", overrideHeight = "1080", maxFps = "20", renderDistance = "24", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "5.0", biomeBlendRadius = "3", ao = "true", fov = "0.0", particles = "1", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", soundCategory_master = "0.0" }
+
+[profile.bench-cam-2.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+[profile.bench-cam-2.mods]
+lithostitched = { target = ["client"] }
+terralith = { target = ["client"] }
+tectonic = { target = ["client"] }
+sodium = { target = ["client"] }
+iris = { target = ["client"] }
 
 [profile.promo.neoforge]
 jvm_args = ["-Xmx3G"]

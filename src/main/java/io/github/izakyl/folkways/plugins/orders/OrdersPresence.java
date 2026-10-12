@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.orders;
 
+import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Asking;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
@@ -24,6 +25,7 @@ import io.github.izakyl.folkways.front.api.notice.Attempt;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
+import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -93,13 +95,12 @@ final class OrdersPresence implements Facing {
             return remaining.get() <= 0;
         }
 
-        Grown goal(int rank) {
+        Grown goal() {
             return Grown.of(Delivery.to(id, OrdersContent.ID, into, stances, what, remaining.get(),
                 count -> {
                     remaining.accumulateAndGet(count, (left, arrived) -> Math.max(0, left - arrived));
                     delivered.run();
-                }))
-                .ranked(rank);
+                }));
         }
     }
 
@@ -109,6 +110,7 @@ final class OrdersPresence implements Facing {
 
     OrdersPresence(Colony colony) {
         this.colony = colony;
+        this.sweeping = Cadence.claim(colony, SWEEP_TICKS);
         this.asking = new Asking(colony, OrdersContent.ID, () -> refreshPending.set(true));
         saved = colony.kept(OrdersContent.ID);
         Reader kept = Reader.of(saved);
@@ -210,7 +212,7 @@ final class OrdersPresence implements Facing {
             return Attempt.refused(OrderRefusal.NOT_ADMITTED);
         }
         Order order = new Order(into, what.get(), draft.count(OrdersContent.LOW.key()),
-            draft.count(OrdersContent.COUNT.key()), standing, draft.count(OrdersContent.RANK.key()));
+            draft.count(OrdersContent.COUNT.key()), standing);
         if (!orders.containsKey(order.key()) && orders.size() >= MAX_ORDERS) {
             return Attempt.refused(OrderRefusal.TOO_MANY, Notice.count(MAX_ORDERS));
         }
@@ -240,11 +242,11 @@ final class OrdersPresence implements Facing {
     private final AtomicBoolean refreshPending =
         new AtomicBoolean(true);
 
-    private int sinceSweep;
+    // When orders are read again within each period, spread against every other cron; see Cadence.
+    private final Cadence.Cron sweeping;
 
     public void tick(MinecraftServer server) {
-        if (++sinceSweep >= SWEEP_TICKS) {
-            sinceSweep = 0;
+        if (sweeping.due(server)) {
             refreshPending.set(true);
         }
         if (refreshPending.getAndSet(false)) {
@@ -374,7 +376,7 @@ final class OrdersPresence implements Facing {
                 filling.put(order.key(), delivery);
                 pending.remove(order.key());
             }
-            wanted.add(delivery.goal(order.rank()));
+            wanted.add(delivery.goal());
         }
         write();
         return List.copyOf(wanted);
@@ -412,7 +414,9 @@ final class OrdersPresence implements Facing {
     @Override
     public Optional<Board> boardAt(ResourceLocation page, BlockPos at, ColonyView view) {
         ServerLevel level = view.level();
-        if (!page.equals(OrdersContent.PAGE.id()) || Containers.at(level, at).isEmpty()) {
+        // Orders are filed into a store; a cooker is a container too, but the colony loads it itself.
+        if (!page.equals(OrdersContent.PAGE.id())
+            || !view.blocks(WaresContent.STORE).contains(Containers.anchor(level, at))) {
             return Optional.empty();
         }
         WorldPos into = WorldPos.of(level, Containers.anchor(level, at));
@@ -504,8 +508,7 @@ final class OrdersPresence implements Facing {
                 what.map(OrdersPresence::nameOf).orElse(Component.empty())),
             List.of(new Board.Act.Edit(OrdersContent.ITEM.key()),
                 new Board.Act.Edit(OrdersContent.LOW.key()),
-                new Board.Act.Edit(OrdersContent.COUNT.key()),
-                new Board.Act.Edit(OrdersContent.RANK.key())))
+                new Board.Act.Edit(OrdersContent.COUNT.key())))
             .told(what.flatMap(spec -> wareOf(spec, 0))
                 .map(ware -> Sentence.of(ware, span(draft.count(OrdersContent.LOW.key()),
                     draft.count(OrdersContent.COUNT.key()))))
@@ -514,7 +517,7 @@ final class OrdersPresence implements Facing {
 
     /**
      * An order in pictures: a standing one is the stock of its item kept against the span it keeps, a one-time one
-     * the item delivered against all it asks for, either then its priority and what is still on its way.
+     * the item delivered against all it asks for, either then what is still on its way.
      */
     private Sentence toldOf(Order order, MinecraftServer server) {
         Optional<Container> held = containerOf(order, server);
@@ -538,8 +541,6 @@ final class OrdersPresence implements Facing {
         tokens.add(Sentence.glyph("slash"));
         tokens.add(order.standing() ? span(order.low(), order.high())
             : Sentence.word(Notice.count(order.high())));
-        tokens.add(Sentence.word(new Notice("folkways.panel.orders.told.rank",
-            List.of(Notice.count(order.rank())))));
         Filling delivery = filling.get(order.key());
         long left = delivery == null ? pending.getOrDefault(order.key(), 0L) : delivery.remaining();
         if (left > 0) {
@@ -578,9 +579,9 @@ final class OrdersPresence implements Facing {
         long present = Goods.countIn(held.get(), order.what());
         return order.standing()
             ? Component.translatable("folkways.panel.orders.standing", present,
-                order.low(), order.high(), order.rank())
+                order.low(), order.high())
             : Component.translatable("folkways.panel.orders.once", present,
-                order.high(), order.rank());
+                order.high());
     }
 
     private static ResourceLocation icon(String path) {

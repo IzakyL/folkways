@@ -55,7 +55,7 @@ public final class TravelPlanningGameTests {
             List.of(), List.of(), Optional.empty())));
         Vertex first = node(at, kind);
         Vertex second = node(at, kind);
-        Weave weave = new Weave(Map.of(first.id(), first, second.id(), second),
+        WeaveDelta weave = Shown.delta(Map.of(first.id(), first, second.id(), second),
             List.of(new Before(first.id(), second.id())), List.of());
         AtomicReference<Faring> answer = new AtomicReference<>(Faring.LATER);
         Ways ways = new Ways() {
@@ -67,7 +67,7 @@ public final class TravelPlanningGameTests {
             }
         };
         Tours tours = new Tours();
-        Schedule pending = tours.schedule(weave, crew, ways, 0, true);
+        Schedule pending = Shown.schedule(tours, weave, crew, ways, 0, true);
         helper.assertTrue(pending.tours().isEmpty(), "pending travel cannot be scheduled yet");
         helper.assertTrue(pending.unassigned().size() == 2
             && pending.unassigned().stream().allMatch(u -> u.why() == Unassigned.Reason.WAY_PENDING),
@@ -75,11 +75,11 @@ public final class TravelPlanningGameTests {
         helper.assertTrue(pending.unassigned().stream().anyMatch(u -> first.id().equals(u.blockedBy())),
             "the dependent must identify its actual blocker");
         answer.set(Faring.NO);
-        Schedule denied = tours.schedule(weave, crew, ways, 1, true);
+        Schedule denied = Shown.schedule(tours, weave, crew, ways, 1, true);
         helper.assertTrue(denied.unassigned().stream().allMatch(u -> u.why() == Unassigned.Reason.NO_WAY),
             "a confirmed denial must remain distinguishable from pending travel");
         answer.set(Faring.yes(Journey.afoot(1, Set.of(at))));
-        Schedule known = tours.schedule(weave, crew, ways, 2, true);
+        Schedule known = Shown.schedule(tours, weave, crew, ways, 2, true);
         helper.assertTrue(known.unassigned().isEmpty()
             && known.tours().get(resident.id()).nodes().equals(List.of(first.id(), second.id())),
             "a resolved route must schedule the chain in dependency order");
@@ -101,9 +101,14 @@ public final class TravelPlanningGameTests {
             vertices.put(node.id(), node);
         }
         AtomicInteger queries = new AtomicInteger();
+        AtomicInteger asks = new AtomicInteger();
         AtomicReference<Faring> answer = new AtomicReference<>(Faring.LATER);
         Ways ways = new Ways() {
             public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
+                asks.incrementAndGet();
+                return answer.get();
+            }
+            public Faring reckon(Resident who, WorldPos from, Set<WorldPos> goals) {
                 queries.incrementAndGet();
                 return answer.get();
             }
@@ -111,21 +116,25 @@ public final class TravelPlanningGameTests {
                 throw new AssertionError("scheduling queries individual residents");
             }
         };
-        Weave weave = new Weave(vertices, List.of(), List.of());
+        WeaveDelta weave = Shown.delta(vertices, List.of(), List.of());
         Tours tours = new Tours();
-        Schedule pending = tours.schedule(weave, new Crew(hands), ways, 0, true);
+        Schedule pending = Shown.schedule(tours, weave, new Crew(hands), ways, 0, true);
         helper.assertTrue(queries.get() == 1,
             "500 residents and 100 equal destinations must query once, got " + queries);
+        helper.assertTrue(asks.get() == 1,
+            "a way not known yet must be asked for once, got " + asks);
         helper.assertTrue(pending.unassigned().size() == 100 && pending.unassigned().stream()
             .allMatch(u -> u.why() == Unassigned.Reason.WAY_PENDING),
             "reuse must retain pending diagnostics for every task");
         answer.set(Faring.NO);
-        Schedule unanswered = tours.schedule(weave, new Crew(hands), ways, 1, false);
+        Schedule unanswered = Shown.schedule(tours, weave, new Crew(hands), ways, 1, false);
         helper.assertTrue(queries.get() == 1 && unanswered.unassigned().equals(pending.unassigned()),
             "waiting work must not ask again until something it waits on has been answered");
-        Schedule denied = tours.schedule(weave, new Crew(hands), ways, 2, true);
+        Schedule denied = Shown.schedule(tours, weave, new Crew(hands), ways, 2, true);
         helper.assertTrue(queries.get() == 2,
             "an answer must query the route again in a new schedule");
+        helper.assertTrue(asks.get() == 1,
+            "a way known to be none must not be asked for, got " + asks);
         helper.assertTrue(denied.unassigned().size() == 100 && denied.unassigned().stream()
             .allMatch(u -> u.why() == Unassigned.Reason.NO_WAY),
             "a new snapshot answer must replace cached pending results");
@@ -144,7 +153,7 @@ public final class TravelPlanningGameTests {
             new Crew.Hand(flyer, at, 6, 6, 1, List.of(), List.of(), Optional.empty())));
         Vertex first = node(at, walking);
         Vertex second = node(at, walking);
-        Weave weave = new Weave(Map.of(first.id(), first, second.id(), second),
+        WeaveDelta weave = Shown.delta(Map.of(first.id(), first, second.id(), second),
             List.of(new Before(first.id(), second.id())), List.of());
         Map<ResourceLocation, Integer> queries = new LinkedHashMap<>();
         Ways ways = new Ways() {
@@ -156,7 +165,7 @@ public final class TravelPlanningGameTests {
                 throw new AssertionError("unexpected colony query");
             }
         };
-        Schedule result = new Tours().schedule(weave, crew, ways, 0, true);
+        Schedule result = Shown.schedule(new Tours(), weave, crew, ways, 0, true);
         helper.assertTrue(queries.equals(Map.of(walking, 1, flying, 1)),
             "each kind must query once even at identical origins and destinations: " + queries);
         helper.assertTrue(result.unassigned().isEmpty() && result.tours().size() == 1
@@ -194,15 +203,15 @@ public final class TravelPlanningGameTests {
                 throw new AssertionError("unexpected colony query");
             }
         };
-        Weave weave = new Weave(vertices, links,  List.of());
+        WeaveDelta weave = Shown.delta(vertices, links,  List.of());
         Tours tours = new Tours();
-        Schedule result = tours.schedule(weave, crew, ways, 0, true);
+        Schedule result = Shown.schedule(tours, weave, crew, ways, 0, true);
         helper.assertTrue(result.unassigned().isEmpty()
             && result.tours().get(resident.id()).nodes().equals(order), "the full chain must schedule");
         helper.assertTrue(origins.equals(List.of(at, away, away)),
             "different origins and destinations must query separately; returning to a prior route reuses it");
         origins.clear();
-        Schedule standing = tours.schedule(weave, crew, ways, 1, true);
+        Schedule standing = Shown.schedule(tours, weave, crew, ways, 1, true);
         helper.assertTrue(standing.tours().equals(result.tours()) && standing.unassigned().isEmpty(),
             "a standing route must be kept as it was");
         helper.assertTrue(origins.isEmpty(), "work already on a route must not be travelled again: " + origins);
@@ -235,13 +244,13 @@ public final class TravelPlanningGameTests {
             }
         };
         Tours tours = new Tours();
-        Schedule first = tours.schedule(weave(chain, done, feeds, fed, other), crew, ways, 0, false);
+        Schedule first = Shown.schedule(tours, weave(chain, done, feeds, fed, other), crew, ways, 0, false);
         helper.assertTrue(first.tours().get(resident.id()).nodes().equals(
                 List.of(done.id(), feeds.id(), fed.id(), other.id())),
             "the route walks out along the line rather than doubling back");
 
         queries.set(0);
-        Schedule grown = tours.schedule(weave(chain, feeds, fed, other, added), crew, ways, 10, false);
+        Schedule grown = Shown.schedule(tours, weave(chain, feeds, fed, other, added), crew, ways, 10, false);
         List<UUID> kept = new ArrayList<>(first.tours().get(resident.id()).nodes());
         kept.remove(done.id());
         kept.add(added.id());
@@ -252,7 +261,7 @@ public final class TravelPlanningGameTests {
         queries.set(0);
         Vertex replanned = new Vertex(feeds.id(), feeds.node(),
             new Placement(Set.of(new Stand(at.at(at.cell().offset(4, 0, 0)))), List.of(), List.of(), List.of()));
-        Schedule repaired = tours.schedule(weave(chain, replanned, fed, other, added), crew, ways, 20, false);
+        Schedule repaired = Shown.schedule(tours, weave(chain, replanned, fed, other, added), crew, ways, 20, false);
         List<UUID> route = repaired.tours().get(resident.id()).nodes();
         helper.assertTrue(route.equals(List.of(feeds.id(), fed.id(), other.id(), added.id())),
             "a node planned anew, with what was timed after it, is moved back to where the walk is shortest: "
@@ -260,12 +269,12 @@ public final class TravelPlanningGameTests {
         helper.succeed();
     }
 
-    private static Weave weave(List<Before> links, Vertex... nodes) {
+    private static WeaveDelta weave(List<Before> links, Vertex... nodes) {
         Map<UUID, Vertex> vertices = new LinkedHashMap<>();
         for (Vertex node : nodes) {
             vertices.put(node.id(), node);
         }
-        return new Weave(vertices, links,  List.of());
+        return Shown.delta(vertices, links,  List.of());
     }
 
     private static Vertex node(WorldPos at, ResourceLocation domain) {

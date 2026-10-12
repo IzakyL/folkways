@@ -76,6 +76,12 @@ final class Survey {
     }
 
     private final Map<Stash, Reading> stores = new LinkedHashMap<>();
+    // Where a worker can stand to reach each store, read again only this often: the ground around a store seldom
+    // changes, and finding it reads every cell in reach, which is the most of what reading a store costs.
+    private static final long STANDS_TICKS = 200L;
+    private record Footed(long at, Set<Stand> stands) {
+    }
+    private final Map<Stash, Footed> footed = new LinkedHashMap<>();
 
     // What a store's container refuses is read once per kind of container there, not on every change inside it.
     private record Refusal(Class<?> kind, Set<Item> items) {
@@ -178,6 +184,7 @@ final class Survey {
                 Set<Stash> still = new LinkedHashSet<>();
                 members.forEach(pos -> still.add(Stash.at(WorldPos.of(level, pos))));
                 refusals.keySet().retainAll(still);
+                footed.keySet().retainAll(still);
                 if (stores.keySet().retainAll(still)) {
                     changed();
                     answered = true;
@@ -263,6 +270,7 @@ final class Survey {
             ? Stores.at(level, where.pos()).orElse(null) : null;
         if (container == null) {
             refusals.remove(where);
+            footed.remove(where);
             if (stores.remove(where) != null) {
                 changed();
                 return true;
@@ -279,7 +287,13 @@ final class Survey {
                 stacks.add(stack.copy());
             }
         }
-        Reading reading = new Reading(List.copyOf(stacks), free, Stands.footingsOf(level, where.pos()),
+        long now = level.getGameTime();
+        Footed feet = footed.get(where);
+        if (feet == null || now - feet.at() >= STANDS_TICKS) {
+            feet = new Footed(now, Stands.footingsOf(level, where.pos()));
+            footed.put(where, feet);
+        }
+        Reading reading = new Reading(List.copyOf(stacks), free, feet.stands(),
             Stores.rulesAt(where.pos()), refusedBy(where, container));
         Reading had = stores.put(where, reading);
         if (had != null && had.same(reading)) {
@@ -314,7 +328,7 @@ final class Survey {
             body.resident(),
             Feet.of(body.mob()),
             body.pack().plannableRoom(item -> kit.holds(item.getDefaultInstance())),
-            body.pack().plannableCells() - kit.keptCells(body),
+            body.pack().plannableCells(item -> kit.holds(item.getDefaultInstance())) - kit.keptCells(body),
             pace(body),
             List.copyOf(licences),
             kit.inPack(body),

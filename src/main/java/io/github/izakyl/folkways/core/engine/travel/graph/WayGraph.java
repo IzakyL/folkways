@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.engine.travel.graph;
 
+import io.github.izakyl.folkways.core.engine.travel.PathfindingLoad;
 import io.github.izakyl.folkways.core.api.participation.Participation;
 import io.github.izakyl.folkways.core.api.participation.Participations;
 import io.github.izakyl.folkways.core.api.participation.Stake;
@@ -23,10 +24,10 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -37,6 +38,9 @@ public final class WayGraph implements Ways {
         new WayGraph(Map.of(), Map.of(), List.of(), Map.of(), new Asked(), new Trodden(), List.of(), 0L);
 
     private static final int MOST_DOORS_TRIED = 8;
+
+    // How far apart, in blocks, an asker and its goals may stand for the walk between them to be asked outright.
+    private static final int NEAR = 128;
 
     private final Map<ResourceLocation, Sort> sorts;
     private final Map<Tract, Waypoints.Net> nets;
@@ -71,7 +75,19 @@ public final class WayGraph implements Ways {
         return sorts.keySet();
     }
 
-    private record Asker(ResourceLocation kind, UUID requester, Urgency urgency, boolean noting) {
+    // `reckoning` askers only weigh a journey: they are answered from what is known of the ways to each goal.
+    private record Asker(ResourceLocation kind, Urgency urgency, boolean noting, boolean reckoning) {
+
+        Asker(ResourceLocation kind, Urgency urgency, boolean noting) {
+            this(kind, urgency, noting, false);
+        }
+    }
+
+    @Override
+    public Faring reckon(Resident who, WorldPos from, Set<WorldPos> goals) {
+        Sort sort = sorts.get(who.kind());
+        return sort == null ? Faring.LATER
+            : fare(new Asker(who.kind(), Urgency.PLANNING, false, true), sort, from, goals);
     }
 
     @Override
@@ -84,7 +100,7 @@ public final class WayGraph implements Ways {
         Sort sort = sorts.get(who.kind());
 
         return sort == null ? Faring.LATER
-            : fare(new Asker(who.kind(), who.id(), urgency, true), sort, from, goals);
+            : fare(new Asker(who.kind(), urgency, true), sort, from, goals);
     }
 
     @Override
@@ -114,7 +130,7 @@ public final class WayGraph implements Ways {
         }
         Faring said = Faring.NO;
         WorldPos waiting = null;
-        Asker quiet = new Asker(kind, null, Urgency.CHECKING, false);
+        Asker quiet = new Asker(kind, Urgency.CHECKING, false);
         for (WorldPos foot : standing) {
             Faring answer = fare(quiet, sort, foot, goals);
             switch (answer) {
@@ -132,7 +148,7 @@ public final class WayGraph implements Ways {
             }
         }
         if (waiting != null) {
-            fare(new Asker(kind, null, Urgency.CHECKING, true), sort, waiting, goals);
+            fare(new Asker(kind, Urgency.CHECKING, true), sort, waiting, goals);
         }
         return said;
     }
@@ -175,7 +191,7 @@ public final class WayGraph implements Ways {
         if (out.isEmpty()) {
             return Faring.NO;
         }
-        Asker quiet = new Asker(asker.kind(), asker.requester(), asker.urgency(), false);
+        Asker quiet = new Asker(asker.kind(), asker.urgency(), false, asker.reckoning());
         Faring said = Faring.NO;
         for (WorldPos door : out) {
             Faring onward = direct(quiet, sort, door, open, beyond);
@@ -281,6 +297,9 @@ public final class WayGraph implements Ways {
             return Faring.NO;
         }
         Web web = webs.computeIfAbsent(sort, this::weave);
+        if (asker.reckoning()) {
+            return reckoned(web, kind, from, goals, beyond);
+        }
         List<WorldPos> live = new ArrayList<>(goals.size());
         for (WorldPos goal : goals) {
             if (goal.equals(from)) {
@@ -295,7 +314,8 @@ public final class WayGraph implements Ways {
         }
         int start = web.at(from);
         if (start < 0) {
-            return later(asker, from, live);
+            PathfindingLoad.laterOff();
+            return later(asker, web, from, live);
         }
         int approachFrom = web.approach(from, start);
         IntArrayList ends = new IntArrayList();
@@ -312,12 +332,13 @@ public final class WayGraph implements Ways {
             }
         }
         if (ends.isEmpty()) {
-            return later(asker, from, live);
+            PathfindingLoad.laterApart();
+            return later(asker, web, from, live);
         }
 
         Arrival arrived = route(web, kind, start, ends, at + approachFrom);
         if (arrived == null) {
-            return later(asker, from, live);
+            return later(asker, web, from, live);
         }
         WorldPos landed = landings.get(arrived.which());
         if (asker.noting()) {
@@ -326,6 +347,63 @@ public final class WayGraph implements Ways {
         int approach = approachFrom + web.approach(landed, ends.getInt(arrived.which()));
         return through(new Journey(ticksOf(arrived.walked() + approach),
             ticksOf(arrived.ridden()), legs(web, arrived, from, live, landed.realm())), landed, beyond);
+    }
+
+    // The journey to the nearest of the goals as the ways to each are known, with no legs: the same answer for
+    // every place asked from, so what is found out for one asker serves the rest.
+    private Faring reckoned(Web web, ResourceLocation kind, WorldPos from, Set<WorldPos> goals,
+                            Map<WorldPos, Set<WorldPos>> beyond) {
+        boolean open = false;
+        for (WorldPos goal : goals) {
+            if (goal.equals(from)) {
+                return through(Journey.afoot(0, Set.of(goal)), goal, beyond);
+            }
+            open |= !web.shutBetween(from, goal);
+        }
+        if (!open) {
+            return Faring.NO;
+        }
+        int start = web.at(from);
+        if (start < 0) {
+            return Faring.LATER;
+        }
+        int approachFrom = web.approach(from, start);
+        long least = Long.MAX_VALUE;
+        int ridden = 0;
+        WorldPos landed = null;
+        for (WorldPos goal : goals) {
+            if (web.shutBetween(from, goal)) {
+                continue;
+            }
+            int id = web.at(goal);
+            long whole;
+            int riding = 0;
+            if (id == start) {
+                whole = Waypoints.Net.ticks(from.cell(), goal.cell());
+            } else if (id >= 0 && web.joined(start, id)) {
+                Field field = web.field(kind, id, at);
+                if (!field.reaches(start)) {
+                    continue;
+                }
+                whole = (long) approachFrom + field.ticks(start) + web.approach(goal, id);
+                riding = field.ridden(start);
+            } else {
+                continue;
+            }
+            Set<WorldPos> inside = beyond.get(goal);
+            long counted = whole + (inside == null ? 0 : walk(goal, inside));
+            if (counted < least) {
+                least = counted;
+                ridden = riding;
+                landed = goal;
+            }
+        }
+        if (landed == null) {
+            return Faring.LATER;
+        }
+        Set<WorldPos> inside = beyond.get(landed);
+        long whole = least - (inside == null ? 0 : walk(landed, inside));
+        return through(new Journey(ticksOf(whole - ridden), ridden, List.of()), landed, beyond);
     }
 
     private static List<Leg> legs(Web web, Arrival arrived, WorldPos from, List<WorldPos> live,
@@ -337,22 +415,26 @@ public final class WayGraph implements Ways {
         for (int at = 0; at < path.length; at++) {
             Crossing via = arrived.via()[at];
             if (via != null) {
-                // The hub and the platform links are virtual, so the hub can sit on fenced track: walk to any footing instead.
+                // Boarded from whichever footing the walk reached: the walk goes to any of them, and the ride is caught
+                // standing on one.
                 Set<WorldPos> footings = via.hop().boarding().cells();
                 while (!walked.isEmpty() && walked.getLast().passing()
-                        && onPlatform(walked.getLast().to().iterator().next(), footings, via.boarding())) {
+                        && footings.contains(walked.getLast().to().iterator().next())) {
                     previous = walked.removeLast().from().orElse(from);
                 }
                 walked.add(Leg.afoot(previous, footings));
                 Hop hop = via.hop();
                 walked.add(Leg.aboard(new Hop(hop.service(), hop.boarding(), hop.landing(),
                     hop.fare().boardingAt(arrived.boardAt()[at]))));
-                previous = via.landing();
                 landed = via;
                 continue;
             }
+            if (web.aboard(path[at])) {
+                continue;
+            }
             WorldPos here = web.cellAt(path[at]);
-            if (landed != null && onPlatform(here, landed.hop().landing().cells(), landed.landing())) {
+            // Set down on the landing: the walk on starts from the footing the plan left by.
+            if (landed != null && landed.hop().landing().cells().contains(here)) {
                 previous = here;
                 continue;
             }
@@ -372,31 +454,40 @@ public final class WayGraph implements Ways {
         return walked;
     }
 
-    private static boolean onPlatform(WorldPos cell, Set<WorldPos> footings, WorldPos hub) {
-        return cell.equals(hub) || footings.contains(cell);
-    }
-
-    private Faring later(Asker asker, WorldPos asking, Collection<WorldPos> goals) {
+    // A way not known yet is asked for. Near, or with no ways laid at all, that is the walk itself. Far, each end that
+    // stands off the ways is joined to the nearest point of them; ends on the ways but in pieces apart are left to the
+    // roaming that grows loose pieces into the rest. Which way is best then (afoot, or by a ride) is the route's to say.
+    private Faring later(Asker asker, Web web, WorldPos asking, Collection<WorldPos> goals) {
         if (!asker.noting()) {
             return Faring.LATER;
         }
-        Set<Realm> elsewhere = new LinkedHashSet<>();
+        double crow = Double.MAX_VALUE;
+        boolean goalsOff = true;
         for (WorldPos goal : goals) {
-            if (!goal.sameRealm(asking)) {
-                elsewhere.add(goal.realm());
+            if (goal.sameRealm(asking)) {
+                crow = Math.min(crow, asking.cell().distSqr(goal.cell()));
             }
+            goalsOff &= web.at(goal) < 0;
         }
-        asked.note(asker.kind(), asker.requester(), asking, goals, asker.urgency());
-        if (elsewhere.isEmpty()) {
+        if (crow < (double) NEAR * NEAR || web.size() == 0) {
+            asked.note(asker.kind(), asking, goals, asker.urgency());
             return Faring.LATER;
         }
-        for (Crossing crossing : crossings) {
-            if (crossing.boarding().sameRealm(asking)) {
-                asked.note(asker.kind(), asker.requester(), asking, Set.of(crossing.boarding()),
-                    asker.urgency());
+        if (web.at(asking) < 0) {
+            web.nearest(asking).ifPresent(on -> asked.note(asker.kind(), asking, Set.of(on), asker.urgency()));
+        }
+        if (goalsOff) {
+            WorldPos nearest = null;
+            double best = Double.MAX_VALUE;
+            for (WorldPos goal : goals) {
+                WorldPos on = web.nearest(goal).orElse(null);
+                if (on != null && on.cell().distSqr(goal.cell()) < best) {
+                    best = on.cell().distSqr(goal.cell());
+                    nearest = on;
+                }
             }
-            if (elsewhere.contains(crossing.landing().realm())) {
-                asked.note(asker.kind(), asker.requester(), crossing.landing(), goals, asker.urgency());
+            if (nearest != null) {
+                asked.note(asker.kind(), nearest, goals, asker.urgency());
             }
         }
         return Faring.LATER;
@@ -419,6 +510,8 @@ public final class WayGraph implements Ways {
         PriorityQueue<long[]> open = new PriorityQueue<>(Comparator.comparingLong(step -> step[1]));
         open.add(new long[] {start, began});
         int arrived = -1;
+        boolean fareGone = false;
+        boolean barred = false;
         while (!open.isEmpty()) {
             long[] step = open.poll();
             int here = (int) step[0];
@@ -430,31 +523,45 @@ public final class WayGraph implements Ways {
                 arrived = which;
                 break;
             }
-            int tract = web.tractOf(here);
-            Waypoints.Net net = web.netAt(tract);
-            int local = here - web.offsetAt(tract);
-            for (int edge = net.head()[local]; edge < net.head()[local + 1]; edge++) {
-                int next = web.offsetAt(tract) + net.to()[edge];
-                long arrives = best[here] + net.cost()[edge];
-                if (arrives < best[next]) {
-                    best[next] = arrives;
-                    cameFrom[next] = here;
-                    cameOn[next] = null;
-                    open.add(new long[] {next, arrives});
+            boolean riding = web.aboard(here);
+            if (!riding) {
+                int tract = web.tractOf(here);
+                Waypoints.Net net = web.netAt(tract);
+                int local = here - web.offsetAt(tract);
+                for (int edge = net.head()[local]; edge < net.head()[local + 1]; edge++) {
+                    int next = web.offsetAt(tract) + net.to()[edge];
+                    long arrives = best[here] + net.cost()[edge];
+                    if (arrives < best[next]) {
+                        best[next] = arrives;
+                        cameFrom[next] = here;
+                        cameOn[next] = null;
+                        open.add(new long[] {next, arrives});
+                    }
                 }
             }
             for (int edge = web.hopHead()[here]; edge < web.hopHead()[here + 1]; edge++) {
                 Crossing crossing = web.hopBy()[edge];
+                int next = web.hopTo()[edge];
+                // Off the train onto any footing of the landing, as it arrives.
+                if (riding) {
+                    if (best[here] < best[next]) {
+                        best[next] = best[here];
+                        cameFrom[next] = here;
+                        cameOn[next] = null;
+                        open.add(new long[] {next, best[here]});
+                    }
+                    continue;
+                }
                 if (Participations.between(kind, Stake.passage(crossing.passage()))
                     == Participation.NONE) {
+                    barred = true;
                     continue;
                 }
                 OptionalLong arrives = crossing.hop().fare().arriveBy(best[here]);
                 if (arrives.isEmpty()) {
-
+                    fareGone = true;
                     continue;
                 }
-                int next = web.hopTo()[edge];
                 if (arrives.getAsLong() < best[next]) {
                     best[next] = arrives.getAsLong();
                     cameFrom[next] = here;
@@ -464,6 +571,7 @@ public final class WayGraph implements Ways {
             }
         }
         if (arrived < 0) {
+            PathfindingLoad.laterUnrouted(fareGone, barred);
             return null;
         }
         int goal = goals.getInt(arrived);
@@ -511,13 +619,184 @@ public final class WayGraph implements Ways {
         return new Web(realms, held, crossings);
     }
 
+    // How far every place on the ways is from one point of them, found out from that point backwards and only as
+    // far as has been asked: asked of a place further off, it goes on from where it stopped. A ride counts what it
+    // took when the ways were laid out, whenever it is caught.
+    private static final class Field {
+
+        private final Web web;
+        private final ResourceLocation kind;
+        private final long at;
+        private final int[] ticks;
+        private final int[] ridden;
+        private final java.util.BitSet found;
+        private final it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue open =
+            new it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue();
+
+        Field(Web web, ResourceLocation kind, int goal, long at) {
+            this.web = web;
+            this.kind = kind;
+            this.at = at;
+            this.ticks = new int[web.size()];
+            this.ridden = new int[web.size()];
+            this.found = new java.util.BitSet(web.size());
+            Arrays.fill(ticks, Integer.MAX_VALUE);
+            ticks[goal] = 0;
+            open.enqueue(goal);
+        }
+
+        synchronized boolean reaches(int from) {
+            while (!found.get(from)) {
+                if (open.isEmpty()) {
+                    return false;
+                }
+                long step = open.dequeueLong();
+                int here = (int) step;
+                if (found.get(here) || (int) (step >>> 32) > ticks[here]) {
+                    continue;
+                }
+                found.set(here);
+                web.before(here, kind, at, this);
+            }
+            return true;
+        }
+
+        synchronized int ticks(int from) {
+            return ticks[from];
+        }
+
+        synchronized int ridden(int from) {
+            return ridden[from];
+        }
+
+        // `from` leads on to `to`, already found, in `cost` ticks, `riding` of them aboard.
+        void leads(int from, int to, long cost, long riding) {
+            long whole = ticks[to] + cost;
+            if (whole < ticks[from]) {
+                ticks[from] = (int) whole;
+                ridden[from] = (int) (ridden[to] + riding);
+                open.enqueue(whole << 32 | from);
+            }
+        }
+    }
+
     private static final class Web {
+
+        // How many fields the web keeps before it forgets them all.
+        private static final int MOST_FIELDS = 1_024;
+
+        private record Toward(ResourceLocation kind, int goal) {
+        }
+
+        private final Map<Toward, Field> fields = new ConcurrentHashMap<>();
+        // The ways backwards, laid out when first asked for: what leads on to each point afoot, and by a ride.
+        private int[] backHead;
+        private int[] backFrom;
+        private int[] backCost;
+        private int[] hopBackHead;
+        private int[] hopBackFrom;
+        private Crossing[] hopBackBy;
+
+        Field field(ResourceLocation kind, int goal, long at) {
+            Toward toward = new Toward(kind, goal);
+            Field field = fields.get(toward);
+            if (field == null) {
+                backwards();
+                if (fields.size() >= MOST_FIELDS) {
+                    fields.clear();
+                }
+                field = fields.computeIfAbsent(toward, key -> new Field(this, kind, goal, at));
+            }
+            return field;
+        }
+
+        private synchronized void backwards() {
+            if (backHead != null) {
+                return;
+            }
+            int total = size();
+            int[] head = new int[real + 1];
+            int links = 0;
+            for (int tract = 0; tract < nets.length; tract++) {
+                for (int to : nets[tract].to()) {
+                    head[offset[tract] + to + 1]++;
+                    links++;
+                }
+            }
+            for (int vertex = 0; vertex < real; vertex++) {
+                head[vertex + 1] += head[vertex];
+            }
+            int[] cursor = head.clone();
+            int[] from = new int[links];
+            int[] cost = new int[links];
+            for (int tract = 0; tract < nets.length; tract++) {
+                Waypoints.Net net = nets[tract];
+                for (int local = 0; local < net.cells().length; local++) {
+                    for (int edge = net.head()[local]; edge < net.head()[local + 1]; edge++) {
+                        int slot = cursor[offset[tract] + net.to()[edge]]++;
+                        from[slot] = offset[tract] + local;
+                        cost[slot] = net.cost()[edge];
+                    }
+                }
+            }
+            int[] hopHeadBack = new int[total + 1];
+            for (int to : hopTo) {
+                hopHeadBack[to + 1]++;
+            }
+            for (int vertex = 0; vertex < total; vertex++) {
+                hopHeadBack[vertex + 1] += hopHeadBack[vertex];
+            }
+            int[] hopCursor = hopHeadBack.clone();
+            int[] hopFrom = new int[hopTo.length];
+            Crossing[] hopBy = new Crossing[hopTo.length];
+            for (int vertex = 0; vertex < total; vertex++) {
+                for (int edge = hopHead[vertex]; edge < hopHead[vertex + 1]; edge++) {
+                    int slot = hopCursor[hopTo[edge]]++;
+                    hopFrom[slot] = vertex;
+                    hopBy[slot] = this.hopBy[edge];
+                }
+            }
+            backFrom = from;
+            backCost = cost;
+            hopBackHead = hopHeadBack;
+            hopBackFrom = hopFrom;
+            hopBackBy = hopBy;
+            backHead = head;
+        }
+
+        // Tells the field every point that leads straight on to `here`: afoot, off a ride onto its landing, or
+        // onto a ride from its boarding, for those of `kind` it carries.
+        void before(int here, ResourceLocation kind, long at, Field field) {
+            boolean riding = aboard(here);
+            if (!riding) {
+                for (int edge = backHead[here]; edge < backHead[here + 1]; edge++) {
+                    field.leads(backFrom[edge], here, backCost[edge], 0L);
+                }
+            }
+            for (int edge = hopBackHead[here]; edge < hopBackHead[here + 1]; edge++) {
+                int from = hopBackFrom[edge];
+                if (!riding) {
+                    field.leads(from, here, 0L, 0L);
+                    continue;
+                }
+                Crossing crossing = hopBackBy[edge];
+                if (Participations.between(kind, Stake.passage(crossing.passage())) == Participation.NONE) {
+                    continue;
+                }
+                OptionalLong arrives = crossing.hop().fare().arriveBy(at);
+                if (arrives.isPresent()) {
+                    long took = Math.max(0L, arrives.getAsLong() - at);
+                    field.leads(from, here, took, took);
+                }
+            }
+        }
 
         private final Map<Realm, Integer> tracts = new LinkedHashMap<>();
         private final List<Realm> realms;
         private final Waypoints.Net[] nets;
         private final int[] offset;
-        private final int[] part;
+        private int[] part;
+        private final int real;
         private final int[] hopHead;
         private final int[] hopTo;
         private final Crossing[] hopBy;
@@ -538,45 +817,82 @@ public final class WayGraph implements Ways {
                     part[offset[tract] + local] = offset[tract] + apart[local];
                 }
             }
-            int[] from = new int[crossings.size()];
-            int[] to = new int[crossings.size()];
-            Crossing[] by = new Crossing[crossings.size()];
-            int laid = 0;
+            // Each ride is a vertex of its own, "aboard", standing on no cell: any of the boarding footings leads on to
+            // it (timed by the fare) and it leads on to every landing footing. Nothing walks through it.
+            IntArrayList from = new IntArrayList();
+            IntArrayList to = new IntArrayList();
+            List<Crossing> by = new ArrayList<>();
+            int aboard = count;
             for (Crossing crossing : crossings) {
-                int boarding = at(crossing.boarding());
-                int landing = at(crossing.landing());
-                if (boarding < 0 || landing < 0) {
+                IntArrayList on = vertices(crossing.hop().boarding().cells());
+                IntArrayList off = vertices(crossing.hop().landing().cells());
+                if (on.isEmpty() || off.isEmpty()) {
 
                     continue;
                 }
-                from[laid] = boarding;
-                to[laid] = landing;
-                by[laid] = crossing;
-                laid++;
-                Waypoints.join(part, boarding, landing);
+                for (int at = 0; at < on.size(); at++) {
+                    from.add(on.getInt(at));
+                    to.add(aboard);
+                    by.add(crossing);
+                }
+                for (int at = 0; at < off.size(); at++) {
+                    from.add(aboard);
+                    to.add(off.getInt(at));
+                    by.add(crossing);
+                }
+                aboard++;
             }
-            this.hopHead = new int[count + 1];
+            this.real = count;
+            int total = aboard;
+            int[] joined = Arrays.copyOf(part, total);
+            for (int vertex = count; vertex < total; vertex++) {
+                joined[vertex] = vertex;
+            }
+            for (int edge = 0; edge < from.size(); edge++) {
+                Waypoints.join(joined, from.getInt(edge), to.getInt(edge));
+            }
+            this.part = joined;
+            int laid = from.size();
+            this.hopHead = new int[total + 1];
             for (int edge = 0; edge < laid; edge++) {
-                hopHead[from[edge] + 1]++;
+                hopHead[from.getInt(edge) + 1]++;
             }
-            for (int vertex = 0; vertex < count; vertex++) {
+            for (int vertex = 0; vertex < total; vertex++) {
                 hopHead[vertex + 1] += hopHead[vertex];
             }
             int[] cursor = hopHead.clone();
             this.hopTo = new int[laid];
             this.hopBy = new Crossing[laid];
             for (int edge = 0; edge < laid; edge++) {
-                int at = cursor[from[edge]]++;
-                hopTo[at] = to[edge];
-                hopBy[at] = by[edge];
+                int at = cursor[from.getInt(edge)]++;
+                hopTo[at] = to.getInt(edge);
+                hopBy[at] = by.get(edge);
             }
-            for (int vertex = 0; vertex < count; vertex++) {
+            for (int vertex = 0; vertex < total; vertex++) {
                 part[vertex] = Waypoints.root(part, vertex);
             }
         }
 
+        // The vertices standing on these cells, each once.
+        private IntArrayList vertices(Set<WorldPos> cells) {
+            IntArrayList found = new IntArrayList();
+            it.unimi.dsi.fastutil.ints.IntOpenHashSet seen = new it.unimi.dsi.fastutil.ints.IntOpenHashSet();
+            for (WorldPos cell : cells) {
+                int vertex = at(cell);
+                if (vertex >= 0 && seen.add(vertex)) {
+                    found.add(vertex);
+                }
+            }
+            return found;
+        }
+
+        // Whether the vertex is a ride under way rather than a cell.
+        boolean aboard(int vertex) {
+            return vertex >= real;
+        }
+
         int size() {
-            return offset[nets.length];
+            return hopHead.length - 1;
         }
 
         int[] hopHead() {
@@ -647,6 +963,25 @@ public final class WayGraph implements Ways {
         BlockPos pieceCell(int vertex) {
             int tract = tractOf(vertex);
             return nets[tract].pieceCell(vertex - offset[tract]);
+        }
+
+        // The point of the ways nearest a place, in its own realm.
+        Optional<WorldPos> nearest(WorldPos where) {
+            Integer tract = tracts.get(where.realm());
+            if (tract == null) {
+                return Optional.empty();
+            }
+            long[] cells = nets[tract].cells();
+            long found = 0L;
+            double best = Double.MAX_VALUE;
+            for (long cell : cells) {
+                double apart = where.cell().distSqr(BlockPos.of(cell));
+                if (apart < best) {
+                    best = apart;
+                    found = cell;
+                }
+            }
+            return best == Double.MAX_VALUE ? Optional.empty() : Optional.of(new WorldPos(where.realm(), BlockPos.of(found)));
         }
 
         boolean shutBetween(WorldPos from, WorldPos to) {

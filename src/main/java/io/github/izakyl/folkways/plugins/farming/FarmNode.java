@@ -5,8 +5,8 @@ import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Unmet;
 import io.github.izakyl.folkways.core.api.work.WorkGesture;
+import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.front.api.PastDay;
@@ -19,8 +19,8 @@ import net.minecraft.world.item.ItemStack;
 
 abstract class FarmNode implements Node {
 
-    // One cell of a batch; every cell of a batch is worked from the batch's footing.
-    record Chore(UUID id, Batch batch, Job job, FieldChores tending) {
+    // One cell's work, done from anywhere in reach of it.
+    record Chore(UUID id, Crop crop, Job job, FieldChores tending) {
     }
 
     private final NodeSpec spec;
@@ -32,11 +32,12 @@ abstract class FarmNode implements Node {
     }
 
     static NodeSpec.Builder declare(Chore chore, Workload workload) {
-        Batch batch = chore.batch();
-        return NodeSpec.of(chore.id(), FarmingContent.ID, batch.at(), batch.stances(), workload)
+        Job job = chore.job();
+        return NodeSpec.of(chore.id(), FarmingContent.ID, new WorkSite.AtBlock(job.ground()), job.footings(),
+                workload)
             .vocation(FarmingContent.trade())
             .gesture(WorkGesture.SWING)
-            .focus(chore.job().cell());
+            .focus(job.cell());
     }
 
     @Override
@@ -53,12 +54,6 @@ abstract class FarmNode implements Node {
     @Override
     public final void ended(ServerLevel level, Ending how) {
         chore.tending().ended(chore, how);
-    }
-
-    // The cells of a batch are worked in turn by one hand, not one for the next: a cell left undone leaves the rest.
-    @Override
-    public final Unmet unmet(UUID before, Ending how) {
-        return Unmet.GO_ON;
     }
 
     @Override

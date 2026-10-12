@@ -25,7 +25,7 @@ export const BENCH_SCALE: Scale = { residents: 500, humans: 400, furnaces: 36, b
 export function syntheticTown(scale: Scale = BENCH_SCALE): Town {
   const terrain = new Terrain(syntheticSurvey(0, 0, 260));
   const site = { x: 0, z: 0, level: 70, sea: 62 };
-  const plan = planTown(terrain, site, countsOf(scale), 128);
+  const plan = planTown(terrain, site, countsOf(scale));
   return { plan, terrain, site, plots: plan.plots, fishing: plan.ponds.map((p, i) => ({ name: `pond-${i}`, cells: p.cells })),
-    wall: null, extent: plan.extent, level: 70 };
+    orders: [], extent: plan.extent, network: null, districts: plan.districts, level: 70 };
 }

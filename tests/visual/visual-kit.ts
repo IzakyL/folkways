@@ -118,7 +118,7 @@ export class VisualRun {
     }
 
     const bytes = fileSize(abs);
-    const probe = probeVideo(abs);
+    const probe = await probeVideo(abs);
     const gates = {
       start_status: start?.status ?? null,
       stop_status: stop?.status ?? null,
@@ -331,32 +331,7 @@ export function fileSize(abs: string) {
   }
 }
 
-export function probeVideo(abs: string): { durationS: number | null; blackFraction: number; blackCheck: string } {
-  if (!existsSync(abs)) return { durationS: null, blackFraction: 0, blackCheck: "missing" };
-  let durationS: number | null = null;
-  try {
-    const out = execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", abs], {
-      encoding: "utf8",
-      timeout: 60_000,
-    });
-    const parsed = Number.parseFloat(out.trim());
-    durationS = Number.isFinite(parsed) ? parsed : null;
-  } catch {
-    durationS = null;
-  }
-  const run = spawnSync(
-    "ffmpeg",
-    ["-hide_banner", "-nostats", "-i", abs, "-vf", "blackdetect=d=0.2:pix_th=0.10", "-an", "-f", "null", "-"],
-    { encoding: "utf8", timeout: 120_000 },
-  );
-  if (run.error) return { durationS, blackFraction: 0, blackCheck: "unavailable" };
-  let black = 0;
-  for (const match of String(run.stderr ?? "").matchAll(/black_duration:\s*([0-9.]+)/g)) {
-    black += Number.parseFloat(match[1]);
-  }
-  if (durationS == null || durationS <= 0) return { durationS, blackFraction: 0, blackCheck: "no-duration" };
-  return { durationS, blackFraction: Math.min(1, black / durationS), blackCheck: "ok" };
-}
+export const probeVideo = media.probeVideo;
 
 function round(value: number) {
   return Math.round(value * 100) / 100;

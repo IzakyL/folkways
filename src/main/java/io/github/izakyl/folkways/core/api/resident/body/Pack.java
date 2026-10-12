@@ -17,11 +17,12 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 public final class Pack implements Container {
-    public static final int DEFAULT_SIZE = 12;
+    // Every cell is for whatever is carried: the tools a resident has and the food it keeps by it take the cells
+    // they lie in, and the rest is for goods.
+    public static final int DEFAULT_SIZE = 18;
 
-    public static final int TOOL_CELLS = 6;
-
-    public static final int BASE_PLANNABLE_CELLS = DEFAULT_SIZE - TOOL_CELLS;
+    // The cells a pack is taken to have for goods before anyone's is looked into.
+    public static final int BASE_PLANNABLE_CELLS = DEFAULT_SIZE;
     private static final String TAG_ITEMS = "Items";
     private static final String TAG_SLOT = "Slot";
     private static final String TAG_STACK = "Stack";
@@ -56,10 +57,19 @@ public final class Pack implements Container {
         this.container = bigger;
     }
 
-    public int plannableCells() {
-        return Math.max(0, getContainerSize() - TOOL_CELLS);
+    // The cells left for goods by the tools carried.
+    public int plannableCells(Predicate<Item> tool) {
+        Objects.requireNonNull(tool);
+        int tools = 0;
+        for (ItemStack stack : contents()) {
+            if (tool.test(stack.getItem())) {
+                tools++;
+            }
+        }
+        return Math.max(0, getContainerSize() - tools);
     }
 
+    // The cells still free for goods.
     public int plannableRoom(Predicate<Item> tool) {
         Objects.requireNonNull(tool);
         int carrying = 0;
@@ -68,7 +78,7 @@ public final class Pack implements Container {
                 carrying++;
             }
         }
-        return Math.max(0, plannableCells() - carrying);
+        return Math.max(0, plannableCells(tool) - carrying);
     }
 
     public int countMatching(Predicate<ItemStack> predicate) {

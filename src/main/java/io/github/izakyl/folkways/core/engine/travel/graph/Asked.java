@@ -8,7 +8,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import net.minecraft.resources.ResourceLocation;
@@ -22,11 +21,11 @@ final class Asked {
     private final AtomicLong dropped = new AtomicLong();
 
     void note(ResourceLocation kind, WorldPos from, Collection<WorldPos> goals) {
-        note(kind, null, from, goals, Urgency.BACKGROUND);
+        note(kind, from, goals, Urgency.BACKGROUND);
     }
 
-    void note(ResourceLocation kind, UUID requester, WorldPos from, Collection<WorldPos> goals, Urgency urgency) {
-        Optional<Ask> ask = Ask.of(kind, requester, from, goals, urgency);
+    void note(ResourceLocation kind, WorldPos from, Collection<WorldPos> goals, Urgency urgency) {
+        Optional<Ask> ask = Ask.of(kind, from, goals, urgency);
         if (ask.isEmpty()) {
             return;
         }
@@ -35,7 +34,7 @@ final class Asked {
             dropped.incrementAndGet();
             return;
         }
-        box.put(key, ask.get());
+        box.merge(key, ask.get(), Ask::again);
     }
 
     List<Ask> drain() {

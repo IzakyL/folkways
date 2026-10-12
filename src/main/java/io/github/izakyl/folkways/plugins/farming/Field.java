@@ -1,17 +1,17 @@
 package io.github.izakyl.folkways.plugins.farming;
 
+import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Loaded;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.front.api.PastDay;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -24,11 +24,8 @@ import net.minecraft.world.level.block.state.BlockState;
 
 final class Field {
 
-    static final int GRAIN_RADIUS = 2;
-
-    static final int GRAIN_UNITS = 6;
-
-    static final int WIDE_HANDS_STEP = 3;
+    // How far a body stands from the cell it works: as far as its hands reach, a level up or down.
+    private static final int REACH = (int) Math.floor(Reach.PLAYER_BLOCK_REACH);
 
     private static final Comparator<BlockPos> SCAN_ORDER =
         Comparator.comparingInt((BlockPos cell) -> cell.getY())
@@ -66,6 +63,7 @@ final class Field {
         Set<BlockPos> claimed = new LinkedHashSet<>();
         List<BlockPos> ground = new ArrayList<>(zone.cells());
         ground.sort(SCAN_ORDER);
+        Map<BlockPos, Boolean> footed = new HashMap<>();
         for (BlockPos cell : ground) {
             if (!Loaded.around(level, cell, crop.reach())) {
                 continue;
@@ -74,12 +72,11 @@ final class Field {
             List<BlockPos> ripe = unclaimed(crop.harvestFrom(level, cell), claimed);
             boolean hoe = crop.needsFarmland()
                 && Tillage.tilled(level, cell, state, Tillage.PLAIN_HOE).isPresent();
-            boolean seed = sowable(level, cell, state, sown);
-            if (ripe.isEmpty() && !hoe && !seed) {
+            stake(level, zone.cells(), cell, sown, footed).ifPresent(plant::add);
+            if (ripe.isEmpty() && !hoe) {
                 continue;
             }
-            Optional<Stances> footings =
-                Stances.of(level, Reach.footingsAround(level, cell.above(), 1, 0));
+            Optional<Stances> footings = Stances.of(level, footings(level, cell.above(), footed));
             if (footings.isEmpty()) {
                 continue;
             }
@@ -93,21 +90,14 @@ final class Field {
             if (hoe) {
                 till.add(new Job(at, List.of(cell), footings.get(), cell));
             }
-            if (seed) {
-                plant.add(new Job(at, List.of(cell), footings.get(), cell));
-                sown.add(cell.above());
-            }
         }
     }
 
-    void settle(long stamp, int wideHands) {
+    void settle(long stamp) {
         begin(stamp);
-        Crop growing = crop;
-        int most = GRAIN_UNITS + WIDE_HANDS_STEP * wideHands;
-        boolean fells = growing.habit() instanceof Habit.Tree;
-        harvesting.settle(cut(harvest, fells ? 1 : most, growing));
-        tilling.settle(cut(till, most, growing));
-        sowing.settle(cut(plant, most, growing));
+        harvesting.settle(crop, harvest);
+        tilling.settle(crop, till);
+        sowing.settle(crop, plant);
     }
 
     private void begin(long stamp) {
@@ -120,35 +110,22 @@ final class Field {
         plant.clear();
     }
 
-    private static List<Batch> cut(List<Job> found, int most, Crop growing) {
-        Map<BlockPos, Job> free = new LinkedHashMap<>(found.size());
-        for (Job job : found) {
-            free.put(job.cell(), job);
-        }
-        List<Batch> batches = new ArrayList<>();
-        for (Job seed : found) {
-            if (free.remove(seed.cell()) == null) {
-                continue;
-            }
-            List<Job> batch = new ArrayList<>();
-            batch.add(seed);
-            if (most > 1) {
-                BlockPos anchor = seed.cell();
-                for (BlockPos around : BlockPos.betweenClosed(
-                        anchor.offset(-GRAIN_RADIUS, -GRAIN_RADIUS, -GRAIN_RADIUS),
-                        anchor.offset(GRAIN_RADIUS, GRAIN_RADIUS, GRAIN_RADIUS))) {
-                    if (batch.size() >= most) {
-                        break;
-                    }
-                    Job near = free.remove(around);
-                    if (near != null) {
-                        batch.add(near);
+    // Every footing in reach of the cell, so the work can be done from wherever the way there is easiest. Whether a
+    // body stands somewhere is looked at once a sweep, for all the cells around it.
+    private static Set<BlockPos> footings(ServerLevel level, BlockPos target, Map<BlockPos, Boolean> footed) {
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        for (int dx = -REACH; dx <= REACH; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -REACH; dz <= REACH; dz++) {
+                    BlockPos feet = target.offset(dx, dy, dz);
+                    if (Reach.withinReach(feet, target) && footed.computeIfAbsent(feet,
+                            at -> level.isLoaded(at) && Footing.withFeetAt(level, at))) {
+                        cells.add(feet);
                     }
                 }
             }
-            batches.add(new Batch(new WorkSite.AtBlock(seed.ground()), seed.footings(), growing, batch));
         }
-        return List.copyOf(batches);
+        return cells;
     }
 
     private static List<BlockPos> unclaimed(List<BlockPos> cells, Set<BlockPos> claimed) {
@@ -160,15 +137,50 @@ final class Field {
         return cells;
     }
 
-    private boolean sowable(ServerLevel level, BlockPos ground, BlockState state, Set<BlockPos> sown) {
-        if (crop.needsFarmland() && !(state.getBlock() instanceof FarmBlock)) {
-            return false;
+    // A stand is sown from its first cell, whole or not at all and as one piece of work: every cell of it in the
+    // plot, room for all of it, and somewhere to stand in reach of each cell still bare. A crop sown a cell at a time
+    // is a stand of one.
+    private Optional<Job> stake(ServerLevel level, Set<BlockPos> plot, BlockPos cell, Set<BlockPos> sown,
+            Map<BlockPos, Boolean> footed) {
+        List<BlockPos> stand = crop.standAt(cell);
+        if (!plot.containsAll(stand)) {
+            return Optional.empty();
         }
-        return crop.sowableAt(level, ground, sown);
+        for (BlockPos ground : stand) {
+            if (!level.isLoaded(ground)
+                || crop.needsFarmland() && !(level.getBlockState(ground).getBlock() instanceof FarmBlock)) {
+                return Optional.empty();
+            }
+        }
+        if (!crop.sowableAt(level, stand, sown)) {
+            return Optional.empty();
+        }
+        List<BlockPos> bare = new ArrayList<>(stand.size());
+        Set<BlockPos> reached = null;
+        for (BlockPos ground : stand) {
+            if (!crop.bare(level, ground.above())) {
+                continue;
+            }
+            bare.add(ground);
+            Set<BlockPos> from = footings(level, ground.above(), footed);
+            if (reached == null) {
+                reached = from;
+            } else {
+                reached.retainAll(from);
+            }
+        }
+        Optional<Stances> footings = Stances.of(level, reached);
+        if (footings.isEmpty()) {
+            return Optional.empty();
+        }
+        for (BlockPos ground : stand) {
+            sown.add(ground.above());
+        }
+        return Optional.of(new Job(WorldPos.of(level, cell), bare, footings.get(), cell));
     }
 
     private static Node cutOrFell(FarmNode.Chore chore) {
-        return chore.batch().crop().habit() instanceof Habit.Tree
+        return chore.crop().habit() instanceof Habit.Tree
             ? new FellNode(chore)
             : new HarvestNode(chore);
     }

@@ -22,8 +22,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 
-record Crop(Block block, Set<Block> standing, Item seed, ItemSpec seedSpec, Substrate substrate,
-            Habit habit) {
+record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, ItemSpec seedSpec,
+            Substrate substrate, Habit habit) {
 
     enum Substrate {
         FARMLAND,
@@ -32,10 +32,19 @@ record Crop(Block block, Set<Block> standing, Item seed, ItemSpec seedSpec, Subs
 
     private static final Habit TREE = new Habit.Tree(2, 9);
 
+    private static final Habit SQUARE_TREE = new Habit.Tree(2, 9, 2);
+
+    // A sapling that grows alone or four to a square is two crops, the second named as a variant of the first.
+    private static final String SQUARE = "/square";
+
+    private static final Set<Block> EITHER_WAY = Set.of(Blocks.JUNGLE_SAPLING, Blocks.SPRUCE_SAPLING);
+
     private record Shape(Substrate substrate, Habit habit, Set<Block> standing) {
     }
 
     private static final Map<Block, Shape> NAMED = Map.of(
+        Blocks.DARK_OAK_SAPLING,
+        new Shape(Substrate.NATURAL, SQUARE_TREE, Set.of(Blocks.DARK_OAK_SAPLING)),
         Blocks.SUGAR_CANE,
         new Shape(Substrate.NATURAL, new Habit.Cane(1, 3), Set.of(Blocks.SUGAR_CANE)),
         Blocks.BAMBOO,
@@ -57,6 +66,9 @@ record Crop(Block block, Set<Block> standing, Item seed, ItemSpec seedSpec, Subs
                 if (block instanceof CropBlock || block instanceof SaplingBlock || NAMED.containsKey(block)) {
                     found.add(BuiltInRegistries.BLOCK.getKey(block));
                 }
+                if (EITHER_WAY.contains(block)) {
+                    found.add(BuiltInRegistries.BLOCK.getKey(block).withSuffix(SQUARE));
+                }
             }
             found.sort(Comparator.comparing(ResourceLocation::toString));
             known = List.copyOf(found);
@@ -65,12 +77,18 @@ record Crop(Block block, Set<Block> standing, Item seed, ItemSpec seedSpec, Subs
         return known;
     }
 
-    static Optional<Crop> of(LevelReader level, BlockPos where, ResourceLocation blockId) {
+    static Optional<Crop> of(LevelReader level, BlockPos where, ResourceLocation id) {
+        boolean square = id.getPath().endsWith(SQUARE);
+        ResourceLocation blockId = square
+            ? id.withPath(id.getPath().substring(0, id.getPath().length() - SQUARE.length()))
+            : id;
         Optional<Block> block = BuiltInRegistries.BLOCK.getOptional(blockId);
-        if (block.isEmpty()) {
+        if (block.isEmpty() || square && !EITHER_WAY.contains(block.get())) {
             return Optional.empty();
         }
-        Optional<Shape> shape = shapeOf(block.get());
+        Optional<Shape> shape = square
+            ? Optional.of(new Shape(Substrate.NATURAL, SQUARE_TREE, Set.of(block.get())))
+            : shapeOf(block.get());
         if (shape.isEmpty()) {
             return Optional.empty();
         }
@@ -79,7 +97,7 @@ record Crop(Block block, Set<Block> standing, Item seed, ItemSpec seedSpec, Subs
             return Optional.empty();
         }
         ResourceLocation seedId = BuiltInRegistries.ITEM.getKey(seed.get());
-        return Optional.of(new Crop(block.get(), shape.get().standing(), seed.get(),
+        return Optional.of(new Crop(id, block.get(), shape.get().standing(), seed.get(),
             ItemSpec.of(seedId), shape.get().substrate(), shape.get().habit()));
     }
 
@@ -137,17 +155,39 @@ record Crop(Block block, Set<Block> standing, Item seed, ItemSpec seedSpec, Subs
         return habit.canopy(level, cut);
     }
 
-    boolean sowableAt(LevelReader level, BlockPos ground, Set<BlockPos> sown) {
-        BlockPos base = ground.above();
-        BlockState standing0 = level.getBlockState(base);
-        if (!standing0.isAir() && !standing0.canBeReplaced()) {
-            return false;
-        }
-        return sown().canSurvive(level, base) && habit.hasRoom(level, base, sown);
+    List<BlockPos> standAt(BlockPos ground) {
+        return habit.stand(ground);
     }
 
-    boolean roomAt(LevelReader level, BlockPos base) {
-        return habit.hasRoom(level, base, Set.of());
+    // A stand is sown while any cell of it is bare; the cells already growing are the part of it that is done.
+    boolean sowableAt(LevelReader level, List<BlockPos> stand, Set<BlockPos> sown) {
+        boolean bare = false;
+        for (BlockPos ground : stand) {
+            BlockPos base = ground.above();
+            if (grows(level.getBlockState(base))) {
+                continue;
+            }
+            if (!bare(level, base)) {
+                return false;
+            }
+            bare = true;
+        }
+        return bare && habit.hasRoom(level, bases(stand), sown);
+    }
+
+    boolean bare(LevelReader level, BlockPos base) {
+        BlockState standing0 = level.getBlockState(base);
+        return (standing0.isAir() || standing0.canBeReplaced()) && sown().canSurvive(level, base);
+    }
+
+    boolean roomAt(LevelReader level, List<BlockPos> stand) {
+        return habit.hasRoom(level, bases(stand), Set.of());
+    }
+
+    private static List<BlockPos> bases(List<BlockPos> stand) {
+        List<BlockPos> bases = new ArrayList<>(stand.size());
+        stand.forEach(ground -> bases.add(ground.above()));
+        return bases;
     }
 
     int reach() {

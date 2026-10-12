@@ -56,7 +56,7 @@ public final class OrdersPlanningGameTests {
         level.setBlockAndUpdate(at, Blocks.BARREL.defaultBlockState());
         var target = Containers.at(level, at).orElseThrow();
         ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
-        Order order = new Order(WorldPos.of(level, at), iron, 32, 64, true, 0);
+        Order order = new Order(WorldPos.of(level, at), iron, 32, 64, true);
         var view = ColonySnapshot.of(new ColonyData(), level);
         AtomicInteger withdrawals = new AtomicInteger();
         AtomicReference<CompoundTag> kept = new AtomicReference<>(new CompoundTag());
@@ -169,8 +169,8 @@ public final class OrdersPlanningGameTests {
         Map<Order.Key, Order> orders = (Map<Order.Key, Order>) field(presence, "orders");
         @SuppressWarnings("unchecked")
         Map<WorldPos, Shelf> shelves = (Map<WorldPos, Shelf>) field(presence, "shelves");
-        Order standing = new Order(kitchenAt, bread, 8, 16, true, 0);
-        Order once = new Order(hallAt, iron, 4, 4, false, 0);
+        Order standing = new Order(kitchenAt, bread, 8, 16, true);
+        Order once = new Order(hallAt, iron, 4, 4, false);
         orders.put(standing.key(), standing);
         orders.put(once.key(), once);
         shelves.put(hallAt, new Shelf(hallAt, Optional.of(new Shelf.Admitting(true, iron)),

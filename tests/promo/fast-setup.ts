@@ -77,7 +77,6 @@ for (var raw : args.list("demands")) {
     int low = demand.containsKey("low") ? ((Number) demand.get("low")).intValue() : 1;
     front.setSetting(OrdersContent.ID, "low", new Value.Count(low));
     front.setSetting(OrdersContent.ID, "count", new Value.Count(count));
-    front.setSetting(OrdersContent.ID, "rank", new Value.Count(0));
     var draft = front.settings(OrdersContent.ID);
     if (draft.count("count") != count || draft.count("low") != low
             || !draft.items("item").flatMap(spec -> spec.item()).filter(item::equals).isPresent()) {

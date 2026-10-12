@@ -227,8 +227,7 @@ public final class RailwayPatternGameTests {
                 new BlockPos[] {BlockPos.ZERO, new BlockPos(0, 0, 6), new BlockPos(6, 0, 6)},
                 new BlockPos[] {BlockPos.ZERO, new BlockPos(0, 0, 24), new BlockPos(0, 0, 8)},
                 new BlockPos[] {BlockPos.ZERO, new BlockPos(5, 0, 24)},
-                new BlockPos[] {BlockPos.ZERO, new BlockPos(0, 12, 20)},
-                new BlockPos[] {BlockPos.ZERO, new BlockPos(0, 0, 2)})) {
+                new BlockPos[] {BlockPos.ZERO, new BlockPos(0, 12, 20)})) {
             var refusal = refused(helper, lay(pattern, ground, marks));
             helper.assertTrue(refusal.detail().contains(" / "), "a refusal in both languages: " + refusal.detail());
         }

@@ -35,6 +35,11 @@ public final class PathfindingLoad {
     private static int found;
     private static int gaveUp;
 
+    // Fares the planner was told to wait on, by why (planner threads count these): the start off the ways, no goal in
+    // its piece, a goal in its piece yet no route there (a ride whose fare had no run left / a ride barred / neither).
+    private static final java.util.concurrent.atomic.AtomicLongArray laters =
+        new java.util.concurrent.atomic.AtomicLongArray(5);
+
     public enum Denial {
 
         FAR_END("farEnd"),
@@ -67,6 +72,8 @@ public final class PathfindingLoad {
     private static long publishMaxNanos;
 
     private static int rambles;
+    // Edges rambles laid, by why they rambled.
+    private static final java.util.Map<String, int[]> rambledBy = new java.util.TreeMap<>();
 
     private static int shortcuts;
 
@@ -158,6 +165,27 @@ public final class PathfindingLoad {
         held.put(graph, new int[] {waypoints, edges, exhausted, pieces});
     }
 
+    public static void laterOff() {
+        laters.incrementAndGet(0);
+    }
+
+    public static void laterApart() {
+        laters.incrementAndGet(1);
+    }
+
+    public static void laterUnrouted(boolean fareGone, boolean barred) {
+        laters.incrementAndGet(fareGone ? 2 : barred ? 3 : 4);
+    }
+
+    private static String laters() {
+        String said = "off=" + laters.get(0) + "/apart=" + laters.get(1) + "/unrouted=" + laters.get(2) + "fareGone+"
+            + laters.get(3) + "barred+" + laters.get(4) + "else";
+        for (int at = 0; at < laters.length(); at++) {
+            laters.set(at, 0);
+        }
+        return said;
+    }
+
     public static void questFound() {
         found++;
     }
@@ -187,6 +215,20 @@ public final class PathfindingLoad {
         straightenNanos += straighten;
         freezeNanos += freeze;
         publishMaxNanos = Math.max(publishMaxNanos, straighten + freeze);
+    }
+
+    private static String rambledBy() {
+        StringBuilder said = new StringBuilder("{");
+        rambledBy.forEach((why, seen) -> said.append(said.length() > 1 ? "," : "").append(why).append('=')
+            .append(seen[0]).append('/').append(seen[1]));
+        return said.append('}').toString();
+    }
+
+    public static void rambled(String why, int laid) {
+        int[] seen = rambledBy.computeIfAbsent(why, key -> new int[2]);
+        seen[0]++;
+        seen[1] += laid;
+        rambled(laid);
     }
 
     public static void rambled(int laid) {
@@ -223,13 +265,14 @@ public final class PathfindingLoad {
             + " graph=" + points + "pts/" + links + "edges/" + spent + "shut/" + pieces + "parts"
             + " disproved=" + disproved + "pts"
             + " asksPending=" + peakPending
+            + " later=" + laters()
             + " quests=" + found + "found/" + refused() + "denied/" + gaveUp + "gaveup"
             + " denied=" + byDenial()
             + " renumbered=" + renumbered
             + " straightened=" + straightened + "pts"
             + " publish=" + straightenNanos / 1000 + "usstraighten/"
             + freezeNanos / 1000 + "usfreeze/" + publishMaxNanos / 1000 + "usmax"
-            + " rambles=" + rambles + "/" + shortcuts + "edges"
+            + " rambles=" + rambles + "/" + shortcuts + "edges" + rambledBy()
             + " hops=" + hops
             + " attached=" + laid + "laid/" + closed + "closed/" + far + "far"
             + " segments=" + struck + "struck/" + walked + "walked";
@@ -242,6 +285,7 @@ public final class PathfindingLoad {
         freezeNanos = 0;
         publishMaxNanos = 0;
         rambles = 0;
+        rambledBy.clear();
         shortcuts = 0;
         hops = 0;
         laid = 0;
@@ -279,6 +323,7 @@ public final class PathfindingLoad {
         freezeNanos = 0;
         publishMaxNanos = 0;
         rambles = 0;
+        rambledBy.clear();
         shortcuts = 0;
         hops = 0;
         held.clear();

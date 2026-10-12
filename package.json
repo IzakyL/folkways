@@ -13,16 +13,18 @@
     "coverage:reset": "node_modules/@izakyl/blockwright-client/dist/blockwright coverage reset --config blockwright.toml",
     "visual:take": "npm exec -- playwright test --config tests/visual.config.ts",
     "bench:take": "npm exec -- playwright test --config tests/bench.config.ts",
+    "bench:overlay": "node --experimental-strip-types tests/bench/overlay.ts",
     "promo:take": "npm exec -- playwright test --config tests/promo.config.ts",
     "promo:film": "python3 tests/promo/film/build.py && python3 tests/promo/film/assemble.py",
     "fuzz:run": "npm exec -- playwright test --config tests/fuzz.config.ts"
   },
   "devDependencies": {
-    "@izakyl/blockwright-client": "0.1.0-alpha.0",
-    "@izakyl/blockwright-mcp": "0.1.0-alpha.0",
-    "@izakyl/blockwright-minecraft": "0.1.0-alpha.0",
-    "@izakyl/blockwright-test": "0.1.0-alpha.0",
-    "@izakyl/blockwright-ui": "0.1.0-alpha.0",
+    "@izakyl/blockwright-cinema": "0.1.0-alpha.1",
+    "@izakyl/blockwright-client": "0.1.0-alpha.1",
+    "@izakyl/blockwright-mcp": "0.1.0-alpha.1",
+    "@izakyl/blockwright-minecraft": "0.1.0-alpha.1",
+    "@izakyl/blockwright-test": "0.1.0-alpha.1",
+    "@izakyl/blockwright-ui": "0.1.0-alpha.1",
     "@playwright/test": "^1.60.0",
     "typescript": "^5.0.0",
     "@types/node": "^20.0.0"

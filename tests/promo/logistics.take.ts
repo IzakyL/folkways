@@ -178,7 +178,8 @@ test("colony orders arrive through a Create logistics network", async ({}, testI
       { at: store, item: "minecraft:stick", count: 64, low: 64 },
       { at: logPile, item: "minecraft:oak_log", count: 48, low: 48 },
       { at: towerPile, item: "minecraft:oak_log", count: 48, low: 48 },
-      // Farmers, herders and fishers only work toward an order, so each yard chest keeps asking for its zone's goods.
+      // Each yard chest asks for its zone's goods, so the harvest, the fleece and the catch are carried to the chest
+      // beside the zone they came from.
       { at: yardChests[0], item: "minecraft:wheat", count: 256, low: 256 },
       { at: yardChests[1], item: "minecraft:white_wool", count: 128, low: 128 },
       { at: yardChests[2], item: "minecraft:cod", count: 128, low: 128 }]));

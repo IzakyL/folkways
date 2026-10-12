@@ -14,8 +14,16 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class LoadNode extends CraftNode {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("folkways-labor");
+
+    private static final int UNCOOKED_TOLD_TICKS = 1200;
 
     private final ItemSpec input;
     private final int load;
@@ -62,6 +70,16 @@ final class LoadNode extends CraftNode {
             return false;
         }
         Optional<Container> machine = machine(level);
-        return machine.isEmpty() || machine.get().getItem(Machines.INPUT_SLOT).isEmpty();
+        boolean cooked = machine.isEmpty() || machine.get().getItem(Machines.INPUT_SLOT).isEmpty();
+        // A load that sits uncooked holds its cooker, its loader and everyone waiting on what it makes: what the
+        // cooker holds is written down now and then while it does, to tell a cold one from a full one.
+        if (!cooked && level.getGameTime() % UNCOOKED_TOLD_TICKS == 0) {
+            BlockState state = level.getBlockState(cell());
+            LOGGER.info("load uncooked node={} at={} input={} fuel={} result={} lit={}", id(), cell().toShortString(),
+                machine.get().getItem(Machines.INPUT_SLOT), machine.get().getItem(Machines.FUEL_SLOT),
+                machine.get().getItem(Machines.RESULT_SLOT),
+                state.hasProperty(BlockStateProperties.LIT) && state.getValue(BlockStateProperties.LIT));
+        }
+        return cooked;
     }
 }

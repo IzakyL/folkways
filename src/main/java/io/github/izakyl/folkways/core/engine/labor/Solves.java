@@ -21,7 +21,7 @@ final class Solves {
 
     private final ExecutorService pool;
 
-    private final Map<UUID, Queue> byColony = new ConcurrentHashMap<>();
+    private final Map<UUID, Lanes> byColony = new ConcurrentHashMap<>();
 
     Solves(int threads) {
         AtomicInteger named = new AtomicInteger();
@@ -32,8 +32,9 @@ final class Solves {
         });
     }
 
-    Executor of(UUID colony) {
-        return byColony.computeIfAbsent(colony, id -> new Queue(pool));
+    // A colony's two lanes: its weave and its schedule each run one at a time, and beside each other.
+    Lanes of(UUID colony) {
+        return byColony.computeIfAbsent(colony, id -> new Lanes(new Queue(pool), new Queue(pool)));
     }
 
     void forget(UUID colony) {
@@ -42,11 +43,16 @@ final class Solves {
 
     void shutdown() {
         long until = System.nanoTime() + DRAIN_NANOS;
-        while (byColony.values().stream().anyMatch(queue -> !queue.idle()) && System.nanoTime() < until) {
+        while (byColony.values().stream().anyMatch(lanes -> !idle(lanes.weave()) || !idle(lanes.schedule()))
+                && System.nanoTime() < until) {
             LockSupport.parkNanos(WAIT_NANOS);
         }
         byColony.clear();
         pool.shutdownNow();
+    }
+
+    private static boolean idle(Executor lane) {
+        return !(lane instanceof Queue queue) || queue.idle();
     }
 
     private static final class Queue implements Executor {

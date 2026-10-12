@@ -34,6 +34,7 @@ final class Runners {
         return byResident.values();
     }
 
+    // Every runner follows its route as laid now, from its start: work it let go of since is on it again.
     void follow(Map<UUID, Tour> tours) {
         for (Map.Entry<UUID, Tour> given : tours.entrySet()) {
             of(given.getKey()).follow(given.getValue().nodes());
@@ -56,7 +57,7 @@ final class Runners {
     void letGo(ColonyLabor labor, Set<UUID> nodes) {
         for (BodyRunner runner : byResident.values()) {
             if (runner.holding().filter(nodes::contains).isPresent()) {
-                runner.drop(labor);
+                runner.drop(labor, "replaced");
             }
         }
     }
@@ -66,8 +67,12 @@ final class Runners {
         byResident.clear();
     }
 
-    void away(ColonyLabor labor, Set<UUID> here, long now) {
+    // A body carried off out of the world is neither here nor away: its runner keeps everything it had and waits.
+    void away(ColonyLabor labor, Set<UUID> here, Set<UUID> carriedOff, long now) {
         for (BodyRunner runner : byResident.values()) {
+            if (carriedOff.contains(runner.resident())) {
+                continue;
+            }
             if (here.contains(runner.resident())) {
                 runner.here(labor);
             } else {

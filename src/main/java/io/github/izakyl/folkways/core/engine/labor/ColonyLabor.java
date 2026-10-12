@@ -5,13 +5,14 @@ import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Before;
+import io.github.izakyl.folkways.core.api.work.Doings;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeState;
 import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Urge;
+import io.github.izakyl.folkways.core.api.work.WorkProgress;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
@@ -27,8 +28,15 @@ import io.github.izakyl.folkways.core.engine.plan.Message;
 import io.github.izakyl.folkways.core.engine.plan.PackLoad;
 import io.github.izakyl.folkways.core.engine.plan.Planner;
 import io.github.izakyl.folkways.core.engine.plan.Schedule;
-import io.github.izakyl.folkways.core.engine.plan.Solved;
+import io.github.izakyl.folkways.core.engine.plan.Asks;
+import io.github.izakyl.folkways.core.engine.plan.Refused;
+import io.github.izakyl.folkways.core.engine.plan.Scheduler;
+import io.github.izakyl.folkways.core.engine.plan.Shortfall;
+import io.github.izakyl.folkways.core.engine.plan.Tour;
+import io.github.izakyl.folkways.core.engine.plan.Unassigned;
 import io.github.izakyl.folkways.core.engine.plan.Vertex;
+import io.github.izakyl.folkways.core.engine.plan.WeaveDelta;
+import io.github.izakyl.folkways.core.engine.plan.WeaveView;
 import io.github.izakyl.folkways.core.engine.travel.Ways;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -39,7 +47,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.Executor;
 import net.minecraft.Util;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -58,8 +65,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     private final ColonyData colony;
     private final ResourceKey<Level> dimension;
 
-    private final Planner planner = new Planner(new Claims(), new Cooldowns());
-    private Executor onPlanThread = Runnable::run;
+    private Lanes lanes = Lanes.INLINE;
 
     private final Phases phases = new Phases(this::ending);
     private record Ended(UUID node, Ending how) { }
@@ -70,7 +76,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     private final Map<UUID, Personal> personalRequests = new LinkedHashMap<>();
     private final Set<UUID> reportedFailures = new LinkedHashSet<>();
     private final Inbox inbox = new Inbox();
-    private final Cycle cycle = new Cycle(inbox);
+    private final Pipeline pipeline = new Pipeline(inbox, new Planner(new Claims(), new Cooldowns()), new Scheduler());
     private final Runners runners = new Runners(this::arrived);
     private final Urges urges = new Urges();
     private final Salvage salvage = new Salvage();
@@ -79,6 +85,12 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     private final Readout readout = new Readout();
 
     private long wakeAt = Long.MAX_VALUE;
+    private long scheduleWakeAt = Long.MAX_VALUE;
+    // What each stage last asked of the survey: the weave's whole ask, and whether the schedule wants hands read.
+    private Asks weaveAsks = Asks.NONE;
+    private boolean scheduleHands;
+    private List<Shortfall> shortfalls = List.of();
+    private List<Refused> refused = List.of();
     private boolean waysAnswered;
     private long waysAnsweredAt = Long.MIN_VALUE / 2;
     private long desertedSince = -1L;
@@ -86,11 +98,13 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     private boolean closed;
     private List<UUID> dropsToRead = List.of();
 
-    private Map<UUID, Vertex> graph = Map.of();
+    // The plan as the colony keeps it, change by change, and the routes laid on it.
+    private final WeaveView graph = new WeaveView();
     private final Set<UUID> declined = new LinkedHashSet<>();
-    private Map<UUID, Set<UUID>> predecessors = Map.of();
+    private final Map<UUID, Tour> tours = new LinkedHashMap<>();
     private Schedule schedule = Schedule.EMPTY;
     private Diagnosis diagnosis = Diagnosis.NOTHING;
+    private long submittedNodes;
 
     public ColonyLabor(ColonyData colony, ResourceKey<Level> dimension) {
         this.colony = colony;
@@ -144,7 +158,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             return;
         }
         closed = true;
-        cycle.close();
+        pipeline.close(lanes.weave(), lanes.schedule());
         colony.works().unlisten(dimension, this);
         runners.close(this);
         phases.retain(Set.of());
@@ -152,21 +166,20 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         personalRequests.clear();
         endings.clear();
         withdrawnGone.clear();
-        onPlanThread.execute(planner::closed);
     }
 
-    public void run(ServerLevel level, Executor onPlanThread) {
+    public void run(ServerLevel level, Lanes lanes) {
         if (closed) {
             return;
         }
-        this.onPlanThread = onPlanThread;
+        this.lanes = lanes;
         for (UUID drop : dropsToRead) {
             if (level.getEntity(drop) instanceof ItemEntity item && item.isAlive()) {
                 spilled(item);
             }
         }
         dropsToRead = List.of();
-        cycle.applyReady(level);
+        pipeline.applyReady(level);
         settle(level);
         Set<UUID> roster = enrolled();
         runners.reconcile(this, roster);
@@ -182,7 +195,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
                 present.put(body.id(), body);
             }
         }
-        runners.away(this, present.keySet(), level.getGameTime());
+        runners.away(this, present.keySet(), colony.holdings().carriedOff(), level.getGameTime());
         ColonyView view = present.isEmpty() ? null : ColonySnapshot.of(colony, level);
         for (Body body : present.values()) {
             BodyRunner runner = runners.of(body.id());
@@ -190,9 +203,14 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             runner.tick(this, level, body);
         }
         answer(level, present);
-        for (int round = 0; round < MOST_ROUNDS && !cycle.busy() && inbox.any(); round++) {
+        for (int round = 0; round < MOST_ROUNDS && !pipeline.weaving() && inbox.any(); round++) {
             plan(level);
             answer(level, present);
+        }
+        if (level.getGameTime() >= scheduleWakeAt) {
+            scheduleWakeAt = Long.MAX_VALUE;
+            pipeline.wake(lanes.schedule(), level.getGameTime(), this::laid);
+            pipeline.applyReady(level);
         }
         tellEndings();
     }
@@ -242,8 +260,9 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         salvage.workshop().ifPresent(workshops::add);
         Known known = survey.known(ways, List.copyOf(workshops));
         readout.froze(known.hands().size(), inbox.size());
-        cycle.begin(level, onPlanThread, planner, known, level.getGameTime(),
-            (batch, solved) -> apply(level, batch, solved));
+        pipeline.weave(lanes.weave(), lanes.schedule(), known, level.getGameTime(),
+            (batch, woven) -> woven(level, batch, woven), this::laid);
+        pipeline.applyReady(level);
     }
 
     private void settle(ServerLevel level) {
@@ -257,10 +276,15 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         for (UUID id : personal.settling()) {
             Node node = personal.node(id);
             boolean settled = personal.settled(node, level);
-            if (settled) readout.completed(node);
+            if (settled) {
+                readout.completed(node);
+                Personal request = personalRequests.get(id);
+                WorkProgress.reported(colony.colonyId(), node, WorkProgress.Step.FINISHED,
+                    Optional.ofNullable(request).map(Personal::resident));
+            }
             if (settled || personal.of(id).terminal()) {
                 Personal request = personalRequests.get(id);
-                if (request != null) {
+                if (request != null && request.urge() != null) {
                     personal.failure(id).ifPresent(why -> urgeRefused(request.urge(), why, level.getGameTime()));
                 }
                 forgetPersonal(id);
@@ -274,7 +298,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         Optional<Urge> current = runner.ownUrge().flatMap(id -> offered.stream()
             .filter(urge -> urge.id().equals(id)).findFirst());
         if (runner.ownBusiness() && current.isEmpty()) {
-            runner.letGo(this, level, body);
+            runner.letGo(this, level, body, "urge-gone");
         }
         Optional<Urge> keenest = urges.keenest(offered, level.getGameTime(), urge ->
             !personalRequests.containsValue(new Personal(body.id(), urge.id()))
@@ -303,84 +327,88 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             personal.forget(doing.id());
             return;
         }
-        runner.letGo(this, level, body);
+        runner.letGo(this, level, body, "urge-preempts");
         personalRequests.put(doing.id(), new Personal(body.id(), keenest.get().id()));
         runner.offer(this, level, body, keenest.get(), doing);
     }
 
-    private void apply(ServerLevel level, List<Message> batch, Solved solved) {
+    // What the weave changed, applied: work that went or was grown afresh is let go of and ends as the plan says,
+    // and work new to the plan, or grown afresh, enters it.
+    private void woven(ServerLevel level, List<Message> batch, Planner.Woven woven) {
+        WeaveDelta delta = woven.delta();
         Set<UUID> withdrawn = new LinkedHashSet<>();
         for (Message message : batch) {
             if (message instanceof Message.Withdrawn(var owner, UUID node)) {
                 withdrawn.add(node);
             }
         }
-        Map<UUID, Vertex> settled = new LinkedHashMap<>();
-        for (Vertex vertex : solved.weave().vertices().values()) {
-            settled.put(vertex.id(), vertex);
+        Set<UUID> regrew = new LinkedHashSet<>();
+        for (UUID regrown : delta.fresh()) {
+            if (graph.has(regrown)) {
+                regrew.add(regrown);
+            }
         }
-        Set<UUID> fresh = solved.weave().fresh();
-        Set<UUID> replaced = new LinkedHashSet<>();
-        for (UUID had : graph.keySet()) {
-            if (!settled.containsKey(had) || fresh.contains(had)) {
-                replaced.add(had);
+        Set<UUID> replaced = new LinkedHashSet<>(regrew);
+        for (UUID gone : delta.removed()) {
+            if (graph.has(gone)) {
+                replaced.add(gone);
             }
         }
         runners.letGo(this, replaced);
-        Set<UUID> regrew = new LinkedHashSet<>();
-        for (UUID regrown : fresh) {
-            if (graph.containsKey(regrown)) {
-                phases.cancelled(regrown);
-                phases.forget(regrown);
-                declined.remove(regrown);
-                reportedFailures.remove(regrown);
-                regrew.add(regrown);
-            }
+        for (UUID regrown : regrew) {
+            phases.cancelled(regrown);
+            phases.forget(regrown);
+            declined.remove(regrown);
+            reportedFailures.remove(regrown);
         }
         if (!regrew.isEmpty()) {
             inbox.discard(message -> regrew.contains(about(message)));
         }
-        List<Node> entered = settled.values().stream()
-            .filter(vertex -> !graph.containsKey(vertex.id()) || fresh.contains(vertex.id()))
-            .map(Vertex::node).toList();
-        graph = Map.copyOf(settled);
-        declined.retainAll(graph.keySet());
-        reportedFailures.retainAll(graph.keySet());
-        Map<UUID, Set<UUID>> before = new LinkedHashMap<>();
-        for (Before link : solved.weave().orders()) {
-            before.computeIfAbsent(link.to(), ignored -> new LinkedHashSet<>())
-                .add(link.from());
-        }
-        predecessors = Map.copyOf(before);
-        Map<UUID, Set<UUID>> grouped = new java.util.HashMap<>();
-        for (Set<UUID> group : solved.weave().groups()) {
-            group.forEach(member -> grouped.put(member, group));
-        }
-        groupOf = grouped;
-        pins = solved.weave().pins();
+        List<Node> entered = new ArrayList<>();
+        delta.put().forEach((id, vertex) -> {
+            if (!graph.has(id) || delta.fresh().contains(id)) {
+                entered.add(vertex.node());
+            }
+        });
+        Set<UUID> heldBefore = graph.held();
+        graph.apply(delta);
+        declined.removeAll(delta.removed());
+        reportedFailures.removeAll(delta.removed());
+        untaken.keySet().removeAll(delta.removed());
         // Work the plan gave up ends as the plan says; work it holds off the plan for now has not ended.
         Map<UUID, Ending> given = new LinkedHashMap<>();
         Set<UUID> worked = new LinkedHashSet<>();
-        for (Gone gone : solved.weave().gone()) {
+        for (Gone gone : delta.gone()) {
             given.put(gone.node().id(), gone.how());
             if (phases.knows(gone.node().id())) {
                 worked.add(gone.node().id());
             }
         }
-        Set<UUID> live = new LinkedHashSet<>(graph.keySet());
-        live.addAll(solved.weave().held());
-        phases.retain(live, id -> withdrawn.contains(id) ? Ending.REVOKED : given.getOrDefault(id, Ending.DROPPED));
+        Set<UUID> offPlan = new LinkedHashSet<>(delta.removed());
+        for (UUID was : heldBefore) {
+            if (!graph.held().contains(was)) {
+                offPlan.add(was);
+            }
+        }
+        for (UUID id : offPlan) {
+            if (!graph.has(id) && !graph.held().contains(id) && phases.knows(id)) {
+                phases.cancelled(id, withdrawn.contains(id) ? Ending.REVOKED : given.getOrDefault(id, Ending.DROPPED));
+                phases.forget(id);
+            }
+        }
         for (UUID node : withdrawn) {
-            if (!graph.containsKey(node)) {
+            if (!graph.has(node)) {
                 withdrawnGone.add(node);
             }
         }
-        schedule = solved.schedule();
-        diagnosis = solved.diagnosis();
-        survey.asked(solved.asks());
-        wakeAt = solved.asks().wakeAt();
-        runners.follow(schedule.tours());
-        for (Gone gone : solved.weave().gone()) {
+        weaveAsks = woven.asks();
+        shortfalls = woven.shortfalls();
+        refused = woven.refused();
+        diagnosis = new Diagnosis(shortfalls, diagnosis.unassigned(), refused);
+        survey.asked(new Asks(weaveAsks.survey(), weaveAsks.looks(), weaveAsks.hands() || scheduleHands,
+            weaveAsks.handsOf(), weaveAsks.wakeAt()));
+        wakeAt = weaveAsks.wakeAt();
+        for (Gone gone : delta.gone()) {
             if (worked.contains(gone.node().id())) {
                 continue;
             }
@@ -392,6 +420,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             ending(gone.node().id(), gone.how());
         }
         for (Node node : entered) {
+            submittedNodes++;
             phases.entered(node, level);
             try {
                 node.planned(level).ifPresent(why -> decline(node.id(), why));
@@ -400,6 +429,27 @@ public final class ColonyLabor implements ColonyWorks.Listening {
                 decline(node.id(), LaborRefusal.WORK_BROKE);
             }
         }
+    }
+
+    // What the schedule laid, applied: every route is followed afresh from now on, so work a runner let go of
+    // is taken up again whether or not its route changed.
+    private void laid(Scheduler.Scheduled laid) {
+        laid.changed().forEach((resident, tour) -> {
+            if (tour.nodes().isEmpty()) {
+                tours.remove(resident);
+            } else {
+                tours.put(resident, tour);
+            }
+        });
+        runners.follow(tours);
+        schedule = new Schedule(tours, laid.unassigned());
+        diagnosis = new Diagnosis(shortfalls, laid.unassigned(), refused);
+        if (laid.hands() != scheduleHands) {
+            scheduleHands = laid.hands();
+            survey.asked(new Asks(weaveAsks.survey(), Set.of(), weaveAsks.hands() || scheduleHands, Set.of(),
+                weaveAsks.wakeAt()));
+        }
+        scheduleWakeAt = laid.wakeAt();
     }
 
     private static UUID about(Message message) {
@@ -428,7 +478,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     }
 
     public Optional<NodeState> state(UUID node) {
-        return graph.containsKey(node) ? Optional.of(phases.of(node)) : Optional.empty();
+        return graph.has(node) ? Optional.of(phases.of(node)) : Optional.empty();
     }
 
     private void decline(UUID id, RefusalKind why) {
@@ -441,13 +491,13 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             untaken.put(id, new Untaken("declined", null));
             return Optional.empty();
         }
-        for (UUID predecessor : predecessors.getOrDefault(id, Set.of())) {
-            if (graph.containsKey(predecessor) && phases.of(predecessor) != NodeState.DONE) {
+        for (UUID predecessor : graph.before(id)) {
+            if (phases.of(predecessor) != NodeState.DONE) {
                 untaken.put(id, new Untaken("after", predecessor));
                 return Optional.empty();
             }
         }
-        Vertex vertex = graph.get(id);
+        Vertex vertex = graph.vertex(id);
         if (vertex == null) {
             untaken.put(id, new Untaken("off_graph", null));
             return Optional.empty();
@@ -506,7 +556,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     // What the node does and where, which group it is in and who it is bound to, as the last plan said.
     private String detailOf(UUID id) {
-        Vertex vertex = graph.get(id);
+        Vertex vertex = graph.vertex(id);
         if (vertex == null) {
             return "[?]";
         }
@@ -514,20 +564,17 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         StringBuilder said = new StringBuilder("[").append(node.spec().doing().getPath())
             .append('@').append(node.spec().site().where().cell().toShortString())
             .append(" goods=").append(node.spec().about().orElse("-"));
-        Set<UUID> group = groupOf.get(id);
-        said.append(" group=").append(group == null ? 1 : group.size());
-        UUID pin = pins.get(id);
+        said.append(" group=").append(graph.group(id).size());
+        UUID pin = graph.pin(id);
         said.append(" pin=").append(pin == null ? "-" : pin.toString().substring(0, 8));
         node.worker().ifPresent(worker -> said.append(" worker=").append(worker.toString(), 0, 8));
-        said.append(" in=").append(predecessors.getOrDefault(id, Set.of()).size());
+        said.append(" in=").append(graph.before(id).size());
         return said.append(']').toString();
     }
 
-    private Map<UUID, Set<UUID>> groupOf = Map.of();
-    private Map<UUID, UUID> pins = Map.of();
 
     private String kindOf(UUID id) {
-        Vertex vertex = graph.get(id);
+        Vertex vertex = graph.vertex(id);
         if (vertex == null) {
             return "?";
         }
@@ -573,17 +620,17 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             }
         }
         Kit kit = Kit.of(colony.works(), body);
-        int capacity = body.pack().plannableCells() - kit.keptCells(body);
+        int capacity = body.pack().plannableCells(item -> kit.holds(item.getDefaultInstance())) - kit.keptCells(body);
         int used = capacity - body.pack().plannableRoom(item -> kit.holds(item.getDefaultInstance()));
         return PackLoad.fits(used, capacity, order);
     }
 
     boolean onTheGraph(UUID id) {
-        return graph.containsKey(id) && !phases.of(id).terminal();
+        return graph.has(id) && !phases.of(id).terminal();
     }
 
     Placement placementOf(UUID id) {
-        Vertex vertex = graph.get(id);
+        Vertex vertex = graph.vertex(id);
         return vertex == null ? Placement.NOWHERE : vertex.plan();
     }
 
@@ -596,7 +643,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         List<Node> ahead = new ArrayList<>();
         runner.inHand().ifPresent(ahead::add);
         for (UUID queued : runner.queued()) {
-            Vertex vertex = graph.get(queued);
+            Vertex vertex = graph.vertex(queued);
             if (vertex != null) {
                 ahead.add(vertex.node());
             }
@@ -616,12 +663,14 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     }
 
     void started(UUID node, UUID resident) {
+        progress(node, WorkProgress.Step.STARTED, Optional.of(resident));
         inbox.raise(new Message.Started(node, resident));
     }
 
     void finished(UUID node) {
-        Vertex finished = graph.get(node);
+        Vertex finished = graph.vertex(node);
         readout.finished(finished == null ? null : finished.node());
+        progress(node, WorkProgress.Step.FINISHED, Optional.empty());
         kits.ended(node);
         salvage.ended(node);
         inbox.raise(new Message.Finished(node));
@@ -634,6 +683,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             return;
         }
         readout.refused(why);
+        progress(node, WorkProgress.Step.FAILED, Optional.empty());
         inbox.raise(new Message.Failed(node, why));
         if (salvage.ended(node)) {
             inbox.raise(new Message.Withdrawn(Salvage.DOMAIN, node));
@@ -642,7 +692,15 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     void released(UUID node) {
         readout.released();
+        progress(node, WorkProgress.Step.RELEASED, Optional.empty());
         inbox.raise(new Message.Released(node));
+    }
+
+    private void progress(UUID node, WorkProgress.Step step, Optional<UUID> worker) {
+        Vertex vertex = graph.vertex(node);
+        if (vertex != null) {
+            WorkProgress.reported(colony.colonyId(), vertex.node(), step, worker);
+        }
     }
 
     void arrived(UUID resident) {
@@ -666,6 +724,19 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         survey.read(resident);
     }
 
+    // A piece handed out within work a body is in: run as the body's own, beside the plan, and told of as any work
+    // is. Answers whether it can be begun.
+    boolean inner(Node piece, UUID resident, ServerLevel level) {
+        personal.entered(piece, level);
+        if (!personal.ready(piece, level)) {
+            personal.cancelled(piece.id());
+            personal.forget(piece.id());
+            return false;
+        }
+        personalRequests.put(piece.id(), new Personal(resident, null));
+        return true;
+    }
+
     void urgeRefused(ResourceLocation urge, RefusalKind why, long now) {
         readout.refused(why);
         urges.refused(urge, why, now);
@@ -676,13 +747,47 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         survey.read(resident);
     }
 
+    LaborCensus census(ServerLevel level) {
+        Map<NodeState, Integer> counted = new java.util.EnumMap<>(NodeState.class);
+        for (NodeState phase : NodeState.values()) {
+            counted.put(phase, phases.in(phase).size());
+        }
+        int planned = 0;
+        for (Tour tour : schedule.tours().values()) {
+            planned += tour.nodes().size();
+        }
+        Map<String, Integer> unassigned = new java.util.TreeMap<>();
+        for (Unassigned nobody : diagnosis.unassigned()) {
+            unassigned.merge(nobody.why().name(), 1, Integer::sum);
+        }
+        Map<String, Long> missing = new java.util.TreeMap<>();
+        for (Shortfall each : diagnosis.shortfalls()) {
+            missing.merge(Doings.item(each.what()).map(ResourceLocation::toString).orElse(each.what().describe()),
+                each.missing(), Long::sum);
+        }
+        Set<UUID> carriedOff = colony.holdings().carriedOff();
+        Map<String, Integer> standing = new java.util.TreeMap<>();
+        for (BodyRunner runner : runners.all()) {
+            String said;
+            if (carriedOff.contains(runner.resident())
+                    || level.getEntity(runner.resident()) instanceof net.minecraft.world.entity.Entity body
+                    && body.getVehicle() != null) {
+                said = "riding";
+            } else {
+                said = runner.census();
+            }
+            standing.merge(said, 1, Integer::sum);
+        }
+        return new LaborCensus(submittedNodes, counted, planned, unassigned, missing, standing);
+    }
+
     String heartbeat() {
-        return readout.line(graph, phases, schedule, diagnosis, runners,
-            cycle.busyFor(Util.getNanos()));
+        return readout.line(graph.vertices(), phases, schedule, diagnosis, runners,
+            pipeline.busyFor(Util.getNanos()));
     }
 
     long solvingFor(long now) {
-        return cycle.busyFor(now);
+        return pipeline.busyFor(now);
     }
 
     Diagnosis diagnosis() {
@@ -690,8 +795,8 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     }
 
     Collection<String> stalls() {
-        untaken.keySet().retainAll(graph.keySet());
-        List<String> lines = new ArrayList<>(readout.stalls(graph, phases, runners, this::untakenWhy, this::untakenKey));
+        untaken.keySet().retainAll(graph.vertices().keySet());
+        List<String> lines = new ArrayList<>(readout.stalls(graph.vertices(), phases, runners, this::untakenWhy, this::untakenKey));
         // The whole route of the first few bodies whose queued work stalled bodies wait on.
         Set<UUID> holders = new LinkedHashSet<>();
         for (BodyRunner runner : runners.all()) {

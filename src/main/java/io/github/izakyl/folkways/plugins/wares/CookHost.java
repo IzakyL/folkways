@@ -65,19 +65,23 @@ final class CookHost implements StationHost {
             fuel.flatMap(spec -> stoking(level, spec)));
     }
 
-    // The colony's fuel as this cooker burns it, and how long what its fuel slot holds now burns for.
+    // The colony's fuel as this cooker burns it, and how long what its fuel slot holds now burns for. A cooker has
+    // one fuel slot: once it holds one of the colony's fuels, that one is what goes in after it, since any other
+    // would be turned away at the slot. With the slot empty any of them may be brought, so the fuel is counted by
+    // the one that burns shortest: counted by a longer burning one, a load stoked with a shorter sat half cooked.
     private Optional<Stoking> stoking(ServerLevel level, ItemSpec fuel) {
-        int burns = Goods.members(fuel).stream().findFirst()
-            .map(item -> new ItemStack(item).getBurnTime(recipeType)).orElse(0);
+        ItemStack held = Machines.at(level, at.block(level))
+            .filter(machine -> machine.getContainerSize() > Machines.FUEL_SLOT)
+            .map(machine -> machine.getItem(Machines.FUEL_SLOT))
+            .orElse(ItemStack.EMPTY);
+        ItemSpec brought = !held.isEmpty() && Goods.matches(held, fuel) ? Goods.specOf(held) : fuel;
+        int burns = Goods.members(brought).stream()
+            .mapToInt(item -> new ItemStack(item).getBurnTime(recipeType)).filter(ticks -> ticks > 0).min().orElse(0);
         if (burns <= 0) {
             return Optional.empty();
         }
-        long stocked = Machines.at(level, at.block(level))
-            .filter(machine -> machine.getContainerSize() > Machines.FUEL_SLOT)
-            .map(machine -> machine.getItem(Machines.FUEL_SLOT))
-            .map(held -> (long) held.getBurnTime(recipeType) * held.getCount())
-            .orElse(0L);
-        return Optional.of(new Stoking(fuel, burns, stocked));
+        long stocked = (long) held.getBurnTime(recipeType) * held.getCount();
+        return Optional.of(new Stoking(brought, burns, stocked));
     }
 
     record Stoking(ItemSpec fuel, int burns, long stocked) {

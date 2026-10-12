@@ -16,31 +16,8 @@ export async function sampleWhileSprinting<T>(
     sampleAtZero?: boolean;
   },
 ): Promise<SprintWaitOutcome & { sample: T; samples: T[] }> {
-  const samples: T[] = [];
-  let ticks = 0;
-  let sample: T;
-
-  if (options.sampleAtZero) {
-    sample = await options.read(0);
-    samples.push(sample);
-    if (options.done(sample)) {
-      return { matched: true, ticks: 0, reason: "matched", sample, samples };
-    }
-  }
-
-  for (;;) {
-    const step = Math.min(options.stepTicks, options.maxTicks - ticks);
-    if (step <= 0) break;
-    await tick.sprint(server, step);
-    ticks += step;
-    sample = await options.read(ticks);
-    samples.push(sample);
-    if (options.done(sample)) {
-      return { matched: true, ticks, reason: "matched", sample, samples };
-    }
-  }
-
-  return { matched: false, ticks, reason: "maxTicks", sample: samples[samples.length - 1]!, samples };
+  const run = await tick.sample(server, options);
+  return { ...run, sample: run.sample as T };
 }
 
 export async function settledAll<T>(

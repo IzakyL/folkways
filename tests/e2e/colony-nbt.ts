@@ -176,7 +176,6 @@ export type OrderSpec = {
   count: number;
   low?: number;
   standing: boolean;
-  rank?: number;
 };
 
 export type BlueprintBlockSpec = { offset: Vec3; block: string; properties?: Record<string, string> };
@@ -323,7 +322,6 @@ function orderNbt(o: OrderSpec): Nbt {
     low: I(o.low ?? o.count),
     count: I(o.count),
     standing: B(o.standing ? 1 : 0),
-    rank: I(Math.max(-2, Math.min(2, o.rank ?? 0))),
   });
 }
 

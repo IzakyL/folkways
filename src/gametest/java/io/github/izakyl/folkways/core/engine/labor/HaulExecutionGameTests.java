@@ -19,12 +19,10 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonySnapshot;
-import io.github.izakyl.folkways.core.engine.plan.Asks;
-import io.github.izakyl.folkways.core.engine.plan.Diagnosis;
-import io.github.izakyl.folkways.core.engine.plan.Schedule;
-import io.github.izakyl.folkways.core.engine.plan.Solved;
 import io.github.izakyl.folkways.core.engine.plan.Vertex;
-import io.github.izakyl.folkways.core.engine.plan.Weave;
+import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
+import io.github.izakyl.folkways.core.engine.plan.Shown;
+import io.github.izakyl.folkways.core.engine.plan.WeaveDelta;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.walk.OnFoot;
 import java.util.ArrayList;
@@ -76,13 +74,11 @@ public final class HaulExecutionGameTests {
         var level = helper.getLevel();
         Node fetch = node(level, helper.absolutePos(BlockPos.ZERO));
         Node build = node(level, helper.absolutePos(new BlockPos(1, 0, 0)));
-        var weave = new Weave(Map.of(fetch.id(), new Vertex(fetch.id(), fetch, Placement.NOWHERE),
+        var weave = Shown.delta(Map.of(fetch.id(), new Vertex(fetch.id(), fetch, Placement.NOWHERE),
             build.id(), new Vertex(build.id(), build, Placement.NOWHERE)),
             List.of(new Before(fetch.id(), build.id())), List.of());
         ColonyLabor labor = labor(level);
-        var apply = ColonyLabor.class.getDeclaredMethod("apply", ServerLevel.class, List.class, Solved.class);
-        apply.setAccessible(true);
-        apply.invoke(labor, level, List.of(), new Solved(weave, Schedule.EMPTY, Diagnosis.NOTHING, Asks.NONE));
+        PlanningFixture.apply(labor, level, List.of(), weave);
         helper.assertTrue(labor.takeable(fetch.id(), level).isPresent(), "fetch must be ready first");
         helper.assertTrue(labor.takeable(build.id(), level).isEmpty(), "build cannot overtake pending fetch");
         labor.phases().started(fetch.id());
@@ -144,14 +140,11 @@ public final class HaulExecutionGameTests {
                 throw new AssertionError("a rejected plan cannot execute");
             }
         };
-        var weave = new Weave(Map.of(rejected.id(), new Vertex(rejected.id(), rejected, Placement.NOWHERE)),
+        var weave = Shown.delta(Map.of(rejected.id(), new Vertex(rejected.id(), rejected, Placement.NOWHERE)),
             List.of(), List.of());
         ColonyLabor labor = labor(level);
-        var solved = new Solved(weave, Schedule.EMPTY, Diagnosis.NOTHING, Asks.NONE);
-        var apply = ColonyLabor.class.getDeclaredMethod("apply", ServerLevel.class, List.class, Solved.class);
-        apply.setAccessible(true);
-        apply.invoke(labor, level, List.of(), solved);
-        apply.invoke(labor, level, List.of(), solved);
+        PlanningFixture.apply(labor, level, List.of(), weave);
+        PlanningFixture.apply(labor, level, List.of(), weave);
         helper.assertTrue(calls.get() == 1, "acceptance belongs to node entry, not each planning round");
         helper.assertTrue(labor.takeable(rejected.id(), level).isEmpty(),
             "even a node whose default readiness is true must not execute after rejecting its plan");
@@ -179,7 +172,7 @@ public final class HaulExecutionGameTests {
         };
         Node next = node(level, helper.absolutePos(BlockPos.ZERO));
         ColonyLabor labor = labor(level);
-        var weave = new Weave(Map.of(work.id(), new Vertex(work.id(), work, Placement.NOWHERE),
+        var weave = Shown.delta(Map.of(work.id(), new Vertex(work.id(), work, Placement.NOWHERE),
             next.id(), new Vertex(next.id(), next, Placement.NOWHERE)),
             List.of(new Before(work.id(), next.id())), List.of());
         apply(labor, level, weave);
@@ -220,7 +213,7 @@ public final class HaulExecutionGameTests {
             public boolean settled(ServerLevel at) { return false; }
         };
         ColonyLabor labor = labor(level);
-        apply(labor, level, new Weave(Map.of(work.id(), new Vertex(work.id(), work, Placement.NOWHERE)),
+        apply(labor, level, Shown.delta(Map.of(work.id(), new Vertex(work.id(), work, Placement.NOWHERE)),
             List.of(), List.of()));
         var body = PersonBody.RESIDENT.get().create(level);
         BodyRunner runner = new BodyRunner(body.getUUID());
@@ -338,9 +331,6 @@ public final class HaulExecutionGameTests {
         Node harvest = node(level, helper.absolutePos(BlockPos.ZERO));
         Node replant = node(level, helper.absolutePos(BlockPos.ZERO));
         Grown graph = Grown.then(harvest, replant);
-        Grown goal = graph.ranked(2);
-        helper.assertTrue(goal.nodes().equals(graph.nodes()) && goal.links().equals(graph.links())
-            && goal.rank() == 2, "ranking a goal preserves its DAG");
         boolean rejected = false;
         try {
             new Grown(List.of(harvest, replant), List.of(new Before(harvest.id(), replant.id()),
@@ -397,7 +387,7 @@ public final class HaulExecutionGameTests {
             };
         }));
         try {
-            labor.run(level, task -> { });
+            labor.run(level, new Lanes(task -> { }, task -> { }));
             var view = ColonySnapshot.of(data, level);
             var interrupt = ColonyLabor.class.getDeclaredMethod("interrupt", ServerLevel.class,
                 ColonyView.class, io.github.izakyl.folkways.core.api.resident.body.Body.class, BodyRunner.class);
@@ -427,11 +417,9 @@ public final class HaulExecutionGameTests {
         helper.succeed();
     }
 
-    private static void apply(ColonyLabor labor, ServerLevel level, Weave weave)
+    private static void apply(ColonyLabor labor, ServerLevel level, WeaveDelta weave)
             throws ReflectiveOperationException {
-        var apply = ColonyLabor.class.getDeclaredMethod("apply", ServerLevel.class, List.class, Solved.class);
-        apply.setAccessible(true);
-        apply.invoke(labor, level, List.of(), new Solved(weave, Schedule.EMPTY, Diagnosis.NOTHING, Asks.NONE));
+        PlanningFixture.apply(labor, level, List.of(), weave);
     }
 
     private static ColonyLabor labor(ServerLevel level) {
@@ -477,7 +465,7 @@ public final class HaulExecutionGameTests {
             });
         }
         ColonyLabor labor = labor(level);
-        apply(labor, level, new Weave(Map.of(
+        apply(labor, level, Shown.delta(Map.of(
             steps.get(0).id(), new Vertex(steps.get(0).id(), steps.get(0), Placement.NOWHERE),
             steps.get(1).id(), new Vertex(steps.get(1).id(), steps.get(1), Placement.NOWHERE)),
             List.of(new Before(steps.get(0).id(), steps.get(1).id())), List.of()));
@@ -523,7 +511,7 @@ public final class HaulExecutionGameTests {
             List.of(new Placement.Draw(Optional.of(from),
                 io.github.izakyl.folkways.core.api.terms.ItemSpec.of(ResourceLocation.withDefaultNamespace("cobblestone")), 1)));
         ColonyLabor labor = labor(level);
-        apply(labor, level, new Weave(Map.of(work.id(), new Vertex(work.id(), work, placement)), List.of(),
+        apply(labor, level, Shown.delta(Map.of(work.id(), new Vertex(work.id(), work, placement)), List.of(),
             List.of()));
         var body = PersonBody.RESIDENT.get().create(level);
         body.moveTo(site.getX() + 0.5, site.getY(), site.getZ() + 2.5);

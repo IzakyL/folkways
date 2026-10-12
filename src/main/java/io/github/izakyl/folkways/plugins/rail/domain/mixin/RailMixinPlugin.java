@@ -8,7 +8,7 @@ public final class RailMixinPlugin extends FolkwaysMixinPlugin {
 
     @Override
     protected Set<String> createOnly() {
-        return Set.of("AbstractContraptionEntityMixin", "TrainMapManagerMixin", "TrainMixin");
+        return Set.of("AbstractContraptionEntityMixin", "CarriageRidersMixin", "TrainMapManagerMixin", "TrainMixin");
     }
 
     @Override
@@ -18,6 +18,10 @@ public final class RailMixinPlugin extends FolkwaysMixinPlugin {
                 "com.simibubi.create.content.contraptions.AbstractContraptionEntity",
                 "right-clicking a train's driver seat only sits the player down, so no train can be "
                     + "handed over to a colony and no resident is ever sent to drive one"),
+            Degradable.common("CarriageRidersMixin",
+                "com.simibubi.create.content.trains.entity.Carriage$DimensionalCarriageEntity",
+                "a resident riding a train over unloaded ground is taken for gone when Create stows it in the "
+                    + "carriage, and its colony lets it go instead of waiting for the carriage to put it back"),
             Degradable.common("TrainMixin",
                 "com.simibubi.create.content.trains.entity.Train",
                 "a train's departures go uncounted, so a resident waiting on a platform is never told the last "

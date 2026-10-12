@@ -55,9 +55,9 @@ public final class LivingPreemptionGameTests {
                 .refresh(helper.getLevel().getServer());
             var saved = colony.kept(LivingContent.ID);
             helper.assertTrue(Math.abs(saved.getList("hunger", 10).getCompound(0).getFloat("Exhaustion")
-                - 0.4F) < 0.00001F, "food consumes standard work plus distance, independent of labor ticks");
+                - 0.19F) < 0.00001F, "food consumes standard work plus distance, independent of labor ticks");
             var rest = saved.getList("rest", 10).getCompound(0);
-            helper.assertTrue(Math.abs(rest.getFloat("Tired") - (1.0F / 15 + 0.3F)) < 0.00001F,
+            helper.assertTrue(Math.abs(rest.getFloat("Tired") - (1.0F / 5 + 0.9F)) < 0.00001F,
                 "fatigue consumes elapsed labor ticks plus distance, preserving fractional effort");
             Rest loaded = new Rest();
             loaded.load(io.github.izakyl.folkways.core.api.persist.Reader.of(rest));

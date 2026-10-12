@@ -9,29 +9,23 @@ import java.util.Optional;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.Mth;
 
-record Order(WorldPos into, ItemSpec what, int low, int high, boolean standing, int rank) {
+record Order(WorldPos into, ItemSpec what, int low, int high, boolean standing) {
 
     static final int MIN_COUNT = 1;
 
     static final int MAX_COUNT = 9999;
-
-    static final int KEENEST = -2;
-    static final int LEAST = 2;
-    static final int RANK_NORMAL = 0;
 
     private static final String TAG_INTO = "into";
     private static final String TAG_WHAT = "what";
     private static final String TAG_LOW = "low";
     private static final String TAG_HIGH = "count";
     private static final String TAG_STANDING = "standing";
-    private static final String TAG_RANK = "rank";
 
     Order {
         Objects.requireNonNull(into, "into");
         Objects.requireNonNull(what, "what");
         high = Mth.clamp(high, MIN_COUNT, MAX_COUNT);
         low = Mth.clamp(low, MIN_COUNT, high);
-        rank = Mth.clamp(rank, KEENEST, LEAST);
     }
 
     long replenishment(long held) {
@@ -52,7 +46,6 @@ record Order(WorldPos into, ItemSpec what, int low, int high, boolean standing, 
             .integer(TAG_LOW, low)
             .integer(TAG_HIGH, high)
             .flag(TAG_STANDING, standing)
-            .integer(TAG_RANK, rank)
             .tag();
     }
 
@@ -66,8 +59,7 @@ record Order(WorldPos into, ItemSpec what, int low, int high, boolean standing, 
         return Optional.of(new Order(into.get(), what.get(),
             reader.integer(TAG_LOW).orElse(high),
             high,
-            reader.flag(TAG_STANDING).orElse(false),
-            reader.integer(TAG_RANK).orElse(RANK_NORMAL)));
+            reader.flag(TAG_STANDING).orElse(false)));
     }
 
 }

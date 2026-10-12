@@ -23,8 +23,6 @@ import net.minecraft.world.item.ItemStack;
 // Clears one parcel no collection is waiting on, so strays do not fill the port.
 final class StrayNode implements Node {
 
-    static final int RANK = 2;
-
     private final NodeSpec spec;
     private final Vocation hauling = Vocations.required(Vocations.HAULING);
     private final WorldPos at;

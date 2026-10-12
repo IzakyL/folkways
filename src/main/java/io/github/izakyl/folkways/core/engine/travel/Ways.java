@@ -13,4 +13,10 @@ public interface Ways {
     }
 
     Faring anyoneReaches(Set<WorldPos> goals);
+
+    // How long the journey would be, for weighing one against another: it lays out no legs, asks for no way to be
+    // found and counts nothing as trodden. Later when the ways cannot say yet; `journey` is what asks.
+    default Faring reckon(Resident who, WorldPos from, Set<WorldPos> goals) {
+        return journey(who, from, goals, Urgency.PLANNING);
+    }
 }

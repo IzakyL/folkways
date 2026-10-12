@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.engine.travel.graph;
 
 import io.github.izakyl.folkways.core.api.terms.Gait;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
@@ -10,6 +11,7 @@ import it.unimi.dsi.fastutil.longs.Long2IntMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongList;
@@ -17,10 +19,13 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.LongConsumer;
+import java.util.function.LongPredicate;
 import java.util.function.LongToIntFunction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -53,6 +58,15 @@ final class Waypoints {
     private static final int STRAIGHT_ENOUGH = 5;
 
     private static final int MOST_MERGED = SPACING * 3;
+
+    // How many of a loose piece's points are tried first when finding where it comes nearest the rest.
+    private static final int BRIDGE_SAMPLES = 16;
+
+    // Points are sorted into squares of 1 << SQUARE blocks to find those near one another; a piece with nothing
+    // within NEAR_SQUARES squares of it has no gap a ramble would close.
+    private static final int SQUARE = 4;
+
+    private static final int NEAR_SQUARES = 8;
 
     static final class Link {
 
@@ -793,6 +807,165 @@ final class Waypoints {
         int piece = rootPiece(waypoint);
         pieceGround.set(piece, ground);
         pieceSealed.set(piece);
+    }
+
+    // The gaps to ramble across: for up to `most` pieces other than the biggest, where each comes nearest the rest -
+    // a point of it, the nearest point outside it, the cell the piece is known by (its first point) and a key for
+    // the gap itself. Pieces holding a pinned point (a platform, a site) come first, then the bigger.
+    // Pieces are told by the links that stand, not by what was once joined: a point dropped from the middle of a
+    // way leaves two. A ride joins nothing here: two halves of a town with a station each are still to be walked
+    // between, and a works out along the line has nothing near enough to try.
+    // A piece `restingPiece` names is passed over unread. One with nothing near, or whose gap `restingGap` names, is
+    // handed to `rested` and passed over: a piece grown since it was last tried has another gap, and is tried again.
+    List<long[]> bridges(int most, LongPredicate restingPiece, LongPredicate restingGap, LongConsumer rested) {
+        int count = cells.size();
+        int[] up = new int[count];
+        for (int id = 0; id < count; id++) {
+            up[id] = id;
+        }
+        for (int id = 0; id < count; id++) {
+            for (Link link : out.get(id)) {
+                join(up, id, link.to);
+            }
+        }
+        Int2ObjectOpenHashMap<IntArrayList> pieces = new Int2ObjectOpenHashMap<>();
+        Long2ObjectOpenHashMap<IntArrayList> square = new Long2ObjectOpenHashMap<>();
+        for (int id = 0; id < count; id++) {
+            if (alive(id)) {
+                up[id] = root(up, id);
+                pieces.computeIfAbsent(up[id], piece -> new IntArrayList()).add(id);
+                long cell = cells.getLong(id);
+                square.computeIfAbsent(squareOf(BlockPos.getX(cell) >> SQUARE, BlockPos.getZ(cell) >> SQUARE),
+                    key -> new IntArrayList()).add(id);
+            }
+        }
+        if (pieces.size() < 2) {
+            return List.of();
+        }
+        int biggest = -1;
+        for (Int2ObjectMap.Entry<IntArrayList> piece : pieces.int2ObjectEntrySet()) {
+            if (biggest < 0 || piece.getValue().size() > pieces.get(biggest).size()) {
+                biggest = piece.getIntKey();
+            }
+        }
+        List<IntArrayList> loose = new ArrayList<>();
+        for (Int2ObjectMap.Entry<IntArrayList> piece : pieces.int2ObjectEntrySet()) {
+            if (piece.getIntKey() != biggest && !restingPiece.test(cells.getLong(piece.getValue().getInt(0)))) {
+                loose.add(piece.getValue());
+            }
+        }
+        loose.sort(Comparator.comparing((IntArrayList members) -> !holdsPinned(members))
+            .thenComparing(members -> -members.size()));
+        List<long[]> gaps = new ArrayList<>();
+        for (IntArrayList members : loose) {
+            if (gaps.size() >= most) {
+                break;
+            }
+            long known = cells.getLong(members.getInt(0));
+            long[] gap = nearestGap(members, up, square);
+            if (gap == null) {
+                rested.accept(known);
+                continue;
+            }
+            long key = gap[0] * 0x9E3779B97F4A7C15L ^ gap[1];
+            if (restingGap.test(key)) {
+                rested.accept(known);
+                continue;
+            }
+            gaps.add(new long[] {gap[0], gap[1], known, key});
+        }
+        return gaps;
+    }
+
+    private static long squareOf(int x, int z) {
+        return (long) x << 32 | z & 0xFFFFFFFFL;
+    }
+
+    // Where a piece comes nearest the points outside it, within NEAR_SQUARES squares: a point of it and the point
+    // outside. A few of its points say roughly how near; then every point is looked round only that far.
+    private long[] nearestGap(IntArrayList members, int[] piece, Long2ObjectOpenHashMap<IntArrayList> square) {
+        int mine = piece[members.getInt(0)];
+        long[] best = {0L, 0L};
+        double nearest = Double.MAX_VALUE;
+        int stride = Math.max(1, members.size() / BRIDGE_SAMPLES);
+        for (int pass = 0; pass < 2; pass++) {
+            for (int at = 0; at < members.size(); at += pass == 0 ? stride : 1) {
+                long from = cells.getLong(members.getInt(at));
+                int x = BlockPos.getX(from), y = BlockPos.getY(from), z = BlockPos.getZ(from);
+                for (int ring = 0; ring <= NEAR_SQUARES; ring++) {
+                    double least = (double) (ring - 1) * (1 << SQUARE);
+                    if (ring > 0 && least * least >= nearest) {
+                        break;
+                    }
+                    for (int dx = -ring; dx <= ring; dx++) {
+                        for (int dz = -ring; dz <= ring; dz += Math.abs(dx) == ring ? 1 : 2 * ring) {
+                            IntArrayList there = square.get(squareOf((x >> SQUARE) + dx, (z >> SQUARE) + dz));
+                            if (there == null) {
+                                continue;
+                            }
+                            for (int k = 0; k < there.size(); k++) {
+                                int other = there.getInt(k);
+                                if (piece[other] == mine) {
+                                    continue;
+                                }
+                                long to = cells.getLong(other);
+                                double ex = BlockPos.getX(to) - x, ey = BlockPos.getY(to) - y, ez = BlockPos.getZ(to) - z;
+                                double apart = ex * ex + ey * ey + ez * ez;
+                                if (apart < nearest) {
+                                    nearest = apart;
+                                    best[0] = from;
+                                    best[1] = to;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return nearest == Double.MAX_VALUE ? null : best;
+    }
+
+    // A point no link leaves or reaches, that a sweep could not set out from, is no ground to stand on: it goes,
+    // unless it is pinned.
+    void stranded(long cell) {
+        int here = byCell.get(cell);
+        if (here < 0 || pinned.get(here) || !out.get(here).isEmpty()) {
+            return;
+        }
+        for (List<Link> links : out) {
+            for (Link link : links) {
+                if (link.to == here) {
+                    return;
+                }
+            }
+        }
+        forget(here);
+    }
+
+    // Pinned points no link leaves - a platform's footings no sweep came to, a site never walked to: up to `most`,
+    // those `resting` names left out.
+    LongArrayList lonely(int most, LongPredicate resting) {
+        LongArrayList found = new LongArrayList();
+        for (int id = pinned.nextSetBit(0); id >= 0 && found.size() < most; id = pinned.nextSetBit(id + 1)) {
+            if (alive(id) && out.get(id).isEmpty() && !resting.test(cells.getLong(id))) {
+                found.add(cells.getLong(id));
+            }
+        }
+        return found;
+    }
+
+    // Whether two points stand in pieces no link joins yet.
+    boolean apart(int one, int other) {
+        return rootPiece(one) != rootPiece(other);
+    }
+
+    private boolean holdsPinned(IntArrayList members) {
+        for (int at = 0; at < members.size(); at++) {
+            if (pinned.get(members.getInt(at))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean alive(int id) {

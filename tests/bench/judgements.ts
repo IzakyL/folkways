@@ -163,8 +163,11 @@ export const TRACERS = {
   pairs: [["minecraft:bucket", "minecraft:milk_bucket"]] as Array<[string, string]>,
 };
 
+// made: what finished work made of each item less what it used up, where the work tap saw it; a pair's total may
+// move by exactly that much (buckets crafted from iron, say). Without it the pair is judged as if nothing were made.
 export function judgeConservation(
   before: Tally, after: Tally, broke: Record<string, number> = {}, brokeKnown = true,
+  made?: Record<string, number>,
 ): Finding[] {
   const found: Finding[] = [];
   if (before.capped || after.capped) {
@@ -200,12 +203,15 @@ export function judgeConservation(
   for (const [left, right] of TRACERS.pairs) {
     const was = totalOf(before, left) + totalOf(before, right);
     const now = totalOf(after, left) + totalOf(after, right);
-    if (was !== now) {
+    const net = made ? (made[left] ?? 0) + (made[right] ?? 0) : 0;
+    if (now - was !== net) {
       found.push({
         rule: "conservation/pair-broken",
         severity: "red",
-        said: `${left} + ${right} went from ${was} to ${now}. They only convert into each other, so the total should be constant`,
-        evidence: { left, right, was, now },
+        said: `${left} + ${right} went from ${was} to ${now}` + (made
+          ? `, but work made ${net} net of them, so it should be ${was + net}`
+          : ". They only convert into each other, so the total should be constant"),
+        evidence: { left, right, was, now, made: made ? net : null },
       });
     }
   }

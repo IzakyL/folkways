@@ -121,7 +121,7 @@ public final class RelocationGameTests {
                 AtomicInteger accepted = new AtomicInteger();
                 Node node = node(old, accepted);
                 colony.submit(OWNER, level.dimension(), Grown.of(node), (any, how) -> { });
-                labor.run(level, queued::add);
+                labor.run(level, new Lanes(queued::add, queued::add));
                 helper.assertTrue(!queued.isEmpty(), "an old-world plan must be in flight");
                 var runnersField = ColonyLabor.class.getDeclaredField("runners");
                 runnersField.setAccessible(true);
@@ -143,14 +143,14 @@ public final class RelocationGameTests {
                 helper.assertTrue(labor != retired && other.current() == other,
                     "only the affected colony's labor must reopen");
                 while (!queued.isEmpty()) queued.removeFirst().run();
-                retired.run(level, queued::add);
+                retired.run(level, new Lanes(queued::add, queued::add));
                 helper.assertTrue(accepted.get() == 0 && queued.isEmpty(),
                     "the old solve must never apply or restart after relocation");
                 Survey fresh = survey(labor);
                 helper.assertTrue(fresh.known(WayGraph.UNBUILT, List.of()).hands().isEmpty()
                         && fresh.known(WayGraph.UNBUILT, List.of()).world().stock().stashes().isEmpty(),
                     "old resident and store readings must not cross the migration boundary");
-                labor.run(level, Runnable::run);
+                labor.run(level, Lanes.INLINE);
                 helper.assertTrue(reopened.get() == 1,
                     "work submitted while reopening must enter the new runtime exactly once");
                 Salvage newSalvage = (Salvage) salvageField.get(labor);

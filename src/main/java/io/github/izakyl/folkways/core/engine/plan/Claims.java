@@ -5,12 +5,19 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public final class Claims {
 
     private final Map<Resource, List<Claim>> byResource = new LinkedHashMap<>();
     private final Map<UUID, List<Claim>> byOwner = new LinkedHashMap<>();
     private long revision;
+    // Told the owner of every claim taken or let go, so whoever shows the plan knows whose draws changed.
+    private Consumer<UUID> moved = owner -> { };
+
+    public void watch(Consumer<UUID> moved) {
+        this.moved = moved;
+    }
 
     public void take(Claim claim) {
         if (claim.amount() <= 0) {
@@ -19,6 +26,7 @@ public final class Claims {
         byResource.computeIfAbsent(claim.on(), key -> new ArrayList<>()).add(claim);
         byOwner.computeIfAbsent(claim.owner(), key -> new ArrayList<>()).add(claim);
         revision++;
+        moved.accept(claim.owner());
     }
 
     public long taken(Resource on) {
@@ -39,6 +47,7 @@ public final class Claims {
             return;
         }
         revision++;
+        moved.accept(owner);
         for (Claim claim : held) {
             List<Claim> onIt = byResource.get(claim.on());
             if (onIt != null && onIt.remove(claim) && onIt.isEmpty()) {
@@ -62,6 +71,7 @@ public final class Claims {
             return;
         }
         revision++;
+        moved.accept(claim.owner());
         if (held.isEmpty()) {
             byOwner.remove(claim.owner());
         }

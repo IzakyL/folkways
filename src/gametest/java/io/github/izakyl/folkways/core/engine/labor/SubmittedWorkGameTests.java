@@ -72,7 +72,7 @@ public final class SubmittedWorkGameTests {
         colony.works().listen(dimension, told);
         helper.assertTrue(told.drain().equals(List.of("submit " + List.of(single.id().toString()))),
             "a listener starts from the work already standing");
-        helper.assertTrue(refused(() -> colony.works().submit(owner, dimension, Grown.of(single).ranked(5),
+        helper.assertTrue(refused(() -> colony.works().submit(owner, dimension, Grown.of(single),
                 (any, how) -> heard.add("twice " + how)), IllegalStateException.class) && told.drain().isEmpty(),
             "a node is asked once, not again before it ended");
         Node first = node(spec(helper, owner));

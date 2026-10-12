@@ -11,24 +11,25 @@ import net.minecraft.server.MinecraftServer;
 public final class Sweep {
 
     private final Asking asking;
-    private final int period;
+    // When the sweep runs within its period, spread against every other sweep's; see Cadence.
+    private final Cadence.Cron cron;
     private final AtomicBoolean offerPending = new AtomicBoolean();
-    private int sinceSweep;
+    private boolean swept;
 
     public Sweep(Colony colony, ResourceLocation owner, int period) {
         this.asking = new Asking(colony, owner, this::nudge);
-        this.period = period;
-        this.sinceSweep = period;
+        this.cron = Cadence.claim(colony, period);
     }
 
     public void nudge() {
         offerPending.set(true);
     }
 
+    // The first tick sweeps at once; after that, on the cron's own tick of each period.
     public void tick(MinecraftServer server, Consumer<MinecraftServer> refresh,
             Function<ColonyView, List<Grown>> goals) {
-        if (++sinceSweep >= period) {
-            sinceSweep = 0;
+        if (!swept || cron.due(server)) {
+            swept = true;
             refresh.accept(server);
             offerPending.set(true);
         }

@@ -22,7 +22,6 @@ import java.util.function.Consumer;
 
 final class Kits {
 
-    private static final int KIT_RANK = -1;
 
     private final Map<UUID, Set<UUID>> asked = new HashMap<>();
 
@@ -38,7 +37,7 @@ final class Kits {
             }
             if (!carried && mine.add(id)) {
                 to.accept(new Message.Submitted(Haul.DOMAIN, Grown.of(
-                    Delivery.to(id, Haul.DOMAIN, at, Stances.WHEREVER, tool, 1, count -> { })).ranked(KIT_RANK)));
+                    Delivery.to(id, Haul.DOMAIN, at, Stances.WHEREVER, tool, 1, count -> { }))));
             }
         }
         // Asked for, but now carried or no longer in the kit - the colony may have narrowed its tools.

@@ -3,13 +3,8 @@ import type { ColonyBeat } from "../shared/heartbeat";
 // One heartbeat is BEAT_TICKS * heartbeatCycles server ticks (Labor.java: 20 * 10 by default).
 export const BEAT_TICKS = 200;
 
-// Beats at the start of a run while residents are still being admitted and the first plans laid; left out of the
-// shares so that the empty colony of the first seconds does not read as idleness.
-export const WARMUP_BEATS = 2;
-
 export type LaborShare = {
   beats: number;
-  warmup: number;
   standing_share: Record<string, number>;
   done_total: number;
   throughput_per_1000_ticks: number;
@@ -30,9 +25,9 @@ const round = (value: number, places = 3) => Math.round(value * 10 ** places) / 
 // sampled bodies. The schedule only hands out work it could start within its horizon, so a resident with nothing
 // near to do is idle, free for the next plan, not stalled behind work laid far ahead: idle alone no longer says the
 // colony is short of work or wasting hands. Throughput - nodes finished per 1000 ticks - is the measure of output.
+// Every beat given counts: the caller hands over the beats it wants shared out, start to end.
 export function laborShare(beats: ColonyBeat[], beatTicks = BEAT_TICKS): LaborShare {
-  const live = beats.filter((beat) => beat.bodies > 0);
-  const judged = live.slice(Math.min(WARMUP_BEATS, Math.max(0, live.length - 1)));
+  const judged = beats.filter((beat) => beat.bodies > 0);
   const totals: Record<string, number> = {};
   let bodies = 0;
   for (const beat of judged) {
@@ -52,7 +47,6 @@ export function laborShare(beats: ColonyBeat[], beatTicks = BEAT_TICKS): LaborSh
   const deferred = judged.map((beat) => beat.why.BEYOND_HORIZON ?? 0);
   return {
     beats: judged.length,
-    warmup: live.length - judged.length,
     standing_share: share,
     done_total: done,
     throughput_per_1000_ticks: ticks > 0 ? round((done * 1000) / ticks, 1) : 0,
@@ -61,7 +55,7 @@ export function laborShare(beats: ColonyBeat[], beatTicks = BEAT_TICKS): LaborSh
       peak: deferred.reduce((most, n) => Math.max(most, n), 0),
       last: deferred.length ? deferred[deferred.length - 1] : 0,
     },
-    note: `standing_share = each standing={...} state over bodies, summed over beats after the first ${WARMUP_BEATS}`
+    note: "standing_share = each standing={...} state over bodies, summed over every beat given"
       + " (holding counts as working). idle = no work handed out: with the plan horizon that is a resident free for"
       + " the next plan, not a fault. stalled = work handed out but none of it can start yet. throughput = nodes"
       + ` finished (done=) per 1000 ticks, ${beatTicks} ticks a beat. deferred = work left past the plan horizon`

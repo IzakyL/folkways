@@ -9,19 +9,20 @@ import io.github.izakyl.folkways.front.api.FrontView;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.phys.Vec3;
 
 final class Fisheries {
 
@@ -49,22 +50,59 @@ final class Fisheries {
         return Map.copyOf(found);
     }
 
+    // The water nearest where a fisher may stand that someone can cast into from there. Water is looked at outward
+    // from the footings, ring by ring - nearest footing first, and by position within a ring - so the first that
+    // works is the one to fish, and no farther water is looked at.
     private static Optional<Spot> spotIn(ServerLevel level, ZoneView zone) {
         Set<BlockPos> footings = footingsOf(level, zone);
         if (footings.isEmpty()) {
             return Optional.empty();
         }
-        for (BlockPos water : watersBeside(level, zone, footings)) {
-            Set<BlockPos> from = new LinkedHashSet<>(Reach.workableCells(level, water));
-            from.retainAll(footings);
-            from.remove(water);
-            Optional<Stances> cast = Stances.of(level, from);
-            if (cast.isPresent()) {
-                return Optional.of(new Spot(WorldPos.of(level, water), cast.get(),
-                    bite(level.getRandom())));
+        Set<BlockPos> seen = new HashSet<>();
+        for (List<BlockPos> ring : RINGS) {
+            List<BlockPos> waters = new ArrayList<>();
+            for (BlockPos feet : footings) {
+                for (BlockPos offset : ring) {
+                    BlockPos cell = feet.offset(offset);
+                    if (seen.add(cell) && !level.isOutsideBuildHeight(cell) && level.isLoaded(cell)
+                            && level.getFluidState(cell).is(FluidTags.WATER)) {
+                        waters.add(cell);
+                    }
+                }
+            }
+            waters.sort(Comparator.comparingLong(BlockPos::asLong));
+            for (BlockPos water : waters) {
+                Set<BlockPos> from = new LinkedHashSet<>(Reach.workableCells(level, water));
+                from.retainAll(footings);
+                from.remove(water);
+                Optional<Stances> cast = Stances.of(level, from);
+                if (cast.isPresent()) {
+                    return Optional.of(new Spot(WorldPos.of(level, water), cast.get(),
+                        bite(level.getRandom())));
+                }
             }
         }
         return Optional.empty();
+    }
+
+    // Every step from a footing to water within reach, measured from the bottom of the feet to the middle of the
+    // water, gathered into rings of equal reach, nearest ring first.
+    private static final List<List<BlockPos>> RINGS = rings();
+
+    private static List<List<BlockPos>> rings() {
+        int span = Mth.ceil(Reach.PLAYER_BLOCK_REACH);
+        Map<Double, List<BlockPos>> byReach = new TreeMap<>();
+        for (int dx = -span; dx <= span; dx++) {
+            for (int dy = -span; dy <= span; dy++) {
+                for (int dz = -span; dz <= span; dz++) {
+                    double reach = dx * dx + (dy + 0.5) * (dy + 0.5) + dz * dz;
+                    if (reach <= REACH_SQR) {
+                        byReach.computeIfAbsent(reach, key -> new ArrayList<>()).add(new BlockPos(dx, dy, dz));
+                    }
+                }
+            }
+        }
+        return byReach.values().stream().map(List::copyOf).toList();
     }
 
     private static Set<BlockPos> footingsOf(ServerLevel level, ZoneView zone) {
@@ -84,54 +122,8 @@ final class Fisheries {
         }
     }
 
-    private static List<BlockPos> watersBeside(ServerLevel level, ZoneView zone,
-            Set<BlockPos> footings) {
-        int span = Mth.ceil(Reach.PLAYER_BLOCK_REACH);
-        BlockPos low = null;
-        BlockPos high = null;
-        for (BlockPos cell : zone.cells()) {
-            low = low == null ? cell : BlockPos.min(low, cell);
-            high = high == null ? cell : BlockPos.max(high, cell);
-        }
-        if (low == null) {
-            return List.of();
-        }
-        BlockPos from = new BlockPos(low.getX() - span,
-            Math.max(level.getMinBuildHeight(), low.getY() - span), low.getZ() - span);
-        BlockPos to = new BlockPos(high.getX() + span,
-            Math.min(level.getMaxBuildHeight() - 1, high.getY() + span), high.getZ() + span);
-        List<Candidate> near = new ArrayList<>();
-        for (BlockPos cell : BlockPos.betweenClosed(from, to)) {
-            if (!level.isLoaded(cell) || !level.getFluidState(cell).is(FluidTags.WATER)) {
-                continue;
-            }
-            double reached = nearestFooting(footings, cell);
-            if (reached <= REACH_SQR) {
-                near.add(new Candidate(cell.immutable(), reached));
-            }
-        }
-        near.sort(Comparator.comparingDouble(Candidate::distanceSqr)
-            .thenComparingLong(candidate -> candidate.water().asLong()));
-        List<BlockPos> ordered = new ArrayList<>(near.size());
-        for (Candidate candidate : near) {
-            ordered.add(candidate.water());
-        }
-        return List.copyOf(ordered);
-    }
-
-    private static double nearestFooting(Set<BlockPos> footings, BlockPos water) {
-        Vec3 centre = Vec3.atCenterOf(water);
-        double nearest = Double.MAX_VALUE;
-        for (BlockPos feet : footings) {
-            nearest = Math.min(nearest, Vec3.atBottomCenterOf(feet).distanceToSqr(centre));
-        }
-        return nearest;
-    }
-
     private static int bite(RandomSource random) {
         return BITE_MIN_TICKS + random.nextInt(BITE_MAX_TICKS - BITE_MIN_TICKS + 1);
     }
 
-    private record Candidate(BlockPos water, double distanceSqr) {
-    }
 }

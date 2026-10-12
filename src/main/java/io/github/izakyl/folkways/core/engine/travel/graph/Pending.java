@@ -41,7 +41,7 @@ final class Pending extends AbstractCollection<Ask> {
         Entry had = entries.get(ask.key());
         if (had != null) {
             order.remove(had);
-            had.ask = ask;
+            had.ask = had.ask.again(ask);
             had.lastAsked = Math.max(had.lastAsked, now);
             order.add(had);
             return false;

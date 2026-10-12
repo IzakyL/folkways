@@ -23,6 +23,7 @@ import io.github.izakyl.folkways.core.api.work.ToolUse;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.WorkNoise;
+import io.github.izakyl.folkways.core.api.work.WorkYield;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
@@ -51,7 +52,12 @@ final class BodyRunner {
 
     private static final long AWAY_TICKS = 100L;
 
+    private static final boolean LET_GO_DEBUG = Boolean.getBoolean("folkways.letGoDebug") || true;
+
     private static final int STALL_POLL_TICKS = 4;
+
+    // How often a body waiting within its work for a piece to come up asks for one.
+    private static final int WAIT_POLL_TICKS = 10;
 
     // How long one beat of work held open lasts before the body turns to the next store or back to the work.
     private static final int BEAT_TICKS = 10;
@@ -70,6 +76,11 @@ final class BodyRunner {
     private Body activeBody;
     private Placement placement = Placement.NOWHERE;
     private Stances footing;
+    // Work the body is in, pieces of which it is handed one after another, and how the plan placed that work.
+    private Node within;
+    private Placement withinPlan = Placement.NOWHERE;
+    private Body withinBody;
+    private int waited;
     private Own own;
     private Trip carrying;
     private Workload.Continuous ongoing;
@@ -99,20 +110,25 @@ final class BodyRunner {
         return inHand().map(Node::id);
     }
 
+    // The work in hand as the plan knows it: work the body is in, whatever piece of it it is doing.
     Optional<Node> inHand() {
+        if (within != null) {
+            return Optional.of(within);
+        }
         return current == null || own != null ? Optional.empty() : Optional.of(current);
     }
 
+    // Whether the body is about an urge of its own; a piece of the work it is in is not that.
     boolean ownBusiness() {
-        return own != null;
+        return own != null && own.urge() != null;
     }
 
     Optional<ResourceLocation> ownUrge() {
-        return own == null ? Optional.empty() : Optional.of(own.urge());
+        return own == null ? Optional.empty() : Optional.ofNullable(own.urge());
     }
 
     boolean executing() {
-        return current != null;
+        return current != null || within != null;
     }
 
     List<UUID> queued() {
@@ -133,27 +149,47 @@ final class BodyRunner {
         return said;
     }
 
+    // What the census counts the body as: its standing, away when it has been out of the world a while, and its own
+    // business told by the kind of work it is (eating, sleeping, mending...).
+    String census() {
+        if (awaySince >= 0L) {
+            return "away";
+        }
+        if (ownBusiness() && current != null && carrying == null) {
+            return "urge/" + current.getClass().getSimpleName();
+        }
+        return standing();
+    }
+
     String standing() {
         if (current == null) {
-            return stalled > 0 ? "stalled" : "idle";
+            return within != null ? "working" : stalled > 0 ? "stalled" : "idle";
         }
         if (carrying != null) {
             return "walking";
         }
-        if (own != null) {
+        if (ownBusiness()) {
             return "urge";
         }
         return ongoing != null ? "holding" : "working";
     }
 
+    // Takes up the route as laid, less the work in hand. A route just as it already stands changes nothing: the
+    // runner keeps its pace of polling rather than looking again at once.
     void follow(List<UUID> given) {
-        rerouted = true;
-        route.clear();
+        List<UUID> laid = new ArrayList<>(given.size());
         for (UUID node : given) {
-            if (current == null || own != null || !current.id().equals(node)) {
-                route.add(node);
+            if ((current == null || own != null || !current.id().equals(node))
+                    && (within == null || !within.id().equals(node))) {
+                laid.add(node);
             }
         }
+        if (laid.size() == route.size() && laid.equals(new ArrayList<>(route))) {
+            return;
+        }
+        rerouted = true;
+        route.clear();
+        route.addAll(laid);
     }
 
     void offer(ColonyLabor labor, ServerLevel level, Body body, Urge urge, Node doing) {
@@ -162,6 +198,10 @@ final class BodyRunner {
     }
 
     void tick(ColonyLabor labor, ServerLevel level, Body body) {
+        if (current == null && within != null) {
+            inside(labor, level, body);
+            return;
+        }
         if (current == null) {
             busy = 0;
             if (stalled > 0 && !rerouted && stalled % STALL_POLL_TICKS != 0) {
@@ -172,6 +212,8 @@ final class BodyRunner {
             take(labor, level, body);
             return;
         }
+        // The same resident may come back as a new entity, as a train's rider does when its carriage is put back.
+        activeBody = body;
         Phases states = phases(labor);
         if (!states.check(current.id())) {
             Node stopped = current;
@@ -179,7 +221,7 @@ final class BodyRunner {
                 putDown(body);
                 failed(labor, level, body, stopped, why);
                 clear(body);
-            }, () -> letGo(labor, level, body));
+            }, () -> letGo(labor, level, body, "check:" + states.of(stopped.id()) + (states.waiting(stopped.id()) ? ":waiting" : "")));
             return;
         }
         busy++;
@@ -195,10 +237,24 @@ final class BodyRunner {
     }
 
     void letGo(ColonyLabor labor, ServerLevel level, Body body) {
+        letGo(labor, level, body, "other");
+    }
+
+    // An urge takes the body from the piece in hand only: it stays in the work it is in, and goes back to it after.
+    // Anything else that lets go takes it out of that work as well.
+    void letGo(ColonyLabor labor, ServerLevel level, Body body, String why) {
+        boolean urged = why.startsWith("urge");
         if (current == null) {
-            return;
+            if (within == null || urged) {
+                return;
+            }
+            comeOut();
         }
         Node node = current;
+        if (LET_GO_DEBUG) {
+            Labor.LOGGER.info("let go node={} doing={} body={} at={} why={}", node.id(), node.spec().doing(),
+                body.mob().getUUID(), body.mob().blockPosition().toShortString(), why);
+        }
         boolean onGraph = own == null;
         node.spec().gesture().release(body.mob());
         putDown(body);
@@ -211,6 +267,100 @@ final class BodyRunner {
             labor.forgetPersonal(node.id());
         }
         clear(body);
+        if (within != null && !urged) {
+            letGo(labor, level, body, why);
+        }
+    }
+
+    // The work the body is in becomes the work in hand again, to be ended as any other.
+    private void comeOut() {
+        current = within;
+        activeBody = withinBody;
+        placement = withinPlan;
+        own = null;
+        within = null;
+        withinBody = null;
+        waited = 0;
+    }
+
+    private void enter(Body body) {
+        Node entered = current;
+        Placement plan = placement;
+        body.mob().getNavigation().stop();
+        clear(body);
+        within = entered;
+        withinBody = body;
+        // Where the plan stood the body for the whole of the work is not where each piece of it is done from.
+        withinPlan = new Placement(Set.of(), plan.carrying(), plan.from(), plan.into(), plan.draws());
+        waited = 0;
+    }
+
+    // In its work and free: the owner is asked what the body does next. A piece is run as the body's own, beside
+    // the plan; with none to come the body comes out, and the work is done.
+    private void inside(ColonyLabor labor, ServerLevel level, Body body) {
+        withinBody = body;
+        if (!labor.phases().check(within.id())) {
+            Node stopped = within;
+            comeOut();
+            labor.phases().failure(stopped.id()).ifPresentOrElse(why -> {
+                failed(labor, level, body, stopped, why);
+                clear(body);
+            }, () -> letGo(labor, level, body, "check:" + labor.phases().of(stopped.id())));
+            return;
+        }
+        if (waited > 0 && waited % WAIT_POLL_TICKS != 0) {
+            waited++;
+            return;
+        }
+        Workload.Within shift = (Workload.Within) within.spec().workload();
+        Workload.Within.Turn turn;
+        try {
+            turn = shift.next(level, labor.hands(body, withinPlan));
+        } catch (RuntimeException | LinkageError broken) {
+            Labor.LOGGER.error("node {} threw asked for its next piece", within.id(), broken);
+            turn = Workload.Within.LEAVE;
+        }
+        switch (turn) {
+            case Workload.Within.Turn.Piece(Node piece) -> {
+                waited = 0;
+                if (!labor.inner(piece, resident, level)) {
+                    told(level, piece, Ending.DROPPED);
+                    return;
+                }
+                own = new Own(null);
+                begin(labor, level, body, piece, withinPlan);
+            }
+            case Workload.Within.Turn.Wait ignored -> waited++;
+            case Workload.Within.Turn.Leave ignored -> leave(labor, level, body);
+        }
+    }
+
+    // What the work needed went into its pieces as they were done, so nothing is drawn for it now.
+    private void leave(ColonyLabor labor, ServerLevel level, Body body) {
+        comeOut();
+        activeBody = body;
+        Node node = current;
+        Outcome outcome;
+        try {
+            outcome = node.commit(level, labor.hands(body, placement));
+        } catch (RuntimeException | LinkageError broken) {
+            Labor.LOGGER.error("node {} threw on commit", node.id(), broken);
+            refuse(labor, level, body, LaborRefusal.WORK_BROKE);
+            return;
+        }
+        switch (outcome) {
+            case Outcome.Done done -> handIn(labor, level, body, node);
+            case Outcome.Failed(List<WorkNoise> ignored, RefusalKind why) -> failed(labor, level, body, node, why);
+        }
+        clear(body);
+    }
+
+    private void told(ServerLevel level, Node piece, Ending how) {
+        try {
+            ((Workload.Within) within.spec().workload()).ended(level, piece, how);
+        } catch (RuntimeException | LinkageError broken) {
+            Labor.LOGGER.error("node {} threw told its piece {} ended as {}", within.id(), piece.id(), how, broken);
+        }
     }
 
     void here(ColonyLabor labor) {
@@ -230,15 +380,21 @@ final class BodyRunner {
             return;
         }
         gone = true;
-        if (current != null && activeBody != null && activeBody.mob().level() instanceof ServerLevel level) {
-            letGo(labor, level, activeBody);
+        Body last = activeBody != null ? activeBody : withinBody;
+        if (last != null && last.mob().level() instanceof ServerLevel level) {
+            letGo(labor, level, last, "away");
         }
         labor.gone(resident);
     }
 
     void drop(ColonyLabor labor) {
-        if (activeBody != null && activeBody.mob().level() instanceof ServerLevel level) {
-            letGo(labor, level, activeBody);
+        drop(labor, "drop");
+    }
+
+    void drop(ColonyLabor labor, String why) {
+        Body last = activeBody != null ? activeBody : withinBody;
+        if (last != null && last.mob().level() instanceof ServerLevel level) {
+            letGo(labor, level, last, why);
         }
     }
 
@@ -310,6 +466,10 @@ final class BodyRunner {
                 ongoing = condition;
                 windupTicks = 0;
             }
+            case Workload.Within ignored -> {
+                ongoing = null;
+                windupTicks = 0;
+            }
         }
         phases(labor).started(node.id());
         if (own == null) {
@@ -330,6 +490,10 @@ final class BodyRunner {
         }
         Optional<Trip> trip = setOut(labor, level, body);
         if (trip.isEmpty()) {
+            if (LET_GO_DEBUG) {
+                Labor.LOGGER.info("no trip node={} body={} at={}", current.id(), body.mob().getUUID(),
+                    body.mob().blockPosition().toShortString());
+            }
             refuse(labor, level, body, LaborRefusal.NO_WAY_THERE);
             return;
         }
@@ -373,6 +537,11 @@ final class BodyRunner {
                 startWork(level, body);
             }
             case Going.Failed(RefusalKind why) -> {
+                if (LET_GO_DEBUG) {
+                    Labor.LOGGER.info("trip failed node={} body={} at={} why={} trip={} stage={}", current.id(), body.mob().getUUID(),
+                        body.mob().blockPosition().toShortString(), why, carrying.doing().map(d -> d.what().toString()).orElse("-"),
+                        carrying.describe());
+                }
                 putDown(body);
                 refuse(labor, level, body,
                     why instanceof LaborRefusal named ? named : LaborRefusal.NO_WAY_THERE);
@@ -389,6 +558,10 @@ final class BodyRunner {
     }
 
     private void startWork(ServerLevel level, Body body) {
+        if (own == null && current.spec().workload() instanceof Workload.Within) {
+            enter(body);
+            return;
+        }
         carrying = null;
         windup = 0;
         body.mob().getNavigation().stop();
@@ -525,6 +698,7 @@ final class BodyRunner {
             case Outcome.Done(List<WorkNoise> ignored, List<ItemStack> made, Optional<Xp> xp,
                               List<ItemStack> returned) -> {
                 Wear.from(level, body, node.spec(), who, item -> labor.broke(resident, item));
+                WorkYield.gave(body.mob(), node, made);
                 Stowing.put(who, placement, made);
                 xp.ifPresent(gained -> reward(level, body, gained));
                 handIn(labor, level, body, node);
@@ -552,7 +726,7 @@ final class BodyRunner {
         body.balked(new Balk(Doing.open(spec.doing()).about(spec.about()).with(node.wares()), why,
             level.getGameTime()));
         if (own == null && labor.phases().waits(node.id(), why)) {
-            letGo(labor, level, body);
+            letGo(labor, level, body, "waits:" + why);
             return;
         }
         ended(labor, level, body, node, new Ending.Failed(node.id(), why));
@@ -581,6 +755,9 @@ final class BodyRunner {
             node.released(level, labor.hands(body, placement), how);
         } catch (RuntimeException | LinkageError broken) {
             Labor.LOGGER.error("node {} threw ending as {}", node.id(), how, broken);
+        }
+        if (within != null && own != null && own.urge() == null) {
+            told(level, node, how);
         }
     }
 

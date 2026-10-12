@@ -53,6 +53,9 @@ public final class Holdings implements ColonyChangeSource {
     private final Map<UUID, UUID> entities = new HashMap<>();
     // The held bodies loaded into the world right now: never saved, filled again as they load.
     private final Set<UUID> present = new LinkedHashSet<>();
+    // The held bodies something carrying them took out of the world, to put back as they were: a train's riders while
+    // their carriage runs over ground no one has loaded. Still here and at their work, only not simulated meanwhile.
+    private final Set<UUID> carriedOff = new LinkedHashSet<>();
     private Runnable dirtyListener = () -> {
     };
     private BiConsumer<Holding, Release> releasedListener = (holding, why) -> {
@@ -104,6 +107,7 @@ public final class Holdings implements ColonyChangeSource {
                 .filter(this::marked).ifPresent(ColonyMembership::leave);
             case Held.Entity entity -> {
                 present.remove(entity.entity());
+                carriedOff.remove(entity.entity());
                 if (why != Release.DIED && server != null) {
                     bodyOf(server, entity.entity()).ifPresent(Body::leaveColony);
                 }
@@ -187,10 +191,25 @@ public final class Holdings implements ColonyChangeSource {
             return;
         }
         present.add(body.id());
+        carriedOff.remove(body.id());
     }
 
     void exited(UUID entity) {
         present.remove(entity);
+    }
+
+    void carriedOff(UUID entity) {
+        if (entities.containsKey(entity)) {
+            carriedOff.add(entity);
+        }
+    }
+
+    public boolean isCarriedOff(UUID entity) {
+        return carriedOff.contains(entity);
+    }
+
+    public Set<UUID> carriedOff() {
+        return Set.copyOf(carriedOff);
     }
 
     // The held bodies loaded and ticking in this level.
@@ -253,6 +272,7 @@ public final class Holdings implements ColonyChangeSource {
             blocks.clear();
             entities.clear();
             present.clear();
+            carriedOff.clear();
             dirtyListener.run();
         }
     }

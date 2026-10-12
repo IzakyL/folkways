@@ -78,7 +78,7 @@ public final class StandingPlanGameTests {
                 fixture.crew.hands());
         }
 
-        List<UUID> fetches(Solved solved) {
+        List<UUID> fetches(Planned solved) {
             return solved.weave().vertices().keySet().stream().filter(id -> !id.equals(delivery.id())).toList();
         }
     }
@@ -86,19 +86,19 @@ public final class StandingPlanGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void withdrawingAnAskTakesEverythingGrownForIt(GameTestHelper helper) {
         Scene scene = Scene.of(helper);
-        Planner planner = new Planner(new Claims(), new Cooldowns());
+        Solving planner = new Solving(new Claims(), new Cooldowns());
         try {
-            Solved grown = planner.handle(scene.known(true),
+            Planned grown = planner.handle(scene.known(true),
                 List.of(new Message.Submitted(OWNER, Grown.of(scene.delivery))), 0);
             helper.assertTrue(grown.weave().vertices().size() == 3, "a delivery and two fetches are grown");
             ResourceLocation stranger = ResourceLocation.withDefaultNamespace("stranger");
-            Solved notTheirs = planner.handle(scene.known(true),
+            Planned notTheirs = planner.handle(scene.known(true),
                 List.of(new Message.Withdrawn(stranger, scene.delivery.id())), 1);
             helper.assertTrue(notTheirs.weave().vertices().size() == 3, "only the owner may withdraw its work");
-            Solved gone = planner.handle(scene.known(true),
+            Planned gone = planner.handle(scene.known(true),
                 List.of(new Message.Withdrawn(OWNER, scene.delivery.id())), 2);
             helper.assertTrue(gone.weave().vertices().isEmpty(), "withdrawing the ask takes its fetches too");
-            Solved later = planner.handle(scene.known(true), List.of(Message.ANSWERED), 3);
+            Planned later = planner.handle(scene.known(true), List.of(Message.ANSWERED), 3);
             helper.assertTrue(later.weave().vertices().isEmpty(), "withdrawn work is not grown again");
         } finally {
             planner.closed();
@@ -109,17 +109,17 @@ public final class StandingPlanGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void withdrawingASupplyFindsTheConsumerAnother(GameTestHelper helper) {
         Scene scene = Scene.of(helper);
-        Planner planner = new Planner(new Claims(), new Cooldowns());
+        Solving planner = new Solving(new Claims(), new Cooldowns());
         try {
-            Solved grown = planner.handle(scene.known(true),
+            Planned grown = planner.handle(scene.known(true),
                 List.of(new Message.Submitted(OWNER, Grown.of(scene.delivery))), 0);
             UUID dropped = scene.fetches(grown).getFirst();
             UUID kept = scene.fetches(grown).getLast();
-            Solved wrongOwner = planner.handle(scene.known(true),
+            Planned wrongOwner = planner.handle(scene.known(true),
                 List.of(new Message.Withdrawn(OWNER, dropped)), 1);
             helper.assertTrue(wrongOwner.weave().vertices().containsKey(dropped),
                 "a node grown by the engine is withdrawn only by whoever it belongs to");
-            Solved repaired = planner.handle(scene.known(true),
+            Planned repaired = planner.handle(scene.known(true),
                 List.of(new Message.Withdrawn(Haul.DOMAIN, dropped)), 2);
             helper.assertTrue(!repaired.weave().vertices().containsKey(dropped)
                     && repaired.weave().vertices().containsKey(kept)
@@ -139,18 +139,18 @@ public final class StandingPlanGameTests {
         Scene scene = Scene.of(helper);
         Node first = node(helper, scene.fixture.source);
         Node second = node(helper, scene.fixture.target);
-        Planner planner = new Planner(new Claims(), new Cooldowns());
+        Solving planner = new Solving(new Claims(), new Cooldowns());
         try {
-            Solved grown = planner.handle(scene.known(false),
+            Planned grown = planner.handle(scene.known(false),
                 List.of(new Message.Submitted(OWNER, Grown.then(first, second))), 0);
             helper.assertTrue(grown.weave().vertices().keySet().equals(Set.of(first.id(), second.id())),
                 "both submitted nodes are planned");
-            Solved cut = planner.handle(scene.known(false), List.of(new Message.Withdrawn(OWNER, second.id())), 1);
+            Planned cut = planner.handle(scene.known(false), List.of(new Message.Withdrawn(OWNER, second.id())), 1);
             helper.assertTrue(cut.weave().vertices().keySet().equals(Set.of(first.id()))
-                    && !cut.weave().fresh().contains(first.id()) && cut.weave().links().isEmpty(),
+                    && !cut.weave().fresh().contains(first.id()) && cut.weave().orders().isEmpty(),
                 "the first node stands on, untouched, without its order to the withdrawn one");
-            Solved finished = planner.handle(scene.known(false), List.of(new Message.Finished(first.id())), 2);
-            Solved after = planner.handle(scene.known(false), List.of(Message.ANSWERED), 3);
+            Planned finished = planner.handle(scene.known(false), List.of(new Message.Finished(first.id())), 2);
+            Planned after = planner.handle(scene.known(false), List.of(Message.ANSWERED), 3);
             helper.assertTrue(finished.weave().vertices().isEmpty() && after.weave().vertices().isEmpty(),
                 "once what is left is done, the submission is over and nothing grows again");
         } finally {
@@ -162,18 +162,18 @@ public final class StandingPlanGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void workThatCannotGrowWaitsForAnAnswer(GameTestHelper helper) {
         Scene scene = Scene.of(helper);
-        Planner planner = new Planner(new Claims(), new Cooldowns());
+        Solving planner = new Solving(new Claims(), new Cooldowns());
         try {
-            Solved empty = planner.handle(scene.known(false),
+            Planned empty = planner.handle(scene.known(false),
                 List.of(new Message.Submitted(OWNER, Grown.of(scene.delivery))), 0);
             helper.assertTrue(empty.weave().vertices().isEmpty() && !empty.diagnosis().shortfalls().isEmpty(),
                 "with no bread known, the delivery cannot grow and says why");
             helper.assertTrue(empty.asks().survey(), "a shortfall asks for the stores to be looked over");
-            Solved unrelated = planner.handle(scene.known(true),
+            Planned unrelated = planner.handle(scene.known(true),
                 List.of(new Message.Released(UUID.randomUUID())), 1);
             helper.assertTrue(unrelated.weave().vertices().isEmpty(),
                 "a message that answers nothing does not retry waiting work");
-            Solved answered = planner.handle(scene.known(true), List.of(Message.ANSWERED), 2);
+            Planned answered = planner.handle(scene.known(true), List.of(Message.ANSWERED), 2);
             helper.assertTrue(answered.weave().vertices().size() == 3 && answered.diagnosis().shortfalls().isEmpty()
                     && !answered.asks().survey(),
                 "once the stores were read again, the delivery grows and stops asking");
@@ -186,27 +186,27 @@ public final class StandingPlanGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void askingFollowsWhatThePlanNeeds(GameTestHelper helper) {
         Scene scene = Scene.of(helper);
-        Planner planner = new Planner(new Claims(), new Cooldowns());
+        Solving planner = new Solving(new Claims(), new Cooldowns());
         try {
             Known nobody = new Known(scene.known(true).world(), List.of());
-            Solved waiting = planner.handle(nobody,
+            Planned waiting = planner.handle(nobody,
                 List.of(new Message.Submitted(OWNER, Grown.of(scene.delivery))), 0);
             helper.assertTrue(waiting.weave().vertices().isEmpty() && waiting.asks().hands(),
                 "nothing is sized before anyone who works is known, and the residents are asked for");
-            Solved grown = planner.handle(scene.known(true), List.of(Message.ANSWERED), 1);
+            Planned grown = planner.handle(scene.known(true), List.of(Message.ANSWERED), 1);
             helper.assertTrue(grown.weave().vertices().size() == 3 && !grown.asks().hands(),
                 "once residents are read, the waiting work grows");
             UUID failing = scene.fetches(grown).getFirst();
             Stash from = grown.weave().vertices().get(failing).plan().firstFrom().orElseThrow();
-            Solved failed = planner.handle(scene.known(true),
+            Planned failed = planner.handle(scene.known(true),
                 List.of(new Message.Failed(failing, LaborRefusal.GOODS_GONE)), 2);
             helper.assertTrue(failed.asks().looks().contains(from),
                 "a failed fetch asks for its store to be read again");
             UUID unread = UUID.randomUUID();
-            Solved idle = planner.handle(scene.known(true), List.of(new Message.Idle(unread)), 3);
+            Planned idle = planner.handle(scene.known(true), List.of(new Message.Idle(unread)), 3);
             helper.assertTrue(idle.asks().handsOf().contains(unread) && !idle.asks().looks().contains(from),
                 "an idle resident not yet read is asked for; a store asked for once is not asked again");
-            Solved read = planner.handle(scene.known(true),
+            Planned read = planner.handle(scene.known(true),
                 List.of(new Message.Idle(scene.fixture.crew.hands().getFirst().id())), 4);
             helper.assertTrue(!read.asks().handsOf().contains(scene.fixture.crew.hands().getFirst().id()),
                 "an idle resident already read with nothing in hand needs no further look");
@@ -219,15 +219,15 @@ public final class StandingPlanGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void aDeliveryIntoAStoreNotYetReadAsksForTheStores(GameTestHelper helper) {
         Scene scene = Scene.of(helper);
-        Planner planner = new Planner(new Claims(), new Cooldowns());
+        Solving planner = new Solving(new Claims(), new Cooldowns());
         try {
             Known unread = new Known(new Situation(scene.fixture.ways, new Stock(List.of(), Map.of()), List.of(),
                 scene.stands), scene.fixture.crew.hands());
-            Solved waiting = planner.handle(unread,
+            Planned waiting = planner.handle(unread,
                 List.of(new Message.Submitted(OWNER, Grown.of(scene.delivery))), 0);
             helper.assertTrue(waiting.weave().vertices().isEmpty() && waiting.asks().survey(),
                 "a delivery into a store never read cannot land, and the stores are asked for");
-            Solved grown = planner.handle(scene.known(true), List.of(Message.ANSWERED), 1);
+            Planned grown = planner.handle(scene.known(true), List.of(Message.ANSWERED), 1);
             helper.assertTrue(grown.weave().vertices().size() == 3,
                 "once the stores are read, the waiting delivery grows");
         } finally {

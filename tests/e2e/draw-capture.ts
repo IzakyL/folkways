@@ -1,4 +1,4 @@
-import type { media } from "@izakyl/blockwright-minecraft";
+import { media } from "@izakyl/blockwright-minecraft";
 
 export type DrawCaptureResult = media.DrawCaptureResult;
 export type DrawEntry = media.DrawEntry;
@@ -14,31 +14,12 @@ export function drawEntries(result: DrawCaptureResult): DrawEntry[] {
   return result.frames.flatMap((frame) => frame.entries);
 }
 
-export function lineBoxes(result: DrawCaptureResult): LineBox[] {
-  return drawEntries(result)
-    .filter((entry): entry is LineBox => entry.kind === "lineBox");
-}
-
-export function filledBoxes(result: DrawCaptureResult): FilledBox[] {
-  return drawEntries(result)
-    .filter((entry): entry is FilledBox => entry.kind === "filledBox");
-}
-
-export function drawTexts(result: DrawCaptureResult): DrawText[] {
-  return drawEntries(result).filter((entry): entry is DrawText => entry.kind === "text");
-}
-
-export function drawItems(result: DrawCaptureResult): DrawItem[] {
-  return drawEntries(result).filter((entry): entry is DrawItem => entry.kind === "item");
-}
-
-export function worldTexts(result: DrawCaptureResult): WorldText[] {
-  return drawEntries(result).filter((entry): entry is WorldText => entry.kind === "worldText");
-}
-
-export function worldItems(result: DrawCaptureResult): WorldItem[] {
-  return drawEntries(result).filter((entry): entry is WorldItem => entry.kind === "worldItem");
-}
+export const lineBoxes = (result: DrawCaptureResult): LineBox[] => media.drawEntries(result, "lineBox");
+export const filledBoxes = (result: DrawCaptureResult): FilledBox[] => media.drawEntries(result, "filledBox");
+export const drawTexts = (result: DrawCaptureResult): DrawText[] => media.drawEntries(result, "text");
+export const drawItems = (result: DrawCaptureResult): DrawItem[] => media.drawEntries(result, "item");
+export const worldTexts = (result: DrawCaptureResult): WorldText[] => media.drawEntries(result, "worldText");
+export const worldItems = (result: DrawCaptureResult): WorldItem[] => media.drawEntries(result, "worldItem");
 
 export function distanceTo(
   position: { x: number; y: number; z: number },

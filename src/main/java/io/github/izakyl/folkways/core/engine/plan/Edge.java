@@ -16,7 +16,7 @@ import java.util.UUID;
  * plan grows it a source, and the source a carry to the consumer. `trail` is what the consumer is itself being made
  * for, so no source is grown out of the goods it is meant to make.
  */
-public record Edge(UUID id, UUID consumer, Need need, int rank, Set<ItemSpec> trail) {
+public record Edge(UUID id, UUID consumer, Need need, Set<ItemSpec> trail) {
 
     public Edge {
         trail = Set.copyOf(trail);
@@ -27,12 +27,12 @@ public record Edge(UUID id, UUID consumer, Need need, int rank, Set<ItemSpec> tr
     }
 
     // Every need a node declares is one open edge into it, named by the need's place.
-    static List<Edge> into(Node consumer, int rank, Set<ItemSpec> trail) {
+    static List<Edge> into(Node consumer, Set<ItemSpec> trail) {
         List<Need> needs = consumer.spec().needs();
         List<Edge> open = new ArrayList<>(needs.size());
         for (int at = 0; at < needs.size(); at++) {
             if (needs.get(at).count() > 0) {
-                open.add(new Edge(idOf(consumer.id(), at), consumer.id(), needs.get(at), rank, trail));
+                open.add(new Edge(idOf(consumer.id(), at), consumer.id(), needs.get(at), trail));
             }
         }
         return open;
@@ -51,7 +51,7 @@ public record Edge(UUID id, UUID consumer, Need need, int rank, Set<ItemSpec> tr
     }
 
     Edge covering(long count) {
-        return new Edge(id, consumer, new Need(need.spec(), count, need.carried()), rank, trail);
+        return new Edge(id, consumer, new Need(need.spec(), count, need.carried()), trail);
     }
 
     // What a source grown for this edge may not be made from.

@@ -111,7 +111,7 @@ public final class SupplyPlanningGameTests {
     public static void declaredNeedsAreOpenEdgesIntoTheirConsumer(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         Node eats = consumer(f, new Need(BREAD, 4), new Need(PLANKS, 2));
-        List<Edge> open = Edge.into(eats, 0, Set.of());
+        List<Edge> open = Edge.into(eats, Set.of());
         helper.assertTrue(open.size() == 2
             && open.get(0).id().equals(Edge.idOf(eats.id(), 0)) && open.get(1).id().equals(Edge.idOf(eats.id(), 1))
             && open.stream().allMatch(edge -> edge.consumer().equals(eats.id())),
@@ -130,15 +130,77 @@ public final class SupplyPlanningGameTests {
         try {
             weaver.know(known.world(), f.crew);
             weaver.submit(OWNER, Grown.of(consumer(f, new Need(BREAD, 4))));
-            Weave grown = weaver.grow(false);
+            WeaveView grown = new WeaveView();
+            grown.apply(weaver.grow(false));
             helper.assertTrue(grown.vertices().size() == 3 && weaver.shortfalls().isEmpty(),
                 "bread out of reach is relayed into the store the consumer reaches: a take, a put and the consumer");
             helper.assertTrue(grown.vertices().values().stream().noneMatch(vertex -> vertex.node() instanceof Intent),
                 "no intent reaches the schedule");
-            grown.vertices().keySet().forEach(weaver::finished);
-            Weave after = weaver.grow(false);
-            helper.assertTrue(after.vertices().isEmpty() && after.pending().isEmpty() && !weaver.asking(),
+            List.copyOf(grown.vertices().keySet()).forEach(weaver::finished);
+            grown.apply(weaver.grow(false));
+            helper.assertTrue(grown.vertices().isEmpty() && !weaver.asking(),
                 "once its consumer is done, nothing grown for it keeps the ask alive");
+        } finally {
+            weaver.closed();
+        }
+        helper.succeed();
+    }
+
+    private static List<Amount> baked(WeaveView grown) {
+        List<Amount> ovens = new ArrayList<>();
+        for (Vertex vertex : grown.vertices().values()) {
+            for (Amount gives : vertex.node().spec().gives()) {
+                if (gives.spec().equals(BREAD)) ovens.add(gives);
+            }
+        }
+        return ovens;
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void aLikeDemandIsAddedOntoTheMakingAlreadyLaid(GameTestHelper helper) {
+        var f = new PlanningFixture(helper);
+        Weaver weaver = new Weaver(new Claims(), new Cooldowns());
+        try {
+            weaver.know(known(f, List.of(), List.of(bakery(f, new Counted(true)))).world(), f.crew);
+            Node first = consumer(f, new Need(BREAD, 4));
+            weaver.submit(OWNER, Grown.of(first));
+            WeaveView grown = new WeaveView();
+            grown.apply(weaver.grow(false));
+            helper.assertTrue(baked(grown).size() == 1 && baked(grown).getFirst().count() == 4,
+                "the first demand grows a making of its own: " + baked(grown));
+            Node second = consumer(f, new Need(BREAD, 3));
+            weaver.submit(OWNER, Grown.of(second));
+            grown.apply(weaver.grow(false));
+            helper.assertTrue(baked(grown).size() == 1 && baked(grown).getFirst().count() == 7,
+                "a second demand for the same goods widens that making rather than growing another: " + baked(grown));
+            helper.assertTrue(weaver.shortfalls().isEmpty() && grown.vertices().containsKey(first.id())
+                && grown.vertices().containsKey(second.id()), "both consumers stay fed: " + weaver.shortfalls());
+            weaver.finished(second.id());
+            grown.apply(weaver.grow(false));
+            helper.assertTrue(baked(grown).size() == 1 && weaver.shortfalls().isEmpty(),
+                "a consumer done with its share leaves the making to the other");
+        } finally {
+            weaver.closed();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void aMakingInHandIsNotLaidAfresh(GameTestHelper helper) {
+        var f = new PlanningFixture(helper);
+        Weaver weaver = new Weaver(new Claims(), new Cooldowns());
+        try {
+            weaver.know(known(f, List.of(), List.of(bakery(f, new Counted(true)))).world(), f.crew);
+            weaver.submit(OWNER, Grown.of(consumer(f, new Need(BREAD, 4))));
+            WeaveView grown = new WeaveView();
+            grown.apply(weaver.grow(false));
+            UUID oven = grown.vertices().values().stream()
+                .filter(vertex -> !vertex.node().spec().gives().isEmpty()).findFirst().orElseThrow().node().id();
+            weaver.heldBy(oven, f.crew.hands().getFirst().id(), false);
+            weaver.submit(OWNER, Grown.of(consumer(f, new Need(BREAD, 3))));
+            grown.apply(weaver.grow(false));
+            helper.assertTrue(baked(grown).size() == 2 && grown.vertices().containsKey(oven),
+                "work already in hand keeps its making; the new demand grows its own: " + baked(grown));
         } finally {
             weaver.closed();
         }
@@ -149,9 +211,9 @@ public final class SupplyPlanningGameTests {
     public static void refusedWorkshopHoldAdmitsNothing(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var hold = new Counted(false);
-        var planner = new Planner(new Claims(), new Cooldowns());
+        var planner = new Solving(new Claims(), new Cooldowns());
         try {
-            Solved solved = planner.handle(known(f, List.of(), List.of(bakery(f, hold))),
+            Planned solved = planner.handle(known(f, List.of(), List.of(bakery(f, hold))),
                 List.of(new Message.Submitted(OWNER, Grown.of(consumer(f, new Need(BREAD, 4))))), 0);
             helper.assertTrue(hold.taken == 1 && hold.released.isEmpty(), "a refused hold was never held");
             helper.assertTrue(solved.weave().vertices().isEmpty() && !solved.diagnosis().refused().isEmpty()
@@ -169,15 +231,15 @@ public final class SupplyPlanningGameTests {
         var hold = new Counted(true);
         var known = known(f, List.of(), List.of(bakery(f, hold)));
         Node eats = consumer(f, new Need(BREAD, 4));
-        var planner = new Planner(new Claims(), new Cooldowns());
+        var planner = new Solving(new Claims(), new Cooldowns());
         try {
-            Solved solved = planner.handle(known, List.of(new Message.Submitted(OWNER, Grown.of(eats))), 0);
+            Planned solved = planner.handle(known, List.of(new Message.Submitted(OWNER, Grown.of(eats))), 0);
             helper.assertTrue(solved.weave().vertices().size() == 2 && solved.diagnosis().shortfalls().isEmpty(),
                 "the bakery's answer is admitted, its bread handed to the consumer by whoever bakes it");
             helper.assertTrue(solved.weave().groups().stream().anyMatch(group -> group.contains(eats.id())),
                 "baking and eating ride together, so one worker carries the bread between them");
             helper.assertTrue(hold.taken == 1 && hold.released.isEmpty(), "the hold is taken once, when admitted");
-            Solved gone = planner.handle(known, List.of(new Message.Withdrawn(OWNER, eats.id()), Message.ANSWERED), 1);
+            Planned gone = planner.handle(known, List.of(new Message.Withdrawn(OWNER, eats.id()), Message.ANSWERED), 1);
             helper.assertTrue(gone.weave().vertices().isEmpty()
                     && hold.released.equals(List.of(Ending.REVOKED)),
                 "withdrawing the consumer takes its production with it and releases the hold once");
@@ -195,9 +257,9 @@ public final class SupplyPlanningGameTests {
             var hold = new Counted(grants);
             var guarded = new Guarded(NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(f.source),
                 Stances.WHEREVER, Workload.Once.of(1)).done(), hold);
-            var planner = new Planner(new Claims(), new Cooldowns());
+            var planner = new Solving(new Claims(), new Cooldowns());
             try {
-                Solved solved = planner.handle(known, List.of(new Message.Submitted(OWNER, Grown.of(guarded))), 0);
+                Planned solved = planner.handle(known, List.of(new Message.Submitted(OWNER, Grown.of(guarded))), 0);
                 helper.assertTrue(hold.taken == 1 && solved.weave().vertices().containsKey(guarded.id()) == grants
                         && solved.diagnosis().refused().isEmpty() == grants,
                     "an ask is admitted only when the holds its refinement depends on are granted");
@@ -215,9 +277,9 @@ public final class SupplyPlanningGameTests {
     public static void shortfallNamesTheSupplyThatCouldNotBeResolved(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         Node eats = consumer(f, new Need(BREAD, 4));
-        var planner = new Planner(new Claims(), new Cooldowns());
+        var planner = new Solving(new Claims(), new Cooldowns());
         try {
-            Solved solved = planner.handle(known(f, List.of(), List.of()),
+            Planned solved = planner.handle(known(f, List.of(), List.of()),
                 List.of(new Message.Submitted(OWNER, Grown.of(eats))), 0);
             helper.assertTrue(solved.weave().vertices().isEmpty() && solved.diagnosis().shortfalls().size() == 1,
                 "a need with no source leaves nothing planned");
@@ -265,9 +327,9 @@ public final class SupplyPlanningGameTests {
             recipe(f, 11, BREAD, 1, new Need(WHEAT, 3), 200),
             recipe(f, 12, BREAD, 9, new Need(BALE, 1), 20),
             recipe(f, 13, BALE, 1, new Need(baled, 9), 20));
-        var planner = new Planner(new Claims(), new Cooldowns());
+        var planner = new Solving(new Claims(), new Cooldowns());
         try {
-            Solved solved = planner.handle(known(f, held, workshops),
+            Planned solved = planner.handle(known(f, held, workshops),
                 List.of(new Message.Submitted(OWNER, Grown.of(eats))), 0);
             helper.assertTrue(solved.diagnosis().shortfalls().isEmpty(),
                 "bread that wheat can make is not short: " + solved.diagnosis().shortfalls());

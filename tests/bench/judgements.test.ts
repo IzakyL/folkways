@@ -139,6 +139,15 @@ test("bucket plus milk bucket is constant", () => {
     .some((one) => one.rule === "conservation/pair-broken"));
 });
 
+test("buckets the work made may grow the pair, and only by that much", () => {
+  const before = tally({ containers: { "minecraft:bucket": 192 } });
+  const after = tally({ containers: { "minecraft:bucket": 193 }, packs: { "minecraft:bucket": 6, "minecraft:milk_bucket": 5 } });
+  const made = { "minecraft:bucket": 12, "minecraft:milk_bucket": 5 - 5, "minecraft:iron_ingot": -36 };
+  assert.deepEqual(judgeConservation(before, after, {}, true, made), []);
+  assert.ok(judgeConservation(before, after, {}, true, { "minecraft:bucket": 11 })
+    .some((one) => one.rule === "conservation/pair-broken"));
+});
+
 test("no red when the tally is truncated", () => {
   const found = judgeConservation(
     tally({ containers: { "minecraft:shears": 4 }, capped: true }),

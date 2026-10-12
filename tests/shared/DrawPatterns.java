@@ -1,4 +1,5 @@
 import io.github.izakyl.folkways.plugins.build.draft.*;
+import io.github.izakyl.folkways.plugins.build.Joints;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
@@ -19,8 +20,9 @@ import blockwright.minecraft.core.Sync;
 
 // Draws patterns from their .star sources at marked zones or paths and lays the cells at once.
 // args: sources {id: text}, drawings [{pattern, kind, points [[x,y,z]..], knobs {key: value}, seed,
-// lay (false only drafts), collect [role..] (answers those roles' cells), blueprint (answers every cell and state)}],
-// keep [[x, z]..] columns where the guarded roles may not stand, guard [role..].
+// lay (false only drafts; laying also joins the drawing's joints), collect [role..] (answers those roles' cells),
+// blueprint (answers every cell and state, and each joint as ["joint", from xyz, to xyz])}],
+// keep [[x, z]..] columns where the guarded roles may not stand, guard [role..], spare [[x, y, z]..] cells nothing is set in.
 public final class Task {
     static final class Knobs implements Settings {
         final Map<String, Object> values = new HashMap<>();
@@ -75,6 +77,13 @@ public final class Task {
             var c = (List<?>) column;
             keep.add(BlockPos.asLong(((Number) c.get(0)).intValue(), 0, ((Number) c.get(1)).intValue()));
         }
+        // Cells no drawing may set (a railway's track and the room over it, laid before the town).
+        Set<Long> spare = new HashSet<>();
+        List<Object> spared = args.list("spare");
+        for (Object cell : spared == null ? List.of() : spared) {
+            var c = (List<?>) cell;
+            spare.add(BlockPos.asLong(((Number) c.get(0)).intValue(), ((Number) c.get(1)).intValue(), ((Number) c.get(2)).intValue()));
+        }
         Set<String> guard = new HashSet<>();
         List<String> guarded = args.strings("guard");
         if (guarded != null) guard.addAll(guarded);
@@ -91,6 +100,11 @@ public final class Task {
             List<BlockPos> points = new ArrayList<>();
             for (Object p : (List<?>) drawing.get("points")) points.add(pos(p));
             Hint hint = "zone".equals(drawing.get("kind")) ? new Hint.Zone(points.get(0), points.get(1)) : new Hint.Path(points);
+            // The ground the drawing reads, generated and loaded first: a line can run out past what any player has seen.
+            int x0 = Integer.MAX_VALUE, z0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE, z1 = Integer.MIN_VALUE;
+            for (BlockPos p : points) { x0 = Math.min(x0, p.getX()); z0 = Math.min(z0, p.getZ()); x1 = Math.max(x1, p.getX()); z1 = Math.max(z1, p.getZ()); }
+            for (int cx = (x0 - 24) >> 4; cx <= (x1 + 24) >> 4; cx++) for (int cz = (z0 - 24) >> 4; cz <= (z1 + 24) >> 4; cz++)
+                level.getChunk(cx, cz);
             var knobs = new Knobs(pattern.knobs(), (Map<?, ?>) drawing.getOrDefault("knobs", Map.of()));
             long seed = ((Number) drawing.getOrDefault("seed", 7)).longValue();
             Drawn drawn = pattern.drawOn(new Commission(hint, knobs, World.of(level), Direction.NORTH, seed));
@@ -112,7 +126,8 @@ public final class Task {
             int[] min = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE}, max = {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
             for (var cell : ready.draft().cells()) {
                 BlockPos at = ready.corner().offset(cell.offset());
-                if (guard.contains(cell.source().role()) && keep.contains(BlockPos.asLong(at.getX(), 0, at.getZ()))) {
+                if (spare.contains(at.asLong())
+                        || guard.contains(cell.source().role()) && keep.contains(BlockPos.asLong(at.getX(), 0, at.getZ()))) {
                     dropped++;
                     continue;
                 }
@@ -125,6 +140,23 @@ public final class Task {
                 cells++;
             }
             if (lay) laid += cells;
+            // What the drawing joins (a railway's curves and climbs), joined the way a builder joins them.
+            int joints = ready.draft().joints().size(), joined = 0;
+            List<Object> unjoined = new ArrayList<>();
+            for (var joint : ready.draft().joints()) {
+                BlockPos from = ready.corner().offset(joint.from()), to = ready.corner().offset(joint.to());
+                if (lay) {
+                    var cost = Joints.joiner().cost(level, from, to);
+                    if (cost.isPresent() && Joints.joiner().join(level, from, to, cost.get()).joined()) joined++;
+                    else unjoined.add(List.of(from.getX(), from.getY(), from.getZ(), to.getX(), to.getY(), to.getZ()));
+                }
+                if (blueprint) plan.add(List.of("joint", from.getX(), from.getY(), from.getZ(), to.getX(), to.getY(), to.getZ()));
+            }
+            if (joints > 0) {
+                report.put("joints", joints);
+                if (lay) report.put("joined", joined);
+                if (!unjoined.isEmpty()) report.put("unjoined", unjoined.subList(0, Math.min(8, unjoined.size())));
+            }
             report.put("cells", cells);
             if (cells > 0) report.put("bounds", List.of(min[0], min[1], min[2], max[0], max[1], max[2]));
             if (!collected.isEmpty()) report.put("roles", collected);

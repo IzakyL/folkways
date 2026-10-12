@@ -133,15 +133,11 @@ def route(site):
         one["tail"] = one["n"] - into
         other["head"] = out
         bends.append((index, into, out))
-    total = 0
     for leg in legs:
         if leg["tail"] - leg["head"] < 1:
             fail("Too tight a bend: leave about ten blocks of straight track either side of each turn" +
                 " / 转弯过急：每个转折点两侧请各留约十格直线")
         leg["climbs"] = grades(leg, leg["head"], leg["tail"])
-        total += leg["n"]
-    if total < 4 or total > 160:
-        fail("A railway runs 4–160 blocks / 铁路全长须为 4–160 格")
     return legs, bends
 
 def level(leg, s):

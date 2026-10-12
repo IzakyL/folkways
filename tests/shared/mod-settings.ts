@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { instanceDirOf, seedInstance } from "@izakyl/blockwright-client";
 import path from "node:path";
 import { REPO_ROOT } from "../out-paths";
 
@@ -7,6 +7,10 @@ export type EngineMode = "DEFAULT" | "SINGLE_THREAD";
 export type ModSettings = {
   mode: EngineMode;
   zones?: Record<string, number>;
+  /** Recipe ids residents never use (crafting.refusedRecipes). */
+  refusedRecipes?: string[];
+  /** Settings of the labor section, by key (planHorizonTicks, planHorizonDepth...). */
+  labor?: Record<string, number>;
 };
 
 const seeded = new Set<string>();
@@ -21,17 +25,18 @@ export function isSeeded(instance: string | undefined): boolean {
 }
 
 export function instanceConfigDir(instance: string): string {
-  return path.join(REPO_ROOT, ".blockwright", "instances", instance, "config");
+  return path.join(instanceDirOf(instance, REPO_ROOT), "config");
 }
 
 export function seedModSettings(instance: string, settings: ModSettings): string {
-  const dir = instanceConfigDir(instance);
-  mkdirSync(dir, { recursive: true });
+  const seed = seedInstance(instance, { cwd: REPO_ROOT });
   markSeeded(instance);
-  const file = path.join(dir, "folkways-server.toml");
   const zones = Object.entries(settings.zones ?? {}).map(([key, value]) => `\t${key} = ${value}\n`).join("");
-  writeFileSync(file, `[planning]\n\tmode = "${settings.mode}"\n` + (zones ? `[zones]\n${zones}` : ""));
-  return file;
+  const refused = settings.refusedRecipes?.length
+    ? `[crafting]\n\trefusedRecipes = [${settings.refusedRecipes.map((id) => `"${id}"`).join(", ")}]\n` : "";
+  const labor = Object.entries(settings.labor ?? {}).map(([key, value]) => `\t${key} = ${value}\n`).join("");
+  return seed.write("config/folkways-server.toml", `[planning]\n\tmode = "${settings.mode}"\n` + (zones ? `[zones]\n${zones}` : "") + refused
+    + (labor ? `[labor]\n${labor}` : ""));
 }
 
 export function seededServer(instance: string, zones?: Record<string, number>): string {
@@ -39,7 +44,8 @@ export function seededServer(instance: string, zones?: Record<string, number>): 
   return instance;
 }
 
-export function seededOffThreadServer(instance: string, zones?: Record<string, number>): string {
-  seedModSettings(instance, { mode: "DEFAULT", zones });
+export function seededOffThreadServer(instance: string, zones?: Record<string, number>,
+  refusedRecipes?: string[], labor?: Record<string, number>): string {
+  seedModSettings(instance, { mode: "DEFAULT", zones, refusedRecipes, labor });
   return instance;
 }

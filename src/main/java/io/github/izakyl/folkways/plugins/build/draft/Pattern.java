@@ -37,7 +37,10 @@ public record Pattern(ResourceLocation id, Schema knobs, Set<String> accepts, Li
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-patterns");
 
     private static final long LOAD_STEPS = 200_000L;
-    private static final long DRAW_STEPS = 4_000_000L;
+    // A drawing runs at once on the thread that asks for it (the server's, or the client's for a local preview):
+    // 12-80M steps a second, so the most it may take holds that thread up for well under two seconds. A 56-block
+    // terraced field takes about 4M, a 150-block piece of railway or road about 2.4M.
+    private static final long DRAW_STEPS = 20_000_000L;
 
     private static final StarlarkSemantics SEMANTICS =
         StarlarkSemantics.builder().setBool("-allow_recursion", true).build();
@@ -231,7 +234,14 @@ public record Pattern(ResourceLocation id, Schema knobs, Set<String> accepts, Li
             StarlarkThread thread = new StarlarkThread(mutability, SEMANTICS);
             thread.setMaxExecutionSteps(DRAW_STEPS);
             thread.setPrintHandler((printing, message) -> LOGGER.info("{}: {}", id, message));
-            List<Massing.Part> parts = drawing.derive(thread, fn, new DraftSite(drawing));
+            long began = System.nanoTime();
+            List<Massing.Part> parts;
+            try {
+                parts = drawing.derive(thread, fn, new DraftSite(drawing));
+            } finally {
+                LOGGER.info("{}: drew in {} steps, {} ms", id, thread.getExecutedSteps(),
+                    (System.nanoTime() - began) / 1_000_000);
+            }
             if (parts.isEmpty()) {
                 return Drawn.refused(DraftRefusal.NOTHING_DRAWN);
             }

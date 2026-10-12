@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
@@ -85,10 +86,12 @@ final class BuildPresence implements Facing {
     // How many sites have been numbered for want of a name, so the next unnamed one is #numbered+1.
     private int numbered;
     private boolean unkept;
-    private int sinceTally;
+    // When sites are tallied within each period, spread against every other cron; see Cadence.
+    private final Cadence.Cron tallying;
 
     BuildPresence(Colony colony, MinecraftServer server) {
         this.colony = colony;
+        this.tallying = Cadence.claim(colony, TALLY_TICKS);
         this.asks = new BuildSite.Asks() {
             @Override
             public void submit(ResourceKey<Level> dimension, Grown work, BiConsumer<UUID, Ending> ended) {
@@ -346,8 +349,7 @@ final class BuildPresence implements Facing {
 
     public void tick(MinecraftServer server) {
         settle(server);
-        if (++sinceTally >= TALLY_TICKS) {
-            sinceTally = 0;
+        if (tallying.due(server)) {
             tally(server);
         }
         if (unkept) {

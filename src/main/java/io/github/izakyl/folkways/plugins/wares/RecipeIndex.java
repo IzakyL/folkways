@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.wares;
 
+import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -66,9 +68,10 @@ final class RecipeIndex {
     private <I extends RecipeInput, T extends Recipe<I>> Map<Item, List<RecipeHolder<?>>> build(
             RecipeType<T> type) {
         Map<Item, List<RecipeHolder<?>>> byOutput = new HashMap<>();
+        Set<ResourceLocation> refused = FolkwaysConfig.refusedRecipes();
         for (RecipeHolder<T> holder : source.getAllRecipesFor(type)) {
             ItemStack result = holder.value().getResultItem(level.registryAccess());
-            if (result.isEmpty()) {
+            if (result.isEmpty() || refused.contains(holder.id())) {
                 continue;
             }
             byOutput.computeIfAbsent(result.getItem(), ignored -> new ArrayList<>()).add(holder);

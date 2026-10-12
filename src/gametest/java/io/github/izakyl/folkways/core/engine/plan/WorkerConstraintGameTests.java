@@ -60,14 +60,14 @@ public final class WorkerConstraintGameTests {
             public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
         };
         var situation = f.situation(new Stock(List.of(), Map.of()), List.of());
-        var planner = new Planner(new Claims(), new Cooldowns());
+        var planner = new Solving(new Claims(), new Cooldowns());
         try {
             planner.handle(new Known(situation, unlicensed.hands()),
                 List.of(new Message.Submitted(ResourceLocation.withDefaultNamespace("probe"), Grown.of(work))), 0);
             for (long tick = 1; tick <= 200; tick += 7) {
                 planner.handle(new Known(situation, unlicensed.hands()), List.of(Message.ANSWERED), tick);
             }
-            Solved fit = planner.handle(new Known(situation, f.crew.hands()), List.of(), 201);
+            Planned fit = planner.handle(new Known(situation, f.crew.hands()), List.of(), 201);
             helper.assertTrue(fit.weave().vertices().containsKey(work.id()),
                 "refused over and over while no one was licensed, the work grows in the round someone is");
         } finally {
@@ -104,11 +104,11 @@ public final class WorkerConstraintGameTests {
             public NodeSpec spec() { return workSpec; }
             public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
         };
-        var weave = new Weave(Map.of(take.id(), new Vertex(take.id(), take, Placement.NOWHERE),
+        var weave = Shown.delta(Map.of(take.id(), new Vertex(take.id(), take, Placement.NOWHERE),
             work.id(), new Vertex(work.id(), work, Placement.NOWHERE)),
             List.of(new Before(take.id(), work.id())),
             List.of(Set.of(take.id(), work.id())));
-        var schedule = new Tours().schedule(weave, crew, f.ways, 0, true);
+        var schedule = Shown.schedule(new Tours(), weave, crew, f.ways, 0, true);
         helper.assertTrue(!schedule.tours().containsKey(one.id())
             && schedule.tours().containsKey(two.id()) && schedule.unassigned().isEmpty()
             && schedule.tours().get(two.id()).nodes().equals(List.of(take.id(), work.id())),
@@ -134,9 +134,9 @@ public final class WorkerConstraintGameTests {
         UUID first = nodes.get(0).id(), middle = nodes.get(1).id(), last = nodes.get(2).id();
         Map<UUID, Vertex> vertices = new LinkedHashMap<>();
         nodes.forEach(n -> vertices.put(n.id(), new Vertex(n.id(), n, Placement.NOWHERE)));
-        var weave = new Weave(vertices, List.of(new Before(first, middle), new Before(middle, last)),
+        var weave = Shown.delta(vertices, List.of(new Before(first, middle), new Before(middle, last)),
              List.of(Set.of(first, middle), Set.of(middle, last)));
-        var schedule = new Tours().schedule(weave,
+        var schedule = Shown.schedule(new Tours(), weave,
             new Crew(List.of(f.crew.hands().getFirst(), g.crew.hands().getFirst())), f.ways, 0, true);
         helper.assertTrue(schedule.unassigned().isEmpty() && schedule.tours().size() == 1
             && schedule.tours().get(chosen).nodes().equals(List.of(first, middle, last)),
@@ -176,7 +176,7 @@ public final class WorkerConstraintGameTests {
         vertices.put(craft.id(), new Vertex(craft.id(), craft, new Placement(Set.of(),
             List.of(new Amount(log, -8), new Amount(planks, 32)), List.of(), List.of())));
         order.add(craft.id());
-        var schedule = new Tours().schedule(new Weave(vertices, links, List.of(Set.copyOf(order))), crew, f.ways, 0,
+        var schedule = Shown.schedule(new Tours(), Shown.delta(vertices, links, List.of(Set.copyOf(order))), crew, f.ways, 0,
             true);
         helper.assertTrue(schedule.unassigned().isEmpty() && schedule.tours().containsKey(one.id())
                 && schedule.tours().get(one.id()).nodes().size() == 9,
@@ -208,12 +208,12 @@ public final class WorkerConstraintGameTests {
         Map<UUID, Vertex> vertices = new LinkedHashMap<>();
         vertices.put(post.id(), new Vertex(post.id(), post, Placement.NOWHERE));
         vertices.put(work.id(), new Vertex(work.id(), work, Placement.NOWHERE));
-        var weave = new Weave(vertices, List.of(), List.of());
-        var alone = new Tours().schedule(weave, new Crew(List.of(sitter)), f.ways, 0, true);
+        var weave = Shown.delta(vertices, List.of(), List.of());
+        var alone = Shown.schedule(new Tours(), weave, new Crew(List.of(sitter)), f.ways, 0, true);
         helper.assertTrue(!alone.tours().containsKey(one.id())
                 && alone.unassigned().stream().anyMatch(u -> u.node().equals(work.id())),
             "a hand sitting at a post it can no longer be planned for is given no other work");
-        var both = new Tours().schedule(weave, new Crew(List.of(sitter, two)), f.ways, 0, true);
+        var both = Shown.schedule(new Tours(), weave, new Crew(List.of(sitter, two)), f.ways, 0, true);
         helper.assertTrue(!both.tours().containsKey(one.id()) && both.tours().containsKey(two.id())
                 && both.tours().get(two.id()).nodes().equals(List.of(work.id())),
             "the work goes to a hand that is free");
@@ -237,9 +237,9 @@ public final class WorkerConstraintGameTests {
         UUID first = nodes.get(0).id(), last = nodes.get(1).id();
         Map<UUID, Vertex> vertices = new LinkedHashMap<>();
         nodes.forEach(n -> vertices.put(n.id(), new Vertex(n.id(), n, Placement.NOWHERE)));
-        var weave = new Weave(vertices, List.of(new Before(first, last)),
+        var weave = Shown.delta(vertices, List.of(new Before(first, last)),
             List.of(Set.of(first, last)));
-        var schedule = new Tours().schedule(weave,
+        var schedule = Shown.schedule(new Tours(), weave,
             new Crew(List.of(f.crew.hands().getFirst(), g.crew.hands().getFirst())), f.ways, 0, true);
         helper.assertTrue(schedule.tours().isEmpty() && schedule.unassigned().size() == 2
             && schedule.unassigned().stream().allMatch(u -> u.why() == Unassigned.Reason.SAME_WORKER_SPLIT),

@@ -18,6 +18,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 
 public interface Colony {
@@ -65,6 +66,17 @@ public interface Colony {
     void entered(Body body);
 
     void exited(UUID entity);
+
+    // A held body was removed from its level for `reason`: let go when it died or was discarded, only gone out of the
+    // world when it was unloaded, and neither when what carries it took it off.
+    void removed(UUID entity, Entity.RemovalReason reason);
+
+    // A held body was taken out of the world by what carries it, which puts it back as it was, like a train's rider
+    // while the carriage runs over unloaded ground. It has not left: it stays held and at its work, only not simulated
+    // until it comes back.
+    void carriedOff(UUID entity);
+
+    boolean isCarriedOff(UUID entity);
 
     void raze();
 

@@ -31,8 +31,9 @@ import net.minecraft.world.level.material.Fluids;
  * The order a build goes up in, worked out once from the whole target: every piece of work outward from one plane,
  * up from it layer by layer above and down from it layer by layer below, after only what it stands on.
  *
- * <p>A piece waits for the piece next toward the plane under (or over) it, and for whatever holds it up: a block it
- * hangs from, the block under sand, the walls water would run out through, the things on a block cleared before it.
+ * <p>A piece waits for the work a few pieces back along its own layer, or for the piece its layer goes out from,
+ * and for whatever holds it up: a block it hangs from, the block under sand, the walls water would run out through,
+ * the things on a block cleared before it. So the last few pieces of a layer may go in any order, by several hands.
  * Nothing waits for room to stand in or a way to walk, so no piece is ever refused for want of them: those are for
  * the work to find when it is done.
  */
@@ -84,6 +85,9 @@ final class Layering {
     private static final int SCAFFOLD_BELOW = 2;
     private static final int TALLEST_SCAFFOLD = 32;
     private static final int MOST_FROM_ONE_SCAFFOLD = 8;
+    // How many pieces along a layer may be under way at once, in any order: a piece waits for the one this many
+    // back, not for the one before it.
+    static final int SLACK = 4;
 
     private final LevelReader level;
     private final BuildTarget target;
@@ -171,9 +175,10 @@ final class Layering {
             }
         }
         int led = 0;
-        for (Map.Entry<Integer, Integer> lead : parent.entrySet()) {
-            if (keys.get(lead.getValue()) < keys.get(lead.getKey())
-                && after.computeIfAbsent(lead.getKey(), id -> new LinkedHashSet<>()).add(lead.getValue())) {
+        for (int id : parent.keySet()) {
+            Integer back = waited(id, parent, plane);
+            if (back != null && keys.get(back) < keys.get(id)
+                && after.computeIfAbsent(id, key -> new LinkedHashSet<>()).add(back)) {
                 led++;
             }
         }
@@ -203,6 +208,18 @@ final class Layering {
         }
         works.sort(Comparator.comparingLong(Work::key).thenComparingInt(Work::id));
         return new Plan(plane, List.copyOf(works), after, Map.copyOf(refused), held, led, broken);
+    }
+
+    // The piece this one waits for of those that led the spread to it: the one SLACK back along its own layer, or
+    // the piece its layer was stepped out to from, when that comes first. None when the layer begins of itself
+    // within that many pieces.
+    private Integer waited(int id, Map<Integer, Integer> parent, int plane) {
+        int band = band(drafts.get(id), plane);
+        Integer back = parent.get(id);
+        for (int step = 1; back != null && step < SLACK && band(drafts.get(back), plane) == band; step++) {
+            back = parent.get(back);
+        }
+        return back;
     }
 
     private List<Draft> live() {
@@ -639,6 +656,17 @@ final class Layering {
         Set<BlockPos> own = draft.after().keySet();
         BlockPos focus = draft.focus;
         List<BlockPos> found = inReach(draft, key);
+        // The pieces a few before and after it may be done or not when it comes up: where a body stands either way
+        // is stood on first.
+        List<BlockPos> sure = new ArrayList<>();
+        for (BlockPos feet : found) {
+            if (standsAt(feet, key - SLACK * HOP) && standsAt(feet, key + SLACK * HOP)) {
+                sure.add(feet);
+            }
+        }
+        if (!sure.isEmpty()) {
+            found = sure;
+        }
         for (int dy = -STANCE_DROP; found.isEmpty() && dy >= -FAR_DROP; dy--) {
             for (int dx = -STANCE_SPAN; dx <= STANCE_SPAN; dx++) {
                 for (int dz = -STANCE_SPAN; dz <= STANCE_SPAN; dz++) {

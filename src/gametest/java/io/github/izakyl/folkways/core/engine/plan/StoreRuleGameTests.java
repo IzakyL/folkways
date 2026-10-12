@@ -60,21 +60,21 @@ public final class StoreRuleGameTests {
 
         Stock onlyReserved = new Stock(List.of(new Stock.Holding(pantry, new ItemStack(Items.BREAD, 10))),
             Map.of(kitchen, 27, pantry, 26, cellar, 27), reserves);
-        Solved starved = solve(f, stands, onlyReserved, kitchen);
+        Planned starved = solve(f, stands, onlyReserved, kitchen);
         helper.assertTrue(starved.weave().vertices().isEmpty() && !starved.diagnosis().shortfalls().isEmpty(),
             "the only bread sits in another bread reserve, so the kitchen reserve waits instead of draining it");
 
         Stock alsoLoose = new Stock(List.of(new Stock.Holding(pantry, new ItemStack(Items.BREAD, 10)),
                 new Stock.Holding(cellar, new ItemStack(Items.BREAD, 10))),
             Map.of(kitchen, 27, pantry, 26, cellar, 26), reserves);
-        Solved fed = solve(f, stands, alsoLoose, kitchen);
+        Planned fed = solve(f, stands, alsoLoose, kitchen);
         helper.assertTrue(drawnFrom(fed).equals(Set.of(cellar)),
             "bread outside any reserve fills the kitchen reserve");
 
         Stock plainKitchen = new Stock(List.of(new Stock.Holding(pantry, new ItemStack(Items.BREAD, 10))),
             Map.of(kitchen, 27, pantry, 26, cellar, 27),
             Map.of(pantry, List.of(new StoreRule.Reserve(pantry.pos(), BREAD))));
-        Solved drawn = solve(f, stands, plainKitchen, kitchen);
+        Planned drawn = solve(f, stands, plainKitchen, kitchen);
         helper.assertTrue(drawnFrom(drawn).equals(Set.of(pantry)),
             "a reserve still feeds a need that is not itself a reserve of the same goods");
 
@@ -82,7 +82,7 @@ public final class StoreRuleGameTests {
             Map.of(kitchen, 27, pantry, 26, cellar, 27),
             Map.of(kitchen, List.of(new StoreRule.Reserve(kitchen.pos(), BREAD)),
                 pantry, List.of(new StoreRule.Reserve(pantry.pos(), IRON))));
-        Solved unrelated = solve(f, stands, otherGoods, kitchen);
+        Planned unrelated = solve(f, stands, otherGoods, kitchen);
         helper.assertTrue(drawnFrom(unrelated).equals(Set.of(pantry)),
             "a reserve of other goods is an ordinary source for bread");
         helper.succeed();
@@ -100,7 +100,7 @@ public final class StoreRuleGameTests {
             Map.of(target, List.of(new StoreRule.Admit(target.pos(), true, List.of(IRON)))));
         helper.assertTrue(ironOnly.roomAt(target, BREAD) == 0 && ironOnly.roomAt(target, IRON) > 0,
             "a store that takes only iron has no room for bread");
-        Solved refused = solve(f, f.stands, ironOnly, target);
+        Planned refused = solve(f, f.stands, ironOnly, target);
         helper.assertTrue(refused.weave().vertices().isEmpty() && !refused.diagnosis().shortfalls().isEmpty(),
             "bread is not carried into a store that does not take it");
 
@@ -184,7 +184,7 @@ public final class StoreRuleGameTests {
         Owed owed = new Owed(new WorkSite.AtBlock(target.pos()), Stances.at(target.pos()), box, 1);
         PlanningFixture.Rounds rounds = new PlanningFixture.Rounds();
         try {
-            Solved solved = rounds.solve(f.situation(stock, List.of()), f.crew, owed.goals(), List.of(), 0);
+            Planned solved = rounds.solve(f.situation(stock, List.of()), f.crew, owed.goals(), List.of(), 0);
             helper.assertTrue(solved.weave().vertices().isEmpty() && !solved.diagnosis().shortfalls().isEmpty(),
                 "nobody carries a shulker box to a shulker box only to fail putting it in");
         } finally {
@@ -193,7 +193,7 @@ public final class StoreRuleGameTests {
         helper.succeed();
     }
 
-    private static Solved solve(PlanningFixture f, Stands stands, Stock stock, Stash into) {
+    private static Planned solve(PlanningFixture f, Stands stands, Stock stock, Stash into) {
         Owed owed = new Owed(new WorkSite.AtBlock(into.pos()), Stances.at(into.pos()), BREAD, 5);
         PlanningFixture.Rounds rounds = new PlanningFixture.Rounds();
         try {
@@ -204,7 +204,7 @@ public final class StoreRuleGameTests {
         }
     }
 
-    private static Set<Stash> drawnFrom(Solved solved) {
+    private static Set<Stash> drawnFrom(Planned solved) {
         Map<UUID, Vertex> vertices = new LinkedHashMap<>(solved.weave().vertices());
         List<Stash> from = new ArrayList<>();
         vertices.values().forEach(vertex -> from.addAll(vertex.plan().from()));

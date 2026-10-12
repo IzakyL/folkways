@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.engine.colony;
 
+import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyContext;
@@ -37,6 +38,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
@@ -409,6 +411,26 @@ public final class ColonyWorks extends Stretch implements Colony {
         colony.holdings().exited(entity);
     }
 
+    @Override
+    public void removed(UUID entity, Entity.RemovalReason reason) {
+        if (isCarriedOff(entity)) {
+            return;
+        }
+        Release.fromWorld(reason).ifPresentOrElse(
+            why -> holdingOf(entity).ifPresent(held -> release(held.id(), why)),
+            () -> exited(entity));
+    }
+
+    @Override
+    public void carriedOff(UUID entity) {
+        colony.holdings().carriedOff(entity);
+    }
+
+    @Override
+    public boolean isCarriedOff(UUID entity) {
+        return colony.holdings().isCarriedOff(entity);
+    }
+
     private void held(Holding holding) {
         for (Scope scope : List.copyOf(scopes)) {
             scope.heard(holding.owner(), watch -> watch.held(holding));
@@ -500,9 +522,18 @@ public final class ColonyWorks extends Stretch implements Colony {
             return;
         }
         for (Scope scope : List.copyOf(scopes)) {
+            long began = System.nanoTime();
             scope.ticks.forEach(callback -> callback.accept(server));
+            long took = System.nanoTime() - began;
+            // A plugin's tick is the colony's tick too: one that takes a good share of the budget says so.
+            if (took >= SLOW_PULSE_NANOS && FolkwaysConfig.logPlanHeartbeat()) {
+                org.slf4j.LoggerFactory.getLogger("folkways-work").info("slow pulse owner={} us={} tick={}",
+                    scope.owner, took / 1000, server.getTickCount());
+            }
         }
     }
+
+    private static final long SLOW_PULSE_NANOS = 20_000_000L;
 
     @Override
     protected void ended(Closing why) {

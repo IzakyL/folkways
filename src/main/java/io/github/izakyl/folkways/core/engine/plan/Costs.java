@@ -62,6 +62,11 @@ final class Costs {
         this.revision = revision;
     }
 
+    // The stores were read again: what is drawable is settled anew, what workshops offer is kept.
+    void restock() {
+        stale = true;
+    }
+
     List<Offer> offers(Produce asked) {
         List<Offer> found = new ArrayList<>();
         Grown alone = Grown.of(asked);

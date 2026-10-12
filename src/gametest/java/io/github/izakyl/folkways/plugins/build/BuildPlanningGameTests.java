@@ -90,8 +90,9 @@ public final class BuildPlanningGameTests {
             }
         }
         SiteRig rig = SiteRig.start(level, target(level, wall));
-        helper.assertValueEqual(rig.asked.size(), 1, "the whole wall is asked for in one go");
-        helper.assertValueEqual(rig.asked.getFirst().nodes().size(), 9, "every block of it");
+        helper.assertValueEqual(rig.site.pieces().size(), 9, "every block of the wall comes up at once");
+        helper.assertTrue(rig.site.turns() > 0 && rig.asked.size() == rig.site.turns(),
+            "and the colony is asked for hands to it, not for the blocks");
         for (int x = 6; x <= 8; x++) {
             helper.assertTrue(rig.free(at(helper, x, 1, 8)), "the course on the ground waits for nothing");
             for (int y = 2; y <= 3; y++) {
@@ -110,17 +111,16 @@ public final class BuildPlanningGameTests {
         BlockPos goal = at(helper, 10, 11, 10);
         BuildTarget target = target(level, Map.of(goal, STONE));
         SiteRig rig = SiteRig.start(level, target);
-        List<BuildJob.Kind> kinds = rig.asked.getFirst().nodes().stream()
-            .map(node -> rig.site.pieces().stream().filter(piece -> piece.node().id().equals(node.id())).findFirst()
-                .orElseThrow().work().step().orElseThrow().kind()).toList();
+        List<BuildJob.Kind> kinds = rig.site.pieces().stream()
+            .map(piece -> piece.work().step().orElseThrow().kind()).toList();
         helper.assertValueEqual(kinds, List.of(BuildJob.Kind.RAISE, BuildJob.Kind.LAY, BuildJob.Kind.LOWER),
             "a scaffold goes up, the cell is laid from it, and it comes down");
         BuildSite.Piece piece = rig.pieceAt(goal);
         helper.assertTrue(!piece.work().stances().isEmpty()
             && piece.work().stances().stream().allMatch(feet -> Reach.withinReach(feet, goal)),
             "the cell is laid from within reach, on the scaffold");
-        UUID raise = rig.asked.getFirst().nodes().getFirst().id();
-        UUID lower = rig.asked.getFirst().nodes().getLast().id();
+        UUID raise = rig.site.pieces().getFirst().node().id();
+        UUID lower = rig.site.pieces().getLast().node().id();
         helper.assertTrue(rig.ordered(raise, rig.node(goal).id()) && rig.ordered(rig.node(goal).id(), lower),
             "the scaffold goes up first and comes down last");
         Worker worker = worker(helper, at(helper, 10, 1, 9));
@@ -177,14 +177,12 @@ public final class BuildPlanningGameTests {
         BlockPos first = at(helper, 6, 1, 6);
         BlockPos second = at(helper, 12, 1, 12);
         SiteRig rig = SiteRig.start(level, target(level, Map.of(first, STONE, second, STONE)));
-        UUID firstAsked = rig.node(first).id();
         helper.assertValueEqual(rig.site.left(), 2, "both cells are still to meet");
 
         level.setBlock(first, STONE, 3);
         rig.site.tick(level);
         helper.assertValueEqual(rig.site.left(), 1, "a cell someone else set is met");
-        helper.assertTrue(rig.withdrawn.contains(firstAsked) && rig.at(first).isEmpty(),
-            "and the work asked for it is withdrawn");
+        helper.assertTrue(rig.at(first).isEmpty(), "and its piece is no longer to do");
 
         level.setBlock(first, AIR, 3);
         rig.site.tick(level);
@@ -203,42 +201,42 @@ public final class BuildPlanningGameTests {
         BlockPos cell = at(helper, 8, 1, 8);
         SiteRig rig = SiteRig.start(level, target(level, Map.of(cell, STONE)));
         Node node = rig.node(cell);
-        for (int tried = 1; tried < BuildSite.MOST_TRIES; tried++) {
+        for (int hitch = 0; hitch <= BuildSite.MOST_TRIES; hitch++) {
             rig.end(node, new Ending.Failed(node.id(), BuildRefusal.OCCUPIED));
             rig.site.tick(level);
-            helper.assertValueEqual(rig.asked.size(), tried + 1, "the piece is asked for again");
-            helper.assertValueEqual(rig.asked.getLast().nodes().getFirst().id(), node.id(), "as the same piece");
         }
-        rig.end(node, new Ending.Failed(node.id(), BuildRefusal.OCCUPIED));
+        helper.assertTrue(rig.at(cell).isPresent(), "a hitch that passes is never counted against the piece");
+        for (int tried = 1; tried < BuildSite.MOST_TRIES; tried++) {
+            rig.end(node, new Ending.Failed(node.id(), BuildRefusal.NO_WAY_TO_BUILD));
+            rig.site.tick(level);
+            helper.assertTrue(rig.at(cell).isPresent() && rig.node(cell) == node, "the piece comes up again as it was");
+        }
+        rig.end(node, new Ending.Failed(node.id(), BuildRefusal.NO_WAY_TO_BUILD));
         rig.site.tick(level);
         helper.assertTrue(rig.site.pieces().isEmpty(), "at last it is given up");
-        helper.assertValueEqual(rig.site.refusals().get(cell), BuildRefusal.OCCUPIED, "and the board says why");
+        helper.assertValueEqual(rig.site.refusals().get(cell), BuildRefusal.NO_WAY_TO_BUILD, "and the board says why");
         helper.succeed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void onlyThreeCoursesAreAskedAheadAndEachLaidAsksTheNext(GameTestHelper helper) {
+    public static void onlyDepthCoursesAreAskedAheadAndEachLaidAsksTheNext(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         floor(helper);
+        int top = BuildSite.DEPTH + 1;
         Map<BlockPos, BlockState> column = new LinkedHashMap<>();
-        for (int y = 1; y <= 4; y++) {
+        for (int y = 1; y <= top; y++) {
             column.put(at(helper, 8, y, 8), STONE);
         }
         SiteRig rig = SiteRig.start(level, target(level, column));
-        helper.assertValueEqual(rig.asked.size(), 1, "the column is asked for in one go at first");
-        helper.assertValueEqual(rig.asked.getFirst().nodes().size(), BuildSite.DEPTH, "but only three courses deep");
-        helper.assertTrue(rig.at(at(helper, 8, 4, 8)).isEmpty(), "the fourth waits to be asked");
-        BlockPos third = at(helper, 8, 3, 8);
-        UUID thirdAsked = rig.node(third).id();
+        helper.assertValueEqual(column.keySet().stream().filter(cell -> rig.at(cell).isPresent()).count(),
+            (long) BuildSite.DEPTH, "but only DEPTH courses deep");
+        helper.assertTrue(rig.at(at(helper, 8, top, 8)).isEmpty(), "the top course waits to be asked");
+        BlockPos below = at(helper, 8, top - 1, 8);
         helper.assertTrue(rig.work(helper, at(helper, 8, 1, 8), worker(helper, at(helper, 9, 1, 8)))
             instanceof Outcome.Done, "the first course is laid");
-        helper.assertValueEqual(rig.asked.size(), 2, "laying it asks for more");
-        Grown next = rig.asked.getLast();
-        BlockPos fourth = at(helper, 8, 4, 8);
-        helper.assertTrue(next.nodes().size() == 1 && rig.pieceAt(fourth).node().id().equals(next.nodes().getFirst().id()),
-            "the fourth course, and only it");
-        helper.assertTrue(next.follows().contains(new Before(thirdAsked, next.nodes().getFirst().id())),
-            "it goes up after the third, asked before it");
+        BlockPos last = at(helper, 8, top, 8);
+        helper.assertTrue(rig.at(last).isPresent(), "laying it brings the top course up");
+        helper.assertTrue(rig.before(below, last), "to go up after the course below it");
         rig.workAll(helper, worker(helper, at(helper, 9, 1, 8)));
         helper.assertTrue(rig.site.complete(), "working what is asked as it comes builds the whole column");
         helper.succeed();
@@ -410,10 +408,10 @@ public final class BuildPlanningGameTests {
         Asked asked = new Asked();
         Colony colony = colony(helper, asked);
         BuildPresence presence = new BuildPresence(colony, level.getServer());
-        presence.file(level, blueprint(BlockPos.ZERO, new BlockPos(2, 0, 0)), anchor, "", Optional.empty(), "")
-            .orElseThrow();
+        BlueprintBuildOrder filed = presence.file(level, blueprint(BlockPos.ZERO, new BlockPos(2, 0, 0)), anchor, "",
+            Optional.empty(), "").orElseThrow();
         presence.settle(level.getServer());
-        helper.assertValueEqual(asked.works.getLast().nodes().size(), 2, "both cells are asked for");
+        helper.assertValueEqual(presence.pieces(filed.id()).size(), 2, "both cells are to do");
 
         level.setBlock(anchor, STONE, 3);
         presence.tick(level.getServer());

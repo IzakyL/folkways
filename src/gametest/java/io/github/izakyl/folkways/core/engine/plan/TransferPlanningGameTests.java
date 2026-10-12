@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -97,7 +98,7 @@ public final class TransferPlanningGameTests {
         orchestration.stow(hand.id());
         orchestration.know(new Situation(ways, new Stock(List.of(), room),
             List.of(), building.done()), carrying);
-        var weave = orchestration.grow(false);
+        var weave = Shown.view(orchestration.grow(false));
         helper.assertTrue(queries.size() == 8 && queries.values().stream().allMatch(count -> count == 1),
             "eight stores and multiple cargo stacks require exactly eight journey queries: " + queries);
         helper.assertTrue(weave.vertices().size() == 2 && orchestration.shortfalls().isEmpty(),
@@ -537,11 +538,9 @@ public final class TransferPlanningGameTests {
                     && solved.weave().groups().stream()
                         .anyMatch(group -> group.contains(producer.id()) && group.contains(consumer.id())),
                 "what a pack can hold is handed from its maker to the consumer by one worker, through no store");
-            helper.assertTrue(solved.weave().links().isEmpty()
-                    && solved.weave().flows().equals(List.of(Flow.from(producer.id(), consumer.id(),
-                        alternatives, 2))),
-                "handed over, the transfer is laid as its material edge alone, straight from the maker into the "
-                    + "consumer: " + solved.weave().flows());
+            helper.assertTrue(solved.weave().orders().equals(List.of(new Before(producer.id(), consumer.id()))),
+                "handed over, the maker comes straight before the consumer and nothing between: "
+                    + solved.weave().orders());
         } finally {
             handed.closed();
         }

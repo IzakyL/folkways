@@ -135,7 +135,26 @@ public final class ChoicePicker {
         confirm.setActive(picked != null && !picked.equals(current));
     }
 
+    // An option written "<id>/<variant>" is another way of the option before the stroke: it reads as that one's
+    // name in the variant's words, and wears its icon.
     public static Component labelOf(ResourceLocation option) {
+        Component named = nameOf(option);
+        if (named != null) {
+            return named;
+        }
+        int stroke = option.getPath().lastIndexOf('/');
+        if (stroke > 0) {
+            Component whole = nameOf(option.withPath(option.getPath().substring(0, stroke)));
+            if (whole != null) {
+                return Component.translatable(
+                    "folkways.choice.variant." + option.getPath().substring(stroke + 1), whole);
+            }
+        }
+        return Component.literal(option.getPath());
+    }
+
+    @Nullable
+    private static Component nameOf(ResourceLocation option) {
         var item = BuiltInRegistries.ITEM.getOptional(option);
         if (item.isPresent() && item.get() != Items.AIR) {
             return item.get().getDescription();
@@ -148,10 +167,18 @@ public final class ChoicePicker {
         if (entity.isPresent()) {
             return entity.get().getDescription();
         }
-        return Component.literal(option.getPath());
+        return null;
     }
 
     public static ItemStack iconOf(ResourceLocation option) {
+        ItemStack icon = wornBy(option);
+        int stroke = option.getPath().lastIndexOf('/');
+        return icon.isEmpty() && stroke > 0
+            ? wornBy(option.withPath(option.getPath().substring(0, stroke)))
+            : icon;
+    }
+
+    private static ItemStack wornBy(ResourceLocation option) {
         var item = BuiltInRegistries.ITEM.getOptional(option);
         if (item.isPresent() && item.get() != Items.AIR) {
             return new ItemStack(item.get());

@@ -86,6 +86,7 @@ public final class ClosureGameTests {
         helper.assertTrue(before.to().equals(Set.of(door)), "the ways end at the door");
         helper.assertTrue(by.walkTicks() >= Waypoints.Net.ticks(start.cell(), door.cell())
             + Waypoints.Net.ticks(door.cell(), goal.cell()), "the walk in is counted");
+        reckonedAlike(helper, ways, start, goal, by);
         helper.succeed();
     }
 
@@ -101,6 +102,7 @@ public final class ClosureGameTests {
         Leg first = ((Faring.Yes) fare).by().legs().getFirst();
         helper.assertTrue(first.to().equals(Set.of(door)) && first.from().isEmpty(),
             "it walks out to the nearest door with a way on");
+        reckonedAlike(helper, ways, inside, goal, ((Faring.Yes) fare).by());
         helper.succeed();
     }
 
@@ -113,6 +115,13 @@ public final class ClosureGameTests {
         helper.assertTrue(fare instanceof Faring.Yes yes && yes.by().legs().size() == 1
             && yes.by().legs().getFirst().to().equals(Set.of(to)), "it is one walk, off the ways");
         helper.succeed();
+    }
+
+    // Weighed without being laid out, a journey is as long as the one laid out.
+    private static void reckonedAlike(GameTestHelper helper, WayGraph ways, WorldPos from, WorldPos goal, Journey by) {
+        Faring weighed = ways.reckon(who(), from, Set.of(goal));
+        helper.assertTrue(weighed instanceof Faring.Yes yes && yes.by().ticks() == by.ticks(),
+            "reckoned, the journey is as long as laid out (" + by.ticks() + " ticks), not " + weighed);
     }
 
     private static Waypoints bend(boolean closed) {

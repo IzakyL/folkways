@@ -6,7 +6,6 @@ import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Sweep;
 import io.github.izakyl.folkways.core.api.persist.Reader;
 import io.github.izakyl.folkways.core.api.persist.Writer;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.front.api.Facing;
@@ -64,10 +63,8 @@ final class FarmPresence implements Facing {
     void refresh(MinecraftServer server) {
         long stamp = ++sweeps;
         FrontView front = Fronts.of(colony);
-        int wideHands = 0;
         Set<Plot> chosen = new LinkedHashSet<>();
         for (ColonyView view : colony.views(server)) {
-            wideHands = Math.max(wideHands, wideHands(view));
             ServerLevel level = view.level();
             for (ZoneView plot : front.zonesIn(view.level())) {
                 if (plot.delegation().equals(FarmingContent.PLOT)) {
@@ -77,7 +74,7 @@ final class FarmPresence implements Facing {
         }
         retireAllBut(chosen);
         for (Field field : fields.values()) {
-            field.settle(stamp, wideHands);
+            field.settle(stamp);
         }
         keepMade();
     }
@@ -125,11 +122,4 @@ final class FarmPresence implements Facing {
         return Optional.of(plot);
     }
 
-    private static int wideHands(ColonyView colony) {
-        int widest = 0;
-        for (Resident resident : colony.residents()) {
-            widest = Math.max(widest, colony.rankOf(resident, FarmingContent.WIDE_HANDS));
-        }
-        return widest;
-    }
 }

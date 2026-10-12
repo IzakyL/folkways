@@ -22,7 +22,22 @@ public record Transfer(From from, To to, ItemSpec goods, long count) {
         record Stocked(Stash where) implements From {
         }
 
-        record Made(UUID maker, long yield) implements From {
+        // What `maker` makes, `yield` in all. Shared goods are for more than one consumer: they are never handed
+        // straight on, but left in a store beside the maker, for each consumer to take its share from.
+        record Made(UUID maker, long yield, boolean shared) implements From {
+
+            public Made(UUID maker, long yield) {
+                this(maker, yield, false);
+            }
+        }
+
+        // A share of goods made for several consumers, lying in `out` once `suppliers` put them there: the maker
+        // itself, or whoever carried them on from it.
+        record LeftBy(List<UUID> suppliers, Stash out) implements From {
+
+            public LeftBy {
+                suppliers = List.copyOf(suppliers);
+            }
         }
 
         // These very stacks, in the pack of `hand`.

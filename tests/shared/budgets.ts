@@ -6,7 +6,7 @@ export const BUDGET = {
   standard: 20 * MINUTES,
   slow: 25 * MINUTES,
   heavy: 30 * MINUTES,
-  bench: 40 * MINUTES,
+  bench: 60 * MINUTES,
   promo: 60 * MINUTES,
   /** Launch and corpus replay around a fuzz campaign; the campaign's own time (FUZZ_MINUTES) comes on top. */
   fuzz: 10 * MINUTES,

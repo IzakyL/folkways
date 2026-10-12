@@ -79,7 +79,7 @@ public final class RefinementGameTests {
         Node after = new Action(spec(f, UUID.randomUUID()));
         var intent = new Obligation(spec(f, UUID.randomUUID()), 2, new AtomicBoolean(true));
         var graph = new Grown(List.of(before, intent, after), List.of(new Before(before.id(), intent.id()),
-            new Before(intent.id(), after.id()))).ranked(7);
+            new Before(intent.id(), after.id())));
         Grown result = new Refining(List.of(rule(RefinementGameTests::elaborate))).expand(graph).orElseThrow().graph();
         helper.assertTrue(result.nodes().size() == 5 && result.nodes().stream().noneMatch(Intent.class::isInstance),
             "two layers must become executable nodes");
@@ -88,8 +88,7 @@ public final class RefinementGameTests {
             helper.assertTrue(result.links().contains(new Before(chain.get(i - 1), chain.get(i))),
                 "incoming dependency must move to expansion entry, outgoing dependency must stay on completion");
         }
-        helper.assertTrue(result.rank() == 7
-            && result.workerGroups().stream().anyMatch(g -> g.containsAll(chain.subList(1, 4)))
+        helper.assertTrue(result.workerGroups().stream().anyMatch(g -> g.containsAll(chain.subList(1, 4)))
             && result.workerGroups().stream().noneMatch(g -> g.contains(before.id()) || g.contains(after.id())),
             "local same-worker constraints must survive recursive substitution without binding unrelated work");
         helper.succeed();
@@ -101,24 +100,26 @@ public final class RefinementGameTests {
         var ready = new AtomicBoolean();
         var intent = new Obligation(spec(f, UUID.randomUUID()), 2, ready);
         var known = new Known(f.situation(new Stock(List.of(), Map.of()), List.of()), f.crew.hands());
-        var planner = new Planner(new Claims(), new Cooldowns());
-        Solved waiting = planner.handle(known, List.of(new Message.Submitted(OWNER, Grown.of(intent))), 0);
+        var planner = new Solving(new Claims(), new Cooldowns());
+        Planned waiting = planner.handle(known, List.of(new Message.Submitted(OWNER, Grown.of(intent))), 0);
         helper.assertTrue(waiting.weave().vertices().isEmpty() && waiting.schedule().tours().isEmpty(),
             "no partial or abstract obligation may execute");
-        Grown pending = waiting.weave().pending().get(intent.id());
-        helper.assertTrue(pending != null && pending.nodes().size() == 3, "retain the partially refined graph");
-        Set<UUID> children = new HashSet<>(pending.nodes().stream().map(Node::id).toList());
-        children.remove(intent.id());
-        Solved unchanged = planner.handle(known, List.of(), 1);
-        helper.assertTrue(unchanged.weave().pending().get(intent.id()) == pending, "idle solve must preserve the intermediate graph");
+        // The refinement names each layer's work after the ask and its stage, so its identities can be told ahead.
+        Set<UUID> children = new HashSet<>();
+        for (int stage = 2; stage > 0; stage--) {
+            children.add(UUID.nameUUIDFromBytes((intent.id() + ":" + stage).getBytes(StandardCharsets.UTF_8)));
+        }
+        Planned unchanged = planner.handle(known, List.of(), 1);
+        helper.assertTrue(unchanged.weave().vertices().isEmpty(), "an idle solve leaves the half-refined ask off the plan");
         ready.set(true);
-        Solved resumed = planner.handle(known, List.of(Message.ANSWERED), 2);
-        helper.assertTrue(resumed.weave().pending().isEmpty() && resumed.weave().vertices().size() == 3
-            && resumed.weave().vertices().keySet().containsAll(children), "resume using the same intermediate identities");
+        Planned resumed = planner.handle(known, List.of(Message.ANSWERED), 2);
+        helper.assertTrue(resumed.weave().vertices().size() == 3
+            && resumed.weave().vertices().keySet().containsAll(children)
+            && resumed.weave().vertices().containsKey(intent.id()), "resume using the same intermediate identities");
         helper.assertTrue(resumed.schedule().unassigned().isEmpty(), "refined fragment must be schedulable");
         for (UUID child : children) planner.handle(known, List.of(new Message.Finished(child)), 3);
-        Solved done = planner.handle(known, List.of(new Message.Finished(intent.id()), Message.ANSWERED), 4);
-        helper.assertTrue(done.weave().vertices().isEmpty() && done.weave().pending().isEmpty(),
+        Planned done = planner.handle(known, List.of(new Message.Finished(intent.id()), Message.ANSWERED), 4);
+        helper.assertTrue(done.weave().vertices().isEmpty(),
             "completion of anchor closes the original ask without regenerating children");
         planner.closed();
         helper.succeed();
@@ -131,10 +132,10 @@ public final class RefinementGameTests {
         for (boolean ready : List.of(false, true)) {
             var intent = new Obligation(spec(f, UUID.randomUUID()), 2, new AtomicBoolean(ready));
             var claims = new Claims();
-            var planner = new Planner(claims, new Cooldowns());
+            var planner = new Solving(claims, new Cooldowns());
             planner.handle(known, List.of(new Message.Submitted(OWNER, Grown.of(intent))), 0);
-            Solved gone = planner.handle(known, List.of(new Message.Withdrawn(OWNER, intent.id()), Message.ANSWERED), 1);
-            helper.assertTrue(gone.weave().vertices().isEmpty() && gone.weave().pending().isEmpty() && claims.size() == 0,
+            Planned gone = planner.handle(known, List.of(new Message.Withdrawn(OWNER, intent.id()), Message.ANSWERED), 1);
+            helper.assertTrue(gone.weave().vertices().isEmpty() && claims.size() == 0,
                 "withdrawal by original identity must remove all descendants and pending state");
             planner.closed();
         }
@@ -161,11 +162,10 @@ public final class RefinementGameTests {
         Intent unknown = new Intent() { public NodeSpec spec() { return unknownSpec; } };
         Node action = new Action(spec(f, UUID.randomUUID()));
         var known = new Known(f.situation(new Stock(List.of(), Map.of()), List.of()), f.crew.hands());
-        var planner = new Planner(new Claims(), new Cooldowns());
-        Solved result = planner.handle(known, List.of(new Message.Submitted(OWNER, Grown.of(unknown)),
+        var planner = new Solving(new Claims(), new Cooldowns());
+        Planned result = planner.handle(known, List.of(new Message.Submitted(OWNER, Grown.of(unknown)),
             new Message.Submitted(OWNER, Grown.of(action))), 0);
-        helper.assertTrue(result.weave().pending().containsKey(unknown.id())
-            && result.weave().vertices().keySet().equals(Set.of(action.id()))
+        helper.assertTrue(result.weave().vertices().keySet().equals(Set.of(action.id()))
             && result.schedule().tours().values().stream().anyMatch(t -> t.nodes().contains(action.id())),
             "unknown plugin relations must remain pending without blocking another ask");
         planner.closed();

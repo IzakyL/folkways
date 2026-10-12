@@ -23,7 +23,11 @@ public final class ColonyBoards {
     private ColonyBoards() {
     }
 
+    // Only a block the colony holds has a board beside its screen; any other container opens as vanilla left it.
     public static Optional<SiteBoard> firstAt(ServerLevel level, Colony colony, BlockPos at) {
+        if (!ColonyGround.holds(level, colony, ColonySites.anchor(level, at))) {
+            return Optional.empty();
+        }
         List<SiteBoard> standing = boardsAt(level, colony, at, 1);
         return standing.isEmpty() ? Optional.empty() : Optional.of(standing.get(0));
     }

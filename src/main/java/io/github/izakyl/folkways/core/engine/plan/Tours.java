@@ -28,6 +28,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.resources.ResourceLocation;
@@ -47,13 +48,26 @@ final class Tours {
     private static final int RIDE_SPEEDUP = 4;
     // How many places earlier on routes one node may be laid out at, when it fits on the end of none.
     private static final int MOST_INSERTS = 16;
+    // How many routes one piece of work may be tried on beside work already laid at its place, and how much of the
+    // work still to come with it is counted when it is.
+    private static final int MOST_JOINS = 4;
+    private static final int MOST_ONWARD = 4;
+    // How much of a route may come after work put in beside other work: all of it is laid out again.
+    private static final int MOST_TAIL = 16;
     // How many pieces of work one schedule may hand off the longest route, and how many pieces from its end each
     // hand-off looks at before giving up.
     private static final int MOST_SHEDS = 64;
     private static final int SHED_LOOKS = 8;
+    // How much of the work left past the horizon one schedule tries again.
+    private static final int MOST_BEYOND_TRIES = 256;
+    // What one step of a chain of work is taken to cost in walking, when chains are ranked by how much hangs on them.
+    private static final int HOP_TICKS = 100;
+    private static final long BEGUN = Long.MAX_VALUE / 2;
 
     // How far past now work is handed out; see FolkwaysConfig.planHorizonTicks.
     private final int horizon;
+    // How deep a route is before the horizon cuts what joins it; see FolkwaysConfig.planHorizonDepth.
+    private final int depth;
 
     private final Map<UUID, Seat> seats = new LinkedHashMap<>();
     private final Map<Stand, List<Span>> spots = new LinkedHashMap<>();
@@ -63,18 +77,31 @@ final class Tours {
     private final Map<UUID, Placement> seen = new LinkedHashMap<>();
     private long origin = -1L;
 
-    private Weave weave = Weave.EMPTY;
+    // The plan as this schedule keeps it, and the work grown afresh since the schedule last ran.
+    private WeaveView weave = new WeaveView();
+    private Set<UUID> fresh = Set.of();
     private Ways ways;
     private int now;
-    private final Map<UUID, Set<UUID>> after = new HashMap<>();
-    private final Map<UUID, Set<UUID>> before = new HashMap<>();
     private final Map<UUID, UUID> heldBy = new HashMap<>();
-    private final Map<UUID, Set<UUID>> groups = new HashMap<>();
+    // Work left past the horizon, and the time it would come within it if the routes before it kept their pace: it
+    // is tried again then, or sooner when routes are cut short, a few at a time.
+    private final Map<UUID, Integer> beyondUntil = new HashMap<>();
+    // Seats whose routes changed this schedule: only their order is worth trying to improve.
+    private final Set<Seat> changed = new HashSet<>();
     private final Map<Route, Faring> fares = new LinkedHashMap<>();
+    // The ways this schedule has asked to be found: weighing hands asks for none, so each is asked for once.
+    private final Set<Route> sought = new HashSet<>();
     private int tries;
     // Orders that looked shorter by straight lines but were not once laid out for real, so later schedules do
     // not ask for the same ways again.
     private final Set<List<UUID>> declined = new HashSet<>();
+    // What this schedule is laying: whether routes were cut or the crew changed, whether everything is tried again,
+    // the work it has laid, how much work past the horizon it has tried, and who it found fit for which work.
+    private boolean moved;
+    private boolean retry;
+    private final Set<UUID> laidNow = new HashSet<>();
+    private int beyondTried;
+    private final Map<UUID, byte[]> fits = new HashMap<>();
 
     // What a route carries is counted per kind of goods, so many small loads of one thing share their stacks.
     private record Placed(int start, int finish, Stand at, int base, Map<ItemSpec, Long> held) {
@@ -96,6 +123,12 @@ final class Tours {
         private int clock;
         private int base;
         private Map<ItemSpec, Long> held = Map.of();
+        // Where on the route the first work with no end is, past the route's end when there is none.
+        private int endless = Integer.MAX_VALUE;
+        // Where this seat stands in the crew this schedule.
+        private int slot;
+        // The cells the route's work is done from, and how much of it from each.
+        private final Map<WorldPos, Integer> stood = new HashMap<>();
 
         Seat(Crew.Hand hand) {
             this.hand = hand;
@@ -110,6 +143,9 @@ final class Tours {
         }
 
         Map<ItemSpec, Long> with(List<Amount> carrying) {
+            if (carrying.isEmpty()) {
+                return held;
+            }
             Map<ItemSpec, Long> after = new LinkedHashMap<>(held);
             for (Amount amount : carrying) {
                 after.merge(amount.spec(), amount.count(), Long::sum);
@@ -120,58 +156,61 @@ final class Tours {
     }
 
     Tours() {
-        this(FolkwaysConfig.planHorizonTicks());
+        this(FolkwaysConfig.planHorizonTicks(), FolkwaysConfig.planHorizonDepth());
     }
 
     Tours(int horizon) {
+        this(horizon, 0);
+    }
+
+    Tours(int horizon, int depth) {
         this.horizon = horizon;
+        this.depth = depth;
     }
 
     int horizon() {
         return horizon;
     }
 
-    Schedule schedule(Weave weave, Crew crew, Ways ways, long tick, boolean retry) {
+    // A schedule for the plan as `weave` now holds it, `fresh` being the work grown afresh since the last one.
+    Schedule schedule(WeaveView weave, Set<UUID> fresh, Crew crew, Ways ways, long tick, boolean retry) {
         if (origin < 0L) {
             origin = tick;
         }
         this.now = (int) Math.clamp(tick - origin, 0L, Integer.MAX_VALUE);
         this.weave = weave;
+        this.fresh = fresh;
         this.ways = ways;
         fares.clear();
+        sought.clear();
+        changed.clear();
+        fits.clear();
+        laidNow.clear();
+        beyondTried = 0;
+        this.retry = retry;
         index(crew);
 
-        boolean moved = seat(crew);
+        moved = seat(crew);
         moved |= cut();
         List<Seat> line = new ArrayList<>(crew.hands().size());
         for (Crew.Hand hand : crew.hands()) {
             line.add(seats.get(hand.id()));
         }
         waiting.keySet().retainAll(weave.vertices().keySet());
+        beyondUntil.keySet().retainAll(waiting.keySet());
 
         List<UUID> order = topological();
-        Set<UUID> placedNow = new HashSet<>();
+        Set<UUID> tried = waves(order, line);
         for (UUID id : order) {
-            if (settled.containsKey(id)) {
-                continue;
+            if (!tried.contains(id)) {
+                attempt(id, line);
             }
-            Placement plan = fixed(id).plan();
-            // Work left past the horizon is tried again every plan: time alone brings it nearer.
-            if (waiting.containsKey(id) && waiting.get(id).why() != Unassigned.Reason.BEYOND_HORIZON
-                    && !retry && !moved && plan.equals(seen.get(id))
-                    && !weave.fresh().contains(id) && !anyIn(after.get(id), placedNow)) {
-                continue;
-            }
-            waiting.remove(id);
-            seen.put(id, plan);
-            place(id, line, false).ifPresentOrElse(
-                refused -> waiting.put(id, refused),
-                () -> placedNow.add(id));
         }
         seen.keySet().removeIf(id -> !settled.containsKey(id) && !waiting.containsKey(id));
-        if (!placedNow.isEmpty()) {
+        if (!laidNow.isEmpty()) {
             improve(line);
         }
+        fits.clear();
 
         Map<UUID, Tour> tours = new LinkedHashMap<>();
         for (Seat seat : line) {
@@ -189,26 +228,221 @@ final class Tours {
         return new Schedule(tours, unassigned);
     }
 
-    private void index(Crew crew) {
-        after.clear();
-        before.clear();
-        heldBy.clear();
-        for (Before link : weave.orders()) {
-            after.computeIfAbsent(link.to(), key -> new LinkedHashSet<>()).add(link.from());
-            before.computeIfAbsent(link.from(), key -> new LinkedHashSet<>()).add(link.to());
+    // Work is handed out a wave at a time, each the work most hangs on among what waits on nothing unlaid, as much of
+    // it as there are hands: laid breadth first like this, work that could go on side by side meets every hand
+    // free, where laid chain by chain each step found the hand that did the last already standing there. A group
+    // goes as one piece, since one resident does all of it. Within a wave the work with the least choice of hands
+    // picks first. Returns the work tried; work waiting on work that was not laid is left to the caller.
+    private Set<UUID> waves(List<UUID> order, List<Seat> line) {
+        Map<UUID, Long> hanging = hanging(order);
+        Map<UUID, Unit> unitOf = new HashMap<>(order.size() * 2);
+        List<Unit> units = new ArrayList<>();
+        for (UUID id : order) {
+            Unit unit = unitOf.get(id);
+            if (unit == null) {
+                unit = new Unit(units.size());
+                units.add(unit);
+                for (UUID member : weave.group(id)) {
+                    if (weave.has(member) && !settled.containsKey(member)) {
+                        unitOf.putIfAbsent(member, unit);
+                    }
+                }
+                unitOf.putIfAbsent(id, unit);
+                unit = unitOf.get(id);
+            }
+            unit.members.add(id);
+            unit.rank = Math.max(unit.rank, hanging.get(id));
         }
+        for (Unit unit : units) {
+            for (UUID id : unit.members) {
+                // Work a resident has begun, or that is theirs alone, is laid before anything else is put in its way.
+                if (unit.rank < BEGUN && requiredWorker(id) != null) {
+                    unit.rank += BEGUN;
+                }
+                for (UUID predecessor : weave.before(id)) {
+                    if (!settled.containsKey(predecessor) && unitOf.get(predecessor) != unit) {
+                        unit.waits++;
+                    }
+                }
+            }
+        }
+        PriorityQueue<Unit> ready = new PriorityQueue<>(
+            Comparator.comparingLong((Unit unit) -> -unit.rank).thenComparingInt(unit -> unit.seq));
+        for (Unit unit : units) {
+            if (unit.waits == 0 && !unit.members.isEmpty()) {
+                ready.add(unit);
+            }
+        }
+        Set<UUID> tried = new HashSet<>();
+        List<Unit> wave = new ArrayList<>();
+        int width = Math.max(1, line.size());
+        while (!ready.isEmpty()) {
+            wave.clear();
+            while (wave.size() < width && !ready.isEmpty()) {
+                Unit unit = ready.poll();
+                unit.regret = regret(unit, line);
+                wave.add(unit);
+            }
+            wave.sort(Comparator.comparingInt((Unit unit) -> unit.regret).reversed());
+            for (Unit unit : wave) {
+                for (UUID id : layUnit(unit, line, tried)) {
+                    for (UUID onward : weave.after(id)) {
+                        Unit next = unitOf.get(onward);
+                        if (next != null && next != unit && --next.waits == 0) {
+                            ready.add(next);
+                        }
+                    }
+                }
+            }
+        }
+        return tried;
+    }
+
+    // Lays the unit's work in order and returns what was laid. A unit that stops part way with goods still in the
+    // pack is taken off again whole, to be tried when what stopped it has changed: left half laid, the hand would
+    // carry those goods under every piece of work laid after, until its pack had room for nothing else.
+    private List<UUID> layUnit(Unit unit, List<Seat> line, Set<UUID> tried) {
+        List<UUID> laid = new ArrayList<>(unit.members.size());
+        for (UUID id : unit.members) {
+            tried.add(id);
+            if (attempt(id, line)) {
+                laid.add(id);
+                continue;
+            }
+            Unassigned refused = waiting.get(id);
+            if (refused == null || laid.isEmpty() || !loaded(laid)) {
+                continue;
+            }
+            for (UUID back : laid.reversed()) {
+                unsettle(seats.get(seatOf.get(back)), back);
+                laidNow.remove(back);
+                waiting.put(back, new Unassigned(back, refused.why(), id));
+            }
+            return List.of();
+        }
+        return laid;
+    }
+
+    // Whether this work, done and nothing after it, leaves goods in the pack; work in hand is never taken back.
+    private boolean loaded(List<UUID> laid) {
+        Map<ItemSpec, Long> held = new HashMap<>();
+        for (UUID id : laid) {
+            if (heldBy.containsKey(id)) {
+                return false;
+            }
+            for (Amount amount : fixed(id).plan().carrying()) {
+                held.merge(amount.spec(), amount.count(), Long::sum);
+            }
+        }
+        for (long count : held.values()) {
+            if (count > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static final class Unit {
+
+        private final List<UUID> members = new ArrayList<>();
+        private final int seq;
+        private long rank;
+        private int waits;
+        private int regret;
+
+        Unit(int seq) {
+            this.seq = seq;
+        }
+    }
+
+    // How much unlaid work hangs on each piece, itself counted: the longest chain of it, each step its labor and a
+    // walk. Work in a ring, which the order leaves for last, counts what is known of it by then.
+    private Map<UUID, Long> hanging(List<UUID> order) {
+        Map<UUID, Long> hanging = new HashMap<>(order.size() * 2);
+        for (UUID id : order.reversed()) {
+            long longest = 0;
+            for (UUID onward : weave.after(id)) {
+                longest = Math.max(longest, hanging.getOrDefault(onward, 0L));
+            }
+            hanging.put(id, longest + HOP_TICKS + work(fixed(id).node().spec(), 1.0));
+        }
+        return hanging;
+    }
+
+    // How much later the unit's first work would be done by its second nearest hand than by its nearest, by
+    // straight lines: work with one hand for it has everything to lose, work no hand can take has nothing.
+    private int regret(Unit unit, List<Seat> line) {
+        for (UUID id : unit.members) {
+            if (!due(id)) {
+                continue;
+            }
+            List<Candidate> candidates = field(id, line).candidates();
+            if (candidates.size() < 2) {
+                return candidates.isEmpty() ? 0 : Integer.MAX_VALUE;
+            }
+            return candidates.get(1).bound() - candidates.get(0).bound();
+        }
+        return 0;
+    }
+
+    // Whether the work is worth trying now: work that waited is tried again only when something it waited on changed.
+    private boolean due(UUID id) {
+        Unassigned was = waiting.get(id);
+        if (was == null) {
+            return true;
+        }
+        Placement plan = fixed(id).plan();
+        if (was.why() == Unassigned.Reason.BEYOND_HORIZON) {
+            // Time alone brings it nearer: tried once it would be near, or when cut routes may bring it nearer,
+            // never more of it at once than the schedule can afford.
+            boolean near = now >= beyondUntil.getOrDefault(id, 0) || moved || retry
+                || fresh.contains(id) || !plan.equals(seen.get(id));
+            return near && beyondTried < MOST_BEYOND_TRIES;
+        }
+        return retry || moved || !plan.equals(seen.get(id))
+            || fresh.contains(id) || anyIn(weave.before(id), laidNow);
+    }
+
+    // Tries the work on the routes as they stand, and says whether it was laid.
+    private boolean attempt(UUID id, List<Seat> line) {
+        if (!due(id)) {
+            return false;
+        }
+        Unassigned was = waiting.remove(id);
+        if (was != null && was.why() == Unassigned.Reason.BEYOND_HORIZON) {
+            beyondTried++;
+        }
+        beyondUntil.remove(id);
+        seen.put(id, fixed(id).plan());
+        Optional<Unassigned> refused = place(id, line, false);
+        if (refused.isPresent()) {
+            waiting.put(id, refused.get());
+            return false;
+        }
+        laidNow.add(id);
+        return true;
+    }
+
+    // When the work left past the horizon should next be looked at again, in ticks of the game.
+    long wakeAt() {
+        int soonest = Integer.MAX_VALUE;
+        for (int until : beyondUntil.values()) {
+            soonest = Math.min(soonest, until);
+        }
+        return soonest == Integer.MAX_VALUE || origin < 0L ? Long.MAX_VALUE : origin + Math.max(soonest, now + 1);
+    }
+
+    private void index(Crew crew) {
+        heldBy.clear();
         for (Crew.Hand hand : crew.hands()) {
             hand.holding().ifPresent(node -> heldBy.put(node, hand.id()));
-        }
-        groups.clear();
-        for (Set<UUID> group : weave.groups()) {
-            group.forEach(member -> groups.put(member, group));
         }
     }
 
     private boolean seat(Crew crew) {
         boolean moved = false;
         Set<UUID> here = new HashSet<>();
+        int slot = 0;
         for (Crew.Hand hand : crew.hands()) {
             here.add(hand.id());
             Seat seat = seats.get(hand.id());
@@ -218,6 +452,7 @@ final class Tours {
                 moved = true;
             }
             seat.hand = hand;
+            seat.slot = slot++;
             seat.resume(now);
         }
         for (Iterator<Seat> all = seats.values().iterator(); all.hasNext(); ) {
@@ -239,7 +474,7 @@ final class Tours {
         for (Seat seat : seats.values()) {
             for (int at = 0; at < seat.route.size(); at++) {
                 UUID id = seat.route.get(at);
-                if (!weave.vertices().containsKey(id) || !holds(seat, id, seat.when.get(at))) {
+                if (!weave.has(id) || !holds(seat, id, at, seat.when.get(at))) {
                     cutting.add(id);
                 }
             }
@@ -262,7 +497,7 @@ final class Tours {
                 continue;
             }
             unsettle(seats.get(seat), id);
-            for (UUID onward : before.getOrDefault(id, Set.of())) {
+            for (UUID onward : weave.after(id)) {
                 if (settled.containsKey(onward)) {
                     cutting.add(onward);
                 }
@@ -296,10 +531,9 @@ final class Tours {
         seat.resume(now);
     }
 
-    private boolean holds(Seat seat, UUID id, Placed placed) {
+    private boolean holds(Seat seat, UUID id, int at, Placed placed) {
         Vertex node = fixed(id);
-        NodeSpec spec = node.node().spec();
-        if (weave.fresh().contains(id) || !node.plan().equals(seen.get(id))) {
+        if (fresh.contains(id) || !node.plan().equals(seen.get(id))) {
             return false;
         }
         if (groupRefusal(seat, id) != null) {
@@ -309,13 +543,10 @@ final class Tours {
         if (mustBe != null && !mustBe.equals(seat.hand.id())) {
             return false;
         }
-        if (endless(seat, seat.route.indexOf(id)) || keeping(seat, id)) {
+        if (endless(seat, at) || keeping(seat, id)) {
             return false;
         }
-        for (UUID predecessor : after.getOrDefault(id, Set.of())) {
-            if (!weave.vertices().containsKey(predecessor)) {
-                continue;
-            }
+        for (UUID predecessor : weave.before(id)) {
             Placed first = settled.get(predecessor);
             if (first == null || first.finish() > placed.start()) {
                 return false;
@@ -325,7 +556,7 @@ final class Tours {
     }
 
     private Vertex fixed(UUID id) {
-        return weave.vertices().get(id);
+        return weave.vertex(id);
     }
 
     private static boolean anyIn(Set<UUID> ids, Set<UUID> among) {
@@ -347,9 +578,14 @@ final class Tours {
         UUID blocker = null;
         Seat best = null;
         Placed bestPlaced = null;
+        // Where on the best hand's route the work goes when not on its end.
+        int bestAt = -1;
+        // A hand that would stand waiting on work laid elsewhere is wasted for as long, so the wait counts against
+        // it again: work that follows on goes to whoever does what it follows, unless another is done that much sooner.
+        int bestCost = Integer.MAX_VALUE;
 
-        for (UUID predecessor : after.getOrDefault(id, Set.of())) {
-            if (!weave.vertices().containsKey(predecessor) || settled.containsKey(predecessor)) {
+        for (UUID predecessor : weave.before(id)) {
+            if (settled.containsKey(predecessor)) {
                 continue;
             }
             Unassigned held = waiting.get(predecessor);
@@ -357,61 +593,119 @@ final class Tours {
                 held == null ? Unassigned.Reason.NO_WAY : held.why(), predecessor));
         }
         UUID mustBe = boundWorker(id);
-        boolean anyBound = false;
-        List<Amount> carried = node.plan().carrying();
         List<WorldPos> goals = destinations(node);
-        List<Candidate> candidates = new ArrayList<>();
-        for (Seat seat : seats) {
-            if (mustBe != null && !mustBe.equals(seat.hand.id())) {
-                continue;
-            }
-            anyBound = true;
-            if (endless(seat, seat.route.size()) || keeping(seat, id)) {
-                continue;
-            }
-            Unassigned.Reason groupRefusal = groupRefusal(seat, id);
-            if (groupRefusal != null) {
-                worst = worse(worst, groupRefusal);
-                continue;
-            }
-            Map<ItemSpec, Long> held = seat.with(carried);
-            int load = seat.base + cells(held);
-            if (load > seat.hand.packCapacity()) {
-                // Too full now only waits for the pack to empty; too big for the pack at all never fits.
-                worst = worse(worst, cells(pickedUp(carried)) > seat.hand.packCapacity()
-                    ? Unassigned.Reason.PACK_FULL : Unassigned.Reason.PACK_BUSY);
-                continue;
-            }
-            candidates.add(new Candidate(seat, held, standing(seat, spec)
-                + seat.clock + (int) Math.round((crow(seat.cursor, goals) / RIDE_SPEEDUP + labor(seat, node, 1.0))
-                / Math.max(0.1, seat.hand.pace()))));
-        }
-        candidates.sort(Comparator.comparingInt(Candidate::bound));
+        Field field = field(id, seats);
+        worst = field.worst();
+        boolean anyBound = field.anyBound();
+        List<Candidate> candidates = field.candidates();
+        List<List<WorldPos>> rest = field.rest();
+        // When the rest of the work's group may start at the soonest, for what it waits on laid elsewhere.
+        int held = rest.isEmpty() ? 0 : heldUntil(id);
+        WorldPos first = goals.isEmpty() ? null : goals.getFirst();
         int pending = 0;
+        int joins = 0;
+        // The nearest hand whose way there is not known yet: the one way worth asking for.
+        Seat waits = null;
+        // A hand that could not start before the horizon even riding the whole way, on a route deep enough, is not
+        // asked the way at all.
+        boolean grouped = continuing(id);
+        int beyond = Integer.MAX_VALUE;
         for (Candidate candidate : candidates) {
-            if (bestPlaced != null && candidate.bound() >= standing(best, spec) + bestPlaced.finish()) {
+            if (best != null && candidate.bound() >= bestCost) {
                 break;
             }
             Seat seat = candidate.seat();
+            // Beside work the route already has at the same place the walk there is made once for both, so the
+            // work is tried there too, and judged by when it and the rest of its group would be done and by how
+            // much later the route then ends.
+            // Not when a move is only being tried: taken back, it would leave the route laid out later than it was.
+            int at = candidate.join();
+            if (at >= 0 && !quiet && joins < MOST_JOINS && !endless(seat, at)
+                    && fitsWith(seat, id, node.plan().carrying(), at)) {
+                joins++;
+                boolean was = changed.contains(seat);
+                int before = seat.clock;
+                Tail tail = splice(seat, id, at);
+                if (tail != null) {
+                    int end = seat.clock;
+                    int cost = standing(seat, spec) + along(seat, settled.get(id).finish(), rest, held)
+                        + end - before;
+                    unsplice(seat, tail);
+                    if (!was) {
+                        changed.remove(seat);
+                    }
+                    if (past(seat, end) && !grouped) {
+                        beyond = Math.min(beyond, end);
+                    } else if (best == null || cost < bestCost) {
+                        best = seat;
+                        bestPlaced = null;
+                        bestAt = at;
+                        bestCost = cost;
+                    }
+                    // On the end of the same route it would only walk there again.
+                    continue;
+                }
+                if (!was) {
+                    changed.remove(seat);
+                }
+            }
+            if (best != null && candidate.reach() >= bestCost) {
+                continue;
+            }
+            int soonest = soonest(seat, node, goals);
+            if (past(seat, soonest) && !grouped && !seat.hand.id().equals(heldBy.get(id))) {
+                beyond = Math.min(beyond, soonest);
+                continue;
+            }
             Fit fit = fit(seat, node, candidate.held());
             if (fit.why() != null) {
                 worst = worse(worst, fit.why());
+                if (fit.why() == Unassigned.Reason.WAY_PENDING && waits == null) {
+                    waits = seat;
+                }
                 if (fit.why() == Unassigned.Reason.WAY_PENDING && ++pending >= MOST_PENDING_FARES
-                        && bestPlaced == null) {
+                        && best == null) {
                     break;
                 }
                 continue;
             }
             Placed placed = fit.placed();
-            if (bestPlaced == null || keener(seat, placed, best, bestPlaced, spec)) {
+            // The rest of the group follows on from here, and waits again for what it follows laid elsewhere: a
+            // hand that would bring it there only to stand is as much wasted as one that stands for this work.
+            int arrives = placed.finish() + onward(first, rest, seat.hand.pace());
+            int cost = standing(seat, spec) + fit.idle() + Math.max(arrives, held) + Math.max(0, held - arrives);
+            if (best == null || cost < bestCost || cost == bestCost && tier(seat, spec) < tier(best, spec)) {
                 best = seat;
                 bestPlaced = placed;
+                bestAt = -1;
+                bestCost = cost;
             }
+        }
+        // Weighing the hands asked for no way: a hand that might have done it sooner, had its way been known, has
+        // that way asked for now.
+        if (waits != null && !quiet && !goals.isEmpty()
+                && sought.add(new Route(waits.hand.who().kind(), waits.cursor, goals))) {
+            ways.journey(waits.hand.who(), waits.cursor, new LinkedHashSet<>(goals), Urgency.PLANNING);
         }
         if (best == null && worst == Unassigned.Reason.PACK_BUSY && insert(id, seats, mustBe)) {
             return Optional.empty();
         }
-        if (best != null && bestPlaced.start() > now + horizon && !continuing(id)) {
+        if (bestAt >= 0) {
+            if (splice(best, id, bestAt) != null) {
+                return Optional.empty();
+            }
+            return quiet ? Optional.empty() : Optional.of(new Unassigned(id, worst, blocker));
+        }
+        boolean late = best != null && past(best, bestPlaced.start()) && !grouped;
+        // Past the horizon for every hand that could take it, and no nearer hand waiting on a way or a free spot.
+        boolean onlyLate = best == null && beyond != Integer.MAX_VALUE && worst == Unassigned.Reason.NO_FREE_HAND;
+        if (late || onlyLate) {
+            if (late) {
+                beyond = Math.min(beyond, bestPlaced.start());
+            }
+            if (!quiet) {
+                beyondUntil.put(id, beyond - horizon);
+            }
             return quiet ? Optional.empty() : Optional.of(new Unassigned(id, Unassigned.Reason.BEYOND_HORIZON));
         }
         if (best == null) {
@@ -423,6 +717,11 @@ final class Tours {
         }
         settle(best, id, bestPlaced);
         return Optional.empty();
+    }
+
+    // Work starting then is past the horizon for this hand: later than the horizon, and joining a route already deep.
+    private boolean past(Seat seat, int start) {
+        return start > now + horizon && seat.route.size() >= depth;
     }
 
     // Work that does not fit on the end of any route for the pack it would fill may still fit earlier on one, before
@@ -447,19 +746,151 @@ final class Tours {
                 if (laid++ >= MOST_INSERTS) {
                     return false;
                 }
-                List<UUID> oldIds = List.copyOf(seat.route.subList(at, seat.route.size()));
-                List<Placed> oldPlaced = List.copyOf(seat.when.subList(at, seat.when.size()));
-                strip(seat, at);
-                List<UUID> order = new ArrayList<>(List.of(id));
-                order.addAll(oldIds);
-                if (lay(seats, seat, order).isPresent()
-                        && (settled.get(id).start() <= now + horizon || continuing(id))) {
+                Tail tail = splice(seat, id, at);
+                if (tail == null) {
+                    continue;
+                }
+                if (settled.get(id).start() <= now + horizon || continuing(id)) {
                     return true;
                 }
-                strip(seat, at);
-                for (int back = 0; back < oldIds.size(); back++) {
-                    settle(seat, oldIds.get(back), oldPlaced.get(back));
+                unsplice(seat, tail);
+            }
+        }
+        return false;
+    }
+
+    // The route from `at` on as it was before work was put in there.
+    private record Tail(int at, List<UUID> ids, List<Placed> placed) {
+    }
+
+    // Puts the work in at `at` on the seat's route and lays the rest of the route out again after it. Returns the
+    // route as it was from there, to put back with `unsplice`; null, with the route untouched, when the work or
+    // anything after it no longer fits.
+    private Tail splice(Seat seat, UUID id, int at) {
+        Tail tail = new Tail(at, List.copyOf(seat.route.subList(at, seat.route.size())),
+            List.copyOf(seat.when.subList(at, seat.when.size())));
+        strip(seat, at);
+        boolean laid = refit(seat, id);
+        for (int next = 0; laid && next < tail.ids().size(); next++) {
+            laid = refit(seat, tail.ids().get(next));
+        }
+        if (laid) {
+            return tail;
+        }
+        unsplice(seat, tail);
+        return null;
+    }
+
+    private void unsplice(Seat seat, Tail tail) {
+        strip(seat, tail.at());
+        for (int back = 0; back < tail.ids().size(); back++) {
+            settle(seat, tail.ids().get(back), tail.placed().get(back));
+        }
+    }
+
+    // Where on the seat's route work done from `goals` would go beside work done from one of the same cells: after
+    // the last such, when that is near the route's end and not the end itself; -1 otherwise.
+    private static int joinAt(Seat seat, List<WorldPos> goals) {
+        if (!stoodAt(seat, goals)) {
+            return -1;
+        }
+        int size = seat.route.size();
+        for (int at = size; at >= 1 && size - at <= MOST_TAIL; at--) {
+            if (goals.contains(seat.when.get(at - 1).at().cell())) {
+                return at == size ? -1 : at;
+            }
+        }
+        return -1;
+    }
+
+    // Where the rest of the work's group is done, as far as it is counted: one resident does all of it, so whoever
+    // takes this work walks on to that.
+    private List<List<WorldPos>> rest(UUID id) {
+        Set<UUID> group = weave.group(id);
+        if (group.size() < 2) {
+            return List.of();
+        }
+        List<List<WorldPos>> rest = new ArrayList<>();
+        for (UUID member : group) {
+            if (!member.equals(id) && weave.has(member) && !settled.containsKey(member)) {
+                rest.add(destinations(fixed(member)));
+                if (rest.size() == MOST_ONWARD) {
+                    break;
                 }
+            }
+        }
+        return rest;
+    }
+
+    // When the rest of the work's group may start at the soonest, for the work laid already that it waits on.
+    private int heldUntil(UUID id) {
+        int until = 0;
+        int counted = 0;
+        for (UUID member : weave.group(id)) {
+            if (!member.equals(id) && weave.has(member) && !settled.containsKey(member)) {
+                until = Math.max(until, earliestAfter(member));
+                if (++counted == MOST_ONWARD) {
+                    break;
+                }
+            }
+        }
+        return until;
+    }
+
+    // When the work, done at `done` on this seat's route as it now stands, and the rest of its group would be done:
+    // each of the rest beside work the route has at its place, or else on from the route's end, and not before
+    // `held`; a wait for that counts again.
+    private int along(Seat seat, int done, List<List<WorldPos>> rest, int held) {
+        int whole = done;
+        for (List<WorldPos> goals : rest) {
+            if (goals.isEmpty()) {
+                continue;
+            }
+            int there = lastAt(seat, goals);
+            int arrives = there >= 0 ? there : seat.clock
+                + (int) Math.round(crow(seat.cursor, goals) / Math.max(0.1, seat.hand.pace()));
+            whole = Math.max(whole, Math.max(arrives, held) + Math.max(0, held - arrives));
+        }
+        return whole;
+    }
+
+    // When the last work near the end of the seat's route done from one of these cells is done, -1 for none.
+    private static int lastAt(Seat seat, List<WorldPos> goals) {
+        if (!stoodAt(seat, goals)) {
+            return -1;
+        }
+        int size = seat.route.size();
+        for (int at = size; at >= 1 && size - at <= MOST_TAIL; at--) {
+            if (goals.contains(seat.when.get(at - 1).at().cell())) {
+                return seat.when.get(at - 1).finish();
+            }
+        }
+        return -1;
+    }
+
+    // The walk from `from` on through `rest`, by straight lines.
+    private static int onward(WorldPos from, List<List<WorldPos>> rest, double pace) {
+        if (from == null || rest.isEmpty()) {
+            return 0;
+        }
+        int ticks = 0;
+        for (List<WorldPos> goals : rest) {
+            if (goals.isEmpty()) {
+                continue;
+            }
+            ticks += crow(from, goals);
+            from = goals.getFirst();
+        }
+        return (int) Math.round(ticks / Math.max(0.1, pace));
+    }
+
+    private static boolean stoodAt(Seat seat, List<WorldPos> goals) {
+        if (seat.stood.isEmpty()) {
+            return false;
+        }
+        for (WorldPos goal : goals) {
+            if (seat.stood.containsKey(goal)) {
+                return true;
             }
         }
         return false;
@@ -468,7 +899,7 @@ final class Tours {
     // Whether some other work of the node's group is laid already: the rest of what one resident began is laid
     // with it, however far out, so that a group is never left half handed out.
     private boolean continuing(UUID id) {
-        for (UUID member : groups.getOrDefault(id, Set.of())) {
+        for (UUID member : weave.group(id)) {
             if (!member.equals(id) && settled.containsKey(member)) {
                 return true;
             }
@@ -488,26 +919,96 @@ final class Tours {
         return PackLoad.fits(seat.hand.packCapacity() - seat.hand.packCells(), seat.hand.packCapacity(), order);
     }
 
-    private record Candidate(Seat seat, Map<ItemSpec, Long> held, int bound) {
+    // `join` is where on the seat's route the work could go beside work done from one of the same cells, -1 for
+    // nowhere but the end; `reach` is the least it could cost on the route's end, `bound` the least it could cost
+    // at either.
+    private record Candidate(Seat seat, Map<ItemSpec, Long> held, int bound, int reach, int join) {
     }
 
-    private record Fit(Placed placed, Unassigned.Reason why) {
+    // The hands that could take the work on the end of their routes, soonest first by straight lines, the worst
+    // that kept any other from it, whether any hand it is bound to is among them at all, and where the rest of its
+    // group is done.
+    private record Field(List<Candidate> candidates, Unassigned.Reason worst, boolean anyBound,
+                         List<List<WorldPos>> rest) {
+    }
+
+    private Field field(UUID id, List<Seat> seats) {
+        Vertex node = fixed(id);
+        NodeSpec spec = node.node().spec();
+        Unassigned.Reason worst = Unassigned.Reason.NO_FREE_HAND;
+        UUID mustBe = boundWorker(id);
+        boolean anyBound = false;
+        List<Amount> carried = node.plan().carrying();
+        List<WorldPos> goals = destinations(node);
+        List<List<WorldPos>> rest = rest(id);
+        WorldPos first = goals.isEmpty() ? null : goals.getFirst();
+        List<Candidate> candidates = new ArrayList<>();
+        for (Seat seat : seats) {
+            if (mustBe != null && !mustBe.equals(seat.hand.id())) {
+                continue;
+            }
+            anyBound = true;
+            if (endless(seat, seat.route.size()) || keeping(seat, id)) {
+                continue;
+            }
+            Unassigned.Reason groupRefusal = groupRefusal(seat, id);
+            if (groupRefusal != null) {
+                worst = worse(worst, groupRefusal);
+                continue;
+            }
+            Map<ItemSpec, Long> held = seat.with(carried);
+            int load = seat.base + cells(held);
+            if (load > seat.hand.packCapacity()) {
+                // Too full now only waits for the pack to empty; too big for the pack at all never fits.
+                worst = worse(worst, cells(pickedUp(carried)) > seat.hand.packCapacity()
+                    ? Unassigned.Reason.PACK_FULL : Unassigned.Reason.PACK_BUSY);
+                continue;
+            }
+            // Beside work already at its place the work costs the route no more than its own doing, at the least.
+            int join = joinAt(seat, goals);
+            int reach = standing(seat, spec)
+                + seat.clock + (int) Math.round((crow(seat.cursor, goals) / RIDE_SPEEDUP + labor(seat, node, 1.0))
+                / Math.max(0.1, seat.hand.pace())) + onward(first, rest, seat.hand.pace());
+            // Beside work at its place it is done no sooner than that work; and when none of the rest of its group
+            // has a place on the route, the group is done no sooner than the route ends. So the hand that has the
+            // places of both is weighed first.
+            int bound = reach;
+            if (join >= 0) {
+                boolean both = rest.isEmpty();
+                for (List<WorldPos> onward : rest) {
+                    both |= stoodAt(seat, onward);
+                }
+                bound = Math.min(reach, standing(seat, spec) + (both ? seat.when.get(join - 1).finish() : seat.clock));
+            }
+            candidates.add(new Candidate(seat, held, bound, reach, join));
+        }
+        candidates.sort(Comparator.comparingInt(Candidate::bound));
+        return new Field(candidates, worst, anyBound, rest);
+    }
+
+    // `idle` is how long the hand would stand at the work before it may start, waiting on work laid elsewhere.
+    private record Fit(Placed placed, Unassigned.Reason why, int idle) {
+
+        Fit(Unassigned.Reason why) {
+            this(null, why, 0);
+        }
     }
 
     // Where and when the node would go on the end of this seat's route, or why it cannot.
     private Fit fit(Seat seat, Vertex node, Map<ItemSpec, Long> held) {
         Faring fare = travel(seat, node);
         if (!(fare instanceof Faring.Yes(Journey by))) {
-            return new Fit(null, fare instanceof Faring.Later
+            return new Fit(fare instanceof Faring.Later
                 ? Unassigned.Reason.WAY_PENDING : Unassigned.Reason.NO_WAY);
         }
-        int start = Math.max(seat.clock + ticks(by, seat.hand.pace()), earliestAfter(node.id()));
+        int there = seat.clock + ticks(by, seat.hand.pace());
+        int start = Math.max(there, earliestAfter(node.id()));
         int finish = start + labor(seat, node, seat.hand.pace());
         Optional<Stand> at = free(seat, node, new Span(start, finish));
         if (at.isEmpty()) {
-            return new Fit(null, Unassigned.Reason.NO_FREE_STAND);
+            return new Fit(Unassigned.Reason.NO_FREE_STAND);
         }
-        return new Fit(new Placed(start, finish, at.get(), seat.base, held), null);
+        return new Fit(new Placed(start, finish, at.get(), seat.base, held), null, start - there);
     }
 
     // Work that joins the work before it on the route shares that work's wind-up.
@@ -522,13 +1023,12 @@ final class Tours {
 
     // Work held until a condition breaks, like keeping a post, has no end to plan anything after.
     private boolean endless(Seat seat, int before) {
-        for (int at = 0; at < before; at++) {
-            Vertex held = fixed(seat.route.get(at));
-            if (held != null && held.node().spec().workload() instanceof Workload.Continuous) {
-                return true;
-            }
-        }
-        return false;
+        return seat.endless < before;
+    }
+
+    private boolean continuous(UUID id) {
+        Vertex node = fixed(id);
+        return node != null && node.node().spec().workload() instanceof Workload.Continuous;
     }
 
     // A hand already holding such work, even work no longer on its route, is not free for anything else.
@@ -538,10 +1038,10 @@ final class Tours {
         return holding != null && holding.node().spec().workload() instanceof Workload.Continuous;
     }
 
-    private static boolean keener(Seat seat, Placed placed, Seat standing, Placed had, NodeSpec spec) {
-        int mine = standing(seat, spec) + placed.finish();
-        int theirs = standing(standing, spec) + had.finish();
-        return mine != theirs ? mine < theirs : tier(seat, spec) < tier(standing, spec);
+    // The earliest the seat could start the node: straight there at riding speed, and not before what comes first.
+    private int soonest(Seat seat, Vertex node, List<WorldPos> goals) {
+        int there = (int) (crow(seat.cursor, goals) / RIDE_SPEEDUP / Math.max(1.0, seat.hand.pace()));
+        return Math.max(seat.clock + there, earliestAfter(node.id()));
     }
 
     private static int standing(Seat seat, NodeSpec spec) {
@@ -564,6 +1064,10 @@ final class Tours {
     }
 
     private void settle(Seat seat, UUID id, Placed placed) {
+        if (seat.endless == Integer.MAX_VALUE && continuous(id)) {
+            seat.endless = seat.route.size();
+        }
+        changed.add(seat);
         seat.route.add(id);
         seat.when.add(placed);
         seat.cursor = placed.at().cell();
@@ -574,6 +1078,7 @@ final class Tours {
         seatOf.put(id, seat.hand.id());
         spots.computeIfAbsent(placed.at(), key -> new ArrayList<>())
             .add(new Span(placed.start(), placed.finish()));
+        seat.stood.merge(placed.at().cell(), 1, Integer::sum);
     }
 
     private void unsettle(Seat seat, UUID id) {
@@ -581,8 +1086,19 @@ final class Tours {
         Placed placed = seat.when.get(at);
         seat.route.remove(at);
         seat.when.remove(at);
+        changed.add(seat);
+        if (at <= seat.endless) {
+            seat.endless = Integer.MAX_VALUE;
+            for (int step = 0; step < seat.route.size(); step++) {
+                if (continuous(seat.route.get(step))) {
+                    seat.endless = step;
+                    break;
+                }
+            }
+        }
         settled.remove(id);
         seatOf.remove(id);
+        seat.stood.computeIfPresent(placed.at().cell(), (cell, count) -> count == 1 ? null : count - 1);
         List<Span> held = spots.get(placed.at());
         if (held != null) {
             held.remove(new Span(placed.start(), placed.finish()));
@@ -597,12 +1113,13 @@ final class Tours {
     // else, or move a short run of work to another place on its own route, which is how a worker stops walking
     // back and forth between the same two places.
     private void improve(List<Seat> seats) {
+        Set<Seat> present = new HashSet<>(seats);
         tries = 0;
         boolean better = true;
         while (better && tries < MOST_TRIES) {
             better = shed(seats);
-            for (Seat seat : seats) {
-                while (tries < MOST_TRIES && reorder(seats, seat)) {
+            for (Seat seat : List.copyOf(changed)) {
+                while (present.contains(seat) && tries < MOST_TRIES && reorder(seats, seat)) {
                     better = true;
                 }
             }
@@ -640,7 +1157,7 @@ final class Tours {
             if (tried.contains(last)) {
                 continue;
             }
-            Set<UUID> group = groups.getOrDefault(last, Set.of(last));
+            Set<UUID> group = weave.group(last);
             List<UUID> moving = new ArrayList<>();
             for (UUID id : longest.route) {
                 if (group.contains(id)) {
@@ -705,7 +1222,7 @@ final class Tours {
             if (requiredWorker(id) != null) {
                 return false;
             }
-            for (UUID onward : before.getOrDefault(id, Set.of())) {
+            for (UUID onward : weave.after(id)) {
                 if (settled.containsKey(onward) && !moving.contains(onward)) {
                     return false;
                 }
@@ -836,8 +1353,8 @@ final class Tours {
 
     private boolean refit(Seat seat, UUID id) {
         Vertex node = fixed(id);
-        for (UUID predecessor : after.getOrDefault(id, Set.of())) {
-            if (weave.vertices().containsKey(predecessor) && !settled.containsKey(predecessor)) {
+        for (UUID predecessor : weave.before(id)) {
+            if (!settled.containsKey(predecessor)) {
                 return false;
             }
         }
@@ -852,7 +1369,7 @@ final class Tours {
         if (fit.why() != null) {
             return false;
         }
-        for (UUID onward : before.getOrDefault(id, Set.of())) {
+        for (UUID onward : weave.after(id)) {
             Placed later = settled.get(onward);
             if (later != null && later.start() < fit.placed().finish()) {
                 return false;
@@ -892,11 +1409,11 @@ final class Tours {
     }
 
     private UUID boundWorker(UUID id) {
-        for (UUID member : groups.getOrDefault(id, Set.of(id))) {
+        for (UUID member : weave.group(id)) {
             UUID hard = requiredWorker(member);
             if (hard != null) return hard;
         }
-        for (UUID member : groups.getOrDefault(id, Set.of(id))) {
+        for (UUID member : weave.group(id)) {
             UUID seat = seatOf.get(member);
             if (seat != null) return seat;
         }
@@ -906,15 +1423,30 @@ final class Tours {
     private UUID requiredWorker(UUID id) {
         UUID holder = heldBy.get(id);
         if (holder != null) return holder;
-        UUID pinned = weave.pins().get(id);
+        UUID pinned = weave.pin(id);
         if (pinned != null) return pinned;
         return fixed(id).node().worker().orElse(null);
     }
 
+    private static final Unassigned.Reason[] REASONS = Unassigned.Reason.values();
+
+    // Asked of every hand for every piece of work, more than once a schedule, and the same each time within one.
     private Unassigned.Reason groupRefusal(Seat seat, UUID id) {
+        byte[] known = fits.computeIfAbsent(id, key -> new byte[seats.size()]);
+        if (seat.slot >= known.length) {
+            return unfit(seat, id);
+        }
+        if (known[seat.slot] == 0) {
+            Unassigned.Reason why = unfit(seat, id);
+            known[seat.slot] = (byte) (why == null ? 1 : why.ordinal() + 2);
+        }
+        return known[seat.slot] == 1 ? null : REASONS[known[seat.slot] - 2];
+    }
+
+    private Unassigned.Reason unfit(Seat seat, UUID id) {
         Set<UUID> bound = new LinkedHashSet<>();
         List<NodeSpec> steps = new ArrayList<>();
-        for (UUID member : groups.getOrDefault(id, Set.of(id))) {
+        for (UUID member : weave.group(id)) {
             UUID pinned = requiredWorker(member);
             if (pinned != null) {
                 bound.add(pinned);
@@ -942,8 +1474,7 @@ final class Tours {
         if (known != null) {
             return known;
         }
-        Faring fare = ways.journey(seat.hand.who(), seat.cursor, new LinkedHashSet<>(goals),
-            Urgency.planning(weave.rankOf(node.id())));
+        Faring fare = ways.reckon(seat.hand.who(), seat.cursor, new LinkedHashSet<>(goals));
         if (fares.size() == MAX_FARES) {
             fares.remove(fares.keySet().iterator().next());
         }
@@ -983,7 +1514,7 @@ final class Tours {
 
     private int earliestAfter(UUID id) {
         int soonest = 0;
-        for (UUID predecessor : after.getOrDefault(id, Set.of())) {
+        for (UUID predecessor : weave.before(id)) {
             Placed placed = settled.get(predecessor);
             if (placed != null) {
                 soonest = Math.max(soonest, placed.finish());
@@ -1038,40 +1569,54 @@ final class Tours {
         };
     }
 
+    // The work not yet laid on any route, each after whatever unlaid work it waits on, in the order it came to the
+    // plan otherwise: what is laid already holds nothing back.
     private List<UUID> topological() {
-        Map<UUID, List<UUID>> next = new LinkedHashMap<>();
         Map<UUID, Integer> waitingOn = new LinkedHashMap<>();
         for (UUID id : weave.vertices().keySet()) {
-            waitingOn.put(id, 0);
-        }
-        for (Before link : weave.orders()) {
-            UUID from = link.from();
-            UUID to = link.to();
-            if (!weave.vertices().containsKey(from) || !weave.vertices().containsKey(to)) {
-                continue;
+            if (!settled.containsKey(id)) {
+                waitingOn.put(id, 0);
             }
-            next.computeIfAbsent(from, key -> new ArrayList<>()).add(to);
-            waitingOn.merge(to, 1, Integer::sum);
         }
-        List<UUID> sources = new ArrayList<>();
+        for (UUID id : waitingOn.keySet()) {
+            for (UUID onward : weave.after(id)) {
+                waitingOn.computeIfPresent(onward, (key, count) -> count + 1);
+            }
+        }
+        Deque<UUID> ready = new ArrayDeque<>();
         waitingOn.forEach((id, count) -> {
             if (count == 0) {
-                sources.add(id);
+                ready.add(id);
             }
         });
-        sources.sort(Comparator.comparingInt(weave::rankOf));
-        Deque<UUID> ready = new ArrayDeque<>(sources);
         Set<UUID> sorted = new LinkedHashSet<>(waitingOn.size());
         while (!ready.isEmpty()) {
             UUID id = ready.removeFirst();
             sorted.add(id);
-            for (UUID onward : next.getOrDefault(id, List.of())) {
-                if (waitingOn.merge(onward, -1, Integer::sum) == 0) {
+            for (UUID onward : weave.after(id)) {
+                if (waitingOn.containsKey(onward) && waitingOn.merge(onward, -1, Integer::sum) == 0) {
                     ready.addFirst(onward);
                 }
             }
         }
-        sorted.addAll(weave.vertices().keySet());
+        sorted.addAll(waitingOn.keySet());
         return new ArrayList<>(sorted);
+    }
+
+    void closed() {
+        seats.clear();
+        spots.clear();
+        settled.clear();
+        seatOf.clear();
+        waiting.clear();
+        seen.clear();
+        beyondUntil.clear();
+        declined.clear();
+        fits.clear();
+        laidNow.clear();
+        fares.clear();
+        sought.clear();
+        changed.clear();
+        origin = -1L;
     }
 }

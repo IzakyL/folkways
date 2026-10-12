@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.engine.travel.local;
 
 import io.github.izakyl.folkways.core.api.ground.Ground;
 import io.github.izakyl.folkways.core.api.terms.Reach;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -54,8 +55,10 @@ final class LocalGround implements Ground, LevelReader {
     private final LongOpenHashSet changedSections = new LongOpenHashSet();
     private final Map<Walker.Kind, Long2ObjectOpenHashMap<Section>> trial = new HashMap<>();
     private final Long2ObjectOpenHashMap<List<BlockPos>> stances = new Long2ObjectOpenHashMap<>();
+    private final Long2ObjectOpenHashMap<List<BlockPos>> inReach = new Long2ObjectOpenHashMap<>();
+    // Each cell come to, and the stretch it is in.
     @Nullable
-    private LongOpenHashSet reached;
+    private Long2IntOpenHashMap reached;
 
     LocalGround(LocalWatch watch, List<Walker> walkers, List<Mob> bodies, Map<BlockPos, BlockState> changes) {
         this.watch = watch;
@@ -93,7 +96,34 @@ final class LocalGround implements Ground, LevelReader {
 
     @Override
     public boolean reachable(BlockPos feet) {
-        return reached().contains(feet.asLong());
+        return reached().containsKey(feet.asLong());
+    }
+
+    @Override
+    public int stretch(BlockPos feet) {
+        return reached().get(feet.asLong());
+    }
+
+    @Override
+    public List<BlockPos> withinReachOf(BlockPos target) {
+        List<BlockPos> known = inReach.get(target.asLong());
+        if (known == null) {
+            known = new ArrayList<>();
+            int span = Mth.ceil(Reach.PLAYER_BLOCK_REACH);
+            for (BlockPos feet : BlockPos.betweenClosed(target.offset(-span, -span, -span),
+                    target.offset(span, span, span))) {
+                if (!feet.equals(target) && reachable(feet) && Reach.withinReach(feet, target)) {
+                    known.add(feet.immutable());
+                }
+            }
+            known.sort(Comparator.<BlockPos>comparingDouble(feet -> feet.distSqr(target))
+                .thenComparingInt(BlockPos::getY)
+                .thenComparingInt(BlockPos::getX)
+                .thenComparingInt(BlockPos::getZ));
+            known = List.copyOf(known);
+            inReach.put(target.asLong(), known);
+        }
+        return known;
     }
 
     @Override
@@ -124,9 +154,9 @@ final class LocalGround implements Ground, LevelReader {
     @Override
     public Collection<BlockPos> lostSince(Ground earlier) {
         List<BlockPos> lost = new ArrayList<>();
-        LongOpenHashSet now = reached();
-        ((LocalGround) earlier).reached().forEach((long cell) -> {
-            if (!now.contains(cell)) {
+        Long2IntOpenHashMap now = reached();
+        ((LocalGround) earlier).reached().keySet().forEach((long cell) -> {
+            if (!now.containsKey(cell)) {
                 lost.add(BlockPos.of(cell));
             }
         });
@@ -157,9 +187,10 @@ final class LocalGround implements Ground, LevelReader {
         return known;
     }
 
-    private LongOpenHashSet reached() {
+    private Long2IntOpenHashMap reached() {
         if (reached == null) {
-            reached = new LongOpenHashSet();
+            reached = new Long2IntOpenHashMap();
+            reached.defaultReturnValue(-1);
             for (Walker walker : walkers) {
                 walk(walker, reached);
             }
@@ -167,32 +198,40 @@ final class LocalGround implements Ground, LevelReader {
         return reached;
     }
 
-    private void walk(Walker walker, LongOpenHashSet into) {
+    // Walks out from each way in that no walk has met yet, both ways at every step: what one walk meets is one
+    // stretch, since a step taken both ways is taken back as well.
+    private void walk(Walker walker, Long2IntOpenHashMap into) {
         LongOpenHashSet seen = new LongOpenHashSet();
         LongArrayFIFOQueue open = new LongArrayFIFOQueue();
+        int stretch = into.values().intStream().max().orElse(-1) + 1;
         for (long entry : entries(walker)) {
-            if (seen.add(entry)) {
-                open.enqueue(entry);
-            }
-        }
-        while (!open.isEmpty() && seen.size() < MOST_REACHED) {
-            long cell = open.dequeueLong();
-            long[] steps = section(walker, Section.keyOf(cell)).steps().get(cell);
-            if (steps == null) {
+            if (!seen.add(entry) || seen.size() >= MOST_REACHED) {
                 continue;
             }
-            for (long next : steps) {
-                if (seen.contains(next) || !watch.covers(BlockPos.getX(next), BlockPos.getY(next), BlockPos.getZ(next))) {
+            int known = into.get(entry);
+            int here = known >= 0 ? known : stretch++;
+            into.putIfAbsent(entry, here);
+            open.enqueue(entry);
+            while (!open.isEmpty() && seen.size() < MOST_REACHED) {
+                long cell = open.dequeueLong();
+                long[] steps = section(walker, Section.keyOf(cell)).steps().get(cell);
+                if (steps == null) {
                     continue;
                 }
-                Section there = section(walker, Section.keyOf(next));
-                if (there.stands().contains(next) && there.stepsTo(next, cell)) {
-                    seen.add(next);
-                    open.enqueue(next);
+                for (long next : steps) {
+                    if (seen.contains(next)
+                            || !watch.covers(BlockPos.getX(next), BlockPos.getY(next), BlockPos.getZ(next))) {
+                        continue;
+                    }
+                    Section there = section(walker, Section.keyOf(next));
+                    if (there.stands().contains(next) && there.stepsTo(next, cell)) {
+                        seen.add(next);
+                        into.putIfAbsent(next, here);
+                        open.enqueue(next);
+                    }
                 }
             }
         }
-        into.addAll(seen);
     }
 
     private LongOpenHashSet entries(Walker walker) {

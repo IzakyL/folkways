@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.engine.plan;
 
 import io.github.izakyl.folkways.core.api.terms.Stand;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Before;
@@ -57,7 +58,6 @@ final class Expansion {
     // What the growth answers: the edge it feeds, or - with no edge - what was asked of the plan itself.
     final Edge serves;
     final UUID asked;
-    final int rank;
     final SequencedSet<UUID> nodes = new LinkedHashSet<>();
     final List<Before> links = new ArrayList<>();
     final List<Flow> flows = new ArrayList<>();
@@ -67,17 +67,87 @@ final class Expansion {
     final List<Touch> touches = new ArrayList<>();
     long covers;
     boolean settled;
+    // Further edges fed from the same making, each covered whole by what it asks, and the consumers that finished
+    // with their share - fed edges no growth answers any more.
+    final List<Edge> also = new ArrayList<>();
+    final Set<UUID> detached = new LinkedHashSet<>();
+    // A workshop's making: what it makes, whose work makes it, and the offer it was taken from - so a further edge
+    // for the same goods can be added onto it rather than growing a making of its own.
+    Making making;
+    // Some of its work is done or in hand: it is no longer replaced whole.
+    boolean started;
+    // Its workshop makes no more than it already does in one go: nothing more is joined onto it.
+    boolean full;
+
+    record Making(ItemSpec made, UUID maker, Stash out, Costs.Offer offer) {
+    }
 
     Expansion(Edge serves) {
         this.serves = serves;
         this.asked = null;
-        this.rank = serves.rank();
     }
 
-    Expansion(UUID asked, int rank) {
+    Expansion(UUID asked) {
         this.serves = null;
         this.asked = asked;
-        this.rank = rank;
+    }
+
+    // The index of what live growths bind, while this one is live: every link, flow and set it gains or gives back
+    // is told to it.
+    private Bonds bonds;
+
+    void bind(Bonds bonds) {
+        this.bonds = bonds;
+        links.forEach(link -> bonds.order(link, 1));
+        flows.forEach(flow -> flow.after().ifPresent(from -> bonds.order(new Before(from, flow.to()), 1)));
+        together.forEach(set -> bonds.together(set, 1));
+    }
+
+    void unbind() {
+        if (bonds == null) {
+            return;
+        }
+        links.forEach(link -> bonds.order(link, -1));
+        flows.forEach(flow -> flow.after().ifPresent(from -> bonds.order(new Before(from, flow.to()), -1)));
+        together.forEach(set -> bonds.together(set, -1));
+        bonds = null;
+    }
+
+    void link(Before link) {
+        links.add(link);
+        if (bonds != null) {
+            bonds.order(link, 1);
+        }
+    }
+
+    void flow(Flow flow) {
+        flows.add(flow);
+        if (bonds != null) {
+            flow.after().ifPresent(from -> bonds.order(new Before(from, flow.to()), 1));
+        }
+    }
+
+    void together(Set<UUID> set) {
+        Set<UUID> kept = Set.copyOf(set);
+        together.add(kept);
+        if (bonds != null) {
+            bonds.together(kept, 1);
+        }
+    }
+
+    // Gives back the links, flows and sets gained since `mark`.
+    void truncate(Mark mark) {
+        List<Before> lost = links.subList(mark.links(), links.size());
+        List<Flow> gone = flows.subList(mark.flows(), flows.size());
+        List<Set<UUID>> parted = together.subList(mark.together(), together.size());
+        if (bonds != null) {
+            lost.forEach(link -> bonds.order(link, -1));
+            gone.forEach(flow -> flow.after().ifPresent(from -> bonds.order(new Before(from, flow.to()), -1)));
+            parted.forEach(set -> bonds.together(set, -1));
+        }
+        lost.clear();
+        gone.clear();
+        parted.clear();
     }
 
     // How far the growth had got: what it gains after, it can give back.
@@ -95,5 +165,32 @@ final class Expansion {
     // The edge again, for just what this growth was bringing.
     Edge reopened() {
         return serves.covering(covers);
+    }
+
+    // Every edge it still feeds, each for just what it brings that edge.
+    List<Edge> fed() {
+        List<Edge> fed = new ArrayList<>();
+        if (!detached.contains(serves.consumer())) {
+            fed.add(reopened());
+        }
+        for (Edge edge : also) {
+            if (!detached.contains(edge.consumer())) {
+                fed.add(edge);
+            }
+        }
+        return fed;
+    }
+
+    // Every consumer it was grown to feed, finished or not.
+    List<UUID> consumers() {
+        List<UUID> all = new ArrayList<>();
+        all.add(serves.consumer());
+        also.forEach(edge -> all.add(edge.consumer()));
+        return all;
+    }
+
+    // Whether it feeds more than one consumer still.
+    boolean shared() {
+        return fed().size() > 1;
     }
 }

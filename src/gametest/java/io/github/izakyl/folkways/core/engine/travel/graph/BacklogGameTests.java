@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -90,27 +89,25 @@ public final class BacklogGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void pendingServesUrgencyFirstAndKeysByRequester(GameTestHelper helper) {
+    public static void pendingServesUrgencyFirstAndKeysByTheWay(GameTestHelper helper) {
         Pending queue = new Pending();
-        UUID one = UUID.randomUUID();
-        UUID two = UUID.randomUUID();
-        Ask planned = ask(helper, one, 1, 10, Urgency.PLANNING);
-        Ask walking = ask(helper, two, 2, 10, Urgency.WALKING);
-        Ask background = ask(helper, null, 3, 10, Urgency.BACKGROUND);
+        Ask planned = ask(helper, 1, 10, Urgency.PLANNING);
+        Ask walking = ask(helper, 2, 11, Urgency.WALKING);
+        Ask background = ask(helper, 3, 12, Urgency.BACKGROUND);
         helper.assertTrue(queue.offer(background, 0) && queue.offer(planned, 0) && queue.offer(walking, 0),
-            "different requesters are different requests");
-        Ask moved = ask(helper, one, 5, 10, Urgency.PLANNING);
+            "ways to different places are different requests");
+        Ask moved = ask(helper, 5, 10, Urgency.BACKGROUND);
         helper.assertTrue(!queue.offer(moved, 1) && queue.size() == 3,
-            "the same requester asking from somewhere else is the same request");
+            "the way to the same place asked from somewhere else is the same request");
         helper.assertTrue(queue.pollFirst().equals(walking), "a resident waiting on its feet goes first");
         Ask polled = queue.pollFirst();
-        helper.assertTrue(polled.equals(moved) && polled.from() == moved.from(),
-            "a re-asked request keeps its place and takes the latest origin");
+        helper.assertTrue(polled.from() == moved.from() && polled.urgency() == Urgency.PLANNING,
+            "a re-asked request keeps its place, takes the latest origin and stays as urgent as its keenest asker");
         helper.assertTrue(queue.pollFirst().equals(background) && queue.pollFirst() == null,
             "background work waits for the rest");
         queue.offer(planned, 0);
         queue.offer(walking, 0);
-        queue.offer(ask(helper, two, 2, 10, Urgency.WALKING), 50);
+        queue.offer(ask(helper, 2, 11, Urgency.WALKING), 50);
         List<Ask> gone = queue.expire(100, ask -> ask.urgency().band() == Urgency.Band.WALKING ? 60 : 1200);
         helper.assertTrue(gone.isEmpty() && queue.size() == 2, "asking again keeps a request alive");
         gone = queue.expire(200, ask -> ask.urgency().band() == Urgency.Band.WALKING ? 60 : 1200);
@@ -157,8 +154,9 @@ public final class BacklogGameTests {
         net.link(b, a, 1, 0);
         Pending queue = (Pending) field(roaming, "pending");
         for (int x = 31; x < 131; x++) {
-            Ask known = ask(helper, UUID.randomUUID(), x, 30, Urgency.PLANNING);
-            net.remember(known.from(), a, 0);
+            // Asks for one way merge whoever asks, so each goes somewhere of its own, every one already known.
+            Ask known = ask(helper, 30, x, Urgency.PLANNING);
+            net.remember(known.goals().getLong(0), a, 0);
             queue.offer(known, 1);
         }
         ((Map<Tract, Waypoints>) field(roaming, "nets")).put(new Tract(sort, first.realm()), net);
@@ -303,9 +301,9 @@ public final class BacklogGameTests {
         return Ask.of(KIND, start, Set.of(start.at(helper.absolutePos(new BlockPos(to, 2, 0))))).orElseThrow();
     }
 
-    private static Ask ask(GameTestHelper helper, UUID requester, int from, int to, Urgency urgency) {
+    private static Ask ask(GameTestHelper helper, int from, int to, Urgency urgency) {
         WorldPos start = WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(from, 2, 0)));
-        return Ask.of(KIND, requester, start, Set.of(start.at(helper.absolutePos(new BlockPos(to, 2, 0)))), urgency)
+        return Ask.of(KIND, start, Set.of(start.at(helper.absolutePos(new BlockPos(to, 2, 0)))), urgency)
             .orElseThrow();
     }
 

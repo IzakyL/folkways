@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.core.api.colony.Asking;
+import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
@@ -73,7 +74,9 @@ final class PatrolPresence {
 
     private final AtomicBoolean offerPending = new AtomicBoolean();
 
-    private int sinceSweep = PERIOD;
+    // When routes are read again within each period, spread against every other cron; see Cadence.
+    private final Cadence.Cron cron;
+    private boolean swept;
 
     private final Map<UUID, Long> lastWatch = new ConcurrentHashMap<>();
 
@@ -84,11 +87,12 @@ final class PatrolPresence {
     PatrolPresence(Colony colony) {
         this.colony = colony;
         this.asking = new Asking(colony, PatrolContent.ID, this::ended);
+        this.cron = Cadence.claim(colony, PERIOD);
     }
 
     public void tick(MinecraftServer server) {
-        if (++sinceSweep >= PERIOD) {
-            sinceSweep = 0;
+        if (!swept || cron.due(server)) {
+            swept = true;
             refresh(server);
             offerPending.set(true);
         }

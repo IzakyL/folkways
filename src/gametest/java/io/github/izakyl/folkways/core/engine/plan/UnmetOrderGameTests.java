@@ -47,12 +47,12 @@ public final class UnmetOrderGameTests {
         PlanningFixture f = new PlanningFixture(helper);
         Asked first = new Asked(f.source, Unmet.GO_ON);
         Asked second = new Asked(f.target, Unmet.GO_ON);
-        Planner planner = new Planner(new Claims(), new Cooldowns());
+        Solving planner = new Solving(new Claims(), new Cooldowns());
         try {
-            Solved grown = planner.handle(known(f), List.of(new Message.Submitted(OWNER, Grown.then(first, second))), 0);
+            Planned grown = planner.handle(known(f), List.of(new Message.Submitted(OWNER, Grown.then(first, second))), 0);
             helper.assertTrue(grown.weave().orders().equals(List.of(new Before(first.id(), second.id()))),
                 "the asked order stands between the two");
-            Solved failed = planner.handle(known(f),
+            Planned failed = planner.handle(known(f),
                 List.of(new Message.Failed(first.id(), LaborRefusal.GOODS_GONE)), 1);
             helper.assertTrue(second.told.size() == 1 && second.told.getFirst().equals(first.id()),
                 "the owner of the work after is asked once about the work before it");
@@ -72,13 +72,13 @@ public final class UnmetOrderGameTests {
         Asked first = new Asked(f.source, Unmet.GO_ON);
         Asked second = new Asked(f.target, Unmet.FAIL);
         Asked third = new Asked(f.source, Unmet.FAIL);
-        Planner planner = new Planner(new Claims(), new Cooldowns());
+        Solving planner = new Solving(new Claims(), new Cooldowns());
         try {
             Grown chain = new Grown(List.of(first, second, third),
                 List.of(new Before(first.id(), second.id()), new Before(second.id(), third.id())));
-            Solved grown = planner.handle(known(f), List.of(new Message.Submitted(OWNER, chain)), 0);
+            Planned grown = planner.handle(known(f), List.of(new Message.Submitted(OWNER, chain)), 0);
             helper.assertTrue(grown.weave().vertices().size() == 3, "the whole chain is planned");
-            Solved failed = planner.handle(known(f),
+            Planned failed = planner.handle(known(f),
                 List.of(new Message.Failed(first.id(), LaborRefusal.GOODS_GONE)), 1);
             helper.assertTrue(failed.weave().vertices().isEmpty() && failed.weave().held().isEmpty(),
                 "work that fails with what it comes after leaves the plan");
@@ -99,23 +99,23 @@ public final class UnmetOrderGameTests {
         PlanningFixture f = new PlanningFixture(helper);
         Asked first = new Asked(f.source, Unmet.GO_ON);
         Asked second = new Asked(f.target, Unmet.WAIT);
-        Planner planner = new Planner(new Claims(), new Cooldowns());
+        Solving planner = new Solving(new Claims(), new Cooldowns());
         try {
             planner.handle(known(f), List.of(new Message.Submitted(OWNER, Grown.then(first, second))), 0);
-            Solved failed = planner.handle(known(f),
+            Planned failed = planner.handle(known(f),
                 List.of(new Message.Failed(first.id(), LaborRefusal.GOODS_GONE)), 1);
             helper.assertTrue(failed.weave().vertices().isEmpty() && failed.weave().held().equals(Set.of(second.id()))
                     && failed.weave().gone().isEmpty(),
                 "the waiting work is held off the plan, still asked, and has not ended");
-            Solved still = planner.handle(known(f), List.of(Message.ANSWERED), 2);
+            Planned still = planner.handle(known(f), List.of(Message.ANSWERED), 2);
             helper.assertTrue(still.weave().vertices().isEmpty() && still.weave().held().equals(Set.of(second.id())),
                 "while what it waits on is not asked, it does not grow");
-            Solved again = planner.handle(known(f), List.of(new Message.Submitted(OWNER, Grown.of(first))), 3);
+            Planned again = planner.handle(known(f), List.of(new Message.Submitted(OWNER, Grown.of(first))), 3);
             helper.assertTrue(again.weave().vertices().keySet().equals(Set.of(first.id(), second.id()))
                     && again.weave().orders().equals(List.of(new Before(first.id(), second.id())))
                     && again.weave().held().isEmpty(),
                 "asked again on its own, the work before has the waiting work back after it");
-            Solved done = planner.handle(known(f), List.of(new Message.Finished(first.id())), 4);
+            Planned done = planner.handle(known(f), List.of(new Message.Finished(first.id())), 4);
             helper.assertTrue(done.weave().vertices().keySet().equals(Set.of(second.id()))
                     && done.weave().orders().isEmpty(),
                 "done, the order is met and the work after stands free");
@@ -130,14 +130,14 @@ public final class UnmetOrderGameTests {
         PlanningFixture f = new PlanningFixture(helper);
         Asked first = new Asked(f.source, Unmet.GO_ON);
         Asked second = new Asked(f.target, Unmet.WAIT);
-        Planner planner = new Planner(new Claims(), new Cooldowns());
+        Solving planner = new Solving(new Claims(), new Cooldowns());
         try {
             planner.handle(known(f), List.of(new Message.Submitted(OWNER, Grown.then(first, second))), 0);
-            Solved withdrawn = planner.handle(known(f), List.of(new Message.Withdrawn(OWNER, first.id())), 1);
+            Planned withdrawn = planner.handle(known(f), List.of(new Message.Withdrawn(OWNER, first.id())), 1);
             helper.assertTrue(second.ends.equals(List.of(Ending.REVOKED))
                     && withdrawn.weave().held().equals(Set.of(second.id())),
                 "the owner hears the work before was withdrawn, and keeps its own work waiting");
-            Solved gone = planner.handle(known(f), List.of(new Message.Withdrawn(OWNER, second.id())), 2);
+            Planned gone = planner.handle(known(f), List.of(new Message.Withdrawn(OWNER, second.id())), 2);
             helper.assertTrue(gone.weave().held().isEmpty() && gone.weave().vertices().isEmpty(),
                 "held work withdrawn is no longer held");
         } finally {
@@ -151,10 +151,10 @@ public final class UnmetOrderGameTests {
         PlanningFixture f = new PlanningFixture(helper);
         Asked first = new Asked(f.source, Unmet.GO_ON);
         Asked second = new Asked(f.target, Unmet.FAIL);
-        Planner planner = new Planner(new Claims(), new Cooldowns());
+        Solving planner = new Solving(new Claims(), new Cooldowns());
         try {
             planner.handle(known(f), List.of(new Message.Submitted(OWNER, Grown.then(first, second))), 0);
-            Solved again = planner.handle(known(f), List.of(new Message.Submitted(OWNER, Grown.of(first))), 1);
+            Planned again = planner.handle(known(f), List.of(new Message.Submitted(OWNER, Grown.of(first))), 1);
             helper.assertTrue(second.told.isEmpty()
                     && again.weave().orders().equals(List.of(new Before(first.id(), second.id()))),
                 "work asked again at once has not ended undone: what comes after it still does");

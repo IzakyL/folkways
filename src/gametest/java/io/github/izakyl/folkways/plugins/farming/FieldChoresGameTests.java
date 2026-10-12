@@ -142,6 +142,131 @@ public final class FieldChoresGameTests {
         helper.succeed();
     }
 
+    // A dark oak grows from four saplings in a square and from no fewer: a wood lot of them is sown a square at a
+    // time, each square one piece of work, the squares apart from each other, and a square half sown is finished.
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void darkOakIsSownFourToASquare(GameTestHelper helper) throws ReflectiveOperationException {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 1, 1));
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        for (BlockPos cell : BlockPos.betweenClosed(origin, origin.offset(5, 0, 1))) {
+            level.setBlockAndUpdate(cell, Blocks.DIRT.defaultBlockState());
+            level.setBlockAndUpdate(cell.above(), Blocks.AIR.defaultBlockState());
+            cells.add(cell.immutable());
+        }
+        Set<BlockPos> squares = new LinkedHashSet<>();
+        for (int x : List.of(0, 1, 4, 5)) {
+            squares.add(origin.offset(x, 0, 0));
+            squares.add(origin.offset(x, 0, 1));
+        }
+
+        List<Job> sown = jobsOf(sweep(level, zone(level, cells), cells, "dark_oak_sapling", 1));
+        helper.assertTrue(sown.size() == 2, "a square is one piece of work, got " + sown.size());
+        Set<BlockPos> covered = new LinkedHashSet<>();
+        for (Job job : sown) {
+            helper.assertTrue(job.cells().size() == 4, "a square is sown four saplings at once: " + job.cells());
+            covered.addAll(job.cells());
+        }
+        helper.assertTrue(covered.equals(squares), "two squares of four, two cells apart, got " + covered);
+
+        Set<BlockPos> strip = new LinkedHashSet<>();
+        for (int x = 0; x <= 5; x++) {
+            strip.add(origin.offset(x, 0, 0));
+        }
+        List<Job> alone = jobsOf(sweep(level, zone(level, strip), strip, "dark_oak_sapling", 2));
+        helper.assertTrue(alone.isEmpty(), "a plot one cell wide holds no square, got " + alone);
+
+        BlockPos last = origin.offset(1, 0, 1);
+        for (BlockPos cell : squares) {
+            if (!cell.equals(last)) {
+                level.setBlockAndUpdate(cell.above(), Blocks.DARK_OAK_SAPLING.defaultBlockState());
+            }
+        }
+        List<Job> left = jobsOf(sweep(level, zone(level, cells), cells, "dark_oak_sapling", 3));
+        helper.assertTrue(left.size() == 1 && left.getFirst().cells().equals(List.of(last)),
+            "a square short of a sapling wants that one alone, got " + left);
+
+        Crop crop = Crop.of(level, origin, ResourceLocation.withDefaultNamespace("dark_oak_sapling")).orElseThrow();
+        helper.assertTrue(crop.roomAt(level, crop.standAt(origin)), "the sower finds room beside its own square");
+
+        level.setBlockAndUpdate(last.above(), Blocks.DARK_OAK_SAPLING.defaultBlockState());
+        List<Job> done = jobsOf(sweep(level, zone(level, cells), cells, "dark_oak_sapling", 4));
+        helper.assertTrue(done.isEmpty(), "full squares want nothing more, got " + done);
+        helper.succeed();
+    }
+
+    // Jungle and spruce grow alone or four to a square, and a plot says which: the two are different crops with different
+    // chores, the square one sown like dark oak.
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void jungleIsSownEitherWay(GameTestHelper helper) throws ReflectiveOperationException {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 1, 1));
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        for (BlockPos cell : BlockPos.betweenClosed(origin, origin.offset(1, 0, 1))) {
+            level.setBlockAndUpdate(cell, Blocks.DIRT.defaultBlockState());
+            level.setBlockAndUpdate(cell.above(), Blocks.AIR.defaultBlockState());
+            cells.add(cell.immutable());
+        }
+        helper.assertTrue(Crop.sowable().contains(ResourceLocation.withDefaultNamespace("jungle_sapling/square")),
+            "the square way of jungle is a crop to choose");
+        helper.assertTrue(jobsOf(sweep(level, zone(level, cells), cells, "spruce_sapling/square", 3))
+            .getFirst().cells().size() == 4, "spruce is sown in a square the same way");
+        helper.assertFalse(Crop.of(level, origin, ResourceLocation.withDefaultNamespace("oak_sapling/square"))
+            .isPresent(), "oak grows no way but alone");
+
+        List<Grown> alone = sweep(level, zone(level, cells), cells, "jungle_sapling", 1);
+        List<Grown> square = sweep(level, zone(level, cells), cells, "jungle_sapling/square", 2);
+        helper.assertTrue(jobsOf(alone).size() == 1 && jobsOf(alone).getFirst().cells().size() == 1,
+            "jungle alone is a sapling to itself, with room round it: " + jobsOf(alone));
+        helper.assertTrue(jobsOf(square).size() == 1
+                && new LinkedHashSet<>(jobsOf(square).getFirst().cells()).equals(cells),
+            "jungle in a square is four saplings at once: " + jobsOf(square));
+        helper.assertTrue(idsOf(alone).stream().noneMatch(idsOf(square)::contains),
+            "the two ways do not share chore ids");
+        helper.succeed();
+    }
+
+    // A tree is felled whole: taller than the room a sapling asks for, and out along its boughs.
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void aTallTreeIsFelledToTheTop(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(3, 1, 3));
+        Set<BlockPos> tree = new LinkedHashSet<>();
+        for (int up = 1; up <= 24; up++) {
+            tree.add(ground.above(up));
+        }
+        for (int out = 1; out <= 5; out++) {
+            tree.add(ground.offset(out, 20 + out, 0));
+        }
+        BlockPos apart = ground.offset(3, 2, 3);
+        try {
+            tree.forEach(log -> place(level, log, Blocks.JUNGLE_LOG.defaultBlockState()));
+            place(level, apart, Blocks.JUNGLE_LOG.defaultBlockState());
+            Crop crop = Crop.of(level, ground, ResourceLocation.withDefaultNamespace("jungle_sapling"))
+                .orElseThrow();
+            Set<BlockPos> felled = new LinkedHashSet<>(crop.harvestFrom(level, ground));
+            helper.assertTrue(felled.equals(tree), "every log joined to the trunk, got " + felled.size()
+                + " of " + tree.size());
+        } finally {
+            tree.forEach(log -> place(level, log, Blocks.AIR.defaultBlockState()));
+            place(level, apart, Blocks.AIR.defaultBlockState());
+        }
+        helper.succeed();
+    }
+
+    // A big tree is slower to fell than a small one, but nothing like as many times slower as it is bigger.
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void workGrowsSlowerThanWhatThereIsOfIt(GameTestHelper helper) {
+        int unit = FarmingContent.FELL_TICKS_PER_LOG;
+        helper.assertTrue(FarmingContent.ticksFor(unit, 1) == unit, "one log takes a log's ticks");
+        helper.assertTrue(FarmingContent.ticksFor(unit, 3) == 2 * unit, "each doubling takes as many again");
+        int small = FarmingContent.ticksFor(unit, 8);
+        int great = FarmingContent.ticksFor(unit, 160);
+        helper.assertTrue(great > small && great < 3 * small,
+            "twenty times the tree is not three times the work: " + small + " then " + great);
+        helper.succeed();
+    }
+
     private static void place(ServerLevel level, BlockPos at, BlockState state) {
         level.setBlock(at, state, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
     }
@@ -158,7 +283,7 @@ public final class FieldChoresGameTests {
             .orElseThrow();
         Field field = new Field(growing, WorldPos.of(level, cells.iterator().next()), () -> { }, new PastDay());
         field.scan(level, zone, growing, stamp);
-        field.settle(stamp, 0);
+        field.settle(stamp);
         List<Grown> goals = new ArrayList<>();
         field.chores().forEach(chores -> chores.goals(level, goals));
         return goals;
@@ -215,6 +340,18 @@ public final class FieldChoresGameTests {
             }
         }
         return covered;
+    }
+
+    private static List<Job> jobsOf(List<Grown> goals) throws ReflectiveOperationException {
+        var held = FarmNode.class.getDeclaredField("chore");
+        held.setAccessible(true);
+        List<Job> jobs = new ArrayList<>();
+        for (Grown goal : goals) {
+            for (Node cell : goal.nodes()) {
+                jobs.add(((FarmNode.Chore) held.get(cell)).job());
+            }
+        }
+        return jobs;
     }
 
     private static UUID idOf(Grown goal) {

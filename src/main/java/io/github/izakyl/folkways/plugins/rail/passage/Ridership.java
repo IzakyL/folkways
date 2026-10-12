@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.rail.passage;
 
+import io.github.izakyl.folkways.core.api.colony.Colonies;
+import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.plugins.rail.domain.SeatRef;
 import io.github.izakyl.folkways.plugins.rail.domain.TransitNetwork;
 import java.util.ArrayList;
@@ -9,6 +11,7 @@ import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
 public final class Ridership {
@@ -43,5 +46,15 @@ public final class Ridership {
 
     public static void clearDestination(Entity rider) {
         rider.getPersistentData().remove(TAG_DESTINATION);
+    }
+
+    // The carriage a resident rides is stowing it out of the world, to put it back when the carriage is loaded again.
+    public static void carriedOff(Entity rider) {
+        if (!(rider.level() instanceof ServerLevel level)) {
+            return;
+        }
+        Bodies.of(rider).ifPresent(body -> body.colonyId()
+            .flatMap(id -> Colonies.of(level.getServer(), id))
+            .ifPresent(colony -> colony.carriedOff(body.id())));
     }
 }

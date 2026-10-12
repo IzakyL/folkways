@@ -93,7 +93,8 @@ public final class LivingContent {
             return List.of();
         }
         return Fronts.of(colony).settings(ID).items(FOOD.key())
-            .map(food -> List.of(new Amount(food, LivingPresence.RATIONS)))
+            .map(food -> List.of(new Amount(food,
+                LivingPresence.mealsFor(food, LivingPresence.RATION_DAYS * Hunger.FOOD_PER_DAY))))
             .orElse(List.of());
     }
 

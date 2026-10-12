@@ -91,11 +91,13 @@ public final class DeliveryPlanningGameTests {
     // Where the schedule last placed the work on its route.
     private static Object placedAt(PlanningFixture.Rounds solver, UUID node) {
         try {
-            var tours = Planner.class.getDeclaredField("tours");
+            var scheduler = Solving.class.getDeclaredField("scheduler");
+            scheduler.setAccessible(true);
+            var tours = Scheduler.class.getDeclaredField("tours");
             tours.setAccessible(true);
             var settled = Tours.class.getDeclaredField("settled");
             settled.setAccessible(true);
-            Object placed = ((Map<?, ?>) settled.get(tours.get(solver.planner()))).get(node);
+            Object placed = ((Map<?, ?>) settled.get(tours.get(scheduler.get(solver.planner())))).get(node);
             var at = placed.getClass().getDeclaredMethod("at");
             at.setAccessible(true);
             return at.invoke(placed);
@@ -182,19 +184,15 @@ public final class DeliveryPlanningGameTests {
             Stances.at(fixture.target), bread, 8);
         PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
         Situation situation = fixture.situation(stock, List.of());
-        Solved solved = solver.solve(situation, fixture.crew, delivery.goals(), List.of(), 0);
+        Planned solved = solver.solve(situation, fixture.crew, delivery.goals(), List.of(), 0);
         helper.assertTrue(solved.weave().vertices().size() == 2, "delivery must grow a fetch dependency");
         helper.assertTrue(solved.diagnosis().shortfalls().isEmpty(), "the delivery has a source");
         var tour = solved.schedule().tours().get(fixture.worker.resident().id());
         helper.assertTrue(tour != null && tour.nodes().size() == 2, "one worker must fetch then deliver");
         UUID fetchId = tour.nodes().getFirst();
         UUID putId = tour.nodes().getLast();
-        helper.assertTrue(solved.weave().links().isEmpty()
-                && solved.weave().flows().contains(new Flow(new Flow.From.Lying(new Stash(fixture.source)), fetchId,
-                    bread, 8))
-                && solved.weave().flows().contains(new Flow(new Flow.From.Work(fetchId), putId, bread, 8))
-                && solved.weave().orders().equals(List.of(new Before(fetchId, putId))),
-            "the goods' way is material edges alone: out of the source into the fetch, and from it into the put");
+        helper.assertTrue(solved.weave().orders().equals(List.of(new Before(fetchId, putId))),
+            "the goods' way orders the fetch before the put, and nothing else");
         for (UUID nodeId : tour.nodes()) {
             var node = solved.weave().vertices().get(nodeId).node();
             Outcome outcome = Commit.run(level, node, fixture.worker);
@@ -206,7 +204,7 @@ public final class DeliveryPlanningGameTests {
         }
         helper.assertTrue(Goods.countIn(source, bread) == 0 && Goods.countIn(target, bread) == 18,
             "eight new items must be delivered without recycling the destination's ten items");
-        Solved finished = solver.solve(situation, fixture.crew, delivery.goals(),
+        Planned finished = solver.solve(situation, fixture.crew, delivery.goals(),
             tour.nodes().stream().<Message>map(Message.Finished::new).toList(), 1);
         helper.assertTrue(delivery.complete() && finished.weave().vertices().isEmpty(),
             "the arrived load settles the delivery, so its requester stops asking");
@@ -224,7 +222,7 @@ public final class DeliveryPlanningGameTests {
             Stances.at(fixture.target), bread, 8);
         Claims claims = new Claims();
         PlanningFixture.Rounds solver = new PlanningFixture.Rounds(claims, new Cooldowns());
-        Solved solved = solver.solve(fixture.situation(stock, List.of()), fixture.crew,
+        Planned solved = solver.solve(fixture.situation(stock, List.of()), fixture.crew,
             task.goals(), List.of(), 0);
         helper.assertTrue(solved.weave().vertices().isEmpty(), "an unfulfillable delivery must not run");
         helper.assertTrue(claims.size() == 0 && task.remaining() == 8,

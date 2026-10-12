@@ -1,5 +1,6 @@
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.worldgen.features.TreeFeatures;
 import net.minecraft.resources.ResourceKey;
@@ -20,6 +21,8 @@ import blockwright.minecraft.core.Sync;
 // Lays a town the bench planned on real ground. args: palette [block state..], ops [[op, ..ints]..]:
 //   ["clear", x0, z0, x1, z1]                    trees, plants and snow off the ground of every column
 //   ["pad", x0, z0, x1, z1, y, top, core, edge, headroom]  ground levelled so its top is at y - 1
+//   ["bed", x0, z0, x1, z1, y, top, core, edge, headroom]  a rail bed: as pad, but a rise is bored through with just the
+//                                                headroom (a tunnel, its roof and sides sealed against sand and water)
 //   ["fill", x0, y0, z0, x1, y1, z1, state, keep] keep=1 only replaces air, plants and fluids
 //   ["set", x, y, z, state]
 //   ["footing", x, z, y, state]                  a column from the ground up to y
@@ -50,8 +53,12 @@ public final class Task {
     final Set<Long> reshape = new HashSet<>();
     int placed = 0;
 
+    // Cells nothing is laid in: the railway's track and the room over it, drawn before the town.
+    final Set<Long> spare = new HashSet<>();
+
     void put(int x, int y, int z, BlockState state) {
         var pos = new BlockPos(x, y, z);
+        if (spare.contains(pos.asLong())) return;
         if (level.getBlockState(pos) == state) return;
         level.setBlock(pos, state, 2);
         placed++;
@@ -82,6 +89,11 @@ public final class Task {
         var generator = level.getChunkSource().getGenerator();
         Map<String, Integer> counts = new TreeMap<>();
         int grown = 0;
+        List<Object> spared = args.list("spare");
+        for (Object cell : spared == null ? List.of() : spared) {
+            var c = (List<?>) cell;
+            spare.add(BlockPos.asLong(num(c.get(0)), num(c.get(1)), num(c.get(2))));
+        }
         List<Object> ops = args.list("ops");
         if (ops == null) throw Fail.invalid("args.ops is required (an array of ops)");
         for (Object raw : ops) {
@@ -133,6 +145,30 @@ public final class Task {
                         // surface. A market foundation must not be a grass lid over a hollow.
                         for (int yy = Math.min(g + 1, y - 5); yy < y - 1; yy++) put(x, yy, z, rim ? edge : core);
                         put(x, y - 1, z, top);
+                    }
+                }
+                case "bed" -> {
+                    int y = a[4], head = a[8];
+                    BlockState top = palette.get(a[5]), core = palette.get(a[6]), edge = palette.get(a[7]);
+                    var at = new BlockPos.MutableBlockPos();
+                    for (int x = a[0]; x <= a[2]; x++) for (int z = a[1]; z <= a[3]; z++) {
+                        boolean rim = x == a[0] || x == a[2] || z == a[1] || z == a[3];
+                        int g = groundAt(x, z);
+                        for (int yy = y; yy <= y + head; yy++) put(x, yy, z, air);
+                        // Banked up over a hollow (or a lake); bored through a rise, where the rock already holds it.
+                        if (g < y) for (int yy = Math.min(g + 1, y - 5); yy < y - 1; yy++) put(x, yy, z, rim ? edge : core);
+                        put(x, y - 1, z, top);
+                        // Nothing may fall or flow in: a loose or wet roof, and wet sides, are stopped with the edge block.
+                        BlockState roof = level.getBlockState(at.set(x, y + head + 1, z));
+                        if (roof.getBlock() instanceof FallingBlock || !roof.getFluidState().isEmpty()) put(x, y + head + 1, z, edge);
+                        if (rim) for (var dir : Direction.Plane.HORIZONTAL) {
+                            int nx = x + dir.getStepX(), nz = z + dir.getStepZ();
+                            if (nx >= a[0] && nx <= a[2] && nz >= a[1] && nz <= a[3]) continue;
+                            for (int yy = y; yy <= y + head; yy++) {
+                                BlockState side = level.getBlockState(at.set(nx, yy, nz));
+                                if (!side.getFluidState().isEmpty() || side.getBlock() instanceof FallingBlock) put(nx, yy, nz, edge);
+                            }
+                        }
                     }
                 }
                 case "fill" -> {

@@ -15,6 +15,7 @@ import io.github.izakyl.folkways.core.engine.plan.Claims;
 import io.github.izakyl.folkways.core.engine.plan.Cooldowns;
 import io.github.izakyl.folkways.core.engine.plan.Known;
 import io.github.izakyl.folkways.core.engine.plan.Planner;
+import io.github.izakyl.folkways.core.engine.plan.Scheduler;
 import io.github.izakyl.folkways.core.engine.plan.Situation;
 import io.github.izakyl.folkways.core.engine.plan.Stands;
 import io.github.izakyl.folkways.core.engine.plan.Stock;
@@ -57,20 +58,20 @@ public final class SimulationClockGameTests {
         Executor later = queued::add;
         try {
             for (int tick = 0; tick < 5; tick++) {
-                labor.run(level, later);
+                labor.run(level, new Lanes(later, Runnable::run));
             }
             helper.assertTrue(queued.isEmpty(), "with nothing to tell the planner, no plan is begun");
             colony.works().submit(OWNER, level.dimension(), Grown.of(node(helper)), (any, how) -> { });
-            labor.run(level, later);
+            labor.run(level, new Lanes(later, Runnable::run));
             helper.assertTrue(queued.size() == 1, "a submission begins a plan at once");
             colony.works().submit(OWNER, level.dimension(), Grown.of(node(helper)), (any, how) -> { });
-            labor.run(level, later);
+            labor.run(level, new Lanes(later, Runnable::run));
             helper.assertTrue(queued.size() == 1, "a plan in flight holds back the next one");
             queued.removeFirst().run();
-            labor.run(level, later);
+            labor.run(level, new Lanes(later, Runnable::run));
             helper.assertTrue(queued.size() == 1, "what arrived meanwhile begins the next plan");
             queued.removeFirst().run();
-            labor.run(level, later);
+            labor.run(level, new Lanes(later, Runnable::run));
             helper.assertTrue(queued.isEmpty(), "once everything is told, planning rests");
         } finally {
             labor.close();
@@ -134,27 +135,26 @@ public final class SimulationClockGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
-    public static void retiredCyclesRejectReadyAndLateResults(GameTestHelper helper) throws InterruptedException {
+    public static void retiredPipelinesRejectReadyAndLateResults(GameTestHelper helper) throws InterruptedException {
         var level = helper.getLevel();
         Situation empty = new Situation(WayGraph.UNBUILT, new Stock(List.of(), Map.of()),
             List.of(), Stands.NONE);
         for (boolean readyFirst : List.of(false, true)) {
-            Cycle cycle = new Cycle(new Inbox());
             Planner planner = new Planner(new Claims(), new Cooldowns());
+            Pipeline pipeline = new Pipeline(new Inbox(), planner, new Scheduler());
             AtomicReference<Runnable> queued = new AtomicReference<>();
             AtomicInteger applied = new AtomicInteger();
-            cycle.begin(level, queued::set, planner, new Known(empty, List.of()),
-                level.getGameTime(), (batch, solved) -> applied.incrementAndGet());
-            if (!readyFirst) cycle.close();
+            pipeline.weave(queued::set, Runnable::run, new Known(empty, List.of()), level.getGameTime(),
+                (batch, woven) -> applied.incrementAndGet(), laid -> applied.incrementAndGet());
+            if (!readyFirst) pipeline.close(Runnable::run, Runnable::run);
             Thread worker = new Thread(queued.get(), "folkways-test-retired-solve");
             worker.start();
             worker.join(5_000);
             helper.assertTrue(!worker.isAlive(), "the retired plan must finish");
-            cycle.close();
-            cycle.applyReady(level);
+            pipeline.close(Runnable::run, Runnable::run);
+            pipeline.applyReady(level);
             helper.assertTrue(applied.get() == 0,
                 "neither an already ready result nor a late result may enter a retired world");
-            planner.closed();
         }
         helper.succeed();
     }
@@ -165,14 +165,15 @@ public final class SimulationClockGameTests {
         var clock = level.getServer().tickRateManager();
         boolean frozen = clock.isFrozen();
         int steps = clock.frozenTicksToRun();
-        Cycle cycle = new Cycle(new Inbox());
+        Pipeline pipeline = new Pipeline(new Inbox(), new Planner(new Claims(), new Cooldowns()), new Scheduler());
         AtomicReference<Runnable> queued = new AtomicReference<>();
-        AtomicInteger applied = new AtomicInteger();
+        AtomicInteger woven = new AtomicInteger();
+        AtomicInteger laid = new AtomicInteger();
         Situation empty = new Situation(WayGraph.UNBUILT, new Stock(List.of(), Map.of()),
             List.of(), Stands.NONE);
         try {
-            cycle.begin(level, queued::set, new Planner(new Claims(), new Cooldowns()),
-                new Known(empty, List.of()), level.getGameTime(), (batch, solved) -> applied.incrementAndGet());
+            pipeline.weave(queued::set, Runnable::run, new Known(empty, List.of()), level.getGameTime(),
+                (batch, result) -> woven.incrementAndGet(), result -> laid.incrementAndGet());
             clock.setFrozen(true);
             clock.setFrozenTicksToRun(0);
             clock.tick();
@@ -180,15 +181,17 @@ public final class SimulationClockGameTests {
             worker.start();
             worker.join(5_000);
             helper.assertTrue(!worker.isAlive(), "the plan should finish while frozen");
-            cycle.applyReady(level);
-            helper.assertTrue(applied.get() == 0 && cycle.busy(), "frozen results must remain pending");
-            helper.assertTrue(cycle.busyFor(Long.MAX_VALUE) == 0, "a pending result is not a stuck solve");
+            pipeline.applyReady(level);
+            helper.assertTrue(woven.get() == 0 && laid.get() == 0 && pipeline.weaving(),
+                "frozen results must remain pending");
             clock.stepGameIfPaused(1);
             clock.tick();
-            cycle.applyReady(level);
-            cycle.applyReady(level);
-            helper.assertTrue(applied.get() == 1 && !cycle.busy(), "the next step applies the result exactly once");
+            pipeline.applyReady(level);
+            pipeline.applyReady(level);
+            helper.assertTrue(woven.get() == 1 && laid.get() == 1 && !pipeline.weaving(),
+                "the next step applies the weave and the schedule laid for it exactly once");
         } finally {
+            pipeline.close(Runnable::run, Runnable::run);
             clock.setFrozen(frozen);
             clock.setFrozenTicksToRun(steps);
             clock.tick();

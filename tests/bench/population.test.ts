@@ -25,3 +25,10 @@ test("rounding preserves total and never overlaps human/golem slots", () => {
   assert.throws(() => distributePopulation(0));
   assert.throws(() => distributePopulation(2.5));
 });
+
+test("with no share for golems everyone is human", () => {
+  const p = populationSlots(400, 0);
+  assert.equal(p.humans, 400);
+  assert.deepEqual(p.golems, []);
+  assert.equal(p.humanIndices.length, 400);
+});

@@ -15,6 +15,9 @@ knobs = [
 ]
 
 WATER = piece(key = {"w": "minecraft:water"}, layers = [["w"]])
+# How many fence posts stand under a field lantern: as tall as the road pattern's lamp posts.
+POST = 3
+
 GATE = piece(key = {"g": "minecraft:oak_fence_gate[facing=north]"}, layers = [["g"]])
 SIDES = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 AROUND = SIDES + [(1, 1), (1, -1), (-1, 1), (-1, -1)]
@@ -68,16 +71,29 @@ def columns(grid):
     return [median([row[x] for row in grid[1:-1]]) for x in range(1, len(grid[0]) - 1)]
 
 def smooth(grid, reach):
+    # Each cell's mean over the square reach around it, read off running sums so no square is added up twice.
     depth = len(grid)
     width = len(grid[0])
+    sums = [[0.0] * (width + 1)]
+    for z in range(depth):
+        above = sums[z]
+        row = [0.0]
+        run = 0.0
+        for x in range(width):
+            run += grid[z][x]
+            row.append(above[x + 1] + run)
+        sums.append(row)
     found = []
     for z in range(depth):
+        z0 = max(0, z - reach)
+        z1 = min(depth, z + reach + 1)
+        top = sums[z0]
+        bottom = sums[z1]
         row = []
         for x in range(width):
-            near = []
-            for dz in range(max(0, z - reach), min(depth, z + reach + 1)):
-                near += grid[dz][max(0, x - reach):min(width, x + reach + 1)]
-            row.append(mean(near))
+            x0 = max(0, x - reach)
+            x1 = min(width, x + reach + 1)
+            row.append((bottom[x1] - bottom[x0] - top[x1] + top[x0]) / ((z1 - z0) * (x1 - x0)))
         found.append(row)
     return found
 
@@ -117,24 +133,15 @@ def lips(surface, levels, rise, least):
         line[width - 1] = line[width - 2]
     return found
 
-def closest(cells, taken, x, z):
-    best = None
-    far = 0
-    for (cx, cz) in cells:
-        if (cx, cz) in taken:
-            continue
-        gap = (cx - x) * (cx - x) + (cz - z) * (cz - z)
-        if best == None or gap < far:
-            best = (cx, cz)
-            far = gap
-    return best
-
 def spread(region, allowed, across, down, size = 0):
     # across by down spots laid evenly over a strip of field, following the strip's curve: the strip is cut into
     # equal shares along x, and each share's spots are spread evenly over how far that share reaches in z.
+    # allowed is keyed by cell, so the spot nearest each mark is found by looking outward from the mark.
     xs = [x for (x, _) in region]
     first = min(xs)
     span = max(xs) - first + 1
+    zs_all = [z for (_, z) in region]
+    deep = max(zs_all) - min(zs_all) + 1
     picks = {}
     for j in range(across):
         start = first + span * j // across
@@ -146,22 +153,38 @@ def spread(region, allowed, across, down, size = 0):
         high = max(zs)
         rows = max(down, -(-(high - low + 1) // size)) if size > 0 else down
         for i in range(rows):
-            spot = closest(allowed, picks, (start + end - 1) // 2, low + (high - low + 1) * (2 * i + 1) // (2 * rows))
+            spot = nearby(allowed, picks, (start + end - 1) // 2, low + (high - low + 1) * (2 * i + 1) // (2 * rows), span, deep)
             if spot != None:
                 picks[spot] = True
     return picks.keys()
 
-def wets(hole, at, reach):
-    return magnitude(hole[0] - at[0]) <= reach and magnitude(hole[1] - at[1]) <= reach
+def wetted(holes, reach):
+    # Every cell some hole waters, on any level: the square of reach around each.
+    found = {}
+    for (hx, hz) in holes:
+        for dx in range(-reach, reach + 1):
+            for dz in range(-reach, reach + 1):
+                found[(hx + dx, hz + dz)] = True
+    return found
 
 def dry(region, holes, reach):
-    return [at for at in region if not [hole for hole in holes if wets(hole, at, reach)]]
+    wet = wetted(holes, reach)
+    return [at for at in region if at not in wet]
+
+def soak(watered, level, hole, reach):
+    # Marks what a hole waters: every cell within reach on its level or one below it.
+    for dx in range(-reach, reach + 1):
+        for dz in range(-reach, reach + 1):
+            at = (hole[0] + dx, hole[1] + dz)
+            if at in level and level[hole] - level[at] >= 0 and level[hole] - level[at] <= 1:
+                watered[at] = True
 
 def hydrate(region, allowed, reach):
     # Farmland drinks from water up to reach cells away, so one hole waters a square of it. Take the fewest holes
     # an even grid over the strip needs, one more across or down only if the strip's curve leaves some dry.
     if not allowed:
         return []
+    allowed = {at: True for at in allowed}
     size = 2 * reach + 1
     columns = {}
     for (x, z) in region:
@@ -175,42 +198,109 @@ def hydrate(region, allowed, reach):
         if not dry(region, holes, reach):
             return holes
     holes = {hole: True for hole in spread(region, allowed, across, down, size)}
+    wet = wetted(holes, reach)
+    reaches = max(columns.keys()) - min(columns.keys()) + 1 + max([max(zs) for zs in columns.values()]) - min([min(zs) for zs in columns.values()]) + 1
     for at in region:
-        if not [hole for hole in holes if wets(hole, at, reach)]:
-            spot = closest(allowed, holes, at[0], at[1])
+        if at not in wet:
+            spot = nearby(allowed, holes, at[0], at[1], reaches, 0)
             if spot != None:
                 holes[spot] = True
+                for cell_at in wetted([spot], reach):
+                    wet[cell_at] = True
     return holes.keys()
 
-def lit(lamps, x, z, y, reach):
-    for (lx, lz, ly) in lamps:
-        if magnitude(lx - x) + magnitude(lz - z) + magnitude(ly - y) <= reach:
-            return True
-    return False
+def apart(a, x, z, y):
+    # How far a lantern is from a cell, block by block along each axis.
+    dx = a[0] - x
+    dz = a[1] - z
+    dy = a[2] - y
+    return (dx if dx >= 0 else -dx) + (dz if dz >= 0 else -dz) + (dy if dy >= 0 else -dy)
 
-def light(spots, ground, fixed, width, depth, reach):
+def dark(lamps, ground, reach):
+    # The first cell no lantern lights, or None: stops at the first, as one is enough to turn a layout down. The
+    # lantern that lit the last cell is tried first, as the next cell is most often beside it.
+    last = None
+    for (x, z, y) in ground:
+        if last != None and apart(last, x, z, y) <= reach:
+            continue
+        last = None
+        for lamp in lamps:
+            if apart(lamp, x, z, y) <= reach:
+                last = lamp
+                break
+        if last == None:
+            return (x, z, y)
+    return None
+
+def nearby(spots, taken, x, z, width, depth):
+    # The free spot nearest (x, z): looked for ring by ring outward while the rings are smaller than the spots
+    # themselves, and among all the spots once they are not, so a sparse field costs no more than a full one.
+    for r in range(width + depth):
+        if (2 * r + 1) * (2 * r + 1) > 2 * len(spots):
+            break
+        best = None
+        far = 0
+        for dx in range(-r, r + 1):
+            for dz in ([-r, r] if magnitude(dx) != r else range(-r, r + 1)):
+                at = (x + dx, z + dz)
+                if at in spots and at not in taken:
+                    gap = dx * dx + dz * dz
+                    if best == None or gap < far:
+                        best = at
+                        far = gap
+        if best != None:
+            return best
+    best = None
+    far = 0
+    for (cx, cz) in spots:
+        if (cx, cz) in taken:
+            continue
+        gap = (cx - x) * (cx - x) + (cz - z) * (cz - z)
+        if best == None or gap < far:
+            best = (cx, cz)
+            far = gap
+    return best
+
+def light(spots, ground, fixed, width, depth, reach, high):
     # A lantern keeps monsters off every cell it lights at all. Lay the fewest lanterns an even grid over the
-    # whole field needs so that every cell a mob could stand on is within reach of one.
+    # whole field needs so that every cell a mob could stand on is within reach of one. A lantern stands `high`
+    # above the ground it lights, which its reach across the field gives up.
     grids = []
     for across in range(1, width + 1):
         for down in range(1, depth + 1):
-            if (-(-width // across)) // 2 + (-(-depth // down)) // 2 < reach:
+            if (-(-width // across)) // 2 + (-(-depth // down)) // 2 + high <= reach:
                 grids.append((across * down, magnitude(float(width) / across - float(depth) / down), across, down))
-    for (_, _, across, down) in sorted(grids)[:12]:
+    for (_, _, across, down) in sorted(grids)[:6]:
         picks = {}
         for j in range(across):
             for i in range(down):
-                spot = closest(spots, picks, width * (2 * j + 1) // (2 * across), depth * (2 * i + 1) // (2 * down))
+                spot = nearby(spots, picks, width * (2 * j + 1) // (2 * across), depth * (2 * i + 1) // (2 * down), width, depth)
                 if spot != None:
                     picks[spot] = True
         lamps = fixed + [(x, z, spots[(x, z)]) for (x, z) in picks]
-        if not [at for at in ground if not lit(lamps, at[0], at[1], at[2], reach)]:
+        if dark(lamps, ground, reach) == None:
             return picks.keys()
+    # No even grid will do on this ground: lay a lantern by each cell still dark, in turn.
     picks = {}
+    lamps = list(fixed)
+    last = None
     for (x, z, y) in ground:
-        lamps = fixed + [(px, pz, spots[(px, pz)]) for (px, pz) in picks]
-        if not lit(lamps, x, z, y, reach):
-            picks[closest(spots, picks, x, z)] = True
+        if last != None and apart(last, x, z, y) <= reach:
+            continue
+        last = None
+        for lamp in lamps:
+            if apart(lamp, x, z, y) <= reach:
+                last = lamp
+                break
+        if last == None:
+            # The nearest spot may stand too far above or below this cell to light it; then no lantern is laid
+            # for it, as one that lights nothing here only adds to the field.
+            spot = nearby(spots, picks, x, z, width, depth)
+            if spot == None or apart((spot[0], spot[1], spots[spot]), x, z, y) > reach:
+                continue
+            picks[spot] = True
+            last = (spot[0], spot[1], spots[spot])
+            lamps.append(last)
     return picks.keys()
 
 def palette(items):
@@ -220,8 +310,8 @@ def palette(items):
 
 def draw(site):
     zone = site.zone.sized(height = 1)
-    if zone.width < 6 or zone.depth < 6 or zone.width > 48 or zone.depth > 48:
-        fail("A terraced field must be 6–48 blocks on each side / 梯田每边须为 6–48 格")
+    if zone.width < 6 or zone.depth < 6 or zone.width > 56 or zone.depth > 56:
+        fail("A terraced field must be 6–56 blocks on each side / 梯田每边须为 6–56 格")
     rise = site.count("rise")
     spacing = site.count("spacing")
     if rise < 1 or rise > 4:
@@ -387,26 +477,32 @@ def draw(site):
     # below: work down the hill and water only what the terrace above has left dry.
     reach = spacing // 2
     holes = []
+    watered = {}
     for key in sorted(strips.keys()):
         strip = strips[key]
-        thirsty = {}
-        for at in strip:
-            if not [hole for hole in holes
-                if wets(hole, at, reach) and level[hole] - level[at] >= 0 and level[hole] - level[at] <= 1]:
-                thirsty[at] = True
+        thirsty = {at: True for at in strip if at not in watered}
         if thirsty:
-            holes += hydrate(thirsty, [at for at in strip if at not in spill], reach)
+            for hole in hydrate(thirsty, [at for at in strip if at not in spill], reach):
+                holes.append(hole)
+                soak(watered, level, hole, reach)
     turf = []
     # Where a terrace narrows to nothing but its brink there is no cell that would hold water; water it from the
     # nearest one that will, on its level or the one above, and leave it in turf if there is none.
     for at in sorted(open_cells.keys()):
-        if at in holes or [hole for hole in holes
-            if wets(hole, at, reach) and level[hole] - level[at] >= 0 and level[hole] - level[at] <= 1]:
+        if at in watered:
             continue
-        near = [spot for spot in open_cells if spot not in spill and wets(spot, at, reach)
-            and level[spot] - level[at] >= 0 and level[spot] - level[at] <= 1]
-        if near:
-            holes.append(closest(near, {}, at[0], at[1]))
+        spot = None
+        far = 0
+        for dx in range(-reach, reach + 1):
+            for dz in range(-reach, reach + 1):
+                near = (at[0] + dx, at[1] + dz)
+                if near in open_cells and near not in spill and level[near] - level[at] >= 0 and level[near] - level[at] <= 1:
+                    if spot == None or dx * dx + dz * dz < far:
+                        spot = near
+                        far = dx * dx + dz * dz
+        if spot != None:
+            holes.append(spot)
+            soak(watered, level, spot, reach)
         else:
             open_cells.pop(at)
             turf.append(at)
@@ -420,8 +516,8 @@ def draw(site):
         if (x, z) in wet or ((x, z) in edge and x not in paths):
             continue
         ground_cells.append((x, z, tops[(x, z)] + 1))
-    spots = {at: level[at] + 2 for at in open_cells if at not in wet}
-    posts = list(light(spots, ground_cells, fixed, width, depth, 13))
+    spots = {at: level[at] + POST + 1 for at in open_cells if at not in wet}
+    posts = list(light(spots, ground_cells, fixed, width, depth, 13, POST))
 
     dig = []
     for z in range(depth):
@@ -520,8 +616,8 @@ def draw(site):
             swap = {"minecraft:oak_fence_gate": site.items("gate")}))
     poles = []
     for (x, z) in posts:
-        poles.append(cell(work, x, z, level[(x, z)], height = 2))
-        lights.append(cell(work, x, z, level[(x, z)] + 2))
+        poles.append(cell(work, x, z, level[(x, z)], height = POST + 1))
+        lights.append(cell(work, x, z, level[(x, z)] + POST + 1))
     if poles:
         parts.append(part("post", group(poles), site.items("fence")))
     if lights:

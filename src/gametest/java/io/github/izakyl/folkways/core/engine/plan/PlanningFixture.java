@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Delivery;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
@@ -124,7 +125,7 @@ public final class PlanningFixture {
 
         public static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "rounds");
 
-        private final Planner planner;
+        private final Solving planner;
         private final Map<UUID, Grown> standing = new LinkedHashMap<>();
         private final Map<UUID, UUID> told = new LinkedHashMap<>();
         private final Set<UUID> planted = new LinkedHashSet<>();
@@ -134,10 +135,10 @@ public final class PlanningFixture {
         }
 
         public Rounds(Claims claims, Cooldowns cooldowns) {
-            this.planner = new Planner(claims, cooldowns);
+            this.planner = new Solving(claims, cooldowns);
         }
 
-        public Solved solve(Situation now, Crew crew, List<Grown> goals, List<Message> events, long tick) {
+        public Planned solve(Situation now, Crew crew, List<Grown> goals, List<Message> events, long tick) {
             List<Message> inbox = new ArrayList<>();
             for (Crew.Hand hand : crew.hands()) {
                 UUID held = hand.holding().orElse(null);
@@ -173,7 +174,7 @@ public final class PlanningFixture {
                 }
             });
             inbox.add(Message.ANSWERED);
-            Solved solved = planner.handle(new Known(now, crew.hands()), inbox, tick);
+            Planned solved = planner.handle(new Known(now, crew.hands()), inbox, tick);
             // What the plan kept to itself ends as the colony's labor ends it, and its id with it.
             for (Gone gone : solved.weave().gone()) {
                 gone.node().ended(null, gone.how());
@@ -191,7 +192,7 @@ public final class PlanningFixture {
             return solved;
         }
 
-        public Planner planner() {
+        public Solving planner() {
             return planner;
         }
 
@@ -200,11 +201,64 @@ public final class PlanningFixture {
         }
     }
 
-    public static void apply(ColonyLabor labor, ServerLevel level, Solved solved) {
+    // What one round of planning made, handed to the colony's labor as its own stages hand it: the weave's change,
+    // then the routes laid for it.
+    public static void apply(ColonyLabor labor, ServerLevel level, Planned planned) {
+        woven(labor, level, List.of(), planned.woven());
+        laid(labor, planned.laid());
+    }
+
+    // A change to the plan made by hand, handed to the colony's labor as if the weave had made it out of `batch`.
+    public static void apply(ColonyLabor labor, ServerLevel level, List<Message> batch, WeaveDelta delta) {
+        woven(labor, level, batch, new Planner.Woven(delta, new Crew(List.of()), null, false, List.of(), List.of(),
+            Asks.NONE, new Planner.Timing(0, 0), delta.put().size()));
+    }
+
+    // A whole plan handed to the colony's labor, as tests once handed it one: the change from the plan it holds now.
+    // Work not among `vertices` goes, the rest is put, `fresh` among it grown afresh; `held` is what the owner now
+    // keeps off the plan.
+    public static void applyWhole(ColonyLabor labor, ServerLevel level, List<Message> batch,
+                                  Map<UUID, Vertex> vertices, List<Before> links, List<Set<UUID>> groups,
+                                  Set<UUID> fresh, List<Gone> gone, Set<UUID> held) {
+        WeaveView now = graphOf(labor);
+        Set<UUID> removed = new LinkedHashSet<>(now.vertices().keySet());
+        removed.removeAll(vertices.keySet());
+        WeaveDelta whole = Shown.delta(vertices, links, groups, Map.of(), fresh, gone, Set.of());
+        apply(labor, level, batch, new WeaveDelta(whole.put(), removed, whole.linked(), Set.of(), whole.groups(),
+            whole.pins(), whole.fresh(), whole.gone(), Optional.of(held)));
+    }
+
+    public static void applyWhole(ColonyLabor labor, ServerLevel level, List<Message> batch,
+                                  Map<UUID, Vertex> vertices) {
+        applyWhole(labor, level, batch, vertices, List.of(), List.of(), Set.of(), List.of(), Set.of());
+    }
+
+    private static WeaveView graphOf(ColonyLabor labor) {
         try {
-            var method = ColonyLabor.class.getDeclaredMethod("apply", ServerLevel.class, List.class, Solved.class);
+            var field = ColonyLabor.class.getDeclaredField("graph");
+            field.setAccessible(true);
+            return (WeaveView) field.get(labor);
+        } catch (ReflectiveOperationException broken) {
+            throw new AssertionError(broken);
+        }
+    }
+
+    private static void woven(ColonyLabor labor, ServerLevel level, List<Message> batch, Planner.Woven woven) {
+        try {
+            var method = ColonyLabor.class.getDeclaredMethod("woven", ServerLevel.class, List.class,
+                Planner.Woven.class);
             method.setAccessible(true);
-            method.invoke(labor, level, List.of(), solved);
+            method.invoke(labor, level, batch, woven);
+        } catch (ReflectiveOperationException broken) {
+            throw new AssertionError(broken);
+        }
+    }
+
+    private static void laid(ColonyLabor labor, Scheduler.Scheduled laid) {
+        try {
+            var method = ColonyLabor.class.getDeclaredMethod("laid", Scheduler.Scheduled.class);
+            method.setAccessible(true);
+            method.invoke(labor, laid);
         } catch (ReflectiveOperationException broken) {
             throw new AssertionError(broken);
         }

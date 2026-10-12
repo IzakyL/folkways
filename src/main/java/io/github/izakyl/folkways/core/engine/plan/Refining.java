@@ -121,6 +121,6 @@ public final class Refining {
         edges.addAll(change.links());
         groups.addAll(change.workerGroups());
         groups.addAll(replacement.workerGroups());
-        return new Grown(nodes, List.copyOf(edges), graph.rank(), groups);
+        return new Grown(nodes, List.copyOf(edges), groups);
     }
 }

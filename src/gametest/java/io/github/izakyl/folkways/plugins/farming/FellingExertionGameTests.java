@@ -10,7 +10,6 @@ import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.living.LivingContent;
 import java.util.List;
@@ -53,8 +52,7 @@ public final class FellingExertionGameTests {
             leaves.forEach(at -> level.setBlock(at, Blocks.OAK_LEAVES.defaultBlockState(), 2));
             Crop crop = Crop.of(level, base, ResourceLocation.withDefaultNamespace("oak_sapling")).orElseThrow();
             Job job = new Job(WorldPos.of(level, base), logs, leaves, Stances.WHEREVER, base);
-            Batch batch = new Batch(WorkSite.at(level, base), Stances.WHEREVER, crop, List.of(job));
-            FellNode node = new FellNode(new FarmNode.Chore(UUID.randomUUID(), batch, job, null));
+            FellNode node = new FellNode(new FarmNode.Chore(UUID.randomUUID(), crop, job, null));
             Worker worker = worker(body);
             node.work(level, worker, job);
             helper.assertTrue(colony.kept(LivingContent.ID).getList("hunger", 10).isEmpty(),

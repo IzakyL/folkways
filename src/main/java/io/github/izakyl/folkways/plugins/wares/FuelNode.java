@@ -53,6 +53,14 @@ final class FuelNode extends CraftNode {
             }
         }
         if (offered > 0 && rejected.stream().mapToInt(ItemStack::getCount).sum() == offered) {
+            // The one fuel slot holds another fuel, put there by another hand: the cooker is stoked, and what was
+            // brought is handed back. Waiting for the slot would be waiting for the cooker to burn it all.
+            ItemStack held = machine.get().getItem(Machines.FUEL_SLOT);
+            if (!held.isEmpty() && held.getCount() < held.getMaxStackSize()
+                    && rejected.stream().noneMatch(stack -> ItemStack.isSameItemSameComponents(stack, held))) {
+                lit.run();
+                return new Outcome.Done(worked(), List.of(), Optional.empty(), rejected);
+            }
             return Outcome.failed(WaresRefusal.STATION_FULL);
         }
         lit.run();

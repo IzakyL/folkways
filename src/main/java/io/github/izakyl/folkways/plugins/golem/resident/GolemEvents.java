@@ -3,7 +3,6 @@ package io.github.izakyl.folkways.plugins.golem.resident;
 import dev.xkmc.modulargolems.content.entity.common.AbstractGolemEntity;
 import dev.xkmc.modulargolems.events.event.GolemCollectInventoryEvent;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Release;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import java.util.Optional;
@@ -101,10 +100,8 @@ public final class GolemEvents {
             return;
         }
         MinecraftServer server = level.getServer();
-        body.colonyId().flatMap(id -> Colonies.of(server, id)).ifPresent(colony ->
-            Release.fromWorld(golem.getRemovalReason())
-                    .ifPresentOrElse(why -> colony.holdingOf(body.id())
-                        .ifPresent(held -> colony.release(held.id(), why)), () -> colony.exited(body.id())));
+        body.colonyId().flatMap(id -> Colonies.of(server, id))
+            .ifPresent(colony -> colony.removed(body.id(), golem.getRemovalReason()));
     }
 
     private static boolean colonyRazed(AbstractGolemEntity<?, ?> golem, Body body) {

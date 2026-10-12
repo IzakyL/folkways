@@ -36,6 +36,36 @@ public sealed interface Workload {
         boolean holds(ServerLevel level, Worker who);
     }
 
+    // Work a body goes into and stays in while its owner has pieces for it, such as a site going up: the plan sees
+    // one piece of work, with what all of it needs and how long it is reckoned to take, and gives it to one body.
+    // Once that body has come to it, the owner hands it one piece after another, each done as any work is; when
+    // the owner has no more for it, the body comes out and the work is done. An urge that takes the body away
+    // meanwhile takes it from the piece in hand only: it goes back in after.
+    non-sealed interface Within extends Workload {
+
+        // What the body does next: a piece, a wait for one to come up, or leaving.
+        sealed interface Turn {
+
+            record Piece(Node node) implements Turn {
+            }
+
+            record Wait() implements Turn {
+            }
+
+            record Leave() implements Turn {
+            }
+        }
+
+        Turn WAIT = new Turn.Wait();
+        Turn LEAVE = new Turn.Leave();
+
+        Turn next(ServerLevel level, Worker who);
+
+        // How a piece handed out ended, once for each.
+        default void ended(ServerLevel level, Node piece, Ending how) {
+        }
+    }
+
     @FunctionalInterface
     interface Haste {
 

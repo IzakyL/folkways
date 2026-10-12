@@ -19,6 +19,13 @@ public final class ColonySites {
         return accepting(Enrollments.delegations(), level, pos);
     }
 
+    // The cell a block is held under, so either half of a double chest names the same member.
+    public static BlockPos anchor(Level level, BlockPos pos) {
+        return accepting(level, pos)
+            .map(delegation -> ((Shape.Block) delegation.shape()).anchor().of(level, pos))
+            .orElse(pos);
+    }
+
     private static Optional<Delegation> accepting(Collection<Delegation> declared, Level level, BlockPos pos) {
         Delegation fallback = null;
         for (Delegation delegation : declared) {

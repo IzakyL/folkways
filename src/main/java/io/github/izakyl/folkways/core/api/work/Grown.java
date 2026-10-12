@@ -11,19 +11,18 @@ import java.util.UUID;
 
 // `follows` orders work here after work asked for before, outside this fragment: each comes after its `from`
 // for as long as that is still asked.
-public record Grown(List<Node> nodes, List<Before> links, int rank, List<Set<UUID>> workerGroups,
-                    List<Before> follows) {
+public record Grown(List<Node> nodes, List<Before> links, List<Set<UUID>> workerGroups, List<Before> follows) {
 
     public Grown(List<Node> nodes, List<Before> links) {
-        this(nodes, links, 0, List.of());
+        this(nodes, links, List.of());
     }
 
-    public Grown(List<Node> nodes, List<Before> links, int rank, List<Set<UUID>> workerGroups) {
-        this(nodes, links, rank, workerGroups, List.of());
+    public Grown(List<Node> nodes, List<Before> links, List<Set<UUID>> workerGroups) {
+        this(nodes, links, workerGroups, List.of());
     }
 
     public Grown following(List<Before> earlier) {
-        return new Grown(nodes, links, rank, workerGroups, earlier);
+        return new Grown(nodes, links, workerGroups, earlier);
     }
 
     public Grown byOneWorker() {
@@ -31,11 +30,7 @@ public record Grown(List<Node> nodes, List<Before> links, int rank, List<Set<UUI
         nodes.forEach(node -> all.add(node.id()));
         List<Set<UUID>> groups = new ArrayList<>(workerGroups);
         groups.add(all);
-        return new Grown(nodes, links, rank, groups, follows);
-    }
-
-    public Grown ranked(int rank) {
-        return new Grown(nodes, links, rank, workerGroups, follows);
+        return new Grown(nodes, links, groups, follows);
     }
 
     public Grown {
@@ -117,7 +112,7 @@ public record Grown(List<Node> nodes, List<Before> links, int rank, List<Set<UUI
         }
         return new Grown(nodes.stream().filter(node -> kept.contains(node.id())).toList(),
             links.stream().filter(link -> kept.contains(link.from()) && kept.contains(link.to())).toList(),
-            rank, groups, follows.stream().filter(link -> kept.contains(link.to())).toList());
+            groups, follows.stream().filter(link -> kept.contains(link.to())).toList());
     }
 
     public static Grown of(Node node) {

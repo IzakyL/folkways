@@ -943,7 +943,7 @@ async function observeTreeFelling(server: any, layout: ReturnType<typeof forestr
     still_standing: stillStanding,
     branches_standing: branchesStanding,
     beyond_reach_standing: beyondReachStanding,
-    boundary_logs_intact: bounds.every(isLogCell),
+    boundary_logs_felled: !bounds.some(isLogCell),
     boundary_logs: bounds.map((entry) => ({ cell: cellKey(entry.cell), id: blockId(entry.block) })),
   };
 }
@@ -1064,8 +1064,8 @@ async function observeForestryGameplay(
   if (felling.beyond_reach_standing.length > 0) {
     reasons.push(`felling: ${felling.beyond_reach_standing.join(" ")} still stand — these sit further than ${UNREACHABLE_FROM_FOOT} blocks from the trunk foot, so a felling lowered to one reach-gated break per log stops exactly here`);
   }
-  if (!felling.boundary_logs_intact) {
-    reasons.push(`felling: a log outside the body box was taken too (${JSON.stringify(felling.boundary_logs)}) — the felling is walking along connected wood instead of being bounded by the tree's own body`);
+  if (!felling.boundary_logs_felled) {
+    reasons.push(`felling: a log joined to the tree past its Tree(radius=${TREE_BODY_RADIUS}, height=${TREE_BODY_HEIGHT}) box was left standing (${JSON.stringify(felling.boundary_logs)}) — the felling stopped at the box instead of following the connected wood, and a log left behind hangs in the air`);
   }
   if (!(evidence.logs_into_packs >= 1)) {
     reasons.push(`felling: the logs vanished but no ${FORESTRY_LOG_BLOCK} reached any resident's pack (delta ${evidence.logs_into_packs}) — nobody actually broke them`);

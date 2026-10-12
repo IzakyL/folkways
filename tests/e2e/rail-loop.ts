@@ -1,6 +1,8 @@
 import { defineTask, tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { runColonyTask } from "./colony-tasks";
-import { commandPos } from "./colony-founding";
+import { commandPos, tryCommand } from "./colony-founding";
+import { crossingsOf, straightsOf } from "./rail-footprint";
+export { crossingsOf, straightsOf } from "./rail-footprint";
 
 type Vec = { x: number; y: number; z: number };
 export type LoopBounds = { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -22,8 +24,10 @@ export async function buildTrackLoop(server: MinecraftServer, bounds: LoopBounds
     { a: p(l, b - radius), b: p(l + radius, b), ax: 0, az: 1, bx: -1, bz: 0 },
     { a: p(r - radius, b), b: p(r, b - radius), ax: 1, az: 0, bx: 0, bz: 1 },
   ];
-  for (let x = l - 8; x <= r + 8; x += 64) {
-    await world.command(server, `forceload add ${x} ${t - 8} ${Math.min(x + 63, r + 8)} ${b + 8}`);
+  // Chunk-aligned strips, so no strip falls wholly inside chunks the one before already loaded (forceload refuses those).
+  for (let x = Math.floor((l - 8) / 16) * 16; x <= r + 8; x += 64) {
+    // A strip already loaded by someone else (another line, the town) marks nothing new; that is no failure.
+    await tryCommand(server, `forceload add ${x} ${t - 8} ${Math.min(x + 63, r + 8)} ${b + 8}`);
   }
   await tick.sprint(server, 40);
   for (const [a, b, shape] of lines) {
@@ -84,3 +88,52 @@ public final class Task {
   }
 }`,
 });
+
+/**
+ * Lays level crossings where a new loop meets the loops already down: clearing the new loop's corridor took the old
+ * track up where they meet, so the old straights are laid back wherever they are missing, and each meeting cell
+ * becomes a crossing piece, which carries both lines through.
+ */
+export async function crossLoops(server: MinecraftServer, loop: LoopBounds, earlier: LoopBounds[], y: number) {
+  const crossings = crossingsOf(loop, earlier);
+  for (const old of earlier) for (const s of straightsOf(old)) {
+    const a = s.axis === "z" ? { x: s.at, z: s.from } : { x: s.from, z: s.at };
+    const b = s.axis === "z" ? { x: s.at, z: s.to } : { x: s.to, z: s.at };
+    // Most straights were never cut, so their refill places nothing; that is no failure.
+    await tryCommand(server, `fill ${a.x} ${y} ${a.z} ${b.x} ${y} ${b.z} create:track[shape=${s.axis}o,turn=false,waterlogged=false] keep`);
+  }
+  for (const c of crossings) await world.command(server, `setblock ${c.x} ${y} ${c.z} create:track[shape=cr_o,turn=false,waterlogged=false]`);
+  await tick.sprint(server, 20);
+  const placed = [];
+  for (const c of crossings) placed.push({ ...c, block: (await world.block(server, { x: c.x, y, z: c.z }))?.id });
+  return { crossings: placed };
+}
+
+export const intArrayOf = (uuid: string) => {
+  const hex = uuid.replace(/-/g, "");
+  return `[I;${[0, 8, 16, 24].map((i) => (parseInt(hex.slice(i, i + 8), 16) | 0)).join(",")}]`;
+};
+
+/**
+ * Signals on both lines either side of each crossing, `gap` blocks out, so the crossing is a block section of its own:
+ * a train waits at the signal while another crosses, rather than meeting it there. Each point gets a signal for either
+ * direction of travel, one on each side of the track, each pointing at the track cell it guards.
+ */
+export async function signalCrossings(server: MinecraftServer, crossings: Array<{ x: number; z: number }>, y: number, gap = 6) {
+  const placed: Array<{ at: Vec; block?: string }> = [];
+  for (const c of crossings) {
+    for (const along of ["x", "z"] as const) for (const out of [-gap, gap]) {
+      const track = along === "z" ? { x: c.x, y, z: c.z + out } : { x: c.x + out, y, z: c.z };
+      for (const side of [-1, 1]) {
+        const at = along === "z" ? { x: track.x + side, y, z: track.z } : { x: track.x, y, z: track.z + side };
+        const rel = `[I;${track.x - at.x},0,${track.z - at.z}]`;
+        const nbt = `{TargetTrack:${rel},TargetDirection:${side > 0 ? 1 : 0}b,Ortho:0b,Id:${intArrayOf(crypto.randomUUID())}}`;
+        await tryCommand(server, `setblock ${commandPos(at)} create:track_signal${nbt}`);
+        placed.push({ at });
+      }
+    }
+  }
+  await tick.sprint(server, 20);
+  for (const p of placed) p.block = (await world.block(server, p.at))?.id;
+  return { signals: placed.length, standing: placed.filter((p) => p.block === "create:track_signal").length };
+}

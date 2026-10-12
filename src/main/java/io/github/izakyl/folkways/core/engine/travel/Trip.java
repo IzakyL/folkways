@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.api.resident.Conveyance;
 import io.github.izakyl.folkways.core.api.resident.Going;
 import io.github.izakyl.folkways.core.api.resident.Locomotion;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.terms.Closures;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.Vec3;
@@ -82,8 +84,11 @@ public final class Trip implements Conveyance {
 
                 return Optional.empty();
             }
-            // A ride is steered by where the plan goes after it, so the conveyance can set down at the side that leads on.
-            Set<WorldPos> onward = leg + 1 >= legs.size() - 1 ? footings : legs.get(leg + 1).to();
+            // A ride sets down where the plan walks on from: the landing footing its way on leaves by, when it names one
+            // (that footing is what the ways join to the rest), else nearest where the plan goes after it.
+            Optional<WorldPos> leaves = leg + 1 < legs.size() ? legs.get(leg + 1).from() : Optional.empty();
+            Set<WorldPos> onward = leaves.isPresent() ? Set.of(leaves.get())
+                : leg + 1 >= legs.size() - 1 ? footings : legs.get(leg + 1).to();
             stages.add(new Stage(ran.get().aboard(hop.get()), onward, Optional.empty(), false));
         }
         return Optional.of(new Trip(stages));
@@ -215,6 +220,33 @@ public final class Trip implements Conveyance {
             && Hops.laid(first).map(passage -> passage.through(first, next)).orElse(false);
     }
 
+    private static boolean shutIn(ServerLevel level, Mob body) {
+        for (Closures.Closed closed : Closures.in(level)) {
+            if (closed.holds(body.blockPosition())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The stage under way, for a log: which of how many, by what, from where, toward which cells.
+    public String describe() {
+        if (at >= stages.size()) {
+            return "done";
+        }
+        Stage stage = stages.get(at);
+        int[] box = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
+        for (WorldPos cell : stage.to()) {
+            box[0] = Math.min(box[0], cell.cell().getX()); box[1] = Math.min(box[1], cell.cell().getY());
+            box[2] = Math.min(box[2], cell.cell().getZ()); box[3] = Math.max(box[3], cell.cell().getX());
+            box[4] = Math.max(box[4], cell.cell().getY()); box[5] = Math.max(box[5], cell.cell().getZ());
+        }
+        return (at + 1) + "/" + stages.size() + " " + stage.carrying().getClass().getSimpleName()
+            + " from=" + stage.from().map(f -> f.cell().toShortString()).orElse("-")
+            + " to=" + stage.to().size() + "@" + box[0] + "," + box[1] + "," + box[2] + ".." + box[3] + "," + box[4] + "," + box[5]
+            + (stage.passing() ? " passing" : "");
+    }
+
     @Override
     public void setOut(ServerLevel level, Mob body, Set<WorldPos> to) {
         Stage stage = stages.get(at);
@@ -228,6 +260,20 @@ public final class Trip implements Conveyance {
             Stage stage = stages.get(at);
             Set<WorldPos> toward = at == stages.size() - 1 ? to : stage.to();
             Going going = stage.carrying().step(level, body, toward);
+            // Ground closed over, such as a site, is left by walking to a door of it, and nothing there is laid
+            // out to walk by: a body whose walk to the door gives out, shut in by work done round it, is set
+            // down at the door rather than left where no way will ever reach it.
+            if (going instanceof Going.Failed && at == 0 && stages.size() > 1 && stage.from().isEmpty()
+                    && !stage.passing() && toward.size() == 1 && shutIn(level, body)) {
+                WorldPos door = toward.iterator().next();
+                Optional<Vec3> out = WorldSpaces.world(level, door);
+                if (out.isPresent()) {
+                    body.getNavigation().stop();
+                    Vec3 feet = Vec3.atBottomCenterOf(BlockPos.containing(out.get()));
+                    body.teleportTo(feet.x, feet.y, feet.z);
+                    going = Going.ARRIVED;
+                }
+            }
             if (going instanceof Going.Failed && stage.from().isPresent()) {
                 for (WorldPos goal : toward) {
                     ColonyWays.wrongEdge(level, stage.from().get(), goal);

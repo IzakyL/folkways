@@ -17,7 +17,7 @@ import {
   type MinecraftServer,
 } from "@izakyl/blockwright-minecraft";
 import { reflectVec3 } from "../shared/bw-helpers";
-import { carEndOf, offsetBox, platformOf, railSite, trackEnd, type Box } from "./rail-footprint";
+import { carEndOf, carFrame, headingOf, offsetBox, platformOf, platformStrips, railSite, trackEnd, trackOf, type Box, type Stop } from "./rail-footprint";
 import { clearRailSite, releaseRailSite, type SiteClearing } from "./rail-site";
 
 export type { Box } from "./rail-footprint";
@@ -57,7 +57,8 @@ export async function buildRailLine(
   lineLength: number,
   bookSlot: string,
   options: {
-    decorate?: (server: MinecraftServer, origin: Vec) => Promise<void>;
+    /** Dresses the car once its working parts stand; `frame` reads the car's cells (see CarFrame). */
+    decorate?: (server: MinecraftServer, origin: Vec, frame: import("./rail-footprint").CarFrame) => Promise<void>;
     decorateBounds?: Box;
     anchor?: Vec;
     cyclic?: boolean;
@@ -67,6 +68,21 @@ export async function buildRailLine(
     /** Hand the train over by putting the click straight to the carriage, for a car whose doors shut the seat off
      * from the platform. */
     clickThrough?: boolean;
+    /** The stations' names in order (Alpha, Beta, then the loop's two), for a line that shares a network with others. */
+    names?: string[];
+    /** The stops after the first, in the order the train calls, in place of Beta and the loop's two: for a loop laid
+     * out by a planner. The first stop stays where the car is built, at railOrigin. */
+    stops?: Stop[];
+    /** Runs once the track is down and before the stations go on it: where another line's track is crossed. */
+    afterTrack?: () => Promise<unknown>;
+    /** The track is already down (drawn with the railway pattern): only the stations, the car and its schedule go on
+     * it. Each stop stands at its own height; the car is built on the straight at railOrigin. */
+    laid?: boolean;
+    /** On a laid line, the stop the car is built behind and first calls at, whichever way it faces, in place of the
+     * one beside railOrigin. */
+    first?: Stop;
+    /** The stations already stand (another train of the line put them up): none is placed, named or given a platform. */
+    standing?: boolean;
   } = {},
 ): Promise<RailResult> {
   const steps: any = {};
@@ -78,25 +94,34 @@ export async function buildRailLine(
   const carEnd = carEndOf(passengerCount);
   // A line that runs back and forth faces Alpha out past the car's far end: the double-ended train backs out of it to
   // Beta and drives forward back into it, so each stop names one station, as a colony timetable needs.
-  const turnback = Boolean(options.cyclic && !options.loop);
-  const stationA: Vec = { x: x + 1, y: gy, z: turnback ? z0 + carEnd + 1 : z0 + 2 };
+  const turnback = Boolean(options.cyclic && !options.loop && !options.laid);
+  const stationA: Vec = options.laid && options.first ? options.first.position
+    : { x: x + 1, y: gy, z: turnback ? z0 + carEnd + 1 : z0 + 2 };
   const stationB: Vec = { x: x + 1, y: gy, z: z0 - lineLength };
-  const stations = [{ name: STATION_A, position: stationA, reverse: turnback },
-    { name: STATION_B, position: stationB, reverse: false },
+  const named = options.names ?? [STATION_A, STATION_B, "Gamma", "Delta"];
+  const stations: Stop[] = options.laid && options.first ? [options.first, ...(options.stops ?? [])]
+    : options.stops ? [{ name: named[0], position: stationA, reverse: false }, ...options.stops] : [
+    { name: named[0], position: stationA, reverse: turnback },
+    { name: named[1], position: stationB, reverse: false },
     ...(options.loop ? [
-      { name: "Gamma", position: { x: options.loop.minX + 1, y: gy, z: z0 - lineLength + 30 }, reverse: true },
-      { name: "Delta", position: { x: options.loop.minX + 1, y: gy, z: z0 + 30 }, reverse: true },
+      { name: named[2], position: { x: options.loop.minX + 1, y: gy, z: z0 - lineLength + 30 }, reverse: true },
+      { name: named[3], position: { x: options.loop.minX + 1, y: gy, z: z0 + 30 }, reverse: true },
     ] : [])];
-  const car = { xMin: x - 2, xMax: x + 2, zMin: z0 + 3, zMax: z0 + carEnd, floorY: gy + 1, blockY: gy + 2, roofY: gy + 4 };
-  const bogey: Vec = { x, y: car.floorY, z: z0 + 3 };
-  const casing: Vec = { x, y: car.blockY, z: z0 + 3 };
-  const controls: Vec = { x, y: car.blockY, z: z0 + 6 };
-  const conductorSeat: Vec = { x, y: car.blockY, z: z0 + 7 };
-  const passengerSeat: Vec = { x: x - 1, y: car.blockY, z: z0 + 4 };
-  const schedulerStand = { x: x + 3.5, y: car.blockY, z: conductorSeat.z + 0.5 };
+  // The car stands behind the first stop: beside railOrigin unless the line names its first stop, and so its frame
+  // reads the very cells it always has there.
+  const frame = carFrame(options.laid && options.first ? options.first : { name: "", position: { x: x + 1, y: gy, z: z0 + 2 }, reverse: false });
+  const fy = frame.at(0, 0, 0).y;
+  const car = { floorY: fy + 1, blockY: fy + 2, roofY: fy + 4, nose: frame.at(0, 1, 0), tail: frame.at(0, carEnd - 2, 0) };
+  const bogey: Vec = frame.at(0, 1, 1);
+  const casing: Vec = frame.at(0, 1, 2);
+  const controls: Vec = frame.at(0, 4, 2);
+  const conductorSeat: Vec = frame.at(0, 5, 2);
+  const passengerSeat: Vec = frame.at(-1, 2, 2);
+  const stand = frame.at(3.5 * frame.side, 5, 2);
+  const schedulerStand = frame.axis === "z" ? { ...stand, z: stand.z + 0.5 } : { ...stand, x: stand.x + 0.5 };
   const farPlatform: Vec = { x: x + 3, y: gy, z: stationB.z + 2 };
   const site = railSite({
-    origin: railOrigin, lineLength, passengerCount, stations, loop: options.loop,
+    origin: railOrigin, lineLength, passengerCount, stations, loop: options.loop, laid: options.laid, standing: options.standing,
     carTop: car.roofY + (options.decorate ? 2 : 0),
     decoration: options.decorate && options.decorateBounds ? offsetBox(railOrigin, options.decorateBounds) : undefined,
   });
@@ -137,29 +162,46 @@ export async function buildRailLine(
       return result;
     }
 
-    if (options.loop) steps.loop = await buildTrackLoop(server, options.loop, gy);
+    if (options.laid) steps.track_laid = true;
+    else if (options.loop) steps.loop = await buildTrackLoop(server, options.loop, gy);
     else await tryCommand(server, `fill ${commandPos(track(z0 - lineLength - 8))} ${commandPos(track(trackEnd(railOrigin, carEnd, stations)))} create:track[shape=zo,turn=false,waterlogged=false]`);
+    if (options.afterTrack) steps.after_track = await options.afterTrack();
     await tick.sprint(server, 20);
     steps.track = (await world.block(server, track(z0 + 3)))?.id;
 
-    const placed = stations.map((stop) => ({ ...stop, suffix: "" }));
-    for (const { name, position: station, reverse, suffix } of placed) {
-      const target = { ...station, x: station.x - 1 };
-      await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with create:track_station`);
-      await tryCommand(server, `tp ${playerName} ${station.x + 1.5} ${gy} ${station.z + 0.5} ${reverse ? 0 : 180} 0`);
-      await tick.sprint(server, 10);
-      await player.useBlock(client, target, { face: "up" }).catch(() => null);
-      await tick.sprint(server, 5);
-      await player.useBlock(client, { ...station, y: station.y - 1 }, { face: "up" }).catch(() => null);
-      await tick.sprint(server, 10);
-      steps[`station_${name}${suffix}`] = (await world.block(server, station))?.id;
+    // Stations another train of the line put up stand already: none is placed, named or given a platform again.
+    const placed = options.standing ? [] : stations.map((stop) => ({ ...stop, suffix: "" }));
+    for (const stop of placed) {
+      const { name, position: station, suffix } = stop;
+      const target = trackOf(stop);
+      // Stood on the platform side, looking the way the train runs through.
+      const side = stop.side ?? 1, alongZ = (stop.axis ?? "z") === "z";
+      const stand = alongZ ? { x: station.x + side + 0.5, z: station.z + 0.5 } : { x: station.x + 0.5, z: station.z + side + 0.5 };
+      const yaw = alongZ ? (headingOf(stop) > 0 ? 0 : 180) : (headingOf(stop) > 0 ? -90 : 90);
+      // Stations far apart put the player down where the client has yet to load: a click that took nothing is tried
+      // again once it has had longer to catch up.
+      let id: string | undefined;
+      for (let attempt = 0; attempt < 4 && !id?.startsWith("create:"); attempt++) {
+        await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with create:track_station`);
+        await tryCommand(server, `tp ${playerName} ${stand.x} ${station.y} ${stand.z} ${yaw} 0`);
+        await tick.sprint(server, 10 + attempt * 40);
+        // The client loads what the teleport showed it on its own clock, not the game's.
+        if (attempt > 0) await new Promise((done) => setTimeout(done, 2000 * attempt));
+        await player.useBlock(client, target, { face: "up" }).catch(() => null);
+        await tick.sprint(server, 5);
+        await player.useBlock(client, { ...station, y: station.y - 1 }, { face: "up" }).catch(() => null);
+        await tick.sprint(server, 10);
+        id = (await world.block(server, station))?.id;
+        steps[`station_${name}${suffix}_attempts`] = attempt + 1;
+      }
+      steps[`station_${name}${suffix}`] = id;
     }
     await tryCommand(server, `clear ${playerName} create:track_station`);
     await tick.sprint(server, 20);
 
-    for (const { min, max } of site.platforms) {
-      await tryCommand(server, `fill ${min.x} ${gy} ${min.z} ${min.x} ${gy + 1} ${max.z} minecraft:stone_bricks`);
-      await tryCommand(server, `fill ${max.x} ${gy} ${min.z} ${max.x} ${gy} ${max.z} minecraft:stone_bricks`);
+    for (const [i, platform] of (options.standing ? [] : site.platforms).entries()) {
+      const { kerb, walk } = platformStrips(stations[i], platform);
+      for (const strip of [kerb, walk]) await tryCommand(server, `fill ${commandPos(strip.min)} ${commandPos(strip.max)} minecraft:stone_bricks`);
     }
     await tick.sprint(server, 10);
 
@@ -170,23 +212,23 @@ export async function buildRailLine(
       steps[`rename_${name}${suffix}`] = { found: renamed?.found, ownerType: renamed?.ownerType, error: renamed?.error };
     }
 
-    await tryCommand(server, `fill ${x - 2} ${car.floorY} ${car.zMin} ${x + 2} ${car.floorY} ${car.zMax} minecraft:oak_planks`);
-    await tryCommand(server, `setblock ${commandPos(bogey)} create:small_bogey[axis=z]`);
+    await tryCommand(server, `fill ${commandPos(frame.at(-2, 1, 1))} ${commandPos(frame.at(2, carEnd - 2, 1))} minecraft:oak_planks`);
+    await tryCommand(server, `setblock ${commandPos(bogey)} create:small_bogey[axis=${frame.axis}]`);
     await tryCommand(server, `setblock ${commandPos(casing)} create:railway_casing`);
-    await tryCommand(server, `setblock ${commandPos(controls)} create:controls[facing=south]`);
+    await tryCommand(server, `setblock ${commandPos(controls)} create:controls[facing=${frame.back}]`);
     await tryCommand(server, `setblock ${commandPos(conductorSeat)} create:red_seat`);
     for (let i = 0; i < passengerCount; i++) {
-      const seat = passengerCount === 1 ? passengerSeat : { x: x + (i % 2 === 0 ? -1 : 1), y: car.blockY, z: z0 + 9 + Math.floor(i / 2) };
+      const seat = passengerCount === 1 ? passengerSeat : frame.at(i % 2 === 0 ? -1 : 1, 7 + Math.floor(i / 2), 2);
       await tryCommand(server, `setblock ${commandPos(seat)} create:red_seat`);
     }
     await tick.sprint(server, 5);
-    if (options.decorate) await options.decorate(server, railOrigin);
+    if (options.decorate) await options.decorate(server, railOrigin, frame);
     if (turnback) {
-      await tryCommand(server, `setblock ${x} ${car.blockY} ${conductorSeat.z + 1} create:controls[facing=north]`);
+      await tryCommand(server, `setblock ${commandPos(frame.at(0, 6, 2))} create:controls[facing=${frame.ahead}]`);
       // Create assembles from the bogey at the station, and a turnback line's Alpha stands past the car's far end.
-      await tryCommand(server, `setblock ${x} ${car.floorY} ${car.zMax} create:small_bogey[axis=z]`);
+      await tryCommand(server, `setblock ${commandPos(frame.at(0, carEnd - 2, 1))} create:small_bogey[axis=${frame.axis}]`);
     }
-    steps.glue = (await tryCommand(server, `create glue ${x - 2} ${car.floorY} ${car.zMin} ${x + 2} ${car.roofY + (options.decorate ? 2 : 0)} ${car.zMax}`))?.success;
+    steps.glue = (await tryCommand(server, `create glue ${commandPos(frame.at(-2, 1, 1))} ${commandPos(frame.at(2, carEnd - 2, car.roofY - fy + (options.decorate ? 2 : 0)))}`))?.success;
     await tick.sprint(server, 20);
     steps.placed = {
       controls: (await world.block(server, controls))?.id,
@@ -210,10 +252,14 @@ export async function buildRailLine(
       .catch(() => ({ entities: [] })))?.entities ?? [];
     steps.carriage_count = carriages.length;
     if (!carriages.length) {
+      steps.assembly_exception = await runColonyTask(server, ASSEMBLY_EXCEPTION, { at: stationA }).catch((e: unknown) => String(e).slice(0, 300));
       result.error = LOST_CARRIAGE;
       return result;
     }
-    const carriageUuid = carriages[0].uuid;
+    // The carriage this line just built: the one standing on its car, when other lines already run trains.
+    const carMid = { x: (car.nose.x + car.tail.x) / 2, z: (car.nose.z + car.tail.z) / 2 };
+    const near = (e: any) => e.position ? Math.hypot(e.position.x - carMid.x, e.position.z - carMid.z) : Infinity;
+    const carriageUuid = [...carriages].sort((a: any, b: any) => near(a) - near(b))[0].uuid;
     result.carriageUuid = carriageUuid;
     result.assembled = true;
 
@@ -223,7 +269,7 @@ export async function buildRailLine(
     steps.conductor_seats = JSON.stringify(conductorSeats?.nbt ?? null).slice(0, 200);
 
     const dwell = (s: number) => `Conditions:[[{Id:"create:delay",Data:{Value:${s},TimeUnit:1}}]]`;
-    const entries = stations.map(({ name }) => `{Instruction:{Id:"create:destination",Data:{Text:"${name}"}},${dwell(options.dwell?.[name] ?? (options.loop || name === STATION_A ? 20 : 10))}}`);
+    const entries = stations.map(({ name }) => `{Instruction:{Id:"create:destination",Data:{Text:"${name}"}},${dwell(options.dwell?.[name] ?? (options.loop || options.laid || name === stations[0].name ? 20 : 10))}}`);
     const scheduleTag = `Entries:[${entries.join(",")}],Cyclic:${options.cyclic ? 1 : 0}b,Progress:0`;
     steps.give_schedule = (await tryCommand(server, `give ${playerName} create:schedule[create:train_schedule={${scheduleTag}}] 1`))?.success;
     steps.book_offhand = (await tryCommand(
@@ -420,3 +466,53 @@ function conductorSeatPos(nbt: any): Vec | null {
   }
   return null;
 }
+
+// What Create's station said when it would not assemble the train: its last AssemblyException, if any.
+const ASSEMBLY_EXCEPTION = defineTask<{ at: Vec }, Record<string, unknown>>({
+  name: "folkways.rail.assembly-exception",
+  side: "server",
+  timeoutMs: 10_000,
+  source: javaTask({
+    imports: ["net.minecraft.core.BlockPos"],
+    body: `
+var at = (Map<?, ?>) Args.of(ctx).value("at");
+var pos = new BlockPos(((Number) at.get("x")).intValue(), ((Number) at.get("y")).intValue(), ((Number) at.get("z")).intValue());
+var be = ctx.server().overworld().getBlockEntity(pos);
+if (be == null) return Map.of("ok", false, "why", "no station block entity");
+var field = be.getClass().getDeclaredField("lastException");
+field.setAccessible(true);
+var e = field.get(be);
+var index = be.getClass().getDeclaredField("failedCarriageIndex");
+index.setAccessible(true);
+String said = "none";
+if (e != null) {
+  var component = e.getClass().getDeclaredField("component");
+  component.setAccessible(true);
+  said = ((net.minecraft.network.chat.Component) component.get(e)).getString();
+}
+var out = new LinkedHashMap<String, Object>();
+out.put("ok", true); out.put("exception", said); out.put("failed_carriage", index.get(be));
+for (var name : List.of("assemblyDirection", "assemblyLength", "bogeyLocations", "bogeyCount")) {
+  var f = be.getClass().getDeclaredField(name);
+  f.setAccessible(true);
+  var v = f.get(be);
+  out.put(name, v instanceof int[] ints ? Arrays.toString(ints) : String.valueOf(v));
+}
+var edge = be.getClass().getField("edgePoint").get(be);
+var target = (BlockPos) edge.getClass().getMethod("getGlobalPosition").invoke(edge);
+out.put("target", target.toShortString());
+var dir = (net.minecraft.core.Direction) be.getClass().getMethod("getAssemblyDirection").invoke(be);
+var along = new ArrayList<String>();
+for (int i = 0; i < 5; i++) {
+  var cell = target.relative(dir, i);
+  along.add(i + ": " + ctx.server().overworld().getBlockState(cell) + " / up " + ctx.server().overworld().getBlockState(cell.above()));
+}
+out.put("along", along);
+var bogeys = new ArrayList<String>();
+for (var cell : BlockPos.betweenClosed(target.offset(-6, -3, -30), target.offset(6, 4, 30)))
+  if (ctx.server().overworld().getBlockState(cell).getBlock() instanceof com.simibubi.create.content.trains.bogey.AbstractBogeyBlock<?>) bogeys.add(cell.toShortString());
+out.put("bogeys", bogeys);
+return out;
+`,
+  }),
+});

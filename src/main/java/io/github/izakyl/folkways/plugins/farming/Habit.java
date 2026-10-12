@@ -19,7 +19,13 @@ sealed interface Habit {
 
     List<BlockPos> harvest(Crop crop, LevelReader level, BlockPos base);
 
-    default boolean hasRoom(LevelReader level, BlockPos base, Set<BlockPos> sown) {
+    // The ground one sowing takes, from its first cell: the cell alone, or all the cells of a crop that only
+    // grows when they are sown together.
+    default List<BlockPos> stand(BlockPos ground) {
+        return List.of(ground);
+    }
+
+    default boolean hasRoom(LevelReader level, List<BlockPos> stand, Set<BlockPos> sown) {
         return true;
     }
 
@@ -95,9 +101,17 @@ sealed interface Habit {
         }
     }
 
-    record Tree(int radius, int height) implements Habit {
+    // A tree of span two grows from four saplings in a square and from no fewer.
+    record Tree(int radius, int height, int span) implements Habit {
 
-        private static final int MAX_BODY_CELLS = 128;
+        Tree(int radius, int height) {
+            this(radius, height, 1);
+        }
+
+        private static final int MAX_BODY_CELLS = 512;
+
+        // How far from the trunk a bough is still followed.
+        private static final int SPRAWL = 8;
 
         private static final int MAX_CANOPY_CELLS = 256;
 
@@ -122,7 +136,18 @@ sealed interface Habit {
 
         @Override
         public int reach() {
-            return Math.max(1, radius);
+            return Math.max(1, radius + span - 1);
+        }
+
+        @Override
+        public List<BlockPos> stand(BlockPos ground) {
+            List<BlockPos> cells = new ArrayList<>(span * span);
+            for (int dx = 0; dx < span; dx++) {
+                for (int dz = 0; dz < span; dz++) {
+                    cells.add(ground.offset(dx, 0, dz));
+                }
+            }
+            return List.copyOf(cells);
         }
 
         @Override
@@ -131,23 +156,28 @@ sealed interface Habit {
         }
 
         @Override
-        public boolean hasRoom(LevelReader level, BlockPos base, Set<BlockPos> sown) {
-            for (int up = 1; up < height; up++) {
-                BlockState overhead = level.getBlockState(base.above(up));
-                if (!overhead.isAir() && !overhead.is(BlockTags.REPLACEABLE_BY_TREES)) {
-                    return false;
+        public boolean hasRoom(LevelReader level, List<BlockPos> stand, Set<BlockPos> sown) {
+            for (BlockPos base : stand) {
+                for (int up = 1; up < height; up++) {
+                    BlockState overhead = level.getBlockState(base.above(up));
+                    if (!overhead.isAir() && !overhead.is(BlockTags.REPLACEABLE_BY_TREES)) {
+                        return false;
+                    }
                 }
-            }
-            for (BlockPos around : BlockPos.betweenClosed(
-                    base.offset(-radius, 0, -radius), base.offset(radius, 0, radius))) {
-                BlockState beside = level.getBlockState(around);
-                if (beside.is(BlockTags.LOGS) || beside.is(BlockTags.SAPLINGS)) {
-                    return false;
+                for (BlockPos around : BlockPos.betweenClosed(
+                        base.offset(-radius, 0, -radius), base.offset(radius, 0, radius))) {
+                    if (stand.contains(around)) {
+                        continue;
+                    }
+                    BlockState beside = level.getBlockState(around);
+                    if (beside.is(BlockTags.LOGS) || beside.is(BlockTags.SAPLINGS)) {
+                        return false;
+                    }
                 }
-            }
-            for (BlockPos taken : sown) {
-                if (claims(base, taken)) {
-                    return false;
+                for (BlockPos taken : sown) {
+                    if (claims(base, taken)) {
+                        return false;
+                    }
                 }
             }
             return true;
@@ -198,6 +228,16 @@ sealed interface Habit {
                 && cell.getY() < base.getY() + height;
         }
 
+        private boolean sprawls(BlockPos base, BlockPos cell) {
+            int dx = cell.getX() - base.getX();
+            int dz = cell.getZ() - base.getZ();
+            return cell.getY() >= base.getY()
+                && dx >= -SPRAWL && dx < span + SPRAWL
+                && dz >= -SPRAWL && dz < span + SPRAWL;
+        }
+
+        // The tree is every log joined to the foot of its trunk, however tall it stands and wherever its boughs go:
+        // a log left behind hangs in the air with nothing to find it by.
         private List<BlockPos> spread(LevelReader level, BlockPos base, List<BlockPos> trunk) {
             Set<BlockPos> body = new LinkedHashSet<>(trunk);
             Deque<BlockPos> frontier = new ArrayDeque<>(trunk);
@@ -205,7 +245,7 @@ sealed interface Habit {
                 BlockPos cell = frontier.removeFirst();
                 for (BlockPos around : BlockPos.betweenClosed(cell.offset(-1, -1, -1), cell.offset(1, 1, 1))) {
                     BlockPos next = around.immutable();
-                    if (body.contains(next) || !claims(base, next)
+                    if (body.contains(next) || !sprawls(base, next) || !level.hasChunkAt(next)
                         || !level.getBlockState(next).is(BlockTags.LOGS)) {
                         continue;
                     }

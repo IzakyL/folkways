@@ -22,13 +22,11 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonySnapshot;
-import io.github.izakyl.folkways.core.engine.plan.Asks;
-import io.github.izakyl.folkways.core.engine.plan.Diagnosis;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.plan.Schedule;
-import io.github.izakyl.folkways.core.engine.plan.Solved;
 import io.github.izakyl.folkways.core.engine.plan.Vertex;
-import io.github.izakyl.folkways.core.engine.plan.Weave;
+import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
+import io.github.izakyl.folkways.core.engine.plan.Shown;
+import io.github.izakyl.folkways.core.engine.plan.WeaveDelta;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.HashMap;
 import java.util.List;
@@ -179,7 +177,7 @@ public final class UrgePreemptionGameTests {
             view = ColonySnapshot.of(data, level);
             body = PersonBody.RESIDENT.get().create(level);
             runner = new BodyRunner(body.resident().id());
-            labor.run(level, task -> { });
+            labor.run(level, new Lanes(task -> { }, task -> { }));
         }
 
         Urge urge(String name, double weight, boolean preempts) {
@@ -203,9 +201,9 @@ public final class UrgePreemptionGameTests {
         }
 
         void queue(Node node) {
-            Weave weave = new Weave(Map.of(node.id(), new Vertex(node.id(), node, Placement.NOWHERE)),
+            WeaveDelta weave = Shown.delta(Map.of(node.id(), new Vertex(node.id(), node, Placement.NOWHERE)),
                 List.of(), List.of());
-            PlanningFixture.apply(labor, level, new Solved(weave, Schedule.EMPTY, Diagnosis.NOTHING, Asks.NONE));
+            PlanningFixture.apply(labor, level, List.of(), weave);
             runner.follow(List.of(node.id()));
         }
 

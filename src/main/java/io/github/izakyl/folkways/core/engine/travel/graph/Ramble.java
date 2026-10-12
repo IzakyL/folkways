@@ -24,14 +24,22 @@ final class Ramble {
     private final Roamer roamer;
     private final long from;
 
+    private final long aim;
+
     private int spent;
 
     Ramble(ServerLevel level, Realm realm, Waypoints net, Roamer roamer, long from) {
+        this(level, realm, net, roamer, from, from);
+    }
+
+    // A ramble with an aim leans its sweep that way, laying ways toward it rather than all round.
+    Ramble(ServerLevel level, Realm realm, Waypoints net, Roamer roamer, long from, long aim) {
         this.level = level;
         this.realm = realm;
         this.net = net;
         this.roamer = roamer;
         this.from = from;
+        this.aim = aim;
     }
 
     int spent() {
@@ -39,22 +47,41 @@ final class Ramble {
     }
 
     int run(long now, int limit) {
+        if (aim != from) {
+            return toward(now, limit);
+        }
         Optional<Reading> read =
             Look.at(level, realm, roamer, from, Set.of(), BlockPos.of(from), true, limit);
         if (read.isEmpty()) {
             return 0;
         }
         spent = read.get().swept().visited();
-        return harvest(read.get(), now);
+        return harvest(read.get(), read.get().swept().walked(), now);
     }
 
-    private int harvest(Reading read, long now) {
+    // Leaning toward the aim, the sweep stops at the first point of another piece it comes to (or the aim, or as near
+    // as it got), and the ways are laid along the trail it took there.
+    private int toward(long now, int limit) {
+        int start = net.at(from);
+        Optional<Reading> read = Look.at(level, realm, roamer, from, Set.of(BlockPos.of(aim)),
+            cell -> {
+                int there = net.at(cell);
+                return there >= 0 && (start < 0 || net.apart(start, there));
+            }, BlockPos.of(aim), false, limit);
+        if (read.isEmpty()) {
+            return 0;
+        }
+        spent = read.get().swept().visited();
+        return harvest(read.get(), read.get().swept().nodes(), now);
+    }
+
+    private int harvest(Reading read, java.util.List<Node> swept, long now) {
         Map<Node, Integer> anchor = new HashMap<>();
         Map<Node, Double> since = new HashMap<>();
         LongArrayList made = new LongArrayList();
         IntArrayList madeAt = new IntArrayList();
         int laid = 0;
-        for (Node node : read.swept().walked()) {
+        for (Node node : swept) {
             Optional<BlockPos> mine = read.on().toLocal(new BlockPos(node.x, node.y, node.z));
             if (mine.isEmpty()) {
                 continue;

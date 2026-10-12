@@ -15,12 +15,14 @@ import io.github.izakyl.folkways.core.engine.travel.TravelBudget;
 import io.github.izakyl.folkways.core.engine.travel.Urgency;
 import io.github.izakyl.folkways.core.engine.travel.Ways;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -43,8 +45,6 @@ public final class Roaming {
 
     private static final long SHELVED_TICKS = 1_200L;
 
-    private static final int ALONG_THE_PLATFORM = 1;
-
     private static final long RAMBLED_TICKS = 2_400L;
 
     private static final int MOST_RAMBLES = 2;
@@ -53,6 +53,32 @@ public final class Roaming {
     private static final int BUSY_RAMBLE_VISITS = 128;
 
     private static final int MOST_WALKED = 64;
+
+    // Loose pieces of the ways (a platform's footings, ground walked to once, half a town) are rambled toward the
+    // nearest of the rest this often, a few at a time, so the colony's ways grow into one rather than staying in islands.
+    private static final int BRIDGE_EVERY = 20;
+
+    private static final int MOST_BRIDGES = 2;
+
+    // A gap rambled across and still open rests RAMBLED_TICKS before it is tried again, twice as long each time up
+    // to sixteen times: islands no ramble reaches (a fenced pen, a platform out on its own) stop costing.
+    private static final int MOST_BRIDGE_BACKOFFS = 4;
+
+    // A loose piece just rambled from, or found with no gap to try, is not read again for this long: the ways grown
+    // meanwhile may have brought another gap.
+    private static final long PIECE_RESTS = 200L;
+
+    // Pinned points with no link (a platform's footings its sweep did not come to) are each swept round from, a few
+    // at a time and no farther than their neighbours: every footing the sweep comes to is joined in passing.
+    private static final int MOST_FOOTINGS = 4;
+
+    private static final int FOOTING_VISITS = 64;
+
+    // While the colony runs on a budget, the ways are straightened and frozen for the planner at most this often;
+    // what changed in between is seen at the next freeze.
+    private static final long FREEZE_EVERY = 20L;
+
+    private static final boolean BRIDGE_DEBUG = Boolean.getBoolean("folkways.bridgeDebug");
 
     private static final int MOST_ANSWERING_ROUNDS = 8;
 
@@ -71,6 +97,48 @@ public final class Roaming {
     private record Shelf(Ask ask, long until) {
     }
 
+    private record Fresh(Tract tract, long footing) {
+    }
+
+    // What was rambled from lately and to no end, each left alone twice as long as the time before.
+    private static final class Rests {
+
+        private static final int MOST_REMEMBERED = 4_096;
+
+        private final Long2LongOpenHashMap until = new Long2LongOpenHashMap();
+        private final Long2IntOpenHashMap tries = new Long2IntOpenHashMap();
+
+        boolean resting(long key) {
+            return until.containsKey(key);
+        }
+
+        void rest(long key, long now) {
+            if (tries.size() >= MOST_REMEMBERED) {
+                tries.clear();
+            }
+            int tried = tries.addTo(key, 1);
+            until.put(key, now + (RAMBLED_TICKS << Math.min(tried, MOST_BRIDGE_BACKOFFS)));
+        }
+
+        void wake(long now) {
+            until.long2LongEntrySet().removeIf(entry -> entry.getLongValue() <= now);
+        }
+    }
+
+    // One net's bridging: the gaps tried, the lone footings swept from, and the pieces not to be read again yet.
+    private static final class Bridging {
+
+        private final Rests gaps = new Rests();
+        private final Rests footings = new Rests();
+        private final Long2LongOpenHashMap pieces = new Long2LongOpenHashMap();
+
+        void wake(long now) {
+            gaps.wake(now);
+            footings.wake(now);
+            pieces.long2LongEntrySet().removeIf(entry -> entry.getLongValue() <= now);
+        }
+    }
+
     private final ServerLevel level;
 
     private final Realm home;
@@ -82,6 +150,14 @@ public final class Roaming {
     private final Deque<Trod> walked = new ArrayDeque<>();
 
     private final Long2LongOpenHashMap rambledUntil = new Long2LongOpenHashMap();
+
+    // What each net was bridged from lately.
+    private final Map<Tract, Bridging> bridging = new LinkedHashMap<>();
+    private long nextFreeze;
+    private long nextIdleRamble;
+
+    // Platforms new to a net, by a footing to sweep round from, waiting for their sweep.
+    private final Set<Fresh> platforms = new LinkedHashSet<>();
 
     private final Pending pending = new Pending();
 
@@ -103,6 +179,7 @@ public final class Roaming {
     private long reviewedRequests;
     private long sweptRequests;
     private long nextRamble;
+    private long nextBridge;
     private long nextExpiry;
 
     private boolean settled;
@@ -193,6 +270,10 @@ public final class Roaming {
             nextExpiry = now + EXPIRE_EVERY;
         }
         PathfindingLoad.asksPending(pending.size() + connecting.size());
+        if (wandering && now >= nextAskDump) {
+            nextAskDump = now + 600L;
+            dumpAsks(now);
+        }
         boolean asking = !pending.isEmpty() || !connecting.isEmpty() || quest != null;
         long began = Util.getNanos();
         if (slice == Slice.UNTIL_ANSWERED) {
@@ -202,6 +283,11 @@ public final class Roaming {
                 }
             }
         } else {
+            // Loose pieces are bridged on a reserve of their own, before the asks: the asks take every slice there is.
+            if (wandering && now >= nextBridge) {
+                bridge(sorts, roamers, slice, now);
+                nextBridge = now + BRIDGE_EVERY;
+            }
             boolean explored = wandering && now >= nextRamble
                 && wander(sorts, roamers, slice, now, true);
             if (explored) {
@@ -210,17 +296,70 @@ public final class Roaming {
             if (!explored || !slice.spent(0)) {
                 work(sorts, roamers, now, slice);
             }
-            if (wandering && !explored && quest == null && pending.isEmpty() && connecting.isEmpty()) {
+            // Idle time explores too, but no more often than walked ground is rambled: each ramble grows the ways the
+            // planner's every freeze reads.
+            if (wandering && !explored && now >= nextIdleRamble && quest == null && pending.isEmpty()
+                    && connecting.isEmpty()) {
                 if (wander(sorts, roamers, slice, now, false)) {
                     nextRamble = now + RAMBLE_EVERY;
                 }
+                nextIdleRamble = now + RAMBLE_EVERY;
             }
         }
 
-        publish(sorts, roamers, crossings, now);
+        publish(sorts, roamers, crossings, now, slice == Slice.UNTIL_ANSWERED);
 
         TravelBudget.spent(Util.getNanos() - began);
         return asking;
+    }
+
+    private long nextAskDump;
+
+    // Diagnostic: what the asks waiting are, by kind and urgency, with a few of each queue spelled out.
+    private void dumpAsks(long now) {
+        Map<String, Integer> byKind = new java.util.TreeMap<>();
+        for (Ask ask : pending) {
+            byKind.merge("p:" + ask.kind().getPath() + "/" + ask.urgency().band(), 1, Integer::sum);
+        }
+        for (Ask ask : connecting) {
+            byKind.merge("c:" + ask.kind().getPath() + "/" + ask.urgency().band(), 1, Integer::sum);
+        }
+        StringBuilder said = new StringBuilder("asks waiting pending=" + pending.size() + " connecting="
+            + connecting.size() + " shelved=" + shelved.size() + " quest="
+            + (quest == null ? "-" : spell(quest.ask())) + " " + byKind + " counts recv=" + receivedRequests
+            + " enq=" + enqueuedRequests + " ans=" + answeredRequests + " started=" + startedRequests
+            + " discarded=" + discardedRequests + " reviewed=" + reviewedRequests);
+        int shown = 0;
+        for (Ask ask : pending) {
+            if (shown++ >= 6) {
+                break;
+            }
+            said.append("\n  p ").append(spell(ask));
+        }
+        shown = 0;
+        for (Ask ask : connecting) {
+            if (shown++ >= 6) {
+                break;
+            }
+            said.append("\n  c ").append(spell(ask));
+        }
+        LOGGER.info("{}", said);
+    }
+
+    private String spell(Ask ask) {
+        BlockPos goal = BlockPos.of(ask.goals().getLong(0));
+        String on = "";
+        for (Map.Entry<Tract, Waypoints> held : nets.entrySet()) {
+            if (held.getKey().realm().equals(ask.realm())) {
+                Waypoints net = held.getValue();
+                int a = net.at(ask.from());
+                int b = net.at(ask.goals().getLong(0));
+                on = " fromOn=" + (a >= 0) + " goalOn=" + (b >= 0);
+                break;
+            }
+        }
+        return ask.kind().getPath() + " " + ask.urgency() + " " + ask.start().toShortString() + " -> "
+            + goal.toShortString() + " (" + ask.goals().size() + " goals)" + on;
     }
 
     private boolean receive(Ask ask, long now) {
@@ -456,7 +595,8 @@ public final class Roaming {
             }
             rambledUntil.put(where.getAsLong(), now + RAMBLED_TICKS);
             Ramble ramble = new Ramble(level, trod.realm(), net, roamer, where.getAsLong());
-            PathfindingLoad.rambled(ramble.run(now, reserved ? BUSY_RAMBLE_VISITS : Sweep.MOST_VISITED));
+            PathfindingLoad.rambled(reserved ? "walked" : "idle", ramble.run(now, reserved ? BUSY_RAMBLE_VISITS
+                : Sweep.MOST_VISITED));
             ran = true;
             boolean exhausted = slice.spent(ramble.spent());
             if (reserved || exhausted) {
@@ -464,6 +604,77 @@ public final class Roaming {
             }
         }
         return ran;
+    }
+
+    private void bridge(Map<ResourceLocation, Sort> sorts, List<Roamer> roamers, Slice slice, long now) {
+        for (Iterator<Fresh> waiting = platforms.iterator(); waiting.hasNext(); ) {
+            Fresh platform = waiting.next();
+            waiting.remove();
+            Waypoints net = nets.get(platform.tract());
+            Roamer roamer = roamerOf(roamers, sorts, platform.tract().sort());
+            if (net == null || roamer == null) {
+                continue;
+            }
+            Ramble ramble = new Ramble(level, platform.tract().realm(), net, roamer, platform.footing());
+            PathfindingLoad.rambled("platform", ramble.run(now, Sweep.MOST_VISITED));
+            if (slice.spent(ramble.spent())) {
+                return;
+            }
+        }
+        for (Map.Entry<Tract, Waypoints> held : nets.entrySet()) {
+            Roamer roamer = roamerOf(roamers, sorts, held.getKey().sort());
+            if (roamer == null) {
+                continue;
+            }
+            Waypoints net = held.getValue();
+            Bridging rests = bridging.computeIfAbsent(held.getKey(), tract -> new Bridging());
+            rests.wake(now);
+            for (long footing : net.lonely(MOST_FOOTINGS, rests.footings::resting)) {
+                rests.footings.rest(footing, now);
+                Ramble ramble = new Ramble(level, held.getKey().realm(), net, roamer, footing);
+                int laid = ramble.run(now, FOOTING_VISITS);
+                PathfindingLoad.rambled("footing", laid);
+                if (BRIDGE_DEBUG) {
+                    LOGGER.info("footing {} {} laid={} spent={}", held.getKey().sort().bulk(),
+                        BlockPos.of(footing).toShortString(), laid, ramble.spent());
+                }
+                if (slice.spent(ramble.spent())) {
+                    return;
+                }
+            }
+            for (long[] gap : net.bridges(MOST_BRIDGES, rests.pieces::containsKey, rests.gaps::resting,
+                    piece -> rests.pieces.put(piece, now + PIECE_RESTS))) {
+                rests.pieces.put(gap[2], now + PIECE_RESTS);
+                rests.gaps.rest(gap[3], now);
+                Ramble ramble = new Ramble(level, held.getKey().realm(), net, roamer, gap[0], gap[1]);
+                int laid = ramble.run(now, Sweep.MOST_VISITED);
+                PathfindingLoad.rambled("bridge", laid);
+                if (BRIDGE_DEBUG) {
+                    int a = net.at(gap[0]), b = net.at(gap[1]);
+                    LOGGER.info("bridge {} {} -> {} laid={} spent={} joined={}", held.getKey().sort().bulk(),
+                        BlockPos.of(gap[0]).toShortString(), BlockPos.of(gap[1]).toShortString(), laid, ramble.spent(),
+                        a >= 0 && b >= 0 && net.joins(a, b, now));
+                }
+                if (laid == 0 && ramble.spent() <= 1) {
+                    net.stranded(gap[0]);
+                }
+                if (slice.spent(ramble.spent())) {
+                    return;
+                }
+            }
+        }
+    }
+
+    private static Roamer roamerOf(List<Roamer> roamers, Map<ResourceLocation, Sort> sorts, Sort sort) {
+        for (Map.Entry<ResourceLocation, Sort> kind : sorts.entrySet()) {
+            if (kind.getValue().equals(sort)) {
+                Roamer roamer = roamerOf(roamers, kind.getKey());
+                if (roamer != null && !roamer.body().isRemoved()) {
+                    return roamer;
+                }
+            }
+        }
+        return null;
     }
 
     private OptionalLong untrodden(Trod trod) {
@@ -583,39 +794,33 @@ public final class Roaming {
         }
         for (Sort sort : sorts.values()) {
             for (Crossing crossing : crossings) {
-                platform(net(sort, crossing.boarding().realm()), crossing.hop().boarding(),
-                    crossing.boarding(), now);
-                platform(net(sort, crossing.landing().realm()), crossing.hop().landing(),
-                    crossing.landing(), now);
+                Tract boarding = new Tract(sort, crossing.boarding().realm());
+                Tract landing = new Tract(sort, crossing.landing().realm());
+                platform(net(sort, boarding.realm()), boarding, crossing.hop().boarding(), crossing.boarding(), now);
+                platform(net(sort, landing.realm()), landing, crossing.hop().landing(), crossing.landing(), now);
             }
         }
-        askTheWayTo(roamers, sorts, crossings);
     }
 
-    private static void platform(Waypoints net, Stances.Cells footings, WorldPos anchor, long now) {
-        int hub = net.pin(anchor.cell().asLong(), now);
+    // A platform's footings stand in the ways as points like any other, joined to them only by ways walked: what is
+    // "aboard" is the web's, not a cell. A platform not seen before is swept round once, so its footings join up.
+    private void platform(Waypoints net, Tract tract, Stances.Cells footings, WorldPos anchor, long now) {
+        boolean fresh = false;
+        long first = Long.MIN_VALUE;
         for (WorldPos cell : footings.cells()) {
             if (!cell.sameRealm(anchor)) {
 
                 continue;
             }
-            int id = net.pin(cell.cell().asLong(), now);
-            net.link(hub, id, ALONG_THE_PLATFORM, now);
-            net.link(id, hub, ALONG_THE_PLATFORM, now);
+            fresh |= !net.knows(cell.cell().asLong());
+            net.pin(cell.cell().asLong(), now);
+            if (first == Long.MIN_VALUE) {
+                first = cell.cell().asLong();
+            }
         }
-    }
-
-    private void askTheWayTo(List<Roamer> roamers, Map<ResourceLocation, Sort> sorts,
-                             List<Crossing> crossings) {
-        for (Roamer roamer : roamers) {
-            if (sorts.get(roamer.kind()) == null || roamer.body().isRemoved()) {
-                continue;
-            }
-            WorldPos from = Feet.of(roamer.body());
-            for (Crossing crossing : crossings) {
-                asked.note(roamer.kind(), from, crossing.hop().boarding().cells());
-                asked.note(roamer.kind(), from, crossing.hop().landing().cells());
-            }
+        // Swept from a footing, where a body stands: the anchor may be on the track.
+        if (fresh && first != Long.MIN_VALUE) {
+            platforms.add(new Fresh(tract, first));
         }
     }
 
@@ -718,6 +923,8 @@ public final class Roaming {
         Predicate<Tract> gone = tract -> !alive.contains(tract.sort())
             || !standing.contains(tract.realm());
         nets.keySet().removeIf(gone);
+        bridging.keySet().removeIf(gone);
+        platforms.removeIf(fresh -> gone.test(fresh.tract()));
         frozen.keySet().removeIf(gone);
         extents.keySet().removeIf(realm -> !standing.contains(realm));
         Predicate<Ask> lost = ask -> {
@@ -744,29 +951,37 @@ public final class Roaming {
         }
     }
 
+    // The ways as the planner reads them: each net frozen afresh when it changed - at once while asks are answered
+    // on the spot, at most every FREEZE_EVERY ticks otherwise, as a freeze reads the whole net.
     private void publish(Map<ResourceLocation, Sort> sorts, List<Roamer> roamers,
-                         List<Crossing> crossings, long now) {
+                         List<Crossing> crossings, long now, boolean promptly) {
         int points = 0;
         int links = 0;
         long straightening = 0;
         long freezing = 0;
+        boolean due = promptly || now >= nextFreeze;
+        boolean froze = false;
         for (Map.Entry<Tract, Waypoints> held : nets.entrySet()) {
             Waypoints net = held.getValue();
             if (net.trim(now)) {
                 PathfindingLoad.renumbered();
             }
-            if (quest == null && net.changed(now)) {
+            if (due && quest == null && net.changed(now)) {
                 long began = Util.getNanos();
                 PathfindingLoad.straightened(net.straighten(now));
                 straightening += Util.getNanos() - began;
             }
-            if (net.changed(now) || !frozen.containsKey(held.getKey())) {
+            if (due && net.changed(now) || !frozen.containsKey(held.getKey())) {
+                froze = true;
                 long began = Util.getNanos();
                 frozen.put(held.getKey(), net.freeze(now));
                 freezing += Util.getNanos() - began;
             }
             points += net.size();
             links += net.links();
+        }
+        if (froze) {
+            nextFreeze = now + FREEZE_EVERY;
         }
         PathfindingLoad.published(straightening, freezing);
         int shut = 0;

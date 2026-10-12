@@ -39,7 +39,6 @@ public final class FarmingContent {
         ResourceLocation.fromNamespaceAndPath("folkways", "farm");
 
     public static final String QUICK_HANDS = "farming_quick_hands";
-    public static final String WIDE_HANDS = "farming_wide_hands";
     public static final String REPLANT = "farming_replant";
 
     static final int CELL_TICKS = 10;
@@ -50,8 +49,14 @@ public final class FarmingContent {
 
     public static final String CROP = "crop";
 
+    // Work done in one go takes longer the more of it there is, but less and less so: one unit of it takes the
+    // unit's ticks, and every doubling after that as many again.
+    static int ticksFor(int unit, double amount) {
+        return Math.max(1, (int) Math.round(unit * Math.log1p(amount) / Math.log(2)));
+    }
+
     private static final VocationSpec SPEC = new VocationSpec(VOCATION,
-        List.of(new Perk(QUICK_HANDS, 4), new Perk(WIDE_HANDS, 2), new Perk(REPLANT, 1)),
+        List.of(new Perk(QUICK_HANDS, 4), new Perk(REPLANT, 1)),
         List.of(ItemSpec.of(ItemTags.HOES)));
 
     private static final Workload.Haste HASTE =

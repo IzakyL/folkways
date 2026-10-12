@@ -1,7 +1,10 @@
 package io.github.izakyl.folkways;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 public final class FolkwaysConfig {
@@ -27,6 +30,7 @@ public final class FolkwaysConfig {
     private static final ModConfigSpec.IntValue MAX_BUILD_CELLS;
     private static final ModConfigSpec.LongValue MAX_BLUEPRINT_VOLUME;
 
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> REFUSED_RECIPES;
     private static final ModConfigSpec.ConfigValue<List<? extends Number>> BUILDING_HASTE;
     private static final ModConfigSpec.ConfigValue<List<? extends Number>> CRAFTING_HASTE;
     private static final ModConfigSpec.ConfigValue<List<? extends Number>> CONDUCTING_HASTE;
@@ -39,6 +43,7 @@ public final class FolkwaysConfig {
 
     private static final ModConfigSpec.IntValue HAUL_REACH_TICKS;
     private static final ModConfigSpec.IntValue PLAN_HORIZON_TICKS;
+    private static final ModConfigSpec.IntValue PLAN_HORIZON_DEPTH;
     private static final ModConfigSpec.IntValue DISPATCH_REACH_TICKS;
     private static final ModConfigSpec.IntValue SEAT_TICKS;
 
@@ -66,10 +71,10 @@ public final class FolkwaysConfig {
                 "cost what they cost: meant for tests and for measuring, not for a busy server.")
             .defineEnum("mode", Mode.DEFAULT);
         SOLVE_THREADS = BUILDER
-            .comment("How many colonies may solve at once in DEFAULT mode. A colony's own dimensions still",
-                "solve one at a time — they share the colony's places — so this is a cap on colonies, not",
-                "on threads doing useful work. 0 picks a quarter of the machine's cores, at least one and",
-                "at most four; the server thread wants the rest. SINGLE_THREAD mode ignores it.")
+            .comment("How many threads plan in DEFAULT mode. Each colony weaves its plan on one and lays its",
+                "routes on another, side by side, so two keep one colony's stages apart; more serve more",
+                "colonies at once. 0 picks a quarter of the machine's cores, at least two and at most",
+                "four; the server thread wants the rest. SINGLE_THREAD mode ignores it.")
             .defineInRange("solveThreads", 0, 0, 32);
         BUILDER.pop();
 
@@ -133,6 +138,19 @@ public final class FolkwaysConfig {
                 "malformed or hostile structure file, not a building size: it stops one from claiming a",
                 "volume too large to walk before its blocks are counted.")
             .defineInRange("maxBlueprintVolume", 1_048_576L, 1L, 16_777_216L);
+        BUILDER.pop();
+
+        BUILDER.push("crafting");
+        REFUSED_RECIPES = BUILDER
+            .comment("Recipes, by id, residents never craft, smelt or cut by, as though they did not exist:",
+                "a recipe that wastes what it takes, or that a server wants kept to players. By default the",
+                "wasteful ones: bamboo planks (nine bamboo for two planks), sticks from bamboo (two bamboo",
+                "for one stick), smelting tools and armour back down to nuggets, taking waxed copper back",
+                "to ingots (the wax is lost), and dyeing wool, beds and carpets that already have a colour",
+                "into another (dye spent on colour already had). Read when the server starts.")
+            .<String>defineListAllowEmpty("refusedRecipes", refusedByDefault(),
+                () -> "minecraft:",
+                id -> id instanceof String text && ResourceLocation.tryParse(text) != null);
         BUILDER.pop();
 
         BUILDER.push("perks");
@@ -201,8 +219,15 @@ public final class FolkwaysConfig {
                 "than this is left unassigned until a later plan, when whoever is free by then can take it:",
                 "the colony plans again every few seconds, so a route laid further out only ties a resident",
                 "to work they would wait on. Work that finishes something a resident has already begun is",
-                "laid whatever its start.")
+                "laid whatever its start. A resident with fewer than planHorizonDepth pieces of work on their",
+                "route is handed work however far off it starts.")
             .defineInRange("planHorizonTicks", 3_000, 200, 1_000_000);
+        PLAN_HORIZON_DEPTH = BUILDER
+            .comment("How many pieces of work a resident's route holds before planHorizonTicks cuts it: work",
+                "is left for a later plan only when it starts past the horizon and the route it would join is",
+                "this deep already. A resident short of work - one walking far out to a works - is never left",
+                "idle for the horizon's sake.")
+            .defineInRange("planHorizonDepth", 8, 0, 10_000);
         BUILDER.pop();
 
         BUILDER.push("navigation");
@@ -257,7 +282,7 @@ public final class FolkwaysConfig {
     public static int solveThreads() {
         int asked = read(SOLVE_THREADS);
         return asked > 0 ? asked
-            : Math.clamp(Runtime.getRuntime().availableProcessors() / 4, 1, 4);
+            : Math.clamp(Runtime.getRuntime().availableProcessors() / 4, 2, 4);
     }
 
     public static boolean immigrationEnabled() {
@@ -308,6 +333,35 @@ public final class FolkwaysConfig {
         return read(MAX_BLUEPRINT_VOLUME);
     }
 
+    // The wasteful recipes refused unless a server says otherwise.
+    private static List<String> refusedByDefault() {
+        List<String> refused = new java.util.ArrayList<>(List.of(
+            "minecraft:bamboo_planks",
+            "minecraft:stick_from_bamboo_item",
+            "minecraft:iron_nugget_from_smelting",
+            "minecraft:iron_nugget_from_blasting",
+            "minecraft:gold_nugget_from_smelting",
+            "minecraft:gold_nugget_from_blasting",
+            "minecraft:copper_ingot_from_waxed_copper_block"));
+        for (net.minecraft.world.item.DyeColor colour : net.minecraft.world.item.DyeColor.values()) {
+            for (String dyed : List.of("wool", "bed", "carpet")) {
+                refused.add("minecraft:dye_" + colour.getName() + "_" + dyed);
+            }
+        }
+        return List.copyOf(refused);
+    }
+
+    public static Set<ResourceLocation> refusedRecipes() {
+        Set<ResourceLocation> refused = new LinkedHashSet<>();
+        for (String id : read(REFUSED_RECIPES)) {
+            ResourceLocation named = ResourceLocation.tryParse(id);
+            if (named != null) {
+                refused.add(named);
+            }
+        }
+        return refused;
+    }
+
     public static List<? extends Number> buildingHaste() {
         return read(BUILDING_HASTE);
     }
@@ -346,6 +400,10 @@ public final class FolkwaysConfig {
 
     public static int haulReachTicks() {
         return read(HAUL_REACH_TICKS);
+    }
+
+    public static int planHorizonDepth() {
+        return read(PLAN_HORIZON_DEPTH);
     }
 
     public static int planHorizonTicks() {

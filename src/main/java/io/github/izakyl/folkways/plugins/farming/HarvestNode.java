@@ -21,8 +21,8 @@ final class HarvestNode extends FarmNode {
     HarvestNode(Chore chore) {
         super(FarmNode.declare(chore, Workload.Once.of(FarmingContent.CELL_TICKS,
             FarmingContent::haste))
-            .doing(FarmingContent.HARVESTING, chore.batch().crop().fruit()).done(), chore);
-        this.crop = chore.batch().crop();
+            .doing(FarmingContent.HARVESTING, chore.crop().fruit()).done(), chore);
+        this.crop = chore.crop();
     }
 
     @Override

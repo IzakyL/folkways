@@ -696,12 +696,16 @@ export async function waitForGroundedPlayer(server: MinecraftServer): Promise<{ 
 }
 
 export async function countResidents(server: MinecraftServer): Promise<number> {
+  let result;
   try {
-    const result = await world.entities(server, { dimension: "minecraft:overworld", limit: 1000 });
-    return (result.entities ?? []).filter((e: any) => entityTypeMatches(e.type, RESIDENT_TYPE)).length;
+    // Filtered by type on the server: an unfiltered read stops at its limit, and a big world's animals and golems would
+    // crowd residents out of it.
+    result = await world.entities(server, { dimension: "minecraft:overworld", types: [RESIDENT_TYPE], limit: 1000 });
   } catch {
     return 0;
   }
+  if (result.limited) throw new Error("more than 1000 residents in the overworld: countResidents cannot count them all");
+  return (result.entities ?? []).filter((e: any) => entityTypeMatches(e.type, RESIDENT_TYPE)).length;
 }
 
 export async function isColonyMember(server: MinecraftServer, target: Vec): Promise<boolean> {

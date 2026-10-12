@@ -6,7 +6,7 @@ const HOLD_REACH = 12;
 const SEARCH_REACH = 16;
 
 export type Moved = { uuid: string; type: string; name: string; from: Vec; to: Vec };
-export type Held = { uuid: string; type: string; noAi: boolean };
+export type Held = { uuid: string; type: string; noAi: boolean; walled?: boolean };
 
 export type SiteClearing = {
   ok: boolean;
@@ -146,6 +146,7 @@ public final class Task {
     var build=boxes(args.value("build"));var bed=boxes(args.value("bed"));int hold=(int)args.integer("hold");
     var obstructions=new ArrayList<Object>();
     for(var b:build)for(var p:BlockPos.betweenClosed(b.x0(),b.y0(),b.z0(),b.x1(),b.y1(),b.z1())){
+      if(BuiltInRegistries.BLOCK.getKey(level.getBlockState(p).getBlock()).getPath().endsWith("track"))continue;
       if(level.getBlockEntity(p)!=null&&obstructions.size()<8)obstructions.add(Map.of("at",vec(p),"block",BuiltInRegistries.BLOCK.getKey(level.getBlockState(p).getBlock()).toString()));
     }
     if(!obstructions.isEmpty()){
@@ -178,13 +179,18 @@ public final class Task {
         moved.add(Map.of("uuid",e.getStringUUID(),"type",type(e),"name",e.getName().getString(),"from",vec(from),"to",vec(best)));
       }
       if(e instanceof Mob m&&(enclosed||touches(near,e.getBoundingBox()))){
-        held.add(Map.of("uuid",e.getStringUUID(),"type",type(e),"noAi",m.isNoAi()));
+        // One already walled in before anything was built (dug in by earlier work, or the land) is not the train's doing.
+        boolean walled=level.getBlockCollisions(e,e.getBoundingBox().deflate(0.01)).iterator().hasNext();
+        held.add(Map.of("uuid",e.getStringUUID(),"type",type(e),"noAi",m.isNoAi(),"walled",walled));
         m.setNoAi(true);
       }
     }
     int cleared=0,filled=0;
     for(var b:build)for(var p:BlockPos.betweenClosed(b.x0(),b.y0(),b.z0(),b.x1(),b.y1(),b.z1())){
-      if(!level.getBlockState(p).isAir()){level.setBlock(p,Blocks.AIR.defaultBlockState(),3);cleared++;}
+      var state=level.getBlockState(p);
+      // Track already laid stays: a line drawn before its stations go on.
+      if(state.isAir()||BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath().endsWith("track"))continue;
+      level.setBlock(p,Blocks.AIR.defaultBlockState(),3);cleared++;
     }
     for(var b:bed)for(var p:BlockPos.betweenClosed(b.x0(),b.y0(),b.z0(),b.x1(),b.y1(),b.z1())){
       if(!level.getBlockState(p).isFaceSturdy(level,p,Direction.UP)){level.setBlock(p.immutable(),Blocks.STONE.defaultBlockState(),3);filled++;}
@@ -205,7 +211,7 @@ public final class Task {
       if(e==null||!e.isAlive()||e.isPassenger())continue;
       checked++;
       String why=null;var bb=e.getBoundingBox().deflate(0.01);
-      if(level.getBlockCollisions(e,bb).iterator().hasNext())why="walled in: blocks overlap its body";
+      if(!Boolean.TRUE.equals(row.get("walled"))&&level.getBlockCollisions(e,bb).iterator().hasNext())why="walled in: blocks overlap its body";
       if(why==null&&car.aabb().intersects(bb))why="inside where the train car was built";
       if(why==null&&moved.contains(e.getStringUUID())&&!reached.contains(key(e.blockPosition())))why="cannot walk back to "+anchor.toShortString();
       if(why!=null)stuck.add(Map.of("uuid",e.getStringUUID(),"type",type(e),"at",vec(e.position()),"why",why));

@@ -13,14 +13,10 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
-import io.github.izakyl.folkways.core.engine.plan.Asks;
-import io.github.izakyl.folkways.core.engine.plan.Diagnosis;
 import io.github.izakyl.folkways.core.engine.plan.Gone;
 import io.github.izakyl.folkways.core.engine.plan.Message;
-import io.github.izakyl.folkways.core.engine.plan.Schedule;
-import io.github.izakyl.folkways.core.engine.plan.Solved;
+import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
 import io.github.izakyl.folkways.core.engine.plan.Vertex;
-import io.github.izakyl.folkways.core.engine.plan.Weave;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -206,8 +202,8 @@ public final class AskedLifecycleGameTests {
             apply(labor, level, List.of(), weave(planted));
             Ending plantedFailed = new Ending.Failed(planted.id(), LaborRefusal.BEFORE_NOT_DONE);
             Ending waitingFailed = new Ending.Failed(waiting.id(), LaborRefusal.BEFORE_NOT_DONE);
-            apply(labor, level, List.of(), new Weave(Map.of(), List.of(), List.of(), Map.of(), Set.of(), Map.of(),
-                Map.of(), List.of(new Gone(planted, plantedFailed), new Gone(waiting, waitingFailed))));
+            PlanningFixture.applyWhole(labor, level, List.of(), Map.of(), List.of(), List.of(), Set.of(),
+                List.of(new Gone(planted, plantedFailed), new Gone(waiting, waitingFailed)), Set.of());
             tellEndings(labor);
             helper.assertTrue(heard.equals(List.of("planted " + plantedFailed, "waiting " + waitingFailed)),
                 "work the planner gave up ends as it says, once, planted or not");
@@ -229,8 +225,8 @@ public final class AskedLifecycleGameTests {
             apply(labor, level, List.of(), weave(old));
             labor.released(id);
             Node fresh = node(helper, id);
-            apply(labor, level, List.of(), new Weave(Map.of(id, new Vertex(id, fresh, Placement.NOWHERE)),
-                List.of(), List.of(), Map.of(), Set.of(id)));
+            PlanningFixture.applyWhole(labor, level, List.of(), Map.of(id, new Vertex(id, fresh, Placement.NOWHERE)),
+                List.of(), List.of(), Set.of(id), List.of(), Set.of());
             helper.assertTrue(hand(labor).stream().noneMatch(Message.Released.class::isInstance),
                 "a release of the old lifetime is not read against the new one");
         } finally {
@@ -240,27 +236,25 @@ public final class AskedLifecycleGameTests {
         helper.succeed();
     }
 
-    private static Weave weave(Node... nodes) {
+    private static Map<UUID, Vertex> weave(Node... nodes) {
         Map<UUID, Vertex> vertices = new java.util.LinkedHashMap<>();
         for (Node node : nodes) {
             vertices.put(node.id(), new Vertex(node.id(), node, Placement.NOWHERE));
         }
-        return new Weave(vertices, List.of(), List.of());
+        return vertices;
     }
 
-    private static Weave held(UUID... ids) {
-        return new Weave(Map.of(), List.of(), List.of(), Map.of(), Set.of(), Map.of(), Map.of(), List.of(), List.of(),
-            Set.of(ids));
+    // The asked work kept off the plan, with nothing on it.
+    private static Set<UUID> held(UUID... ids) {
+        return Set.of(ids);
     }
 
-    private static void apply(ColonyLabor labor, ServerLevel level, List<Message> batch, Weave weave) {
-        try {
-            var method = ColonyLabor.class.getDeclaredMethod("apply", ServerLevel.class, List.class, Solved.class);
-            method.setAccessible(true);
-            method.invoke(labor, level, batch, new Solved(weave, Schedule.EMPTY, Diagnosis.NOTHING, Asks.NONE));
-        } catch (ReflectiveOperationException broken) {
-            throw new AssertionError(broken);
-        }
+    private static void apply(ColonyLabor labor, ServerLevel level, List<Message> batch, Map<UUID, Vertex> weave) {
+        PlanningFixture.applyWhole(labor, level, batch, weave);
+    }
+
+    private static void apply(ColonyLabor labor, ServerLevel level, List<Message> batch, Set<UUID> held) {
+        PlanningFixture.applyWhole(labor, level, batch, Map.of(), List.of(), List.of(), Set.of(), List.of(), held);
     }
 
     private static void tellEndings(ColonyLabor labor) {

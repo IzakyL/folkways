@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.person;
 
+import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.resident.Resident;
@@ -27,16 +28,19 @@ final class PersonPresence implements Facing {
 
     private final SettlerQueue settlers;
 
+    // When the settlers are counted within each period, spread against every other cron; see Cadence.
+    private final Cadence.Cron cron;
+    private boolean swept;
+
     PersonPresence(Colony colony) {
         this.colony = colony;
         this.settlers = SettlerQueue.from(colony.kept(PersonContent.ID));
+        this.cron = Cadence.claim(colony, SWEEP_TICKS);
     }
 
-    private int sinceSweep = SWEEP_TICKS;
-
     public void tick(MinecraftServer server) {
-        if (++sinceSweep >= SWEEP_TICKS) {
-            sinceSweep = 0;
+        if (!swept || cron.due(server)) {
+            swept = true;
             refresh(server);
         }
     }

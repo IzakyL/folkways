@@ -50,6 +50,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
 
@@ -57,9 +58,11 @@ final class LivingPresence implements Facing {
 
     private static final int VITALS_INTERVAL = 10;
 
-    static final long RATIONS = 2;
+    // A resident carries food for this many days, counted by what it nourishes, and goes for more once down to
+    // this many days' worth: one walk to the pantry in a couple of days, not one after every meal.
+    static final int RATION_DAYS = 3;
+    static final int RESTOCK_DAYS = 1;
 
-    private static final int RATION_RANK = 0;
 
     static final ResourceLocation EAT = ResourceLocation.fromNamespaceAndPath("folkways", "eat");
 
@@ -271,20 +274,48 @@ final class LivingPresence implements Facing {
             if (body == null) {
                 continue;
             }
-            long carried = Bodies.of(body).map(had -> Goods.countIn(had.pack(), food)).orElse(0L);
-            if (carried >= RATIONS) {
+            int carried = Bodies.of(body).map(had -> nourishing(had.pack(), food)).orElse(0);
+            if (carried >= RESTOCK_DAYS * Hunger.FOOD_PER_DAY) {
                 continue;
             }
             wanted.add(Grown.of(Delivery.to(idOf(resident.id(), food), LivingContent.ID,
                     WorkSite.on(level, resident.id(), body.blockPosition()), Stances.WHEREVER,
-                    food, RATIONS - carried, count -> sweep.nudge()))
-                .ranked(RATION_RANK));
+                    food, mealsFor(food, RATION_DAYS * Hunger.FOOD_PER_DAY - carried), count -> sweep.nudge())));
         }
         return List.copyOf(wanted);
     }
 
+    // How much the food in the pack nourishes, of the food the colony eats.
+    private static int nourishing(Container pack, ItemSpec food) {
+        int points = 0;
+        for (int slot = 0; slot < pack.getContainerSize(); slot++) {
+            ItemStack stack = pack.getItem(slot);
+            FoodProperties eaten = stack.isEmpty() ? null : stack.get(DataComponents.FOOD);
+            if (eaten != null && Goods.matches(stack, food)) {
+                points += eaten.nutrition() * stack.getCount();
+            }
+        }
+        return points;
+    }
+
+    // How many pieces of the food nourish this much, taking one piece for the middling of what the colony eats:
+    // which of it is fetched is the plan's to say.
+    static long mealsFor(ItemSpec food, int points) {
+        int whole = 0;
+        int kinds = 0;
+        for (Item item : Goods.members(food)) {
+            FoodProperties eaten = item.getDefaultInstance().get(DataComponents.FOOD);
+            if (eaten != null && eaten.nutrition() > 0) {
+                whole += eaten.nutrition();
+                kinds++;
+            }
+        }
+        double each = kinds == 0 ? 1.0D : (double) whole / kinds;
+        return Math.max(1L, (long) Math.ceil(points / each));
+    }
+
     private static UUID idOf(UUID resident, ItemSpec food) {
-        String said = LivingContent.ID + "|" + resident + "|" + food.describe() + "|" + RATIONS;
+        String said = LivingContent.ID + "|" + resident + "|" + food.describe() + "|" + RATION_DAYS;
         return UUID.nameUUIDFromBytes(said.getBytes(StandardCharsets.UTF_8));
     }
 

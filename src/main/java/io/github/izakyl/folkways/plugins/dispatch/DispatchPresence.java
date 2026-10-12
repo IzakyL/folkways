@@ -210,7 +210,7 @@ public final class DispatchPresence implements Facing {
         int reachTicks = CollectNode.reachTicks();
         strays.forEach((at, stances) -> {
             if (at.in(view.level())) {
-                goals.add(Grown.of(new StrayNode(at, stances, reachTicks, collecting)).ranked(StrayNode.RANK));
+                goals.add(Grown.of(new StrayNode(at, stances, reachTicks, collecting)));
             }
         });
         return goals;

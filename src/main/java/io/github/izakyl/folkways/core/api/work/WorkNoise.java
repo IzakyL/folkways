@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.core.api.work;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
@@ -20,6 +22,23 @@ public interface WorkNoise {
     static WorkNoise broke(BlockPos at, BlockState state) {
         BlockPos cell = at.immutable();
         return (level, emitter) -> level.levelEvent(2001, cell, Block.getId(state));
+    }
+
+    // A block broken among many: a few of its crumbs and no sound, where the full burst of every one would bury
+    // the rest. The sound of the lot is voiced apart, once.
+    static WorkNoise crumbs(BlockPos at, BlockState state) {
+        BlockPos cell = at.immutable();
+        return (level, emitter) -> level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, state),
+            cell.getX() + 0.5, cell.getY() + 0.5, cell.getZ() + 0.5, 6, 0.25, 0.25, 0.25, 0.0);
+    }
+
+    static WorkNoise crack(BlockPos at, BlockState state) {
+        BlockPos cell = at.immutable();
+        return (level, emitter) -> {
+            SoundType sound = state.getSoundType(level, cell, emitter);
+            level.playSound(null, cell, sound.getBreakSound(), SoundSource.BLOCKS,
+                (sound.getVolume() + 1.0F) / 2.0F, sound.getPitch() * 0.8F);
+        };
     }
 
     static WorkNoise placed(BlockPos at, BlockState state) {

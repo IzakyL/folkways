@@ -12,11 +12,13 @@ final class Rest {
     static final int SPENT = 1200;
     static final int SLEEPY = 800;
 
-    private static final double PER_LABOR_TICK = 1.0D / 15.0D;
+    // A resident walking most of the day, as a working one does, grows sleepy about once a day and sleeps it off
+    // in a sixth of one.
+    private static final double PER_LABOR_TICK = 1.0D / 5.0D;
 
-    private static final double PER_BLOCK_WALKED = 0.1D;
+    private static final double PER_BLOCK_WALKED = 0.3D;
 
-    private static final double PER_TICK_ASLEEP = 12.0D / 30.0D;
+    private static final double PER_TICK_ASLEEP = 6.0D / 30.0D;
 
     private double tired;
 

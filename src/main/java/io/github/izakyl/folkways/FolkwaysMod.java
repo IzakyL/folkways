@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.Declaring;
 import io.github.izakyl.folkways.core.api.FolkwaysMixinPlugin;
 import io.github.izakyl.folkways.core.api.Ledger;
 import io.github.izakyl.folkways.core.api.Relating;
+import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Contributions;
 import io.github.izakyl.folkways.core.api.participation.Participations;
 import io.github.izakyl.folkways.core.api.participation.Stake;
@@ -138,6 +139,7 @@ public final class FolkwaysMod {
         PathfindingLoad.forgetServer();
         TravelBudget.forgetServer();
         ColonyOverviews.forgetServer();
+        Cadence.forgetServer();
         ColonyFront.forgetAll();
     }
 

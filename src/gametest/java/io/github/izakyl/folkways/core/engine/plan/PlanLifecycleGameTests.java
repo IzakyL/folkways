@@ -69,7 +69,7 @@ public final class PlanLifecycleGameTests {
             return new Situation(fixture.ways, new Stock(holdings, room), List.of(), stands);
         }
 
-        Map<Stash, UUID> fetches(Solved solved) {
+        Map<Stash, UUID> fetches(Planned solved) {
             Map<Stash, UUID> found = new LinkedHashMap<>();
             solved.weave().vertices().forEach((id, vertex) -> {
                 if (!id.equals(task.id())) {
@@ -85,7 +85,7 @@ public final class PlanLifecycleGameTests {
         Scene scene = Scene.of(helper);
         PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
         try {
-            Solved first = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, scene.task.goals(), List.of(), 0);
+            Planned first = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, scene.task.goals(), List.of(), 0);
             Map<Stash, UUID> fetches = scene.fetches(first);
             helper.assertTrue(fetches.size() == 2 && first.weave().vertices().containsKey(scene.task.id()),
                 "eight bread come from two stashes of four");
@@ -94,7 +94,7 @@ public final class PlanLifecycleGameTests {
             Stash kept = used.get(1);
             Stash spare = scene.stashes.stream().filter(stash -> !fetches.containsKey(stash)).findFirst().orElseThrow();
 
-            Solved repaired = solver.solve(scene.stocked(Set.of(failing)), scene.fixture.crew, scene.task.goals(),
+            Planned repaired = solver.solve(scene.stocked(Set.of(failing)), scene.fixture.crew, scene.task.goals(),
                 List.of(new Message.Failed(fetches.get(failing), LaborRefusal.GOODS_GONE)), 1);
             Map<Stash, UUID> now = scene.fetches(repaired);
             helper.assertTrue(repaired.weave().vertices().containsKey(scene.task.id())
@@ -121,11 +121,11 @@ public final class PlanLifecycleGameTests {
         Claims claims = new Claims();
         PlanningFixture.Rounds solver = new PlanningFixture.Rounds(claims, new Cooldowns());
         try {
-            Solved first = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, scene.task.goals(), List.of(), 0);
+            Planned first = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, scene.task.goals(), List.of(), 0);
             Map<Stash, UUID> fetches = scene.fetches(first);
             Stash failing = fetches.keySet().iterator().next();
             Stash spare = scene.stashes.stream().filter(stash -> !fetches.containsKey(stash)).findFirst().orElseThrow();
-            Solved broken = solver.solve(scene.stocked(Set.of(failing, spare)), scene.fixture.crew,
+            Planned broken = solver.solve(scene.stocked(Set.of(failing, spare)), scene.fixture.crew,
                 scene.task.goals(), List.of(new Message.Failed(fetches.get(failing), LaborRefusal.GOODS_GONE)), 1);
             helper.assertTrue(broken.weave().vertices().isEmpty(),
                 "with four bread left, neither the delivery nor its surviving fetch stays planned");
@@ -142,13 +142,13 @@ public final class PlanLifecycleGameTests {
         Scene scene = Scene.of(helper);
         PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
         try {
-            Solved first = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, scene.task.goals(), List.of(), 0);
+            Planned first = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, scene.task.goals(), List.of(), 0);
             Map<Stash, UUID> before = scene.fetches(first);
-            Solved gone = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, scene.task.goals(),
+            Planned gone = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, scene.task.goals(),
                 List.of(new Message.Failed(scene.task.id(), LaborRefusal.NOWHERE_TO_PUT_IT)), 1);
             helper.assertTrue(gone.weave().vertices().isEmpty(),
                 "a failed goal is not grown again by the planner, and its fetches go with it");
-            Solved again = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, scene.task.goals(), List.of(), 2);
+            Planned again = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, scene.task.goals(), List.of(), 2);
             Map<Stash, UUID> after = scene.fetches(again);
             helper.assertTrue(again.weave().fresh().contains(scene.task.id()),
                 "offered again by its owner, it is a new lifetime");
@@ -198,35 +198,35 @@ public final class PlanLifecycleGameTests {
         var goals = scene.task.goals();
         PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
         try {
-            Solved first = solver.solve(situation, both, goals, List.of(), 0);
+            Planned first = solver.solve(situation, both, goals, List.of(), 0);
             UUID taken = scene.fetches(first).values().iterator().next();
             Crew holding = new Crew(List.of(holding(hand, taken), second));
             helper.assertTrue(hand.id().equals(solver.solve(situation, holding, goals, List.of(), 1)
                 .weave().pins().get(taken)), "a held node is bound to its holder");
-            Solved released = solver.solve(situation, both, goals, List.of(new Message.Released(taken)), 2);
+            Planned released = solver.solve(situation, both, goals, List.of(new Message.Released(taken)), 2);
             helper.assertTrue(!released.weave().pins().containsKey(taken),
                 "a released node may be taken by anyone");
 
             solver.solve(situation, holding, goals, List.of(), 3);
-            Solved gone = solver.solve(situation, new Crew(List.of(second)), goals,
+            Planned gone = solver.solve(situation, new Crew(List.of(second)), goals,
                 List.of(new Message.Left(hand.id())), 4);
             helper.assertTrue(!gone.weave().pins().containsKey(taken)
                     && gone.schedule().tours().containsKey(other.id()),
                 "a holder who is no longer here does not keep the node from the rest");
 
-            Solved carried = solver.solve(situation, both, goals, List.of(), 5);
+            Planned carried = solver.solve(situation, both, goals, List.of(), 5);
             var tour = carried.schedule().tours().values().iterator().next();
             UUID fetched = tour.nodes().getFirst();
-            Solved pinned = solver.solve(situation, both, goals, List.of(new Message.Finished(fetched)), 6);
+            Planned pinned = solver.solve(situation, both, goals, List.of(new Message.Finished(fetched)), 6);
             helper.assertTrue(tour.resident().equals(pinned.weave().pins().get(scene.task.id())),
                 "once goods are in a pack, the rest of that work stays with the one carrying them");
-            Solved away = solver.solve(situation,
+            Planned away = solver.solve(situation,
                 new Crew(List.of(tour.resident().equals(hand.id()) ? second : hand)), goals,
                 List.of(new Message.Left(tour.resident())), 7);
             Crew stayed = new Crew(List.of(tour.resident().equals(hand.id()) ? second : hand));
             helper.assertTrue(!away.weave().vertices().containsKey(scene.task.id()),
                 "when the carrier is gone, the work they were bound to leaves with them");
-            Solved offered = solver.solve(situation, stayed, goals, List.of(), 8);
+            Planned offered = solver.solve(situation, stayed, goals, List.of(), 8);
             helper.assertTrue(offered.weave().vertices().containsKey(scene.task.id())
                     && offered.schedule().unassigned().isEmpty(),
                 "offered again by its owner, it is sought afresh for those still here");
@@ -243,14 +243,14 @@ public final class PlanLifecycleGameTests {
         var goals = scene.task.goals();
         PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
         try {
-            Solved first = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, goals, List.of(), 0);
+            Planned first = solver.solve(scene.stocked(Set.of()), scene.fixture.crew, goals, List.of(), 0);
             Map<Stash, UUID> fetches = scene.fetches(first);
             Stash failing = fetches.keySet().iterator().next();
             UUID held = fetches.get(failing);
             Crew holding = new Crew(List.of(holding(hand, held)));
             solver.solve(scene.stocked(Set.of()), holding, goals, List.of(), 1);
             Set<Stash> empty = Set.copyOf(scene.stashes);
-            Solved broken = solver.solve(scene.stocked(empty), holding, goals,
+            Planned broken = solver.solve(scene.stocked(empty), holding, goals,
                 List.of(new Message.Failed(fetches.values().stream().filter(id -> !id.equals(held))
                     .findFirst().orElseThrow(), LaborRefusal.GOODS_GONE)), 2);
             helper.assertTrue(broken.weave().fresh().stream().noneMatch(first.weave().vertices()::containsKey),

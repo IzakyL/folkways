@@ -80,7 +80,8 @@ test("panel member toggle joins a container to the colony and leaves it again", 
     await screen.waitForWidget(client, { id: TOGGLE_WIDGET }, { timeoutMs: 10_000 });
     evidence.tokens_before = await widgetIds(client);
     expect(evidence.tokens_before).toContain(TOGGLE_WIDGET);
-    await waitForElement(client, { id: PANEL_WIDGET }, { timeoutMs: 10_000 });
+    // Only a block the colony holds has a board beside its screen: until the chest joins there is the button alone.
+    await waitForElement(client, { id: PANEL_WIDGET }, { state: "absent", timeoutMs: 10_000 });
 
     evidence.click_join = await softly(() => screen.clickWidget(client, { id: TOGGLE_WIDGET }));
     await safeAction(() => world.waitFor(server, memberCondition(chest!, true), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));
@@ -95,6 +96,7 @@ test("panel member toggle joins a container to the colony and leaves it again", 
     await safeAction(() => world.waitFor(server, memberCondition(chest!, false), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));
     evidence.member_after_leave = await isColonyMember(server, chest);
     expect(evidence.member_after_leave).toBe(false);
+    await waitForElement(client, { id: PANEL_WIDGET }, { state: "absent", timeoutMs: 10_000 });
 
     await screen.dismiss(client);
     testInfo.attach("member-toggle", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });

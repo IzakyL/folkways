@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
-import { screen, tick, world } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { foundColonyFast, optInViaBook, waitForGroundedPlayer,
   entityTypeMatches,
 } from "./colony-founding";
+import { runColonyTask } from "./colony-tasks";
 import { aimAndWorldLeftClick, countInResidentPacks, mustCommand } from "./world-ui";
 import {
   colonyRegistry,
@@ -33,7 +34,13 @@ const RATION = 8;
 const BED_NEAR_DISTANCE = 2.75;
 const MIN_SLEEPERS = 2;
 
-const LABOR_TICKS_TO_SLEEPY = 12_000;
+const LABOR_TICKS_TO_SLEEPY = 4_000;
+// A resident grows hungry and sleepy about once a day of work, and the woodlot is a few minutes of it: each starts
+// the watch a little short of both marks (he eats at food 14 and looks for his bed at 800 tired), so the felling
+// and the hauling are what take him over them.
+const FOOD_AT_START = 15;
+const EXHAUSTION_AT_START = 3.0;
+const TIRED_AT_START = 780;
 const OBSERVE_TICKS = 36_000;
 const BURST_TICKS = 1_200;
 
@@ -92,6 +99,11 @@ test("a resident eats out of his own pack and lies down in his own bed", async (
       + `{"neoforge:attachments":{"folkways:body_state":{Pack:{Items:[`
       + `{Slot:0b,Stack:{id:"${FOOD_ITEM}",count:${RATION}}}]}}}}`,
     );
+
+    evidence.worn = await runColonyTask(server, WEAR, {
+      colony_id: founding.evidence.colonyId, food: FOOD_AT_START, exhaustion: EXHAUSTION_AT_START, tired: TIRED_AT_START,
+    });
+    expect(evidence.worn.set, "every resident starts the watch near hungry and near sleepy").toBe(RESIDENT_COUNT);
 
     const packsBefore = await countInResidentPacks(server);
     evidence.packs_before = packsBefore;
@@ -161,6 +173,66 @@ test("a resident eats out of his own pack and lies down in his own bed", async (
     });
     await pair?.teardown(testInfo);
   }
+});
+
+// Hunger and tiredness are the living presence's own books, kept by resident and reached no other way.
+const WEAR = defineTask<Record<string, any>, Record<string, any>>({
+  name: "folkways.needs.wear",
+  side: "server",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: [
+      "io.github.izakyl.folkways.core.api.colony.Colony",
+      "io.github.izakyl.folkways.core.api.resident.Resident",
+      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+      "java.lang.reflect.AccessibleObject",
+      "java.lang.reflect.Constructor",
+      "java.util.Map",
+      "java.util.UUID",
+    ],
+    body: `
+Args args = Args.of(ctx);
+String colonyId = args.string("colony_id");
+Colony colony = ColonyGround.of(ctx.server(), UUID.fromString(colonyId))
+    .orElseThrow(() -> Fail.notFound("no colony " + colonyId));
+Object presence = colony.service(LivingContent.ID, Object.class)
+    .orElseThrow(() -> Fail.unavailable("the colony has no folkways:living presence"));
+@SuppressWarnings("unchecked")
+Map<UUID, Object> bellies = (Map<UUID, Object>) open(presence.getClass().getDeclaredField("bellies")).get(presence);
+@SuppressWarnings("unchecked")
+Map<UUID, Object> wear = (Map<UUID, Object>) open(presence.getClass().getDeclaredField("wear")).get(presence);
+Class<?> hungerType = Class.forName("io.github.izakyl.folkways.plugins.person.living.Hunger");
+Class<?> restType = Class.forName("io.github.izakyl.folkways.plugins.person.living.Rest");
+Constructor<?> newHunger = open(hungerType.getDeclaredConstructor());
+Constructor<?> newRest = open(restType.getDeclaredConstructor());
+int set = 0;
+for (Resident resident : colony.residents()) {
+    Object belly = bellies.computeIfAbsent(resident.id(), key -> make(newHunger));
+    open(hungerType.getDeclaredField("foodLevel")).setInt(belly, (int) args.number("food"));
+    open(hungerType.getDeclaredField("saturationLevel")).setFloat(belly, 0.0F);
+    open(hungerType.getDeclaredField("exhaustionLevel")).setFloat(belly, (float) args.number("exhaustion"));
+    Object rest = wear.computeIfAbsent(resident.id(), key -> make(newRest));
+    open(restType.getDeclaredField("tired")).setDouble(rest, args.number("tired"));
+    set++;
+}
+return Sync.stamp(Map.of("ok", Boolean.TRUE, "set", Integer.valueOf(set)));
+`,
+    members: `
+private static Object make(Constructor<?> constructor) {
+    try {
+        return constructor.newInstance();
+    } catch (ReflectiveOperationException e) {
+        throw new IllegalStateException(e);
+    }
+}
+
+private static <T extends AccessibleObject> T open(T member) {
+    member.setAccessible(true);
+    return member;
+}
+`,
+  }),
 });
 
 type Woodlot = {

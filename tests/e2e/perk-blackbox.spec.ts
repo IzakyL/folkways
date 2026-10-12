@@ -36,8 +36,9 @@ const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 3;
 
 const SADDLE = "minecraft:saddle";
-const BASE_PACK_SLOTS = 12;
-const BASE_PLANNABLE = 6;
+// A pack is eighteen cells, all of them for goods but those its tools and its food lie in: so at most eighteen.
+const BASE_PACK_SLOTS = 18;
+const BASE_PLANNABLE = 18;
 const SADDLE_STOCK = 24;
 const CHEST_SLOTS = 27;
 
@@ -215,7 +216,7 @@ test("perk system end-to-end: carrying capacity and butcher yield each flip a wo
     expect(
       blocked.peak_in_one_pack,
       `without the perk the fullest pack held ${blocked.peak_in_one_pack} saddles at once, beyond the`
-      + ` ${BASE_PLANNABLE} slots a 12-slot pack can plan: so "going past it" later cannot prove the pack grew. `
+      + ` ${BASE_PLANNABLE} slots a ${BASE_PACK_SLOTS}-slot pack can plan: so "going past it" later cannot prove the pack grew. `
       + ` Samples: ${JSON.stringify(blocked.samples.slice(0, 12))}`,
     ).toBeLessThanOrEqual(BASE_PLANNABLE);
 

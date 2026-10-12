@@ -160,11 +160,11 @@ public final class Labor {
         }
         int threads = FolkwaysConfig.solveThreads();
         solves = new Solves(threads);
-        LOGGER.info("solves run on {} thread(s), one colony at a time each", threads);
+        LOGGER.info("plans run on {} thread(s), each colony weaving and scheduling apart", threads);
     }
 
-    private Executor planFor(UUID colony) {
-        return offThread && solves != null ? solves.of(colony) : Runnable::run;
+    private Lanes planFor(UUID colony) {
+        return offThread && solves != null ? solves.of(colony) : Lanes.INLINE;
     }
 
     public void shutdown() {

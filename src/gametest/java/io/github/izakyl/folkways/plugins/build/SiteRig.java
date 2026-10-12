@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
@@ -72,41 +71,31 @@ final class SiteRig implements BuildSite.Asks {
         return pieceAt(cell).work().step().orElseThrow();
     }
 
-    // Every order asked for: within each work asked, and from each onto work asked before it.
-    private java.util.stream.Stream<Before> ordered() {
-        return asked.stream().flatMap(work -> java.util.stream.Stream.concat(work.links().stream(),
-            work.follows().stream()));
-    }
-
-    /** Whether the work asked for has the node {@code first} go in before {@code then}. */
+    /** Whether the piece with the node {@code first} goes in before the one with {@code then}. */
     boolean ordered(UUID first, UUID then) {
-        return ordered().anyMatch(link -> link.equals(new Before(first, then)));
+        return site.pieces().stream().filter(piece -> piece.node().id().equals(then))
+            .anyMatch(piece -> site.before(piece).contains(first));
     }
 
-    /** Whether the work asked for has {@code first} go in before {@code then}, as one of its links. */
+    /** Whether the piece at {@code first} goes in before the piece at {@code then}. */
     boolean before(BlockPos first, BlockPos then) {
-        UUID from = node(first).id();
-        UUID to = node(then).id();
-        return ordered().anyMatch(link -> link.equals(new Before(from, to)));
+        return site.before(pieceAt(then)).contains(node(first).id());
     }
 
-    /** The cells of every piece asked to go in straight before the piece at {@code cell}. */
+    /** The cells of every piece that goes in straight before the piece at {@code cell}. */
     List<BlockPos> after(BlockPos cell) {
-        UUID id = node(cell).id();
         Map<UUID, BlockPos> focus = new HashMap<>();
         site.pieces().forEach(piece -> focus.put(piece.node().id(), piece.work().focus()));
-        return ordered().filter(link -> link.to().equals(id))
-            .map(link -> focus.get(link.from())).filter(java.util.Objects::nonNull).toList();
+        return site.before(pieceAt(cell)).stream().map(focus::get).filter(java.util.Objects::nonNull).toList();
     }
 
-    /** Whether nothing asked for has to go in before the piece at {@code cell}. */
+    /** Whether nothing has to go in before the piece at {@code cell}. */
     boolean free(BlockPos cell) {
-        UUID id = node(cell).id();
-        return ordered().noneMatch(link -> link.to().equals(id));
+        return site.before(pieceAt(cell)).isEmpty();
     }
 
     void end(Node node, Ending how) {
-        heard.get(node.id()).accept(node.id(), how);
+        site.ended(node.id(), how);
     }
 
     /** Does the piece at {@code cell} as a worker would, tells the site it ended, and lets the site hear it. */

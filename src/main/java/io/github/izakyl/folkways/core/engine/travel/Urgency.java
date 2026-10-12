@@ -23,10 +23,6 @@ public record Urgency(Band band, int rank) implements Comparable<Urgency> {
         return new Urgency(Band.WALKING, rank);
     }
 
-    public static Urgency planning(int rank) {
-        return new Urgency(Band.PLANNING, rank);
-    }
-
     @Override
     public int compareTo(Urgency other) {
         return ORDER.compare(this, other);

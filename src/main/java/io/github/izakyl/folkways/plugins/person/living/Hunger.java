@@ -13,8 +13,11 @@ final class Hunger {
 
     public static final int MAX_FOOD_LEVEL = 20;
     public static final int REGEN_FOOD_LEVEL = 18;
+    // What a resident at work eats in a day: walking some three thousand blocks of it, about a full belly.
+    public static final int FOOD_PER_DAY = MAX_FOOD_LEVEL;
     private static final float EXHAUSTION_THRESHOLD = 4.0F;
-    public static final float WALK_EXHAUSTION_PER_BLOCK = 0.1F;
+    // A resident walks most of its day: at a sprinting player's 0.1 a block it ate four bellies a day.
+    public static final float WALK_EXHAUSTION_PER_BLOCK = 0.03F;
     // One unit is one standard labor second: 80 seconds consume one saturation/food point.
     static final float WORK_EXHAUSTION_PER_UNIT = 0.05F;
     private static final float REGEN_EXHAUSTION_PER_HP = 6.0F;

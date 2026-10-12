@@ -37,7 +37,9 @@ interface Assembly {
                 }
             }
             return draw(pool, slots).flatMap(taken -> {
-                List<ItemStack> shaped = new ArrayList<>(Collections.nCopies(grid.size(), ItemStack.EMPTY));
+                // A shapeless recipe's ingredients need not fill the grid they are laid out on: the rest is empty.
+                List<ItemStack> shaped = new ArrayList<>(
+                    Collections.nCopies(Math.max(grid.size(), width * height), ItemStack.EMPTY));
                 for (int index = 0; index < taken.size(); index++) {
                     shaped.set(slotOf.get(index), taken.get(index));
                 }
