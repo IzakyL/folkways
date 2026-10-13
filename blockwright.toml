@@ -116,6 +116,12 @@ url = "https://cdn.modrinth.com/data/R0bDWFAW/versions/tXG1TkGx/touhoulittlemaid
 sha512 = "147bc10f5cc7159ee16c4918795155b3e52cf6bab5e09f588ed3fec14f8b47bbc512948bb8fef30346a47feba2692b6dbe20781c6cc1dc1d2c6b9377a9649bbe"
 target = []
 
+# Its camera sits off the player's eyes, so the book's aim follows its pick ray; installed only by the shoulder profile.
+[mods.shouldersurfing]
+url = "https://cdn.modrinth.com/data/kepjj2sy/versions/woekHsje/ShoulderSurfing-NeoForge-1.21.1-5.2.0.jar"
+sha512 = "4497d2f8a992d6d8985b1a6fa7018158a877521052302682866f89171d14eafa7c6b75d92c6e08531003476bc292f71c67c7e4f34b8c1a6864074a3b0dcd7e75"
+target = []
+
 # Measures folkways itself, mixins included; off unless BLOCKWRIGHT_COVERAGE=1 (npm run test:coverage).
 [coverage]
 mods = ["folkways"]
@@ -234,6 +240,31 @@ iris = { target = ["client"] }
 sable = { target = ["server", "client"] }
 create-aeronautics = { target = ["server", "client"] }
 
+# The promo's client over the bench's land (Terralith biomes over Tectonic landforms), for shots of works standing
+# in real country: hills to terrace and mine, water to bridge. The game is in Chinese, as the film's viewers read it.
+[profile.promo-land.neoforge]
+jvm_args = ["-Xmx3G"]
+
+[profile.promo-land.neoforge.server]
+world = "vanilla"
+properties = { "level-seed" = "folkways-promo-land", "generate-structures" = "false", "max-tick-time" = "-1", "view-distance" = "16", "entity-broadcast-range-percentage" = "300" }
+
+[profile.promo-land.neoforge.client]
+game_args = ["--width", "1920", "--height", "1080"]
+options = { lang = "zh_cn", guiScale = "2", overrideWidth = "1920", overrideHeight = "1080", maxFps = "260", renderDistance = "16", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "4.0", biomeBlendRadius = "3", ao = "true", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", fovEffectScale = "0.0", soundCategory_music = "0.0", soundCategory_record = "0.0", soundCategory_ambient = "0.0" }
+
+[profile.promo-land.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+[profile.promo-land.mods]
+lithostitched = { target = ["server", "client"] }
+terralith = { target = ["server", "client"] }
+tectonic = { target = ["server", "client"] }
+sodium = { target = ["client"] }
+iris = { target = ["client"] }
+
 # The fuzzers (tests/fuzz): a server alone, over an empty flat world, running the mod jar that also carries the
 # fuzzers' in-game classes (gradle fuzzJar).
 [profile.fuzz.neoforge]
@@ -249,3 +280,7 @@ path = "build/fuzz/folkways-*.jar"
 # The e2e pair with Touhou Little Maid on both sides, for the looks it lends.
 [profile.maids.mods]
 touhou_little_maid = { target = ["server", "client"] }
+
+# The e2e pair with Shoulder Surfing Reloaded on the client, for the book's aim under its camera.
+[profile.shoulder.mods]
+shouldersurfing = { target = ["client"] }

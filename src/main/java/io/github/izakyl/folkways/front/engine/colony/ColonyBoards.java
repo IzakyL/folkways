@@ -23,7 +23,7 @@ public final class ColonyBoards {
     private ColonyBoards() {
     }
 
-    // Only a block the colony holds has a board beside its screen; any other container opens as vanilla left it.
+    // Only a block the colony holds has a board of its own; the book used on any other opens the colony's panel.
     public static Optional<SiteBoard> firstAt(ServerLevel level, Colony colony, BlockPos at) {
         if (!ColonyGround.holds(level, colony, ColonySites.anchor(level, at))) {
             return Optional.empty();

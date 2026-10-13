@@ -1,6 +1,6 @@
 import type { MinecraftServer } from "@izakyl/blockwright-minecraft";
-import type { Vec } from "../e2e/colony-founding";
-import { commandPos, tryCommand } from "../shared/bw-helpers";
+import type { Vec } from "../shared/colony/colony-founding";
+import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
 
 export type Cell = { x: number; z: number };
 

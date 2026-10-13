@@ -11,19 +11,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
@@ -40,6 +39,9 @@ public final class PathSelection {
 
     private static final float NEXT_LINE = 0.55F;
 
+    /** How far past the block behind it a post is still taken, squared: it stands on that block's face. */
+    private static final double POST_SLACK = 0.25D;
+
     private static final List<io.github.izakyl.folkways.front.engine.colony.ColonyPath> PATHS = new ArrayList<>();
 
     public static void overview(List<net.minecraft.nbt.CompoundTag> paths) {
@@ -50,11 +52,15 @@ public final class PathSelection {
 
     private static final List<BlockPos> POINTS = new ArrayList<>();
 
+    /** The point the wheel moves: the last one set down, until another is picked up. */
+    private static int held = -1;
+
     static {
         Drawing.install(Shape.Gesture.LINE, new Draft<Drawn>(PathSelection::drawn, PathSelection::clear,
             path -> Component.translatable("folkways.zoneconfig.drawn", path.points().size()),
+            path -> path.points().size(),
             (colony, line, delegation, settings) -> new CreatePathPacket(colony, line.points(), delegation, settings),
-            id -> PathOffers.of(id).<Consumer<Drawn>>map(offer -> line -> offer.take().take(line.points()))));
+            id -> PathOffers.of(id).map(offer -> (line, done) -> offer.body().build(line.points(), done))));
         Drawing.offers(Shape.Gesture.LINE, () -> PathOffers.all().stream()
             .map(offer -> new Drawing.Offered(offer.id(), offer.nameKey(), offer.icon()))
             .toList());
@@ -76,6 +82,7 @@ public final class PathSelection {
 
     public static void clear() {
         POINTS.clear();
+        held = -1;
     }
 
     public static boolean drafting() {
@@ -100,30 +107,104 @@ public final class PathSelection {
         if (player == null || minecraft.level == null) {
             return false;
         }
-        if (player.isShiftKeyDown()) {
-            if (!POINTS.isEmpty()) {
-                clear();
-                Draft.say(Component.translatable("folkways.path.dropped"));
-            }
+        if (FolkwaysClientGameEvents.sneakDown(player)) {
+            discard();
             return true;
         }
-        if (!(minecraft.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
+        if (FolkwaysClientGameEvents.modifierDown()) {
+            aimedPoint(player).ifPresent(index -> {
+                held = index;
+                Draft.say(Component.translatable("folkways.path.held", index + 1));
+            });
+            return true;
+        }
+        Optional<BlockPos> aimed = Aim.cell(player);
+        if (aimed.isEmpty()) {
             return true;
         }
         if (POINTS.size() >= MAX_POINTS) {
             Draft.say(Component.translatable("folkways.path.full", MAX_POINTS));
             return true;
         }
-        POINTS.add(hit.getBlockPos().immutable());
+        POINTS.add(aimed.get());
+        held = POINTS.size() - 1;
         Draft.say(Component.translatable("folkways.path.point", POINTS.size()));
         return true;
     }
 
+    static void discard() {
+        if (drafting()) {
+            clear();
+            Draft.say(Component.translatable("folkways.path.dropped"));
+        }
+    }
+
+    /** Takes back the point set down last, and holds the one before it. */
+    static void undo() {
+        if (!POINTS.isEmpty()) {
+            POINTS.removeLast();
+            held = POINTS.size() - 1;
+        }
+    }
+
+    static Optional<Component> status() {
+        return POINTS.isEmpty() ? Optional.empty()
+            : Optional.of(Component.translatable("folkways.zoneconfig.drawn", POINTS.size()));
+    }
+
+    public static boolean handleScroll(double verticalDelta) {
+        Player player = Minecraft.getInstance().player;
+        if (player == null || verticalDelta == 0.0D || held < 0) {
+            return false;
+        }
+        int step = verticalDelta > 0.0D ? Mth.ceil(verticalDelta) : Mth.floor(verticalDelta);
+        BlockPos moved = POINTS.get(held).relative(pull(player), step);
+        POINTS.set(held, moved);
+        Draft.say(Component.translatable("folkways.path.moved", held + 1, moved.getX(), moved.getY(), moved.getZ()));
+        return true;
+    }
+
+    /** Where a turn of the wheel draws the held point: towards the player, to their right with the other key, or up with both. */
+    private static Direction pull(Player player) {
+        boolean along = FolkwaysClientGameEvents.modifierDown();
+        boolean across = FolkwaysClientGameEvents.alternateDown();
+        if (along && across) {
+            return Direction.UP;
+        }
+        Vec3 look = Aim.of(player).look();
+        Direction ahead = look.horizontalDistanceSqr() < 1.0E-6D
+            ? player.getDirection() : Direction.getNearest(look.x, 0.0D, look.z);
+        return across ? ahead.getClockWise() : ahead.getOpposite();
+    }
+
+    /** The point of the draft whose post is under the crosshair, when it is not the one held already. */
+    static Optional<Integer> aimedPoint(Player player) {
+        Aim aim = Aim.of(player);
+        double reach = aim.block(player).map(hit -> hit.getLocation().distanceToSqr(aim.from()))
+            .orElse(Aim.range() * Aim.range()) + POST_SLACK;
+        Integer best = null;
+        for (int index = 0; index < POINTS.size(); index++) {
+            Optional<Vec3> hit = post(player.level(), POINTS.get(index)).inflate(0.1D)
+                .clip(aim.from(), aim.at(Aim.range()));
+            if (index != held && hit.isPresent() && hit.get().distanceToSqr(aim.from()) < reach) {
+                reach = hit.get().distanceToSqr(aim.from());
+                best = index;
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
+    private static AABB post(Level level, BlockPos point) {
+        Vec3 foot = ColonyHighlightState.surface(level, point);
+        return new AABB(foot.x - 0.3D, foot.y, foot.z - 0.3D, foot.x + 0.3D, foot.y + 0.6D, foot.z + 0.3D);
+    }
+
     static Optional<java.util.UUID> aimedPath(Minecraft minecraft) {
-        if (!(minecraft.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
+        Optional<BlockHitResult> hit = Aim.of(minecraft.player).block(minecraft.player);
+        if (hit.isEmpty() || !Layer.PATHS.shown()) {
             return Optional.empty();
         }
-        Vec3 target = hit.getLocation();
+        Vec3 target = hit.get().getLocation();
         for (var path : PATHS) {
             for (int at = 1; at < path.points().size(); at++) {
                 Vec3 a = Vec3.atCenterOf(path.points().get(at - 1));
@@ -171,7 +252,7 @@ public final class PathSelection {
         buffers.endBatch(RenderType.debugFilledBox());
 
         VertexConsumer lines = buffers.getBuffer(RenderType.lines());
-        for (var path : PATHS) {
+        for (var path : Layer.PATHS.shown() ? PATHS : List.<io.github.izakyl.folkways.front.engine.colony.ColonyPath>of()) {
             for (int at = 1; at < path.points().size(); at++) {
                 Vec3 a = ColonyHighlightState.surface(level, path.points().get(at - 1));
                 Vec3 b = ColonyHighlightState.surface(level, path.points().get(at));
@@ -180,10 +261,10 @@ public final class PathSelection {
             }
         }
         // Each point set down stands as a short post on the ribbon, so it reads apart from the cursor's own outline.
-        for (BlockPos point : POINTS) {
-            Vec3 foot = ColonyHighlightState.surface(level, point);
-            LevelRenderer.renderLineBox(poseStack, lines, new AABB(foot.x - 0.3D, foot.y, foot.z - 0.3D,
-                foot.x + 0.3D, foot.y + 0.6D, foot.z + 0.3D), DRAFT[0], DRAFT[1], DRAFT[2], 1.0F);
+        // The held one stands out in the colour of what is already set.
+        for (int index = 0; index < POINTS.size(); index++) {
+            float[] rgb = index == held ? SET : DRAFT;
+            LevelRenderer.renderLineBox(poseStack, lines, post(level, POINTS.get(index)), rgb[0], rgb[1], rgb[2], 1.0F);
         }
         for (int at = 1; at < POINTS.size(); at++) {
             segment(poseStack, lines, ColonyHighlightState.surface(level, POINTS.get(at - 1)),
@@ -196,9 +277,7 @@ public final class PathSelection {
     }
 
     private static Optional<BlockPos> aimed(Minecraft minecraft) {
-        return minecraft.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
-            ? Optional.of(hit.getBlockPos().immutable())
-            : Optional.empty();
+        return Aim.cell(minecraft.player);
     }
 
     static List<io.github.izakyl.folkways.front.engine.colony.ColonyPath> paths() {

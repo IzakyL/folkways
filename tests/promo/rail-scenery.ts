@@ -1,6 +1,6 @@
 import { world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { tryCommand } from "../shared/bw-helpers";
-import type { Box, Vec } from "../e2e/rail-fixture";
+import { tryCommand } from "../shared/harness/bw-helpers";
+import type { Box, Vec } from "../shared/rail/rail-fixture";
 
 export const PROMO_TRAIN_BOUNDS: Box = { min: { x: -2, y: 1, z: 3 }, max: { x: 2, y: 6, z: 11 } };
 // The decorated shell and its station clearances are sized for this many seats,

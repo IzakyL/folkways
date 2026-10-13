@@ -5,18 +5,19 @@
   "scripts": {
     "build": "gradle build",
     "setup": "node_modules/@izakyl/blockwright-client/dist/blockwright mods sync --config blockwright.toml",
-    "typecheck": "tsc -p tests/tsconfig.e2e.json && tsc -p tests/tsconfig.visual.json && tsc -p tests/tsconfig.bench.json && tsc -p tests/tsconfig.promo.json && tsc -p tests/tsconfig.fuzz.json",
+    "typecheck": "tsc -p tests/e2e && tsc -p tests/visual && tsc -p tests/bench && tsc -p tests/promo && tsc -p tests/fuzz",
     "test:unit": "node --test --experimental-strip-types \"tests/**/*.test.ts\"",
-    "test:e2e": "npm exec -- playwright test --config tests/blockwright.config.ts",
+    "test:e2e": "npm exec -- playwright test --config tests/e2e/playwright.config.ts",
     "test:coverage": "npm run coverage:reset && BLOCKWRIGHT_COVERAGE=1 npm run test:e2e; status=$?; npm run coverage:report && exit $status",
     "coverage:report": "node_modules/@izakyl/blockwright-client/dist/blockwright coverage report --config blockwright.toml",
     "coverage:reset": "node_modules/@izakyl/blockwright-client/dist/blockwright coverage reset --config blockwright.toml",
-    "visual:take": "npm exec -- playwright test --config tests/visual.config.ts",
-    "bench:take": "npm exec -- playwright test --config tests/bench.config.ts",
-    "bench:overlay": "node --experimental-strip-types tests/bench/overlay.ts",
-    "promo:take": "npm exec -- playwright test --config tests/promo.config.ts",
+    "visual:take": "npm exec -- playwright test --config tests/visual/playwright.config.ts",
+    "bench:take": "npm exec -- playwright test --config tests/bench/playwright.config.ts",
+    "bench:overlay": "node --experimental-strip-types tests/bench/film/overlay.ts",
+    "promo:take": "npm exec -- playwright test --config tests/promo/playwright.config.ts",
     "promo:film": "python3 tests/promo/film/build.py && python3 tests/promo/film/assemble.py",
-    "fuzz:run": "npm exec -- playwright test --config tests/fuzz.config.ts"
+    "promo:overhead": "python3 tests/promo/film/overhead.py",
+    "fuzz:run": "npm exec -- playwright test --config tests/fuzz/playwright.config.ts"
   },
   "devDependencies": {
     "@izakyl/blockwright-cinema": "0.1.0-alpha.1",

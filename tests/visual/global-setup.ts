@@ -1,10 +1,10 @@
 import { rmSync } from "node:fs";
-import { outAbs, ensureOut } from "../out-paths";
-import { buildMod, checkSpecTypes } from "../e2e/global-setup";
+import { outAbs, ensureOut } from "../shared/harness/out-paths";
+import { buildMod, checkSpecTypes } from "../shared/harness/setup";
 
 export default function visualSetup() {
   rmSync(outAbs("visual", "takes"), { recursive: true, force: true });
   ensureOut("visual");
-  checkSpecTypes("tests/tsconfig.visual.json");
+  checkSpecTypes("visual");
   buildMod();
 }

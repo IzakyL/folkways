@@ -2,20 +2,20 @@ import { expect, test } from "@playwright/test";
 import { defineTask, input, javaTask, screen, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { clickElement } from "../ldlib2";
-import { waitForGroundedPlayer, type Vec } from "../e2e/colony-founding";
-import { setMaintainDemandInView } from "../e2e/membership-optin";
-import { buttonText, openContainerScreen, pickChoice } from "../e2e/site-panel";
-import { colonyRegistry, setBookGesture, zoneCount, zoneKindToken } from "../e2e/zone-tools";
-import { drainActionBar, FIRST_CORNER, readActionBar, ZONE_MARKED } from "../e2e/zone-receipt";
-import { BUDGET } from "../shared/budgets";
-import { frames, safeAction, softly, tryCommand, waitForElement } from "../shared/bw-helpers";
-import { runColonyTask } from "../e2e/colony-tasks";
+import { waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { setMaintainDemandInView } from "../shared/colony/membership-optin";
+import { buttonText, openContainerScreen, pickChoice } from "../shared/ui/site-panel";
+import { colonyRegistry, setBookGesture, zoneCount, zoneKindToken } from "../shared/ui/zone-tools";
+import { drainActionBar, FIRST_CORNER, readActionBar, ZONE_MARKED } from "../shared/ui/zone-receipt";
+import { BUDGET } from "../shared/harness/budgets";
+import { frames, safeAction, softly, tryCommand, waitForElement } from "../shared/harness/bw-helpers";
+import { runColonyTask } from "../shared/colony/colony-tasks";
 import { admitPromoSettlersFast, foundPromoColonyFast, licenseCrewFast } from "./fast-setup";
 import {
   cinematicWorld, hideHud, launchPromoPair, promoClip, setFov, setTickRate, sleepMs, take, writeLook,
   type Look, type PromoPair,
 } from "./promo-kit";
-import { shaderEvidence } from "./shaders";
+import { shaderEvidence } from "../shared/capture/shaders";
 
 // Three short shots, each one declaration and the colony carrying it out: an order for lanterns in a chest, a plot
 // framed as a field, and a plot framed over standing trees as a wood lot. The camera holds still in each; the player
@@ -122,10 +122,8 @@ test("each declaration is carried out by the colony on its own", async ({}, test
     const shots: any = {};
 
     // ── An order: this chest should hold four lanterns. ──
-    // The order is filed bare-handed (a chest used with the book opens the colony panel instead), and from within
-    // eight blocks of the chest: the server answers for a block no farther away.
-    await world.command(server, `item replace entity ${player} hotbar.8 from entity ${player} weapon.mainhand`);
-    await world.command(server, `item replace entity ${player} weapon.mainhand with minecraft:air`);
+    // The order is filed with the book in hand (a colony chest used with it opens that chest's window), and from
+    // within eight blocks of the chest: the server answers for a block no farther away.
     let look = await standAt(server, client, player, spots.workshop);
     // The chat lines and the join toasts fade before the first shot rolls.
     await sleepMs(CHAT_FADE_MS);
@@ -139,8 +137,6 @@ test("each declaration is carried out by the colony on its own", async ({}, test
         mark("declare");
         const order = await setMaintainDemandInView(server, client, set.workshop.shelf, LANTERN, LANTERN_COUNT, BEAT_MS);
         mark("declared");
-        // The book back in hand while the crafter works: residents show their cards only to a player holding it.
-        await world.command(server, `item replace entity ${player} weapon.mainhand from entity ${player} hotbar.8`);
         look = await glide(client, look, lookAt(spots.workshop, spots.workshop.aim), GLIDE_MS);
         await hideHud(client);
         await setTickRate(server, WORK_RATE);
@@ -162,8 +158,9 @@ test("each declaration is carried out by the colony on its own", async ({}, test
           stuck.placards = await runColonyTask(server, PLACARDS, { colony_id });
         }
         await sleepMs(HOLD_AFTER_MS);
-        // The order met: the chest opens on the lanterns, bare-handed again.
+        // The order met: the chest opens on the lanterns, bare-handed.
         await hideHud(client);
+        await world.command(server, `item replace entity ${player} hotbar.8 from entity ${player} weapon.mainhand`);
         await world.command(server, `item replace entity ${player} weapon.mainhand with minecraft:air`);
         look = await glide(client, look, lookAt(spots.workshop, set.workshop.shelf), GLIDE_MS);
         mark("reveal");

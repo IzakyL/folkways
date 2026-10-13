@@ -15,15 +15,15 @@ import {
   screenOpen,
   waitForGroundedPlayer,
   type Vec,
-} from "./colony-founding";
-import { buildRailLine, conductorAboard, seatedAt } from "./rail-fixture";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { REPO_ROOT, ensureOut, reportPath, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { newRunId } from "../shared/run-id";
-import { frames, softly } from "../shared/bw-helpers";
-import { runColonyTask } from "./colony-tasks";
+} from "../shared/colony/colony-founding";
+import { buildRailLine, conductorAboard, seatedAt } from "../shared/rail/rail-fixture";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { REPO_ROOT, ensureOut, reportPath, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { newRunId } from "../shared/harness/run-id";
+import { frames, softly } from "../shared/harness/bw-helpers";
+import { runColonyTask } from "../shared/colony/colony-tasks";
 
 const CONFIG_PATH = "blockwright.toml";
 const REPORT_PATH = reportPath("e2e", "rail-map-report");

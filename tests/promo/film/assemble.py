@@ -11,9 +11,12 @@ TRACK = os.environ.get("PROMO_MUSIC", "minecraft/sounds/music/game/creative/aria
 TRACK_START = float(os.environ.get("PROMO_MUSIC_START", 0))
 ASSET_INDEXES = [os.path.join(HERE, "..", "..", "..", ".blockwright-store", "runtime", "*", "assets", "indexes", "*.json"),
                  os.path.expanduser("~/.gradle/caches/neoformruntime/assets/indexes/*.json")]
-GRAPH = os.path.join(WORK, "txt", "final.fc")
+# PROMO_SHOTS and PROMO_NAME join another cut (the view-from-above short) under its own name.
+SHOTS = os.environ.get("PROMO_SHOTS", os.path.join(WORK, "shots"))
+NAME = os.environ.get("PROMO_NAME", "folkways-promo")
+GRAPH = os.path.join(WORK, "txt", f"{NAME}-final.fc")
 XF = 0.6
-cut = json.load(open(os.path.join(WORK, "shots", "segments.json")))
+cut = json.load(open(os.path.join(SHOTS, "segments.json")))
 W, H, segs = cut["width"], cut["height"], cut["segments"]
 total = sum(d for _, d in segs) - XF * (len(segs) - 1)
 print(f"total {total:.2f}s at {W}x{H}", flush=True)
@@ -56,11 +59,11 @@ upload = ["-map", "[full]", "-map", "[afull]",
           "-maxrate", "60M" if four_k else "20M", "-bufsize", "120M" if four_k else "40M",
           "-profile:v", "high", "-level:v", "5.2" if four_k else "4.2",
           "-g", "120", "-keyint_min", "120", "-sc_threshold", "0", "-pix_fmt", "yuv420p",
-          "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart", os.path.join(FILM, "folkways-promo-upload.mp4")]
+          "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart", os.path.join(FILM, f"{NAME}-upload.mp4")]
 preview = ["-map", "[preview]", "-map", "[apreview]",
            "-c:v", "libx264", "-preset", "slow", "-crf", "24", "-maxrate", "2.5M", "-bufsize", "5M",
            "-profile:v", "high", "-level:v", "4.0", "-g", "60", "-keyint_min", "60", "-sc_threshold", "0",
            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
-           os.path.join(FILM, "folkways-promo-preview.mp4")]
+           os.path.join(FILM, f"{NAME}-preview.mp4")]
 subprocess.run(["ffmpeg", "-v", "error", "-y", *inp, "-/filter_complex", GRAPH,
                 *upload, *preview], check=True)

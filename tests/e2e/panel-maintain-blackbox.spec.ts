@@ -1,16 +1,16 @@
 import { expect, test } from "@playwright/test";
 import { tick, world } from "@izakyl/blockwright-minecraft";
-import { setMaintainDemandViaUI } from "./membership-optin";
+import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
 import { foundColonyFast, optInViaBook, waitForGroundedPlayer,
   entityTypeMatches,
-} from "./colony-founding";
-import { prepareSafeWalkway } from "./world-ui";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { commandPos, safeAction, tryCommand } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/colony/colony-founding";
+import { prepareSafeWalkway } from "../shared/ui/world-ui";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { commandPos, safeAction, tryCommand } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 
@@ -68,9 +68,6 @@ test("container panel carry-set MAINTAIN stock replenishes the bound chest", asy
     await tick.sprint(server, 20);
     const sourceStocked = await chestHasAtLeast(server, sourceChest, DEMAND_ITEM, SOURCE_STOCK);
     expect(sourceStocked).toBe(true);
-
-    await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with minecraft:air`);
-    await tick.sprint(server, 3);
 
     await setMaintainDemandViaUI(server, client, playerName, targetChest, DEMAND_ITEM);
 

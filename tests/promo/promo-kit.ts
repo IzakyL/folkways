@@ -1,14 +1,14 @@
-import { launchPair, type E2EPair } from "../shared/pair";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { camera, input, player, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { stillWorld, walkSpeed } from "@izakyl/blockwright-cinema";
-import { sleepMs } from "../e2e/draw-capture";
-import { VisualRun } from "../visual/visual-kit";
-import { outPath, tracePath } from "../out-paths";
-import { seedShaders } from "./shaders";
-import { placeServerModels, reloadServerModels, type ModelManifest } from "../e2e/model-folder";
-import { seededOffThreadServer } from "../shared/mod-settings";
-import { safeAction, tryCommand } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+import { sleepMs } from "../shared/capture/draw-capture";
+import { VisualRun } from "../shared/capture/visual-kit";
+import { outPath, tracePath } from "../shared/harness/out-paths";
+import { seedShaders, type Patch as ShaderPatch } from "../shared/capture/shaders";
+import { placeServerModels, reloadServerModels, type ModelManifest } from "../shared/ui/model-folder";
+import { seededOffThreadServer } from "../shared/harness/mod-settings";
+import { safeAction, tryCommand } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 export const PROMO_CONFIG = "blockwright.toml#promo";
 
@@ -26,11 +26,14 @@ export type PromoPair = E2EPair & { clientInstance: string };
 export type SeededModel = { source: string; name: string; manifest?: ModelManifest };
 
 export async function launchPromoPair(
-  scope: string, seed?: { models?: SeededModel[]; config?: string; zones?: Record<string, number> },
+  scope: string,
+  seed?: { models?: SeededModel[]; config?: string; zones?: Record<string, number>;
+    /** The shader pack's own settings and further edits to its sources, over the ones every film takes. */
+    look?: { options: Record<string, string | number>; patches?: ShaderPatch[] } },
 ): Promise<PromoPair> {
   const clientInstance = `promo-${scope}-client-${RUN_ID}`;
   const serverInstance = `promo-${scope}-server-${RUN_ID}`;
-  seedShaders(clientInstance);
+  seedShaders(clientInstance, undefined, seed?.look?.options, seed?.look?.patches);
   const pair = await launchPair({
     config: seed?.config ?? PROMO_CONFIG,
     server: {

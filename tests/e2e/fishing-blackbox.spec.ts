@@ -5,12 +5,12 @@ import {
   commandPos,
   foundColonyFast,
   waitForGroundedPlayer,
-} from "./colony-founding";
+} from "../shared/colony/colony-founding";
 import {
   aimAndWorldLeftClick,
   mustCommand,
-} from "./world-ui";
-import { drainActionBar } from "./zone-receipt";
+} from "../shared/ui/world-ui";
+import { drainActionBar } from "../shared/ui/zone-receipt";
 import {
   colonyRegistry,
   createMarkedZone,
@@ -18,12 +18,12 @@ import {
   zoneCount,
   zoneKindAt,
   ZONE_KIND_ID,
-} from "./zone-tools";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { newRunId } from "../shared/run-id";
+} from "../shared/ui/zone-tools";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 3;

@@ -7,12 +7,12 @@ import {
   countResidents,
   screenName,
   tryCommand,
-} from "./colony-founding";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { newRunId } from "../shared/run-id";
+} from "../shared/colony/colony-founding";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 const TARGET_RESIDENTS = 3;

@@ -1,9 +1,9 @@
 import { expect } from "@playwright/test";
 import { clickElement, panelElements, ancestorsOf, visibleBox } from "../ldlib2";
 import { defineTask, input, javaTask, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { runColonyTask } from "../e2e/colony-tasks";
-import type { VisualRun } from "./visual-kit";
-import { clickUnverified, frames } from "../shared/bw-helpers";
+import { runColonyTask } from "../shared/colony/colony-tasks";
+import type { VisualRun } from "../shared/capture/visual-kit";
+import { clickUnverified, frames } from "../shared/harness/bw-helpers";
 
 export type Page = { name: string; token: string };
 

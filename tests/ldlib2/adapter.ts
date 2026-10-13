@@ -17,7 +17,7 @@ import type { PanelHolder } from "./routes.ts";
 import { anchorOf, hasUniqueId, isHittable, selectElement, visibleBox, type Element, type ElementSelector } from "./rules.ts";
 
 const ADAPTER = "ldlib2";
-// Generated specs live in tests/e2e, beside this helper.
+// Generated specs live in tests/e2e.
 const FROM = "../ldlib2";
 
 /** A style class that states an element's role outright, e.g. `bw-role-button`. */

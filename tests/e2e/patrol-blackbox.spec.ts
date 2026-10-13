@@ -9,17 +9,25 @@ import {
   stockToolsForResidents,
   waitForGroundedPlayer,
   type Vec,
-} from "./colony-founding";
-import { aimAndWorldLeftClick, mustCommand, packHasItem } from "./world-ui";
-import { drainActionBar } from "./zone-receipt";
-import { colonyFront, colonyRegistry, markCorner, setBookGesture } from "./zone-tools";
-import { settlePanel } from "./site-panel";
-import { waitForElement, safeAction } from "../shared/bw-helpers";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { newRunId } from "../shared/run-id";
+} from "../shared/colony/colony-founding";
+import { aimAndWorldLeftClick, mustCommand, packHasItem } from "../shared/ui/world-ui";
+import { drainActionBar } from "../shared/ui/zone-receipt";
+import {
+  colonyFront,
+  colonyRegistry,
+  heldScroll,
+  KEY_LEFT_ALT,
+  KEY_LEFT_CONTROL,
+  markCorner,
+  setBookGesture,
+} from "../shared/ui/zone-tools";
+import { settlePanel } from "../shared/ui/site-panel";
+import { waitForElement, safeAction } from "../shared/harness/bw-helpers";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 2;
@@ -133,6 +141,12 @@ async function drawPatrolRoute(
       evidence.points.push(await markCorner(server, client, point, new RegExp(`^Point ${index + 1} set down`),
         () => aimAndWorldLeftClick(server, client, playerName, point)));
     }
+    // The point set down last is the one held: the wheel with both keys lifts it a block, and lowers it again.
+    const last = route[route.length - 1];
+    evidence.raise = await heldScroll(server, client, [KEY_LEFT_CONTROL, KEY_LEFT_ALT], 1);
+    expect(evidence.raise.bar?.text).toBe(`Point ${route.length} at ${last.x}, ${last.y + 1}, ${last.z}`);
+    evidence.lower = await heldScroll(server, client, [KEY_LEFT_CONTROL, KEY_LEFT_ALT], -1);
+    expect(evidence.lower.bar?.text).toBe(`Point ${route.length} at ${last.x}, ${last.y}, ${last.z}`);
     evidence.open = await openColonyPanelViaBook(server, client, playerName, standBlock);
     await settlePanel(server, client);
     await waitForElement(client, { id: PATROL_KIND }, { timeoutMs: 8_000 });

@@ -1,16 +1,16 @@
-import { launchPair, type E2EPair } from "../shared/pair";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { expect, test } from "@playwright/test";
 import { input, player, reflect, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements } from "../ldlib2";
-import { foundColonyFast, waitForGroundedPlayer, type Vec } from "../e2e/colony-founding";
-import { setBookGesture } from "../e2e/zone-tools";
-import { LayoutProbe } from "./layout-lint";
-import { CONFIG_PATH, VisualRun } from "./visual-kit";
-import { tracePath } from "../out-paths";
-import { seededOffThreadServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { frames, safeAction, safeScreen, screenName, screenOpen, tryCommand, softly } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+import { foundColonyFast, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { setBookGesture } from "../shared/ui/zone-tools";
+import { LayoutProbe } from "../shared/capture/layout-lint";
+import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
+import { tracePath } from "../shared/harness/out-paths";
+import { seededOffThreadServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { frames, safeAction, safeScreen, screenName, screenOpen, tryCommand, softly } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const BOOK_ITEM = "folkways:colony_book";
 const TARGET_RESIDENTS = 2;

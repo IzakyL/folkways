@@ -11,7 +11,6 @@ import io.github.izakyl.folkways.front.ui.screen.Drawing;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Consumer;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -29,12 +28,12 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 public final class ZoneSelection {
-    private static final double AIM_RANGE = 64.0D;
     private static final int MIN_RANGE = 1;
     private static final int MAX_RANGE = 100;
     private static final int DEFAULT_RANGE = 5;
 
     private static final float[] DRAFT = {0.95F, 0.95F, 0.95F};
+    private static final float PREVIEW = 0.45F;
 
     private static BlockPos origin;
     private static BlockPos min;
@@ -48,12 +47,9 @@ public final class ZoneSelection {
 
     static {
         Drawing.install(Shape.Gesture.BOX, new Draft<Marked>(ZoneSelection::marked, ZoneSelection::clear,
-            box -> Component.translatable("folkways.zoneconfig.size", box.sizeX(), box.sizeY(), box.sizeZ())
-                .append(" ")
-                .append(Component.translatable("folkways.zoneconfig.corner",
-                    box.min().getX(), box.min().getY(), box.min().getZ())),
+            ZoneSelection::measure, box -> box.sizeX() * box.sizeY() * box.sizeZ(),
             (colony, box, delegation, settings) -> new CreateZonePacket(colony, box.min(), box.max(), delegation, settings),
-            id -> BoxOffers.of(id).<Consumer<Marked>>map(offer -> box -> offer.take().take(box.min(), box.max()))));
+            id -> BoxOffers.of(id).map(offer -> (box, done) -> offer.body().build(box.min(), box.max(), done))));
         Drawing.offers(Shape.Gesture.BOX, () -> BoxOffers.all().stream()
             .map(offer -> new Drawing.Offered(offer.id(), offer.nameKey(), offer.icon()))
             .toList());
@@ -95,6 +91,32 @@ public final class ZoneSelection {
         return origin != null || min != null;
     }
 
+    static void discard() {
+        if (drafting()) {
+            clear();
+            Draft.say(Component.translatable("folkways.zone.dropped"));
+        }
+    }
+
+    /** How far the box being marked has got, in a line: its size and corner, or that it has one corner so far. */
+    static Optional<Component> status() {
+        if (min == null) {
+            return origin == null ? Optional.empty() : Optional.of(Component.translatable("folkways.zone.corner"));
+        }
+        return marked().map(ZoneSelection::measure);
+    }
+
+    private static Component measure(Marked box) {
+        return Component.translatable("folkways.zoneconfig.size", box.sizeX(), box.sizeY(), box.sizeZ())
+            .append(" ")
+            .append(Component.translatable("folkways.zoneconfig.corner",
+                box.min().getX(), box.min().getY(), box.min().getZ()));
+    }
+
+    static int reach() {
+        return range;
+    }
+
     static void openOn(UUID id) {
         openingId = id;
         openingUntilMs = Util.getMillis() + OPENING_WINDOW_MS;
@@ -118,7 +140,7 @@ public final class ZoneSelection {
             clear();
             return;
         }
-        if (minecraft.screen != null || min == null) {
+        if (Overhead.screened(minecraft) || min == null) {
             aimedFace = null;
             return;
         }
@@ -132,11 +154,8 @@ public final class ZoneSelection {
         }
         Player player = minecraft.player;
 
-        if (player.isShiftKeyDown()) {
-            if (min != null || origin != null) {
-                clear();
-                Draft.say(Component.translatable("folkways.zone.dropped"));
-            }
+        if (FolkwaysClientGameEvents.sneakDown(player)) {
+            discard();
             return true;
         }
 
@@ -166,6 +185,9 @@ public final class ZoneSelection {
         }
         int step = verticalDelta > 0.0D ? Mth.ceil(verticalDelta) : Mth.floor(verticalDelta);
         if (min == null) {
+            if (!FolkwaysClientGameEvents.modifierDown()) {
+                return false;
+            }
             range = Mth.clamp(range + step, MIN_RANGE, MAX_RANGE);
             Draft.say(Component.translatable("folkways.zone.reach", range));
             return true;
@@ -173,25 +195,35 @@ public final class ZoneSelection {
         if (aimedFace == null) {
             return true;
         }
-        pushFace(minecraft, aimedFace, step);
+        // The wheel draws towards the player whatever it has hold of, so a box entered is pulled the other way.
+        Direction towards = boxOfMarked().contains(Aim.of(minecraft.player).from())
+            ? aimedFace.getOpposite() : aimedFace;
+        int by = towards.getAxisDirection().getStep() * step;
+        Direction.Axis axis = aimedFace.getAxis();
+        if (gripped().size() > 1) {
+            min = min.relative(axis, by);
+            max = max.relative(axis, by);
+            Draft.say(Component.translatable("folkways.zone.shifted", min.getX(), min.getY(), min.getZ()));
+            return true;
+        }
+        if (gripped().getFirst().getAxisDirection() == Direction.AxisDirection.POSITIVE) {
+            max = clampAbove(max.relative(axis, by), min, axis);
+        } else {
+            min = clampBelow(min.relative(axis, by), max, axis);
+        }
         Draft.say(Component.translatable("folkways.zone.marked",
             max.getX() - min.getX() + 1, max.getY() - min.getY() + 1, max.getZ() - min.getZ() + 1));
         return true;
     }
 
-    private static void pushFace(Minecraft minecraft, Direction face, int step) {
-        Vec3 camera = minecraft.gameRenderer.getMainCamera().getPosition();
-        int signed = boxOfMarked().contains(camera) ? -step : step;
-        int axisStep = face.getAxisDirection() == Direction.AxisDirection.POSITIVE ? signed : -signed;
-        BlockPos shifted = new BlockPos(
-            face.getAxis() == Direction.Axis.X ? axisStep : 0,
-            face.getAxis() == Direction.Axis.Y ? axisStep : 0,
-            face.getAxis() == Direction.Axis.Z ? axisStep : 0);
-        if (face.getAxisDirection() == Direction.AxisDirection.POSITIVE) {
-            max = clampAbove(max.offset(shifted), min, face.getAxis());
-        } else {
-            min = clampBelow(min.offset(shifted), max, face.getAxis());
+    /** The faces the wheel has hold of: the one aimed at, the one behind it with the other key, or both at once. */
+    private static List<Direction> gripped() {
+        boolean near = FolkwaysClientGameEvents.modifierDown();
+        boolean far = FolkwaysClientGameEvents.alternateDown();
+        if (near && far) {
+            return List.of(aimedFace, aimedFace.getOpposite());
         }
+        return List.of(far ? aimedFace.getOpposite() : aimedFace);
     }
 
     private static BlockPos clampAbove(BlockPos moved, BlockPos floor, Direction.Axis axis) {
@@ -215,29 +247,33 @@ public final class ZoneSelection {
 
     private static BlockPos aimedCell(Player player) {
         if (FolkwaysClientGameEvents.modifierDown()) {
-            return BlockPos.containing(player.getEyePosition().add(player.getLookAngle().scale(range)));
+            return BlockPos.containing(Aim.of(player).at(range));
         }
-        Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
-            return null;
-        }
-        return hit.getBlockPos().immutable();
+        return Aim.cell(player).orElse(null);
+    }
+
+    /** The cell a click would take as a corner, while there is a corner still to set. */
+    static Optional<BlockPos> cursor(Player player) {
+        return min != null ? Optional.empty() : Optional.ofNullable(aimedCell(player));
     }
 
     private static Direction faceUnderCrosshair(Player player) {
         AABB box = boxOfMarked();
-        Vec3 eye = player.getEyePosition();
-        if (box.contains(eye)) {
-            return Direction.getNearest(player.getLookAngle());
+        Aim aim = Aim.of(player);
+        if (box.contains(aim.from())) {
+            return Direction.getNearest(aim.look());
         }
-        Vec3 end = eye.add(player.getLookAngle().scale(AIM_RANGE));
-        BlockHitResult hit = AABB.clip(List.of(box), eye, end, BlockPos.ZERO);
+        BlockHitResult hit = AABB.clip(List.of(box), aim.from(), aim.at(Aim.range()), BlockPos.ZERO);
         return hit == null || hit.getType() != HitResult.Type.BLOCK ? null : hit.getDirection();
     }
 
     static Optional<ZoneSnapshot> aimedZone(Player player) {
-        Vec3 eye = player.getEyePosition();
-        Vec3 end = eye.add(player.getLookAngle().scale(AIM_RANGE));
+        if (!Layer.ZONES.shown()) {
+            return Optional.empty();
+        }
+        Aim aim = Aim.of(player);
+        Vec3 eye = aim.from();
+        Vec3 end = aim.at(Aim.range());
         ZoneSnapshot best = null;
         double bestDistance = Double.MAX_VALUE;
         for (ZoneSnapshot zone : ColonyHighlightState.zones()) {
@@ -277,10 +313,12 @@ public final class ZoneSelection {
 
         if (min != null && aimedFace != null) {
             VertexConsumer fills = buffers.getBuffer(RenderType.debugFilledBox());
-            AABB slab = faceSlab(boxOfMarked(), aimedFace);
-            LevelRenderer.addChainedFilledBoxVertices(poseStack, fills,
-                slab.minX, slab.minY, slab.minZ, slab.maxX, slab.maxY, slab.maxZ,
-                DRAFT[0], DRAFT[1], DRAFT[2], 0.35F);
+            for (Direction face : gripped()) {
+                AABB slab = faceSlab(boxOfMarked(), face);
+                LevelRenderer.addChainedFilledBoxVertices(poseStack, fills,
+                    slab.minX, slab.minY, slab.minZ, slab.maxX, slab.maxY, slab.maxZ,
+                    DRAFT[0], DRAFT[1], DRAFT[2], 0.35F);
+            }
             buffers.endBatch(RenderType.debugFilledBox());
         }
 
@@ -291,6 +329,13 @@ public final class ZoneSelection {
         } else {
             LevelRenderer.renderLineBox(poseStack, lines, new AABB(origin).inflate(0.025D),
                 DRAFT[0], DRAFT[1], DRAFT[2], 1.0F);
+            // The box a click now would mark, from the corner set down to the cell aimed at.
+            BlockPos opposite = aimedCell(minecraft.player);
+            if (opposite != null) {
+                LevelRenderer.renderLineBox(poseStack, lines,
+                    AABB.encapsulatingFullBlocks(origin, opposite).inflate(0.03D),
+                    DRAFT[0], DRAFT[1], DRAFT[2], PREVIEW);
+            }
         }
         poseStack.popPose();
         buffers.endBatch(RenderType.lines());

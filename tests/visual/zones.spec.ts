@@ -1,17 +1,17 @@
-import { launchPair, type E2EPair } from "../shared/pair";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { test } from "@playwright/test";
 import { player, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
-import { createColonyViaBook, openColonyPanelViaBook, optInViaBook, waitForGroundedPlayer, type Vec } from "../e2e/colony-founding";
-import { createMarkedZone, ctrlScroll, setBookGesture } from "../e2e/zone-tools";
-import { aimAndWorldLeftClick } from "../e2e/world-ui";
-import { sleepMs } from "../e2e/draw-capture";
-import { CONFIG_PATH, VisualRun } from "./visual-kit";
-import { tracePath } from "../out-paths";
-import { seededOffThreadServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { commandPos, tryCommand } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+import { createColonyViaBook, openColonyPanelViaBook, optInViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { createMarkedZone, ctrlScroll, setBookGesture } from "../shared/ui/zone-tools";
+import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
+import { sleepMs } from "../shared/capture/draw-capture";
+import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
+import { tracePath } from "../shared/harness/out-paths";
+import { seededOffThreadServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const BOOK_ITEM = "folkways:colony_book";
 

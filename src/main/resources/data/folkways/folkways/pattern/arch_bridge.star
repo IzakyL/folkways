@@ -1,12 +1,39 @@
+load("folkways:materials.star", "FENCES", "MASONRY", "WALLS", "offer")
+
 accepts = ["path"]
 knobs = [
     count("width", 3, 15, default = 5, icon = "minecraft:stone_brick_slab"),
-    items("arch", default = ["minecraft:stone_bricks"], icon = "minecraft:stone_bricks"),
-    items("deck", default = ["minecraft:smooth_stone"], icon = "minecraft:smooth_stone"),
-    items("parapet", default = ["minecraft:stone_brick_wall"], icon = "minecraft:stone_brick_wall"),
-    items("abutment", default = ["minecraft:chiseled_stone_bricks"], icon = "minecraft:chiseled_stone_bricks"),
-    items("accent", default = ["minecraft:polished_andesite"], icon = "minecraft:polished_andesite"),
+    items("arch", offer(["minecraft:stone_bricks"], MASONRY),
+        default = ["minecraft:stone_bricks"], icon = "minecraft:stone_bricks"),
+    items("deck", offer(["minecraft:smooth_stone"], MASONRY),
+        default = ["minecraft:smooth_stone"], icon = "minecraft:smooth_stone"),
+    items("parapet", offer(["minecraft:stone_brick_wall"], WALLS, FENCES),
+        default = ["minecraft:stone_brick_wall"], icon = "minecraft:stone_brick_wall"),
+    items("abutment", offer(["minecraft:chiseled_stone_bricks"], MASONRY),
+        default = ["minecraft:chiseled_stone_bricks"], icon = "minecraft:chiseled_stone_bricks"),
+    items("accent", offer(["minecraft:polished_andesite"], MASONRY),
+        default = ["minecraft:polished_andesite"], icon = "minecraft:polished_andesite"),
 ]
+lang = {
+    "en_us": {
+        "title": "Arch Bridge",
+        "width": "Width",
+        "arch": "Arch",
+        "deck": "Deck",
+        "parapet": "Parapet",
+        "abutment": "Abutments",
+        "accent": "Accent",
+    },
+    "zh_cn": {
+        "title": "拱桥",
+        "width": "宽度",
+        "arch": "拱",
+        "deck": "桥面",
+        "parapet": "护栏",
+        "abutment": "桥台",
+        "accent": "点缀",
+    },
+}
 
 def approach(site, band, z, y, direction):
     for distance in range(2, 13):

@@ -58,6 +58,14 @@ ordering = "AFTER"
 side = "CLIENT"
 
 [[dependencies.${mod_id}]]
+modId = "shouldersurfing"
+type = "optional"
+reason = "Under its third-person camera the Colony Book aims along the crosshair it draws rather than out of the player's eyes. Nothing else changes."
+versionRange = "[1.21.1-5.2.0,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.${mod_id}]]
 modId = "jei"
 type = "optional"
 reason = "The colony book's item filters open JEI's ingredient list, and JEI is told which parts of a Folkways screen it may draw over. Without it the filters fall back to Folkways' own picker."
@@ -83,9 +91,6 @@ side = "BOTH"
 
 [[mixins]]
 config = "folkways.mixins.json"
-
-[[mixins]]
-config = "folkways-front.mixins.json"
 
 [[mixins]]
 config = "folkways-optional.mixins.json"

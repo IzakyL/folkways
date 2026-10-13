@@ -8,7 +8,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
-import com.lowdragmc.lowdraglib2.gui.ui.elements.Switch;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import io.github.izakyl.folkways.front.api.Schema;
@@ -91,7 +91,8 @@ final class ZoneSettings {
             row.press = new Button().noText();
             row.press.layout(layout -> layout.widthAuto()
                 .minWidth(SettingsPage.CONTROL_MIN).flexShrink(0));
-            row.press.addChildren(row.value);
+            row.worn = Rows.icon(ItemStack.EMPTY);
+            row.press.addChildren(row.worn, row.value);
 
             row.press.setOnClick(event -> pick(index, asking));
 
@@ -99,11 +100,13 @@ final class ZoneSettings {
             stamp(row.number, index, row.number::getValue,
                 (key, text) -> write(player, index, key, text));
 
-            row.flag = Controls.flag();
+            row.range = Controls.range(0, 0);
+
+            row.flag = Controls.tick();
             row.flag.addServerEventListener(UIEvents.CLICK, event -> toggle(player, index));
 
             row.element = Rows.row().addChildren(row.icon, row.name,
-                row.press, row.number, row.flag);
+                row.press, row.range, row.number, row.flag);
             rows.add(row);
             table.addChildren(row.element);
         }
@@ -335,9 +338,19 @@ final class ZoneSettings {
             case KIND_COUNT -> {
                 if (rekeyed) {
                     Controls.ranged(row.number, entry.getInt(MIN), entry.getInt(MAX));
+                    row.range.setText(Component.translatable("folkways.draft.range",
+                        entry.getInt(MIN), entry.getInt(MAX)));
                 }
                 if (echoed.fresh(slot, raw)) {
                     row.number.setValue(raw, false);
+                }
+            }
+            case KIND_CHOICE -> {
+                if (!raw.equals(row.wearing)) {
+                    row.wearing = raw;
+                    ResourceLocation picked = ResourceLocation.tryParse(raw);
+                    ItemStack icon = picked == null ? ItemStack.EMPTY : ChoicePicker.iconOf(picked);
+                    row.worn.style(style -> style.background(new ItemStackTexture(icon)));
                 }
             }
             case KIND_FLAG -> {
@@ -352,6 +365,8 @@ final class ZoneSettings {
 
     private static void wear(Row row, int kind) {
         row.press.setDisplay(kind == KIND_ITEMS || kind == KIND_CHOICE);
+        row.worn.setDisplay(kind == KIND_CHOICE);
+        row.range.setDisplay(kind == KIND_COUNT);
         row.number.setDisplay(kind == KIND_COUNT);
         row.flag.setDisplay(kind == KIND_FLAG);
     }
@@ -372,7 +387,10 @@ final class ZoneSettings {
         private Label value;
         private Button press;
         private TextField number;
-        private Switch flag;
+        private Toggle flag;
+        private UIElement worn;
+        private String wearing = "";
+        private Label range;
         private int kind;
         private String nameKey = "";
         private String raw = "";

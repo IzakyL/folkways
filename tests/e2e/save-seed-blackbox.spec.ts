@@ -1,16 +1,16 @@
 import { expect, test } from "@playwright/test";
 import { reflect, world } from "@izakyl/blockwright-minecraft";
-import { PERSON_KIND, writeColonyDat, type ColonySpec } from "./colony-nbt";
+import { PERSON_KIND, writeColonyDat, type ColonySpec } from "../shared/colony/colony-nbt";
 import {
   colonyRegistry, zoneCellsAt, zoneChoiceSettingAt, zoneCount, zoneCountSettingAt, zoneKindAt,
-} from "./zone-tools";
-import { doingKind, readDoing } from "./resident-probe";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { REPO_ROOT, ensureOut } from "../out-paths";
-import { BUDGET } from "../shared/budgets";
-import { introspect } from "../shared/bw-helpers";
-import { seededServer } from "../shared/mod-settings";
-import { newRunId } from "../shared/run-id";
+} from "../shared/ui/zone-tools";
+import { doingKind, readDoing } from "../shared/colony/resident-probe";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { REPO_ROOT, ensureOut } from "../shared/harness/out-paths";
+import { BUDGET } from "../shared/harness/budgets";
+import { introspect } from "../shared/harness/bw-helpers";
+import { seededServer } from "../shared/harness/mod-settings";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 const COLONY_ID = "00000000-0000-4000-8000-00000000c064";

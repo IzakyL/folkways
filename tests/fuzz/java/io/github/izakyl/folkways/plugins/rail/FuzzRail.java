@@ -28,7 +28,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * A Create line laid on the server the way a player lays one, minus the player, as tests/e2e/rail-fixture.ts lays
+ * A Create line laid on the server the way a player lays one, minus the player, as tests/shared/rail/rail-fixture.ts lays
  * it through a client: track running north from the car, two stations bound to it as the station item binds them
  * (track and facing written into the station's block entity), a plank car on two bogeys with controls either way, a
  * conductor's seat and passenger seats, glued and assembled at the first station. Then the train is given a cyclic

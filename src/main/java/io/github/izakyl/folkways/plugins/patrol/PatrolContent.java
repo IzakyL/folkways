@@ -54,7 +54,8 @@ public final class PatrolContent {
 
     public static void enroll(Registering registering) {
         registering.enrollment(ID,
-            new Enrollment(List.of(new Delegation(BEAT, new Shape.Path(FolkwaysConfig.maxPatrolPoints())))));
+            new Enrollment(List.of(new Delegation(BEAT, new Shape.Path(FolkwaysConfig.maxPatrolPoints()),
+                ResourceLocation.withDefaultNamespace("iron_sword")))));
     }
 
     static Vocation trade() {

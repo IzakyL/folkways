@@ -1,11 +1,11 @@
 import { defineTask, javaTask, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { runColonyTask } from "../e2e/colony-tasks";
-import type { Vec } from "../e2e/colony-founding";
-import { buildPen, type Pen } from "../e2e/pasture-tools";
-import { buildRailLine, LOST_CARRIAGE, type RailResult } from "../e2e/rail-fixture";
-import { varyVitals } from "../promo/vitals";
-import { WIRE_NETWORK } from "../shared/integration-tasks";
-import { commandPos, tryCommand } from "../shared/bw-helpers";
+import { runColonyTask } from "../shared/colony/colony-tasks";
+import type { Vec } from "../shared/colony/colony-founding";
+import { buildPen, type Pen } from "../shared/colony/pasture-tools";
+import { buildRailLine, LOST_CARRIAGE, type RailResult } from "../shared/rail/rail-fixture";
+import { varyVitals } from "../shared/colony/vitals";
+import { WIRE_NETWORK } from "../shared/colony/integration-tasks";
+import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
 
 // A freshly founded colony shows every page empty: no stations, no zones, no orders, no sites, and every
 // resident at the same priority with no levels. This lays a little of everything inside the founding pad

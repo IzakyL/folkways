@@ -1,16 +1,16 @@
 import { expect, test } from "@playwright/test";
-import { openOrderDraft } from "./membership-optin";
+import { openOrderDraft } from "../shared/colony/membership-optin";
 import { input, media, screen, tick } from "@izakyl/blockwright-minecraft";
 import { panelElements } from "../ldlib2";
 import { writeFileSync } from "node:fs";
-import { createColonyViaBook, optInViaBook, waitForGroundedPlayer, type Vec } from "./colony-founding";
-import { drawItems, drawTexts, sleepMs, type DrawCaptureResult } from "./draw-capture";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, outAbs, shotPath, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { frames, safeAction, safeScreen, screenOpen, commandPos, tryCommand } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+import { createColonyViaBook, optInViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { drawItems, drawTexts, sleepMs, type DrawCaptureResult } from "../shared/capture/draw-capture";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, outAbs, shotPath, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { frames, safeAction, safeScreen, screenOpen, commandPos, tryCommand } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 
@@ -58,7 +58,6 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     await tick.sprint(server, 3);
     evidence.opt_in = await optInViaBook(server, client, playerName, chest, "chest");
 
-    await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with minecraft:air`);
     await tryCommand(server, `tp ${playerName} ${chest.x + 0.5} ${chest.y} ${chest.z + 1.5} 180 30`);
     await tick.sprint(server, 5);
     await screen.dismiss(client);
@@ -73,7 +72,7 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     expect(draftRow, "the order draft's row should be on the panel").toBeTruthy();
     const rowBounds = { x: draftRow!.x, y: draftRow!.y, width: draftRow!.width, height: draftRow!.height };
     const sitePanel = elements.find((element) => element.id === "folkways.site.panel");
-    expect(sitePanel, "this site's panel should be next to the chest").toBeTruthy();
+    expect(sitePanel, "this site's panel should be in its window").toBeTruthy();
     const dropTarget = {
       x: button!.x + button!.width / 2,
       y: button!.y + button!.height / 2,

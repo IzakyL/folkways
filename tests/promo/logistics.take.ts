@@ -1,18 +1,18 @@
-import { WIRE_NETWORK, NETWORK_STATE } from "../shared/integration-tasks";
+import { WIRE_NETWORK, NETWORK_STATE } from "../shared/colony/integration-tasks";
 import { expect, test } from "@playwright/test";
 import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
-import { foundColonyFast, waitForGroundedPlayer } from "../e2e/colony-founding";
-import { MARK_MEMBERS, runColonyTask } from "../e2e/colony-tasks";
-import { BUDGET } from "../shared/budgets";
+import { foundColonyFast, waitForGroundedPlayer } from "../shared/colony/colony-founding";
+import { MARK_MEMBERS, runColonyTask } from "../shared/colony/colony-tasks";
+import { BUDGET } from "../shared/harness/budgets";
 import { setMaintainDemandsFast } from "./fast-setup";
 import { cinematicWorld, hideHud, launchPromoPair, promoClip, setFov, sleepMs, take, writeLook,
   type PromoPair } from "./promo-kit";
-import { shaderEvidence } from "./shaders";
-import { commandPos, tryCommand, frames, safeAction } from "../shared/bw-helpers";
-import { handOffSchematic } from "../e2e/schematic-tools";
-import { DATA_VERSION, encodeNbtFile } from "../e2e/colony-nbt";
-import { outPath } from "../out-paths";
+import { shaderEvidence } from "../shared/capture/shaders";
+import { commandPos, tryCommand, frames, safeAction } from "../shared/harness/bw-helpers";
+import { handOffSchematic } from "../shared/ui/schematic-tools";
+import { DATA_VERSION, encodeNbtFile } from "../shared/colony/colony-nbt";
+import { outPath } from "../shared/harness/out-paths";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 

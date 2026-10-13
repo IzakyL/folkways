@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -26,6 +27,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -94,6 +96,7 @@ public final class ColonyHighlightState {
         if (minecraft.screen != null && minecraft.player != null) {
             minecraft.player.closeContainer();
         }
+        Overhead.lookAt(Vec3.atCenterOf(pos));
     }
 
     public static List<ZoneSnapshot> zones() {
@@ -151,19 +154,26 @@ public final class ColonyHighlightState {
         float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
         Level level = minecraft.level;
 
-        GhostRenderer.drawModels(level, camera, partialTick);
+        boolean works = Layer.WORKS.shown();
+        if (works) {
+            GhostRenderer.drawModels(level, camera, partialTick);
+        }
 
         VertexConsumer fills = buffers.getBuffer(RenderType.debugFilledBox());
         drawZoneFills(level, poseStack, fills, camera, partialTick);
         drawPlacardFills(level, poseStack, fills, camera);
-        GhostRenderer.drawFills(level, poseStack, fills, partialTick);
+        if (works) {
+            GhostRenderer.drawFills(level, poseStack, fills, partialTick);
+        }
         buffers.endBatch(RenderType.debugFilledBox());
 
         VertexConsumer lines = buffers.getBuffer(RenderType.lines());
         drawMemberBoxes(level, poseStack, lines, camera, partialTick);
         drawZoneOutlines(level, poseStack, lines, camera, partialTick);
         drawPlacardOutlines(level, poseStack, lines, camera);
-        GhostRenderer.drawOutlines(level, poseStack, lines, partialTick);
+        if (works) {
+            GhostRenderer.drawOutlines(level, poseStack, lines, partialTick);
+        }
         BlockPos pointed = pingedBlock();
         if (pointed != null) {
             Placed.at(level, pointed, partialTick).enter(poseStack);
@@ -180,7 +190,7 @@ public final class ColonyHighlightState {
 
     private static void drawZoneFills(Level level, PoseStack poseStack, VertexConsumer fills, Vec3 viewer,
             float partialTick) {
-        for (ZoneSnapshot zone : ZONES) {
+        for (ZoneSnapshot zone : Layer.ZONES.shown() ? ZONES : List.<ZoneSnapshot>of()) {
             Placed placed = Placed.at(level, zone.min(), partialTick);
             AABB box = localBoxOf(zone);
             if (Math.sqrt(placed.point(box.getCenter()).distanceToSqr(viewer)) > FILL_RANGE) {
@@ -225,7 +235,7 @@ public final class ColonyHighlightState {
 
     private static void drawZoneOutlines(Level level, PoseStack poseStack, VertexConsumer lines, Vec3 viewer,
             float partialTick) {
-        for (ZoneSnapshot zone : ZONES) {
+        for (ZoneSnapshot zone : Layer.ZONES.shown() ? ZONES : List.<ZoneSnapshot>of()) {
             Placed placed = Placed.at(level, zone.min(), partialTick);
             AABB box = localBoxOf(zone);
             double distance = Math.sqrt(placed.point(box.getCenter()).distanceToSqr(viewer));
@@ -248,7 +258,7 @@ public final class ColonyHighlightState {
 
     private static void drawPlacardFills(BlockGetter level, PoseStack poseStack, VertexConsumer fills,
             Vec3 camera) {
-        for (Placard placard : PLACARDS) {
+        for (Placard placard : Layer.WORKS.shown() ? PLACARDS : List.<Placard>of()) {
             switch (placard.outline()) {
                 case Placard.Outline.Box box -> {
                     AABB bounds = AABB.encapsulatingFullBlocks(box.min(), box.max());
@@ -307,7 +317,7 @@ public final class ColonyHighlightState {
 
     private static void drawPlacardOutlines(BlockGetter level, PoseStack poseStack, VertexConsumer lines,
             Vec3 camera) {
-        for (Placard placard : PLACARDS) {
+        for (Placard placard : Layer.WORKS.shown() ? PLACARDS : List.<Placard>of()) {
             switch (placard.outline()) {
                 case Placard.Outline.Box box -> {
                     AABB bounds = AABB.encapsulatingFullBlocks(box.min(), box.max());
@@ -337,26 +347,19 @@ public final class ColonyHighlightState {
 
     /** Queues the zone, path and placard cards; {@link WorldCards#flush} draws them with the residents' cards. */
     private static void queueCards(Minecraft minecraft, Vec3 camera, float partialTick) {
-        for (ZoneSnapshot zone : ZONES) {
+        for (ZoneSnapshot zone : Layer.ZONES.cards() ? ZONES : List.<ZoneSnapshot>of()) {
             Placed placed = Placed.at(minecraft.level, zone.min(), partialTick);
             AABB box = localBoxOf(zone);
             Vec3 center = box.getCenter();
-            List<Line> lines = new ArrayList<>();
-            lines.add(Line.told(DelegationNames.told(zone.delegation())));
-            lines.addAll(NOTES.getOrDefault(zone.id(), List.of()));
-            card(placed.point(new Vec3(center.x, box.maxY + CARD_HEAD_ROOM, center.z)), lines, camera);
+            card(placed.point(new Vec3(center.x, box.maxY + CARD_HEAD_ROOM, center.z)),
+                titled(zone.delegation(), zone.id()), camera);
         }
-        for (ColonyPath path : PathSelection.paths()) {
-            List<Line> noted = NOTES.get(path.id());
-            if (noted == null || path.points().isEmpty()) {
-                continue;
+        for (ColonyPath path : Layer.PATHS.cards() ? PathSelection.paths() : List.<ColonyPath>of()) {
+            if (NOTES.containsKey(path.id()) && !path.points().isEmpty()) {
+                card(middleOf(path.points(), PATH_HEAD_ROOM), titled(path.delegation(), path.id()), camera);
             }
-            List<Line> lines = new ArrayList<>();
-            lines.add(Line.told(DelegationNames.told(path.delegation())));
-            lines.addAll(noted);
-            card(middleOf(path.points(), PATH_HEAD_ROOM), lines, camera);
         }
-        for (Placard placard : PLACARDS) {
+        for (Placard placard : Layer.WORKS.cards() ? PLACARDS : List.<Placard>of()) {
             Vec3 anchor = switch (placard.outline()) {
                 case Placard.Outline.Box box -> {
                     AABB bounds = AABB.encapsulatingFullBlocks(box.min(), box.max());
@@ -366,6 +369,34 @@ public final class ColonyHighlightState {
             };
             card(anchor, placard.lines(), camera);
         }
+    }
+
+    // What it is, then what has been noted of it.
+    private static List<Line> titled(ResourceLocation delegation, UUID id) {
+        List<Line> lines = new ArrayList<>();
+        lines.add(Line.told(DelegationNames.told(delegation)));
+        lines.addAll(NOTES.getOrDefault(id, List.of()));
+        return lines;
+    }
+
+    /** What a card says of the colony's own thing under the crosshair: a path, a work commissioned, or a zone. */
+    static List<Line> aimedLines(Minecraft minecraft) {
+        Optional<UUID> aimedPath = PathSelection.aimedPath(minecraft);
+        for (ColonyPath path : PathSelection.paths()) {
+            if (aimedPath.isPresent() && path.id().equals(aimedPath.get())) {
+                return titled(path.delegation(), path.id());
+            }
+        }
+        Aim aim = Aim.of(minecraft.player);
+        for (Placard placard : Layer.WORKS.cards() ? PLACARDS : List.<Placard>of()) {
+            if (placard.outline() instanceof Placard.Outline.Box box && AABB.encapsulatingFullBlocks(box.min(), box.max())
+                    .clip(aim.from(), aim.at(Aim.range())).isPresent()) {
+                return placard.lines();
+            }
+        }
+        return ZoneSelection.aimedZone(minecraft.player)
+            .map(zone -> titled(zone.delegation(), zone.id()))
+            .orElse(List.of());
     }
 
     private static void card(Vec3 anchor, List<Line> lines, Vec3 camera) {

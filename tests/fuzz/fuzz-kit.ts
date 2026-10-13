@@ -2,9 +2,9 @@ import { BlockwrightDriver, type BlockwrightInstance } from "@izakyl/blockwright
 import { defineTask, javaTask, minecraft, tick, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import type { TestInfo } from "@playwright/test";
 import { appendFileSync, writeFileSync } from "node:fs";
-import { REPO_ROOT, outAbs, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { newRunId } from "../shared/run-id";
+import { REPO_ROOT, outAbs, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { newRunId } from "../shared/harness/run-id";
 import { campaignMs, campaignSeed, fuzzShards, keep, readCorpus } from "./campaign";
 
 // A live fuzz target runs on a server of its own (no client: nothing here is looked at). Each case lays a real

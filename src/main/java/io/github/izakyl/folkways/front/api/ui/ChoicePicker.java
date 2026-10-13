@@ -12,7 +12,9 @@ import dev.vfyjxf.taffy.style.FlexDirection;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
@@ -52,23 +54,61 @@ public final class ChoicePicker {
 
     public static Dialog open(UIElement host, String titleKey, List<ResourceLocation> options,
             @Nullable ResourceLocation current, Consumer<ResourceLocation> confirmed) {
+        List<Row> rows = new ArrayList<>();
+        for (ResourceLocation option : options) {
+            rows.add(new Row(option.toString(), labelOf(option), iconOf(option)));
+        }
+        return open(host, titleKey, rows, current == null ? null : current.toString(),
+            picked -> confirmed.accept(ResourceLocation.parse(picked)));
+    }
+
+    /** One thing a picker offers: the key handed back when it is picked, the words it reads as, the icon it wears. */
+    public record Row(String key, Component label, ItemStack icon) {
+    }
+
+    // One of the rows: confirming hands back the key picked, when it is not the one already held.
+    public static Dialog open(UIElement host, String title, List<Row> rows, @Nullable String current,
+            Consumer<String> confirmed) {
+        Set<String> held = current == null ? Set.of() : Set.of(current);
+        return pick(host, title, rows, held, false,
+            picked -> picked.stream().findFirst().ifPresent(confirmed));
+    }
+
+    // Any of the rows: confirming hands back every key picked, in the order the rows stand.
+    public static Dialog openMany(UIElement host, String title, List<Row> rows, Set<String> current,
+            Consumer<List<String>> confirmed) {
+        return pick(host, title, rows, current, true, confirmed);
+    }
+
+    private static Dialog pick(UIElement host, String title, List<Row> offered, Set<String> current, boolean many,
+            Consumer<List<String>> confirmed) {
         Dialog dialog = new Dialog();
-        ResourceLocation[] picked = { options.contains(current) ? current : null };
+        Set<String> picked = new LinkedHashSet<>();
+        for (Row row : offered) {
+            if (current.contains(row.key())) {
+                picked.add(row.key());
+            }
+        }
+        Set<String> held = Set.copyOf(picked);
         List<Button> rows = new ArrayList<>();
         UIElement list = new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.COLUMN).widthPercent(100).gapAll(ROW_GAP));
         Button confirm = new Button().setText(Component.translatable("folkways.action.confirm"));
-        for (ResourceLocation option : options) {
-            Button row = new Button().setText(labelOf(option));
+        for (Row option : offered) {
+            Button row = new Button().setText(option.label());
             row.layout(layout -> layout.widthPercent(100).height(ROW).flexShrink(0));
-            ItemStack icon = iconOf(option);
-            if (!icon.isEmpty()) {
-                row.addPreIcon(new ItemStackTexture(icon));
+            if (!option.icon().isEmpty()) {
+                row.addPreIcon(new ItemStackTexture(option.icon()));
             }
-            Tokens.name(row, "folkways.choice.option." + Tokens.of(option));
+            Tokens.name(row, "folkways.choice.option." + tokenOf(option.key()));
             row.setOnClick(event -> {
-                picked[0] = option;
-                mark(rows, options, picked[0], confirm, current);
+                if (!many) {
+                    picked.clear();
+                    picked.add(option.key());
+                } else if (!picked.remove(option.key())) {
+                    picked.add(option.key());
+                }
+                mark(rows, offered, picked, confirm, held);
             });
             rows.add(row);
             list.addChildren(row);
@@ -78,10 +118,15 @@ public final class ChoicePicker {
         Tokens.name(scroller, "folkways.choice.options");
 
         confirm.setOnClick(event -> {
-            ResourceLocation chosen = picked[0];
             dialog.close();
-            if (chosen != null && !chosen.equals(current)) {
-                confirmed.accept(chosen);
+            if (!picked.equals(held)) {
+                List<String> inOrder = new ArrayList<>();
+                for (Row row : offered) {
+                    if (picked.contains(row.key())) {
+                        inOrder.add(row.key());
+                    }
+                }
+                confirmed.accept(inOrder);
             }
         });
         Tokens.name(confirm, "folkways.choice.confirm");
@@ -90,18 +135,23 @@ public final class ChoicePicker {
             .setOnClick(event -> dialog.close());
         cancel.addClass("__cancel-button__");
         Tokens.name(cancel, "folkways.choice.cancel");
-        mark(rows, options, picked[0], confirm, current);
+        mark(rows, offered, picked, confirm, held);
 
-        dialog.setTitle(titleKey);
+        dialog.setTitle(title);
         dialog.addContent(new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
                 .widthPercent(100).heightPercent(100).gapAll(3))
-            .addChildren(Rows.text(Component.translatable("folkways.choice.hint")), scroller));
+            .addChildren(Rows.text(Component.translatable(many ? "folkways.choice.hint.many" : "folkways.choice.hint")),
+                scroller));
         dialog.addButton(cancel);
         dialog.addButton(confirm);
         Tokens.name(dialog, "folkways.choice");
-        float height = CHROME + Math.min(Math.max(options.size(), 1), MOST_ROWS) * (ROW + ROW_GAP);
+        float height = CHROME + Math.min(Math.max(offered.size(), 1), MOST_ROWS) * (ROW + ROW_GAP);
         return show(dialog, host, WIDTH, height);
+    }
+
+    private static String tokenOf(String key) {
+        return key.replace("#", "").replace(':', '.').replace('/', '.');
     }
 
     // Shows a dialog as a window beside the element that asked for it, over every window already open.
@@ -128,16 +178,16 @@ public final class ChoicePicker {
         dialog.windowMode(x, y, wide, height);
     }
 
-    private static void mark(List<Button> rows, List<ResourceLocation> options,
-            @Nullable ResourceLocation picked, Button confirm, @Nullable ResourceLocation current) {
+    private static void mark(List<Button> rows, List<Row> offered, Set<String> picked, Button confirm,
+            Set<String> held) {
         for (int at = 0; at < rows.size(); at++) {
-            if (options.get(at).equals(picked)) {
+            if (picked.contains(offered.get(at).key())) {
                 rows.get(at).addClass(CHOSEN);
             } else {
                 rows.get(at).removeClass(CHOSEN);
             }
         }
-        confirm.setActive(picked != null && !picked.equals(current));
+        confirm.setActive(!picked.equals(held));
     }
 
     // An option written "<id>/<variant>" is another way of the option before the stroke: it reads as that one's

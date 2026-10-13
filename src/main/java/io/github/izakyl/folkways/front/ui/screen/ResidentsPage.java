@@ -24,6 +24,8 @@ import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.ui.Bay;
+import io.github.izakyl.folkways.front.api.ui.Cue;
+import io.github.izakyl.folkways.front.api.ui.Cues;
 import io.github.izakyl.folkways.front.api.ui.Draw;
 import io.github.izakyl.folkways.front.api.ui.Inlay;
 import io.github.izakyl.folkways.front.api.ui.Nook;
@@ -307,8 +309,8 @@ public final class ResidentsPage implements Draw {
                 cell.textStyle(style -> style.textAlignHorizontal(Horizontal.CENTER)
                 .textAlignVertical(Vertical.CENTER).textWrap(TextWrap.HIDE));
                 cell.addClass("folkways_priority");
-                cell.style(style -> style.tooltips(vocationName(trades.get(trade)),
-                    Component.translatable("folkways.ui.residents.priority")));
+                Cues.under(cell, vocationName(trades.get(trade)),
+                    Cue.of("folkways.keys.allow", Cue.Key.CLICK), Cue.of("folkways.keys.rank", Cue.Key.WHEEL));
                 cell.addServerEventListener(UIEvents.CLICK,
                     event -> togglePriority(player, state, index, trade));
                 cell.addServerEventListener(UIEvents.MOUSE_WHEEL,

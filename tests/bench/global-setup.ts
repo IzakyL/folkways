@@ -1,8 +1,8 @@
-import { buildMod, checkSpecTypes } from "../e2e/global-setup";
-import { ensureOut } from "../out-paths";
+import { buildMod, checkSpecTypes } from "../shared/harness/setup";
+import { ensureOut } from "../shared/harness/out-paths";
 
 export default function benchSetup() {
   ensureOut("bench");
-  checkSpecTypes("tests/tsconfig.bench.json");
+  checkSpecTypes("bench");
   buildMod();
 }

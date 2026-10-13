@@ -1,6 +1,6 @@
 import { defineTask, javaTask, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { ADMIT_SETTLERS, BIND_COLONY, MARK_MEMBERS, runColonyTask } from "../e2e/colony-tasks";
-import type { Vec } from "../e2e/colony-founding";
+import { ADMIT_SETTLERS, BIND_COLONY, MARK_MEMBERS, runColonyTask } from "../shared/colony/colony-tasks";
+import type { Vec } from "../shared/colony/colony-founding";
 
 export async function foundPromoColonyFast(server: MinecraftServer, player: string, cells: Vec[]) {
   const bound = await runColonyTask(server, BIND_COLONY, { player });

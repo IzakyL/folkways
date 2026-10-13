@@ -106,6 +106,47 @@ captions = [
   "需要 Create Aeronautics 1.3.2 及以上",
 ]
 
+# ── 俯瞰短片（npm run promo:overhead）──────────────────────
+# 第一段镜头分前后两截：above 是自由视角下翻看、操作殖民地；above-draft 从画路开始，到居民把路修完。
+# 之后每个样式一段镜头：overhead-<样式>。
+[scenes.above]
+captions = ["支持：自由视角下的殖民地操作"]
+
+[scenes.above-draft]
+captions = [
+  "Draft：画一条线或圈一块地，选一种样式，便能生成整座建筑",
+  "每种样式都是一段脚本，用基于 Starlark 的 DSL 编写",
+  "可通过数据包加载自定义样式",
+  "生存模式下由居民备料施工，创造模式下立刻建成",
+]
+
+[scenes.overhead-road]
+captions = ["已包含：道路"]
+
+[scenes.overhead-arcade]
+captions = ["已包含：风雨廊"]
+
+[scenes.overhead-railway]
+captions = ["已包含：铁路"]
+
+[scenes.overhead-city_wall]
+captions = ["已包含：城墙"]
+
+[scenes.overhead-terraced_field]
+captions = ["已包含：梯田"]
+
+[scenes.overhead-quarry]
+captions = ["已包含：采石场"]
+
+[scenes.overhead-mine]
+captions = ["已包含：矿井"]
+
+[scenes.overhead-dock]
+captions = ["已包含：码头"]
+
+[scenes.overhead-arch_bridge]
+captions = ["已包含：拱桥"]
+
 # ── 结尾 ───────────────────────────────────────────────
 [cards.ending]
 seconds = 9

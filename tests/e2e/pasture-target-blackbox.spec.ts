@@ -7,8 +7,8 @@ import {
   tryCommand,
   waitForGroundedPlayer,
   type Vec,
-} from "./colony-founding";
-import { buildPen, createPastureZoneViaPanel, pastureZoneFailure, penLayout, type Pen } from "./pasture-tools";
+} from "../shared/colony/colony-founding";
+import { buildPen, createPastureZoneViaPanel, pastureZoneFailure, penLayout, type Pen } from "../shared/colony/pasture-tools";
 import {
   applyZoneSetting,
   colonyRegistry,
@@ -16,14 +16,15 @@ import {
   releaseHeldZone,
   zoneChoiceSettingAt,
   zoneCountSettingAt,
+  zoneFlagSettingAt,
   zoneSettingToken,
-} from "./zone-tools";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, outAbs, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { frames, safeAction, waitForElement } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/ui/zone-tools";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { frames, safeAction, waitForElement } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 const BOOK_ITEM = "folkways:colony_book";
@@ -102,6 +103,17 @@ test("the zone settings page sets a pasture's target head count on the colony's 
       evidence.target_after,
       `writing ${EXPECTED_TARGET} into the head count field on the settings page should change the target from ${CREATED_TARGET} to ${EXPECTED_TARGET} (read from the zone in ColonyData)`,
     ).toBe(EXPECTED_TARGET);
+
+    // The tick box on the same page: a pasture is made shearing, and one click clears it on the zone.
+    expect(await zoneFlagSettingAt(server, registry, "shear"), "a pasture shears by default").toBe(true);
+    evidence.untick = await applyPastureEdit(server, client, playerName, pen, { key: "shear", toggle: true });
+    let shear = true;
+    for (let round = 0; round < 12 && shear; round++) {
+      await tick.sprint(server, 20);
+      shear = await zoneFlagSettingAt(server, registry, "shear");
+      if (shear) await safeAction(() => frames(client, 30));
+    }
+    expect(shear, "unticking the shear box on the settings page should clear the flag on the zone").toBe(false);
   } catch (error) {
     pair?.failing(error);
     throw error;
@@ -114,6 +126,23 @@ test("the zone settings page sets a pasture's target head count on the colony's 
     await pair?.teardown(testInfo);
   }
 });
+
+async function applyPastureEdit(
+  server: any, client: any, playerName: string, pen: Pen, edit: { key: string; toggle: true },
+) {
+  const step: any = { edit };
+  try {
+    step.hold = await holdZoneAndOpen(server, client, playerName, { min: pen.min, max: pen.max });
+    await waitForElement(client, { id: zoneSettingToken(edit.key) }, { timeoutMs: 8_000 });
+    step.press = await applyZoneSetting(server, client, edit);
+    await tick.sprint(server, 10);
+  } catch (error) {
+    step.error = errorSummary(error);
+  } finally {
+    step.release = await releaseHeldZone(client);
+  }
+  return step;
+}
 
 async function applyPastureTarget(
   server: any, client: any, playerName: string, standBlock: Vec, pen: Pen, target: number,

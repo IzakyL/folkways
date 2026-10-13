@@ -1,14 +1,14 @@
-import { launchPair, type E2EPair } from "../shared/pair";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { expect, test } from "@playwright/test";
 import { camera, defineTask, screen, type TaskTemplate } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { readdirSync, readFileSync } from "node:fs";
-import { VisualRun } from "./visual-kit";
-import { tracePath } from "../out-paths";
-import { seededOffThreadServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { frames, tryCommand } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+import { VisualRun } from "../shared/capture/visual-kit";
+import { tracePath } from "../shared/harness/out-paths";
+import { seededOffThreadServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { frames, tryCommand } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 type Vec = { x: number; y: number; z: number };
 
@@ -26,7 +26,7 @@ type Gallery = {
 };
 
 const PATTERNS = "src/main/resources/data/folkways/folkways/pattern";
-const CAMERA = "tests/visual/arch-bridge/CameraSetup.java";
+const CAMERA = "tests/visual/patterns/arch-bridge/CameraSetup.java";
 const SETTLE_MS = 5_000;
 
 // Pins the render distance and pushes the fog out, so every shot sees the whole gallery.
@@ -87,7 +87,7 @@ function mineViews(value: any): View[] {
 const GALLERIES: Gallery[] = [
   {
     pattern: "arcade",
-    task: galleryTask("arcade", "tests/visual/arcade/ArcadeGallery.java"),
+    task: galleryTask("arcade", "tests/visual/patterns/arcade/ArcadeGallery.java"),
     args: () => ({ arcade: star("arcade") }),
     stand: "0 40 0",
     forceload: "-80 -80 80 80",
@@ -114,7 +114,7 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "arch_bridge",
-    task: galleryTask("arch_bridge", "tests/visual/arch-bridge/BridgeGallery.java"),
+    task: galleryTask("arch_bridge", "tests/visual/patterns/arch-bridge/BridgeGallery.java"),
     args: () => ({ source: star("arch_bridge") }),
     stand: "0 25 8",
     forceload: "-64 -64 64 64",
@@ -124,7 +124,7 @@ const GALLERIES: Gallery[] = [
       ...[1, 4, 7, 10, 13, 16].map((y) => `fill -48 ${y} -38 48 ${y + 2} 54 minecraft:air`),
     ],
     views: () => {
-      const { position, target } = json("tests/visual/arch-bridge/camera.json");
+      const { position, target } = json("tests/visual/patterns/arch-bridge/camera.json");
       return [
         view("gallery", position, target, "Arch bridge overview: samples of each span, material and abutment laid out over water", 55),
         view("sandstone-detail", v(26, 13, 18), v(20, 6, -4), "Sandstone arch bridge close-up: where arch, deck and railing meet", 50),
@@ -135,21 +135,21 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "city_wall",
-    task: galleryTask("city_wall", "tests/visual/city-wall/WallGallery.java"),
+    task: galleryTask("city_wall", "tests/visual/patterns/city-wall/WallGallery.java"),
     args: () => ({ source: star("city_wall") }),
     stand: "0 40 0",
     forceload: "-80 -80 80 80",
-    views: () => (json("tests/visual/city-wall/cameras.json") as any[]).map((c) =>
+    views: () => (json("tests/visual/patterns/city-wall/cameras.json") as any[]).map((c) =>
       view(c.name, c.position, c.target, `City wall · ${c.name}`, c.fov ?? 60)),
   },
   {
     pattern: "dock",
-    task: galleryTask("dock", "tests/visual/dock/DockGallery.java"),
-    args: () => ({ source: star("dock"), ...json("tests/visual/dock/scenes.json") }),
+    task: galleryTask("dock", "tests/visual/patterns/dock/DockGallery.java"),
+    args: () => ({ source: star("dock"), ...json("tests/visual/patterns/dock/scenes.json") }),
     stand: "0 25 40",
     forceload: "-64 -32 64 48",
     views: () => {
-      const { scenes } = json("tests/visual/dock/scenes.json");
+      const { scenes } = json("tests/visual/patterns/dock/scenes.json");
       return [
         view("overview", v(0, 36, 62), v(0, 0, 8), "Dock overview: five shore types and the dock heads side by side", 60),
         ...(scenes as any[]).flatMap((s) => [
@@ -162,7 +162,7 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "railway",
-    task: galleryTask("railway", "tests/visual/railway/RailwayGallery.java"),
+    task: galleryTask("railway", "tests/visual/patterns/railway/RailwayGallery.java"),
     args: () => ({ source: star("railway") }),
     stand: "0 40 20",
     forceload: "-64 -32 64 250",
@@ -187,7 +187,7 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "road",
-    task: galleryTask("road", "tests/visual/road/RoadGallery.java"),
+    task: galleryTask("road", "tests/visual/patterns/road/RoadGallery.java"),
     args: () => ({ road: star("road"), grading: star("grading") }),
     stand: "0 40 0",
     forceload: "-80 -80 80 80",
@@ -203,7 +203,7 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "terraced_field",
-    task: galleryTask("terraced_field", "tests/visual/terraced-field/FieldGallery.java"),
+    task: galleryTask("terraced_field", "tests/visual/patterns/terraced-field/FieldGallery.java"),
     args: () => ({ source: star("terraced_field") }),
     stand: "10 40 20",
     forceload: "-80 -48 112 80",
@@ -225,7 +225,7 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "mine",
-    task: galleryTask("mine", "tests/visual/mine/MineGallery.java"),
+    task: galleryTask("mine", "tests/visual/patterns/mine/MineGallery.java"),
     args: () => ({ source: star("mine") }),
     stand: "0 110 0",
     forceload: "-80 -44 80 44",

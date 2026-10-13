@@ -55,6 +55,11 @@ use, for example:
 npm run test:e2e -- tests/e2e/founding-smoke.spec.ts --workers=1
 ```
 
+Each suite is a directory under `tests/` (`e2e`, `visual`, `bench`, `promo`, `fuzz`) with
+its own `playwright.config.ts` and `tsconfig.json`. Code more than one suite uses lives in
+`tests/shared/`; a suite imports from there and from `tests/ldlib2/`, never from another
+suite. Everything the suites write goes to `tests/out/`, which git ignores.
+
 The repository's `.mcp.json` exposes the same harness to MCP-capable assistants, with
 the LDLib2 UI adapter in `tests/ldlib2/`.
 

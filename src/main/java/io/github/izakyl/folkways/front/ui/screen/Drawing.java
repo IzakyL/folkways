@@ -1,13 +1,14 @@
 package io.github.izakyl.folkways.front.ui.screen;
 
 import com.lowdragmc.lowdraglib2.LDLib2;
-import com.lowdragmc.lowdraglib2.gui.texture.ItemStackTexture;
+import com.lowdragmc.lowdraglib2.gui.texture.ColorRectTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
+import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
-import dev.vfyjxf.taffy.style.FlexWrap;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.ui.Rows;
@@ -21,21 +22,27 @@ import java.util.Optional;
 import java.util.function.Supplier;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
 
 public final class Drawing {
 
-    private static final String PICKED = "> ";
+    private static final int LIST_WIDTH = 104;
+    private static final int MARK_WIDTH = 2;
+    private static final int MARK_ON = 0xFFE0BC76;
 
     public interface Held {
 
         Optional<Component> measure();
 
+        /** How much was drawn, in what a shape's limit counts: the cells of a box, the points of a line. */
+        int extent();
+
         void drop();
 
         void hand(ResourceLocation delegation, net.minecraft.nbt.CompoundTag settings);
 
-        default void take(ResourceLocation offer) {
+        /** What an offer asks before it takes the shape, to stand beside the list as a delegation's settings do. */
+        default Optional<UIElement> offered(ResourceLocation offer) {
+            return Optional.empty();
         }
     }
 
@@ -76,19 +83,22 @@ public final class Drawing {
         }
     }
 
-    private record Candidate(Picked pick, Shape.Gesture gesture, Component name, Button row) {
+    private record Candidate(Picked pick, Shape.Gesture gesture, Button row, UIElement mark, UIElement pane, int most,
+                             Component limit) {
     }
 
     private final List<Candidate> candidates = new ArrayList<>();
-    private final Label question = Rows.text(Component.empty());
-    private final Label measure = Rows.note(Component.empty());
     private final Label unavailable = Rows.text(Component.translatable("folkways.zoneconfig.no_types"));
+    private final Label over = Rows.name(Component.empty());
     private final Button confirm = new Button();
     private UIElement body;
+    private UIElement split;
+    private UIElement commit;
     private final Map<ResourceLocation, DraftSettings> parameters = new java.util.LinkedHashMap<>();
 
     private Shape.Gesture holding;
-    private Picked picked;
+    private Candidate picked;
+    private Candidate worn;
 
     private Drawing() {
     }
@@ -98,42 +108,53 @@ public final class Drawing {
     }
 
     public UIElement build() {
-        UIElement table = Rows.strip();
-        table.layout(layout -> layout.flexWrap(FlexWrap.WRAP).gapAll(Rows.GAP));
+        // What the shape can become is listed down the left; whichever is picked asks what it needs on the right.
+        UIElement list = new UIElement()
+            .layout(layout -> layout.flexDirection(FlexDirection.COLUMN).widthPercent(100).gapAll(1));
+        UIElement detail = new UIElement()
+            .layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
+                .flexGrow(1).flexShrink(1).minWidth(0).minHeight(0).gapAll(5));
+        detail.setOverflowVisible(false);
         for (Delegation declared : Enrollments.delegations()) {
             if (declared.shape().gesture().drawn()) {
-                add(table, new Picked.Ground(declared.id()), declared.shape().gesture(),
-                    groundText(declared), ItemStack.EMPTY);
+                add(list, detail, new Picked.Ground(declared.id()), declared.shape().gesture(),
+                    Component.translatable("folkways.delegation."
+                        + declared.id().getNamespace() + "." + declared.id().getPath()),
+                    declared.icon(), mostOf(declared), limitOf(declared), settingsOf(declared));
             }
         }
         for (Map.Entry<Shape.Gesture, Supplier<List<Offered>>> gesture : OFFERS.entrySet()) {
             for (Offered offered : gesture.getValue().get()) {
-                add(table, new Picked.Offer(offered.id()), gesture.getKey(),
-                    Component.translatable(offered.nameKey()), SettingsPage.iconOf(offered.icon()));
+                add(list, detail, new Picked.Offer(offered.id()), gesture.getKey(),
+                    Component.translatable(offered.nameKey()), offered.icon(), Integer.MAX_VALUE, Component.empty(),
+                    Rows.page());
             }
         }
 
-        question.layout(layout -> layout.widthPercent(100).flexShrink(1).minWidth(0));
-        measure.layout(layout -> layout.widthPercent(100).flexShrink(1).minWidth(0));
-        confirm.setText(Component.translatable("folkways.zoneconfig.confirm"));
+        confirm.setText(Component.translatable("folkways.action.confirm"));
         confirm.setOnClick(event -> hand());
         Tokens.name(confirm, "folkways.zoneconfig.confirm");
+        confirm.layout(layout -> layout.flexShrink(0));
+        commit = Rows.strip().addChildren(over, confirm);
+        detail.addChildren(commit);
         Button cancel = new Button()
             .setText(Component.translatable("folkways.action.cancel"))
             .setOnClick(event -> drop());
+        cancel.layout(layout -> layout.flexShrink(0));
         Tokens.name(cancel, "folkways.zoneconfig.cancel");
 
-        UIElement forms = Rows.page();
-        for (Delegation declared : Enrollments.delegations()) {
-            if (!declared.shape().gesture().drawn()) continue;
-            DraftSettings form = new DraftSettings(declared.schema());
-            parameters.put(declared.id(), form);
-            forms.addChildren(form.build());
-        }
-        var scroller = Rows.fills(Rows.box());
-        scroller.addScrollViewChild(Rows.page().addChildren(table, forms));
-        body = Rows.page().addChildren(question, measure, unavailable, scroller,
-            Rows.actions(cancel, confirm));
+        ScrollerView kinds = Rows.fills(Rows.box());
+        kinds.addScrollViewChild(list);
+        UIElement side = new UIElement()
+            .layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
+                .width(LIST_WIDTH).flexShrink(0).minHeight(0).gapAll(5))
+            .addChildren(kinds, cancel);
+        split = new UIElement()
+            .layout(layout -> layout.flexDirection(FlexDirection.ROW)
+                .widthPercent(100).flexGrow(1).flexShrink(1).minHeight(0).gapAll(Rows.GAP))
+            .addChildren(side, detail);
+
+        body = Rows.page().addChildren(unavailable, split);
         body.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
         body.setDisplay(false);
 
@@ -144,22 +165,52 @@ public final class Drawing {
         return root;
     }
 
-    private void add(UIElement table, Picked pick, Shape.Gesture gesture, Component name, ItemStack icon) {
-        Button row = new Button().setText(name);
+    private UIElement settingsOf(Delegation declared) {
+        DraftSettings form = new DraftSettings(declared.schema());
+        parameters.put(declared.id(), form);
+        ScrollerView scroller = Rows.fills(Rows.box());
+        scroller.addScrollViewChild(form.build());
+        form.display(true);
+        UIElement pane = Rows.page();
+        if (declared.schema().settings().isEmpty()) {
+            pane.addChildren(Rows.note(Component.translatable("folkways.zoneconfig.no_settings")));
+        }
+        return pane.addChildren(scroller);
+    }
+
+    private void add(UIElement list, UIElement detail, Picked pick, Shape.Gesture gesture, Component name,
+            ResourceLocation icon, int most, Component limit, UIElement pane) {
+        Button row = new Button().noText();
         Tokens.name(row, switch (pick) {
             case Picked.Ground ground -> "folkways.zoneconfig.kind." + Tokens.of(ground.delegation());
             case Picked.Offer offer -> "folkways.zoneconfig.offer." + Tokens.of(offer.id());
         });
-        row.layout(layout -> layout.flexShrink(0));
-        if (!icon.isEmpty()) {
-            row.addPreIcon(new ItemStackTexture(icon));
+        row.layout(layout -> layout.flexDirection(FlexDirection.ROW)
+            .widthPercent(100).height(Rows.ROW_HEIGHT).flexShrink(0)
+            .alignItems(AlignItems.CENTER).gapAll(Rows.GAP - 1).paddingAll(1));
+        row.addClass("folkways_nav");
+        row.setOverflowVisible(false);
+        UIElement mark = new UIElement()
+            .layout(layout -> layout.width(MARK_WIDTH).heightPercent(100).flexShrink(0))
+            .style(style -> style.background(new ColorRectTexture(MARK_ON)));
+        mark.setDisplay(false);
+        row.addChildren(mark, Rows.icon(SettingsPage.iconOf(icon)), Rows.name(name));
+        pane.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
+        pane.setDisplay(false);
+        Candidate candidate = new Candidate(pick, gesture, row, mark, pane, most, limit);
+        row.setOnClick(event -> pick(candidate));
+        candidates.add(candidate);
+        list.addChildren(row);
+        detail.addChildren(pane);
+    }
+
+    private void pick(Candidate candidate) {
+        picked = candidate;
+        if (candidate.pick() instanceof Picked.Offer offer) {
+            candidate.pane().clearAllChildren();
+            held().flatMap(held -> held.offered(offer.id())).ifPresent(candidate.pane()::addChildren);
         }
-        row.setOnClick(event -> {
-            picked = pick;
-            refresh();
-        });
-        candidates.add(new Candidate(pick, gesture, name, row));
-        table.addChildren(row);
+        refresh();
     }
 
     private void refresh() {
@@ -167,49 +218,75 @@ public final class Drawing {
             return;
         }
         holding = null;
-        Component measured = null;
         for (Map.Entry<Shape.Gesture, Held> entry : HELD.entrySet()) {
-            Optional<Component> answer = entry.getValue().measure();
-            if (answer.isPresent()) {
+            if (entry.getValue().measure().isPresent()) {
                 holding = entry.getKey();
-                measured = answer.get();
                 break;
             }
         }
         body.setDisplay(holding != null);
         if (holding == null) {
-            picked = null;
+            if (picked != null) {
+                // What an offer drew was drawn for the shape now gone.
+                candidates.stream().filter(candidate -> candidate.pick() instanceof Picked.Offer)
+                    .forEach(candidate -> candidate.pane().clearAllChildren());
+                picked = null;
+            }
             return;
         }
-        question.setText(Component.translatable(holding == Shape.Gesture.LINE
-            ? "folkways.zoneconfig.path" : "folkways.zoneconfig.new"));
-        measure.setText(measured);
-        boolean offered = false;
-        boolean available = false;
+        Candidate first = null;
+        boolean stands = false;
         for (Candidate candidate : candidates) {
             boolean shown = candidate.gesture() == holding;
             candidate.row().setDisplay(shown);
-            available |= shown;
-            boolean marked = shown && candidate.pick().equals(picked);
-            offered |= marked;
-            candidate.row().setText(Component.literal(marked ? PICKED : "").append(candidate.name()));
-            if (marked) {
-                candidate.row().addClass("folkways_chosen");
-            } else {
-                candidate.row().removeClass("folkways_chosen");
+            if (shown && first == null) {
+                first = candidate;
+            }
+            stands |= shown && candidate == picked;
+        }
+        unavailable.setDisplay(first == null);
+        split.setDisplay(first != null);
+        if (!stands) {
+            picked = null;
+            if (first != null) {
+                // The first is picked to begin with, so the page never opens on an empty half.
+                pick(first);
+                return;
             }
         }
-        unavailable.setDisplay(!available);
-        if (!offered) {
-            picked = null;
+        for (Candidate candidate : candidates) {
+            candidate.pane().setDisplay(candidate == picked);
         }
-        parameters.forEach((id, form) -> form.display(
-            picked instanceof Picked.Ground ground && ground.delegation().equals(id)));
-        confirm.setDisplay(picked != null);
+        commit.setDisplay(picked != null && picked.pick() instanceof Picked.Ground);
+        // A limit is only spoken of once what was drawn is past it, in the place of the button it withholds.
+        boolean fits = picked == null || held().map(Held::extent).orElse(0) <= picked.most();
+        confirm.setDisplay(fits);
+        over.setText(fits ? Component.empty() : picked.limit());
+        if (worn != picked) {
+            worn = picked;
+            for (Candidate candidate : candidates) {
+                boolean marked = candidate == picked;
+                candidate.mark().setDisplay(marked);
+                if (marked) {
+                    candidate.row().addClass("folkways_selected");
+                } else {
+                    candidate.row().removeClass("folkways_selected");
+                }
+            }
+        }
     }
 
-    private static Component groundText(Delegation declared) {
-        Component cap = switch (declared.shape()) {
+    private static int mostOf(Delegation declared) {
+        return switch (declared.shape()) {
+            case Shape.Volume volume -> volume.maxCells();
+            case Shape.Path path -> path.maxPoints();
+            case Shape.Block ignored -> Integer.MAX_VALUE;
+            case Shape.Body ignored -> Integer.MAX_VALUE;
+        };
+    }
+
+    private static Component limitOf(Delegation declared) {
+        return switch (declared.shape()) {
             case Shape.Volume volume ->
                 Component.translatable("folkways.zoneconfig.cells", volume.maxCells());
             case Shape.Path path ->
@@ -217,10 +294,6 @@ public final class Drawing {
             case Shape.Block ignored -> Component.empty();
             case Shape.Body ignored -> Component.empty();
         };
-        return Component.translatable("folkways.delegation."
-                + declared.id().getNamespace() + "." + declared.id().getPath())
-            .append(" ")
-            .append(cap);
     }
 
     private void drop() {
@@ -228,17 +301,12 @@ public final class Drawing {
     }
 
     private void hand() {
-        Picked pick = picked;
-        if (pick == null) {
+        if (picked == null || !(picked.pick() instanceof Picked.Ground ground)
+                || held().map(Held::extent).orElse(0) > picked.most()) {
             return;
         }
-        held().ifPresent(held -> {
-            switch (pick) {
-                case Picked.Ground ground -> held.hand(ground.delegation(),
-                    parameters.get(ground.delegation()).settings().save());
-                case Picked.Offer offer -> held.take(offer.id());
-            }
-        });
+        held().ifPresent(held -> held.hand(ground.delegation(),
+            parameters.get(ground.delegation()).settings().save()));
     }
 
     private Optional<Held> held() {

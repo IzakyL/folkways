@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.front.api.ui;
 
+import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import io.github.izakyl.folkways.core.api.Ledger;
 import java.util.List;
 import java.util.Optional;
@@ -29,12 +30,13 @@ public final class PathOffers {
         return OFFERS.of(id);
     }
 
-    public record Offer(ResourceLocation id, String nameKey, ResourceLocation icon, Taker take) {
+    public record Offer(ResourceLocation id, String nameKey, ResourceLocation icon, Body body) {
     }
 
     @FunctionalInterface
-    public interface Taker {
+    public interface Body {
 
-        void take(List<BlockPos> points);
+        /** What the offer asks before it is taken, drawn in the page; {@code done} is run once it has been. */
+        UIElement build(List<BlockPos> points, Runnable done);
     }
 }

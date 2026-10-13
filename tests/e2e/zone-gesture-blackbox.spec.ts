@@ -7,30 +7,33 @@ import {
   tryCommand,
   safeAction,
   waitForGroundedPlayer,
-} from "./colony-founding";
+} from "../shared/colony/colony-founding";
 import {
   colonyRegistry,
   createMarkedZone,
   ctrlScroll,
+  heldScroll,
   holdZoneAndOpen,
+  KEY_LEFT_ALT,
+  KEY_LEFT_CONTROL,
   markBox,
   openBookPage,
   releaseHeldZone,
   setBookGesture,
   zoneCount,
-} from "./zone-tools";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { waitForElement, softly } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/ui/zone-tools";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { waitForElement, softly } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 
 const BOOK_ITEM = "folkways:colony_book";
 
-const MARKED_SIZE = /^(\d+)x(\d+)x(\d+) marked\./;
+const MARKED_SIZE = /^(\d+)x(\d+)x(\d+) marked/;
 
 test("zone gesture: mark, push a face, create it, right-click it open, then give it back", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
@@ -85,6 +88,22 @@ test("zone gesture: mark, push a face, create it, right-click it open, then give
       "after pushing a face the action bar should report the size again; if not, this Ctrl+scroll was never consumed",
     ).not.toBeNull();
     expect(markedAfter, "pushing the top face out one block turns the box from 1x1x1 into 1x2x1").toEqual([1, 2, 1]);
+
+    evidence.push_far = await heldScroll(server, client, [KEY_LEFT_ALT], -1);
+    expect(
+      sizeOf(evidence.push_far.bar?.text),
+      "Alt+scroll moves the face behind the one aimed at: the bottom, one block away from the player, 1x2x1 into 1x3x1",
+    ).toEqual([1, 3, 1]);
+    evidence.push_far_back = await heldScroll(server, client, [KEY_LEFT_ALT], 1);
+    expect(sizeOf(evidence.push_far_back.bar?.text), "and back towards the player again").toEqual([1, 2, 1]);
+
+    evidence.shift = await heldScroll(server, client, [KEY_LEFT_CONTROL, KEY_LEFT_ALT], 1);
+    expect(
+      evidence.shift.bar?.text,
+      "with both keys the wheel moves the whole box towards the player, one block up, and says where it now starts",
+    ).toBe(`Moved to ${farmGround.x}, ${farmGround.y + 1}, ${farmGround.z}`);
+    evidence.shift_back = await heldScroll(server, client, [KEY_LEFT_CONTROL, KEY_LEFT_ALT], -1);
+    expect(evidence.shift_back.bar?.text).toBe(`Moved to ${farmGround.x}, ${farmGround.y}, ${farmGround.z}`);
 
     evidence.configure = await createMarkedZone(server, client, playerName, standBlock, "farm");
 

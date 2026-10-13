@@ -97,6 +97,6 @@ public final class PastureContent {
 
     private static Delegation pen() {
         return new Delegation(PASTURE, new Shape.Volume(FolkwaysConfig.maxPastureCells()),
-            new Schema(List.of(ANIMAL, TARGET, SHEAR)));
+            new Schema(List.of(ANIMAL, TARGET, SHEAR)), ResourceLocation.withDefaultNamespace("lead"));
     }
 }

@@ -6,15 +6,15 @@ import {
   openColonyPanelViaBook,
   tryCommand,
   setBookGesture,
-} from "./colony-founding";
-import { aimAndLeftClick, colonyRegistry, createMarkedZone, markCorner, zoneCount } from "./zone-tools";
-import { FIRST_CORNER, ZONE_MARKED } from "./zone-receipt";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { waitForElement } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/colony/colony-founding";
+import { aimAndLeftClick, colonyRegistry, createMarkedZone, markCorner, zoneCount } from "../shared/ui/zone-tools";
+import { FIRST_CORNER, ZONE_MARKED } from "../shared/ui/zone-receipt";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { waitForElement } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CRAFT_PAGE = "folkways.wares";
 const CRAFT_TAB = "folkways.page.wares";

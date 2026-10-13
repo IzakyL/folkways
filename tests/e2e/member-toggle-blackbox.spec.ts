@@ -1,12 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { player, screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { createColonyViaBook, isColonyMember, waitForGroundedPlayer, type Vec } from "./colony-founding";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { waitForAnyScreen, waitForElement, safeAction, safeScreen, screenOpen, commandPos, tryCommand, softly } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+import { createColonyViaBook, isColonyMember, optInViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { clickElement } from "../ldlib2";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { waitForAnyScreen, waitForElement, safeAction, safeScreen, screenOpen, commandPos, tryCommand, softly } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 
@@ -15,7 +16,7 @@ const TOGGLE_WIDGET = "folkways.member.toggle";
 const PANEL_WIDGET = "folkways.site.panel";
 const TOGGLE_TICKS = 200;
 
-test("panel member toggle joins a container to the colony and leaves it again", async ({}, testInfo) => {
+test("the chest window's member toggle takes a container out of the colony and back in", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
@@ -55,16 +56,11 @@ test("panel member toggle joins a container to the colony and leaves it again", 
     await tryCommand(server, `setblock ${commandPos(chest)} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 5);
 
-    await tryCommand(server, `item replace entity ${playerName} weapon.offhand from entity ${playerName} weapon.mainhand`);
-    await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with minecraft:air`);
-    await tick.sprint(server, 5);
-    evidence.book_in_offhand = await world.probe(server, `if items entity ${playerName} weapon.offhand ${BOOK_ITEM}`);
-    evidence.mainhand_empty = !(await world.probe(server, `if items entity ${playerName} weapon.mainhand *`));
-    expect(evidence.book_in_offhand).toBe(true);
-    expect(evidence.mainhand_empty).toBe(true);
-
     evidence.member_initial = await isColonyMember(server, chest);
     expect(evidence.member_initial).toBe(false);
+    // A chest outside the colony has no window of its own: the book takes it in from the world first.
+    evidence.opt_in = await optInViaBook(server, client, playerName, chest, "chest");
+    expect(await isColonyMember(server, chest)).toBe(true);
 
     await tryCommand(server, `tp ${playerName} ${chest.x + 0.5} ${chest.y} ${chest.z + 1.5} 180 30`);
     await tick.sprint(server, 5);
@@ -74,29 +70,24 @@ test("panel member toggle joins a container to the colony and leaves it again", 
     );
     await waitForAnyScreen(client, 10_000);
     if (!screenOpen(await safeScreen(client))) {
-      throw new Error(`member-toggle: chest screen did not open at ${commandPos(chest)}`);
+      throw new Error(`member-toggle: no window opened on the chest at ${commandPos(chest)}`);
     }
-
-    await screen.waitForWidget(client, { id: TOGGLE_WIDGET }, { timeoutMs: 10_000 });
-    evidence.tokens_before = await widgetIds(client);
-    expect(evidence.tokens_before).toContain(TOGGLE_WIDGET);
-    // Only a block the colony holds has a board beside its screen: until the chest joins there is the button alone.
-    await waitForElement(client, { id: PANEL_WIDGET }, { state: "absent", timeoutMs: 10_000 });
-
-    evidence.click_join = await softly(() => screen.clickWidget(client, { id: TOGGLE_WIDGET }));
-    await safeAction(() => world.waitFor(server, memberCondition(chest!, true), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));
-    evidence.member_after_join = await isColonyMember(server, chest);
-    expect(evidence.member_after_join).toBe(true);
-
+    await tick.sprint(server, 5);
+    await waitForElement(client, { id: TOGGLE_WIDGET }, { timeoutMs: 10_000 });
     await waitForElement(client, { id: PANEL_WIDGET }, { timeoutMs: 10_000 });
-    evidence.tokens_after_join = await widgetIds(client);
-    expect(evidence.tokens_after_join).toContain(TOGGLE_WIDGET);
 
-    evidence.click_leave = await softly(() => screen.clickWidget(client, { id: TOGGLE_WIDGET }));
+    evidence.click_leave = await softly(() => clickElement(client, { id: TOGGLE_WIDGET }));
     await safeAction(() => world.waitFor(server, memberCondition(chest!, false), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));
     evidence.member_after_leave = await isColonyMember(server, chest);
     expect(evidence.member_after_leave).toBe(false);
+    // Only a block the colony holds has a board: once the chest leaves there is the button alone.
     await waitForElement(client, { id: PANEL_WIDGET }, { state: "absent", timeoutMs: 10_000 });
+
+    evidence.click_join = await softly(() => clickElement(client, { id: TOGGLE_WIDGET }));
+    await safeAction(() => world.waitFor(server, memberCondition(chest!, true), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));
+    evidence.member_after_join = await isColonyMember(server, chest);
+    expect(evidence.member_after_join).toBe(true);
+    await waitForElement(client, { id: PANEL_WIDGET }, { timeoutMs: 10_000 });
 
     await screen.dismiss(client);
     testInfo.attach("member-toggle", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
@@ -110,8 +101,4 @@ test("panel member toggle joins a container to the colony and leaves it again", 
 
 function memberCondition(chest: Vec, member: boolean): string {
   return `${member ? "if" : "unless"} data block ${commandPos(chest)} "neoforge:attachments"."folkways:colony_member"`;
-}
-
-async function widgetIds(client: any): Promise<string[]> {
-  return (await screen.widgets(client)).map((widget) => widget.id);
 }

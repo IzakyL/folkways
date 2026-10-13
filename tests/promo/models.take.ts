@@ -2,12 +2,12 @@ import type { PromoPair } from "./promo-kit";
 import { expect, test } from "@playwright/test";
 import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
-import { foundColonyFast, waitForGroundedPlayer, type Vec } from "../e2e/colony-founding";
+import { foundColonyFast, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import {
   readResidentLooks,
   waitForModelsOnClient,
-} from "../e2e/model-folder";
-import { MARK_MEMBERS, runColonyTask } from "../e2e/colony-tasks";
+} from "../shared/ui/model-folder";
+import { MARK_MEMBERS, runColonyTask } from "../shared/colony/colony-tasks";
 import { markZone, residentPositions, settleClient } from "./scene";
 import { setMaintainDemandsFast } from "./fast-setup";
 import path from "node:path";
@@ -21,9 +21,9 @@ import {
   take,
   writeLook,
 } from "./promo-kit";
-import { shaderEvidence } from "./shaders";
-import { BUDGET } from "../shared/budgets";
-import { commandPos, tryCommand, frames, safeAction } from "../shared/bw-helpers";
+import { shaderEvidence } from "../shared/capture/shaders";
+import { BUDGET } from "../shared/harness/budgets";
+import { commandPos, tryCommand, frames, safeAction } from "../shared/harness/bw-helpers";
 
 const MODEL_WEIGHT = 600;
 const MODEL_ASSETS = path.join(process.cwd(), "tests/promo/models");

@@ -35,7 +35,7 @@ public final class ColonyLookState {
 
     public static void tick() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || minecraft.screen != null || minecraft.getConnection() == null) {
+        if (minecraft.player == null || Overhead.screened(minecraft) || minecraft.getConnection() == null) {
             residents = List.of();
             return;
         }

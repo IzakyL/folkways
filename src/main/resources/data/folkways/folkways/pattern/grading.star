@@ -1,4 +1,5 @@
 NEARLY = 0.000001
+FAR = 1000000.0
 
 def floor(value):
     whole = int(value)
@@ -36,13 +37,16 @@ def runs_of(marks):
 
 def centreline(site, width):
     marks = []
+    heights = []
     for p in site.path.points:
         spot = (p.x + 0.5, p.z + 0.5)
         if not marks or marks[-1] != spot:
             marks.append(spot)
+            heights.append(p.y)
     if len(marks) < 2:
         fail("A road needs two different points / 道路至少需要两个不同的点")
     line = runs_of(marks)
+    line["heights"] = heights
     runs = line["runs"]
     for j in range(1, len(runs)):
         if runs[j - 1]["ux"] * runs[j]["ux"] + runs[j - 1]["uz"] * runs[j]["uz"] < -0.7072:
@@ -58,7 +62,9 @@ def centreline(site, width):
         nz = before["ux"] + after["ux"]
         scale = 0.5 / (1.0 + before["ux"] * after["ux"] + before["uz"] * after["uz"])
         shifted.append((marks[i][0] + nx * scale, marks[i][1] + nz * scale))
-    return runs_of(shifted)
+    line = runs_of(shifted)
+    line["heights"] = heights
+    return line
 
 def locate(line, cx, cz, half):
     runs = line["runs"]
@@ -180,15 +186,6 @@ def profile(site, line, width, grade = 0.5, smoothing = 4.0, deepest = 8, crossi
                     % (crossing, crossing))
         else:
             wet_from = None
-    targets = []
-    for i in range(count):
-        total = 0.0
-        taken = 0
-        for k in range(max(0, i - 3 * int(smoothing)), min(count, i + 3 * int(smoothing) + 1)):
-            if size(stations[k]["s"] - stations[i]["s"]) <= smoothing:
-                total += stations[k]["dry"]
-                taken += 1
-        targets.append(total / taken)
     spans = landings(line, width / 2.0)
     run = [0.0]
     for i in range(1, count):
@@ -196,30 +193,79 @@ def profile(site, line, width, grade = 0.5, smoothing = 4.0, deepest = 8, crossi
         b = stations[i]["s"]
         run.append(run[i - 1] + (b - a) - flat(spans, a, b))
     total = run[count - 1]
-    first = stations[0]["centre"]
-    last = stations[count - 1]["centre"]
-    if size(last - first) > grade * total + NEARLY:
+
+    # A point left on the ground lets the road follow the ground there. A point lifted off it or sunk into it is the
+    # middle of the road at that height, and the stretches that meet at it run straight to it: in a cutting where
+    # they pass under a little ground, in a tunnel where they pass under more than deepest of it.
+    runs = line["runs"]
+    at_mark = [0]
+    for one in runs:
+        at_mark.append(at_mark[-1] + max(1, ceil(one["length"] - NEARLY)))
+    ends = []
+    held = []
+    for m in range(len(at_mark)):
+        station = stations[at_mark[m]]
+        given = line["heights"][m]
+        moved = given > station["dry"] + 1 or given < station["centre"] - 1
+        held.append(moved)
+        ends.append(given if moved else station["centre"] if m == 0 or m == len(at_mark) - 1 else station["dry"])
+    first = ends[0]
+    last = ends[-1]
+    if True not in held and size(last - first) > grade * total + NEARLY:
         fail("Too steep: the ends differ by %d blocks over %d / 坡度过陡：两端高差 %d 格，路长仅 %d 格"
             % (size(last - first), int(line["length"]), size(last - first), int(line["length"])))
-    cone = list(floors)
+    fixed = [None] * count
+    ruled = [False] * count
+    fixed[0] = first
+    fixed[count - 1] = last
+    for j in range(len(runs)):
+        if not (held[j] or held[j + 1]):
+            continue
+        a = at_mark[j]
+        b = at_mark[j + 1]
+        length = run[b] - run[a]
+        if size(ends[j + 1] - ends[j]) > grade * length + NEARLY:
+            fail("Too steep: points %d and %d differ by %d blocks over %d / 坡度过陡：第 %d、%d 个点高差 %d 格，相距仅 %d 格"
+                % (j + 1, j + 2, size(ends[j + 1] - ends[j]), int(runs[j]["length"]),
+                    j + 1, j + 2, size(ends[j + 1] - ends[j]), int(runs[j]["length"])))
+        for i in range(a, b + 1):
+            fixed[i] = ends[j] + (ends[j + 1] - ends[j]) * ((run[i] - run[a]) / length if length > 0 else 0.0)
+            ruled[i] = True
+
+    targets = []
+    for i in range(count):
+        summed = 0.0
+        taken = 0
+        for k in range(max(0, i - 3 * int(smoothing)), min(count, i + 3 * int(smoothing) + 1)):
+            if size(stations[k]["s"] - stations[i]["s"]) <= smoothing:
+                summed += stations[k]["dry"]
+                taken += 1
+        targets.append(summed / taken)
+    # How low and how high the road may stand at each station: as fixed where it is, clear of any water, and
+    # within the grade of what is fixed on either side.
+    low = []
+    high = []
+    for i in range(count):
+        if fixed[i] != None:
+            low.append(fixed[i])
+            high.append(fixed[i])
+        else:
+            low.append(floors[i] if floors[i] != None else -FAR)
+            high.append(FAR)
     for i in range(1, count):
-        if cone[i - 1] != None:
-            reach = cone[i - 1] - grade * (run[i] - run[i - 1])
-            cone[i] = reach if cone[i] == None else max(cone[i], reach)
+        step = grade * (run[i] - run[i - 1])
+        low[i] = max(low[i], low[i - 1] - step)
+        high[i] = min(high[i], high[i - 1] + step)
     for i in range(count - 2, -1, -1):
-        if cone[i + 1] != None:
-            reach = cone[i + 1] - grade * (run[i + 1] - run[i])
-            cone[i] = reach if cone[i] == None else max(cone[i], reach)
+        step = grade * (run[i + 1] - run[i])
+        low[i] = max(low[i], low[i + 1] - step)
+        high[i] = min(high[i], high[i + 1] + step)
     heights = []
     for i in range(count):
-        low = max(first - grade * run[i], last - grade * (total - run[i]))
-        if cone[i] != None:
-            low = max(low, cone[i])
-        high = min(first + grade * run[i], last + grade * (total - run[i]))
-        if low > high + NEARLY:
+        if low[i] > high[i] + NEARLY:
             fail("The road cannot climb clear of the water and still meet the ground at both ends"
                 + " / 道路无法既高出水面又与两端地面衔接")
-        heights.append(max(low, min(high, targets[i])))
+        heights.append(max(low[i], min(high[i], targets[i])))
     for i in range(1, count):
         step = grade * (run[i] - run[i - 1])
         heights[i] = max(heights[i - 1] - step, min(heights[i - 1] + step, heights[i]))
@@ -229,11 +275,29 @@ def profile(site, line, width, grade = 0.5, smoothing = 4.0, deepest = 8, crossi
     worst = 0
     for i in range(count):
         stations[i]["y"] = heights[i]
-        worst = max(worst, ceil(size(heights[i] - stations[i]["dry"])))
+        cut = stations[i]["dry"] - heights[i]
+        stations[i]["bored"] = ruled[i] and cut > deepest and stations[i]["water"] == None
+        if not stations[i]["bored"]:
+            worst = max(worst, ceil(size(cut)))
     if worst > deepest:
         fail("The ground is too uneven: it would take %d blocks of cut or fill; add points or bridge the gap"
             % worst + " / 地形起伏过大，需要挖填 %d 格；请增加路径点或改建桥梁" % worst)
     return {"stations": stations, "depth": worst}
+
+# Whether the road runs under the hill at s: the nearer station tells.
+def bored(profile, s):
+    stations = profile["stations"]
+    low = 0
+    high = len(stations) - 1
+    for _ in range(32):
+        if high - low <= 1:
+            break
+        middle = (low + high) // 2
+        if stations[middle]["s"] <= s:
+            low = middle
+        else:
+            high = middle
+    return stations[low if s - stations[low]["s"] <= stations[high]["s"] - s else high]["bored"]
 
 def level(profile, s):
     stations = profile["stations"]
@@ -281,6 +345,13 @@ def earthworks(site, line, profile, width, shoulder = 1, headroom = 4, canopy = 
                 fail("No ground beside the road at (%d, %d) / 道路旁 (%d, %d) 没有地面" % (x, z, x, z))
             top = bed(level(profile, s))
             k = 0 if beyond < -NEARLY else max(1, ceil(beyond))
+            if bored(profile, s) and ground - top > headroom + 1:
+                # Under a hill only the way itself is dug, as high as its headroom, and the hill is left standing.
+                if k <= shoulder:
+                    columns[(x, z)] = (k, top)
+                    for y in range(top + 1, top + headroom + 1):
+                        dig.append((x, y, z))
+                continue
             slope = max(0, k - shoulder)
             low = top - 1 if k == 0 else top - slope
             high = top if k == 0 else top + slope

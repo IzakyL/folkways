@@ -56,7 +56,8 @@ public final class FishingContent {
     public static void enroll(Registering registering) {
         registering.facing(ID, colony -> colony.service(ID, FishingPresence.class).map(Facing.class::cast));
         registering.enrollment(ID,
-            new Enrollment(List.of(new Delegation(FISHERY, new Shape.Volume(cap())))));
+            new Enrollment(List.of(new Delegation(FISHERY, new Shape.Volume(cap()),
+                ResourceLocation.withDefaultNamespace("fishing_rod")))));
     }
 
     static Vocation trade() {

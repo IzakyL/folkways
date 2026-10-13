@@ -2,6 +2,16 @@ accepts = ["zone"]
 knobs = [
     count("depth", 0, 16, default = 3, icon = "minecraft:stone_pickaxe"),
 ]
+lang = {
+    "en_us": {
+        "title": "Quarry",
+        "depth": "Depth",
+    },
+    "zh_cn": {
+        "title": "采石场",
+        "depth": "深度",
+    },
+}
 
 # An open quarry: the ground inside the zone is cut away from the top down to a flat floor, depth below the lowest
 # ground on the zone's edge. The sides step down a block a cell, so the floor is walked onto from wherever the ground

@@ -13,19 +13,19 @@ import {
   toolChestItems,
   TRADE_TOOLS,
   waitForGroundedPlayer,
-} from "./colony-founding";
-import { readDoing } from "./resident-probe";
-import { sampleWhileSprinting } from "./tick-tools";
-import { drainActionBar, readActionBar } from "./zone-receipt";
-import { seatedAt, TAKEN_ON } from "./rail-fixture";
-import { handOffSchematic, schematicSpec } from "./schematic-tools";
+} from "../shared/colony/colony-founding";
+import { readDoing } from "../shared/colony/resident-probe";
+import { sampleWhileSprinting } from "../shared/harness/tick-tools";
+import { drainActionBar, readActionBar } from "../shared/ui/zone-receipt";
+import { seatedAt, TAKEN_ON } from "../shared/rail/rail-fixture";
+import { handOffSchematic, schematicSpec } from "../shared/ui/schematic-tools";
 import { input, media, player as playerActions, reflect, screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { REPO_ROOT, ensureOut, reportPath, shotPath, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { reflectVec3, introspect } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { REPO_ROOT, ensureOut, reportPath, shotPath, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { reflectVec3, introspect } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const RESIDENT_TYPE = "folkways:resident";
 const CONFIG_PATH = "blockwright.toml";
@@ -33,7 +33,7 @@ const REPORT_PATH = reportPath("e2e", "rail-train-report");
 
 type Vec = { x: number; y: number; z: number };
 
-const BLUEPRINT_ASSET = "tests/e2e/assets/oak-post.nbt";
+const BLUEPRINT_ASSET = "tests/shared/assets/oak-post.nbt";
 
 const BESIDE_TRAIN = 8;
 const ALPHA_STOP_RADIUS = 8;

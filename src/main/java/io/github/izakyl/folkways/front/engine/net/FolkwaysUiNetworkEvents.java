@@ -12,10 +12,8 @@ import io.github.izakyl.folkways.front.api.notice.Attempt;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.client.ColonyHighlightState;
 import io.github.izakyl.folkways.front.client.ColonyLookState;
-import io.github.izakyl.folkways.front.client.SiteEntryInjector;
 import io.github.izakyl.folkways.front.engine.authority.AtBody;
 import io.github.izakyl.folkways.front.engine.authority.ColonyAuthority;
-import io.github.izakyl.folkways.front.engine.colony.ColonyBoards;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGhosts;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
@@ -68,8 +66,6 @@ public final class FolkwaysUiNetworkEvents {
             asPlayer((packet, player) -> ColonyAuthority.ofHeldBook(player, packet.colonyId())
                 .ifPresent(authority -> PacketDistributor.sendToPlayer(player,
                     ColonyOverviews.of(player, authority.colony())))));
-        registrar.playToServer(RequestSitePacket.TYPE, RequestSitePacket.STREAM_CODEC,
-            asPlayer((packet, player) -> PacketDistributor.sendToPlayer(player, siteState(player, packet.pos()))));
         registrar.playToServer(ToggleColonyMemberPacket.TYPE, ToggleColonyMemberPacket.STREAM_CODEC,
             asPlayer((packet, player) -> ColonyAuthority
                 .ofHeldBook(player, packet.colonyId(), Optional.of(packet.pos()))
@@ -91,8 +87,6 @@ public final class FolkwaysUiNetworkEvents {
             (packet, context) -> onClient(context, () -> ColonyLookState.handleLookAtSnapshot(packet)));
         registrar.playToClient(ColonyOverviewPacket.TYPE, ColonyOverviewPacket.STREAM_CODEC,
             (packet, context) -> onClient(context, () -> ColonyHighlightState.handleColonyOverview(packet)));
-        registrar.playToClient(SiteSyncPacket.TYPE, SiteSyncPacket.STREAM_CODEC,
-            (packet, context) -> onClient(context, () -> SiteEntryInjector.accept(packet)));
     }
 
     private static <T extends CustomPacketPayload> IPayloadHandler<T> asPlayer(BiConsumer<T, ServerPlayer> work) {
@@ -134,15 +128,6 @@ public final class FolkwaysUiNetworkEvents {
         }
     }
 
-    static SiteSyncPacket siteState(ServerPlayer player, BlockPos at) {
-        ServerLevel level = player.serverLevel();
-        return ColonyAuthority.of(player, Optional.of(at))
-            .map(authority -> new SiteSyncPacket(at,
-                ColonyGround.holds(level, authority.colony(), at),
-                ColonyBoards.firstAt(level, authority.colony(), at).isPresent()))
-            .orElseGet(() -> new SiteSyncPacket(at, false, false));
-    }
-
     static void toggleColonyResident(ServerPlayer player, ColonyAuthority authority, Body body) {
         Colony colony = authority.colony();
         Optional<Attempt> answered =
@@ -154,14 +139,13 @@ public final class FolkwaysUiNetworkEvents {
         PacketDistributor.sendToPlayer(player, ColonyOverviews.of(player, colony));
     }
 
-    static void toggleColonyMember(ServerPlayer player, ColonyAuthority authority) {
+    public static void toggleColonyMember(ServerPlayer player, ColonyAuthority authority) {
         ServerLevel level = player.serverLevel();
         BlockPos pos = authority.at().orElseThrow().pos();
         Colony colony = authority.colony();
         if (MemberToggle.toggleAt(level, colony, pos, player).refused()) {
             return;
         }
-        PacketDistributor.sendToPlayer(player, siteState(player, pos));
         PacketDistributor.sendToPlayer(player, ColonyOverviews.of(player, colony));
     }
 

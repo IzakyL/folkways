@@ -1,15 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
-import { waitForGroundedPlayer } from "../e2e/colony-founding";
-import { runColonyTask } from "../e2e/colony-tasks";
+import { waitForGroundedPlayer } from "../shared/colony/colony-founding";
+import { runColonyTask } from "../shared/colony/colony-tasks";
 import { foundPromoColonyFast, admitPromoSettlersFast, setMaintainDemandsFast } from "./fast-setup";
 import {
   cinematicWorld, hideHud, launchPromoPair, promoClip, PROMO_SKY_CONFIG, setFov, sleepMs, take, writeLook,
   type PromoPair,
 } from "./promo-kit";
-import { shaderEvidence } from "./shaders";
-import { tryCommand, frames, safeAction } from "../shared/bw-helpers";
+import { shaderEvidence } from "../shared/capture/shaders";
+import { tryCommand, frames, safeAction } from "../shared/harness/bw-helpers";
 
 // Above the forested hills south of spawn in the promo-sky world; nothing stands above y=117 on this course,
 // and the keel hangs 8 below the deck.

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { gallery } from "./gallery";
-import { outAbs } from "../out-paths";
+import { outAbs } from "../shared/harness/out-paths";
 
 const VISUAL_DIR = outAbs("visual", "takes");
 

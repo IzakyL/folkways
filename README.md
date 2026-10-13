@@ -56,6 +56,7 @@ install.
 | [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+ | Golems join the roster as a second kind of resident and take trades like people |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+ | Residents can wear bedrock-format models instead of player skins |
 | [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib | Its built-in maid models become looks a colony can switch on, one by one or a whole pack at once. They are read from the installed mod and never copied or sent |
+| [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+ | The Colony Book aims along its third-person crosshair |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi) | Item filters in the colony panel open the recipe viewer's ingredient list |
 
 ## Getting started

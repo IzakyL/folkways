@@ -1,36 +1,36 @@
-import { samplePathQueue } from "./path-probe";
-import { sampleLoosePieces } from "./piece-probe";
-import { sampleRailGraphs, sampleRailReach } from "./rail-reach-probe";
-import { sampleTrain } from "./rail-probe";
-import { populationSlots } from "./population";
-import { safeSpawnSites } from "./spawn-sites";
-import { snapshotBodies } from "./body-snapshot";
-import { runColonyTask } from "../e2e/colony-tasks";
-import { COLONY_PACKS } from "../shared/integration-tasks";
-import { setupIntegrations, sampleIntegrations } from "./integrations";
+import { samplePathQueue } from "./probes/path-probe";
+import { sampleLoosePieces } from "./probes/piece-probe";
+import { sampleRailGraphs, sampleRailReach } from "./probes/rail-reach-probe";
+import { sampleTrain } from "../shared/rail/rail-probe";
+import { populationSlots } from "./town/population";
+import { safeSpawnSites } from "./town/spawn-sites";
+import { snapshotBodies } from "./probes/body-snapshot";
+import { runColonyTask } from "../shared/colony/colony-tasks";
+import { COLONY_PACKS } from "../shared/colony/integration-tasks";
+import { setupIntegrations, sampleIntegrations } from "./town/integrations";
 import { startFilm, finishFilm, heroShots, launchCameras, closeCameras, filmShaders, seedFilmClient, FILMING, SHADERS, ROAMERS,
-  type Camera, type Shot } from "./video";
-import { direct, installFilmFeed, scout, type Directing } from "./director";
+  type Camera, type Shot } from "./film/video";
+import { direct, installFilmFeed, scout, type Directing } from "./film/director";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
-import { raiseTown, type Town } from "./raise";
-import { hasTown, keepTown, loadTown, seedWorld, townKey, townSave } from "./town-cache";
-import { dumpTicks, installTickMeter, TICK_METER_NOTE } from "./tick-meter";
-import { dumpWorkTap, installWorkTap, WORK_TAP_NOTE } from "./work-tap";
-import { censusLines, installCensus, CENSUS_NOTE } from "./census";
+import { raiseTown, type Town } from "./town/raise";
+import { hasTown, keepTown, loadTown, seedWorld, townKey, townSave } from "./town/town-cache";
+import { dumpTicks, installTickMeter, TICK_METER_NOTE } from "./probes/tick-meter";
+import { dumpWorkTap, installWorkTap, WORK_TAP_NOTE } from "./probes/work-tap";
+import { censusLines, installCensus, CENSUS_NOTE } from "./probes/census";
 import {
   buildLayout, buildColonySpec, summarizeLayout, validateFixture, countsOf, staffing, stockOf as stockPlan, COLONY_ID,
   type Scale, type Layout, type Staffing, type Trade,
-} from "./fixture";
-import { SEATS, type Line } from "./network";
-import { callingFrom, dressCar, furtherStarts, signalStations } from "./trains";
-import type { Stop } from "../e2e/rail-footprint";
-import { launchPair, type E2EPair } from "../shared/pair";
+} from "./town/fixture";
+import { SEATS, type Line } from "./town/network";
+import { callingFrom, dressCar, furtherStarts, signalStations } from "./town/trains";
+import type { Stop } from "../shared/rail/rail-footprint";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { test } from "@playwright/test";
 import {
   errorSummary,
 } from "@izakyl/blockwright-client";
 import { defineTask, javaTask, reflect, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { commissionAll } from "../shared/commission";
+import { commissionAll } from "../shared/colony/commission";
 import { copyFileSync, existsSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -39,9 +39,9 @@ import {
   isColonyMember,
   waitForGroundedPlayer,
   type Vec,
-} from "../e2e/colony-founding";
-import { readResidentPack } from "../e2e/world-ui";
-import type { Tally } from "./judgements";
+} from "../shared/colony/colony-founding";
+import { readResidentPack } from "../shared/ui/world-ui";
+import type { Tally } from "./report/judgements";
 
 import {
   newUuids,
@@ -49,14 +49,14 @@ import {
   writeColonyDat,
   colonyDatPath,
   type BlueprintBlockSpec,
-} from "../e2e/colony-nbt";
-import { colonyRegistry, memberCellCount, zoneCount } from "../e2e/zone-tools";
-import { buildRailLine, conductorAboard, type RailResult } from "../e2e/rail-fixture";
-import { REPO_ROOT, ensureOut, outAbs, tracePath } from "../out-paths";
-import { seededOffThreadServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { tryCommand, introspect } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/colony/colony-nbt";
+import { colonyRegistry, memberCellCount, zoneCount } from "../shared/ui/zone-tools";
+import { buildRailLine, conductorAboard, type RailResult } from "../shared/rail/rail-fixture";
+import { REPO_ROOT, ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { seededOffThreadServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { tryCommand, introspect } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG = "blockwright.toml#bench";
 

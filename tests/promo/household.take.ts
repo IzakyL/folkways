@@ -2,16 +2,16 @@ import { expect, test } from "@playwright/test";
 import { defineTask, input, javaTask, reflect, screen, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { clickElement, panelElements } from "../ldlib2";
-import { waitForGroundedPlayer, type Vec } from "../e2e/colony-founding";
-import { BUDGET } from "../shared/budgets";
-import { frames, safeAction, softly, tryCommand } from "../shared/bw-helpers";
-import { runColonyTask } from "../e2e/colony-tasks";
+import { waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { BUDGET } from "../shared/harness/budgets";
+import { frames, safeAction, softly, tryCommand } from "../shared/harness/bw-helpers";
+import { runColonyTask } from "../shared/colony/colony-tasks";
 import { admitPromoSettlersFast, foundPromoColonyFast, licenseCrewFast } from "./fast-setup";
 import {
   cinematicWorld, hideHud, launchPromoPair, promoClip, setFov, setTickRate, sleepMs, take, writeLook,
   type Look, type PromoPair,
 } from "./promo-kit";
-import { shaderEvidence } from "./shaders";
+import { shaderEvidence } from "../shared/capture/shaders";
 
 // One shot of a small homestead. The player only looks over the workforce page, where each resident is allowed one
 // trade or another, and closes it. Nobody has a tool for their trade: the crafter makes a hoe for each farmer and a

@@ -1,8 +1,15 @@
 package io.github.izakyl.folkways.front.ui.screen;
 
-import com.lowdragmc.lowdraglib2.gui.ui.elements.Switch;
+import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
+import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Cue;
+import io.github.izakyl.folkways.front.api.ui.Cues;
+import io.github.izakyl.folkways.front.api.ui.Rows;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 
 final class Controls {
 
@@ -11,21 +18,18 @@ final class Controls {
     private static final int DIGIT = 6;
     private static final int NUMBER_PADDING = 10;
 
-    static final int SWITCH_WIDTH = 22;
-    static final int SWITCH_HEIGHT = 11;
 
     private Controls() {
     }
 
     static TextField count(int min, int max) {
-        return ranged(new TextField(), min, max);
+        TextField field = new TextField();
+        Cues.on(field, Cue.of("folkways.keys.type", Cue.Key.DIGITS), Cue.of("folkways.keys.adjust", Cue.Key.WHEEL));
+        return ranged(field, min, max);
     }
 
     static TextField ranged(TextField field, int min, int max) {
         field.setNumbersOnlyInt(min, max);
-        field.style(style -> style.appendTooltips(
-            Component.translatable("folkways.settings.gesture.type"),
-            Component.translatable("folkways.settings.gesture.wheel")));
 
         int room = widthFor(max);
         field.layout(layout -> layout.width(room).flexShrink(1).minWidth(0));
@@ -37,12 +41,23 @@ final class Controls {
         return Math.min(NUMBER_WIDTH, digits * DIGIT + NUMBER_PADDING);
     }
 
-    static Switch flag() {
-        Switch toggle = new Switch();
-        toggle.layout(layout -> layout.width(SWITCH_WIDTH).height(SWITCH_HEIGHT).flexShrink(0));
-        toggle.style(style -> style.tooltips(
-            Component.translatable("folkways.settings.gesture.toggle")));
-        return toggle;
+    static Toggle tick() {
+        Toggle box = new Toggle().noText();
+        box.layout(layout -> layout.flexShrink(0));
+        Cues.on(box, Cue.of("folkways.keys.toggle", Cue.Key.CLICK));
+        return box;
+    }
+
+    // What a number may be set between, said quietly beside its field.
+    static Label range(int min, int max) {
+        Label range = Rows.value(Component.translatable("folkways.draft.range", min, max));
+        range.textStyle(style -> style.textColor(Rows.QUIET));
+        return range;
+    }
+
+    // A choice's button wears the icon of what is picked before its name.
+    static UIElement worn(ResourceLocation option) {
+        return Rows.icon(ChoicePicker.iconOf(option));
     }
 
     static String stamped(String key, String value) {

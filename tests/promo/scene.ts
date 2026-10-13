@@ -3,7 +3,7 @@ import { player, screen, tick, world, type MinecraftClient, type MinecraftServer
 import {
   waitForGroundedPlayer,
   type Vec,
-} from "../e2e/colony-founding";
+} from "../shared/colony/colony-founding";
 import { admitPromoSettlersFast, foundPromoColonyFast, licenseCrewFast, setMaintainDemandsFast } from "./fast-setup";
 import {
   buildPen,
@@ -13,10 +13,10 @@ import {
   penCenter,
   penLayout,
   type Pen,
-} from "../e2e/pasture-tools";
-import { colonyRegistry, configureZone, createMarkedZone, markCorner, setBookGesture, zoneCount } from "../e2e/zone-tools";
-import { drainActionBar, FIRST_CORNER, ZONE_MARKED } from "../e2e/zone-receipt";
-import type { ZoneEdit } from "../e2e/zone-tools";
+} from "../shared/colony/pasture-tools";
+import { colonyRegistry, configureZone, createMarkedZone, markCorner, setBookGesture, zoneCount } from "../shared/ui/zone-tools";
+import { drainActionBar, FIRST_CORNER, ZONE_MARKED } from "../shared/ui/zone-receipt";
+import type { ZoneEdit } from "../shared/ui/zone-tools";
 import {
   blobCells,
   cellBounds,
@@ -28,9 +28,9 @@ import {
   type Blob,
   type Cell,
 } from "./ground";
-import { commandPos, frames, safeAction, tryCommand, type CommandOutcome } from "../shared/bw-helpers";
-import { runColonyTask } from "../e2e/colony-tasks";
-import { GOLEM_CAST, PATROL_ROUTES } from "../shared/integration-tasks";
+import { commandPos, frames, safeAction, tryCommand, type CommandOutcome } from "../shared/harness/bw-helpers";
+import { runColonyTask } from "../shared/colony/colony-tasks";
+import { GOLEM_CAST, PATROL_ROUTES } from "../shared/colony/integration-tasks";
 
 export type Patch = { minX: number; maxX: number; minZ: number; maxZ: number };
 

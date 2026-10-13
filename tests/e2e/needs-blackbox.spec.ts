@@ -3,9 +3,9 @@ import { writeFileSync } from "node:fs";
 import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { foundColonyFast, optInViaBook, waitForGroundedPlayer,
   entityTypeMatches,
-} from "./colony-founding";
-import { runColonyTask } from "./colony-tasks";
-import { aimAndWorldLeftClick, countInResidentPacks, mustCommand } from "./world-ui";
+} from "../shared/colony/colony-founding";
+import { runColonyTask } from "../shared/colony/colony-tasks";
+import { aimAndWorldLeftClick, countInResidentPacks, mustCommand } from "../shared/ui/world-ui";
 import {
   colonyRegistry,
   configureZone,
@@ -15,14 +15,14 @@ import {
   zoneChoiceSettingAt,
   zoneKindAt,
   ZONE_KIND_ID,
-} from "./zone-tools";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, outAbs, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { settledAll, unwrapSettled } from "./tick-tools";
-import { commandPos, distance, tryCommand } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/ui/zone-tools";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { settledAll, unwrapSettled } from "../shared/harness/tick-tools";
+import { commandPos, distance, tryCommand } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 

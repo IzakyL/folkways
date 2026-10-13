@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { defineTask, javaTask, tick } from "@izakyl/blockwright-minecraft";
-import { foundColonyFast, tryCommand, waitForGroundedPlayer, type Vec } from "./colony-founding";
+import { foundColonyFast, tryCommand, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import {
   MODEL_ASSETS,
   clientHasModelFile,
@@ -11,12 +11,12 @@ import {
   waitForModelsOnClient,
   readServerLibrary,
   reloadServerModels,
-} from "./model-folder";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { REPO_ROOT, ensureOut, reportPath, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { newRunId } from "../shared/run-id";
+} from "../shared/ui/model-folder";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { REPO_ROOT, ensureOut, reportPath, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 const REPORT_JSON = reportPath("e2e", "server-models-report");

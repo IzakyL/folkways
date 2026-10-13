@@ -1,11 +1,12 @@
 package io.github.izakyl.folkways.front.ui.screen;
 
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.DataBindingBuilder;
+import com.lowdragmc.lowdraglib2.gui.texture.ItemStackTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
-import com.lowdragmc.lowdraglib2.gui.ui.elements.Switch;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
@@ -69,10 +70,11 @@ public final class SettingsPage implements Draw {
     public UIElement build(Player player) {
         UIElement table = Rows.table();
         for (Schema.Setting setting : CoreSettings.schema().settings()) {
-            table.addChildren(Rows.row().addChildren(
-                Rows.icon(iconOf(setting.icon())),
-                Rows.name(setting.name()),
-                control(player, CoreSettings.CORE, setting)));
+            UIElement row = Rows.row().addChildren(Rows.icon(iconOf(setting.icon())), Rows.name(setting.name()));
+            if (setting instanceof Schema.Setting.Count count) {
+                row.addChildren(Controls.range(count.min(), count.max()));
+            }
+            table.addChildren(row.addChildren(control(player, CoreSettings.CORE, setting)));
         }
 
         Button resetLayout = new Button()
@@ -111,7 +113,7 @@ public final class SettingsPage implements Draw {
             }
             case Schema.Setting.Choice choice -> picker(player, where, choice);
             case Schema.Setting.Flag flag -> {
-                Switch toggle = Controls.flag();
+                Toggle toggle = Controls.tick();
                 toggle.bind(DataBindingBuilder.bool(
                     () -> flagOf(player, where, flag),
                     on -> setFlag(player, where, flag, on)).build());
@@ -128,11 +130,15 @@ public final class SettingsPage implements Draw {
         shown.bind(DataBindingBuilder.componentS2C(() -> label(player, where, choice)).build());
         Button press = new Button().noText();
         press.layout(layout -> layout.widthAuto().minWidth(CONTROL_MIN).flexShrink(0));
-        press.addChildren(shown);
+        UIElement worn = Controls.worn(choice.byDefault());
+        press.addChildren(worn, shown);
         ResourceLocation[] current = { choice.byDefault() };
         press.addSyncValue(DataBindingBuilder.stringS2C(() -> choiceOf(player, where, choice).toString())
             .onSyncReceived(id -> {
                 ResourceLocation parsed = ResourceLocation.tryParse(id);
+                if (parsed != null && !parsed.equals(current[0])) {
+                    worn.style(style -> style.background(new ItemStackTexture(ChoicePicker.iconOf(parsed))));
+                }
                 if (parsed != null) {
                     current[0] = parsed;
                 }

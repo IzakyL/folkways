@@ -1,8 +1,8 @@
 import type { PromoPair } from "./promo-kit";
 import { test } from "@playwright/test";
 import { screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { waitForGroundedPlayer, type Vec } from "../e2e/colony-founding";
-import { countInResidentPacks } from "../e2e/world-ui";
+import { waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { countInResidentPacks } from "../shared/ui/world-ui";
 import {
   armWork,
   castGolems,
@@ -30,12 +30,12 @@ import {
   take,
   writeLook,
 } from "./promo-kit";
-import { shaderEvidence } from "./shaders";
-import { varyVitals } from "./vitals";
-import { BUDGET } from "../shared/budgets";
-import { tryCommand, frames, safeAction } from "../shared/bw-helpers";
-import { runColonyTask } from "../e2e/colony-tasks";
-import { GOLEM_WORK } from "../shared/integration-tasks";
+import { shaderEvidence } from "../shared/capture/shaders";
+import { varyVitals } from "../shared/colony/vitals";
+import { BUDGET } from "../shared/harness/budgets";
+import { tryCommand, frames, safeAction } from "../shared/harness/bw-helpers";
+import { runColonyTask } from "../shared/colony/colony-tasks";
+import { GOLEM_WORK } from "../shared/colony/integration-tasks";
 
 const RESIDENTS = crewTotal() + 5;
 const CLIP_SECONDS = 15;

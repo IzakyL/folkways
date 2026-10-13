@@ -1,11 +1,35 @@
+load("folkways:materials.star", "MASONRY", "offer")
+
 accepts = ["path"]
 knobs = [
     items("track", default = ["create:track"], icon = "create:track"),
-    items("ballast", default = ["minecraft:tuff"], icon = "minecraft:tuff"),
-    items("bed", default = ["minecraft:cobblestone"], icon = "minecraft:cobblestone"),
-    items("masonry", default = ["minecraft:bricks"], icon = "minecraft:bricks"),
-    items("accent", default = ["minecraft:polished_andesite"], icon = "minecraft:polished_andesite"),
+    items("ballast", offer(["minecraft:tuff"], MASONRY, ["minecraft:gravel"]),
+        default = ["minecraft:tuff"], icon = "minecraft:tuff"),
+    items("bed", offer(["minecraft:cobblestone"], MASONRY),
+        default = ["minecraft:cobblestone"], icon = "minecraft:cobblestone"),
+    items("masonry", offer(["minecraft:bricks"], MASONRY),
+        default = ["minecraft:bricks"], icon = "minecraft:bricks"),
+    items("accent", offer(["minecraft:polished_andesite"], MASONRY),
+        default = ["minecraft:polished_andesite"], icon = "minecraft:polished_andesite"),
 ]
+lang = {
+    "en_us": {
+        "title": "Railway",
+        "track": "Track",
+        "ballast": "Ballast",
+        "bed": "Bed",
+        "masonry": "Masonry",
+        "accent": "Accent",
+    },
+    "zh_cn": {
+        "title": "铁路",
+        "track": "轨道",
+        "ballast": "道砟",
+        "bed": "路基",
+        "masonry": "砌体",
+        "accent": "点缀",
+    },
+}
 
 AIR = "minecraft:air"
 FULL = "minecraft:stone_bricks"
@@ -458,8 +482,30 @@ def rails(site, legs, bends):
         ends.append((point(leg["x"] + leg["head"] * sx, leg["y0"] + 1, leg["z"] + leg["head"] * sz),
             point(leg["x"] + leg["tail"] * sx, leg["y1"] + 1, leg["z"] + leg["tail"] * sz)))
     for index, into, out in bends:
-        joints.append(joint(ends[index][1], ends[index + 1][0]))
+        if ends[index][1] != ends[index + 1][0]:
+            joints.append(joint(ends[index][1], ends[index + 1][0]))
     return laid, joints
+
+def meets(site, line, columns):
+    material = site.items("track")
+    if not material:
+        fail("Choose the track to lay / 请选择要铺设的轨道")
+    found = {}
+    for key, best in columns.items():
+        x, z = key
+        floor = lower(line[best[1]]["f"] + 0.25)
+        for y in range(floor - 1, floor + 4):
+            if site.matches(point(x, y, z), material[0]):
+                found[key] = True
+                break
+    return found
+
+def beside(met, x, z):
+    for dx in range(-1, 2):
+        for dz in range(-1, 2):
+            if (x + dx, z + dz) in met:
+                return True
+    return False
 
 def draw(site):
     for key in ["ballast", "bed", "masonry", "accent"]:
@@ -470,8 +516,12 @@ def draw(site):
     found = classify(site, line)
     arches(site, line, found)
     out = {}
-    for key, best in raster(line).items():
+    columns = raster(line)
+    met = meets(site, line, columns)
+    for key, best in columns.items():
         x, z = key
+        if met and beside(met, x, z):
+            continue
         sample = line[best[1]]
         far = root(best[0])
         q = int(far + 0.5)

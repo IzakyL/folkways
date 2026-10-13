@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.colony.Books;
 import io.github.izakyl.folkways.plugins.build.draft.Chosen;
 import io.github.izakyl.folkways.plugins.build.draft.DraftRefusal;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
+import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import io.github.izakyl.folkways.plugins.build.draft.Pattern;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.build.draft.Round;
@@ -175,6 +176,12 @@ public final class BuildPackets {
             after.put(at, block.state());
         }
         Rubble.swap(level, player, before, after, ItemStack.EMPTY, true);
+        // What runs between two of the blocks, as a track's slopes and bends do, is laid as a builder lays it.
+        for (Joint joint : blueprint.joints()) {
+            Joint between = joint.moved(anchor);
+            Joints.joiner().cost(level, between.from(), between.to())
+                .ifPresent(cost -> Joints.joiner().join(level, between.from(), between.to(), cost));
+        }
     }
 
     private static Component whyNot(CompoundTag file, ServerLevel level, String name,

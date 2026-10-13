@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { REPO_ROOT } from "../out-paths";
+import { REPO_ROOT } from "../shared/harness/out-paths";
 
 // The live fuzzers: each target lays real colonies out on a server's plots and lets the server tick them as in
 // play (tests/fuzz/java, io.github.izakyl.folkways.fuzz.Live), up to eight cases side by side. A case that broke a

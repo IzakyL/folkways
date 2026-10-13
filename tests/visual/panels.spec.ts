@@ -1,17 +1,17 @@
-import { launchPair, type E2EPair } from "../shared/pair";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { expect, test } from "@playwright/test";
 import { camera, input, player, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements } from "../ldlib2";
-import { foundColonyFast, openColonyPanelViaBook, optInViaBook, setBookGesture, waitForGroundedPlayer, type Vec } from "../e2e/colony-founding";
-import { boardActs, enterSitePanel, firstEmptyGridSlot } from "../e2e/site-panel";
-import { CONFIG_PATH, VisualRun } from "./visual-kit";
+import { foundColonyFast, openColonyPanelViaBook, optInViaBook, setBookGesture, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { boardActs, enterSitePanel, firstEmptyGridSlot } from "../shared/ui/site-panel";
+import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
 import { discoverPages, capturePageWindows, clickTab } from "./ui-catalog";
-import { LayoutProbe } from "./layout-lint";
-import { tracePath } from "../out-paths";
-import { seededOffThreadServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { frames, safeAction, waitForAnyScreen, clickSlot, safeScreen, screenName, screenOpen, commandPos, tryCommand, waitForElement, clickUnverified, softly } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+import { LayoutProbe } from "../shared/capture/layout-lint";
+import { tracePath } from "../shared/harness/out-paths";
+import { seededOffThreadServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { frames, safeAction, waitForAnyScreen, clickSlot, safeScreen, screenName, screenOpen, commandPos, tryCommand, waitForElement, clickUnverified, softly } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 import { stockColony, stockDispatch, stockRail } from "./colony-stock";
 
 const BOOK_ITEM = "folkways:colony_book";
@@ -284,7 +284,6 @@ test("panels and item models on camera", async ({}, testInfo) => {
     await tryCommand(server, `setblock ${commandPos(chest)} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 3);
     await optInViaBook(server, client, playerName, chest, "chest");
-    await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with minecraft:air`);
     await tryCommand(server, `tp ${playerName} ${chest.x + 0.5} ${chest.y} ${chest.z + 1.5} 180 30`);
     await tick.sprint(server, 5);
     await screen.dismiss(client);
@@ -294,14 +293,14 @@ test("panels and item models on camera", async ({}, testInfo) => {
     await waitForAnyScreen(client, 8_000);
     await safeAction(() => frames(client, 3));
     await run.shot(client, "08-container-node-entry", {
-      subject: "The vanilla chest screen opens as usual, with this chest's colony panel shown right beside it",
+      subject: "The book used on a colony chest opens that chest's own window instead of the chest screen",
       worldState: { chest, screen: screenName(await safeScreen(client)), tokens: await tokensOf(client) },
       hard: true,
     });
     await enterSitePanel(server, client);
     await safeAction(() => frames(client, 3));
     await run.shot(client, "08b-container-site-panel", {
-      subject: "Side panel next to the chest slots: edit this chest's settings directly, no button needed",
+      subject: "The chest's window: its board and the button that takes it out of the colony",
       worldState: { chest, screen: screenName(await safeScreen(client)), tokens: await tokensOf(client) },
       hard: true,
     });

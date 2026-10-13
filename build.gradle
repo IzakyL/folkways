@@ -98,6 +98,8 @@ dependencies {
 
     compileOnly lib("geckolib")
 
+    compileOnly lib("shouldersurfing")
+
     compileOnly lib("create")
     gametestRuntimeOnly lib("create")
 
@@ -242,7 +244,7 @@ tasks.register("lintScaffold") {
         exclude "**/.gradle/**", "**/build/**", "**/run/**",
                 "**/node_modules/**", "**/.blockwright/**", "**/.blockwright-store/**",
                 "tests/out/**",
-                "**/.claude/**", "tests/e2e/assets/resident-models/**",
+                "**/.claude/**", "tests/shared/assets/resident-models/**",
                 "tests/promo/models/*/**"
     })
     doLast {

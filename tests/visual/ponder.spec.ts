@@ -1,13 +1,13 @@
-import { launchPair, type E2EPair } from "../shared/pair";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { expect, test } from "@playwright/test";
 import { input, screen, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { waitForGroundedPlayer } from "../e2e/colony-founding";
-import { CONFIG_PATH, VisualRun } from "./visual-kit";
-import { tracePath } from "../out-paths";
-import { seededOffThreadServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { frames, safeScreen, screenName, tryCommand } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+import { waitForGroundedPlayer } from "../shared/colony/colony-founding";
+import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
+import { tracePath } from "../shared/harness/out-paths";
+import { seededOffThreadServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { frames, safeScreen, screenName, tryCommand } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 // Page order in the colony book: the basics folder, then one folder per plugin in the order it enrolled
 // (Lessons.folders()). The fixture pack loads Create and Modular Golems, so their scenes are here too.

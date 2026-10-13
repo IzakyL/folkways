@@ -24,7 +24,6 @@ public final class Desk {
     };
 
     private Window panel;
-    private UIElement beside;
 
     public Desk() {
         root.addClass("folkways_desk");
@@ -40,11 +39,6 @@ public final class Desk {
 
     public UIElement root() {
         return root;
-    }
-
-    void beside(UIElement element) {
-        beside = element;
-        root.addChildren(element);
     }
 
     public Window panel(Window window) {
@@ -87,10 +81,6 @@ public final class Desk {
 
     private List<Box> occupiedBoxes() {
         List<Box> boxes = new ArrayList<>();
-        if (beside != null && beside.isDisplayed()) {
-            boxes.add(new Box(Math.round(beside.getPositionX()), Math.round(beside.getPositionY()),
-                Math.round(beside.getSizeWidth()), Math.round(beside.getSizeHeight())));
-        }
         for (Window window : windows) {
             if (!window.isOpen()) {
                 continue;
@@ -110,16 +100,28 @@ public final class Desk {
         return List.copyOf(boxes);
     }
 
+    public static boolean on(com.lowdragmc.lowdraglib2.gui.ui.ModularUI ui) {
+        return shown != null && ui != null && shown.root.getModularUI() == ui;
+    }
+
+    /** Whether a window stands open over the desk's own panel, for Escape to close before the desk itself. */
+    public static boolean floating(com.lowdragmc.lowdraglib2.gui.ui.ModularUI ui) {
+        return on(ui) && shown.topmost().isPresent();
+    }
+
     public static boolean closeTopmost(com.lowdragmc.lowdraglib2.gui.ui.ModularUI ui) {
-        Desk desk = shown;
-        if (desk == null || ui == null || desk.root.getModularUI() != ui) {
+        if (!on(ui)) {
             return false;
         }
-        Optional<Window> top = desk.windows.stream()
-            .filter(window -> window != desk.panel)
-            .filter(Window::isOpen)
-            .max(java.util.Comparator.comparingInt(Window::order));
+        Optional<Window> top = shown.topmost();
         top.ifPresent(Window::close);
         return top.isPresent();
+    }
+
+    private Optional<Window> topmost() {
+        return windows.stream()
+            .filter(window -> window != panel)
+            .filter(Window::isOpen)
+            .max(java.util.Comparator.comparingInt(Window::order));
     }
 }

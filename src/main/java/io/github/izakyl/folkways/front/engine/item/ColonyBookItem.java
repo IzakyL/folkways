@@ -2,11 +2,13 @@ package io.github.izakyl.folkways.front.engine.item;
 
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.front.api.Shape;
+import io.github.izakyl.folkways.front.engine.colony.ColonyBoards;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysDataComponents;
 import io.github.izakyl.folkways.front.ui.screen.ColonyShell;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -31,7 +33,14 @@ public final class ColonyBookItem extends Item {
         if (!(level instanceof ServerLevel serverLevel) || !(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResult.sidedSuccess(level.isClientSide);
         }
-        open(serverLevel, stack, serverPlayer);
+        // A block the colony keeps a board for opens on that board; anything else opens the colony's own panel.
+        BlockPos at = context.getClickedPos();
+        if (liveColony(serverLevel, stack, serverPlayer)
+                .flatMap(colony -> ColonyBoards.firstAt(serverLevel, colony, at)).isPresent()) {
+            ColonyShell.openAt(serverPlayer, at);
+        } else {
+            ColonyShell.open(serverPlayer);
+        }
         return InteractionResult.CONSUME;
     }
 

@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.front.engine.authority;
 
 import com.lowdragmc.lowdraglib2.gui.holder.ModularUIContainerMenu;
-import com.lowdragmc.lowdraglib2.gui.holder.IModularUIHolder;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
 import io.github.izakyl.folkways.front.engine.colony.Residents;
@@ -87,10 +86,7 @@ public final class ColonyAuthority {
     private static Optional<UUID> openPanelColony(ServerPlayer player) {
         return player.containerMenu instanceof ModularUIContainerMenu menu
             && menu.uiHolder instanceof Panel panel
-            ? panel.colonyId()
-            : player.containerMenu instanceof IModularUIHolder holder
-                && holder.getModularUI() instanceof Panel panel
-                ? panel.colonyId() : Optional.empty();
+            ? panel.colonyId() : Optional.empty();
     }
 
     private static Optional<UUID> heldBookColony(ServerPlayer player) {

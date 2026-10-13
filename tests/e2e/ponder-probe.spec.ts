@@ -8,15 +8,15 @@ import {
   safeScreen,
   screenName,
   waitForGroundedPlayer,
-} from "./colony-founding";
+} from "../shared/colony/colony-founding";
 import { input, media, reflect, screen, tick } from "@izakyl/blockwright-minecraft";
 import { clickElement, hoverElement, panelElements, elementLabel, elementsAtPoint, LDLIB2_SYMBOLS } from "../ldlib2";
-import { frames } from "../shared/bw-helpers";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { REPO_ROOT, ensureOut, reportPath, shotPath, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { newRunId } from "../shared/run-id";
+import { frames } from "../shared/harness/bw-helpers";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { REPO_ROOT, ensureOut, reportPath, shotPath, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 const REPORT_PATH = reportPath("e2e", "ponder-probe-report");

@@ -2,19 +2,19 @@ import { expect, test } from "@playwright/test";
 import { clickElement, panelElements, typeIntoElement } from "../ldlib2";
 import { camera, defineTask, input, javaTask, screen, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
-import { setBookGesture, waitForGroundedPlayer } from "../e2e/colony-founding";
-import { runColonyTask } from "../e2e/colony-tasks";
+import { setBookGesture, waitForGroundedPlayer } from "../shared/colony/colony-founding";
+import { runColonyTask } from "../shared/colony/colony-tasks";
 import {
   deployedSchematic, equipHandoffTool, HANDOFF_CONFIRM, HANDOFF_WINDOW, rightClickWorld,
-} from "../e2e/schematic-tools";
-import { BUDGET } from "../shared/budgets";
-import { clickUnverified, tryCommand, waitForElement, softly, frames, safeAction } from "../shared/bw-helpers";
+} from "../shared/ui/schematic-tools";
+import { BUDGET } from "../shared/harness/budgets";
+import { clickUnverified, tryCommand, waitForElement, softly, frames, safeAction } from "../shared/harness/bw-helpers";
 import { admitPromoSettlersFast, foundPromoColonyFast } from "./fast-setup";
 import {
   cinematicWorld, hideHud, launchPromoPair, promoClip, PROMO_SKY_CONFIG, setFov, sleepMs, take, writeLook,
   type Look, type PromoPair,
 } from "./promo-kit";
-import { shaderEvidence } from "./shaders";
+import { shaderEvidence } from "../shared/capture/shaders";
 import path from "node:path";
 import { mkdirSync } from "node:fs";
 
@@ -275,7 +275,6 @@ async function commissionRoad(client: any) {
   await sleepMs(700);
   await clickElement(client, { id: offer });
   await sleepMs(500);
-  const proceed = await clickUnverified(client, { id: "folkways.zoneconfig.confirm" });
   const road = await waitForToken(client, id => id.startsWith("folkways.draft.pattern.") && id.endsWith("road"));
   await sleepMs(600);
   await clickElement(client, { id: road });
@@ -285,7 +284,7 @@ async function commissionRoad(client: any) {
   const confirm = await clickUnverified(client, { id: "folkways.draft.confirm" });
   await sleepMs(300);
   await safeAction(() => screen.dismiss(client));
-  return { opened, offer, proceed, road, named, confirm };
+  return { opened, offer, road, named, confirm };
 }
 
 // Works the real ground rather than a flattened one: only the meadow's tall grass is cleared and the wheat field

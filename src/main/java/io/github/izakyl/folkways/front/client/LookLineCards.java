@@ -24,7 +24,7 @@ public final class LookLineCards {
         }
         List<LookLines> looks = ColonyLookState.residents();
         Minecraft minecraft = Minecraft.getInstance();
-        if (looks.isEmpty() || minecraft.level == null || minecraft.player == null) {
+        if (looks.isEmpty() || !Layer.RESIDENTS.cards() || minecraft.level == null || minecraft.player == null) {
             return;
         }
 

@@ -7,7 +7,7 @@ import {
   tryCommand,
   waitForGroundedPlayer,
   type Vec,
-} from "./colony-founding";
+} from "../shared/colony/colony-founding";
 import {
   buildRailLine,
   clickConductorSeat,
@@ -15,12 +15,12 @@ import {
   trainHasSchedule,
   GIVEN_BACK,
   TAKEN_ON,
-} from "./rail-fixture";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { REPO_ROOT, ensureOut, reportPath, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { newRunId } from "../shared/run-id";
+} from "../shared/rail/rail-fixture";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { REPO_ROOT, ensureOut, reportPath, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 const REPORT_PATH = reportPath("e2e", "rail-handover-report");

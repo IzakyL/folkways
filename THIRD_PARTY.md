@@ -26,5 +26,5 @@ Players install these separately. Folkways only compiles against them.
 
 | Path | License | Notes |
 | --- | --- | --- |
-| `tests/e2e/assets/resident-models/` | CC0 | Yes Steve Model built-in models (Steve, Default Boy), used by end-to-end tests |
+| `tests/shared/assets/resident-models/` | CC0 | Yes Steve Model built-in models (Steve, Default Boy), used by end-to-end tests |
 | `tests/promo/models/` | CC BY-NC-SA 4.0 | Wine Fox models from Yes Steve Model's built-in pack, used only to film promotional footage. Authors are credited in each folder's `ysm.json`; see [the folder's README](tests/promo/models/README.md) |

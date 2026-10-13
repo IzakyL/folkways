@@ -7,10 +7,10 @@ import {
   optInViaBook,
   waitForGroundedPlayer,
   type Vec,
-} from "./colony-founding";
-import { setMaintainDemandViaUI } from "./membership-optin";
-import { readDoing } from "./resident-probe";
-import { mustCommand, packHasItem } from "./world-ui";
+} from "../shared/colony/colony-founding";
+import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
+import { readDoing } from "../shared/colony/resident-probe";
+import { mustCommand, packHasItem } from "../shared/ui/world-ui";
 import {
   blockHasItem,
   buildPen,
@@ -20,13 +20,13 @@ import {
   pastureZoneFailure,
   penLayout,
   purgeLooseItem,
-} from "./pasture-tools";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { tryCommand } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/colony/pasture-tools";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { tryCommand } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 3;
@@ -100,9 +100,6 @@ test("pasture milk end-to-end: a standing order for milk stays unfilled until th
     }
     await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${founding.standBlock.y} ${founding.standBlock.z + 1.5} 180 30`);
     await tick.sprint(server, 20);
-
-    await mustCommand(server, `item replace entity ${playerName} weapon.mainhand with minecraft:air`);
-    await tick.sprint(server, 3);
 
     await setMaintainDemandViaUI(server, client, playerName, demandChest, MILK, 1);
     await purgeLooseItem(server, playerName, MILK);

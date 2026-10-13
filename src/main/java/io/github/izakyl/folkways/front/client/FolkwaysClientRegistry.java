@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.front.client;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.front.client.ponder.PonderIntegration;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Cues;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.api.ui.ItemChoice;
 import io.github.izakyl.folkways.front.api.ui.LonePanel;
@@ -16,10 +17,22 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 
 @EventBusSubscriber(modid = FolkwaysMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class FolkwaysClientRegistry {
     private FolkwaysClientRegistry() {
+    }
+
+    @SubscribeEvent
+    public static void registerKeys(RegisterKeyMappingsEvent event) {
+        event.register(Overhead.KEY);
+    }
+
+    @SubscribeEvent
+    public static void registerTooltips(RegisterClientTooltipComponentFactoriesEvent event) {
+        event.register(Cues.class, CueLines::new);
     }
 
     @SubscribeEvent

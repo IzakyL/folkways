@@ -7,14 +7,14 @@ import {
   razeFoundingSet,
   waitForGroundedPlayer,
   type Vec,
-} from "./colony-founding";
-import { runColonyTask, type ColonyTaskValue } from "./colony-tasks";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, outAbs, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { tryCommand } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/colony/colony-founding";
+import { runColonyTask, type ColonyTaskValue } from "../shared/colony/colony-tasks";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { tryCommand } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const RESIDENTS = 2;
 
@@ -326,7 +326,7 @@ function verdict(diff: Record<string, { fast: unknown; panel: unknown }>): strin
     + `every difference above is something missing from the world while those specs run, `
     + `but present in a colony a player founds through the panel; their failures will take other shapes, `
     + `and may not point back here.\n`
-    + `Fix foundColonyFast (tests/e2e/colony-founding.ts) and the tasks it runs `
-    + `(tests/e2e/colony-tasks.ts): make the fast path set this state through the mod's own entry points too, `
+    + `Fix foundColonyFast (tests/shared/colony/colony-founding.ts) and the tasks it runs `
+    + `(tests/shared/colony/colony-tasks.ts): make the fast path set this state through the mod's own entry points too, `
     + `do not change this spec's assertions, and do not add a panel click to the fast path.`;
 }

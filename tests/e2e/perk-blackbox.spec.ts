@@ -5,14 +5,14 @@ import {
   optInViaBook,
   waitForGroundedPlayer,
   type Vec,
-} from "./colony-founding";
+} from "../shared/colony/colony-founding";
 import {
   countInResidentPacks,
   maxInAnySinglePack,
   mustCommand,
   prepareSafeWalkway,
-} from "./world-ui";
-import { setMaintainDemandViaUI } from "./membership-optin";
+} from "../shared/ui/world-ui";
+import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
 import {
   anyResidentEarnedPerkXp,
   buildPen,
@@ -22,14 +22,14 @@ import {
   pastureZoneFailure,
   penCenter,
   penLayout,
-} from "./pasture-tools";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { sampleWhileSprinting, settledAll, unwrapSettled } from "./tick-tools";
-import { commandPos, tryCommand } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/colony/pasture-tools";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { sampleWhileSprinting, settledAll, unwrapSettled } from "../shared/harness/tick-tools";
+import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 
@@ -177,11 +177,7 @@ test("perk system end-to-end: carrying capacity and butcher yield each flip a wo
     await tryCommand(server, `setblock ${commandPos(targetChest)} minecraft:chest{Items:[]}`);
     await optInViaBook(server, client, playerName, sourceChest, "chest");
     await optInViaBook(server, client, playerName, targetChest, "chest");
-    await tryCommand(server, `item replace entity ${playerName} inventory.26 from entity ${playerName} weapon.mainhand`);
-    await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with minecraft:air`);
     await setMaintainDemandViaUI(server, client, playerName, targetChest, SADDLE, SADDLE_STOCK);
-    await tryCommand(server, `item replace entity ${playerName} weapon.mainhand from entity ${playerName} inventory.26`);
-    await tryCommand(server, `item replace entity ${playerName} inventory.26 with minecraft:air`);
     await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${founding.standBlock.y} ${founding.standBlock.z + 1.5} 180 30`);
     await stockSaddles(server, sourceChest);
 

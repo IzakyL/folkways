@@ -16,12 +16,12 @@ import { clickElement, panelElements } from "../ldlib2";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { optInContainerViaUI } from "./membership-optin";
+import { optInContainerViaUI } from "../shared/colony/membership-optin";
 import { stockToolsForResidents, foundColonyFast, openColonyPanelViaBook, TRADE_TOOLS,
   waitForGroundedPlayer, entityTypeMatches,
-} from "./colony-founding";
-import { blockHasItem, countInResidentPacks, packHasItem, summarizeResidentMovement } from "./world-ui";
-import { drainActionBar } from "./zone-receipt";
+} from "../shared/colony/colony-founding";
+import { blockHasItem, countInResidentPacks, packHasItem, summarizeResidentMovement } from "../shared/ui/world-ui";
+import { drainActionBar } from "../shared/ui/zone-receipt";
 import {
   colonyRegistry,
   configureZone,
@@ -31,13 +31,13 @@ import {
   zoneChoiceSettingAt,
   zoneKindAt,
   ZONE_KIND_ID,
-} from "./zone-tools";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { REPO_ROOT, ensureOut, shotPath, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { commandPos, isSafeFailure, safeAction, tryCommand, waitForElement, softly, waitMatched } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/ui/zone-tools";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { REPO_ROOT, ensureOut, shotPath, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { commandPos, isSafeFailure, safeAction, tryCommand, waitForElement, softly, waitMatched } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 

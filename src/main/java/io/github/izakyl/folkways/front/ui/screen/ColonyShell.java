@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.front.ui.screen;
 
 import com.lowdragmc.lowdraglib2.gui.factory.PlayerUIMenuType;
-import com.lowdragmc.lowdraglib2.gui.holder.IModularUIHolder;
 import com.lowdragmc.lowdraglib2.gui.holder.ModularUIContainerMenu;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.DataBindingBuilder;
 import com.lowdragmc.lowdraglib2.gui.texture.ColorRectTexture;
@@ -13,7 +12,6 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
-import dev.vfyjxf.taffy.style.TaffyPosition;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
@@ -26,14 +24,17 @@ import io.github.izakyl.folkways.front.api.ui.Windows;
 import io.github.izakyl.folkways.front.engine.authority.ColonyAuthority;
 import io.github.izakyl.folkways.front.engine.colony.ColonyBoards;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
+import io.github.izakyl.folkways.front.engine.colony.ColonySites;
 import io.github.izakyl.folkways.front.engine.colony.SiteBoard;
 import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
+import io.github.izakyl.folkways.front.engine.net.FolkwaysUiNetworkEvents;
 import io.github.izakyl.folkways.front.ui.UiRegistrations;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.WeakHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -48,6 +49,11 @@ public final class ColonyShell
 
     public static final ResourceLocation ID =
         ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "colony");
+    public static final ResourceLocation SITE_ID =
+        ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "site");
+
+    // The block a book was used on, kept from the click until the window built for it takes it.
+    private static final Map<Player, BlockPos> AIMED = new WeakHashMap<>();
 
     private static final int PANEL_WIDTH = 500;
     private static final int PANEL_HEIGHT = 310;
@@ -65,6 +71,7 @@ public final class ColonyShell
 
     private final Optional<UUID> colonyId;
     private final Optional<BlockPos> site;
+    private final boolean atSite;
     private Map<ResourceLocation, Pane> opened = Map.of();
     private ItemListEditor lists;
     private final ZoneSettings selectionSettings = ZoneSettings.create();
@@ -75,11 +82,12 @@ public final class ColonyShell
     }
 
     private ColonyShell(Player player) {
-        this(player, Optional.empty());
+        this(player, Optional.empty(), false);
     }
 
-    private ColonyShell(Player player, Optional<BlockPos> at) {
+    private ColonyShell(Player player, Optional<BlockPos> at, boolean atSite) {
         site = at;
+        this.atSite = atSite;
         colonyId = heldColonyId(player).or(() -> siteColonyId(player, at));
     }
 
@@ -102,25 +110,32 @@ public final class ColonyShell
             .map(Colony::id);
     }
 
-    public static ModularUI besideContainer(Player player, Optional<BlockPos> at) {
-        ColonyShell shell = new ColonyShell(player, at);
-        return shell.createSiteUI(player);
-    }
-
     private ModularUI createSiteUI(Player player) {
         Desk desk = new Desk();
-        UIElement panel = Rows.page().addClass("panel_bg")
-            .layout(layout -> layout.positionType(TaffyPosition.ABSOLUTE)
-                .width(WINDOW_WIDTH).height(WINDOW_HEIGHT));
+        Window window = desk.panel(Window.of("site",
+            Component.translatable("folkways.panel.title"),
+            0f, 0f, WINDOW_WIDTH, WINDOW_HEIGHT, 220, 140));
+        window.open();
+        window.onDismiss(() -> {
+            if (player instanceof ServerPlayer serverPlayer) {
+                serverPlayer.closeContainer();
+            }
+        });
+        UIElement panel = Rows.page();
+        panel.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
         Tokens.name(panel, "folkways.site.panel");
         panel.setDisplay(false);
         panel.setOverflowVisible(false);
-        desk.beside(panel);
+        Button toggle = new Button()
+            .setText(Component.translatable("folkways.member.toggle"))
+            .setOnServerClick(event -> toggleMember(player));
+        Tokens.name(toggle, "folkways.member.toggle");
+        window.body().addChildren(panel, Rows.actions(toggle));
         Windows windows = (id, title, body) -> {
-            Window window = desk.add(Window.of(id, title,
+            Window opened = desk.add(Window.of(id, title,
                 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, 220, 140));
-            window.body().addChildren(body);
-            return window;
+            opened.body().addChildren(body);
+            return opened;
         };
         Map<ResourceLocation, UIElement> pages = new LinkedHashMap<>();
         Map<ResourceLocation, Pane> panes = new LinkedHashMap<>();
@@ -150,29 +165,39 @@ public final class ColonyShell
                 panel.setDisplay(target != null && pages.containsKey(target));
                 pages.forEach((key, value) -> value.setDisplay(key.equals(target)));
             }).build().getSyncValue());
-        return new SiteUI(UI.of(desk.root(),
+        desk.root().addSyncValue(DataBindingBuilder.boolS2C(() -> member(player, site))
+            .onSyncReceived(held -> toggle.setText(Component.translatable(
+                held ? "folkways.member.leave" : "folkways.member.join")))
+            .build().getSyncValue());
+        return new ModularUI(UI.of(desk.root(),
             List.of(StylesheetManager.INSTANCE.getStylesheetSafe(StylesheetManager.MC),
                 StylesheetManager.INSTANCE.getStylesheetSafe(
                     ResourceLocation.fromNamespaceAndPath("folkways", "lss/desk.lss"))),
-            screen -> screen), player, this);
+            screen -> screen), player);
     }
 
-    public static final class SiteUI extends ModularUI implements ColonyAuthority.Panel {
-        private final ColonyShell shell;
-
-        private SiteUI(UI ui, Player player, ColonyShell shell) {
-            super(ui, player);
-            this.shell = shell;
+    private static boolean member(Player player, Optional<BlockPos> at) {
+        if (!(player instanceof ServerPlayer serverPlayer) || at.isEmpty()) {
+            return false;
         }
+        ServerLevel level = serverPlayer.serverLevel();
+        return ColonyAuthority.of(serverPlayer, at)
+            .filter(authority -> ColonyGround.holds(level, authority.colony(), ColonySites.anchor(level, at.get())))
+            .isPresent();
+    }
 
-        @Override
-        public Optional<UUID> colonyId() {
-            return shell.colonyId();
+    private void toggleMember(Player player) {
+        if (player instanceof ServerPlayer serverPlayer) {
+            ColonyAuthority.of(serverPlayer, site)
+                .filter(authority -> authority.at().isPresent())
+                .ifPresent(authority -> FolkwaysUiNetworkEvents.toggleColonyMember(serverPlayer, authority));
         }
     }
 
     public static void register() {
         PlayerUIMenuType.register(ID, ColonyShell::new);
+        PlayerUIMenuType.register(SITE_ID,
+            player -> new ColonyShell(player, Optional.ofNullable(AIMED.remove(player)), true));
     }
 
     @Override
@@ -183,10 +208,7 @@ public final class ColonyShell
     static Optional<ColonyShell> of(Player player) {
         return player.containerMenu instanceof ModularUIContainerMenu menu
             && menu.uiHolder instanceof ColonyShell shell
-            ? Optional.of(shell)
-            : player.containerMenu instanceof IModularUIHolder holder
-                && holder.getModularUI() instanceof SiteUI ui
-                ? Optional.of(ui.shell) : Optional.empty();
+            ? Optional.of(shell) : Optional.empty();
     }
 
     Optional<ItemListEditor> itemLists() {
@@ -207,6 +229,13 @@ public final class ColonyShell
         PlayerUIMenuType.openUI(player, ID);
     }
 
+    /** The window of one block the colony holds: its board alone, without the colony's other pages. */
+    public static void openAt(ServerPlayer player, BlockPos at) {
+        AIMED.put(player, at.immutable());
+        PlayerUIMenuType.openUI(player, SITE_ID);
+        AIMED.remove(player);
+    }
+
     public static Optional<BlockPos> siteOf(Player player) {
         return of(player).flatMap(shell -> shell.site);
     }
@@ -218,6 +247,9 @@ public final class ColonyShell
     @Override
     public ModularUI createUI(Player player) {
         PageKinds.verify();
+        if (atSite) {
+            return createSiteUI(player);
+        }
         Desk desk = new Desk();
         Window panel = desk.panel(Window.of("colony",
             Component.translatable("folkways.panel.title"),

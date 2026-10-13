@@ -1,9 +1,9 @@
 import { expect } from "@playwright/test";
 import { reflect, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
-import { entityTypeMatches, type Vec } from "../e2e/colony-founding";
-import { readDoing } from "../e2e/resident-probe";
-import type { VisualRun } from "./visual-kit";
+import { entityTypeMatches, type Vec } from "../shared/colony/colony-founding";
+import { readDoing } from "../shared/colony/resident-probe";
+import type { VisualRun } from "../shared/capture/visual-kit";
 import { occluderIn } from "./occlusion";
 
 export type ResidentState = {

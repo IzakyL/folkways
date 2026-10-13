@@ -1,7 +1,7 @@
-import { launchPair, type E2EPair } from "../shared/pair";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { expect, test } from "@playwright/test";
 import { screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { createColonyViaBook, waitForGroundedPlayer, type Vec } from "../e2e/colony-founding";
+import { createColonyViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import {
   HANDOFF_LABEL,
   SCHEMATIC_ITEM,
@@ -11,16 +11,16 @@ import {
   HANDOFF_WINDOW,
   openHandoffScreen,
   rightClickWorld,
-} from "../e2e/schematic-tools";
-import { drainActionBar, readActionBar } from "../e2e/zone-receipt";
+} from "../shared/ui/schematic-tools";
+import { drainActionBar, readActionBar } from "../shared/ui/zone-receipt";
 import { clickElement, panelElements } from "../ldlib2";
-import { CONFIG_PATH, VisualRun } from "./visual-kit";
-import { LayoutProbe } from "./layout-lint";
-import { tracePath } from "../out-paths";
-import { seededOffThreadServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { frames, safeAction, safeScreen, screenName, screenOpen, tryCommand, clickUnverified, softly } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
+import { LayoutProbe } from "../shared/capture/layout-lint";
+import { tracePath } from "../shared/harness/out-paths";
+import { seededOffThreadServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { frames, safeAction, safeScreen, screenName, screenOpen, tryCommand, clickUnverified, softly } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const BOOK_ITEM = "folkways:colony_book";
 const SCHEMATIC_FILE = "folkways-handoff.nbt";

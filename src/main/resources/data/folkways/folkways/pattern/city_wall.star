@@ -1,17 +1,56 @@
+load("folkways:materials.star", "LOGS", "MASONRY", "PLANKS", "ROOFING", "offer")
+
 accepts = ["path"]
 knobs = [
     count("height", 5, 14, default = 7, icon = "minecraft:ladder"),
     count("thickness", 3, 9, default = 5, icon = "minecraft:stone_brick_slab"),
     count("spacing", 0, 48, default = 20, icon = "minecraft:chiseled_stone_bricks"),
     flag("gate", default = True, icon = "minecraft:spruce_door"),
-    items("wall", default = ["minecraft:stone_bricks"], icon = "minecraft:stone_bricks"),
-    items("base", default = ["minecraft:cobblestone"], icon = "minecraft:cobblestone"),
-    items("walkway", default = ["minecraft:smooth_stone"], icon = "minecraft:smooth_stone"),
-    items("trim", default = ["minecraft:polished_andesite"], icon = "minecraft:polished_andesite"),
-    items("timber", default = ["minecraft:stripped_spruce_log"], icon = "minecraft:stripped_spruce_log"),
-    items("panel", default = ["minecraft:spruce_planks"], icon = "minecraft:spruce_planks"),
-    items("roof", default = ["minecraft:deepslate_tiles"], icon = "minecraft:deepslate_tiles"),
+    items("wall", offer(["minecraft:stone_bricks"], MASONRY),
+        default = ["minecraft:stone_bricks"], icon = "minecraft:stone_bricks"),
+    items("base", offer(["minecraft:cobblestone"], MASONRY),
+        default = ["minecraft:cobblestone"], icon = "minecraft:cobblestone"),
+    items("walkway", offer(["minecraft:smooth_stone"], MASONRY),
+        default = ["minecraft:smooth_stone"], icon = "minecraft:smooth_stone"),
+    items("trim", offer(["minecraft:polished_andesite"], MASONRY),
+        default = ["minecraft:polished_andesite"], icon = "minecraft:polished_andesite"),
+    items("timber", offer(["minecraft:stripped_spruce_log"], LOGS),
+        default = ["minecraft:stripped_spruce_log"], icon = "minecraft:stripped_spruce_log"),
+    items("panel", offer(["minecraft:spruce_planks"], PLANKS),
+        default = ["minecraft:spruce_planks"], icon = "minecraft:spruce_planks"),
+    items("roof", offer(["minecraft:deepslate_tiles"], ROOFING),
+        default = ["minecraft:deepslate_tiles"], icon = "minecraft:deepslate_tiles"),
 ]
+lang = {
+    "en_us": {
+        "title": "City Wall",
+        "height": "Height",
+        "thickness": "Thickness",
+        "spacing": "Tower spacing",
+        "gate": "Gate",
+        "wall": "Wall",
+        "base": "Base",
+        "walkway": "Walkway",
+        "trim": "Trim",
+        "timber": "Timber",
+        "panel": "Panels",
+        "roof": "Roof",
+    },
+    "zh_cn": {
+        "title": "城墙",
+        "height": "高度",
+        "thickness": "厚度",
+        "spacing": "敌楼间距",
+        "gate": "城门",
+        "wall": "墙体",
+        "base": "墙基",
+        "walkway": "马道",
+        "trim": "压顶",
+        "timber": "木构",
+        "panel": "板壁",
+        "roof": "屋顶",
+    },
+}
 
 def ceiling(value):
     return int(-(-value // 1))

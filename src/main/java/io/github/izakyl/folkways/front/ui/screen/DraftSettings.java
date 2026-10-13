@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.ui.screen;
 
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
 import io.github.izakyl.folkways.front.api.ui.Rows;
@@ -10,6 +11,7 @@ import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 
 final class DraftSettings {
     private final Schema schema;
@@ -38,19 +40,19 @@ final class DraftSettings {
                     control = number;
                 }
                 case Schema.Setting.Flag flag -> {
-                    Button button = new Button().setText(flagLabel(flag.key()));
-                    button.setOnClick(event -> {
-                        values = values.with(flag.key(), new ColonySettings.Value.Flag(!values.flag(flag.key())));
-                        button.setText(flagLabel(flag.key()));
-                    });
-                    control = button;
+                    Toggle box = Controls.tick();
+                    box.setOn(flag.byDefault(), false);
+                    box.setOnToggleChanged(on ->
+                        values = values.with(flag.key(), new ColonySettings.Value.Flag(on)));
+                    control = box;
                 }
                 case Schema.Setting.Choice choice -> {
-                    Button button = new Button().setText(ChoicePicker.labelOf(choice.byDefault()));
+                    Button button = new Button().noText();
+                    wear(button, choice.byDefault());
                     button.setOnClick(event -> ChoicePicker.open(button, choice, values.choice(choice.key()),
                         option -> {
                             values = values.with(choice.key(), new ColonySettings.Value.Choice(option));
-                            button.setText(ChoicePicker.labelOf(option));
+                            wear(button, option);
                         }));
                     control = button;
                 }
@@ -59,8 +61,12 @@ final class DraftSettings {
             }
             control.layout(layout -> layout.flexShrink(0));
             Tokens.name(control, "folkways.draft.value." + setting.key());
-            root.addChildren(Rows.row().addChildren(Rows.icon(SettingsPage.iconOf(setting.icon())),
-                Rows.name(setting.name()), control));
+            UIElement row = Rows.row().addChildren(Rows.icon(SettingsPage.iconOf(setting.icon())),
+                Rows.name(setting.name()));
+            if (setting instanceof Schema.Setting.Count count) {
+                row.addChildren(Controls.range(count.min(), count.max()));
+            }
+            root.addChildren(row.addChildren(control));
         }
         root.setDisplay(false);
         return root;
@@ -73,7 +79,8 @@ final class DraftSettings {
         return values.conformedTo(schema);
     }
 
-    private Component flagLabel(String key) {
-        return Component.translatable(values.flag(key) ? "folkways.action.on" : "folkways.action.off");
+    private static void wear(Button button, ResourceLocation option) {
+        button.clearAllChildren();
+        button.addChildren(Controls.worn(option), Rows.value(ChoicePicker.labelOf(option)));
     }
 }

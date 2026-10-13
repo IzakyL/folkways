@@ -6,9 +6,9 @@ import {
   optInViaBook,
   waitForGroundedPlayer,
   type Vec,
-} from "./colony-founding";
-import { createMarkedZone, setBookGesture } from "./zone-tools";
-import { aimAndWorldLeftClick } from "./world-ui";
+} from "../shared/colony/colony-founding";
+import { createMarkedZone, setBookGesture } from "../shared/ui/zone-tools";
+import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
 import {
   boxIsAt,
   drawEntries,
@@ -20,13 +20,13 @@ import {
   worldItems,
   worldTexts,
   type DrawCaptureResult,
-} from "./draw-capture";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, outAbs, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { commandPos, frames, tryCommand } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/capture/draw-capture";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { commandPos, frames, tryCommand } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 

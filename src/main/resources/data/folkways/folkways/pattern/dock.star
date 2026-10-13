@@ -1,16 +1,64 @@
+load("folkways:materials.star", "FENCES", "LAMPS", "LOGS", "MASONRY", "PLANKS", "WOOD_SLABS", "WOOD_STAIRS", "offer")
+
 accepts = ["path"]
 knobs = [
     count("width", 3, 9, default = 3, icon = "minecraft:spruce_slab"),
-    choice("head", ["t", "l", "square", "none"], default = "t", icon = "minecraft:oak_boat"),
+    choice("head", [
+        option("t", icon = "minecraft:spruce_trapdoor"), option("l", icon = "minecraft:spruce_stairs"),
+        option("square", icon = "minecraft:spruce_planks"), option("none", icon = "minecraft:barrier"),
+    ], default = "t", icon = "minecraft:oak_boat"),
     flag("shelter", default = False, icon = "minecraft:spruce_stairs"),
-    items("deck", default = ["minecraft:spruce_planks"], icon = "minecraft:spruce_planks"),
-    items("beam", default = ["minecraft:stripped_spruce_log"], icon = "minecraft:stripped_spruce_log"),
-    items("pile", default = ["minecraft:spruce_log"], icon = "minecraft:spruce_log"),
-    items("rail", default = ["minecraft:spruce_fence"], icon = "minecraft:spruce_fence"),
-    items("landing", default = ["minecraft:cobblestone"], icon = "minecraft:cobblestone"),
-    items("lantern", default = ["minecraft:lantern"], icon = "minecraft:lantern"),
-    items("roof", default = ["minecraft:dark_oak_stairs", "minecraft:dark_oak_slab"], icon = "minecraft:dark_oak_stairs"),
+    items("deck", offer(["minecraft:spruce_planks"], PLANKS),
+        default = ["minecraft:spruce_planks"], icon = "minecraft:spruce_planks"),
+    items("beam", offer(["minecraft:stripped_spruce_log"], LOGS),
+        default = ["minecraft:stripped_spruce_log"], icon = "minecraft:stripped_spruce_log"),
+    items("pile", offer(["minecraft:spruce_log"], LOGS),
+        default = ["minecraft:spruce_log"], icon = "minecraft:spruce_log"),
+    items("rail", offer(["minecraft:spruce_fence"], FENCES),
+        default = ["minecraft:spruce_fence"], icon = "minecraft:spruce_fence"),
+    items("landing", offer(["minecraft:cobblestone"], MASONRY),
+        default = ["minecraft:cobblestone"], icon = "minecraft:cobblestone"),
+    items("lantern", offer(["minecraft:lantern"], LAMPS),
+        default = ["minecraft:lantern"], icon = "minecraft:lantern"),
+    items("roof", offer(["minecraft:dark_oak_stairs", "minecraft:dark_oak_slab"], WOOD_STAIRS, WOOD_SLABS),
+        default = ["minecraft:dark_oak_stairs", "minecraft:dark_oak_slab"], icon = "minecraft:dark_oak_stairs"),
 ]
+lang = {
+    "en_us": {
+        "title": "Dock",
+        "width": "Width",
+        "head": "Head",
+        "head.t": "T-shaped",
+        "head.l": "L-shaped",
+        "head.square": "Square",
+        "head.none": "None",
+        "shelter": "Shelter",
+        "deck": "Deck",
+        "beam": "Beams",
+        "pile": "Piles",
+        "rail": "Railing",
+        "landing": "Landing",
+        "lantern": "Lanterns",
+        "roof": "Roof",
+    },
+    "zh_cn": {
+        "title": "码头",
+        "width": "宽度",
+        "head": "栈桥尽头",
+        "head.t": "T 形",
+        "head.l": "L 形",
+        "head.square": "方台",
+        "head.none": "无",
+        "shelter": "雨棚",
+        "deck": "桥面",
+        "beam": "梁",
+        "pile": "桩",
+        "rail": "栏杆",
+        "landing": "岸台",
+        "lantern": "灯具",
+        "roof": "棚顶",
+    },
+}
 
 def cell(band, x, z, y, height = 1):
     return band.at(x = x, z = z, y = y).sized(width = 1, depth = 1, height = height)

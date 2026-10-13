@@ -40,13 +40,12 @@ public final class KnobValues implements Settings {
         return values;
     }
 
-    public void toggle(String key) {
-        flags.put(key, !flag(key));
+    public void set(String key, boolean on) {
+        flags.put(key, on);
     }
 
-    public void step(Schema.Setting.Count count) {
-        int next = count(count.key()) + 1;
-        counts.put(count.key(), next > count.max() ? count.min() : next);
+    public void set(Schema.Setting.Count count, int dialled) {
+        counts.put(count.key(), Math.max(count.min(), Math.min(count.max(), dialled)));
     }
 
     public void choose(Schema.Setting.Choice choice, ResourceLocation option) {
@@ -55,14 +54,9 @@ public final class KnobValues implements Settings {
         }
     }
 
-    public void put(String key, Optional<ItemFilter> filter) {
-        if (filter.isEmpty()) {
-            lists.remove(key);
-            return;
-        }
-        List<ItemFilter> held = new ArrayList<>(filtersOf(key));
-        held.add(filter.get());
-        specOf(held).ifPresent(spec -> lists.put(key, spec));
+    public void hold(String key, List<ItemFilter> filters) {
+        lists.remove(key);
+        specOf(filters).ifPresent(spec -> lists.put(key, spec));
     }
 
     public List<ItemFilter> filtersOf(String key) {

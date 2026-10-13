@@ -116,7 +116,19 @@ public final class Vocabulary implements StarlarkValue {
     }
 
     @StarlarkBuiltin(name = "knob", doc = "One thing the player fills in.")
-    public record Knob(Schema.Setting setting) implements StarlarkValue {
+    public record Knob(Schema.Setting setting, List<Face.Option> offered) implements StarlarkValue {
+
+        public Knob {
+            offered = List.copyOf(offered);
+        }
+
+        Knob(Schema.Setting setting) {
+            this(setting, List.of());
+        }
+    }
+
+    @StarlarkBuiltin(name = "option", doc = "One thing a choice offers, and the item whose icon it wears.")
+    public record Offered(Face.Option option) implements StarlarkValue {
     }
 
     @StarlarkMethod(name = "point", doc = "A cell, counted from the site's anchor.",
@@ -937,33 +949,89 @@ public final class Vocabulary implements StarlarkValue {
     }
 
     @StarlarkMethod(
+        name = "option",
+        doc = "An option of a choice or an items slot that wears an item's icon: option('steep', icon ="
+            + " 'minecraft:deepslate_tile_stairs'). An option written as a bare string wears its own icon when it"
+            + " is an item, and none otherwise.",
+        parameters = {
+            @Param(name = "key"),
+            @Param(name = "icon", defaultValue = "None", named = true, positional = false)})
+    public Offered option(String key, Object icon) throws EvalException {
+        return new Offered(new Face.Option(key,
+            icon == Starlark.NONE ? Optional.empty() : Optional.of(id(Starlark.str(icon)))));
+    }
+
+    @StarlarkMethod(
         name = "choice",
-        doc = "A knob the player picks one of a fixed set with. Options are plain words ('steep') or ids.",
+        doc = "A knob the player picks one of a fixed set with. Options are plain words ('steep'), ids, or"
+            + " option(...) to give one an icon.",
         parameters = {
             @Param(name = "key"), @Param(name = "options"),
             @Param(name = "default", named = true, positional = false),
             @Param(name = "icon", defaultValue = "'minecraft:paper'", named = true, positional = false)})
     public Knob choice(String key, Sequence<?> options, String byDefault, String icon) throws EvalException {
+        List<Face.Option> offered = offeredOf(options);
         List<ResourceLocation> ids = new ArrayList<>();
-        for (Object option : options) {
-            ids.add(option(String.valueOf(option)));
+        for (Face.Option option : offered) {
+            ids.add(optionId(option.key()));
         }
-        ResourceLocation fallback = option(byDefault);
+        ResourceLocation fallback = optionId(byDefault);
         if (!ids.contains(fallback)) {
             throw Starlark.errorf("choice '%s' defaults to '%s', which is not one of its options", key, byDefault);
         }
-        return new Knob(new Schema.Setting.Choice(key, AS_WRITTEN, id(icon), ids, fallback));
+        return new Knob(new Schema.Setting.Choice(key, AS_WRITTEN, id(icon), ids, fallback), offered);
     }
 
     @StarlarkMethod(
         name = "items",
-        doc = "A slot the player fills with blocks — a palette a part can be built out of.",
+        doc = "A slot the player fills with blocks — a palette a part can be built out of. The player ticks any"
+            + " of the options, which are block ids, '#tags', or option(...) to give one an icon; left out, the"
+            + " slot offers its defaults alone. What is ticked reaches the pattern in the order written here.",
         parameters = {
             @Param(name = "key"),
+            @Param(name = "options", defaultValue = "None"),
             @Param(name = "default", named = true, positional = false),
             @Param(name = "icon", defaultValue = "'minecraft:paper'", named = true, positional = false)})
-    public Knob items(String key, Sequence<?> byDefault, String icon) throws EvalException {
-        return new Knob(new Schema.Setting.Items(key, AS_WRITTEN, id(icon), filters(byDefault)));
+    public Knob items(String key, Object options, Sequence<?> byDefault, String icon) throws EvalException {
+        List<ItemFilter> held = filters(byDefault);
+        if (options == Starlark.NONE) {
+            List<Face.Option> own = new ArrayList<>();
+            for (Object entry : byDefault) {
+                own.add(new Face.Option(String.valueOf(entry), Optional.empty()));
+            }
+            return new Knob(new Schema.Setting.Items(key, AS_WRITTEN, id(icon), held), own);
+        }
+        if (!(options instanceof Sequence<?> listed)) {
+            throw Starlark.errorf("the options of items '%s' are a list, got %s", key, Starlark.type(options));
+        }
+        List<Face.Option> offered = offeredOf(listed);
+        List<ItemFilter> admitted = new ArrayList<>();
+        for (Face.Option option : offered) {
+            admitted.add(filter(option.key()));
+        }
+        for (ItemFilter each : held) {
+            if (!admitted.contains(each)) {
+                throw Starlark.errorf("items '%s' defaults to '%s', which is not one of its options", key,
+                    each.describe());
+            }
+        }
+        List<ItemFilter> ordered = new ArrayList<>(admitted);
+        ordered.retainAll(held);
+        return new Knob(new Schema.Setting.Items(key, AS_WRITTEN, id(icon), ordered), offered);
+    }
+
+    private static List<Face.Option> offeredOf(Sequence<?> options) throws EvalException {
+        List<Face.Option> offered = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (Object entry : options) {
+            Face.Option option = entry instanceof Offered written
+                ? written.option() : new Face.Option(String.valueOf(entry), Optional.empty());
+            if (!seen.add(option.key())) {
+                throw Starlark.errorf("the option '%s' is offered twice", option.key());
+            }
+            offered.add(option);
+        }
+        return offered;
     }
 
     @StarlarkMethod(
@@ -1410,7 +1478,7 @@ public final class Vocabulary implements StarlarkValue {
         return filters;
     }
 
-    private static ItemFilter filter(String written) throws EvalException {
+    static ItemFilter filter(String written) throws EvalException {
         return written.startsWith("#") ? ItemFilter.tag(id(written.substring(1))) : ItemFilter.item(id(written));
     }
 
@@ -1422,7 +1490,7 @@ public final class Vocabulary implements StarlarkValue {
         return parsed;
     }
 
-    private static ResourceLocation option(String written) throws EvalException {
+    private static ResourceLocation optionId(String written) throws EvalException {
         if (written.contains(":")) {
             return id(written);
         }

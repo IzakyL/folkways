@@ -1,17 +1,47 @@
 load("folkways:grading.star", "at", "centreline", "earthworks", "floor", "only", "profile", "trace")
+load("folkways:materials.star", "EARTH", "FENCES", "LAMPS", "MASONRY", "WALLS", "offer")
 
 accepts = ["path"]
 knobs = [
     count("width", 3, 9, default = 5, icon = "minecraft:stone_brick_slab"),
-    items("surface", default = ["minecraft:andesite", "minecraft:cobblestone", "minecraft:polished_andesite"],
+    items("surface", offer(["minecraft:andesite", "minecraft:cobblestone", "minecraft:polished_andesite"], MASONRY, ["minecraft:gravel"]),
+        default = ["minecraft:andesite", "minecraft:cobblestone", "minecraft:polished_andesite"],
         icon = "minecraft:andesite"),
-    items("edge", default = ["minecraft:stone_bricks"], icon = "minecraft:stone_bricks"),
-    items("fill", default = ["minecraft:dirt"], icon = "minecraft:dirt"),
+    items("edge", offer(["minecraft:stone_bricks"], MASONRY),
+        default = ["minecraft:stone_bricks"], icon = "minecraft:stone_bricks"),
+    items("fill", offer(["minecraft:dirt"], EARTH, MASONRY),
+        default = ["minecraft:dirt"], icon = "minecraft:dirt"),
     flag("lights", default = True, icon = "minecraft:lantern"),
     count("spacing", 6, 32, default = 12, icon = "minecraft:chain"),
-    items("post", default = ["minecraft:spruce_fence"], icon = "minecraft:spruce_fence"),
-    items("lamp", default = ["minecraft:lantern"], icon = "minecraft:lantern"),
+    items("post", offer(["minecraft:spruce_fence"], FENCES, WALLS),
+        default = ["minecraft:spruce_fence"], icon = "minecraft:spruce_fence"),
+    items("lamp", offer(["minecraft:lantern"], LAMPS),
+        default = ["minecraft:lantern"], icon = "minecraft:lantern"),
 ]
+lang = {
+    "en_us": {
+        "title": "Road",
+        "width": "Width",
+        "surface": "Surface",
+        "edge": "Edge",
+        "fill": "Fill",
+        "lights": "Lights",
+        "spacing": "Light spacing",
+        "post": "Posts",
+        "lamp": "Lamps",
+    },
+    "zh_cn": {
+        "title": "道路",
+        "width": "宽度",
+        "surface": "路面",
+        "edge": "路缘",
+        "fill": "填土",
+        "lights": "路灯",
+        "spacing": "路灯间距",
+        "post": "灯柱",
+        "lamp": "灯具",
+    },
+}
 
 POST = 3
 

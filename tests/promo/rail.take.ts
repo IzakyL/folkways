@@ -4,9 +4,9 @@ import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-m
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import {
   foundColonyFast, setVocationPriorityViaPanel, waitForGroundedPlayer, entityTypeMatches, type Vec,
-} from "../e2e/colony-founding";
-import { buildRailLine, conductorAboard, LOST_CARRIAGE, seatedAt, type RailResult } from "../e2e/rail-fixture";
-import { MARK_MEMBERS, runColonyTask } from "../e2e/colony-tasks";
+} from "../shared/colony/colony-founding";
+import { buildRailLine, conductorAboard, LOST_CARRIAGE, seatedAt, type RailResult } from "../shared/rail/rail-fixture";
+import { MARK_MEMBERS, runColonyTask } from "../shared/colony/colony-tasks";
 import { setMaintainDemandsFast } from "./fast-setup";
 import {
   cinematicWorld, hideHud, launchPromoPair, promoClip, setTickRate, sleepMs, take, writeLook,
@@ -15,9 +15,9 @@ import {
   buildSubwayStation, CUT_DEPTH, decoratePromoTrain, deliveryChests, fenceTheCut, holdOnPlatform, platformSpots,
   PROMO_TRAIN_BOUNDS, PROMO_TRAIN_SEATS, CHEST_SLOTS, supplyChests,
 } from "./rail-scenery";
-import { shaderEvidence } from "./shaders";
-import { BUDGET } from "../shared/budgets";
-import { commandPos, tryCommand, frames, safeAction } from "../shared/bw-helpers";
+import { shaderEvidence } from "../shared/capture/shaders";
+import { BUDGET } from "../shared/harness/budgets";
+import { commandPos, tryCommand, frames, safeAction } from "../shared/harness/bw-helpers";
 
 const RIDERS = 3;
 const RESIDENTS = RIDERS + 1;

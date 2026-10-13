@@ -80,7 +80,7 @@ public final class FarmingContent {
         registering.facing(ID, colony -> colony.service(ID, FarmPresence.class).map(Facing.class::cast));
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(PLOT, new Shape.Volume(FolkwaysConfig.maxFarmCells()),
-                new Schema(List.of(crop()))))));
+                new Schema(List.of(crop())), ResourceLocation.withDefaultNamespace("wheat")))));
     }
 
     public static Vocation trade() {

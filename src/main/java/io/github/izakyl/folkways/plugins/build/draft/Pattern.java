@@ -7,8 +7,10 @@ import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.plugins.build.Joints;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -18,6 +20,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.resources.ResourceLocation;
+import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Module;
 import net.starlark.java.eval.Mutability;
@@ -31,8 +34,8 @@ import net.starlark.java.syntax.SyntaxError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public record Pattern(ResourceLocation id, Schema knobs, Set<String> accepts, List<String> phases, Object draw,
-        Object grow) {
+public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> accepts, List<String> phases,
+        Object draw, Object grow) {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-patterns");
 
@@ -46,17 +49,20 @@ public record Pattern(ResourceLocation id, Schema knobs, Set<String> accepts, Li
         StarlarkSemantics.builder().setBool("-allow_recursion", true).build();
 
     private static final String KNOBS = "knobs";
+    private static final String LANG = "lang";
     private static final String DRAW = "draw";
     private static final String GROW = "grow";
     private static final String ACCEPTS = "accepts";
     private static final String PHASES = "phases";
     private static final String SUFFIX = ".star";
-    private static final Function<ResourceLocation, Optional<String>> NO_LIBRARIES = id -> Optional.empty();
+    private static final Function<ResourceLocation, Optional<String>> INSTALLED =
+        id -> Optional.ofNullable(Patterns.sources().get(id));
     private static final String JOINER = "create";
 
     public Pattern {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(knobs, "knobs");
+        Objects.requireNonNull(face, "face");
         accepts = Set.copyOf(accepts);
         phases = List.copyOf(phases);
         if ((draw == null) == (grow == null)) {
@@ -64,8 +70,9 @@ public record Pattern(ResourceLocation id, Schema knobs, Set<String> accepts, Li
         }
     }
 
+    // Read on its own, a pattern still loads the libraries this game has installed.
     public static Optional<Pattern> parse(ResourceLocation id, String source) {
-        return parse(id, source, NO_LIBRARIES);
+        return parse(id, source, INSTALLED);
     }
 
     public static Optional<Pattern> parse(ResourceLocation id, String source,
@@ -80,8 +87,9 @@ public record Pattern(ResourceLocation id, Schema knobs, Set<String> accepts, Li
             if (drawing != null && growing != null) {
                 throw Starlark.errorf("a pattern defines draw(site) or grow(site), and not both");
             }
-            Pattern pattern = new Pattern(id, schema(module.getGlobal(KNOBS)), accepts(module.getGlobal(ACCEPTS)),
-                phases(module.getGlobal(PHASES)), drawing, growing);
+            Pattern pattern = new Pattern(id, schema(module.getGlobal(KNOBS)),
+                new Face(offered(module.getGlobal(KNOBS)), words(module.getGlobal(LANG))),
+                accepts(module.getGlobal(ACCEPTS)), phases(module.getGlobal(PHASES)), drawing, growing);
             Set<ResourceLocation> unloaded = pattern.unloaded();
             if (!unloaded.isEmpty()) {
                 LOGGER.warn("{}: needs {}, which this game has not loaded", id, unloaded);
@@ -317,6 +325,43 @@ public record Pattern(ResourceLocation id, Schema knobs, Set<String> accepts, Li
             settings.add(knob.setting());
         }
         return new Schema(settings);
+    }
+
+    private static Map<String, List<Face.Option>> offered(Object declared) {
+        Map<String, List<Face.Option>> offered = new LinkedHashMap<>();
+        if (declared instanceof Sequence<?> sequence) {
+            for (Object entry : sequence) {
+                if (entry instanceof Vocabulary.Knob knob && !knob.offered().isEmpty()) {
+                    offered.put(knob.setting().key(), knob.offered());
+                }
+            }
+        }
+        return offered;
+    }
+
+    // lang = {"en_us": {"title": "Road", "width": "Width", "roof.gable": "Gable"}, "zh_cn": {...}}
+    private static Map<String, Map<String, String>> words(Object declared) throws EvalException {
+        Map<String, Map<String, String>> words = new LinkedHashMap<>();
+        if (declared == null) {
+            return words;
+        }
+        if (!(declared instanceof Dict<?, ?> languages)) {
+            throw Starlark.errorf("lang is a dict of languages, got %s", Starlark.type(declared));
+        }
+        for (Map.Entry<?, ?> language : languages.entrySet()) {
+            if (!(language.getKey() instanceof String code) || !(language.getValue() instanceof Dict<?, ?> said)) {
+                throw Starlark.errorf("lang maps a language such as 'en_us' to a dict of its words");
+            }
+            Map<String, String> spoken = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> word : said.entrySet()) {
+                if (!(word.getKey() instanceof String key) || !(word.getValue() instanceof String text)) {
+                    throw Starlark.errorf("lang '%s' maps a key to its text, both strings", code);
+                }
+                spoken.put(key, text);
+            }
+            words.put(code.toLowerCase(Locale.ROOT), spoken);
+        }
+        return words;
     }
 
     private static Set<String> accepts(Object declared) throws EvalException {

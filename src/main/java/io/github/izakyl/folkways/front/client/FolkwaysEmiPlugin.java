@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.front.client;
 
-import com.lowdragmc.lowdraglib2.gui.holder.ModularUIContainerScreen;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import dev.emi.emi.api.EmiDragDropHandler;
 import dev.emi.emi.api.EmiEntrypoint;
@@ -21,24 +20,20 @@ public final class FolkwaysEmiPlugin implements EmiPlugin {
     @Override
     public void register(EmiRegistry registry) {
         registry.addGenericDragDropHandler(new DemandSlotDragHandler());
-        registry.addScreenBoundsProvider(AbstractContainerScreen.class, FolkwaysEmiPlugin::deskBounds);
+        // Asked of every screen: EMI looks a provider up by a screen's exact class, never by what it extends.
+        registry.addGenericScreenBoundsProvider(FolkwaysEmiPlugin::deskBounds);
     }
 
-    private static Bounds deskBounds(AbstractContainerScreen<?> screen) {
+    // The windows on the desk, so EMI's lists stand beside them; empty for any screen that is not the colony's.
+    private static Bounds deskBounds(Screen screen) {
         List<Desk.Box> occupied = Desk.occupied(ModularUI.of(screen));
         if (occupied.isEmpty()) {
-            return new Bounds(screen.getGuiLeft(), screen.getGuiTop(), screen.getXSize(), screen.getYSize());
+            return Bounds.EMPTY;
         }
         int left = occupied.stream().mapToInt(Desk.Box::x).min().orElseThrow();
         int top = occupied.stream().mapToInt(Desk.Box::y).min().orElseThrow();
         int right = occupied.stream().mapToInt(box -> box.x() + box.width()).max().orElseThrow();
         int bottom = occupied.stream().mapToInt(box -> box.y() + box.height()).max().orElseThrow();
-        if (!(screen instanceof ModularUIContainerScreen)) {
-            left = Math.min(left, screen.getGuiLeft());
-            top = Math.min(top, screen.getGuiTop());
-            right = Math.max(right, screen.getGuiLeft() + screen.getXSize());
-            bottom = Math.max(bottom, screen.getGuiTop() + screen.getYSize());
-        }
         return new Bounds(left, top, right - left, bottom - top);
     }
 

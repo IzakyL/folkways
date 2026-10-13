@@ -1,15 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { tick, world } from "@izakyl/blockwright-minecraft";
-import { setMaintainDemandViaUI } from "./membership-optin";
+import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
 import { foundColonyFast, waitForGroundedPlayer, optInViaBook, type Vec,
-} from "./colony-founding";
-import { countInResidentPacks } from "./world-ui";
-import { launchPair, type E2EPair } from "../shared/pair";
-import { ensureOut, tracePath } from "../out-paths";
-import { seededServer } from "../shared/mod-settings";
-import { BUDGET } from "../shared/budgets";
-import { commandPos, tryCommand, waitMatched } from "../shared/bw-helpers";
-import { newRunId } from "../shared/run-id";
+} from "../shared/colony/colony-founding";
+import { countInResidentPacks } from "../shared/ui/world-ui";
+import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
+import { seededServer } from "../shared/harness/mod-settings";
+import { BUDGET } from "../shared/harness/budgets";
+import { commandPos, tryCommand, waitMatched } from "../shared/harness/bw-helpers";
+import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 
@@ -82,11 +82,7 @@ test("economy spine: a smithing upgrade runs through the real chain, and a resid
       `setup failed to stage ${SMITH_BASE} as "damage ${SMITH_DAMAGE}"; supply chest read ${JSON.stringify(smithStaged)}`,
     ).toBe(SMITH_DAMAGE);
 
-    await world.command(server, `item replace entity ${playerName} inventory.26 from entity ${playerName} weapon.mainhand`);
-    await world.command(server, `item replace entity ${playerName} weapon.mainhand with minecraft:air`);
     await setMaintainDemandViaUI(server, client, playerName, smithing.target, SMITH_RESULT, 1);
-    await world.command(server, `item replace entity ${playerName} weapon.mainhand from entity ${playerName} inventory.26`);
-    await world.command(server, `item replace entity ${playerName} inventory.26 with minecraft:air`);
 
     const smithTargetBefore = await readContainerStacks(server, smithing.target);
     expect(
@@ -184,11 +180,7 @@ test("economy spine: a smithing upgrade runs through the real chain, and a resid
       ).toBe(true);
 
       evidence.opt_in = await optInViaBook(server, client, playerName, fixture.demand, "chest");
-      await world.command(server, `item replace entity ${playerName} inventory.26 from entity ${playerName} weapon.mainhand`);
-      await world.command(server, `item replace entity ${playerName} weapon.mainhand with minecraft:air`);
       await setMaintainDemandViaUI(server, client, playerName, fixture.demand, DOORWAY_DEMAND_ITEM, 1);
-      await world.command(server, `item replace entity ${playerName} weapon.mainhand from entity ${playerName} inventory.26`);
-      await world.command(server, `item replace entity ${playerName} inventory.26 with minecraft:air`);
       await world.command(
         server,
         `tp ${playerName} ${founding.origin.x + 0.5} ${founding.origin.y} ${founding.origin.z + 3.5}`,
