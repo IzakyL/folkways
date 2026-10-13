@@ -50,7 +50,8 @@ public record ResidentLook(Appearance appearance, int weight) {
             String idleAnimation,
             String walkAnimation,
             java.util.Optional<String> workAnimation,
-            Skin fallback) implements Appearance {
+            Skin fallback,
+            float scale) implements Appearance {
 
         public static final MapCodec<Model> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             ResourceLocation.CODEC.fieldOf("geometry").forGetter(Model::geometry),
@@ -59,7 +60,8 @@ public record ResidentLook(Appearance appearance, int weight) {
             Codec.STRING.optionalFieldOf("idle_animation", "animation.resident.idle").forGetter(Model::idleAnimation),
             Codec.STRING.optionalFieldOf("walk_animation", "animation.resident.walk").forGetter(Model::walkAnimation),
             Codec.STRING.optionalFieldOf("work_animation").forGetter(Model::workAnimation),
-            Skin.CODEC.fieldOf("fallback").forGetter(Model::fallback)
+            Skin.CODEC.fieldOf("fallback").forGetter(Model::fallback),
+            ExtraCodecs.POSITIVE_FLOAT.optionalFieldOf("scale", 1.0F).forGetter(Model::scale)
         ).apply(instance, Model::new));
 
         @Override

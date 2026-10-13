@@ -1,5 +1,8 @@
 package io.github.izakyl.folkways.plugins.person.look;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
@@ -23,7 +26,7 @@ public final class ResidentModels {
     public static ModelLibrary reload(ResourceManager resources) {
         ModelLibrary library = ModelLibrary.scan(resources);
         current = library;
-        ResidentLooks.installRuntime(library.entries());
+        ResidentLooks.installRuntime(looks(library));
         for (String line : library.rejected()) {
             LOGGER.warn("[folkways-models] {}", line);
         }
@@ -32,6 +35,13 @@ public final class ResidentModels {
                 library.entries().size(), library.assets().size(), ModelLibrary.FOLDER);
         }
         return library;
+    }
+
+    // Every look that is not a data pack's: the models in the folder, and the maids of an installed mod.
+    public static Map<ResourceLocation, ResidentLook> looks(ModelLibrary library) {
+        Map<ResourceLocation, ResidentLook> looks = new LinkedHashMap<>(MaidLooks.entries());
+        looks.putAll(library.entries());
+        return looks;
     }
 
     public static void forgetServer() {

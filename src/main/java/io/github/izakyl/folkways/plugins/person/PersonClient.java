@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.person;
 
 import io.github.izakyl.folkways.plugins.person.living.HouseholdScene;
+import io.github.izakyl.folkways.plugins.person.look.ClientMaidModels;
 import io.github.izakyl.folkways.plugins.person.look.ClientResidentModels;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
@@ -26,5 +27,6 @@ final class PersonClient {
 
     private static void addModelPack(AddPackFindersEvent event) {
         ClientResidentModels.addPackFinder(event);
+        ClientMaidModels.addPackFinder(event);
     }
 }

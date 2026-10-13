@@ -71,7 +71,7 @@ public final class ResidentLooks {
     }
 
     public static Optional<ResourceKey<ResidentLook>> draw(RegistryAccess registries, UUID resident) {
-        return draw(registries, resident, key -> true);
+        return draw(registries, resident, LookPool.UNTOUCHED::allows);
     }
 
     public static Optional<ResourceKey<ResidentLook>> draw(
@@ -86,7 +86,8 @@ public final class ResidentLooks {
             return byPin.get();
         }
         Map<ResourceLocation, ResidentLook> pool = pool(registries);
-        return weighted(pool, resident, key -> true).map(key -> pool.get(key.location())).orElse(FALLBACK);
+        return weighted(pool, resident, LookPool.UNTOUCHED::allows)
+            .map(key -> pool.get(key.location())).orElse(FALLBACK);
     }
 
     public static ResidentLook of(ResidentEntity resident) {

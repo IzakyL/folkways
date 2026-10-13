@@ -110,6 +110,12 @@ url = "https://cdn.modrinth.com/data/lWDHr9jE/versions/n4iyW7aB/tectonic-3.0.28-
 sha512 = "e07b9cb54f078b7bf74c925c5cebd6643f0b4c210b8f94474e68659b69468ece7d61432f70eafe7abaa1dfa798e4638aad297987c121dc127588c2623b7f7a81"
 target = []
 
+# Lends its maid models to residents as looks; installed only by the maids profile.
+[mods.touhou_little_maid]
+url = "https://cdn.modrinth.com/data/R0bDWFAW/versions/tXG1TkGx/touhoulittlemaid-1.5.3-neoforge%2Bmc1.21.1.jar"
+sha512 = "147bc10f5cc7159ee16c4918795155b3e52cf6bab5e09f588ed3fec14f8b47bbc512948bb8fef30346a47feba2692b6dbe20781c6cc1dc1d2c6b9377a9649bbe"
+target = []
+
 # Measures folkways itself, mixins included; off unless BLOCKWRIGHT_COVERAGE=1 (npm run test:coverage).
 [coverage]
 mods = ["folkways"]
@@ -239,3 +245,7 @@ properties = { "level-seed" = "folkways-fuzz", "generate-structures" = "false", 
 
 [profile.fuzz.mods.folkways]
 path = "build/fuzz/folkways-*.jar"
+
+# The e2e pair with Touhou Little Maid on both sides, for the looks it lends.
+[profile.maids.mods]
+touhou_little_maid = { target = ["server", "client"] }

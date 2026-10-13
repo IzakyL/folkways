@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.person;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLook;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLooks;
 import java.util.List;
@@ -8,6 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
@@ -23,6 +26,8 @@ import software.bernie.geckolib.animation.AnimationController;
 import software.bernie.geckolib.animation.AnimationState;
 import software.bernie.geckolib.animation.PlayState;
 import software.bernie.geckolib.animation.RawAnimation;
+import software.bernie.geckolib.cache.GeckoLibCache;
+import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.constant.DataTickets;
 import software.bernie.geckolib.model.GeoModel;
@@ -48,6 +53,27 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
         return appearance instanceof ResidentLook.Model model ? model.texture() : appearance.skin().texture();
     }
 
+    // A model whose files have not reached GeckoLib (still on their way from the server, or not to be had on
+    // this client) cannot be drawn; its resident wears the fallback skin meanwhile.
+    static boolean loaded(ResidentLook.Model model) {
+        return GeckoLibCache.getBakedModels().containsKey(model.geometry())
+            && GeckoLibCache.getBakedAnimations().containsKey(model.animations());
+    }
+
+    @Override
+    public void preRender(PoseStack pose, Crew crew, BakedGeoModel baked, MultiBufferSource buffers,
+            VertexConsumer buffer, boolean isReRender, float partialTick, int light, int overlay, int colour) {
+        withScale(getCurrentEntity() == null ? 1.0F
+            : modelOf(getCurrentEntity()).map(ResidentLook.Model::scale).orElse(1.0F));
+        super.preRender(pose, crew, baked, buffers, buffer, isReRender, partialTick, light, overlay, colour);
+    }
+
+    private static List<ResidentLook.Model> loadedModels() {
+        return ResidentLooks.modelsInPool(Minecraft.getInstance().level).stream()
+            .filter(ResidentGeoBackend::loaded)
+            .toList();
+    }
+
     private static Optional<ResidentLook.Model> modelOf(ResidentEntity resident) {
         return ResidentLooks.of(resident).appearance() instanceof ResidentLook.Model model
             ? Optional.of(model)
@@ -55,7 +81,7 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
     }
 
     private static ResidentLook.Model firstModelInPool() {
-        List<ResidentLook.Model> models = ResidentLooks.modelsInPool(Minecraft.getInstance().level);
+        List<ResidentLook.Model> models = loadedModels();
         if (models.isEmpty()) {
             throw new IllegalStateException(
                 "the pool has no model entry, so nothing dispatches to ResidentGeoBackend");
@@ -153,7 +179,7 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
 
         @Override
         public ResourceLocation[] getAnimationResourceFallbacks(Crew crew) {
-            return ResidentLooks.modelsInPool(Minecraft.getInstance().level).stream()
+            return loadedModels().stream()
                 .map(ResidentLook.Model::animations)
                 .distinct()
                 .toArray(ResourceLocation[]::new);

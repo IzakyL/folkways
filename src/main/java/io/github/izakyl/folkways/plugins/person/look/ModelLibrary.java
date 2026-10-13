@@ -138,7 +138,7 @@ public record ModelLibrary(
                 model.withPath("model/" + name + "/" + stem),
                 new ResidentLook(
                     new ResidentLook.Model(geometryAt, animationsAt, textureAt, idle, walk, work,
-                        manifest.fallback().orElse(ResidentLooks.FALLBACK.appearance().skin())),
+                        manifest.fallback().orElse(ResidentLooks.FALLBACK.appearance().skin()), 1.0F),
                     manifest.weight()));
         }
 

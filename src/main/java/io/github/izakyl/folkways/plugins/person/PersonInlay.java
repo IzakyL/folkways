@@ -10,17 +10,18 @@ import io.github.izakyl.folkways.front.api.ui.Inlay;
 import io.github.izakyl.folkways.front.api.ui.Nook;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
-import io.github.izakyl.folkways.plugins.person.look.ResidentLook;
+import io.github.izakyl.folkways.plugins.person.look.LookPicker;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLooks;
 import io.github.izakyl.folkways.plugins.person.name.ColonyNames;
-import java.util.List;
 import java.util.Optional;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 
-// One person's own name and look, in their window: whatever the pools hold, any look there is can be put on.
+// One person's own name and look, in their window: whatever the pools hold, any look there is can be put on,
+// picked from a window of its own.
 public final class PersonInlay implements Inlay {
 
     private static final int LABEL_WIDTH = 28;
@@ -33,6 +34,8 @@ public final class PersonInlay implements Inlay {
     private String typedGiven = "";
     private String typedSurname = "";
     private String filled = "";
+    private String worn = "";
+    private LookPicker.Open picking;
 
     @Override
     public boolean names(Body subject) {
@@ -51,23 +54,38 @@ public final class PersonInlay implements Inlay {
 
         Label look = Rows.value(Component.empty());
         look.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
-        Button back = stepper("<", nook, -1);
-        Button next = stepper(">", nook, 1);
-        Tokens.name(back, "folkways.resident.look.previous");
-        Tokens.name(next, "folkways.resident.look.next");
+        Button change = new Button().setText(Component.translatable("folkways.resident.look.change"));
+        change.layout(layout -> layout.flexShrink(0));
+        Tokens.name(change, "folkways.resident.look.change");
 
         UIElement inlay = Rows.page().addChildren(
             Rows.strip().addChildren(caption("folkways.resident.given"), given,
                 caption("folkways.resident.surname"), surname, apply),
-            Rows.strip().addChildren(caption("folkways.resident.look"), back, look, next));
+            Rows.strip().addChildren(caption("folkways.resident.look"), look, change));
         inlay.setDisplay(false);
+        LookPicker.Line line = new LookPicker.Line(inlay, (word, what) -> {
+            if (word.equals(LookPicker.PICK)) {
+                wear(nook, what);
+            }
+        });
+        change.setOnClick(event -> {
+            if (picking != null) {
+                picking.close();
+            }
+            picking = LookPicker.open(change, ResourceLocation.tryParse(worn),
+                picked -> line.say(LookPicker.PICK, picked.toString()));
+        });
         inlay.addSyncValue(DataBindingBuilder.tagS2C(() -> reading(nook))
             .onSyncReceived(tag -> {
                 CompoundTag read = tag instanceof CompoundTag compound ? compound : new CompoundTag();
                 String showing = read.getString(ID);
                 inlay.setDisplay(!showing.isEmpty());
+                worn = read.getString(LOOK);
                 if (showing.isEmpty()) {
                     filled = "";
+                    if (picking != null) {
+                        picking.close();
+                    }
                     return;
                 }
                 if (!showing.equals(filled)) {
@@ -75,7 +93,12 @@ public final class PersonInlay implements Inlay {
                     surname.setText(read.getString(SURNAME));
                     filled = showing;
                 }
-                look.setText(Component.literal(read.getString(LOOK)));
+                ResourceLocation wearing = ResourceLocation.tryParse(worn);
+                look.setText(wearing == null || worn.isEmpty() ? Component.empty() : LookPicker.nameOf(wearing));
+                look.style(style -> style.tooltips(Component.literal(worn)));
+                if (picking != null && picking.isOpen()) {
+                    picking.wears(wearing);
+                }
             })
             .build()
             .getSyncValue());
@@ -94,12 +117,6 @@ public final class PersonInlay implements Inlay {
         Label label = Rows.name(Component.translatable(key));
         label.layout(layout -> layout.width(LABEL_WIDTH).flexGrow(0).flexShrink(0));
         return label;
-    }
-
-    private static Button stepper(String glyph, Nook nook, int step) {
-        Button press = new Button().setText(Component.literal(glyph)).setOnServerClick(event -> step(nook, step));
-        press.layout(layout -> layout.flexShrink(0));
-        return press;
     }
 
     private static Optional<ResidentEntity> person(Nook nook) {
@@ -131,16 +148,12 @@ public final class PersonInlay implements Inlay {
         });
     }
 
-    private static void step(Nook nook, int step) {
+    private static void wear(Nook nook, String written) {
+        ResourceLocation look = ResourceLocation.tryParse(written);
         person(nook).ifPresent(person -> {
-            List<ResourceKey<ResidentLook>> every =
-                ResidentLooks.keysInPool(person.level().registryAccess());
-            if (every.isEmpty()) {
-                return;
+            if (look != null && ResidentLooks.pool(person.level().registryAccess()).containsKey(look)) {
+                person.setLookId(ResourceKey.create(ResidentLooks.REGISTRY, look));
             }
-            int at = every.indexOf(person.lookId().orElse(null));
-            int next = Math.floorMod((at < 0 ? 0 : at) + step, every.size());
-            person.setLookId(every.get(next));
         });
     }
 }

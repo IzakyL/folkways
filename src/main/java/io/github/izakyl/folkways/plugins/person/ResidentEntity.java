@@ -223,7 +223,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
             .flatMap(id -> Colonies.of(level.getServer(), id))
             .map(LookPool::of)
             .<Predicate<ResourceLocation>>map(pool -> pool::allows)
-            .orElse(look -> true);
+            .orElse(LookPool.UNTOUCHED::allows);
         ResidentLooks.draw(level.registryAccess(), getUUID(), allowed)
             .ifPresent(key -> entityData.set(DATA_LOOK, key.location().toString()));
     }

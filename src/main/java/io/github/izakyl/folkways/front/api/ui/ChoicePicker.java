@@ -101,26 +101,31 @@ public final class ChoicePicker {
         dialog.addButton(confirm);
         Tokens.name(dialog, "folkways.choice");
         float height = CHROME + Math.min(Math.max(options.size(), 1), MOST_ROWS) * (ROW + ROW_GAP);
-        place(dialog, host, height);
+        return show(dialog, host, WIDTH, height);
+    }
+
+    // Shows a dialog as a window beside the element that asked for it, over every window already open.
+    public static Dialog show(Dialog dialog, UIElement host, float width, float height) {
+        place(dialog, host, width, height);
         int depth = aboveWindows.getAsInt();
         dialog.style(style -> style.zIndex(depth));
         return dialog.show(host.getModularUI());
     }
 
-    private static void place(Dialog dialog, UIElement host, float height) {
+    private static void place(Dialog dialog, UIElement host, float wide, float height) {
         UIElement screen = host;
         while (screen.getParent() != null) {
             screen = screen.getParent();
         }
         float right = host.getPositionX() + host.getSizeWidth() + HOST_GAP;
-        float left = host.getPositionX() - HOST_GAP - WIDTH;
+        float left = host.getPositionX() - HOST_GAP - wide;
         float width = screen.getSizeWidth();
         float tall = screen.getSizeHeight();
-        float x = width <= 0f || right + WIDTH <= width ? right : Math.max(0f, left);
+        float x = width <= 0f || right + wide <= width ? right : Math.max(0f, left);
         float y = tall <= 0f
             ? host.getPositionY()
             : Math.max(0f, Math.min(host.getPositionY(), tall - height));
-        dialog.windowMode(x, y, WIDTH, height);
+        dialog.windowMode(x, y, wide, height);
     }
 
     private static void mark(List<Button> rows, List<ResourceLocation> options,

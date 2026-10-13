@@ -96,7 +96,9 @@ public final class Window implements Pane {
         frame.setDisplay(false);
         Tokens.name(frame, "folkways.window." + id);
 
-        frame.addEventListener(UIEvents.MOUSE_DOWN, event -> raise());
+        // On the way down to whatever was pressed: a press that opens another window must find this one
+        // already raised, or the new window opens underneath it.
+        frame.addEventListener(UIEvents.MOUSE_DOWN, event -> raise(), true);
         if (LDLib2.isRemote()) {
             draggable();
         }

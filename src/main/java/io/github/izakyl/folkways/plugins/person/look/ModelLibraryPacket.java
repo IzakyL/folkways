@@ -20,7 +20,7 @@ public record ModelLibraryPacket(String fingerprint, List<Entry> entries, List<A
     public record Asset(String path, int bytes) {
     }
 
-    private static final int MAX_ENTRIES = 512;
+    private static final int MAX_ENTRIES = 2048;
     private static final int MAX_ASSETS = 1024;
     private static final int MAX_FINGERPRINT_LENGTH = 64;
 
@@ -40,7 +40,7 @@ public record ModelLibraryPacket(String fingerprint, List<Entry> entries, List<A
 
     public static ModelLibraryPacket of(ModelLibrary library) {
         List<Entry> entries = new ArrayList<>();
-        library.entries().forEach((id, look) -> entries.add(new Entry(id, look)));
+        ResidentModels.looks(library).forEach((id, look) -> entries.add(new Entry(id, look)));
         List<Asset> assets = new ArrayList<>();
         library.assets().forEach((path, bytes) -> assets.add(new Asset(path, bytes.length)));
         return new ModelLibraryPacket(library.fingerprint(), entries, assets);

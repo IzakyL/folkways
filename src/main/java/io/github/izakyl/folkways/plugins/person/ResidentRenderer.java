@@ -48,7 +48,9 @@ public final class ResidentRenderer extends EntityRenderer<ResidentEntity> {
     }
 
     private EntityRenderer<ResidentEntity> backendFor(ResidentEntity resident) {
-        boolean wantsModel = ResidentLooks.of(resident).appearance() instanceof ResidentLook.Model;
-        return wantsModel && modelBackend != null ? modelBackend : skinBackend;
+        boolean drawsModel = modelBackend != null
+            && ResidentLooks.of(resident).appearance() instanceof ResidentLook.Model model
+            && ResidentGeoBackend.loaded(model);
+        return drawsModel ? modelBackend : skinBackend;
     }
 }
