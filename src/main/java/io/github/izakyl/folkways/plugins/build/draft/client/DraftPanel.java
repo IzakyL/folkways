@@ -11,7 +11,6 @@ import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
@@ -199,8 +198,7 @@ public final class DraftPanel {
         Drawn drawn = Patterns.commission(chosen,
             new Commission(hint, values, world, front, Patterns.seedOf(chosen, hint)));
         if (drawn instanceof Drawn.Refused refused) {
-            refusal.setText(Component.translatable(refused.why().translationKey(),
-                Notice.text(refused.detail())));
+            refusal.setText(refused.component());
             refusal.setDisplay(true);
             return;
         }
@@ -311,7 +309,7 @@ public final class DraftPanel {
                 String held = values.choice(choice.key()).toString();
                 wear(press, rows.stream().filter(each -> each.key().equals(held)).toList());
             };
-            press.setOnClick(event -> ChoicePicker.open(press, worded(choice.key(), choice.name()).getString(), rows,
+            press.setOnClick(event -> ChoicePicker.open(press, worded(choice.key(), choice.name()), rows,
                 values.choice(choice.key()).toString(), picked -> {
                     values.choose(choice, ResourceLocation.parse(picked));
                     show.run();
@@ -348,7 +346,7 @@ public final class DraftPanel {
                         ticked.add(key);
                     }
                 });
-                ChoicePicker.openMany(press, worded(items.key(), items.name()).getString(), rows, ticked, picked -> {
+                ChoicePicker.openMany(press, worded(items.key(), items.name()), rows, ticked, picked -> {
                     values.hold(items.key(), picked.stream().map(filters::get).toList());
                     show.run();
                 });

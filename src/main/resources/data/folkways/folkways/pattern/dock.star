@@ -58,6 +58,40 @@ lang = {
         "lantern": "灯具",
         "roof": "棚顶",
     },
+    "zh_hk": {
+        "title": "碼頭",
+        "width": "寬度",
+        "head": "棧橋盡頭",
+        "head.t": "T 形",
+        "head.l": "L 形",
+        "head.square": "方台",
+        "head.none": "無",
+        "shelter": "雨棚",
+        "deck": "橋面",
+        "beam": "梁",
+        "pile": "樁",
+        "rail": "欄杆",
+        "landing": "岸台",
+        "lantern": "燈具",
+        "roof": "棚頂",
+    },
+    "zh_tw": {
+        "title": "碼頭",
+        "width": "寬度",
+        "head": "棧橋盡頭",
+        "head.t": "T 形",
+        "head.l": "L 形",
+        "head.square": "方臺",
+        "head.none": "無",
+        "shelter": "雨棚",
+        "deck": "橋面",
+        "beam": "梁",
+        "pile": "樁",
+        "rail": "欄杆",
+        "landing": "岸臺",
+        "lantern": "燈具",
+        "roof": "棚頂",
+    },
 }
 
 def cell(band, x, z, y, height = 1):
@@ -138,16 +172,16 @@ def roof(width, layers, depth):
 
 def draw(site):
     if len(site.path.points) != 2:
-        fail("A dock needs exactly two path points, shore then water / 码头只支持两个路径点：先岸上，后水面")
+        reject("folkways.draft.error.dock.points")
     length = site.path.length
     if length < 6 or length > 64:
-        fail("Dock length must be 6–64 blocks / 码头长度须为 6–64 格")
+        reject("folkways.draft.error.dock.length")
     width = site.count("width")
     if width < 3 or width > 9:
-        fail("Dock width must be 3–9 blocks / 码头宽度须为 3–9 格")
+        reject("folkways.draft.error.dock.width")
     for key in ["deck", "beam", "pile", "rail", "landing", "lantern", "roof"]:
         if not site.items(key):
-            fail("Choose material for %s / 请选择材料" % key)
+            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
     shape = site.choice("head")
     shelter = site.flag("shelter")
     run = site.zone
@@ -162,9 +196,9 @@ def draw(site):
     middle = (width - 1) // 2
 
     if look(site, band, seen, middle, 0)[1] != None:
-        fail("Start the dock on dry land / 码头须从岸上起步")
+        reject("folkways.draft.error.dock.start")
     if look(site, band, seen, middle, span)[1] == None:
-        fail("The dock must end over water / 码头终点须在水面上")
+        reject("folkways.draft.error.dock.end")
     shore = span
     for z in range(span, -1, -1):
         if look(site, band, seen, middle, z)[1] == None:
@@ -172,7 +206,7 @@ def draw(site):
         shore = z
     for z in range(1, shore):
         if look(site, band, seen, middle, z)[1] != None:
-            fail("The dock must cross the shore only once / 码头只能跨过一次岸线")
+            reject("folkways.draft.error.dock.shore")
     level = max([look(site, band, seen, middle, z)[1] for z in range(shore, span + 1)])
 
     back = min(0, shore - 2)
@@ -181,25 +215,25 @@ def draw(site):
         for x in range(-1, width + 1):
             ground = look(site, band, seen, x, z)[0]
             if ground == None:
-                fail("No ground under the landing / 码头岸台下方没有地面")
+                reject("folkways.draft.error.dock.ground")
             bank = max(bank, ground)
     deck = bank
     if deck - level > 4:
-        fail("The bank stands too high above the water / 岸比水面高出太多")
+        reject("folkways.draft.error.dock.bank")
 
     depth = 5 if shelter else 4
     head = span - depth + 1
     if head <= shore:
-        fail("The dock is too short to reach open water / 码头太短，伸不进水里")
+        reject("folkways.draft.error.dock.reach")
     lo, hi = extent(shape, width, 2 if width <= 4 else 3)
     for z in range(shore, span + 1):
         xs = range(lo, hi + 1) if z >= head else range(width)
         for x in xs:
             ground = look(site, band, seen, x, z)[0]
             if ground == None or deck - ground > 32:
-                fail("The water is too deep to drive piles / 水太深，无法打桩")
+                reject("folkways.draft.error.dock.depth")
             if ground >= deck:
-                fail("The dock would run aground / 码头会搁浅在岸上")
+                reject("folkways.draft.error.dock.aground")
 
     landing = []
     for z in range(back, shore):

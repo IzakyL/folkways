@@ -60,7 +60,7 @@ final class Rounds {
         Drawn drawn = pattern.drawOn(new Commission(hint, settings, World.of(level), facing,
             Patterns.seedOf(pattern, hint)));
         if (drawn instanceof Drawn.Refused refused) {
-            return new Once.Refused(Component.translatable(refused.why().translationKey(), refused.detail()));
+            return new Once.Refused(refused.component());
         }
         Drawn.Ready ready = (Drawn.Ready) drawn;
         return blueprintOf(level, pattern.id().getPath(), ready.draft())

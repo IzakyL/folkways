@@ -30,6 +30,7 @@ public final class ColonyLookCard {
             switch (lines.get(i)) {
                 case Line.Said said -> rows.add(new Row.Text((said.notice().component()).getString(), color));
                 case Line.Literal literal -> rows.add(new Row.Text(literal.text(), color));
+                case Line.Text text -> rows.add(new Row.Text(text.component().getString(), color));
                 case Line.Blocked blocked -> rows.add(blocked(blocked));
                 case Line.Told told -> rows.add(new Row.Signs(Signs.of(told.sentence(), color)));
                 case Line.Busy busy -> {

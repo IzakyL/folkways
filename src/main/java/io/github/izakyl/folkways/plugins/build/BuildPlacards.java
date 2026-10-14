@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
 final class BuildPlacards {
@@ -54,9 +55,9 @@ final class BuildPlacards {
     }
 
     static List<Line> waiting(Growing one) {
-        Notice said = one.stuck().isEmpty()
-            ? new Notice(GROWING, List.of(Notice.count(one.growth().round() + 1)))
-            : new Notice(STUCK, List.of(Notice.count(one.growth().round() + 1), Notice.named(one.stuck())));
-        return List.of(Line.literal(one.name()), Line.said(said));
+        Component said = one.stuck().isEmpty()
+            ? Component.translatable(GROWING, one.growth().round() + 1)
+            : Component.translatable(STUCK, one.growth().round() + 1, one.stuckText());
+        return List.of(Line.literal(one.name()), Line.text(said));
     }
 }

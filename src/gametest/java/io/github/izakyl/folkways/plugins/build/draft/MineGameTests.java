@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.build.draft;
 
 import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.front.api.notice.Notice;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -338,8 +339,10 @@ public final class MineGameTests {
         Growth growth = Growth.first(hint).next(head.get(0).kept(), head.get(0).ready().corner(),
             head.get(0).ready().draft(), hint.anchor());
         Round flooded = pattern.growOn(new Commission(hint, settings, world, Direction.NORTH, 7L, growth));
-        helper.assertTrue(flooded instanceof Round.Stuck stuck && stuck.refused().detail().contains("淹没")
-            && stuck.refused().detail().contains("height " + (SURFACE - 6)),
+        helper.assertTrue(flooded instanceof Round.Stuck stuck && stuck.refused().explanation()
+            .filter(notice -> notice.key().equals("folkways.draft.error.mine.flooded")
+                && notice.args().equals(List.of(Notice.count(SURFACE - 6))))
+            .isPresent(),
             "a lake across the stair holds the mine up and says where, got " + flooded);
         for (int x = -12; x <= 12; x++) {
             for (int z = -12; z <= 12; z++) {
@@ -360,7 +363,8 @@ public final class MineGameTests {
         Hint hint = new Hint.Zone(new BlockPos(0, 11, 0), new BlockPos(2, 11, 2));
         Round round = pattern.growOn(new Commission(hint, DraftKit.Filled.defaulting(pattern.knobs()), low,
             Direction.NORTH, 7L, Growth.first(hint)));
-        helper.assertTrue(round instanceof Round.Stuck stuck && stuck.refused().detail().contains("矿层"),
+        helper.assertTrue(round instanceof Round.Stuck stuck && stuck.refused().explanation()
+            .filter(notice -> notice.key().equals("folkways.draft.error.mine.level")).isPresent(),
             "iron level lies above a mouth at y 10, got " + round);
         helper.succeed();
     }

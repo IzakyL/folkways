@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.front.api.notice.Notice;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -7,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.PriorityQueue;
 import java.util.Random;
@@ -50,6 +52,7 @@ final class Derivation {
     private Rule.Node current;
     private int reads;
     private DraftRefusal stoppedFor;
+    private Notice explanation;
     private Vocabulary.Grown grown;
 
     Derivation(Commission commission, List<String> phases) {
@@ -119,6 +122,15 @@ final class Derivation {
 
     DraftRefusal stoppedFor() {
         return stoppedFor;
+    }
+
+    Optional<Notice> explanation() {
+        return Optional.ofNullable(explanation);
+    }
+
+    EvalException reject(Notice notice) {
+        explanation = notice;
+        return stop(DraftRefusal.PATTERN_FAILED, notice.key() + " " + notice.args());
     }
 
     Map<String, Double> reports() {

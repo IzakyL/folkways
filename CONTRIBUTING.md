@@ -37,6 +37,7 @@ downloads, as pinned in `blockwright.toml`.
 | Command | What it runs |
 | --- | --- |
 | `npm run test:unit` | Fast Node tests for the TypeScript helpers; no game |
+| `npm run test:i18n` | Language keys, placeholders and notice/refusal coverage; no game or dependencies |
 | `npm run typecheck` | Type checks every TypeScript suite |
 | `./gradlew check` | Compiles everything and lints for tabs and trailing whitespace |
 | `./gradlew runGameTestServer` | NeoForge game tests in `src/gametest` |
@@ -67,8 +68,23 @@ the LDLib2 UI adapter in `tests/ldlib2/`.
 
 - Match the surrounding code: its naming, comment density and idiom.
 - No tabs and no trailing whitespace. `./gradlew check` enforces this.
-- Every player-facing string goes in both `assets/folkways/lang/en_us.json` and
-  `zh_cn.json`.
+- Every player-facing string goes in all four catalogs under `assets/folkways/lang/`:
+  `en_us.json`, `zh_cn.json`, `zh_hk.json` (Hong Kong) and `zh_tw.json` (Taiwan).
+  Use each region's Minecraft terminology, not just converted characters.
+- Keep translated text as a `Component` until it reaches the client. Use `Pages.text`
+  / `Pages.readText` for UI sync and `Line.text` for information cards; resolving a name
+  with `getString()` on the server loses the player's language. Translation arguments
+  use `%s` (or indexed `%1$s` when reordered), and a literal percent uses `%%`.
+- Run `npm run test:i18n` after editing translations. It also runs in `test:unit` in CI;
+  it checks catalog keys and arguments, direct translation calls, notice/refusal enums,
+  and the built-in patterns' dictionaries and errors, not every computed Java key.
+- Built-in patterns also translate their `lang` dictionaries in all four locales.
+  Custom patterns fall back per word to another Chinese locale, then to `en_us`;
+  `zh_hk` and `zh_tw` prefer one another before `zh_cn`.
+- A pattern's expected refusal uses `reject("translation.key", ...)`, with at most four
+  text or numeric arguments. Use `translated("another.key")` for an argument that
+  also needs translation. Keep ordinary `fail(...)` for script diagnostics in custom
+  patterns; built-in player-facing failures belong in the language catalogs.
 - Commit messages follow `type(scope): summary`, for example
   `fix(plan): keep rations out of cargo` or `feat(draft): add a dock pattern`.
 - Add or update a test for behavioural changes. Prefer a black-box e2e spec for anything

@@ -4,13 +4,17 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Holding;
+import io.github.izakyl.folkways.core.api.persist.Reader;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
+import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.plugins.build.draft.Chosen;
 import io.github.izakyl.folkways.plugins.build.draft.Draft;
+import io.github.izakyl.folkways.plugins.build.draft.Drawn;
+import io.github.izakyl.folkways.plugins.build.draft.DraftRefusal;
 import io.github.izakyl.folkways.plugins.build.draft.Round;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Pattern;
@@ -19,6 +23,7 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -48,6 +53,28 @@ public final class GrowingGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(GrowingGameTests.class);
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 40)
+    public static void savedFailuresKeepTheirTranslationAndReadOlderSaves(GameTestHelper helper) {
+        Hint hint = new Hint.Zone(BlockPos.ZERO, new BlockPos(2, 2, 2));
+        Growing growing = Growing.begun(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "mine"),
+            "Mine", hint, new CompoundTag(), Direction.NORTH, 1L, WorldPos.of(helper.getLevel(), BlockPos.ZERO),
+            Optional.empty(), "");
+        Notice explanation = new Notice("folkways.draft.error.mine.flooded", List.of(Notice.count(12)));
+        Growing stopped = growing.stuck(new Drawn.Refused(DraftRefusal.PATTERN_FAILED, "diagnostic",
+            Optional.of(explanation)), 100L);
+        CompoundTag saved = stopped.save();
+        Growing restored = Growing.load(Reader.of(saved)).orElseThrow();
+        helper.assertTrue(restored.stuckExplanation().equals(Optional.of(explanation))
+            && restored.stuckText().equals(stopped.stuckText()), "saving and loading preserves the translated detail");
+        saved.remove("stuckExplanation");
+        Growing older = Growing.load(Reader.of(saved)).orElseThrow();
+        helper.assertTrue(older.stuckExplanation().isEmpty() && older.stuckDetail().equals("diagnostic"),
+            "older saves still read their literal failure detail");
+        helper.assertTrue(restored.building(UUID.randomUUID(), restored.growth(), false).stuckExplanation().isEmpty(),
+            "a successful retry clears the previous failure");
+        helper.succeed();
     }
 
     private record Rig(ServerLevel level, ColonyView view, AtomicReference<CompoundTag> saved, Colony colony) {

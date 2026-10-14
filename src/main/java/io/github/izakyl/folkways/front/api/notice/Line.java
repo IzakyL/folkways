@@ -5,7 +5,9 @@ import io.netty.handler.codec.DecoderException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.resources.ResourceLocation;
 
 public sealed interface Line {
@@ -17,6 +19,10 @@ public sealed interface Line {
         public Literal {
             text = Notice.trim(text, Notice.MAX_ARG);
         }
+    }
+
+    /** A display name whose translations are resolved by the client that reads it. */
+    record Text(Component component) implements Line {
     }
 
     /** What stands in the way, in words, and after them in pictures when {@code told}: "Can't eat: ✗ bread". */
@@ -73,6 +79,10 @@ public sealed interface Line {
         return new Literal(text);
     }
 
+    static Line text(Component component) {
+        return new Text(component);
+    }
+
     static Line blocked(Notice notice) {
         return new Blocked(notice);
     }
@@ -101,7 +111,7 @@ public sealed interface Line {
         return new Goods(stacks);
     }
 
-    static void encodeAll(FriendlyByteBuf buffer, List<Line> lines, int max) {
+    static void encodeAll(RegistryFriendlyByteBuf buffer, List<Line> lines, int max) {
         List<Line> capped = lines.size() > max ? lines.subList(0, max) : lines;
         buffer.writeVarInt(capped.size());
         for (Line line : capped) {
@@ -146,11 +156,15 @@ public sealed interface Line {
                     buffer.writeVarInt(7);
                     told.sentence().encode(buffer);
                 }
+                case Text text -> {
+                    buffer.writeVarInt(8);
+                    ComponentSerialization.STREAM_CODEC.encode(buffer, text.component());
+                }
             }
         }
     }
 
-    static List<Line> decodeAll(FriendlyByteBuf buffer, int max) {
+    static List<Line> decodeAll(RegistryFriendlyByteBuf buffer, int max) {
         int count = buffer.readVarInt();
         List<Line> lines = new ArrayList<>();
         for (int i = 0; i < count; i++) {
@@ -162,6 +176,7 @@ public sealed interface Line {
                 case 5 -> bar(buffer.readVarInt(), buffer.readVarInt());
                 case 6 -> goods(decodeStacks(buffer));
                 case 7 -> told(Sentence.decode(buffer));
+                case 8 -> text(ComponentSerialization.STREAM_CODEC.decode(buffer));
                 default -> said(Notice.decode(buffer));
             };
             if (i < max) {
@@ -171,7 +186,7 @@ public sealed interface Line {
         return List.copyOf(lines);
     }
 
-    private static List<Stack> decodeStacks(FriendlyByteBuf buffer) {
+    private static List<Stack> decodeStacks(RegistryFriendlyByteBuf buffer) {
         int count = buffer.readVarInt();
         if (count < 0 || count > Goods.MOST_STACKS) {
             throw new DecoderException("too many goods in a line: " + count);

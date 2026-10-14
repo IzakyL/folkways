@@ -8,6 +8,7 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 
 public final class Placards {
@@ -25,13 +26,13 @@ public final class Placards {
     static final StreamCodec<FriendlyByteBuf, Placard.Outline> OUTLINE = StreamCodec.of(Placards::writeOutline,
         Placards::readOutline);
 
-    static final StreamCodec<FriendlyByteBuf, Placard> PLACARD = StreamCodec.composite(
+    static final StreamCodec<RegistryFriendlyByteBuf, Placard> PLACARD = StreamCodec.composite(
         UUIDUtil.STREAM_CODEC, Placard::id,
         OUTLINE, Placard::outline,
         SyncCodecs.lines(MAX_LINES), Placard::lines,
         Placard::new);
 
-    static final StreamCodec<FriendlyByteBuf, Note> NOTE = StreamCodec.composite(
+    static final StreamCodec<RegistryFriendlyByteBuf, Note> NOTE = StreamCodec.composite(
         UUIDUtil.STREAM_CODEC, Note::id,
         SyncCodecs.lines(MAX_LINES), Note::lines,
         Note::new);

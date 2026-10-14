@@ -144,7 +144,7 @@ public final class BuildPackets {
             if (!(round instanceof Round.Grew grew)) {
                 if (raised == 0) {
                     refuse(player, round instanceof Round.Stuck stuck
-                        ? Component.translatable(stuck.refused().why().translationKey(), stuck.refused().detail())
+                        ? stuck.refused().component()
                         : Component.translatable(DraftRefusal.NOTHING_DRAWN.translationKey(), ""));
                     return;
                 }
