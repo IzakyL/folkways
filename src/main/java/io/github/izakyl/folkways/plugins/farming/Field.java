@@ -71,7 +71,7 @@ final class Field {
             BlockState state = level.getBlockState(cell);
             List<BlockPos> ripe = unclaimed(crop.harvestFrom(level, cell), claimed);
             boolean hoe = crop.needsFarmland()
-                && Tillage.tilled(level, cell, state, Tillage.PLAIN_HOE).isPresent();
+                && Tillage.canTill(level, cell, state, Tillage.PLAIN_HOE);
             stake(level, zone.cells(), cell, sown, footed).ifPresent(plant::add);
             if (ripe.isEmpty() && !hoe) {
                 continue;

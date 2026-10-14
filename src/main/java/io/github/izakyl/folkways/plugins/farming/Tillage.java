@@ -22,6 +22,21 @@ final class Tillage {
     private Tillage() {
     }
 
+    static boolean canTill(Level level, BlockPos ground, BlockState state, ItemStack hoe) {
+        if (tilled(level, ground, state, hoe).isPresent()) {
+            return true;
+        }
+        // The hoe's own check needs air above the soil. Recognise grass without changing the world during a scan;
+        // the work clears it and asks the hoe again before turning the soil.
+        return grass(level.getBlockState(ground.above())) && hoe.canPerformAction(ItemAbilities.HOE_TILL)
+            && (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.DIRT) || state.is(Blocks.DIRT_PATH));
+    }
+
+    static boolean grass(BlockState state) {
+        return state.is(Blocks.SHORT_GRASS) || state.is(Blocks.TALL_GRASS)
+            || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN);
+    }
+
     static Optional<BlockState> tilled(Level level, BlockPos ground, BlockState state, ItemStack hoe) {
         if (state.getBlock() instanceof FarmBlock || !level.getBlockState(ground.above()).isAir()) {
             return Optional.empty();

@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.api.work.WorkNoise;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Xp;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -32,12 +33,24 @@ final class TillNode extends FarmNode {
         }
         ItemStack hoe = who.held(HOE.need());
         BlockState state = level.getBlockState(ground);
-        Optional<BlockState> turned = Tillage.tilled(level, ground, state, hoe);
-        if (turned.isEmpty()) {
+        if (!Tillage.canTill(level, ground, state, hoe)) {
             return Outcome.done();
         }
+        List<WorkNoise> heard = new ArrayList<>();
+        List<ItemStack> taken = new ArrayList<>();
+        BlockPos above = ground.above();
+        BlockState grass = level.getBlockState(above);
+        if (Tillage.grass(grass)) {
+            taken.addAll(Yield.take(level, who.body(), above, grass));
+            heard.add(WorkNoise.broke(above, grass));
+        }
+        Optional<BlockState> turned = Tillage.tilled(level, ground, state, hoe);
+        if (turned.isEmpty()) {
+            return new Outcome.Done(heard, taken, Optional.empty());
+        }
         level.setBlock(ground, turned.get(), 3);
-        return new Outcome.Done(List.of(WorkNoise.placed(ground, turned.get())), List.of(),
+        heard.add(WorkNoise.placed(ground, turned.get()));
+        return new Outcome.Done(heard, taken,
             Optional.of(new Xp(FarmingContent.trade(), 1)));
     }
 }
