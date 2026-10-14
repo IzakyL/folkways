@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.front.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
@@ -37,6 +36,7 @@ public final class Overhead {
     private static final double RISE = 12.0D;
     private static final float TILT = 45.0F;
     private static final double BLOCKS_A_SECOND = 24.0D;
+    private static final double CLIMB_A_SECOND = 8.0D;
     private static final double BLOCKS_A_NOTCH = 4.0D;
     private static final float DEGREES_A_PIXEL = 0.3F;
     private static final double STAND_OFF = 20.0D;
@@ -82,7 +82,7 @@ public final class Overhead {
 
     static void leave(Minecraft minecraft) {
         Entity left = eye;
-        eye = null;
+        forget();
         if (left != null && minecraft.getCameraEntity() == left && minecraft.player != null) {
             minecraft.setCameraEntity(minecraft.player);
         }
@@ -124,21 +124,31 @@ public final class Overhead {
         return new Aim(camera.getPosition(), new Vec3(look).normalize());
     }
 
-    /** Flies the camera over the ground with the walking keys, for the time one frame took. */
+    /**
+     * Flies the camera over the ground with the walking keys, and up and down with jump and sneak, for the time
+     * one frame took.
+     */
     static void fly(Minecraft minecraft, double seconds) {
         if (!on()) {
             return;
         }
-        double ahead = (held(minecraft, minecraft.options.keyUp) ? 1.0D : 0.0D)
-            - (held(minecraft, minecraft.options.keyDown) ? 1.0D : 0.0D);
-        double aside = (held(minecraft, minecraft.options.keyRight) ? 1.0D : 0.0D)
-            - (held(minecraft, minecraft.options.keyLeft) ? 1.0D : 0.0D);
-        if (ahead == 0.0D && aside == 0.0D) {
+        // Told from the keys' own events as well as asked of the window: a screen has the keyboard here.
+        double ahead = (Pressed.held(minecraft.options.keyUp) ? 1.0D : 0.0D)
+            - (Pressed.held(minecraft.options.keyDown) ? 1.0D : 0.0D);
+        double aside = (Pressed.held(minecraft.options.keyRight) ? 1.0D : 0.0D)
+            - (Pressed.held(minecraft.options.keyLeft) ? 1.0D : 0.0D);
+        double climb = (Pressed.held(minecraft.options.keyJump) ? 1.0D : 0.0D)
+            - (Pressed.held(minecraft.options.keyShift) ? 1.0D : 0.0D);
+        if (ahead == 0.0D && aside == 0.0D && climb == 0.0D) {
             return;
         }
-        Vec3 forward = Vec3.directionFromRotation(0.0F, eye.getYRot());
-        Vec3 right = new Vec3(-forward.z, 0.0D, forward.x);
-        Vec3 moved = forward.scale(ahead).add(right.scale(aside)).normalize().scale(BLOCKS_A_SECOND * seconds);
+        Vec3 moved = new Vec3(0.0D, climb * CLIMB_A_SECOND * seconds, 0.0D);
+        if (ahead != 0.0D || aside != 0.0D) {
+            Vec3 forward = Vec3.directionFromRotation(0.0F, eye.getYRot());
+            Vec3 right = new Vec3(-forward.z, 0.0D, forward.x);
+            moved = moved.add(forward.scale(ahead).add(right.scale(aside)).normalize()
+                .scale(BLOCKS_A_SECOND * seconds));
+        }
         place(eye.position().add(moved), eye.getYRot(), eye.getXRot());
     }
 
@@ -167,12 +177,6 @@ public final class Overhead {
     private static void place(Vec3 at, float yaw, float pitch) {
         eye.moveTo(at.x, at.y, at.z, yaw, pitch);
         eye.setOldPosAndRot();
-    }
-
-    private static boolean held(Minecraft minecraft, KeyMapping mapping) {
-        InputConstants.Key key = mapping.getKey();
-        return key.getType() == InputConstants.Type.KEYSYM
-            && InputConstants.isKeyDown(minecraft.getWindow().getWindow(), key.getValue());
     }
 
     // The game still draws for a player looking out of their own eyes: the hand, their HUD, the block in reach.

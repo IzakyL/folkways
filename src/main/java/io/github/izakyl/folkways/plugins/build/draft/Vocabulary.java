@@ -45,8 +45,6 @@ public final class Vocabulary implements StarlarkValue {
 
     private static final Vocabulary INSTANCE = new Vocabulary();
 
-    private static final int MOST_WITHIN = 32;
-
     private Vocabulary() {
     }
 
@@ -515,8 +513,7 @@ public final class Vocabulary implements StarlarkValue {
     @StarlarkMethod(
         name = "trim",
         doc = "A region cut back to what lies inside another, or None where nothing of it does. This is how a"
-            + " piece of a rule that runs past what holds it is kept in bounds. Where the two boxes overlap by"
-            + " more than one drawing's worth of cells it is taken on trust that something is shared.",
+            + " piece of a rule that runs past what holds it is kept in bounds.",
         parameters = {@Param(name = "region"), @Param(name = "to", named = true)},
         allowReturnNones = true)
     public Shape trim(Object region, Object to) throws EvalException {
@@ -527,9 +524,7 @@ public final class Vocabulary implements StarlarkValue {
         }
         Solid cut = new Solid.Intersection(kept, limit);
         BoundingBox shared = cut.bounds();
-        if (Lattice.volume(shared) > Lattice.MOST_SCANNED) {
-            return new Shape(cut);
-        }
+        Drafting.checkTime();
         for (BlockPos cell : BlockPos.betweenClosed(shared.minX(), shared.minY(), shared.minZ(), shared.maxX(),
                 shared.maxY(), shared.maxZ())) {
             if (Octants.of(cut, cell.getX(), cell.getY(), cell.getZ()) != Octants.NONE) {
@@ -1202,11 +1197,12 @@ public final class Vocabulary implements StarlarkValue {
         Derivation drawing = Derivation.of(thread);
         Derivation.By looking = Derivation.By.parse(to);
         BoundingBox box = scope.bounds();
-        int reach = Math.min(within.toInt("within"), MOST_WITHIN);
+        int reach = within.toInt("within");
         if (overlapping(drawing, scope, looking)) {
             return StarlarkInt.of(0);
         }
         for (int ring = 1; ring <= reach; ring++) {
+            Drafting.checkTime();
             BoundingBox outer = box.inflatedBy(ring);
             for (BlockPos cell : BlockPos.betweenClosed(outer.minX(), outer.minY(), outer.minZ(), outer.maxX(),
                     outer.maxY(), outer.maxZ())) {

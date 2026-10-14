@@ -48,14 +48,28 @@ final class Pressed {
             case WHEEL -> lit(BUTTON_AT, WHEEL);
             case USE -> bound(minecraft.options.keyUse);
             case SNEAK -> bound(minecraft.options.keyShift);
+            case JUMP -> bound(minecraft.options.keyJump);
             case MODIFIER -> Screen.hasControlDown() || FolkwaysClientGameEvents.modifierDown();
             case ALTERNATE -> Screen.hasAltDown() || FolkwaysClientGameEvents.alternateDown();
             case OVERHEAD -> bound(Overhead.KEY);
             case WALK -> bound(minecraft.options.keyUp) || bound(minecraft.options.keyLeft)
                 || bound(minecraft.options.keyDown) || bound(minecraft.options.keyRight);
             case ESCAPE -> key(GLFW.GLFW_KEY_ESCAPE);
+            case TAB -> key(GLFW.GLFW_KEY_TAB);
+            case BACKSPACE -> key(GLFW.GLFW_KEY_BACKSPACE) || key(GLFW.GLFW_KEY_DELETE);
             case DIGITS -> digit();
             case PONDER -> bound(PonderHint.mapping());
+        };
+    }
+
+    /** Whether a key is held down now, with no tap left lit: what is steered by holding it. */
+    static boolean held(KeyMapping mapping) {
+        InputConstants.Key key = mapping.getKey();
+        return switch (key.getType()) {
+            case MOUSE -> BUTTONS.contains(key.getValue());
+            case KEYSYM -> KEYS.contains(key.getValue())
+                || InputConstants.isKeyDown(Minecraft.getInstance().getWindow().getWindow(), key.getValue());
+            case SCANCODE -> false;
         };
     }
 

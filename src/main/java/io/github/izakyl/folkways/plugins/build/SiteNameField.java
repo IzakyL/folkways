@@ -29,6 +29,11 @@ public final class SiteNameField {
         return row;
     }
 
+    /** Puts back a name typed earlier, as the field held it. */
+    public void retype(String name) {
+        field.setValue(name, false);
+    }
+
     public String typed() {
         return SiteNames.typed(field.getValue());
     }

@@ -2,9 +2,11 @@ package io.github.izakyl.folkways.core.api.work;
 
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import java.util.Objects;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 
 public sealed interface WorkSite {
@@ -74,5 +76,10 @@ public sealed interface WorkSite {
 
     static WorkSite on(Level level, UUID entity, BlockPos seenAt) {
         return new AtEntity(entity, WorldPos.of(level, seenAt));
+    }
+
+    /** The entity, seen where it stands now: aboard the ship it stands on, if it does. */
+    static WorkSite on(Entity entity) {
+        return new AtEntity(entity.getUUID(), WorldSpaces.at(entity));
     }
 }

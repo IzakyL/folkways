@@ -284,3 +284,7 @@ touhou_little_maid = { target = ["server", "client"] }
 # The e2e pair with Shoulder Surfing Reloaded on the client, for the book's aim under its camera.
 [profile.shoulder.mods]
 shouldersurfing = { target = ["client"] }
+
+# The e2e pair with Sable on both sides, for the aboard twin of each spec and the Sable-only specs.
+[profile.sable.mods]
+sable = { target = ["server", "client"] }

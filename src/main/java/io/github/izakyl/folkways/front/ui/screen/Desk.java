@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.ui.screen;
 
 import com.lowdragmc.lowdraglib2.LDLib2;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import java.util.ArrayList;
 import java.util.List;
@@ -85,19 +86,30 @@ public final class Desk {
             if (!window.isOpen()) {
                 continue;
             }
-            UIElement frame = window.frame();
-            Box box = new Box(Math.round(frame.getPositionX()), Math.round(frame.getPositionY()),
-                Math.round(frame.getSizeWidth()), Math.round(frame.getSizeHeight()));
-            if (box.width() <= 0 || box.height() <= 0) {
+            Optional<Box> drawn = boxOf(window.frame());
+            if (drawn.isEmpty()) {
                 continue;
             }
+            Box box = drawn.get();
             if (window == panel) {
                 boxes.add(0, box);
             } else {
                 boxes.add(box);
             }
         }
+        // Pickers open as dialogs on the desk too: the dialog itself spans the screen, its overlay is the box drawn.
+        for (UIElement child : root.getChildren()) {
+            if (child instanceof Dialog dialog && dialog.isDisplayed()) {
+                boxOf(dialog.overlay).ifPresent(boxes::add);
+            }
+        }
         return List.copyOf(boxes);
+    }
+
+    private static Optional<Box> boxOf(UIElement element) {
+        Box box = new Box(Math.round(element.getPositionX()), Math.round(element.getPositionY()),
+            Math.round(element.getSizeWidth()), Math.round(element.getSizeHeight()));
+        return box.width() > 0 && box.height() > 0 ? Optional.of(box) : Optional.empty();
     }
 
     public static boolean on(com.lowdragmc.lowdraglib2.gui.ui.ModularUI ui) {

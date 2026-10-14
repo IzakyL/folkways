@@ -17,7 +17,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { optInContainerViaUI } from "../shared/colony/membership-optin";
-import { stockToolsForResidents, foundColonyFast, openColonyPanelViaBook, TRADE_TOOLS,
+import { stockToolsForResidents, foundColonyFast, foundingBox, openColonyPanelViaBook, TRADE_TOOLS,
   waitForGroundedPlayer, entityTypeMatches,
 } from "../shared/colony/colony-founding";
 import { blockHasItem, countInResidentPacks, packHasItem, summarizeResidentMovement } from "../shared/ui/world-ui";
@@ -36,10 +36,10 @@ import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { REPO_ROOT, ensureOut, shotPath, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
-import { commandPos, isSafeFailure, safeAction, tryCommand, waitForElement, softly, waitMatched } from "../shared/harness/bw-helpers";
+import { commandPos as worldCommandPos, isSafeFailure, safeAction, tryCommand, waitForElement, softly, waitMatched } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
+import { around, cover, GROUND, twins, type Stage } from "../shared/harness/stage";
 
-const CONFIG_PATH = "blockwright.toml";
 
 const RESIDENT_TYPE = "folkways:resident";
 const RESIDENT_COUNT = 6;
@@ -59,19 +59,29 @@ const MIN_SAPLING_SPACING = TREE_BODY_RADIUS + 1;
 const WOODLOT_SIZE = 7;
 const UNREACHABLE_FROM_FOOT = 6.5;
 
+// The stage the running test builds on, set as it starts: every helper below places and reads blocks through it.
+// A worker runs its tests one after another, so the one running is the only one reading this.
+let stage: Stage = GROUND;
+
+// The block that commands address for the plan cell `cell`.
+function block(cell: { x: number; y: number; z: number }) {
+  return worldCommandPos(stage.at(cell));
+}
+
 async function taggedCommand(server: any, command: string, required: boolean) {
   return { ...(await tryCommand(server, command)), required };
 }
 
-test("farm end-to-end: till → crop → harvest via panel", async ({}, testInfo) => {
+for (const on of twins()) test(on.title("farm end-to-end: till → crop → harvest via panel"), async ({}, testInfo) => {
+  stage = on;
   test.setTimeout(BUDGET.slow);
   ensureOut("e2e");
   const runId = folkwaysRunId();
 
-  const serverTrace = tracePath("e2e", "farm-server");
-  const clientTrace = tracePath("e2e", "farm-client");
-  const serverInstance = `farm-server-${runId}`;
-  const clientInstance = `farm-client-${runId}`;
+  const serverTrace = tracePath("e2e", stage.name("farm-server"));
+  const clientTrace = tracePath("e2e", stage.name("farm-client"));
+  const serverInstance = stage.name(`farm-server-${runId}`);
+  const clientInstance = stage.name(`farm-client-${runId}`);
 
   let pair: E2EPair | undefined;
   let server: any;
@@ -81,10 +91,10 @@ test("farm end-to-end: till → crop → harvest via panel", async ({}, testInfo
 
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
+      config: stage.config,
       server: { trace: serverTrace, instance: seededServer(serverInstance) },
       client: { trace: clientTrace, instance: clientInstance },
-      snapshot: () => ({ containers: snapshotContainers, entityTypes: [RESIDENT_TYPE, "minecraft:item"] }),
+      snapshot: () => ({ containers: snapshotContainers.map((at) => stage.at(at)), entityTypes: [RESIDENT_TYPE, "minecraft:item"] }),
     });
     ({ server, client } = pair);
 
@@ -96,9 +106,11 @@ test("farm end-to-end: till → crop → harvest via panel", async ({}, testInfo
       y: Math.round(grounded.pos.y),
       z: Math.round(grounded.pos.z) + 4,
     };
+    await stage.lay(server, cover(foundingBox(origin), around(forestryLayout(origin).body, 0, 1)));
     const founding = await foundColonyFast(server, client, playerName, {
       origin,
       residentCount: RESIDENT_COUNT,
+      stage,
     });
     colonyEvidence = await deriveColonyEvidence(server, founding, playerName);
 
@@ -160,7 +172,7 @@ async function deriveColonyEvidence(server: any, founding: any, playerName: stri
 }
 
 async function isChestColonyMember(server: any, chest: any) {
-  return world.probe(server, `if data block ${commandPos(chest)} "neoforge:attachments"."folkways:colony_member"`);
+  return world.probe(server, `if data block ${block(chest)} "neoforge:attachments"."folkways:colony_member"`);
 }
 
 async function captureColonyScreenshot(client: any, colonyEvidence: any) {
@@ -287,7 +299,7 @@ async function checkFarmPanelFidelity(server: any, client: any, playerName: stri
   let screenshot: any;
 
   try {
-    steps.open_panel = await openColonyPanelViaBook(server, client, playerName, standBlock);
+    steps.open_panel = await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
     steps.click_citizens_tab = await softly(() => clickElement(client, { id: "folkways.tab.residents" }));
     await waitForElement(client, { idPattern: "folkways.resident.row.*" }, { timeoutMs: 10_000 });
     await tick.sprint(server, 5);
@@ -351,13 +363,13 @@ async function setupAutonomousFarmScenario(server: any, client: any, playerName:
     { slot: "container.2", item: FARM_SEED_ITEM, count: 4, purpose: "farm planting seed source" },
   ];
   const commandSpecs = [
-    { command: `setblock ${commandPos(farm.ground)} minecraft:dirt`, required: true },
-    { command: `setblock ${commandPos(farm.planting)} minecraft:air`, required: false },
-    { command: `setblock ${commandPos({ x: farm.planting.x, y: farm.planting.y + 1, z: farm.planting.z })} minecraft:air`, required: false },
-    { command: `setblock ${commandPos(craftingTable)} minecraft:crafting_table`, required: true },
-    { command: `setblock ${commandPos(chest)} minecraft:chest{Items:[]}`, required: true },
+    { command: `setblock ${block(farm.ground)} minecraft:dirt`, required: true },
+    { command: `setblock ${block(farm.planting)} minecraft:air`, required: false },
+    { command: `setblock ${block({ x: farm.planting.x, y: farm.planting.y + 1, z: farm.planting.z })} minecraft:air`, required: false },
+    { command: `setblock ${block(craftingTable)} minecraft:crafting_table`, required: true },
+    { command: `setblock ${block(chest)} minecraft:chest{Items:[]}`, required: true },
     ...injectedStorageItems.map((it) => ({
-      command: `item replace block ${commandPos(chest)} ${it.slot} with ${it.item} ${it.count}`,
+      command: `item replace block ${block(chest)} ${it.slot} with ${it.item} ${it.count}`,
       required: true,
     })),
   ];
@@ -367,15 +379,15 @@ async function setupAutonomousFarmScenario(server: any, client: any, playerName:
   }
   await tick.sprint(server, 3);
 
-  const optIn = await optInContainerViaUI(server, client, playerName, chest);
+  const optIn = await optInContainerViaUI(server, client, playerName, chest, stage);
   const supplyChestMember = await isChestColonyMember(server, chest);
   const supplyMaterials = {
-    oak_planks: await blockHasItem(server, chest, "minecraft:oak_planks"),
-    stick: await blockHasItem(server, chest, "minecraft:stick"),
-    wheat_seeds: await blockHasItem(server, chest, FARM_SEED_ITEM),
+    oak_planks: await blockHasItem(server, stage.at(chest), "minecraft:oak_planks"),
+    stick: await blockHasItem(server, stage.at(chest), "minecraft:stick"),
+    wheat_seeds: await blockHasItem(server, stage.at(chest), FARM_SEED_ITEM),
   };
   const farmZoneArm = await armFarmZoneViaPanel(server, client, playerName, colonyEvidence.stand_block, farm.ground);
-  const hoes = await stockToolsForResidents(server, chest, TRADE_TOOLS.farming, RESIDENT_COUNT, 3);
+  const hoes = await stockToolsForResidents(server, stage.at(chest), TRADE_TOOLS.farming, RESIDENT_COUNT, 3);
 
   return {
     hoes,
@@ -403,7 +415,7 @@ async function armFarmZoneViaPanel(server: any, client: any, playerName: string,
     await tick.sprint(server, 3);
     evidence.corner_2 = await aimAndWorldLeftClick(server, client, playerName, farmGround);
     await tick.sprint(server, 5);
-    evidence.configure = await createMarkedZone(server, client, playerName, standBlock, "farm");
+    evidence.configure = await createMarkedZone(server, client, playerName, standBlock, "farm", stage);
     await tick.sprint(server, 5);
 
     const registry = await colonyRegistry(server);
@@ -424,7 +436,7 @@ async function armFarmZoneViaPanel(server: any, client: any, playerName: string,
 
 async function aimAndWorldLeftClick(server: any, client: any, playerName: string, block: any) {
   const eyeTarget = { x: block.x + 0.5, y: block.y + 1, z: block.z + 0.5 };
-  const view = { x: block.x + 0.5, y: block.y + 1, z: block.z + 1.5 };
+  const view = stage.stand({ x: block.x + 0.5, y: block.y + 1, z: block.z + 1.5 });
   const camera = cameraLookingAt({ x: view.x, y: view.y + 1.62, z: view.z }, eyeTarget);
   const teleport = await taggedCommand(server, `tp ${playerName} ${view.x} ${view.y} ${view.z} ${camera.yaw} ${camera.pitch}`, false);
   await tick.sprint(server, 3);
@@ -446,7 +458,7 @@ async function sampleAutonomousFarmScenario(server: any, setup: any) {
     samples.push(sample);
 
     if (!maturityCommand && isCropBlock(sample.crop_block)) {
-      maturityCommand = await taggedCommand(server, `setblock ${commandPos(setup.farm.planting)} ${FARM_CROP_BLOCK}[age=7]`, true);
+      maturityCommand = await taggedCommand(server, `setblock ${block(setup.farm.planting)} ${FARM_CROP_BLOCK}[age=7]`, true);
       const matureSample = await farmSnapshot(server, setup, order++, "after_maturity_command");
       samples.push(matureSample);
       maturityForcedOrder = matureSample.order;
@@ -469,8 +481,8 @@ async function sampleAutonomousFarmScenario(server: any, setup: any) {
 async function farmSnapshot(server: any, setup: any, order: number, label: string) {
   const [entitiesResult, groundResult, cropResult] = await Promise.all([
     world.entities(server, { dimension: "minecraft:overworld", limit: 1000 }),
-    world.block(server, setup.farm.ground, { dimension: "minecraft:overworld" }),
-    world.block(server, setup.farm.planting, { dimension: "minecraft:overworld" }),
+    world.block(server, stage.at(setup.farm.ground), { dimension: "minecraft:overworld" }),
+    world.block(server, stage.at(setup.farm.planting), { dimension: "minecraft:overworld" }),
   ]);
   const residents = entitiesResult.entities
     .filter((entity: any) => entityTypeMatches(entity.type, RESIDENT_TYPE))
@@ -764,7 +776,7 @@ async function readCells(server: any, cells: Cell[]) {
   for (let i = 0; i < cells.length; i += 12) {
     const chunk = cells.slice(i, i + 12);
     const results = await Promise.all(
-      chunk.map((cell) => world.block(server, cell, { dimension: "minecraft:overworld" })),
+      chunk.map((cell) => world.block(server, stage.at(cell), { dimension: "minecraft:overworld" })),
     );
     results.forEach((result, index) => out.push({ cell: chunk[index], block: blockInfo(result) }));
   }
@@ -789,10 +801,10 @@ function isLogCell(entry: { block: any }) {
 async function buildForestryFixtures(server: any, layout: ReturnType<typeof forestryLayout>) {
   const saplingStacks = 64;
   const commandSpecs = [
-    { command: `fill ${commandPos(layout.woodlot.min)} ${commandPos(layout.woodlot.max)} minecraft:dirt`, required: true },
-    { command: `setblock ${commandPos(layout.fellGround)} minecraft:stone`, required: true },
-    { command: `setblock ${commandPos(layout.chest)} minecraft:chest{Items:[]}`, required: true },
-    { command: `item replace block ${commandPos(layout.chest)} container.0 with ${FORESTRY_CROP_ID} ${saplingStacks}`, required: true },
+    { command: `fill ${block(layout.woodlot.min)} ${block(layout.woodlot.max)} minecraft:dirt`, required: true },
+    { command: `setblock ${block(layout.fellGround)} minecraft:stone`, required: true },
+    { command: `setblock ${block(layout.chest)} minecraft:chest{Items:[]}`, required: true },
+    { command: `item replace block ${block(layout.chest)} container.0 with ${FORESTRY_CROP_ID} ${saplingStacks}`, required: true },
   ];
   const results = [];
   for (const spec of commandSpecs) {
@@ -808,7 +820,7 @@ async function buildStandingTree(server: any, layout: ReturnType<typeof forestry
   await tick.freeze(server, true);
   try {
     for (const cell of placed) {
-      results.push(await taggedCommand(server, `setblock ${commandPos(cell)} ${FORESTRY_LOG_BLOCK}`, true));
+      results.push(await taggedCommand(server, `setblock ${block(cell)} ${FORESTRY_LOG_BLOCK}`, true));
     }
   } finally {
     await tick.freeze(server, false);
@@ -838,10 +850,10 @@ async function armForestryZoneViaPanel(
     await tick.sprint(server, 5);
 
     evidence.action_bar_before = await drainActionBar(client);
-    evidence.configure = await createMarkedZone(server, client, playerName, standBlock, "farm");
+    evidence.configure = await createMarkedZone(server, client, playerName, standBlock, "farm", stage);
     evidence.set_crop = await configureZone(server, client, playerName, standBlock,
       { min: cornerA, max: cornerB },
-      [{ key: "crop", option: FORESTRY_CROP_ID, shot: index === 1 ? CROP_PICKER_SHOT : undefined }]);
+      [{ key: "crop", option: FORESTRY_CROP_ID, shot: index === 1 ? CROP_PICKER_SHOT : undefined }], stage);
 
     const registry = await colonyRegistry(server);
     evidence.zone_kind = await zoneKindAt(server, registry, index);
@@ -864,7 +876,7 @@ async function observeWoodlotSowing(server: any, layout: ReturnType<typeof fores
   const evidence: any = { first_cell: firstCell, samples: [] };
   await taggedCommand(server, "time set day", false);
   try {
-    const started = await waitMatched(server, `if block ${commandPos(firstCell)} ${FORESTRY_CROP_ID}`, {
+    const started = await waitMatched(server, `if block ${block(firstCell)} ${FORESTRY_CROP_ID}`, {
       maxTicks: 2400,
       stepTicks: 20,
     });
@@ -892,7 +904,7 @@ async function observeWoodlotSowing(server: any, layout: ReturnType<typeof fores
   const closest = closestHorizontalPair(saplings);
   return {
     ...evidence,
-    sapling_in_chest: await blockHasItem(server, layout.chest, FORESTRY_CROP_ID),
+    sapling_in_chest: await blockHasItem(server, stage.at(layout.chest), FORESTRY_CROP_ID),
     sapling_in_packs: (await countInResidentPacks(server)).totals?.[FORESTRY_CROP_ID] ?? 0,
     observed_ticks: ticks,
     saplings,
@@ -905,7 +917,7 @@ async function observeWoodlotSowing(server: any, layout: ReturnType<typeof fores
 }
 
 async function observeTreeFelling(server: any, layout: ReturnType<typeof forestryLayout>) {
-  const allDown = layout.body.map((cell) => `if block ${commandPos(cell)} minecraft:air`).join(" ");
+  const allDown = layout.body.map((cell) => `if block ${block(cell)} minecraft:air`).join(" ");
   const evidence: any = {};
   await taggedCommand(server, "time set day", false);
   const CHUNK_TICKS = 3000;
@@ -960,10 +972,10 @@ async function observeForestryGameplay(
 
   try {
     evidence.fixtures = await buildForestryFixtures(server, layout);
-    evidence.opt_in = await optInContainerViaUI(server, client, playerName, layout.chest);
+    evidence.opt_in = await optInContainerViaUI(server, client, playerName, layout.chest, stage);
     evidence.chest_is_member = await isChestColonyMember(server, layout.chest);
-    evidence.chest_has_saplings = await blockHasItem(server, layout.chest, FORESTRY_CROP_ID);
-    evidence.hoes = await stockToolsForResidents(server, layout.chest, TRADE_TOOLS.farming,
+    evidence.chest_has_saplings = await blockHasItem(server, stage.at(layout.chest), FORESTRY_CROP_ID);
+    evidence.hoes = await stockToolsForResidents(server, stage.at(layout.chest), TRADE_TOOLS.farming,
       RESIDENT_COUNT, 1);
 
     evidence.saplings_before = (await readWoodlotSaplings(server, layout.woodlot)).length;

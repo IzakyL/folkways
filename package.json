@@ -14,9 +14,6 @@
     "visual:take": "npm exec -- playwright test --config tests/visual/playwright.config.ts",
     "bench:take": "npm exec -- playwright test --config tests/bench/playwright.config.ts",
     "bench:overlay": "node --experimental-strip-types tests/bench/film/overlay.ts",
-    "promo:take": "npm exec -- playwright test --config tests/promo/playwright.config.ts",
-    "promo:film": "python3 tests/promo/film/build.py && python3 tests/promo/film/assemble.py",
-    "promo:overhead": "python3 tests/promo/film/overhead.py",
     "fuzz:run": "npm exec -- playwright test --config tests/fuzz/playwright.config.ts"
   },
   "devDependencies": {

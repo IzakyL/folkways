@@ -279,7 +279,7 @@ final class LivingPresence implements Facing {
                 continue;
             }
             wanted.add(Grown.of(Delivery.to(idOf(resident.id(), food), LivingContent.ID,
-                    WorkSite.on(level, resident.id(), body.blockPosition()), Stances.WHEREVER,
+                    WorkSite.on(body), Stances.WHEREVER,
                     food, mealsFor(food, RATION_DAYS * Hunger.FOOD_PER_DAY - carried), count -> sweep.nudge())));
         }
         return List.copyOf(wanted);

@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -10,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
@@ -50,14 +52,24 @@ public final class Wards {
                 held.remove();
                 continue;
             }
-            BlockPos stop = ward.getKey();
-            long dx = at.getX() - stop.getX();
-            long dz = at.getZ() - stop.getZ();
-            if (!found && dx * dx + dz * dz <= reach && Math.abs(at.getY() - stop.getY()) <= radius) {
-                found = true;
+            if (found) {
+                continue;
             }
+            BlockPos stop = ward.getKey();
+            BlockPos near = asSeenFrom(level, stop, at);
+            long dx = near.getX() - stop.getX();
+            long dz = near.getZ() - stop.getZ();
+            found = dx * dx + dz * dz <= reach && Math.abs(near.getY() - stop.getY()) <= radius;
         }
         return found;
+    }
+
+    // A stop on a ship is kept where the level stores the ship's blocks; the world cell is measured from it as that
+    // ship holds it, so the ward goes where the ship goes.
+    private static BlockPos asSeenFrom(ServerLevel level, BlockPos stop, BlockPos at) {
+        return WorldSpaces.containing(level, stop)
+            .map(frame -> BlockPos.containing(frame.toLocal(Vec3.atCenterOf(at))).offset(frame.storageOrigin()))
+            .orElse(at);
     }
 
     @SubscribeEvent

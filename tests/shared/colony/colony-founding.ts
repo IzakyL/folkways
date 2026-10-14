@@ -27,6 +27,7 @@ import {
   clickUnverified,
   softly,
 } from "../harness/bw-helpers";
+import { GROUND, type Box, type Stage } from "../harness/stage";
 
 /** Whether an `execute` condition holds now; throws when the game cannot evaluate it. */
 export function probe(server: MinecraftServer, condition: string): Promise<boolean> {
@@ -92,10 +93,20 @@ const FOUNDING_PAD = 20;
 const FOUNDING_HEIGHT = 6;
 const WALL_HEIGHT = 3;
 
+/** The cells a founding at `origin` clears and walls in: what a stage must lay under it. */
+export function foundingBox(origin: Vec): Box {
+  return {
+    min: { x: origin.x - FOUNDING_PAD, y: origin.y, z: origin.z - FOUNDING_PAD },
+    max: { x: origin.x + FOUNDING_PAD, y: origin.y + FOUNDING_HEIGHT, z: origin.z + FOUNDING_PAD },
+  };
+}
+
 export type FoundingLayout = {
   origin: Vec;
   residentCount: number;
   foodItem?: string;
+  /** Where the colony is founded; the ground unless a twin spec says otherwise. */
+  stage?: Stage;
 };
 
 export type FoundingResult = {
@@ -116,6 +127,7 @@ export async function foundColonyWithResidents(
   const origin = layout.origin;
   const foodItem = layout.foodItem ?? DEFAULT_FOOD;
   const n = layout.residentCount;
+  const stage = layout.stage ?? GROUND;
   const evidence: any = { origin, residentCount: n, foodItem, steps: [] };
 
   const bedFeet: Vec[] = [];
@@ -129,37 +141,39 @@ export async function foundColonyWithResidents(
   const maxX = origin.x + FOUNDING_PAD;
   const minZ = origin.z - FOUNDING_PAD;
   const maxZ = origin.z + FOUNDING_PAD;
-  await tryCommand(server, `fill ${minX} ${origin.y} ${minZ} ${maxX} ${origin.y + FOUNDING_HEIGHT} ${maxZ} minecraft:air`);
-  await tryCommand(server, `fill ${minX} ${origin.y} ${minZ} ${maxX} ${origin.y + WALL_HEIGHT} ${minZ} minecraft:smooth_stone`);
-  await tryCommand(server, `fill ${minX} ${origin.y} ${maxZ} ${maxX} ${origin.y + WALL_HEIGHT} ${maxZ} minecraft:smooth_stone`);
-  await tryCommand(server, `fill ${minX} ${origin.y} ${minZ} ${minX} ${origin.y + WALL_HEIGHT} ${maxZ} minecraft:smooth_stone`);
-  await tryCommand(server, `fill ${maxX} ${origin.y} ${minZ} ${maxX} ${origin.y + WALL_HEIGHT} ${maxZ} minecraft:smooth_stone`);
+  const fill = (from: Vec, to: Vec, block: string) =>
+    tryCommand(server, `fill ${commandPos(stage.at(from))} ${commandPos(stage.at(to))} ${block}`);
+  await fill({ x: minX, y: origin.y, z: minZ }, { x: maxX, y: origin.y + FOUNDING_HEIGHT, z: maxZ }, "minecraft:air");
+  await fill({ x: minX, y: origin.y, z: minZ }, { x: maxX, y: origin.y + WALL_HEIGHT, z: minZ }, "minecraft:smooth_stone");
+  await fill({ x: minX, y: origin.y, z: maxZ }, { x: maxX, y: origin.y + WALL_HEIGHT, z: maxZ }, "minecraft:smooth_stone");
+  await fill({ x: minX, y: origin.y, z: minZ }, { x: minX, y: origin.y + WALL_HEIGHT, z: maxZ }, "minecraft:smooth_stone");
+  await fill({ x: maxX, y: origin.y, z: minZ }, { x: maxX, y: origin.y + WALL_HEIGHT, z: maxZ }, "minecraft:smooth_stone");
 
   await tryCommand(server, `give ${playerName} ${BOOK_ITEM}`);
   await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with ${BOOK_ITEM}`);
   await tick.sprint(server, 5);
 
-  evidence.steps.push(await createColonyViaBook(server, client, playerName, standBlock));
+  evidence.steps.push(await createColonyViaBook(server, client, playerName, standBlock, stage));
 
   for (const foot of bedFeet) {
-    await tryCommand(server, `setblock ${commandPos(foot)} minecraft:red_bed[part=foot,facing=east]`);
-    await tryCommand(server, `setblock ${commandPos({ x: foot.x + 1, y: foot.y, z: foot.z })} minecraft:red_bed[part=head,facing=east]`);
+    await tryCommand(server, `setblock ${commandPos(stage.at(foot))} minecraft:red_bed[part=foot,facing=east]`);
+    await tryCommand(server, `setblock ${commandPos(stage.at({ x: foot.x + 1, y: foot.y, z: foot.z }))} minecraft:red_bed[part=head,facing=east]`);
   }
   await tick.sprint(server, 3);
   for (const foot of bedFeet) {
-    evidence.steps.push(await optInViaBook(server, client, playerName, foot, "bed"));
+    evidence.steps.push(await optInViaBook(server, client, playerName, foot, "bed", stage));
   }
 
-  await tryCommand(server, `setblock ${commandPos(foodChest)} minecraft:chest{Items:[]}`);
+  await tryCommand(server, `setblock ${commandPos(stage.at(foodChest))} minecraft:chest{Items:[]}`);
   await tick.sprint(server, 3);
-  evidence.steps.push(await optInViaBook(server, client, playerName, foodChest, "chest"));
+  evidence.steps.push(await optInViaBook(server, client, playerName, foodChest, "chest", stage));
   const foodStacks = Math.max(2, Math.ceil((n * 16) / 64));
   for (let slot = 0; slot < foodStacks; slot++) {
-    await tryCommand(server, `item replace block ${commandPos(foodChest)} container.${slot} with ${foodItem} 64`);
+    await tryCommand(server, `item replace block ${commandPos(stage.at(foodChest))} container.${slot} with ${foodItem} 64`);
   }
   await tick.sprint(server, 5);
 
-  const residents = await admitSettlers(server, client, playerName, standBlock, n, n * 2 + 4, evidence);
+  const residents = await admitSettlers(server, client, playerName, standBlock, n, n * 2 + 4, evidence, stage);
   evidence.finalResidents = residents;
   if (residents < n) {
     throw new Error(`founding: only ${residents}/${n} settlers admitted (evidence: ${JSON.stringify(evidence.steps.slice(-3))})`);
@@ -177,6 +191,7 @@ export async function foundColonyFast(
   const origin = layout.origin;
   const foodItem = layout.foodItem ?? DEFAULT_FOOD;
   const n = layout.residentCount;
+  const stage = layout.stage ?? GROUND;
   const evidence: any = { origin, residentCount: n, foodItem, path: "task", steps: [] };
 
   const bedFeet: Vec[] = [];
@@ -190,11 +205,13 @@ export async function foundColonyFast(
   const maxX = origin.x + FOUNDING_PAD;
   const minZ = origin.z - FOUNDING_PAD;
   const maxZ = origin.z + FOUNDING_PAD;
-  await tryCommand(server, `fill ${minX} ${origin.y} ${minZ} ${maxX} ${origin.y + FOUNDING_HEIGHT} ${maxZ} minecraft:air`);
-  await tryCommand(server, `fill ${minX} ${origin.y} ${minZ} ${maxX} ${origin.y + WALL_HEIGHT} ${minZ} minecraft:smooth_stone`);
-  await tryCommand(server, `fill ${minX} ${origin.y} ${maxZ} ${maxX} ${origin.y + WALL_HEIGHT} ${maxZ} minecraft:smooth_stone`);
-  await tryCommand(server, `fill ${minX} ${origin.y} ${minZ} ${minX} ${origin.y + WALL_HEIGHT} ${maxZ} minecraft:smooth_stone`);
-  await tryCommand(server, `fill ${maxX} ${origin.y} ${minZ} ${maxX} ${origin.y + WALL_HEIGHT} ${maxZ} minecraft:smooth_stone`);
+  const fill = (from: Vec, to: Vec, block: string) =>
+    tryCommand(server, `fill ${commandPos(stage.at(from))} ${commandPos(stage.at(to))} ${block}`);
+  await fill({ x: minX, y: origin.y, z: minZ }, { x: maxX, y: origin.y + FOUNDING_HEIGHT, z: maxZ }, "minecraft:air");
+  await fill({ x: minX, y: origin.y, z: minZ }, { x: maxX, y: origin.y + WALL_HEIGHT, z: minZ }, "minecraft:smooth_stone");
+  await fill({ x: minX, y: origin.y, z: maxZ }, { x: maxX, y: origin.y + WALL_HEIGHT, z: maxZ }, "minecraft:smooth_stone");
+  await fill({ x: minX, y: origin.y, z: minZ }, { x: minX, y: origin.y + WALL_HEIGHT, z: maxZ }, "minecraft:smooth_stone");
+  await fill({ x: maxX, y: origin.y, z: minZ }, { x: maxX, y: origin.y + WALL_HEIGHT, z: maxZ }, "minecraft:smooth_stone");
 
   await tryCommand(server, `give ${playerName} ${BOOK_ITEM}`);
   await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with ${BOOK_ITEM}`);
@@ -213,23 +230,23 @@ export async function foundColonyFast(
   evidence.colonyId = colonyId;
 
   for (const foot of bedFeet) {
-    await tryCommand(server, `setblock ${commandPos(foot)} minecraft:red_bed[part=foot,facing=east]`);
-    await tryCommand(server, `setblock ${commandPos({ x: foot.x + 1, y: foot.y, z: foot.z })} minecraft:red_bed[part=head,facing=east]`);
+    await tryCommand(server, `setblock ${commandPos(stage.at(foot))} minecraft:red_bed[part=foot,facing=east]`);
+    await tryCommand(server, `setblock ${commandPos(stage.at({ x: foot.x + 1, y: foot.y, z: foot.z }))} minecraft:red_bed[part=head,facing=east]`);
   }
-  await tryCommand(server, `setblock ${commandPos(foodChest)} minecraft:chest{Items:[]}`);
+  await tryCommand(server, `setblock ${commandPos(stage.at(foodChest))} minecraft:chest{Items:[]}`);
   await tick.sprint(server, 3);
 
   const cells = [...bedFeet, foodChest];
   const marked = await runColonyTask(server, MARK_MEMBERS, {
     player: playerName,
     colony_id: colonyId,
-    cells: cells.flatMap((cell) => [cell.x, cell.y, cell.z]),
+    cells: cells.map((cell) => stage.at(cell)).flatMap((cell) => [cell.x, cell.y, cell.z]),
   });
   evidence.steps.push({ step: "optIn", via: "task", ...marked });
   for (const cell of cells) {
-    if (!(await isColonyMember(server, cell))) {
+    if (!(await isColonyMember(server, cell, stage))) {
       throw new Error(
-        `foundColonyFast: ${commandPos(cell)} is still not a colony member after MemberToggle.toggleAt. `
+        `foundColonyFast: ${commandPos(stage.at(cell))} is still not a colony member after MemberToggle.toggleAt. `
           + `The task itself read ${JSON.stringify(marked.cells)}; `
           + `if refusal is set there, the block simply cannot join, panel or not`);
     }
@@ -237,7 +254,7 @@ export async function foundColonyFast(
 
   const foodStacks = Math.max(2, Math.ceil((n * 16) / 64));
   for (let slot = 0; slot < foodStacks; slot++) {
-    await tryCommand(server, `item replace block ${commandPos(foodChest)} container.${slot} with ${foodItem} 64`);
+    await tryCommand(server, `item replace block ${commandPos(stage.at(foodChest))} container.${slot} with ${foodItem} 64`);
   }
   await tick.sprint(server, 5);
 
@@ -263,10 +280,10 @@ export async function foundColonyFast(
   return { origin, bedFeet, foodChest, standBlock, residents, evidence };
 }
 
-export async function razeFoundingSet(server: MinecraftServer, origin: Vec) {
+export async function razeFoundingSet(server: MinecraftServer, origin: Vec, stage: Stage = GROUND) {
   const min = { x: origin.x - FOUNDING_PAD, y: origin.y, z: origin.z - FOUNDING_PAD };
   const max = { x: origin.x + FOUNDING_PAD, y: origin.y + FOUNDING_HEIGHT, z: origin.z + FOUNDING_PAD };
-  await world.command(server, `fill ${commandPos(min)} ${commandPos(max)} minecraft:air`);
+  await world.command(server, `fill ${commandPos(stage.at(min))} ${commandPos(stage.at(max))} minecraft:air`);
   await tick.sprint(server, 5);
   await tryCommand(server, `kill @e[type=minecraft:item,x=${min.x},y=${min.y - 1},z=${min.z},`
     + `dx=${max.x - min.x},dy=${max.y - min.y + 1},dz=${max.z - min.z}]`);
@@ -277,8 +294,9 @@ export async function razeFoundingSet(server: MinecraftServer, origin: Vec) {
   return { min, max, itemsLeft: (left.entities ?? []).length };
 }
 
-export async function createColonyViaBook(server: MinecraftServer, client: MinecraftClient, playerName: string, standBlock: Vec) {
-  const panel = await openColonyPanelViaBook(server, client, playerName, standBlock);
+export async function createColonyViaBook(server: MinecraftServer, client: MinecraftClient, playerName: string, standBlock: Vec,
+  stage: Stage = GROUND) {
+  const panel = await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
   const click = await clickElement(client, { id: "folkways.colony.create" });
   await tick.sprint(server, 10);
   await screen.dismiss(client);
@@ -348,27 +366,29 @@ export async function setBookGesture(server: MinecraftServer, client: MinecraftC
       + `then ${JSON.stringify(step.attempts)}`);
 }
 
-export async function optInViaBook(server: MinecraftServer, client: MinecraftClient, playerName: string, target: Vec, kind: "bed" | "chest" | "worksite") {
+export async function optInViaBook(server: MinecraftServer, client: MinecraftClient, playerName: string, target: Vec, kind: "bed" | "chest" | "worksite",
+  stage: Stage = GROUND) {
   const step: any = { target, kind, attempts: [] };
-  if (await isColonyMember(server, target)) {
+  if (await isColonyMember(server, target, stage)) {
     step.member = true;
     step.attempts.push({ attempt: 0, action: "already-member" });
     return step;
   }
   step.mode = await setBookGesture(server, client, playerName, "point");
   for (let attempt = 1; attempt <= OPT_IN_ATTEMPTS; attempt++) {
-    if (await isColonyMember(server, target)) {
+    if (await isColonyMember(server, target, stage)) {
       step.member = true;
       step.attempts.push({ attempt, action: "already-member" });
       await screen.dismiss(client);
       return step;
     }
-    await tryCommand(server, `tp ${playerName} ${target.x + 0.5} ${target.y} ${target.z + 1.5} 180 30`);
+    const seen = stage.stand(target);
+    await tryCommand(server, `tp ${playerName} ${seen.x + 0.5} ${seen.y} ${seen.z + 1.5} 180 30`);
     await tick.sprint(server, 5);
     await screen.dismiss(client);
-    const use = await softly(() => player.clickBlock({ server, client }, target, { player: playerName }));
+    const use = await softly(() => stage.click({ server, client }, target, { player: playerName }));
     await tick.sprint(server, 5);
-    const memberAfter = await isColonyMember(server, target);
+    const memberAfter = await isColonyMember(server, target, stage);
     step.attempts.push({ attempt, use: summarize(use), memberAfter });
     if (memberAfter) {
       step.member = true;
@@ -378,11 +398,13 @@ export async function optInViaBook(server: MinecraftServer, client: MinecraftCli
   throw new Error(`opt-in(${kind}): ${target.x},${target.y},${target.z} never became a colony member after ${OPT_IN_ATTEMPTS} attempts`);
 }
 
-export async function openColonyPanelViaBook(server: MinecraftServer, client: MinecraftClient, playerName: string, standBlock: Vec) {
-  await tryCommand(server, `tp ${playerName} ${standBlock.x + 0.5} ${standBlock.y} ${standBlock.z + 1.5} 180 30`);
+export async function openColonyPanelViaBook(server: MinecraftServer, client: MinecraftClient, playerName: string, standBlock: Vec,
+  stage: Stage = GROUND) {
+  const seen = stage.stand(standBlock);
+  await tryCommand(server, `tp ${playerName} ${seen.x + 0.5} ${seen.y} ${seen.z + 1.5} 180 30`);
   await tick.sprint(server, 5);
   await screen.dismiss(client);
-  await safeAction(() => player.useBlock(client, { x: standBlock.x, y: standBlock.y, z: standBlock.z }, { face: "up" }));
+  await safeAction(() => player.useBlock(client, stage.at(standBlock), { face: "up" }));
   await softly(() => screen.waitFor(client, "ModularUIContainerScreen", { timeoutMs: 10_000 }));
   const panel = await safeScreen(client);
   if (isSafeFailure(panel)) {
@@ -640,11 +662,12 @@ export async function admitSettlers(
   target: number,
   rounds: number,
   evidence?: any,
+  stage: Stage = GROUND,
 ): Promise<number> {
   let residents = await countResidents(server);
   if (residents >= target) return residents;
 
-  await openColonyPanelViaBook(server, client, playerName, standBlock);
+  await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
   await softly(() => clickElement(client, { id: SETTLERS_TAB }));
 
   for (let round = 0; round < rounds && residents < target; round++) {
@@ -708,8 +731,8 @@ export async function countResidents(server: MinecraftServer): Promise<number> {
   return (result.entities ?? []).filter((e: any) => entityTypeMatches(e.type, RESIDENT_TYPE)).length;
 }
 
-export async function isColonyMember(server: MinecraftServer, target: Vec): Promise<boolean> {
-  return world.probe(server, `if data block ${commandPos(target)} "neoforge:attachments"."folkways:colony_member"`);
+export async function isColonyMember(server: MinecraftServer, target: Vec, stage: Stage = GROUND): Promise<boolean> {
+  return world.probe(server, `if data block ${commandPos(stage.at(target))} "neoforge:attachments"."folkways:colony_member"`);
 }
 
 export function entityTypeMatches(actual: string | null | undefined, expected: string) {

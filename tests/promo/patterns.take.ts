@@ -8,7 +8,7 @@ import {
   deployedSchematic, equipHandoffTool, HANDOFF_CONFIRM, HANDOFF_WINDOW, rightClickWorld,
 } from "../shared/ui/schematic-tools";
 import { BUDGET } from "../shared/harness/budgets";
-import { clickUnverified, tryCommand, waitForElement, softly, frames, safeAction } from "../shared/harness/bw-helpers";
+import { clickUnverified, tryCommand, waitForElement, softly, frames, safeAction, safeScreen, screenOpen } from "../shared/harness/bw-helpers";
 import { admitPromoSettlersFast, foundPromoColonyFast } from "./fast-setup";
 import {
   cinematicWorld, hideHud, launchPromoPair, promoClip, PROMO_SKY_CONFIG, setFov, sleepMs, take, writeLook,
@@ -281,10 +281,17 @@ async function commissionRoad(client: any) {
   await sleepMs(600);
   const named = await typeIntoElement(client, { id: SITE_NAME }, "Road");
   await sleepMs(600);
+  // The road is looked at where it would run first; the page opens again on it to be built.
+  const preview = await clickUnverified(client, { id: "folkways.draft.preview" });
+  await sleepMs(1500);
+  const reopened = await rightClickWorld(client);
+  await waitForToken(client, id => id === "folkways.draft.confirm");
+  await sleepMs(600);
   const confirm = await clickUnverified(client, { id: "folkways.draft.confirm" });
-  await sleepMs(300);
+  // The road is drawn again off the client's thread before it is sent; the page closes itself once it has been.
+  for (let waited = 0; waited < 40 && screenOpen(await safeScreen(client)); waited++) await sleepMs(100);
   await safeAction(() => screen.dismiss(client));
-  return { opened, offer, road, named, confirm };
+  return { opened, offer, road, named, preview, reopened, confirm };
 }
 
 // Works the real ground rather than a flattened one: only the meadow's tall grass is cleared and the wheat field
@@ -614,23 +621,30 @@ const COMMISSION = defineTask<Record<string, any>, Record<string, any>>({
       "net.minecraft.nbt.CompoundTag",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.server.MinecraftServer",
+      "java.util.concurrent.CompletableFuture",
     ],
     body: `
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
-var said=new ArrayList<Object>();boolean all=true;
+var said=new ArrayList<Object>();boolean[] all={true};
+// Each site is drawn off the server's thread and filed once it comes back; the next is asked for after it.
+CompletableFuture<Void> filed=CompletableFuture.completedFuture(null);
 for(var raw:args.list("sites")){
   var site=(Map<?,?>)raw;
   Hint hint=site.containsKey("points")
     ? new Hint.Path(((List<?>)site.get("points")).stream().map(Task::pos).toList())
     : new Hint.Zone(pos(site.get("min")),pos(site.get("max")));
   var id=ResourceLocation.parse(String.valueOf(site.get("pattern")));
-  var result=Commissions.commission(level,colony,id,hint.save(),defaults(id,site.containsKey("knobs")?(Map<?,?>)site.get("knobs"):Map.of()),Direction.NORTH,"",Optional.empty(),"promo");
-  all&=result.filed();
-  said.add(Map.of("pattern",String.valueOf(site.get("pattern")),"filed",result.filed(),"said",result.message().getString()));
+  filed=filed.thenCompose(done->Commissions.commission(level,colony,id,hint.save(),defaults(id,site.containsKey("knobs")?(Map<?,?>)site.get("knobs"):Map.of()),Direction.NORTH,"",Optional.empty(),"promo"))
+    .thenAccept(result->{
+      all[0]&=result.filed();
+      said.add(Map.of("pattern",String.valueOf(site.get("pattern")),"filed",result.filed(),"said",result.message().getString()));
+    });
 }
-if(!all)throw new TaskException("refused","not every commission was filed",Map.of("said",said));
-return Sync.stamp(Map.of("ok",true,"said",said));
+return filed.thenApply(done->{
+  if(!all[0])throw new TaskException("refused","not every commission was filed",Map.of("said",said));
+  return Sync.stamp(Map.of("ok",true,"said",said));
+});
 `,
     members: `
 static BlockPos pos(Object raw){var m=(Map<?,?>)raw;

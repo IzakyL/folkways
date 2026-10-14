@@ -119,36 +119,46 @@ public final class BuildPackets {
                 }
                 return;
             }
-            Commissions.Said said = Commissions.file(level, site.get(), pattern.get(), hint.get(), settings,
-                packet.facing(), packet.siteName(), Optional.of(player.getUUID()), player.getGameProfile().getName());
-            player.displayClientMessage(said.message(), true);
+            Rounds.logged(Commissions.file(level, site.get(), pattern.get(), hint.get(), settings,
+                    packet.facing(), packet.siteName(), Optional.of(player.getUUID()),
+                    player.getGameProfile().getName())
+                .thenAccept(said -> player.displayClientMessage(said.message(), true)));
         });
     }
 
     private static void raiseOnce(ServerLevel level, ServerPlayer player, Pattern pattern, Hint hint,
             Chosen settings, Direction facing) {
-        Rounds.Once once = Rounds.drawOnce(level, pattern, hint, settings, facing);
-        if (!(once instanceof Rounds.Once.Drafted drafted)) {
-            refuse(player, ((Rounds.Once.Refused) once).why());
-            return;
-        }
-        raise(level, player, drafted.blueprint(), drafted.corner());
-        player.displayClientMessage(
-            Component.translatable("folkways.blueprint.raised", drafted.blueprint().name()), true);
+        Rounds.logged(Rounds.drawOnce(level, pattern, hint, settings, facing).thenAccept(once -> {
+            if (!(once instanceof Rounds.Once.Drafted drafted)) {
+                refuse(player, ((Rounds.Once.Refused) once).why());
+                return;
+            }
+            raise(level, player, drafted.blueprint(), drafted.corner());
+            player.displayClientMessage(
+                Component.translatable("folkways.blueprint.raised", drafted.blueprint().name()), true);
+        }));
     }
 
     private static void raiseRounds(ServerLevel level, ServerPlayer player, Growing growing) {
-        Growing one = growing;
-        for (int raised = 0; raised < MOST_RAISED_ROUNDS; raised++) {
-            Round round = Rounds.draw(level, one);
+        raiseRound(level, player, growing, growing, 0);
+    }
+
+    // Each round is drawn over what the one before it raised, so the next is asked for only once this one stands.
+    private static void raiseRound(ServerLevel level, ServerPlayer player, Growing growing, Growing one, int raised) {
+        if (raised >= MOST_RAISED_ROUNDS) {
+            raisedAll(player, growing, one);
+            return;
+        }
+        Rounds.logged(Rounds.draw(level, one).thenAccept(round -> {
             if (!(round instanceof Round.Grew grew)) {
                 if (raised == 0) {
                     refuse(player, round instanceof Round.Stuck stuck
                         ? Component.translatable(stuck.refused().why().translationKey(), stuck.refused().detail())
                         : Component.translatable(DraftRefusal.NOTHING_DRAWN.translationKey(), ""));
-                    return;
+                } else {
+                    raisedAll(player, growing, one);
                 }
-                break;
+                return;
             }
             Optional<Blueprint> blueprint = Rounds.blueprintOf(level, one, grew.ready().draft());
             if (blueprint.isEmpty()) {
@@ -157,11 +167,15 @@ public final class BuildPackets {
             }
             raise(level, player, blueprint.get(), grew.ready().corner());
             if (grew.last()) {
-                break;
+                raisedAll(player, growing, one);
+                return;
             }
-            one = one.building(blueprint.get().id(), one.growth().next(grew.kept(), grew.ready().corner(),
-                grew.ready().draft(), one.hint().anchor()), false);
-        }
+            raiseRound(level, player, growing, one.building(blueprint.get().id(), one.growth().next(grew.kept(),
+                grew.ready().corner(), grew.ready().draft(), one.hint().anchor()), false), raised + 1);
+        }));
+    }
+
+    private static void raisedAll(ServerPlayer player, Growing growing, Growing one) {
         player.displayClientMessage(
             Component.translatable("folkways.draft.grow.raised", growing.pattern().getPath(), one.growth().round()),
             true);

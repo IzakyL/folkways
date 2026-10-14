@@ -4,6 +4,7 @@ import { MinecraftTimeoutError, tick, world, type MinecraftServer } from "@izaky
 import {
   commandPos,
   foundColonyFast,
+  foundingBox,
   optInViaBook,
   waitForGroundedPlayer,
   type Vec,
@@ -27,8 +28,8 @@ import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
+import { twins } from "../shared/harness/stage";
 
-const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 3;
 
 const TARGET = 2;
@@ -40,13 +41,13 @@ const ORDER_ALIVE_TICKS = 2_400;
 const MILK_PHASE_TICKS = 6_000;
 const BURST = 20;
 
-test("pasture milk end-to-end: a standing order for milk stays unfilled until the colony actually owns an empty bucket", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("pasture milk end-to-end: a standing order for milk stays unfilled until the colony actually owns an empty bucket"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.slow);
   ensureOut("e2e");
   const runId = newRunId();
 
-  const serverTrace = tracePath("e2e", "pasture-milk-server");
-  const clientTrace = tracePath("e2e", "pasture-milk-client");
+  const serverTrace = tracePath("e2e", stage.name("pasture-milk-server"));
+  const clientTrace = tracePath("e2e", stage.name("pasture-milk-client"));
 
   let pair: E2EPair | undefined;
   let server: any;
@@ -55,12 +56,12 @@ test("pasture milk end-to-end: a standing order for milk stays unfilled until th
   let supplyChest: Vec | undefined;
 
   try {
-    const clientInstance = `pasture-milk-client-${runId}`;
+    const clientInstance = stage.name(`pasture-milk-client-${runId}`);
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: serverTrace, instance: seededServer(`pasture-milk-server-${runId}`) },
+      config: stage.config,
+      server: { trace: serverTrace, instance: seededServer(stage.name(`pasture-milk-server-${runId}`)) },
       client: { trace: clientTrace, instance: clientInstance },
-      snapshot: () => ({ containers: [demandChest, supplyChest], entityTypes: ["folkways:resident", "minecraft:cow"] }),
+      snapshot: () => ({ containers: [demandChest, supplyChest].map((chest) => chest && stage.at(chest)), entityTypes: ["folkways:resident", "minecraft:cow"] }),
     });
     ({ server, client } = pair);
 
@@ -73,23 +74,27 @@ test("pasture milk end-to-end: a standing order for milk stays unfilled until th
       y: Math.round(grounded.pos.y),
       z: Math.round(grounded.pos.z) + 4,
     };
-    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT });
+    await stage.lay(server, foundingBox(origin));
+    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT, stage });
     expect(founding.residents, `residents=${founding.residents} (expected ${RESIDENT_COUNT})`).toBeGreaterThanOrEqual(RESIDENT_COUNT);
 
     const pen = penLayout(origin, 8);
     demandChest = { x: origin.x + 5, y: origin.y, z: origin.z + 8 };
     supplyChest = { x: origin.x + 7, y: origin.y, z: origin.z + 8 };
-    await buildPen(server, pen);
-    await mustCommand(server, `setblock ${commandPos(demandChest)} minecraft:chest{Items:[]}`);
-    await mustCommand(server, `setblock ${commandPos(supplyChest)} minecraft:chest{Items:[]}`);
+    // The blocks the chests are: what commands and container reads address.
+    const demandAt = stage.at(demandChest);
+    const supplyAt = stage.at(supplyChest);
+    await buildPen(server, pen, stage);
+    await mustCommand(server, `setblock ${commandPos(demandAt)} minecraft:chest{Items:[]}`);
+    await mustCommand(server, `setblock ${commandPos(supplyAt)} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 3);
-    await optInViaBook(server, client, playerName, demandChest, "chest");
-    await optInViaBook(server, client, playerName, supplyChest, "chest");
+    await optInViaBook(server, client, playerName, demandChest, "chest", stage);
+    await optInViaBook(server, client, playerName, supplyChest, "chest", stage);
 
     const zone = await createPastureZoneViaPanel(server, client, playerName, founding.standBlock, pen, {
       animal: "cow",
       target: TARGET,
-    });
+    }, stage);
     expect(zone.created, pastureZoneFailure(zone, "cow", TARGET)).toBe(true);
 
     for (const spot of [
@@ -98,16 +103,16 @@ test("pasture milk end-to-end: a standing order for milk stays unfilled until th
     ]) {
       await mustCommand(server, `summon minecraft:cow ${spot.x} ${origin.y} ${spot.z} {Age:0,PersistenceRequired:1b}`);
     }
-    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${founding.standBlock.y} ${founding.standBlock.z + 1.5} 180 30`);
+    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${stage.stand(founding.standBlock).y} ${founding.standBlock.z + 1.5} 180 30`);
     await tick.sprint(server, 20);
 
-    await setMaintainDemandViaUI(server, client, playerName, demandChest, MILK, 1);
+    await setMaintainDemandViaUI(server, client, playerName, demandChest, MILK, 1, stage);
     await purgeLooseItem(server, playerName, MILK);
     await purgeLooseItem(server, playerName, BUCKET);
     await tick.sprint(server, 20);
 
     const strayMilk = await looseItemExists(server, MILK);
-    const milkAlreadyInChest = await blockHasItem(server, demandChest, MILK);
+    const milkAlreadyInChest = await blockHasItem(server, demandAt, MILK);
     const cleanSlate = !strayMilk && !milkAlreadyInChest;
     expect(
       cleanSlate,
@@ -115,47 +120,47 @@ test("pasture milk end-to-end: a standing order for milk stays unfilled until th
         + `a stray milk bucket on the ground gets picked up by Gathering, so "milk showed up" holds without any milking and this phase proves nothing`,
     ).toBe(true);
 
-    const blocked = await pollForItem(server, demandChest, MILK, BLOCKED_PHASE_TICKS);
+    const blocked = await pollForItem(server, demandAt, MILK, BLOCKED_PHASE_TICKS);
     expect(
       blocked.found,
       `the colony has no empty buckets, yet ${MILK} appeared at tick ${blocked.ticks}: the milking recipe's empty-bucket input is not gating anything, `
         + `so a green "milk in the chest" proves nothing`,
     ).toBe(false);
 
-    await mustCommand(server, `item replace block ${commandPos(supplyChest)} container.0 with ${MILK} 1`);
+    await mustCommand(server, `item replace block ${commandPos(supplyAt)} container.0 with ${MILK} 1`);
     await tick.sprint(server, 20);
-    const standing = await pollForItem(server, demandChest, MILK, ORDER_ALIVE_TICKS);
+    const standing = await pollForItem(server, demandAt, MILK, ORDER_ALIVE_TICKS);
     expect(
       standing.found,
       `a ready milk bucket put in the member supply chest did not reach the demand chest within ${ORDER_ALIVE_TICKS} ticks: the order pinned to that chest`
       + ` is not standing at all, so phase B cannot prove anything about milking`,
     ).toBe(true);
-    const beforeClear = await chestItems(server, demandChest);
-    await emptyChest(server, demandChest);
+    const beforeClear = await chestItems(server, demandAt);
+    await emptyChest(server, demandAt);
     await purgeLooseItem(server, playerName, MILK);
     await tick.sprint(server, 20);
-    const afterTicks = await chestItems(server, demandChest);
+    const afterTicks = await chestItems(server, demandAt);
     expect(
-      await blockHasItem(server, demandChest, MILK),
+      await blockHasItem(server, demandAt, MILK),
       "the milk bucket in the demand chest was not fully cleared, and it would turn phase B's check green. "
         + `before clearing=${beforeClear}; after clearing and running 25 ticks=${afterTicks}. `
         + "(if it reappears after clearing, the colony brought it back; check whose pack is still holding a bucket)",
     ).toBe(false);
 
     for (let slot = 0; slot < 4; slot++) {
-      await mustCommand(server, `item replace block ${commandPos(supplyChest)} container.${slot} with ${BUCKET} 1`);
+      await mustCommand(server, `item replace block ${commandPos(supplyAt)} container.${slot} with ${BUCKET} 1`);
     }
     await tick.sprint(server, 20);
-    const milking = await pollForItem(server, demandChest, MILK, MILK_PHASE_TICKS);
+    const milking = await pollForItem(server, demandAt, MILK, MILK_PHASE_TICKS);
     const doing: any[] = [];
     for (let round = 0; round < 5; round++) {
       await tick.sprint(server, 40);
       doing.push(await whatEachResidentIsDoing(server));
     }
     const diagnosis = {
-      bucket_still_in_supply: await blockHasItem(server, supplyChest, BUCKET),
-      supply_is_member: await world.probe(server, `if data block ${commandPos(supplyChest)} "neoforge:attachments"."folkways:colony_member"`),
-      demand_is_member: await world.probe(server, `if data block ${commandPos(demandChest)} "neoforge:attachments"."folkways:colony_member"`),
+      bucket_still_in_supply: await blockHasItem(server, supplyAt, BUCKET),
+      supply_is_member: await world.probe(server, `if data block ${commandPos(supplyAt)} "neoforge:attachments"."folkways:colony_member"`),
+      demand_is_member: await world.probe(server, `if data block ${commandPos(demandAt)} "neoforge:attachments"."folkways:colony_member"`),
       bucket_in_a_pack: await packHasItem(server, BUCKET),
       milk_in_a_pack: await packHasItem(server, MILK),
       cows_in_pen: await countAnimalsInPen(server, pen, /cow/),

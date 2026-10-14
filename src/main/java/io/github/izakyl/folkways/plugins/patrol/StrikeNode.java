@@ -34,13 +34,14 @@ final class StrikeNode implements Node {
 
     StrikeNode(ServerLevel level, Mob foe, Stances stances) {
         this.foe = foe.getUUID();
-        this.spec = NodeSpec.of(UUID.randomUUID(), PatrolContent.ID,
-                WorkSite.on(level, foe.getUUID(), foe.blockPosition()), stances, Workload.Once.of(SWING_TICKS))
+        // The foe, and the cell it is struck at, as the site holds them: aboard the ship it stands on, if it does.
+        WorkSite site = WorkSite.on(foe);
+        this.spec = NodeSpec.of(UUID.randomUUID(), PatrolContent.ID, site, stances, Workload.Once.of(SWING_TICKS))
             .tools(ToolUse.of(PatrolContent.WEAPON))
             .vocation(PatrolContent.trade())
             .gesture(WorkGesture.SWING)
             .doing(PatrolContent.FIGHTING)
-            .focus(foe.blockPosition())
+            .focus(site.cell())
             .done();
     }
 

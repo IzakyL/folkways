@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { reflect, tick, world } from "@izakyl/blockwright-minecraft";
 import {
   foundColonyFast,
+  foundingBox,
   optInViaBook,
   waitForGroundedPlayer,
   type Vec,
@@ -10,7 +11,8 @@ import {
   countInResidentPacks,
   maxInAnySinglePack,
   mustCommand,
-  prepareSafeWalkway,
+  prepareSafeWalkwayOn,
+  safeWalkwayBox,
 } from "../shared/ui/world-ui";
 import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
 import {
@@ -30,8 +32,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { sampleWhileSprinting, settledAll, unwrapSettled } from "../shared/harness/tick-tools";
 import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
-
-const CONFIG_PATH = "blockwright.toml";
+import { cover, twins } from "../shared/harness/stage";
 
 const RESIDENT_COUNT = 3;
 
@@ -55,22 +56,22 @@ const CULL_TICKS = 8_000;
 const BURST = 20;
 const KILL_BURST = 20;
 
-test("perk system end-to-end: carrying capacity and butcher yield each flip a world fact that cannot flip without them", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("perk system end-to-end: carrying capacity and butcher yield each flip a world fact that cannot flip without them"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   ensureOut("e2e");
   const runId = newRunId();
-  const serverTrace = tracePath("e2e", "perk-server");
-  const clientTrace = tracePath("e2e", "perk-client");
+  const serverTrace = tracePath("e2e", stage.name("perk-server"));
+  const clientTrace = tracePath("e2e", stage.name("perk-client"));
 
   let pair: E2EPair | undefined;
   let server: any;
   let client: any;
 
   try {
-    const clientInstance = `perk-client-${runId}`;
-    const serverInstance = `perk-server-${runId}`;
+    const clientInstance = stage.name(`perk-client-${runId}`);
+    const serverInstance = stage.name(`perk-server-${runId}`);
     pair = await launchPair({
-      config: CONFIG_PATH,
+      config: stage.config,
       server: { trace: serverTrace, instance: seededServer(serverInstance) },
       client: { trace: clientTrace, instance: clientInstance },
       snapshot: () => ({ containers: [], entityTypes: ["folkways:resident", "minecraft:cow", "minecraft:item"] }),
@@ -88,19 +89,24 @@ test("perk system end-to-end: carrying capacity and butcher yield each flip a wo
     };
     const sourceChest: Vec = { x: origin.x - 7, y: origin.y, z: origin.z - 3 };
     const targetChest: Vec = { x: origin.x - 7, y: origin.y, z: origin.z - 13 };
-    await prepareSafeWalkway(server, origin, sourceChest, targetChest);
+    // The blocks the chests are: what commands and container reads address.
+    await stage.lay(server, cover(foundingBox(origin), safeWalkwayBox(origin, sourceChest, targetChest)));
+    const sourceAt = stage.at(sourceChest);
+    const targetAt = stage.at(targetChest);
+    await prepareSafeWalkwayOn(server, stage, origin, sourceChest, targetChest);
 
-    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT });
+    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT, stage });
+    const foodAt = stage.at(founding.foodChest);
     expect(founding.residents, `residents=${founding.residents} (expected ${RESIDENT_COUNT})`).toBeGreaterThanOrEqual(RESIDENT_COUNT);
     await grantPerkToAllResidents(server,
       `{global:{level:99,owned:[]},vocations:{"folkways:herding":{level:99,owned:[]}}}`);
 
     const pen = penLayout(origin, 8, 3);
-    await buildPen(server, pen);
+    await buildPen(server, pen, stage);
     const zone = await createPastureZoneViaPanel(server, client, playerName, founding.standBlock, pen, {
       animal: "cow",
       target: PASTURE_TARGET,
-    });
+    }, stage);
     expect(zone.created, pastureZoneFailure(zone, "cow", PASTURE_TARGET)).toBe(true);
     for (const spot of [
       { x: pen.min.x + 0.5, z: pen.min.z + 0.5 },
@@ -109,7 +115,7 @@ test("perk system end-to-end: carrying capacity and butcher yield each flip a wo
     ]) {
       await mustCommand(server, `summon minecraft:cow ${spot.x} ${origin.y} ${spot.z} {Age:0,PersistenceRequired:1b}`);
     }
-    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${founding.standBlock.y} ${founding.standBlock.z + 1.5} 180 30`);
+    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${stage.stand(founding.standBlock).y} ${founding.standBlock.z + 1.5} 180 30`);
     await tick.sprint(server, 20);
 
     const reasons: string[] = [];
@@ -173,18 +179,18 @@ test("perk system end-to-end: carrying capacity and butcher yield each flip a wo
 
     await clearCarcassGoods(server);
 
-    await tryCommand(server, `setblock ${commandPos(sourceChest)} minecraft:chest{Items:[]}`);
-    await tryCommand(server, `setblock ${commandPos(targetChest)} minecraft:chest{Items:[]}`);
-    await optInViaBook(server, client, playerName, sourceChest, "chest");
-    await optInViaBook(server, client, playerName, targetChest, "chest");
-    await setMaintainDemandViaUI(server, client, playerName, targetChest, SADDLE, SADDLE_STOCK);
-    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${founding.standBlock.y} ${founding.standBlock.z + 1.5} 180 30`);
-    await stockSaddles(server, sourceChest);
+    await tryCommand(server, `setblock ${commandPos(sourceAt)} minecraft:chest{Items:[]}`);
+    await tryCommand(server, `setblock ${commandPos(targetAt)} minecraft:chest{Items:[]}`);
+    await optInViaBook(server, client, playerName, sourceChest, "chest", stage);
+    await optInViaBook(server, client, playerName, targetChest, "chest", stage);
+    await setMaintainDemandViaUI(server, client, playerName, targetChest, SADDLE, SADDLE_STOCK, stage);
+    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${stage.stand(founding.standBlock).y} ${founding.standBlock.z + 1.5} 180 30`);
+    await stockSaddles(server, sourceAt);
 
     const packAtStart = await maxInAnySinglePack(server, SADDLE);
-    const stockAtStart = await countInChest(server, sourceChest, SADDLE);
+    const stockAtStart = await countInChest(server, sourceAt, SADDLE);
     expect(
-      { stocked: stockAtStart, in_target: await countInChest(server, targetChest, SADDLE), in_packs: packAtStart.max },
+      { stocked: stockAtStart, in_target: await countInChest(server, targetAt, SADDLE), in_packs: packAtStart.max },
       "phase A did not start from a clean slate",
     ).toEqual({ stocked: SADDLE_STOCK, in_target: 0, in_packs: 0 });
 
@@ -195,7 +201,7 @@ test("perk system end-to-end: carrying capacity and butcher yield each flip a wo
       + `so the peak measured below says nothing about the no-perk cap`,
     ).toEqual([]);
 
-    const blocked = await observeCarry(server, targetChest, BLOCKED_TICKS);
+    const blocked = await observeCarry(server, targetAt, BLOCKED_TICKS);
     expect(
       blocked.delivered,
       `phase A delivered only ${blocked.delivered} of ${SADDLE_STOCK} saddles to the target chest in ${BLOCKED_TICKS} ticks: `
@@ -217,10 +223,10 @@ test("perk system end-to-end: carrying capacity and butcher yield each flip a wo
     ).toBeLessThanOrEqual(BASE_PLANNABLE);
 
     await emptyPacks(server);
-    await emptyChest(server, targetChest);
+    await emptyChest(server, targetAt);
     await tick.sprint(server, 20);
 
-    const beforePerk = await whereAreSaddles(server, sourceChest, targetChest, founding.foodChest);
+    const beforePerk = await whereAreSaddles(server, sourceAt, targetAt, foodAt);
     expect(
       beforePerk,
       `phase B wants to grant the perk while the colony has no saddles to split yet, but saddles are here: `
@@ -243,10 +249,10 @@ test("perk system end-to-end: carrying capacity and butcher yield each flip a wo
       + `so the run below cannot possibly haul more than baseline. Pack slots and perks: ${JSON.stringify(perkedPacks)}`,
     ).toBeGreaterThan(BASE_PACK_SLOTS);
 
-    await stockSaddles(server, sourceChest);
-    const delivered = await observeCarry(server, targetChest, DELIVER_TICKS);
+    await stockSaddles(server, sourceAt);
+    const delivered = await observeCarry(server, targetAt, DELIVER_TICKS);
     const perkState = await readResidentPerks(server);
-    const where = await whereAreSaddles(server, sourceChest, targetChest, founding.foodChest);
+    const where = await whereAreSaddles(server, sourceAt, targetAt, foodAt);
 
     if (delivered.peak_in_one_pack <= BASE_PLANNABLE) {
       reasons.push(

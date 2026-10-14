@@ -1,11 +1,13 @@
 package io.github.izakyl.folkways.front.client;
 
+import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
@@ -39,6 +41,19 @@ record Aim(Vec3 from, Vec3 look) {
         return from.add(look.scale(distance));
     }
 
+    /**
+     * This ray as the ship holding the block stored at {@code storage} sees it: in the level's storage coordinates,
+     * where the ship keeps its blocks and the boxes marked on them. On the ground it is the ray itself. A ship
+     * only moves and turns what is on it, so distances along the ray stay as they were.
+     */
+    Aim in(Level level, BlockPos storage) {
+        return WorldSpaces.containing(level, storage).map(frame -> {
+            Vec3 origin = Vec3.atLowerCornerOf(frame.storageOrigin());
+            Vec3 start = frame.toLocal(from).add(origin);
+            return new Aim(start, frame.toLocal(from.add(look)).add(origin).subtract(start));
+        }).orElse(this);
+    }
+
     /** The block the ray lands on. */
     Optional<BlockHitResult> block(Player player) {
         BlockHitResult hit = player.level().clip(new ClipContext(from, at(range()),
@@ -48,7 +63,9 @@ record Aim(Vec3 from, Vec3 look) {
 
     /** The entity the ray meets before any block. */
     Optional<EntityHitResult> entity(Player player) {
-        double reach = block(player).map(hit -> hit.getLocation().distanceTo(from)).orElse(range());
+        // A block hit on a ship lands where the ship keeps its blocks: it is measured from the eye as the ship sees it.
+        double reach = block(player).map(hit -> hit.getLocation().distanceTo(in(player.level(), hit.getBlockPos()).from()))
+            .orElse(range());
         Vec3 end = at(reach);
         return Optional.ofNullable(ProjectileUtil.getEntityHitResult(player, from, end,
             new AABB(from, end).inflate(1.0D), entity -> !entity.isSpectator() && entity.isPickable(),

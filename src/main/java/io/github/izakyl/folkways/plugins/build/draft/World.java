@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.plugins.build.draft;
 import java.util.Optional;
 import java.util.OptionalInt;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -29,6 +30,11 @@ public interface World {
             return OptionalInt.of(Integer.MIN_VALUE);
         }
     };
+
+    /** The area as it stands now, to be drawn over off the level's thread; taken on the level's own thread. */
+    static World capture(Level level, Area area) {
+        return Captured.of(level, area);
+    }
 
     static World of(LevelReader level) {
         return new World() {

@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.core.api.terms.Reach;
+import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -29,9 +30,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.monster.Enemy;
 
@@ -176,7 +179,7 @@ final class PatrolPresence {
         if (foe.isEmpty()) {
             return List.of();
         }
-        Optional<Stances> reach = Stances.of(level, Reach.workableCells(level, foe.get().blockPosition()));
+        Optional<Stances> reach = Stances.of(level, Reach.workableCells(level, cellOf(level, foe.get())));
         if (reach.isEmpty()) {
             return List.of();
         }
@@ -206,6 +209,12 @@ final class PatrolPresence {
             }
         }
         return Optional.empty();
+    }
+
+    // The block a mob stands in, where the level stores it: the ship's cell when it stands on one, as the cells
+    // to strike it from are found among the ship's blocks.
+    private static BlockPos cellOf(ServerLevel level, Entity entity) {
+        return WorldSpaces.storage(level, WorldSpaces.at(entity)).orElse(entity.blockPosition());
     }
 
     private static UUID idOf(UUID route, int lap, int stop) {

@@ -11,7 +11,6 @@ import io.github.izakyl.folkways.front.engine.net.ZoneSnapshot;
 import io.github.izakyl.folkways.front.ui.screen.Desk;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
@@ -58,9 +57,9 @@ public final class FolkwaysClientGameEvents {
         return alternateDown;
     }
 
-    /** The sneak key, which the player is not told of while a screen has the keyboard. */
+    /** The sneak key as a modifier for the book; from above it only takes the camera down, and modifies nothing. */
     static boolean sneakDown(Player player) {
-        return Overhead.on() ? Screen.hasShiftDown() : player.isShiftKeyDown();
+        return !Overhead.on() && player.isShiftKeyDown();
     }
 
     @SubscribeEvent
@@ -69,6 +68,7 @@ public final class FolkwaysClientGameEvents {
         alternateDown = false;
         Overhead.forget();
         Desk.forget();
+        ShapePreview.clear();
     }
 
     @SubscribeEvent
@@ -77,6 +77,7 @@ public final class FolkwaysClientGameEvents {
         ColonyHighlightState.tick();
         ZoneSelection.tick();
         PathSelection.tick();
+        ShapePreview.tick();
         ColonyLookState.tick();
     }
 
@@ -190,6 +191,7 @@ public final class FolkwaysClientGameEvents {
     public static void onRenderLevel(RenderLevelStageEvent event) {
         ZoneSelection.render(event);
         PathSelection.render(event);
+        ShapePreview.render(event);
         ColonyHighlightState.render(event);
         LookLineCards.render(event);
         AimCursor.render(event);

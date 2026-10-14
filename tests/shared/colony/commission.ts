@@ -29,22 +29,25 @@ export const COMMISSION = defineTask<Record<string, any>, Record<string, any>>({
       "net.minecraft.core.Direction",
       "net.minecraft.nbt.CompoundTag",
       "net.minecraft.resources.ResourceLocation",
+      "java.util.concurrent.CompletableFuture",
     ],
     body: `
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
 var said=new ArrayList<Object>();
+// Each site is drawn off the server's thread and filed once it comes back; the next is asked for after it.
+CompletableFuture<Void> filed=CompletableFuture.completedFuture(null);
 for(var raw:args.list("sites")){
   var site=(Map<?,?>)raw;
   Hint hint=site.containsKey("points")
     ? new Hint.Path(((List<?>)site.get("points")).stream().map(Task::pos).toList())
     : new Hint.Zone(pos(site.get("min")),pos(site.get("max")));
   var id=ResourceLocation.parse(String.valueOf(site.get("pattern")));
-  var result=Commissions.commission(level,colony,id,hint.save(),defaults(id,site.containsKey("knobs")?(Map<?,?>)site.get("knobs"):Map.of()),
-    Direction.NORTH,String.valueOf(site.get("name")),Optional.empty(),args.string("by"));
-  said.add(Map.of("pattern",String.valueOf(site.get("pattern")),"filed",result.filed(),"said",result.message().getString()));
+  filed=filed.thenCompose(done->Commissions.commission(level,colony,id,hint.save(),defaults(id,site.containsKey("knobs")?(Map<?,?>)site.get("knobs"):Map.of()),
+    Direction.NORTH,String.valueOf(site.get("name")),Optional.empty(),args.string("by")))
+    .thenAccept(result->said.add(Map.of("pattern",String.valueOf(site.get("pattern")),"filed",result.filed(),"said",result.message().getString())));
 }
-return Sync.stamp(Map.of("ok",true,"said",said));
+return filed.thenApply(done->Sync.stamp(Map.of("ok",true,"said",said)));
 `,
     members: `
 static BlockPos pos(Object raw){var m=(Map<?,?>)raw;

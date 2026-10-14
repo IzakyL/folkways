@@ -255,7 +255,10 @@ export class View {
     if (point![1] !== lift) throw new Error(`point ${index + 1} stands at ${point![1]}, not lifted to ${lift}`);
   }
 
-  /** Right-clicks what was drawn, takes the offer to raise a building there, picks the pattern, sets its knobs and builds. */
+  /**
+   * Right-clicks what was drawn, takes the offer to raise a building there, picks the pattern, sets its knobs,
+   * previews it, and comes back to build it.
+   */
   private async commission(spot: Vec, pattern: string, knobs: Knob[], pace: number) {
     const wait = (ms: number) => sleepMs(ms * pace);
     await this.click(spot, "right");
@@ -293,6 +296,14 @@ export class View {
       }
       await wait(350);
     }
+    await wait(500);
+    // It is looked at where it would stand first, then the page opened again on it and built.
+    await this.point("folkways.draft.preview");
+    await clickUnverified(this.client, { id: "folkways.draft.preview" });
+    await this.back(pattern);
+    await wait(1500);
+    await this.click(spot, "right");
+    await this.element(id => id === "folkways.draft.confirm");
     await wait(500);
     await this.point("folkways.draft.confirm");
     await clickUnverified(this.client, { id: "folkways.draft.confirm" });

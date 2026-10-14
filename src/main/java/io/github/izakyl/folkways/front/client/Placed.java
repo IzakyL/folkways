@@ -26,6 +26,28 @@ record Placed(Vec3 origin, Matrix3f turn) {
         }).orElseGet(() -> new Placed(Vec3.atLowerCornerOf(anchor), new Matrix3f()));
     }
 
+    /**
+     * Draws what {@code draw} lays out in the level's storage coordinates near {@code anchor} where it shows: on a
+     * ship, moved and turned with it; on the ground, as laid out.
+     */
+    static void drawAt(Level level, PoseStack poseStack, BlockPos anchor, float partialTick, Runnable draw) {
+        at(level, anchor, partialTick).enter(poseStack);
+        poseStack.translate(-anchor.getX(), -anchor.getY(), -anchor.getZ());
+        draw.run();
+        poseStack.popPose();
+    }
+
+    /** Whether two stored cells lie in the same space, both on one ship or both on the ground: only those join up. */
+    static boolean together(Level level, BlockPos one, BlockPos other) {
+        return WorldSpaces.containing(level, one).map(WorldSpaces.Frame::id)
+            .equals(WorldSpaces.containing(level, other).map(WorldSpaces.Frame::id));
+    }
+
+    /** The cell of the world the block stored at {@code anchor} shows in: the block's own cell on the ground. */
+    static BlockPos shown(Level level, BlockPos anchor) {
+        return BlockPos.containing(at(level, anchor, 1.0F).centre());
+    }
+
     Vec3 point(Vec3 offset) {
         Vector3f turned = turn.transform(new Vector3f((float) offset.x, (float) offset.y, (float) offset.z));
         return origin.add(turned.x, turned.y, turned.z);

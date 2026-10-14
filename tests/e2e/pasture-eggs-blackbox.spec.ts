@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import { tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import {
   foundColonyFast,
+  foundingBox,
   waitForGroundedPlayer,
   type Vec,
 } from "../shared/colony/colony-founding";
@@ -18,8 +19,8 @@ import { ensureOut, tracePath, outAbs } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { newRunId } from "../shared/harness/run-id";
+import { twins } from "../shared/harness/stage";
 
-const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 3;
 
 const TARGET = 6;
@@ -30,13 +31,13 @@ const LAY_BURST = 200;
 const COLLECT_TICKS = 2_400;
 const COLLECT_BURST = 20;
 
-test("pasture eggs end-to-end: vanilla hens lay on their own eggTime, residents collect naturally laid eggs into colony inventory", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("pasture eggs end-to-end: vanilla hens lay on their own eggTime, residents collect naturally laid eggs into colony inventory"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   ensureOut("e2e");
   const runId = newRunId();
 
-  const serverTrace = tracePath("e2e", "pasture-eggs-server");
-  const clientTrace = tracePath("e2e", "pasture-eggs-client");
+  const serverTrace = tracePath("e2e", stage.name("pasture-eggs-server"));
+  const clientTrace = tracePath("e2e", stage.name("pasture-eggs-client"));
 
   const evidence: any = { samples: [] };
   let foodChest: Vec | undefined;
@@ -45,12 +46,12 @@ test("pasture eggs end-to-end: vanilla hens lay on their own eggTime, residents 
   let client: any;
 
   try {
-    const clientInstance = `pasture-eggs-client-${runId}`;
+    const clientInstance = stage.name(`pasture-eggs-client-${runId}`);
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: serverTrace, instance: seededServer(`pasture-eggs-server-${runId}`) },
+      config: stage.config,
+      server: { trace: serverTrace, instance: seededServer(stage.name(`pasture-eggs-server-${runId}`)) },
       client: { trace: clientTrace, instance: clientInstance },
-      snapshot: () => ({ containers: [foodChest], entityTypes: ["folkways:resident", "minecraft:chicken", "minecraft:item"] }),
+      snapshot: () => ({ containers: [foodChest && stage.at(foodChest)], entityTypes: ["folkways:resident", "minecraft:chicken", "minecraft:item"] }),
     });
     ({ server, client } = pair);
 
@@ -63,24 +64,26 @@ test("pasture eggs end-to-end: vanilla hens lay on their own eggTime, residents 
       y: Math.round(grounded.pos.y),
       z: Math.round(grounded.pos.z) + 4,
     };
-    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT });
+    await stage.lay(server, foundingBox(origin));
+    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT, stage });
     expect(
       founding.residents,
       `residents=${founding.residents} (expected ${RESIDENT_COUNT})`,
     ).toBeGreaterThanOrEqual(RESIDENT_COUNT);
 
     foodChest = founding.foodChest;
+    const foodStore = stage.at(foodChest);
     const pen = penLayout(origin, 8, 3);
     evidence.pen = pen;
-    await buildPen(server, pen);
+    await buildPen(server, pen, stage);
 
     const zone = await createPastureZoneViaPanel(server, client, playerName, founding.standBlock, pen, {
       animal: "chicken",
       target: TARGET,
-    });
+    }, stage);
     expect(zone.created, pastureZoneFailure(zone, "chicken", TARGET)).toBe(true);
 
-    const baseline = await observeEggs(server, pen, foodChest);
+    const baseline = await observeEggs(server, pen, foodStore);
     evidence.baseline = baseline;
     expect(baseline.stored + baseline.drops.reduce((n: number, d: any) => n + d.count, 0),
       "before the chickens lay, neither the site nor colony stock should already hold eggs").toBe(0);
@@ -96,12 +99,12 @@ test("pasture eggs end-to-end: vanilla hens lay on their own eggTime, residents 
     for (const spot of spots) {
       await mustCommand(server, `summon minecraft:chicken ${spot.x} ${origin.y} ${spot.z} {Age:0,PersistenceRequired:1b}`);
     }
-    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${founding.standBlock.y} ${founding.standBlock.z + 1.5} 180 30`);
+    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${stage.stand(founding.standBlock).y} ${founding.standBlock.z + 1.5} 180 30`);
     await tick.sprint(server, 20);
     let firstEggTick: number | undefined;
     let collected = false;
     for (let ticks = 0; ticks <= MAX_LAY_TICKS + COLLECT_TICKS;) {
-      const sample = await observeEggs(server, pen, foodChest);
+      const sample = await observeEggs(server, pen, foodStore);
       evidence.samples.push({ ticks, ...sample });
       if (firstEggTick === undefined && (sample.inPen > 0 || sample.stored > baseline.stored)) {
         firstEggTick = ticks;
@@ -126,7 +129,7 @@ test("pasture eggs end-to-end: vanilla hens lay on their own eggTime, residents 
     pair?.failing(error);
     throw error;
   } finally {
-    writeFileSync(outAbs("e2e", "reports", "pasture-eggs-evidence.json"), JSON.stringify(evidence, null, 2));
+    writeFileSync(outAbs("e2e", "reports", `${stage.name("pasture-eggs-evidence")}.json`), JSON.stringify(evidence, null, 2));
     await pair?.teardown(testInfo);
   }
 });

@@ -4,6 +4,7 @@ import { screen, tick } from "@izakyl/blockwright-minecraft";
 import {
   commandPos,
   foundColonyFast,
+  foundingBox,
   waitForGroundedPlayer,
 } from "../shared/colony/colony-founding";
 import {
@@ -23,12 +24,13 @@ import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
+import { tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
+import { twins, type Stage } from "../shared/harness/stage";
 
-const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 3;
 
-test("fishing: player carves a fish zone through the real panel", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("fishing: player carves a fish zone through the real panel"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
   const runId = newRunId();
@@ -38,11 +40,11 @@ test("fishing: player carves a fish zone through the real panel", async ({}, tes
   let client: any;
 
   try {
-    const clientInstance = `fishing-client-${runId}`;
+    const clientInstance = stage.name(`fishing-client-${runId}`);
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: tracePath("e2e", "fishing-server"), instance: seededServer(`fishing-server-${runId}`) },
-      client: { trace: tracePath("e2e", "fishing-client"), instance: clientInstance },
+      config: stage.config,
+      server: { trace: tracePath("e2e", stage.name("fishing-server")), instance: seededServer(stage.name(`fishing-server-${runId}`)) },
+      client: { trace: tracePath("e2e", stage.name("fishing-client")), instance: clientInstance },
       snapshot: () => ({ containers: [], entityTypes: ["folkways:resident"] }),
     });
     ({ server, client } = pair);
@@ -56,7 +58,8 @@ test("fishing: player carves a fish zone through the real panel", async ({}, tes
       y: Math.round(grounded.pos.y),
       z: Math.round(grounded.pos.z) + 4,
     };
-    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT });
+    await stage.lay(server, foundingBox(origin));
+    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT, stage });
     expect(founding.residents, `residents=${founding.residents} (expected ${RESIDENT_COUNT})`).toBeGreaterThanOrEqual(RESIDENT_COUNT);
 
     const registry = await colonyRegistry(server);
@@ -64,10 +67,12 @@ test("fishing: player carves a fish zone through the real panel", async ({}, tes
 
     const shore = { x: origin.x, y: origin.y - 1, z: origin.z + 8 };
     const water = { x: shore.x, y: shore.y, z: shore.z - 1 };
-    await mustCommand(server, `setblock ${commandPos(water)} minecraft:water`);
+    // A ship's deck is one block thick: the pool needs a floor there, or it pours out of the ship.
+    await tryCommand(server, `setblock ${commandPos(stage.at({ ...water, y: water.y - 1 }))} minecraft:oak_planks`);
+    await mustCommand(server, `setblock ${commandPos(stage.at(water))} minecraft:water`);
     await tick.sprint(server, 5);
 
-    const zone = await createFishZoneViaPanel(server, client, playerName, founding.standBlock, shore);
+    const zone = await createFishZoneViaPanel(server, client, playerName, founding.standBlock, shore, stage);
     expect(zone.error, `creating the fishing spot threw: ${JSON.stringify(zone.error)}`).toBeUndefined();
 
     expect(
@@ -86,17 +91,17 @@ test("fishing: player carves a fish zone through the real panel", async ({}, tes
   }
 });
 
-async function createFishZoneViaPanel(server: any, client: any, playerName: string, standBlock: any, shore: any) {
+async function createFishZoneViaPanel(server: any, client: any, playerName: string, standBlock: any, shore: any, stage: Stage) {
   const evidence: any = { shore };
   try {
     evidence.zone_mode = await setBookGesture(server, client, playerName, "box");
-    evidence.corner_1 = await aimAndWorldLeftClick(server, client, playerName, shore);
+    evidence.corner_1 = await aimAndWorldLeftClick(server, client, playerName, shore, stage);
     await tick.sprint(server, 3);
-    evidence.corner_2 = await aimAndWorldLeftClick(server, client, playerName, shore);
+    evidence.corner_2 = await aimAndWorldLeftClick(server, client, playerName, shore, stage);
     await tick.sprint(server, 5);
 
     evidence.action_bar_before = await drainActionBar(client);
-    evidence.configure = await createMarkedZone(server, client, playerName, standBlock, "fish");
+    evidence.configure = await createMarkedZone(server, client, playerName, standBlock, "fish", stage);
   } catch (error) {
     evidence.error = errorSummary(error);
   } finally {

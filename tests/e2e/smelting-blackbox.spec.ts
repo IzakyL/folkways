@@ -8,6 +8,7 @@ import { clickElement } from "../ldlib2";
 import {
   commandPos,
   foundColonyFast,
+  foundingBox,
   openColonyPanelViaBook,
   optInViaBook,
   pickViaSelector,
@@ -25,8 +26,8 @@ import { BUDGET } from "../shared/harness/budgets";
 import { sampleWhileSprinting, settledAll, unwrapSettled } from "../shared/harness/tick-tools";
 import { frames, waitForElement, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
+import { twins, type Stage } from "../shared/harness/stage";
 
-const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 3;
 
 const ORDER_COUNT = 8;
@@ -38,13 +39,13 @@ const CRAFT_PAGE = "folkways.wares";
 const BLOCKED_PHASE_TICKS = 800;
 const SMELT_PHASE_TICKS = 12_000;
 
-test("smelting end-to-end: the fuel policy set through the real panel is what unblocks the furnace", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("smelting end-to-end: the fuel policy set through the real panel is what unblocks the furnace"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.standard);
   ensureOut("e2e");
   const runId = newRunId();
 
-  const serverTrace = tracePath("e2e", "smelting-server");
-  const clientTrace = tracePath("e2e", "smelting-client");
+  const serverTrace = tracePath("e2e", stage.name("smelting-server"));
+  const clientTrace = tracePath("e2e", stage.name("smelting-client"));
 
   let pair: E2EPair | undefined;
   let server: any;
@@ -53,12 +54,12 @@ test("smelting end-to-end: the fuel policy set through the real panel is what un
   let outputChest: any;
 
   try {
-    const clientInstance = `smelting-client-${runId}`;
+    const clientInstance = stage.name(`smelting-client-${runId}`);
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: serverTrace, instance: seededServer(`smelting-server-${runId}`) },
+      config: stage.config,
+      server: { trace: serverTrace, instance: seededServer(stage.name(`smelting-server-${runId}`)) },
       client: { trace: clientTrace, instance: clientInstance },
-      snapshot: () => ({ containers: [chest, outputChest], entityTypes: ["folkways:resident", "minecraft:item"] }),
+      snapshot: () => ({ containers: [chest, outputChest].map((at) => at && stage.at(at)), entityTypes: ["folkways:resident", "minecraft:item"] }),
     });
     ({ server, client } = pair);
 
@@ -71,24 +72,25 @@ test("smelting end-to-end: the fuel policy set through the real panel is what un
       y: Math.round(grounded.pos.y),
       z: Math.round(grounded.pos.z) + 4,
     };
-    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT });
+    await stage.lay(server, foundingBox(origin));
+    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT, stage });
     expect(founding.residents, `residents=${founding.residents} (expected ${RESIDENT_COUNT})`).toBeGreaterThanOrEqual(RESIDENT_COUNT);
 
     const furnace: Vec = { x: origin.x + 6, y: origin.y, z: origin.z + 6 };
     chest = { x: origin.x + 4, y: origin.y, z: origin.z + 6 };
     outputChest = { x: origin.x + 8, y: origin.y, z: origin.z + 6 };
-    await mustCommand(server, `setblock ${commandPos(furnace)} minecraft:furnace`);
-    await mustCommand(server, `setblock ${commandPos(chest)} minecraft:chest{Items:[]}`);
-    await mustCommand(server, `setblock ${commandPos(outputChest)} minecraft:chest{Items:[]}`);
+    await mustCommand(server, `setblock ${commandPos(stage.at(furnace))} minecraft:furnace`);
+    await mustCommand(server, `setblock ${commandPos(stage.at(chest))} minecraft:chest{Items:[]}`);
+    await mustCommand(server, `setblock ${commandPos(stage.at(outputChest))} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 3);
-    await optInViaBook(server, client, playerName, chest, "chest");
-    await optInViaBook(server, client, playerName, outputChest, "chest");
-    await optInViaBook(server, client, playerName, furnace, "worksite");
-    await mustCommand(server, `item replace block ${commandPos(chest)} container.0 with ${POLICY_FUEL} 32`);
-    await mustCommand(server, `item replace block ${commandPos(furnace)} container.0 with ${SMELT_INPUT} ${ORDER_COUNT}`);
+    await optInViaBook(server, client, playerName, chest, "chest", stage);
+    await optInViaBook(server, client, playerName, outputChest, "chest", stage);
+    await optInViaBook(server, client, playerName, furnace, "worksite", stage);
+    await mustCommand(server, `item replace block ${commandPos(stage.at(chest))} container.0 with ${POLICY_FUEL} 32`);
+    await mustCommand(server, `item replace block ${commandPos(stage.at(furnace))} container.0 with ${SMELT_INPUT} ${ORDER_COUNT}`);
     await tick.sprint(server, 5);
 
-    const watched = [furnace, chest, outputChest];
+    const watched = [furnace, chest, outputChest].map((at) => stage.at(at));
 
     const blocked = await pollForOutput(server, watched, BLOCKED_PHASE_TICKS);
     expect(
@@ -97,17 +99,17 @@ test("smelting end-to-end: the fuel policy set through the real panel is what un
         + ` coal and charcoal and neither was in storage — the furnace path is ignoring WaresContent.FUEL`,
     ).toBe(false);
 
-    const policy = await allowFuelViaPanel(server, client, playerName, founding.standBlock);
+    const policy = await allowFuelViaPanel(server, client, playerName, founding.standBlock, stage);
     const smelted = await pollForOutput(server, watched, SMELT_PHASE_TICKS);
-    writeFileSync(outAbs("e2e", "reports", "smelting-evidence.json"), JSON.stringify({
+    writeFileSync(outAbs("e2e", "reports", `${stage.name("smelting-evidence")}.json`), JSON.stringify({
       policy,
       blocked,
       smelted,
-      source_chest: await readContainer(server, chest),
-      output_chest: await readContainer(server, outputChest),
-      furnace: await readContainer(server, furnace),
+      source_chest: await readContainer(server, stage.at(chest)),
+      output_chest: await readContainer(server, stage.at(outputChest)),
+      furnace: await readContainer(server, stage.at(furnace)),
       packs: await countInResidentPacks(server),
-      stations: await tabRows(server, client, playerName, founding.standBlock, CRAFT_TAB, CRAFT_PAGE),
+      stations: await tabRows(server, client, playerName, founding.standBlock, CRAFT_TAB, CRAFT_PAGE, stage),
       doing: await residentsDoing(server),
     }, null, 2) + "\n");
 
@@ -132,9 +134,9 @@ test("smelting end-to-end: the fuel policy set through the real panel is what un
 
 });
 
-async function allowFuelViaPanel(server: any, client: any, playerName: string, standBlock: Vec) {
+async function allowFuelViaPanel(server: any, client: any, playerName: string, standBlock: Vec, stage: Stage) {
   const evidence: any = { item: POLICY_FUEL };
-  evidence.open_panel = await openColonyPanelViaBook(server, client, playerName, standBlock);
+  evidence.open_panel = await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
   evidence.click_craft_tab = await softly(() => clickElement(client, { id: CRAFT_TAB }));
   await waitForElement(client, { idPattern: `folkways.board.edit.${CRAFT_PAGE}.*` }, { timeoutMs: 8_000 });
   const fuel = await fuelEditToken(client);
@@ -164,9 +166,9 @@ async function fuelEditToken(client: any): Promise<string> {
 }
 
 async function tabRows(
-  server: any, client: any, playerName: string, standBlock: Vec, tab: string, page: string,
+  server: any, client: any, playerName: string, standBlock: Vec, tab: string, page: string, stage: Stage,
 ) {
-  await openColonyPanelViaBook(server, client, playerName, standBlock);
+  await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
   await softly(() => clickElement(client, { id: tab }));
   await tick.sprint(server, 30);
   await safeAction(() => frames(client, 5));

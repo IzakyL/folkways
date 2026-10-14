@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { tick, world } from "@izakyl/blockwright-minecraft";
 import {
   foundColonyFast,
+  foundingBox,
   waitForGroundedPlayer,
   type Vec,
 } from "../shared/colony/colony-founding";
@@ -18,8 +19,8 @@ import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { newRunId } from "../shared/harness/run-id";
+import { twins } from "../shared/harness/stage";
 
-const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 3;
 
 const TARGET = 2;
@@ -30,23 +31,23 @@ const LEATHER = "minecraft:leather";
 const SLAUGHTER_TICKS = 3_000;
 const BURST = 20;
 
-test("pasture slaughter end-to-end: an over-stocked pasture is culled down to its target and the drops are gathered up", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("pasture slaughter end-to-end: an over-stocked pasture is culled down to its target and the drops are gathered up"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.slow);
   ensureOut("e2e");
   const runId = newRunId();
 
-  const serverTrace = tracePath("e2e", "pasture-slaughter-server");
-  const clientTrace = tracePath("e2e", "pasture-slaughter-client");
+  const serverTrace = tracePath("e2e", stage.name("pasture-slaughter-server"));
+  const clientTrace = tracePath("e2e", stage.name("pasture-slaughter-client"));
 
   let pair: E2EPair | undefined;
   let server: any;
   let client: any;
 
   try {
-    const clientInstance = `pasture-slaughter-client-${runId}`;
+    const clientInstance = stage.name(`pasture-slaughter-client-${runId}`);
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: serverTrace, instance: seededServer(`pasture-slaughter-server-${runId}`) },
+      config: stage.config,
+      server: { trace: serverTrace, instance: seededServer(stage.name(`pasture-slaughter-server-${runId}`)) },
       client: { trace: clientTrace, instance: clientInstance },
       snapshot: () => ({ entityTypes: ["folkways:resident", "minecraft:cow", "minecraft:item"] }),
     });
@@ -61,16 +62,17 @@ test("pasture slaughter end-to-end: an over-stocked pasture is culled down to it
       y: Math.round(grounded.pos.y),
       z: Math.round(grounded.pos.z) + 4,
     };
-    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT });
+    await stage.lay(server, foundingBox(origin));
+    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT, stage });
     expect(founding.residents, `residents=${founding.residents} (expected ${RESIDENT_COUNT})`).toBeGreaterThanOrEqual(RESIDENT_COUNT);
 
     const pen = penLayout(origin, 8, 3);
-    await buildPen(server, pen);
+    await buildPen(server, pen, stage);
 
     const zone = await createPastureZoneViaPanel(server, client, playerName, founding.standBlock, pen, {
       animal: "cow",
       target: TARGET,
-    });
+    }, stage);
     expect(zone.created, pastureZoneFailure(zone, "cow", TARGET)).toBe(true);
 
     const spots = [
@@ -81,12 +83,12 @@ test("pasture slaughter end-to-end: an over-stocked pasture is culled down to it
     for (const spot of spots) {
       await mustCommand(server, `summon minecraft:cow ${spot.x} ${origin.y} ${spot.z} {Age:0,PersistenceRequired:1b}`);
     }
-    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${founding.standBlock.y} ${founding.standBlock.z + 1.5} 180 30`);
+    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${stage.stand(founding.standBlock).y} ${founding.standBlock.z + 1.5} 180 30`);
     await tick.sprint(server, 20);
     const stockedCows = await countCowsInWorld(server);
     expect(stockedCows, `expected ${STOCKED} cows in the world, saw ${stockedCows}`).toBe(STOCKED);
 
-    const culling = await observeCulling(server, pen, [founding.foodChest]);
+    const culling = await observeCulling(server, pen, [stage.at(founding.foodChest)]);
 
     expect(
       culling.escaped_from_pen,

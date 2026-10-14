@@ -1,6 +1,9 @@
 package io.github.izakyl.folkways.core.api.work;
 
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.terms.Realm;
+import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
@@ -12,6 +15,7 @@ import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 // How a body looks while it works. The ones here are what vanilla bodies can already show; a plugin
 // with its own motion implements this rather than asking for a new constant.
@@ -60,8 +64,18 @@ public interface WorkGesture {
         @Override
         public void perform(LivingEntity body, int windupTick, BlockPos at) {
             if (windupTick == 0 && body instanceof Mob mob) {
-                mob.startSleeping(pillowOf(body.level(), at));
+                mob.startSleeping(pillowOf(body.level(), keptAt(body, at)));
             }
+        }
+
+        // The bed is read where the level keeps it: on a ship, among the ship's own blocks, not in the world cell
+        // it shows in, which is air.
+        private static BlockPos keptAt(LivingEntity body, BlockPos at) {
+            Level level = body.level();
+            Realm realm = WorldSpaces.at(body).realm();
+            return WorldSpaces.relative(level, realm, Vec3.atCenterOf(at))
+                .flatMap(local -> WorldSpaces.storage(level, new WorldPos(realm, BlockPos.containing(local))))
+                .orElse(at);
         }
 
         private static BlockPos pillowOf(Level level, BlockPos at) {

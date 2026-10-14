@@ -49,10 +49,6 @@ public final class Patterns {
         return List.copyOf(library.values());
     }
 
-    public static Drawn commission(Pattern pattern, Commission commission) {
-        return pattern.drawOn(commission);
-    }
-
     public static void reload(ResourceManager resources) {
         Templates.reload(resources);
         Map<ResourceLocation, String> read = new LinkedHashMap<>();

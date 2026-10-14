@@ -24,8 +24,6 @@ import net.starlark.java.eval.StarlarkThread;
 
 final class Derivation {
 
-    static final int READ_BUDGET = 262_144;
-    static final int REACH = 96;
     private static final BlockClass SOLID = unchecked("solid");
     private static final BlockClass GROUND = unchecked("ground");
 
@@ -33,6 +31,7 @@ final class Derivation {
         Comparator.comparingInt((Queued waiting) -> -waiting.node().priority()).thenComparingInt(Queued::order);
 
     private final Commission commission;
+    private final Area area;
     private final List<String> phases;
     private final List<PriorityQueue<Queued>> queues = new ArrayList<>();
     private final List<Committed> parts = new ArrayList<>();
@@ -48,12 +47,12 @@ final class Derivation {
 
     private int phase;
     private Rule.Node current;
-    private int reads;
     private DraftRefusal stoppedFor;
     private Vocabulary.Grown grown;
 
-    Derivation(Commission commission, List<String> phases) {
+    Derivation(Commission commission, Area area, List<String> phases) {
         this.commission = commission;
+        this.area = area;
         this.phases = List.copyOf(phases);
         for (int index = 0; index < this.phases.size(); index++) {
             queues.add(new PriorityQueue<>(ORDER));
@@ -96,6 +95,10 @@ final class Derivation {
             throw Starlark.errorf("this only works while a pattern draws, inside draw(site) or a rule");
         }
         return drawing;
+    }
+
+    Area area() {
+        return area;
     }
 
     Commission commission() {
@@ -314,8 +317,9 @@ final class Derivation {
         while (painted < parts.size() && parts.get(painted).phase() < phase) {
             Massing.Part part = parts.get(painted).part();
             BoundingBox box = part.solid().bounds();
-            if (Lattice.volume(box) <= Lattice.MOST_SCANNED) {
+            {
                 for (int y = box.minY(); y <= box.maxY(); y++) {
+                    Drafting.checkTime();
                     for (int z = box.minZ(); z <= box.maxZ(); z++) {
                         for (int x = box.minX(); x <= box.maxX(); x++) {
                             if (Octants.of(part.solid(), x, y, z) == Octants.NONE) {
@@ -335,28 +339,26 @@ final class Derivation {
     }
 
     BlockState read(int x, int y, int z) throws EvalException {
-        BoundingBox marked = commission.growth().reach();
-        if (x < marked.minX() - REACH || x > marked.maxX() + REACH || z < marked.minZ() - REACH
-            || z > marked.maxZ() + REACH || y < marked.minY() - REACH || y > marked.maxY() + REACH) {
+        BlockPos at = commission.hint().anchor().offset(x, y, z);
+        if (!area.covers(at.getX(), at.getY(), at.getZ())) {
             throw stop(DraftRefusal.READ_TOO_FAR, "(" + x + ", " + y + ", " + z + ")");
         }
-        if (++reads > READ_BUDGET) {
-            throw stop(DraftRefusal.READ_BUDGET, Integer.toString(READ_BUDGET));
-        }
-        BlockPos at = commission.hint().anchor().offset(x, y, z);
         return commission.world().block(at).orElseThrow(() -> stop(DraftRefusal.UNLOADED, at.toShortString()));
     }
 
     Integer highest(int x, int z, BlockClass of) throws EvalException {
         BlockPos anchor = commission.hint().anchor();
-        BoundingBox marked = commission.growth().reach();
+        if (!area.coversColumn(anchor.getX() + x, anchor.getZ() + z)) {
+            throw stop(DraftRefusal.READ_TOO_FAR, "(" + x + ", " + z + ")");
+        }
         OptionalInt top = commission.world().top(anchor.getX() + x, anchor.getZ() + z);
         if (top.isEmpty()) {
             throw stop(DraftRefusal.UNLOADED, new BlockPos(anchor.getX() + x, anchor.getY(),
                 anchor.getZ() + z).toShortString());
         }
-        long start = Math.min((long) top.getAsInt() - 1 - anchor.getY(), marked.maxY() + REACH);
-        long end = Math.max((long) marked.minY() - REACH, (long) commission.world().floor() - anchor.getY());
+        // Only what the pattern captured is looked through: from the column's top, or the top of the capture.
+        long start = Math.min((long) top.getAsInt() - 1, area.top()) - anchor.getY();
+        long end = Math.max((long) area.bottom(), commission.world().floor()) - anchor.getY();
         for (long y = start; y >= end; y--) {
             if (of.matches(read(x, (int) y, z))) {
                 return (int) y;

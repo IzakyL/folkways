@@ -36,6 +36,7 @@ record KeyGlyph(Kind kind, String name) {
             case WHEEL -> new KeyGlyph(Kind.WHEEL, "");
             case USE -> bound(minecraft.options.keyUse);
             case SNEAK -> bound(minecraft.options.keyShift);
+            case JUMP -> bound(minecraft.options.keyJump);
             case MODIFIER -> cap(Minecraft.ON_OSX ? "Cmd" : "Ctrl");
             case ALTERNATE -> cap(Minecraft.ON_OSX ? "Opt" : "Alt");
             case OVERHEAD -> bound(Overhead.KEY);
@@ -43,6 +44,8 @@ record KeyGlyph(Kind kind, String name) {
                 + bound(minecraft.options.keyDown).name + bound(minecraft.options.keyRight).name);
             case DRAG -> new KeyGlyph(Kind.WHEEL, "");
             case ESCAPE -> cap("Esc");
+            case TAB -> cap("Tab");
+            case BACKSPACE -> cap("Backspace");
             case DIGITS -> cap("0-9");
             case PONDER -> bound(PonderHint.mapping());
         };
