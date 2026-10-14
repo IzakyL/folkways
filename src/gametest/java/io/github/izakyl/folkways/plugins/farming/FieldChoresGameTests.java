@@ -26,8 +26,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -86,6 +88,43 @@ public final class FieldChoresGameTests {
         helper.assertTrue(live.containsAll(carrotIds) && asking.live().containsAll(carrotIds),
             "the carrot chores must be submitted");
         helper.assertTrue(cellsOf(carrots).equals(cells), "carrot chores must cover every cell: " + cellsOf(carrots));
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void aGrassyFieldIsPlannedWithoutChangingTheWorld(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 1, 1));
+        for (BlockPos floor : BlockPos.betweenClosed(origin, origin.offset(5, 0, 2))) {
+            place(level, floor, Blocks.DIRT.defaultBlockState());
+            place(level, floor.above(), Blocks.AIR.defaultBlockState());
+            place(level, floor.above(2), Blocks.AIR.defaultBlockState());
+        }
+        List<Block> grass = List.of(Blocks.SHORT_GRASS, Blocks.TALL_GRASS, Blocks.FERN, Blocks.LARGE_FERN);
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        for (int i = 0; i < grass.size(); i++) {
+            BlockPos ground = origin.offset(i + 1, 0, 1);
+            Block block = grass.get(i);
+            place(level, ground.above(), block.defaultBlockState());
+            if (block instanceof DoublePlantBlock) {
+                place(level, ground.above(2), block.defaultBlockState()
+                    .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
+            }
+            cells.add(ground);
+        }
+        List<Grown> goals = sweep(level, zone(level, cells), cells, "wheat", 1);
+        Set<BlockPos> tilled = new LinkedHashSet<>();
+        goals.forEach(goal -> goal.nodes().forEach(node -> {
+            helper.assertTrue(node instanceof TillNode, "grass-covered dirt needs tilling before sowing");
+            tilled.add(node.spec().focus().orElseThrow());
+        }));
+        helper.assertTrue(tilled.equals(cells), "every grass-covered cell needs a tilling job: " + tilled);
+        int i = 0;
+        for (BlockPos ground : cells) {
+            helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "planning does not turn the soil");
+            helper.assertTrue(level.getBlockState(ground.above()).is(grass.get(i++)),
+                "planning does not remove the grass");
+        }
         helper.succeed();
     }
 
