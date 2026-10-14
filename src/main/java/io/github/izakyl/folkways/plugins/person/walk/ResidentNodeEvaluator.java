@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.terms.ClimbableBlocks;
 import io.github.izakyl.folkways.core.api.terms.Keepouts;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.PathNavigationRegion;
 import net.minecraft.world.level.block.Blocks;
@@ -16,8 +17,12 @@ import net.minecraft.world.level.pathfinder.Node;
 import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.PathfindingContext;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
+    // How high a body steps without a jump.
+    private static final double STEP = 0.6D;
+
     private final BlockPos.MutableBlockPos probePos = new BlockPos.MutableBlockPos();
     @Nullable
     private BlockPos start;
@@ -76,7 +81,26 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
         if (type == PathType.OPEN && (isClimbable(context, x, y, z) || restsOnAScaffold(context, x, y, z))) {
             return PathType.WALKABLE;
         }
+        if ((type == PathType.OPEN || type == PathType.WALKABLE) && isSolidInside(context, x, y, z)) {
+            return PathType.BLOCKED;
+        }
+        if (type == PathType.OPEN && isSolidInside(context, x, y - 1, z)) {
+            return PathType.WALKABLE;
+        }
         return type;
+    }
+
+    // Vanilla walks through any block that is not a full cube unless the block says otherwise, and every vanilla
+    // block that matters says so. A modded machine a pixel short of the cube on each side does not: a resident
+    // pathed into it and stood against it for good, and nobody pathed onto it. A cell too tall to step into is
+    // shut, and stands as a floor under the cell above, as the ways (Footing) always had it.
+    private boolean isSolidInside(PathfindingContext context, int x, int y, int z) {
+        BlockState state = context.getBlockState(probePos.set(x, y, z));
+        if (state.isAir() || ClimbableBlocks.isClimbable(state) || ClimbableBlocks.offersFloor(state)) {
+            return false;
+        }
+        VoxelShape shape = state.getCollisionShape(context.level(), probePos);
+        return !shape.isEmpty() && shape.max(Direction.Axis.Y) > STEP;
     }
 
     // A body holding a climbable block stands on it as on a ladder's rung. Vanilla reads the floor off collision
