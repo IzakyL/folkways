@@ -74,15 +74,16 @@ public final class TextSyncGameTests {
         Colony colony = Colonies.mint(helper.getLevel().getServer());
         Body body = PersonBody.RESIDENT.get().create(helper.getLevel());
         try {
+            // An unnamed resident is called by a name drawn from the name sets, which is plain text already.
             body.mob().setCustomName(null);
             Line title = ColonyLooks.of(colony, body, List.of()).getFirst();
-            helper.assertTrue(title instanceof Line.Text text
-                && text.component().getContents() instanceof TranslatableContents,
-                "an unnamed resident's card keeps its entity-name translation");
+            helper.assertTrue(title instanceof Line.Text text && text.component().equals(body.mob().getDisplayName()),
+                "an unnamed resident's card carries its display name as it stands");
             body.mob().setCustomName(Component.translatable("folkways.sign.as_is", Component.literal("小明")));
             Line custom = ColonyLooks.of(colony, body, List.of()).getFirst();
-            helper.assertTrue(custom instanceof Line.Text text && text.component().equals(body.mob().getDisplayName()),
-                "a custom name keeps its component too");
+            helper.assertTrue(custom instanceof Line.Text text && text.component().equals(body.mob().getDisplayName())
+                && text.component().getContents() instanceof TranslatableContents,
+                "a translated custom name reaches the card unresolved");
         } finally {
             body.mob().discard();
             colony.raze();
