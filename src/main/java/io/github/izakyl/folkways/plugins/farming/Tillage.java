@@ -1,13 +1,18 @@
 package io.github.izakyl.folkways.plugins.farming;
 
+import io.github.izakyl.folkways.FolkwaysMod;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FarmBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -19,6 +24,11 @@ final class Tillage {
 
     static final ItemStack PLAIN_HOE = new ItemStack(Items.WOODEN_HOE);
 
+    // What a resident pulls up before tilling, and the soil a hoe turns once it is gone. The hoe itself refuses soil
+    // with anything above it, so a scan cannot ask it without changing the world; these tags stand in for that answer.
+    static final TagKey<Block> WEEDS = tag("weeds");
+    static final TagKey<Block> TILLABLE_UNDER_WEEDS = tag("tillable_under_weeds");
+
     private Tillage() {
     }
 
@@ -26,15 +36,13 @@ final class Tillage {
         if (tilled(level, ground, state, hoe).isPresent()) {
             return true;
         }
-        // The hoe's own check needs air above the soil. Recognise grass without changing the world during a scan;
-        // the work clears it and asks the hoe again before turning the soil.
-        return grass(level.getBlockState(ground.above())) && hoe.canPerformAction(ItemAbilities.HOE_TILL)
-            && (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.DIRT) || state.is(Blocks.DIRT_PATH));
+        // The work clears the weeds and asks the hoe again before turning the soil.
+        return weeds(level.getBlockState(ground.above())) && hoe.canPerformAction(ItemAbilities.HOE_TILL)
+            && state.is(TILLABLE_UNDER_WEEDS);
     }
 
-    static boolean grass(BlockState state) {
-        return state.is(Blocks.SHORT_GRASS) || state.is(Blocks.TALL_GRASS)
-            || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN);
+    static boolean weeds(BlockState state) {
+        return state.is(WEEDS);
     }
 
     static Optional<BlockState> tilled(Level level, BlockPos ground, BlockState state, ItemStack hoe) {
@@ -46,5 +54,9 @@ final class Tillage {
             new BlockHitResult(hit, Direction.UP, ground, false));
         BlockState turned = state.getToolModifiedState(context, ItemAbilities.HOE_TILL, true);
         return turned != null && turned.is(Blocks.FARMLAND) ? Optional.of(turned) : Optional.empty();
+    }
+
+    private static TagKey<Block> tag(String path) {
+        return TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, path));
     }
 }

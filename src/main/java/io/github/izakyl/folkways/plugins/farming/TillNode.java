@@ -39,10 +39,10 @@ final class TillNode extends FarmNode {
         List<WorkNoise> heard = new ArrayList<>();
         List<ItemStack> taken = new ArrayList<>();
         BlockPos above = ground.above();
-        BlockState grass = level.getBlockState(above);
-        if (Tillage.grass(grass)) {
-            taken.addAll(Yield.take(level, who.body(), above, grass));
-            heard.add(WorkNoise.broke(above, grass));
+        BlockState weeds = level.getBlockState(above);
+        if (Tillage.weeds(weeds)) {
+            taken.addAll(Yield.take(level, who.body(), above, weeds));
+            heard.add(WorkNoise.broke(above, weeds));
         }
         Optional<BlockState> turned = Tillage.tilled(level, ground, state, hoe);
         if (turned.isEmpty()) {
