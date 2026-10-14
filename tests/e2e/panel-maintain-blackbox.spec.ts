@@ -1,18 +1,17 @@
 import { expect, test } from "@playwright/test";
 import { tick, world } from "@izakyl/blockwright-minecraft";
 import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
-import { foundColonyFast, optInViaBook, waitForGroundedPlayer,
+import { foundColonyFast, foundingBox, optInViaBook, waitForGroundedPlayer,
   entityTypeMatches,
 } from "../shared/colony/colony-founding";
-import { prepareSafeWalkway } from "../shared/ui/world-ui";
+import { prepareSafeWalkwayOn, safeWalkwayBox } from "../shared/ui/world-ui";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, safeAction, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
-
-const CONFIG_PATH = "blockwright.toml";
+import { cover, twins } from "../shared/harness/stage";
 
 const RESIDENT_TYPE = "folkways:resident";
 const ITEM_TYPE = "minecraft:item";
@@ -20,14 +19,14 @@ const DEMAND_ITEM = "minecraft:cobblestone";
 const MAINTAIN_COUNT = 1;
 const SOURCE_STOCK = 16;
 
-test("container panel carry-set MAINTAIN stock replenishes the bound chest", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("container panel carry-set MAINTAIN stock replenishes the bound chest"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
   const runId = newRunId();
   let pair: E2EPair | undefined;
-  const serverTrace = tracePath("e2e", "panel-server");
-  const clientTrace = tracePath("e2e", "panel-client");
+  const serverTrace = tracePath("e2e", stage.name("panel-server"));
+  const clientTrace = tracePath("e2e", stage.name("panel-client"));
 
   let server: any;
   let client: any;
@@ -35,43 +34,44 @@ test("container panel carry-set MAINTAIN stock replenishes the bound chest", asy
   let sourceChest: any;
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: serverTrace, instance: seededServer(`panel-server-${runId}`) },
-      client: { trace: clientTrace, instance: `panel-client-${runId}` },
-      snapshot: () => ({ containers: [targetChest, sourceChest], entityTypes: [RESIDENT_TYPE, ITEM_TYPE] }),
+      config: stage.config,
+      server: { trace: serverTrace, instance: seededServer(stage.name(`panel-server-${runId}`)) },
+      client: { trace: clientTrace, instance: stage.name(`panel-client-${runId}`) },
+      snapshot: () => ({ containers: [targetChest, sourceChest].map((chest) => chest && stage.at(chest)), entityTypes: [RESIDENT_TYPE, ITEM_TYPE] }),
     });
     ({ server, client } = pair);
     const grounded = await waitForGroundedPlayer(server);
     const playerName = grounded.name;
 
     const origin = { x: Math.round(grounded.pos.x) + 4, y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) + 4 };
-    await foundColonyFast(server, client, playerName, { origin, residentCount: 3 });
     targetChest = { x: origin.x + 5, y: origin.y, z: origin.z - 2 };
     sourceChest = { x: origin.x - 5, y: origin.y, z: origin.z + 5 };
+    await stage.lay(server, cover(foundingBox(origin), safeWalkwayBox(origin, targetChest, sourceChest)));
+    await foundColonyFast(server, client, playerName, { origin, residentCount: 3, stage });
     await tryCommand(server, "gamerule doDaylightCycle false");
     await tryCommand(server, "time set day");
 
-    await prepareSafeWalkway(server, origin, targetChest, sourceChest);
+    await prepareSafeWalkwayOn(server, stage, origin, targetChest, sourceChest);
     await tryCommand(server, `gamemode survival ${playerName}`);
-    await tryCommand(server, `execute positioned ${commandPos(origin)} run kill @e[type=${ITEM_TYPE},distance=..48]`);
+    await tryCommand(server, `execute positioned ${commandPos(stage.world(origin))} run kill @e[type=${ITEM_TYPE},distance=..48]`);
     for (const chest of [targetChest, sourceChest]) {
-      await tryCommand(server, `setblock ${commandPos(chest)} minecraft:chest{Items:[]}`);
+      await tryCommand(server, `setblock ${commandPos(stage.at(chest))} minecraft:chest{Items:[]}`);
     }
     await tick.sprint(server, 3);
     for (const chest of [targetChest, sourceChest]) {
-      await optInViaBook(server, client, playerName, chest, "chest");
+      await optInViaBook(server, client, playerName, chest, "chest", stage);
     }
-    await tryCommand(server, `item replace block ${commandPos(sourceChest)} container.0 with ${DEMAND_ITEM} ${SOURCE_STOCK}`);
+    await tryCommand(server, `item replace block ${commandPos(stage.at(sourceChest))} container.0 with ${DEMAND_ITEM} ${SOURCE_STOCK}`);
     for (let slot = 0; slot < 9; slot++) {
       await tryCommand(server, `item replace entity ${playerName} inventory.${slot} with ${DEMAND_ITEM} 1`);
     }
     await tick.sprint(server, 20);
-    const sourceStocked = await chestHasAtLeast(server, sourceChest, DEMAND_ITEM, SOURCE_STOCK);
+    const sourceStocked = await chestHasAtLeast(server, stage.at(sourceChest), DEMAND_ITEM, SOURCE_STOCK);
     expect(sourceStocked).toBe(true);
 
-    await setMaintainDemandViaUI(server, client, playerName, targetChest, DEMAND_ITEM);
+    await setMaintainDemandViaUI(server, client, playerName, targetChest, DEMAND_ITEM, 1, stage);
 
-    const final = await pollReplenish(server, targetChest, sourceChest);
+    const final = await pollReplenish(server, stage.at(targetChest), stage.at(sourceChest));
     expect(final.targetHasStock).toBe(true);
     expect(final.sourceHasRemainder).toBe(true);
   } catch (error) {

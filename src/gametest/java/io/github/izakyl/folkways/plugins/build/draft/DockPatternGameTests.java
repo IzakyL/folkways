@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
 import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.draw;
-import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.parse;
 import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.ready;
 import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.refused;
 
@@ -45,7 +44,7 @@ public final class DockPatternGameTests {
     private static Pattern dock() {
         try (InputStream bytes = DockPatternGameTests.class.getResourceAsStream(
                 "/data/folkways/folkways/pattern/dock.star")) {
-            return parse("dock", new String(bytes.readAllBytes(), StandardCharsets.UTF_8), Map.of());
+            return DraftKit.bundled("dock", new String(bytes.readAllBytes(), StandardCharsets.UTF_8));
         } catch (IOException unreadable) {
             throw new AssertionError(unreadable);
         }

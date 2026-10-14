@@ -9,6 +9,7 @@ import {
   typeCell,
 } from "../ui/site-panel";
 import { frames, safeAction, tryCommand, softly, waitForElement } from "../harness/bw-helpers";
+import { GROUND, type Stage } from "../harness/stage";
 
 type Vec = { x: number; y: number; z: number };
 
@@ -18,16 +19,16 @@ const ACT_DELIVER = 1;
 const FILED_POLLS = 12;
 
 export async function optInContainerViaUI(
-  server: MinecraftServer, client: MinecraftClient, playerName: string, chest: Vec,
+  server: MinecraftServer, client: MinecraftClient, playerName: string, chest: Vec, stage: Stage = GROUND,
 ) {
-  return optInViaBook(server, client, playerName, chest, "chest");
+  return optInViaBook(server, client, playerName, chest, "chest", stage);
 }
 
 export async function setMaintainDemandViaUI(
   server: MinecraftServer, client: MinecraftClient, playerName: string, chest: Vec,
-  itemId: string, count = 1,
+  itemId: string, count = 1, stage: Stage = GROUND,
 ) {
-  return fileOrderViaSitePanel(server, client, playerName, chest, itemId, count, ACT_MAINTAIN);
+  return fileOrderViaSitePanel(server, client, playerName, chest, itemId, count, ACT_MAINTAIN, 0, stage);
 }
 
 // The same order, filed from wherever the player stands and looks: a filmed shot keeps its camera still, and
@@ -40,9 +41,9 @@ export async function setMaintainDemandInView(
 
 export async function deliverOrderViaSitePanel(
   server: MinecraftServer, client: MinecraftClient, playerName: string, chest: Vec,
-  itemId: string, count = 1,
+  itemId: string, count = 1, stage: Stage = GROUND,
 ) {
-  return fileOrderViaSitePanel(server, client, playerName, chest, itemId, count, ACT_DELIVER);
+  return fileOrderViaSitePanel(server, client, playerName, chest, itemId, count, ACT_DELIVER, 0, stage);
 }
 
 // The site's panel open on its order draft, with the draft's item button: what an item dragged in lands on.
@@ -59,17 +60,18 @@ export async function openOrderDraft(
 
 async function fileOrderViaSitePanel(
   server: MinecraftServer, client: MinecraftClient, playerName: string | null, chest: Vec,
-  itemId: string, count: number, act: number, beatMs = 0,
+  itemId: string, count: number, act: number, beatMs = 0, stage: Stage = GROUND,
 ) {
   const evidence: any = { chest, itemId, count, act };
   const beat = () => (beatMs > 0 ? new Promise((resolve) => setTimeout(resolve, beatMs)) : Promise.resolve());
   if (playerName !== null) {
-    await tryCommand(server, `tp ${playerName} ${chest.x + 0.5} ${chest.y} ${chest.z + 1.5} 180 30`);
+    const seen = stage.stand(chest);
+    await tryCommand(server, `tp ${playerName} ${seen.x + 0.5} ${seen.y} ${seen.z + 1.5} 180 30`);
   }
   await tick.sprint(server, 5);
   await screen.dismiss(client);
 
-  evidence.open = await openSite(server, client, chest);
+  evidence.open = await openSite(server, client, chest, stage);
   await beat();
   const before = await ordersRowCount(client);
   evidence.rows_before = before;

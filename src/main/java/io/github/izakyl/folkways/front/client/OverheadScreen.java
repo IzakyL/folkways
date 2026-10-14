@@ -193,6 +193,32 @@ final class OverheadScreen extends Screen {
         return true;
     }
 
+    /**
+     * Sneak here only takes the camera down, so what it does with a click or the wheel in the player's own eyes
+     * has keys of its own: Tab turns the book to the next gesture, Backspace or Delete lets go of the drawing.
+     */
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        switch (keyCode) {
+            case InputConstants.KEY_TAB -> {
+                HeldBook.bound(minecraft.player).ifPresent(book -> PacketDistributor.sendToServer(
+                    new SetBookGesturePacket(book.hand(), BookGestures.next(book.gesture()))));
+                return true;
+            }
+            case InputConstants.KEY_BACKSPACE, InputConstants.KEY_DELETE -> {
+                if (laid.gesture() == Shape.Gesture.LINE) {
+                    PathSelection.discard();
+                } else if (laid.gesture() == Shape.Gesture.BOX) {
+                    ZoneSelection.discard();
+                }
+                return true;
+            }
+            default -> {
+                return super.keyPressed(keyCode, scanCode, modifiers);
+            }
+        }
+    }
+
     @Override
     public void onClose() {
         Overhead.leave(minecraft);

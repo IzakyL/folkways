@@ -41,10 +41,10 @@ public final class DraftOffer {
     public static void register(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
             BoxOffers.register(new BoxOffers.Offer(ID, DraftPanel.TOKEN, ResourceLocation.withDefaultNamespace("paper"),
-                (min, max, done) -> DraftPanel.body(new Hint.Zone(min, max), DraftOffer::send, done)));
+                (min, max, taking) -> DraftPanel.body(new Hint.Zone(min, max), DraftOffer::send, taking)));
             PathOffers.register(new PathOffers.Offer(ALONG, DraftPanel.TOKEN,
                 ResourceLocation.withDefaultNamespace("paper"),
-                (points, done) -> DraftPanel.body(new Hint.Path(points), DraftOffer::send, done)));
+                (points, taking) -> DraftPanel.body(new Hint.Path(points), DraftOffer::send, taking)));
         });
     }
 

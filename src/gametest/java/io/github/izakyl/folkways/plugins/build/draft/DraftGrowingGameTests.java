@@ -125,7 +125,7 @@ public final class DraftGrowingGameTests {
         Pattern pattern = DraftKit.parse("""
             accepts = ["zone"]
             def grow(site):
-                far = 120
+                far = 70
                 if not site.matches(point(far, 0, 0), "air"):
                     fail("expected air")
                 return [part("x", box(site.zone.at(x = far)), ["minecraft:stone"])]

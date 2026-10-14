@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import javax.annotation.Nullable;
@@ -79,6 +80,8 @@ final class BuildPresence implements Facing {
     private final Set<UUID> cancelled = new LinkedHashSet<>();
     private final Map<UUID, BuildSite> sites = new LinkedHashMap<>();
     private final Map<UUID, Growing> growing = new LinkedHashMap<>();
+    // Growing sites whose next round is being drawn now.
+    private final Set<UUID> drawing = new HashSet<>();
     private final Map<UUID, Drafted> drafted = new LinkedHashMap<>();
     private final Map<UUID, Map<ResourceLocation, Long>> owed = new ConcurrentHashMap<>();
     private final Map<UUID, Set<BlockPos>> met = new LinkedHashMap<>();
@@ -232,25 +235,29 @@ final class BuildPresence implements Facing {
         return book.place(level, blueprint.id(), name, anchor, playerId, playerName, level.getGameTime());
     }
 
-    /** Begins a growing site; every round it places carries the name it was given, or the number it was dealt. */
-    Optional<Component> grow(ServerLevel level, Growing begun) {
-        Growing fresh = begun.named(siteName(begun.name()));
-        Growing next = advance(level, fresh);
-        if (next == null) {
-            return Optional.of(Component.translatable(DraftRefusal.NOTHING_DRAWN.translationKey(), ""));
-        }
-        if (next.order().isEmpty()) {
-            return Optional.of(next.stuckText());
-        }
-        growing.put(next.id(), next);
-        spend(begun.name());
-        keep();
-        return Optional.empty();
+    /**
+     * Begins a growing site once its first round is drawn; every round it places carries the name it was given, or
+     * the number it was dealt when it was placed.
+     */
+    CompletableFuture<Optional<Component>> grow(ServerLevel level, Growing begun) {
+        return Rounds.draw(level, begun).thenApply(round -> {
+            Growing next = advance(level, begun.named(siteName(begun.name())), round);
+            if (next == null) {
+                return Optional.of(Component.translatable(DraftRefusal.NOTHING_DRAWN.translationKey(), ""));
+            }
+            if (next.order().isEmpty()) {
+                return Optional.of(next.stuckText());
+            }
+            growing.put(next.id(), next);
+            spend(begun.name());
+            keep();
+            return Optional.empty();
+        });
     }
 
-    private Growing advance(ServerLevel level, Growing one) {
+    private Growing advance(ServerLevel level, Growing one, Round drawn) {
         long retry = level.getGameTime() + RETRY_TICKS;
-        return switch (Rounds.draw(level, one)) {
+        return switch (drawn) {
             case Round.Ended ended -> null;
             case Round.Stuck stuck -> one.stuck(stuck.refused(), retry);
             case Round.Grew grew -> {
@@ -274,7 +281,7 @@ final class BuildPresence implements Facing {
     private void tend(ServerLevel level) {
         boolean changed = false;
         for (Growing one : List.copyOf(growing.values())) {
-            if (!one.anchor().in(level) || one.order().filter(this::filed).isPresent()) {
+            if (drawing.contains(one.id()) || !one.anchor().in(level) || one.order().filter(this::filed).isPresent()) {
                 continue;
             }
             if (one.order().isPresent()) {
@@ -290,13 +297,23 @@ final class BuildPresence implements Facing {
             if (level.getGameTime() < one.retryAt()) {
                 continue;
             }
-            Growing next = advance(level, one);
-            if (next == null) {
-                growing.remove(one.id());
-            } else {
-                growing.put(next.id(), next);
-            }
-            changed = true;
+            // The round is drawn off the server's thread; until it comes back the site is left as it stands, and
+            // what comes back is let go if the site was stopped or changed meanwhile.
+            Growing asked = one;
+            drawing.add(asked.id());
+            Rounds.logged(Rounds.draw(level, asked).thenAccept(round -> {
+                drawing.remove(asked.id());
+                if (!asked.equals(growing.get(asked.id()))) {
+                    return;
+                }
+                Growing next = advance(level, asked, round);
+                if (next == null) {
+                    growing.remove(asked.id());
+                } else {
+                    growing.put(next.id(), next);
+                }
+                keep();
+            }));
         }
         if (changed) {
             keep();

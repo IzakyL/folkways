@@ -16,6 +16,7 @@ import {
   ZONE_KIND_ID,
 } from "../ui/zone-tools";
 import { commandPos, tryCommand } from "../harness/bw-helpers";
+import { GROUND, type Stage } from "../harness/stage";
 
 /** Whether an `execute` condition holds now (throws when the game cannot evaluate it). */
 export function probe(server: MinecraftServer, condition: string): Promise<boolean> {
@@ -60,11 +61,11 @@ export function penCenter(pen: Pen, y: number): Vec {
   return { x: (pen.min.x + pen.max.x + 1) / 2, y, z: (pen.min.z + pen.max.z + 1) / 2 };
 }
 
-export async function buildPen(server: MinecraftServer, pen: Pen) {
+export async function buildPen(server: MinecraftServer, pen: Pen, stage: Stage = GROUND) {
   for (const fence of pen.fences) {
-    await mustCommand(server, `setblock ${commandPos(fence)} minecraft:oak_fence`);
+    await mustCommand(server, `setblock ${commandPos(stage.at(fence))} minecraft:oak_fence`);
   }
-  await mustCommand(server, `setblock ${commandPos(pen.gate)} minecraft:oak_fence_gate[facing=east,open=false]`);
+  await mustCommand(server, `setblock ${commandPos(stage.at(pen.gate))} minecraft:oak_fence_gate[facing=east,open=false]`);
   await tick.sprint(server, 3);
 }
 
@@ -75,6 +76,7 @@ export async function createPastureZoneViaPanel(
   standBlock: Vec,
   pen: Pen,
   options: { animal: keyof typeof PASTURE_ANIMALS; target: number; index?: number },
+  stage: Stage = GROUND,
 ) {
   const animalId = `minecraft:${options.animal}`;
   const index = options.index ?? 0;
@@ -83,18 +85,18 @@ export async function createPastureZoneViaPanel(
     evidence.zone_mode = await setBookGesture(server, client, playerName, "box");
 
     evidence.corner_1 = await markCorner(server, client, pen.min, FIRST_CORNER,
-      () => aimAndLeftClick(server, client, playerName, pen.standInside, pen.min));
+      () => aimAndLeftClick(server, client, playerName, pen.standInside, pen.min, stage));
     evidence.corner_2 = await markCorner(server, client, pen.max, ZONE_MARKED,
-      () => aimAndLeftClick(server, client, playerName, pen.standInside, pen.max));
+      () => aimAndLeftClick(server, client, playerName, pen.standInside, pen.max, stage));
     await tick.sprint(server, 5);
 
-    evidence.create = await createMarkedZone(server, client, playerName, standBlock, "pasture");
+    evidence.create = await createMarkedZone(server, client, playerName, standBlock, "pasture", stage);
     evidence.configure = await configureZone(server, client, playerName, standBlock,
       { min: pen.min, max: pen.max },
       [
         { key: "animal", option: animalId },
         { key: "target", count: options.target },
-      ]);
+      ], stage);
 
     const registry = await colonyRegistry(server);
     evidence.zone_count = await zoneCount(server, registry);

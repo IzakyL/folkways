@@ -59,17 +59,14 @@ final class GhostRenderer {
     private static final float[] WRONG_STATE_RGB = {1.00F, 0.62F, 0.15F};
     private static final float MARK_FILL = 0.18F;
 
-    private static final List<Mesh> MESHES = new ArrayList<>();
-    private static final List<Mark> MARKS = new ArrayList<>();
-    private static List<Ghost> shown = List.of();
-    private static List<BlockState> standing = List.of();
-    private static boolean stale;
-
-    private GhostRenderer() {
-    }
+    private final List<Mesh> meshes = new ArrayList<>();
+    private final List<Mark> marks = new ArrayList<>();
+    private List<Ghost> shown = List.of();
+    private List<BlockState> standing = List.of();
+    private boolean stale;
 
     /** Takes the owed blocks the server sent, remeshing only when they or the blocks standing in them changed. */
-    static void show(Level level, List<Ghost> ghosts) {
+    void show(Level level, List<Ghost> ghosts) {
         List<BlockState> now = ghosts.stream().map(ghost -> level.getBlockState(ghost.pos())).toList();
         if (ghosts.equals(shown) && now.equals(standing)) {
             return;
@@ -79,33 +76,33 @@ final class GhostRenderer {
         stale = true;
     }
 
-    static void clear() {
-        MESHES.forEach(mesh -> mesh.buffer().close());
-        MESHES.clear();
-        MARKS.clear();
+    void clear() {
+        meshes.forEach(mesh -> mesh.buffer().close());
+        meshes.clear();
+        marks.clear();
         shown = List.of();
         standing = List.of();
         stale = false;
     }
 
-    static boolean isEmpty() {
+    boolean isEmpty() {
         return shown.isEmpty();
     }
 
-    static void drawModels(Level level, Vec3 camera, float partialTick) {
+    void drawModels(Level level, Vec3 camera, float partialTick) {
         if (stale) {
             remesh(level);
         }
-        if (MESHES.isEmpty()) {
+        if (meshes.isEmpty()) {
             return;
         }
-        List<Matrix4f> views = MESHES.stream().map(mesh -> mesh.view(level, camera, partialTick)).toList();
+        List<Matrix4f> views = meshes.stream().map(mesh -> mesh.view(level, camera, partialTick)).toList();
         pass(Layers.DEPTH, views);
         pass(Layers.COLOR, views);
     }
 
-    static void drawFills(Level level, PoseStack poseStack, VertexConsumer fills, float partialTick) {
-        for (Mark mark : MARKS) {
+    void drawFills(Level level, PoseStack poseStack, VertexConsumer fills, float partialTick) {
+        for (Mark mark : marks) {
             Placed.at(level, mark.pos(), partialTick).enter(poseStack);
             AABB box = mark.box();
             LevelRenderer.addChainedFilledBoxVertices(poseStack, fills,
@@ -115,8 +112,8 @@ final class GhostRenderer {
         }
     }
 
-    static void drawOutlines(Level level, PoseStack poseStack, VertexConsumer lines, float partialTick) {
-        for (Mark mark : MARKS) {
+    void drawOutlines(Level level, PoseStack poseStack, VertexConsumer lines, float partialTick) {
+        for (Mark mark : marks) {
             Placed.at(level, mark.pos(), partialTick).enter(poseStack);
             LevelRenderer.renderLineBox(poseStack, lines, mark.box(),
                 mark.rgb()[0], mark.rgb()[1], mark.rgb()[2], 1.0F);
@@ -124,12 +121,12 @@ final class GhostRenderer {
         }
     }
 
-    private static void pass(RenderType layer, List<Matrix4f> views) {
+    private void pass(RenderType layer, List<Matrix4f> views) {
         layer.setupRenderState();
         ShaderInstance shader = RenderSystem.getShader();
         if (shader != null) {
-            for (int at = 0; at < MESHES.size(); at++) {
-                VertexBuffer buffer = MESHES.get(at).buffer();
+            for (int at = 0; at < meshes.size(); at++) {
+                VertexBuffer buffer = meshes.get(at).buffer();
                 buffer.bind();
                 buffer.drawWithShader(views.get(at), RenderSystem.getProjectionMatrix(), shader);
             }
@@ -138,7 +135,7 @@ final class GhostRenderer {
         layer.clearRenderState();
     }
 
-    private static void remesh(Level level) {
+    private void remesh(Level level) {
         List<Ghost> ghosts = shown;
         List<BlockState> stood = standing;
         clear();
@@ -155,15 +152,15 @@ final class GhostRenderer {
                 continue;
             }
             if (there.is(wanted.getBlock())) {
-                MARKS.add(Mark.whole(ghost.pos(), WRONG_STATE_RGB));
+                marks.add(Mark.whole(ghost.pos(), WRONG_STATE_RGB));
             } else if (!there.isAir() && !there.canBeReplaced()) {
-                MARKS.add(Mark.whole(ghost.pos(), WRONG_BLOCK_RGB));
+                marks.add(Mark.whole(ghost.pos(), WRONG_BLOCK_RGB));
             } else if (wanted.getRenderShape() == RenderShape.MODEL) {
                 modelled.put(ghost.pos(), wanted);
                 frames.computeIfAbsent(WorldSpaces.containing(level, ghost.pos()).map(WorldSpaces.Frame::id),
                     frame -> new ArrayList<>()).add(ghost.pos());
             } else {
-                MARKS.add(Mark.shaped(level, ghost.pos(), wanted, MISSING_RGB));
+                marks.add(Mark.shaped(level, ghost.pos(), wanted, MISSING_RGB));
             }
         }
 
@@ -174,7 +171,7 @@ final class GhostRenderer {
     }
 
     /** Meshes one frame's ghosts around the first of them, so the mesh can follow the frame as it moves. */
-    private static void mesh(GhostView view, List<BlockPos> cells) {
+    private void mesh(GhostView view, List<BlockPos> cells) {
         BlockRenderDispatcher blocks = Minecraft.getInstance().getBlockRenderer();
         BlockPos origin = cells.getFirst();
         RandomSource random = RandomSource.create();
@@ -206,7 +203,7 @@ final class GhostRenderer {
                 buffer.bind();
                 buffer.upload(mesh);
                 VertexBuffer.unbind();
-                MESHES.add(new Mesh(origin, buffer));
+                meshes.add(new Mesh(origin, buffer));
             }
         }
     }

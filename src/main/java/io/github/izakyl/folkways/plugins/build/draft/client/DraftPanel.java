@@ -7,20 +7,25 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Taking;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
 import io.github.izakyl.folkways.plugins.build.SiteNameField;
 import io.github.izakyl.folkways.plugins.build.draft.Chosen;
 import io.github.izakyl.folkways.plugins.build.draft.Commission;
+import io.github.izakyl.folkways.plugins.build.draft.Drafting;
 import io.github.izakyl.folkways.plugins.build.draft.DraftTemplate;
 import io.github.izakyl.folkways.plugins.build.draft.Drawn;
 import io.github.izakyl.folkways.plugins.build.draft.Face;
+import io.github.izakyl.folkways.plugins.build.draft.Growth;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Pattern;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
@@ -30,7 +35,10 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -40,6 +48,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
@@ -61,9 +70,28 @@ public final class DraftPanel {
         void send(CompoundTag file, BlockPos corner, String siteName);
     }
 
+    /**
+     * What the page held when its last preview went out: the pattern, its knobs and the name, and the way it
+     * faced, so the page opens on them again and builds what was looked at.
+     */
+    private record Kept(Hint hint, ResourceLocation pattern, KnobValues values, String name, Direction front) {
+    }
+
+    private static Kept kept;
+
+    /**
+     * A drawing under way off the client's thread, the button that asked for it, and what is done with it once it
+     * has come back ready.
+     */
+    private record Asked(CompletableFuture<Drawn> drawn, Button by, Consumer<Drawn.Ready> then) {
+    }
+
     private final Hint hint;
     private final HandOff handOff;
+    private final Taking taking;
     private final List<Pattern> patterns;
+    private final Optional<Kept> resumed;
+    private final Direction front;
 
     private final List<Button> patternRows = new ArrayList<>();
     private final List<UIElement> patternMarks = new ArrayList<>();
@@ -71,23 +99,35 @@ public final class DraftPanel {
     private final Label refusal = Rows.text(Component.empty());
     private final Label empty = Rows.text(Component.empty());
     private final SiteNameField name = new SiteNameField();
+    private Button preview;
     private Button confirm;
 
     private Pattern chosen;
     private KnobValues values;
+    private Asked asked;
 
-    private DraftPanel(Hint hint, HandOff handOff) {
+    private DraftPanel(Hint hint, HandOff handOff, Taking taking) {
         this.hint = hint;
         this.handOff = handOff;
+        this.taking = taking;
         this.patterns = LocalPatterns.available().stream().filter(pattern -> pattern.accepts(hint)).toList();
+        this.resumed = Optional.ofNullable(kept).filter(held -> held.hint().equals(hint) && taking.previewed());
+        // The way the player faced when the page first opened stands until it is built, wherever they have
+        // walked off to look at the preview.
+        Minecraft minecraft = Minecraft.getInstance();
+        this.front = resumed.map(Kept::front).orElseGet(() -> minecraft.player == null
+            ? Direction.NORTH : minecraft.player.getDirection().getOpposite());
     }
 
-    /** The patterns that fit what was drawn and the chosen one's knobs; {@code done} is run once one is commissioned. */
-    static UIElement body(Hint hint, HandOff handOff, Runnable done) {
-        return new DraftPanel(hint, handOff).build(done);
+    /**
+     * The patterns that fit what was drawn and the chosen one's knobs. One is previewed out in the world before it
+     * can be built, and the page opens on what was previewed when it is come back to.
+     */
+    static UIElement body(Hint hint, HandOff handOff, Taking taking) {
+        return new DraftPanel(hint, handOff, taking).build();
     }
 
-    private UIElement build(Runnable done) {
+    private UIElement build() {
         // The patterns stand in a column of their own, and the chosen one's knobs beside it.
         UIElement table = new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.COLUMN).widthPercent(100).gapAll(1));
@@ -118,9 +158,14 @@ public final class DraftPanel {
 
         refusal.setDisplay(false);
 
+        preview = new Button()
+            .setText(Component.translatable(TOKEN + ".preview"))
+            .setOnClick(event -> preview());
+        preview.setDisplay(false);
+        Tokens.name(preview, TOKEN + ".preview");
         confirm = new Button()
-            .setText(Component.translatable("folkways.action.confirm"))
-            .setOnClick(event -> raise(done));
+            .setText(Component.translatable(TOKEN + ".confirm"))
+            .setOnClick(event -> raise());
         confirm.setDisplay(false);
         Tokens.name(confirm, TOKEN + ".confirm");
 
@@ -132,9 +177,16 @@ public final class DraftPanel {
         ScrollerView scroller = Rows.fills(Rows.box());
         scroller.addScrollViewChild(stack);
 
-        UIElement page = Rows.page().addChildren(scroller, name.row(), Rows.actions(confirm));
+        UIElement page = Rows.page().addChildren(scroller, name.row(), Rows.actions(preview, confirm));
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0).minHeight(0));
-        if (patterns.isEmpty()) {
+        // A drawing is taken up only while the page is open; one that comes back after it has closed is let go.
+        page.addEventListener(UIEvents.TICK, event -> tick());
+        Optional<Pattern> previewed = resumed.flatMap(held -> patterns.stream()
+            .filter(pattern -> pattern.id().equals(held.pattern())).findFirst());
+        if (previewed.isPresent()) {
+            choose(previewed.get(), resumed.get().values());
+            name.retype(resumed.get().name());
+        } else if (patterns.isEmpty()) {
             refresh();
         } else {
             // The first is chosen to begin with, so the knobs' half never opens empty.
@@ -163,8 +215,14 @@ public final class DraftPanel {
     }
 
     private void choose(Pattern pattern) {
+        choose(pattern, KnobValues.of(pattern.knobs()));
+    }
+
+    private void choose(Pattern pattern, KnobValues held) {
+        // What was being drawn for the pattern chosen before is let go.
+        asked = null;
         chosen = pattern;
-        values = KnobValues.of(pattern.knobs());
+        values = held;
         knobTable.clearAllChildren();
         for (Schema.Setting setting : pattern.knobs().settings()) {
             knobTable.addChildren(new Knob(setting).row);
@@ -184,44 +242,108 @@ public final class DraftPanel {
                 row.removeClass("folkways_selected");
             }
         }
-        confirm.setDisplay(chosen != null);
+        preview.setDisplay(chosen != null);
+        // Nothing is built that has not first been looked at where it would stand: its knobs may still be
+        // turned once it has, but another pattern is previewed first.
+        confirm.setDisplay(chosen != null && kept != null && kept.hint().equals(hint)
+            && kept.pattern().equals(chosen.id()) && taking.previewed());
+        // While a drawing is under way nothing more is asked of it, and the button that asked says it is drawing.
+        preview.setActive(asked == null);
+        confirm.setActive(asked == null);
+        preview.setText(Component.translatable(asked != null && asked.by() == preview ? TOKEN + ".drawing"
+            : TOKEN + ".preview"));
+        confirm.setText(Component.translatable(asked != null && asked.by() == confirm ? TOKEN + ".drawing"
+            : TOKEN + ".confirm"));
         name.row().setDisplay(chosen != null);
     }
 
-    private void raise(Runnable done) {
+    private void preview() {
+        draw(preview, ready -> {
+            kept = new Kept(hint, chosen.id(), values, name.typed(), front);
+            taking.preview(ghostsOf(ready));
+        });
+    }
+
+    private void raise() {
         if (chosen == null) {
             return;
         }
-        Minecraft minecraft = Minecraft.getInstance();
-        World world = minecraft.level == null ? World.NONE : World.of(minecraft.level);
-        Direction front = minecraft.player == null ? Direction.NORTH : minecraft.player.getDirection().getOpposite();
-        Drawn drawn = Patterns.commission(chosen,
-            new Commission(hint, values, world, front, Patterns.seedOf(chosen, hint)));
+        Chosen settings = Chosen.of(chosen.knobs(), values);
+        String typed = name.typed();
+        draw(confirm, ready -> {
+            if (LocalPatterns.local(chosen)) {
+                handOff.send(fileOf(ready), ready.corner(), typed);
+            } else {
+                DraftOffer.commission(chosen, hint, settings, front, typed);
+            }
+            kept = null;
+            taking.done();
+        });
+    }
+
+    /**
+     * Draws the chosen pattern here as it is set, over the chunks it reaches as they stand now, on a drafting
+     * thread; once it is back, it is handed on, or the page says why it cannot be built.
+     */
+    private void draw(Button by, Consumer<Drawn.Ready> then) {
+        if (chosen == null || asked != null) {
+            return;
+        }
+        Level level = Minecraft.getInstance().level;
+        World world = level == null ? World.NONE : chosen.capture(level, hint, Growth.first(hint));
+        // The knobs are copied as they stand, as they may be turned while it is drawn.
+        Commission commission = new Commission(hint, Chosen.of(chosen.knobs(), values), world, front,
+            Patterns.seedOf(chosen, hint));
+        asked = new Asked(Drafting.draw(chosen, commission), by, then);
+        refusal.setDisplay(false);
+        refresh();
+    }
+
+    private void tick() {
+        if (asked == null || !asked.drawn().isDone()) {
+            return;
+        }
+        Asked done = asked;
+        asked = null;
+        refresh();
+        checked(done.drawn().join()).ifPresent(done.then());
+    }
+
+    /** What came back, if it can be built from here; otherwise the page says why not. */
+    private Optional<Drawn.Ready> checked(Drawn drawn) {
         if (drawn instanceof Drawn.Refused refused) {
-            refusal.setText(refused.component());
-            refusal.setDisplay(true);
-            return;
-        }
-        if (!LocalPatterns.local(chosen)) {
-            DraftOffer.commission(chosen, hint, Chosen.of(chosen.knobs(), values), front, name.typed());
-            done.run();
-            return;
-        }
-        if (chosen.grows()) {
-            refusal.setText(Component.translatable(TOKEN + ".grow.local"));
-            refusal.setDisplay(true);
-            return;
+            return refuse(refused.component());
         }
         Drawn.Ready ready = (Drawn.Ready) drawn;
-        CompoundTag file = DraftTemplate.of(ready.draft(), SharedConstants.getCurrentVersion().getDataVersion()
-            .getVersion());
-        if (!DraftOffer.fits(file)) {
-            refusal.setText(Component.translatable(TOKEN + ".too_big_to_send"));
-            refusal.setDisplay(true);
-            return;
+        if (LocalPatterns.local(chosen)) {
+            if (chosen.grows()) {
+                return refuse(Component.translatable(TOKEN + ".grow.local"));
+            }
+            if (!DraftOffer.fits(fileOf(ready))) {
+                return refuse(Component.translatable(TOKEN + ".too_big_to_send"));
+            }
         }
-        handOff.send(file, ready.corner(), name.typed());
-        done.run();
+        refusal.setDisplay(false);
+        return Optional.of(ready);
+    }
+
+    private Optional<Drawn.Ready> refuse(Component why) {
+        refusal.setText(why);
+        refusal.setDisplay(true);
+        return Optional.empty();
+    }
+
+    private static CompoundTag fileOf(Drawn.Ready ready) {
+        return DraftTemplate.of(ready.draft(), SharedConstants.getCurrentVersion().getDataVersion().getVersion());
+    }
+
+    // A cell the world already holds as drawn is left as it stands, and has nothing to show.
+    private static List<Ghost> ghostsOf(Drawn.Ready ready) {
+        Level level = Minecraft.getInstance().level;
+        return ready.draft().cells().stream()
+            .map(cell -> new Ghost(ready.corner().offset(cell.offset()), cell.state()))
+            .filter(ghost -> level == null || !level.getBlockState(ghost.pos()).equals(ghost.state()))
+            .toList();
     }
 
     private static ItemStack stackOf(ResourceLocation item) {

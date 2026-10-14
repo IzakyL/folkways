@@ -12,8 +12,6 @@ public final class Lattice {
 
     static final int UNCOVERED = -1;
 
-    static final long MOST_SCANNED = 1L << 24;
-
     private static final int MASK_BITS = 8;
     private static final int MASK = (1 << MASK_BITS) - 1;
 
@@ -31,23 +29,17 @@ public final class Lattice {
         return FolkwaysConfig.maxBuildCells();
     }
 
-    static long volume(BoundingBox box) {
-        return (long) box.getXSpan() * box.getYSpan() * box.getZSpan();
-    }
-
     public static Optional<Lattice> of(Massing massing) {
         List<Massing.Part> parts = massing.parts();
         if (parts.isEmpty()) {
             return Optional.empty();
         }
         BoundingBox reach = null;
-        long scanned = 0;
         for (Massing.Part part : parts) {
             BoundingBox box = part.solid().bounds();
             reach = reach == null ? box : Solid.union(reach, box);
-            scanned += volume(box);
         }
-        if (scanned > MOST_SCANNED || Extent.of(reach.getXSpan(), reach.getYSpan(), reach.getZSpan()).isEmpty()) {
+        if (Extent.of(reach.getXSpan(), reach.getYSpan(), reach.getZSpan()).isEmpty()) {
             return Optional.empty();
         }
         Long2IntOpenHashMap covered = new Long2IntOpenHashMap();
@@ -69,6 +61,7 @@ public final class Lattice {
         }
         BoundingBox box = part.solid().bounds();
         for (int y = box.minY(); y <= box.maxY(); y++) {
+            Drafting.checkTime();
             for (int z = box.minZ(); z <= box.maxZ(); z++) {
                 for (int x = box.minX(); x <= box.maxX(); x++) {
                     int mask = part.skin() instanceof Skin.Fitted fitted && fitted.fit() == Fit.LAYERED

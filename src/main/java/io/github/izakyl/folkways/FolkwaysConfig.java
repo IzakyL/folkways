@@ -29,6 +29,7 @@ public final class FolkwaysConfig {
     private static final ModConfigSpec.IntValue PATROL_WARD_TICKS;
     private static final ModConfigSpec.IntValue MAX_BUILD_CELLS;
     private static final ModConfigSpec.LongValue MAX_BLUEPRINT_VOLUME;
+    private static final ModConfigSpec.IntValue DRAW_SECONDS;
 
     private static final ModConfigSpec.ConfigValue<List<? extends String>> REFUSED_RECIPES;
     private static final ModConfigSpec.ConfigValue<List<? extends Number>> BUILDING_HASTE;
@@ -138,6 +139,11 @@ public final class FolkwaysConfig {
                 "malformed or hostile structure file, not a building size: it stops one from claiming a",
                 "volume too large to walk before its blocks are counted.")
             .defineInRange("maxBlueprintVolume", 1_048_576L, 1L, 16_777_216L);
+        DRAW_SECONDS = BUILDER
+            .comment("Longest one pattern may take to draw, in seconds, before it is stopped and refused.",
+                "Drawings run beside the game rather than in its tick, and patterns are trusted to read",
+                "and draw what they like within what they capture: this is the one limit held over them.")
+            .defineInRange("drawSeconds", 10, 1, 3_600);
         BUILDER.pop();
 
         BUILDER.push("crafting");
@@ -331,6 +337,10 @@ public final class FolkwaysConfig {
 
     public static long maxBlueprintVolume() {
         return read(MAX_BLUEPRINT_VOLUME);
+    }
+
+    public static int drawSeconds() {
+        return read(DRAW_SECONDS);
     }
 
     // The wasteful recipes refused unless a server says otherwise.

@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { foundColonyFast, optInViaBook, waitForGroundedPlayer,
+import { foundColonyFast, foundingBox, optInViaBook, waitForGroundedPlayer,
   entityTypeMatches,
 } from "../shared/colony/colony-founding";
 import { runColonyTask } from "../shared/colony/colony-tasks";
+import { readDoing } from "../shared/colony/resident-probe";
 import { aimAndWorldLeftClick, countInResidentPacks, mustCommand } from "../shared/ui/world-ui";
 import {
   colonyRegistry,
@@ -23,8 +24,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { settledAll, unwrapSettled } from "../shared/harness/tick-tools";
 import { commandPos, distance, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
-
-const CONFIG_PATH = "blockwright.toml";
+import { around, cover, twins, type Stage } from "../shared/harness/stage";
 
 const RESIDENT_TYPE = "folkways:resident";
 const ITEM_TYPE = "minecraft:item";
@@ -50,23 +50,23 @@ const WOODLOT_SIDE = 32;
 const WOODLOT_MARGIN = 2;
 const WOODLOT_HEIGHT = 9;
 
-test("a resident eats out of his own pack and lies down in his own bed", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("a resident eats out of his own pack and lies down in his own bed"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
   const runId = newRunId();
   let pair: E2EPair | undefined;
-  const serverTrace = tracePath("e2e", "needs-server");
-  const clientTrace = tracePath("e2e", "needs-client");
+  const serverTrace = tracePath("e2e", stage.name("needs-server"));
+  const clientTrace = tracePath("e2e", stage.name("needs-client"));
 
   let server: any;
   let client: any;
   const evidence: any = {};
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: serverTrace, instance: seededServer(`needs-server-${runId}`) },
-      client: { trace: clientTrace, instance: `needs-client-${runId}` },
+      config: stage.config,
+      server: { trace: serverTrace, instance: seededServer(stage.name(`needs-server-${runId}`)) },
+      client: { trace: clientTrace, instance: stage.name(`needs-client-${runId}`) },
       snapshot: () => ({ entityTypes: [RESIDENT_TYPE] }),
     });
     ({ server, client } = pair);
@@ -75,23 +75,24 @@ test("a resident eats out of his own pack and lies down in his own bed", async (
     await tryCommand(server, `gamemode survival ${playerName}`);
 
     const origin = { x: Math.round(grounded.pos.x) + 4, y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) + 4 };
+    const woodlot = raiseWoodlot(origin);
+    await stage.lay(server, cover(foundingBox(origin), around([woodlot.min, woodlot.max, ...woodlot.depots], 0, WOODLOT_HEIGHT + 2)));
     const founding = await foundColonyFast(server, client, playerName, {
-      origin, residentCount: RESIDENT_COUNT,
+      origin, residentCount: RESIDENT_COUNT, stage,
     });
     const beds = founding.bedFeet;
-    evidence.beds = await readBlocks(server, beds);
+    evidence.beds = await readBlocks(server, beds.map((bed) => stage.at(bed)));
 
     await tryCommand(server, "gamerule doDaylightCycle false");
     await tryCommand(server, "time set day");
-    await tryCommand(server, `execute positioned ${commandPos(origin)} run kill @e[type=${ITEM_TYPE},distance=..24]`);
-    await tryCommand(server, `setblock ${commandPos(founding.foodChest)} minecraft:chest{Items:[]}`);
+    await tryCommand(server, `execute positioned ${commandPos(stage.world(origin))} run kill @e[type=${ITEM_TYPE},distance=..24]`);
+    await tryCommand(server, `setblock ${commandPos(stage.at(founding.foodChest))} minecraft:chest{Items:[]}`);
 
-    const woodlot = raiseWoodlot(origin);
-    evidence.woodlot = await buildWoodlot(server, woodlot);
-    evidence.depots = await enrolDepots(server, client, playerName, woodlot);
-    evidence.zone = await armWoodlotZone(server, client, playerName, founding.standBlock, woodlot);
+    evidence.woodlot = await buildWoodlot(server, woodlot, stage);
+    evidence.depots = await enrolDepots(server, client, playerName, woodlot, stage);
+    evidence.zone = await armWoodlotZone(server, client, playerName, founding.standBlock, woodlot, stage);
     expect(evidence.zone.armed, `woodlot was not created: ${JSON.stringify(evidence.zone)}`).toBe(true);
-    const held = [...woodlot.depots];
+    const held = woodlot.depots.map((depot) => stage.at(depot));
 
     await tryCommand(
       server,
@@ -123,7 +124,8 @@ test("a resident eats out of his own pack and lies down in his own bed", async (
       const [packsRead, bedsideRead, asleepRead, chestRead] = await settledAll<any>([
         () => countInResidentPacks(server),
         () => bedsideSnapshot(server, beds),
-        () => sleepersInBed(server, beds[0].y, RESIDENT_COUNT),
+        // A sleeper's SleepingY is the bed block's own, where the level stores it.
+        () => sleepersInBed(server, stage.at(beds[0]).y, RESIDENT_COUNT),
         () => countInChests(server, held, FOOD_ITEM),
       ]);
       const packs = unwrapSettled(packsRead);
@@ -137,6 +139,13 @@ test("a resident eats out of his own pack and lies down in his own bed", async (
         logs_in_packs: packs.totals[LOG_ITEM] ?? 0,
         near_beds: bedside.near.length,
         asleep,
+        // What each is about, and where it stands: a resident by its bed that never lies down says why here.
+        doing: await Promise.all(bedside.residents.map(async (one: any) => ({
+          at: one.position, doing: await readDoing(server, one.uuid).catch((error) => String(error).slice(0, 120)),
+        }))),
+        sleeping_at: (await world.entities(server, { dimension: "minecraft:overworld", types: [RESIDENT_TYPE], nbt: true, limit: 16 }))
+          .entities.map((one: any) => one.nbt?.SleepingY === undefined ? null
+            : [one.nbt.SleepingX, one.nbt.SleepingY, one.nbt.SleepingZ]),
       });
       mostAsleep = Math.max(mostAsleep, asleep);
       if (foodHeld < foodBefore) {
@@ -166,8 +175,8 @@ test("a resident eats out of his own pack and lies down in his own bed", async (
     pair?.failing(error);
     throw error;
   } finally {
-    writeFileSync(outAbs("e2e", "reports", "needs-evidence.json"), JSON.stringify(evidence, null, 2) + "\n");
-    testInfo.attach("needs-evidence.json", {
+    writeFileSync(outAbs("e2e", "reports", `${stage.name("needs-evidence")}.json`), JSON.stringify(evidence, null, 2) + "\n");
+    testInfo.attach(`${stage.name("needs-evidence")}.json`, {
       body: JSON.stringify(evidence, null, 2),
       contentType: "application/json",
     });
@@ -262,54 +271,49 @@ function raiseWoodlot(origin: { x: number; y: number; z: number }): Woodlot {
   };
 }
 
-async function buildWoodlot(server: any, woodlot: Woodlot) {
+async function buildWoodlot(server: any, woodlot: Woodlot, stage: Stage) {
   const evidence: any = { min: woodlot.min, max: woodlot.max, rows: woodlot.logRows.length };
-  await mustCommand(server, `fill ${commandPos(woodlot.min)} ${commandPos(woodlot.max)} minecraft:dirt`);
-  await mustCommand(
-    server,
-    `fill ${woodlot.min.x} ${woodlot.min.y + 1} ${woodlot.min.z}`
-    + ` ${woodlot.max.x} ${woodlot.min.y + WOODLOT_HEIGHT + 2} ${woodlot.max.z} minecraft:air`,
-  );
+  const fill = (from: any, to: any, block: string) =>
+    mustCommand(server, `fill ${commandPos(stage.at(from))} ${commandPos(stage.at(to))} ${block}`);
+  await fill(woodlot.min, woodlot.max, "minecraft:dirt");
+  await fill({ ...woodlot.min, y: woodlot.min.y + 1 }, { ...woodlot.max, y: woodlot.min.y + WOODLOT_HEIGHT + 2 }, "minecraft:air");
   const wide = woodlot.logSpan.to - woodlot.logSpan.from + 1;
   for (const z of woodlot.logRows) {
-    await mustCommand(
-      server,
-      `fill ${woodlot.logSpan.from} ${woodlot.min.y + 1} ${z}`
-      + ` ${woodlot.logSpan.to} ${woodlot.min.y + WOODLOT_HEIGHT} ${z} ${LOG_ITEM}`,
-    );
+    await fill({ x: woodlot.logSpan.from, y: woodlot.min.y + 1, z },
+      { x: woodlot.logSpan.to, y: woodlot.min.y + WOODLOT_HEIGHT, z }, LOG_ITEM);
   }
   evidence.logs = woodlot.logRows.length * wide * WOODLOT_HEIGHT;
   evidence.labor_ticks = evidence.logs * 12;
   return evidence;
 }
 
-async function enrolDepots(server: any, client: any, playerName: string, woodlot: Woodlot) {
+async function enrolDepots(server: any, client: any, playerName: string, woodlot: Woodlot, stage: Stage) {
   const evidence: any[] = [];
   for (const depot of woodlot.depots) {
-    await mustCommand(server, `fill ${commandPos({ ...depot, y: depot.y - 1 })}`
-      + ` ${commandPos({ x: depot.x, y: depot.y - 1, z: depot.z + 1 })} minecraft:dirt`);
-    await mustCommand(server, `setblock ${commandPos(depot)} minecraft:chest{Items:[]}`);
+    await mustCommand(server, `fill ${commandPos(stage.at({ ...depot, y: depot.y - 1 }))}`
+      + ` ${commandPos(stage.at({ x: depot.x, y: depot.y - 1, z: depot.z + 1 }))} minecraft:dirt`);
+    await mustCommand(server, `setblock ${commandPos(stage.at(depot))} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 3);
-    evidence.push(await optInViaBook(server, client, playerName, depot, "chest"));
+    evidence.push(await optInViaBook(server, client, playerName, depot, "chest", stage));
   }
   return evidence;
 }
 
 async function armWoodlotZone(
-  server: any, client: any, playerName: string, standBlock: any, woodlot: Woodlot,
+  server: any, client: any, playerName: string, standBlock: any, woodlot: Woodlot, stage: Stage,
 ) {
   const evidence: any = { crop: FORESTRY_CROP };
   const cornerA = { ...woodlot.min };
   const cornerB = { ...woodlot.max };
   evidence.zone_mode = await setBookGesture(server, client, playerName, "box");
-  evidence.corner_1 = await aimAndWorldLeftClick(server, client, playerName, cornerA);
+  evidence.corner_1 = await aimAndWorldLeftClick(server, client, playerName, cornerA, stage);
   await tick.sprint(server, 3);
-  evidence.corner_2 = await aimAndWorldLeftClick(server, client, playerName, cornerB);
+  evidence.corner_2 = await aimAndWorldLeftClick(server, client, playerName, cornerB, stage);
   await tick.sprint(server, 5);
-  evidence.create = await createMarkedZone(server, client, playerName, standBlock, "farm");
+  evidence.create = await createMarkedZone(server, client, playerName, standBlock, "farm", stage);
   evidence.set_crop = await configureZone(server, client, playerName, standBlock,
     { min: cornerA, max: cornerB },
-    [{ key: "crop", option: FORESTRY_CROP }]);
+    [{ key: "crop", option: FORESTRY_CROP }], stage);
 
   const registry = await colonyRegistry(server);
   evidence.zone_kind = await zoneKindAt(server, registry, 0);

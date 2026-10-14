@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.function.Function;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.resources.ResourceLocation;
 import net.starlark.java.eval.Dict;
@@ -36,15 +37,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> accepts, List<String> phases,
-        Object draw, Object grow) {
+        Capture capture, Object draw, Object grow) {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-patterns");
 
     private static final long LOAD_STEPS = 200_000L;
-    // A drawing runs at once on the thread that asks for it (the server's, or the client's for a local preview):
-    // 12-80M steps a second, so the most it may take holds that thread up for well under two seconds. A 56-block
-    // terraced field takes about 4M, a 150-block piece of railway or road about 2.4M.
-    private static final long DRAW_STEPS = 20_000_000L;
+    // A drawing has no step limit of its own: it runs on a drafting thread, over the part of the world its pattern
+    // captured, until it is done or its time is up (see Drafting).
 
     private static final StarlarkSemantics SEMANTICS =
         StarlarkSemantics.builder().setBool("-allow_recursion", true).build();
@@ -55,6 +54,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
     private static final String GROW = "grow";
     private static final String ACCEPTS = "accepts";
     private static final String PHASES = "phases";
+    private static final String CAPTURE = "capture";
     private static final String SUFFIX = ".star";
     private static final Function<ResourceLocation, Optional<String>> INSTALLED =
         id -> Optional.ofNullable(Patterns.sources().get(id));
@@ -66,6 +66,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
         Objects.requireNonNull(face, "face");
         accepts = Set.copyOf(accepts);
         phases = List.copyOf(phases);
+        Objects.requireNonNull(capture, "capture");
         if ((draw == null) == (grow == null)) {
             throw new IllegalArgumentException("a pattern defines draw(site) or grow(site), and not both");
         }
@@ -90,7 +91,8 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
             }
             Pattern pattern = new Pattern(id, schema(module.getGlobal(KNOBS)),
                 new Face(offered(module.getGlobal(KNOBS)), words(module.getGlobal(LANG))),
-                accepts(module.getGlobal(ACCEPTS)), phases(module.getGlobal(PHASES)), drawing, growing);
+                accepts(module.getGlobal(ACCEPTS)), phases(module.getGlobal(PHASES)),
+                Capture.parse(module.getGlobal(CAPTURE)), drawing, growing);
             Set<ResourceLocation> unloaded = pattern.unloaded();
             if (!unloaded.isEmpty()) {
                 LOGGER.warn("{}: needs {}, which this game has not loaded", id, unloaded);
@@ -200,6 +202,19 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
         }
     }
 
+    /** The chunks a drawing of this pattern over the mark, at this round, may read. */
+    public Area area(Hint hint, Growth growth) {
+        return Area.around(hint, growth, capture);
+    }
+
+    /**
+     * What a drawing of this pattern over the mark will read, taken from the level now so it can be drawn on
+     * another thread; this runs on the level's own thread.
+     */
+    public World capture(Level level, Hint hint, Growth growth) {
+        return World.capture(level, area(hint, growth));
+    }
+
     public Drawn drawOn(Commission commission) {
         if (draw == null) {
             return switch (growOn(commission)) {
@@ -208,7 +223,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
                 case Round.Stuck stuck -> stuck.refused();
             };
         }
-        Derivation drawing = new Derivation(commission, phases);
+        Derivation drawing = new Derivation(commission, area(commission.hint(), commission.growth()), phases);
         Drawn drawn = run(commission, drawing, draw);
         if (drawn instanceof Drawn.Ready && drawing.grown() != null) {
             return Drawn.refused(DraftRefusal.PATTERN_FAILED, "grown(...) is what grow(site) answers, not draw(site)");
@@ -220,7 +235,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
         if (grow == null) {
             return new Round.Stuck(new Drawn.Refused(DraftRefusal.PATTERN_FAILED, id + " does not grow"));
         }
-        Derivation drawing = new Derivation(commission, phases);
+        Derivation drawing = new Derivation(commission, area(commission.hint(), commission.growth()), phases);
         Drawn drawn = run(commission, drawing, grow);
         Vocabulary.Grown grown = drawing.grown();
         return switch (drawn) {
@@ -243,7 +258,6 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
         }
         try (Mutability mutability = Mutability.create("draw", id)) {
             StarlarkThread thread = new StarlarkThread(mutability, SEMANTICS);
-            thread.setMaxExecutionSteps(DRAW_STEPS);
             thread.setPrintHandler((printing, message) -> LOGGER.info("{}: {}", id, message));
             long began = System.nanoTime();
             List<Massing.Part> parts;

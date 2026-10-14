@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { tick, world } from "@izakyl/blockwright-minecraft";
 import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
-import { foundColonyFast, waitForGroundedPlayer, optInViaBook, type Vec,
+import { foundColonyFast, foundingBox, waitForGroundedPlayer, optInViaBook, type Vec,
 } from "../shared/colony/colony-founding";
 import { countInResidentPacks } from "../shared/ui/world-ui";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -10,8 +10,7 @@ import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, tryCommand, waitMatched } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
-
-const CONFIG_PATH = "blockwright.toml";
+import { twins } from "../shared/harness/stage";
 
 const RESIDENT_TYPE = "folkways:resident";
 const ITEM_TYPE = "minecraft:item";
@@ -30,24 +29,24 @@ const DOORWAY_OPEN_BUDGET = 2400;
 const DOORWAY_ENTER_BUDGET = 1200;
 const DOORWAY_SHUT_BUDGET = 400;
 
-test("economy spine: a smithing upgrade runs through the real chain, and a resident works a doorway", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("economy spine: a smithing upgrade runs through the real chain, and a resident works a doorway"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   ensureOut("e2e");
 
   const runId = newRunId();
   let pair: E2EPair | undefined;
-  const serverTrace = tracePath("e2e", "economy-spine-server");
-  const clientTrace = tracePath("e2e", "economy-spine-client");
+  const serverTrace = tracePath("e2e", stage.name("economy-spine-server"));
+  const clientTrace = tracePath("e2e", stage.name("economy-spine-client"));
 
   let server: any;
   let client: any;
   let phaseContainers: any[] = [];
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: serverTrace, instance: seededServer(`economy-spine-server-${runId}`) },
-      client: { trace: clientTrace, instance: `economy-spine-client-${runId}` },
-      snapshot: () => ({ containers: phaseContainers, entityTypes: [RESIDENT_TYPE, ITEM_TYPE] }),
+      config: stage.config,
+      server: { trace: serverTrace, instance: seededServer(stage.name(`economy-spine-server-${runId}`)) },
+      client: { trace: clientTrace, instance: stage.name(`economy-spine-client-${runId}`) },
+      snapshot: () => ({ containers: phaseContainers.map((at) => stage.at(at)), entityTypes: [RESIDENT_TYPE, ITEM_TYPE] }),
     });
     ({ server, client } = pair);
     const grounded = await waitForGroundedPlayer(server);
@@ -55,36 +54,39 @@ test("economy spine: a smithing upgrade runs through the real chain, and a resid
     await tryCommand(server, `gamemode survival ${playerName}`);
 
     const origin = { x: Math.round(grounded.pos.x) + 4, y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) + 4 };
-    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: 3 });
-    await tryCommand(server, `execute positioned ${commandPos(origin)} run kill @e[type=minecraft:fox,distance=..32]`);
+    await stage.lay(server, foundingBox(origin));
+    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: 3, stage });
+    // Where commands and container reads reach the plan cell `cell`.
+    const block = (cell: Vec) => commandPos(stage.at(cell));
+    await tryCommand(server, `execute positioned ${commandPos(stage.world(origin))} run kill @e[type=minecraft:fox,distance=..32]`);
 
     await tryCommand(server, "time set day");
     const smithing = smithingLayout(founding.origin);
     phaseContainers = [smithing.supply, smithing.target];
 
-    await world.command(server, `setblock ${commandPos(smithing.table)} minecraft:smithing_table`);
-    await world.command(server, `setblock ${commandPos(smithing.supply)} minecraft:chest{Items:[]}`);
-    await world.command(server, `setblock ${commandPos(smithing.target)} minecraft:chest{Items:[]}`);
+    await world.command(server, `setblock ${block(smithing.table)} minecraft:smithing_table`);
+    await world.command(server, `setblock ${block(smithing.supply)} minecraft:chest{Items:[]}`);
+    await world.command(server, `setblock ${block(smithing.target)} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 3);
-    await optInViaBook(server, client, playerName, smithing.supply, "chest");
-    await optInViaBook(server, client, playerName, smithing.target, "chest");
-    await optInViaBook(server, client, playerName, smithing.table, "worksite");
+    await optInViaBook(server, client, playerName, smithing.supply, "chest", stage);
+    await optInViaBook(server, client, playerName, smithing.target, "chest", stage);
+    await optInViaBook(server, client, playerName, smithing.table, "worksite", stage);
 
-    await world.command(server, `item replace block ${commandPos(smithing.supply)} container.0 with ${SMITH_TEMPLATE} 1`);
-    await world.command(server, `item replace block ${commandPos(smithing.supply)} container.1 with ${SMITH_BASE}[minecraft:damage=${SMITH_DAMAGE}] 1`);
-    await world.command(server, `item replace block ${commandPos(smithing.supply)} container.2 with ${SMITH_ADDITION} 1`);
+    await world.command(server, `item replace block ${block(smithing.supply)} container.0 with ${SMITH_TEMPLATE} 1`);
+    await world.command(server, `item replace block ${block(smithing.supply)} container.1 with ${SMITH_BASE}[minecraft:damage=${SMITH_DAMAGE}] 1`);
+    await world.command(server, `item replace block ${block(smithing.supply)} container.2 with ${SMITH_ADDITION} 1`);
     await tick.sprint(server, 5);
 
-    const smithStaged = await readContainerStacks(server, smithing.supply);
+    const smithStaged = await readContainerStacks(server, stage.at(smithing.supply));
     const stagedBase = smithStaged.find((stack) => stack.id === SMITH_BASE);
     expect(
       stagedBase?.damage,
       `setup failed to stage ${SMITH_BASE} as "damage ${SMITH_DAMAGE}"; supply chest read ${JSON.stringify(smithStaged)}`,
     ).toBe(SMITH_DAMAGE);
 
-    await setMaintainDemandViaUI(server, client, playerName, smithing.target, SMITH_RESULT, 1);
+    await setMaintainDemandViaUI(server, client, playerName, smithing.target, SMITH_RESULT, 1, stage);
 
-    const smithTargetBefore = await readContainerStacks(server, smithing.target);
+    const smithTargetBefore = await readContainerStacks(server, stage.at(smithing.target));
     expect(
       smithTargetBefore.some((stack) => stack.id === SMITH_RESULT),
       `the target chest already holds ${SMITH_RESULT} after ordering: the UI picker's sample leaked into the scene, so this phase cannot test smithing`,
@@ -97,11 +99,11 @@ test("economy spine: a smithing upgrade runs through the real chain, and a resid
 
     const smithed = await waitMatched(
       server,
-      `if items block ${commandPos(smithing.target)} container.* ${SMITH_RESULT}`,
+      `if items block ${block(smithing.target)} container.* ${SMITH_RESULT}`,
       { maxTicks: SMITH_BUDGET_TICKS, stepTicks: 20 },
     );
-    const smithTargetAfter = await readContainerStacks(server, smithing.target);
-    const smithSupplyAfter = await readContainerStacks(server, smithing.supply);
+    const smithTargetAfter = await readContainerStacks(server, stage.at(smithing.target));
+    const smithSupplyAfter = await readContainerStacks(server, stage.at(smithing.supply));
 
     expect(
       smithed.matched,
@@ -121,11 +123,11 @@ test("economy spine: a smithing upgrade runs through the real chain, and a resid
 
     await world.command(
       server,
-      `item replace block ${commandPos(smithing.supply)} container.${DOORWAY_SOURCE_SLOT}`
+      `item replace block ${block(smithing.supply)} container.${DOORWAY_SOURCE_SLOT}`
         + ` with ${DOORWAY_DEMAND_ITEM} ${DOORWAY_SOURCE_STOCK}`,
     );
     await tick.sprint(server, 5);
-    const doorwaySupply = await readContainerStacks(server, smithing.supply);
+    const doorwaySupply = await readContainerStacks(server, stage.at(smithing.supply));
     expect(
       doorwaySupply
         .filter((stack) => stack.id === DOORWAY_DEMAND_ITEM)
@@ -137,14 +139,16 @@ test("economy spine: a smithing upgrade runs through the real chain, and a resid
     for (const fixture of doorwayFixtures(founding.origin)) {
       phaseContainers = [...phaseContainers, fixture.demand];
       await tryCommand(server, "time set day");
-      for (const command of fixture.build) {
-        await world.command(server, command);
+      for (const part of fixture.build) {
+        await world.command(server, part.to
+          ? `fill ${block(part.from)} ${block(part.to)} ${part.block}`
+          : `setblock ${block(part.from)} ${part.block}`);
       }
       await tick.sprint(server, 5);
 
       const evidence: any = { label: fixture.label, barrier: fixture.barrier };
       evidence.shut_at_start = await world.probe(
-        server, `if block ${commandPos(fixture.barrier)} ${fixture.blockId}[open=false]`);
+        server, `if block ${block(fixture.barrier)} ${fixture.blockId}[open=false]`);
       expect(
         evidence.shut_at_start,
         `[${fixture.label}] setup not built: ${commandPos(fixture.barrier)} is not a closed ${fixture.blockId}`,
@@ -164,10 +168,10 @@ test("economy spine: a smithing upgrade runs through the real chain, and a resid
         `[${fixture.label}] could not clear residents out of the enclosure - the "they got in" check would be true from the start, so this phase tests nothing`,
       ).toBe(false);
 
-      await world.command(server, `setblock ${commandPos(fixture.demand)} minecraft:chest{Items:[]}`);
+      await world.command(server, `setblock ${block(fixture.demand)} minecraft:chest{Items:[]}`);
       await tick.sprint(server, 3);
       evidence.demand_chest_placed = await world.probe(
-        server, `if block ${commandPos(fixture.demand)} minecraft:chest`);
+        server, `if block ${block(fixture.demand)} minecraft:chest`);
       expect(
         evidence.demand_chest_placed,
         `[${fixture.label}] demand chest not built: ${commandPos(fixture.demand)} is not a chest`,
@@ -179,16 +183,16 @@ test("economy spine: a smithing upgrade runs through the real chain, and a resid
         `[${fixture.label}] check volume ${volumeArgs(fixture.deep)} does not cover demand chest ${commandPos(fixture.demand)}: the volume is miscomputed`,
       ).toBe(true);
 
-      evidence.opt_in = await optInViaBook(server, client, playerName, fixture.demand, "chest");
-      await setMaintainDemandViaUI(server, client, playerName, fixture.demand, DOORWAY_DEMAND_ITEM, 1);
+      evidence.opt_in = await optInViaBook(server, client, playerName, fixture.demand, "chest", stage);
+      await setMaintainDemandViaUI(server, client, playerName, fixture.demand, DOORWAY_DEMAND_ITEM, 1, stage);
       await world.command(
         server,
-        `tp ${playerName} ${founding.origin.x + 0.5} ${founding.origin.y} ${founding.origin.z + 3.5}`,
+        `tp ${playerName} ${founding.origin.x + 0.5} ${stage.stand(founding.origin).y} ${founding.origin.z + 3.5}`,
       );
       await tick.sprint(server, 5);
 
       evidence.opened = await waitMatched(
-        server, `if block ${commandPos(fixture.barrier)} ${fixture.blockId}[open=true]`,
+        server, `if block ${block(fixture.barrier)} ${fixture.blockId}[open=true]`,
         { maxTicks: DOORWAY_OPEN_BUDGET, stepTicks: 1 });
       expect(
         evidence.opened.matched,
@@ -209,7 +213,7 @@ test("economy spine: a smithing upgrade runs through the real chain, and a resid
       ).toBe(true);
 
       evidence.shut_again = await waitMatched(
-        server, `if block ${commandPos(fixture.barrier)} ${fixture.blockId}[open=false]`,
+        server, `if block ${block(fixture.barrier)} ${fixture.blockId}[open=false]`,
         { maxTicks: DOORWAY_SHUT_BUDGET, stepTicks: 1 });
       expect(
         evidence.shut_again.matched,
@@ -278,7 +282,8 @@ type DoorwayFixture = {
   barrier: Vec;
   blockId: string;
   demand: Vec;
-  build: string[];
+  // Plan cells: a fill from..to, or a setblock at from alone.
+  build: { from: Vec; to?: Vec; block: string }[];
   interior: Volume;
   deep: Volume;
 };
@@ -320,10 +325,10 @@ function doorwayFixtures(origin: Vec): DoorwayFixture[] {
       blockId: "minecraft:oak_door",
       demand: { x: doorX, y, z: chestZ },
       build: [
-        `fill ${corridor.outerMinX} ${y} ${farWall} ${corridor.outerMaxX} ${y + 2} ${nearWall} minecraft:smooth_stone`,
-        `fill ${corridor.innerMinX} ${y} ${innerFar} ${corridor.innerMaxX} ${y + 2} ${innerNear} minecraft:air`,
-        `setblock ${doorX} ${y} ${nearWall} minecraft:oak_door[facing=north,half=lower,hinge=left,open=false,powered=false]`,
-        `setblock ${doorX} ${y + 1} ${nearWall} minecraft:oak_door[facing=north,half=upper,hinge=left,open=false,powered=false]`,
+        { from: { x: corridor.outerMinX, y, z: farWall }, to: { x: corridor.outerMaxX, y: y + 2, z: nearWall }, block: "minecraft:smooth_stone" },
+        { from: { x: corridor.innerMinX, y, z: innerFar }, to: { x: corridor.innerMaxX, y: y + 2, z: innerNear }, block: "minecraft:air" },
+        { from: { x: doorX, y, z: nearWall }, block: "minecraft:oak_door[facing=north,half=lower,hinge=left,open=false,powered=false]" },
+        { from: { x: doorX, y: y + 1, z: nearWall }, block: "minecraft:oak_door[facing=north,half=upper,hinge=left,open=false,powered=false]" },
       ],
       interior: { x: corridor.innerMinX, y, z: innerFar, dx: corridor.innerWidth, dy: 2, dz: innerDepth },
       deep: { x: corridor.innerMinX, y, z: innerFar, dx: corridor.innerWidth, dy: 2, dz: innerDepth - DEEP_MARGIN },
@@ -334,9 +339,9 @@ function doorwayFixtures(origin: Vec): DoorwayFixture[] {
       blockId: "minecraft:oak_fence_gate",
       demand: { x: gateX, y, z: chestZ },
       build: [
-        `fill ${pen.outerMinX} ${y} ${farWall} ${pen.outerMaxX} ${y} ${nearWall} minecraft:oak_fence`,
-        `fill ${pen.innerMinX} ${y} ${innerFar} ${pen.innerMaxX} ${y} ${innerNear} minecraft:air`,
-        `setblock ${gateX} ${y} ${nearWall} minecraft:oak_fence_gate[facing=north,open=false,in_wall=false,powered=false]`,
+        { from: { x: pen.outerMinX, y, z: farWall }, to: { x: pen.outerMaxX, y, z: nearWall }, block: "minecraft:oak_fence" },
+        { from: { x: pen.innerMinX, y, z: innerFar }, to: { x: pen.innerMaxX, y, z: innerNear }, block: "minecraft:air" },
+        { from: { x: gateX, y, z: nearWall }, block: "minecraft:oak_fence_gate[facing=north,open=false,in_wall=false,powered=false]" },
       ],
       interior: { x: pen.innerMinX, y, z: innerFar, dx: pen.innerWidth, dy: 2, dz: innerDepth },
       deep: { x: pen.innerMinX, y, z: innerFar, dx: pen.innerWidth, dy: 2, dz: innerDepth - DEEP_MARGIN },

@@ -8,15 +8,14 @@ import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { waitForAnyScreen, waitForElement, safeAction, safeScreen, screenOpen, commandPos, tryCommand, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
-
-const CONFIG_PATH = "blockwright.toml";
+import { around, twins } from "../shared/harness/stage";
 
 const BOOK_ITEM = "folkways:colony_book";
 const TOGGLE_WIDGET = "folkways.member.toggle";
 const PANEL_WIDGET = "folkways.site.panel";
 const TOGGLE_TICKS = 200;
 
-test("the chest window's member toggle takes a container out of the colony and back in", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("the chest window's member toggle takes a container out of the colony and back in"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
@@ -29,10 +28,10 @@ test("the chest window's member toggle takes a container out of the colony and b
 
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: tracePath("e2e", "member-toggle-server"), instance: seededServer(`member-toggle-server-${runId}`) },
-      client: { trace: tracePath("e2e", "member-toggle-client"), instance: `member-toggle-client-${runId}` },
-      snapshot: () => ({ containers: [chest] }),
+      config: stage.config,
+      server: { trace: tracePath("e2e", stage.name("member-toggle-server")), instance: seededServer(stage.name(`member-toggle-server-${runId}`)) },
+      client: { trace: tracePath("e2e", stage.name("member-toggle-client")), instance: stage.name(`member-toggle-client-${runId}`) },
+      snapshot: () => ({ containers: [chest && stage.at(chest)] }),
     });
     ({ server, client } = pair);
 
@@ -46,27 +45,29 @@ test("the chest window's member toggle takes a container out of the colony and b
     evidence.chest = chest;
 
     await tryCommand(server, `fill ${origin.x - 8} ${origin.y} ${origin.z - 8} ${origin.x + 8} ${origin.y + 4} ${origin.z + 8} minecraft:air`);
+    await stage.lay(server, around([origin], 8, 4));
     await tryCommand(server, "gamerule doDaylightCycle false");
     await tryCommand(server, "time set day");
 
     await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with ${BOOK_ITEM}`);
     await tick.sprint(server, 5);
-    evidence.create = await createColonyViaBook(server, client, playerName, standBlock);
+    evidence.create = await createColonyViaBook(server, client, playerName, standBlock, stage);
 
-    await tryCommand(server, `setblock ${commandPos(chest)} minecraft:chest{Items:[]}`);
+    await tryCommand(server, `setblock ${commandPos(stage.at(chest))} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 5);
 
-    evidence.member_initial = await isColonyMember(server, chest);
+    evidence.member_initial = await isColonyMember(server, chest, stage);
     expect(evidence.member_initial).toBe(false);
     // A chest outside the colony has no window of its own: the book takes it in from the world first.
-    evidence.opt_in = await optInViaBook(server, client, playerName, chest, "chest");
-    expect(await isColonyMember(server, chest)).toBe(true);
+    evidence.opt_in = await optInViaBook(server, client, playerName, chest, "chest", stage);
+    expect(await isColonyMember(server, chest, stage)).toBe(true);
 
-    await tryCommand(server, `tp ${playerName} ${chest.x + 0.5} ${chest.y} ${chest.z + 1.5} 180 30`);
+    const seen = stage.stand(chest);
+    await tryCommand(server, `tp ${playerName} ${seen.x + 0.5} ${seen.y} ${seen.z + 1.5} 180 30`);
     await tick.sprint(server, 5);
     await screen.dismiss(client);
     evidence.open = await safeAction(() =>
-      player.useBlock(client, { x: chest!.x, y: chest!.y, z: chest!.z }, { face: "up" }),
+      player.useBlock(client, stage.at(chest!), { face: "up" }),
     );
     await waitForAnyScreen(client, 10_000);
     if (!screenOpen(await safeScreen(client))) {
@@ -77,20 +78,20 @@ test("the chest window's member toggle takes a container out of the colony and b
     await waitForElement(client, { id: PANEL_WIDGET }, { timeoutMs: 10_000 });
 
     evidence.click_leave = await softly(() => clickElement(client, { id: TOGGLE_WIDGET }));
-    await safeAction(() => world.waitFor(server, memberCondition(chest!, false), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));
-    evidence.member_after_leave = await isColonyMember(server, chest);
+    await safeAction(() => world.waitFor(server, memberCondition(stage.at(chest!), false), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));
+    evidence.member_after_leave = await isColonyMember(server, chest, stage);
     expect(evidence.member_after_leave).toBe(false);
     // Only a block the colony holds has a board: once the chest leaves there is the button alone.
     await waitForElement(client, { id: PANEL_WIDGET }, { state: "absent", timeoutMs: 10_000 });
 
     evidence.click_join = await softly(() => clickElement(client, { id: TOGGLE_WIDGET }));
-    await safeAction(() => world.waitFor(server, memberCondition(chest!, true), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));
-    evidence.member_after_join = await isColonyMember(server, chest);
+    await safeAction(() => world.waitFor(server, memberCondition(stage.at(chest!), true), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));
+    evidence.member_after_join = await isColonyMember(server, chest, stage);
     expect(evidence.member_after_join).toBe(true);
     await waitForElement(client, { id: PANEL_WIDGET }, { timeoutMs: 10_000 });
 
     await screen.dismiss(client);
-    testInfo.attach("member-toggle", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
+    testInfo.attach(stage.name("member-toggle"), { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
   } catch (error) {
     pair?.failing(error);
     throw error;

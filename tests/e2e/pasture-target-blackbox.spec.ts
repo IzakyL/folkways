@@ -3,6 +3,7 @@ import { tick } from "@izakyl/blockwright-minecraft";
 import { writeFileSync } from "node:fs";
 import {
   createColonyViaBook,
+  foundingBox,
   errorSummary,
   tryCommand,
   waitForGroundedPlayer,
@@ -25,14 +26,14 @@ import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { frames, safeAction, waitForElement } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
+import { twins, type Stage } from "../shared/harness/stage";
 
-const CONFIG_PATH = "blockwright.toml";
 const BOOK_ITEM = "folkways:colony_book";
 
 const CREATED_TARGET = 4;
 const EXPECTED_TARGET = 7;
 
-test("the zone settings page sets a pasture's target head count on the colony's own zone", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("the zone settings page sets a pasture's target head count on the colony's own zone"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
@@ -44,9 +45,9 @@ test("the zone settings page sets a pasture's target head count on the colony's 
 
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: tracePath("e2e", "pasture-target-server"), instance: seededServer(`pasture-target-server-${runId}`) },
-      client: { trace: tracePath("e2e", "pasture-target-client"), instance: `pasture-target-client-${runId}` },
+      config: stage.config,
+      server: { trace: tracePath("e2e", stage.name("pasture-target-server")), instance: seededServer(stage.name(`pasture-target-server-${runId}`)) },
+      client: { trace: tracePath("e2e", stage.name("pasture-target-client")), instance: stage.name(`pasture-target-client-${runId}`) },
     });
     ({ server, client } = pair);
 
@@ -60,18 +61,19 @@ test("the zone settings page sets a pasture's target head count on the colony's 
     const standBlock: Vec = { x: origin.x - 4, y: origin.y, z: origin.z };
 
     await tryCommand(server, `fill ${origin.x - 20} ${origin.y} ${origin.z - 20} ${origin.x + 20} ${origin.y + 6} ${origin.z + 20} minecraft:air`);
+    await stage.lay(server, foundingBox(origin));
     await tryCommand(server, `gamemode survival ${playerName}`);
     await tryCommand(server, `give ${playerName} ${BOOK_ITEM}`);
     await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with ${BOOK_ITEM}`);
     await tick.sprint(server, 5);
-    evidence.found = await createColonyViaBook(server, client, playerName, standBlock);
+    evidence.found = await createColonyViaBook(server, client, playerName, standBlock, stage);
 
     const pen = penLayout(origin, 8, 2);
-    await buildPen(server, pen);
+    await buildPen(server, pen, stage);
     evidence.zone = await createPastureZoneViaPanel(server, client, playerName, standBlock, pen, {
       animal: "cow",
       target: CREATED_TARGET,
-    });
+    }, stage);
     expect(
       evidence.zone.created,
       pastureZoneFailure(evidence.zone, "cow", CREATED_TARGET),
@@ -85,7 +87,7 @@ test("the zone settings page sets a pasture's target head count on the colony's 
 
     await settleOverview(server, client, 4);
 
-    evidence.apply = await applyPastureTarget(server, client, playerName, standBlock, pen, EXPECTED_TARGET);
+    evidence.apply = await applyPastureTarget(server, client, playerName, standBlock, pen, EXPECTED_TARGET, stage);
 
     const series: number[] = [];
     for (let round = 0; round < 12; round++) {
@@ -106,7 +108,7 @@ test("the zone settings page sets a pasture's target head count on the colony's 
 
     // The tick box on the same page: a pasture is made shearing, and one click clears it on the zone.
     expect(await zoneFlagSettingAt(server, registry, "shear"), "a pasture shears by default").toBe(true);
-    evidence.untick = await applyPastureEdit(server, client, playerName, pen, { key: "shear", toggle: true });
+    evidence.untick = await applyPastureEdit(server, client, playerName, pen, { key: "shear", toggle: true }, stage);
     let shear = true;
     for (let round = 0; round < 12 && shear; round++) {
       await tick.sprint(server, 20);
@@ -118,8 +120,8 @@ test("the zone settings page sets a pasture's target head count on the colony's 
     pair?.failing(error);
     throw error;
   } finally {
-    writeFileSync(outAbs("e2e", "reports", "pasture-target-evidence.json"), JSON.stringify(evidence, null, 2) + "\n");
-    testInfo.attach("pasture-target-evidence.json", {
+    writeFileSync(outAbs("e2e", "reports", `${stage.name("pasture-target-evidence")}.json`), JSON.stringify(evidence, null, 2) + "\n");
+    testInfo.attach(`${stage.name("pasture-target-evidence")}.json`, {
       body: JSON.stringify(evidence, null, 2),
       contentType: "application/json",
     });
@@ -128,11 +130,11 @@ test("the zone settings page sets a pasture's target head count on the colony's 
 });
 
 async function applyPastureEdit(
-  server: any, client: any, playerName: string, pen: Pen, edit: { key: string; toggle: true },
+  server: any, client: any, playerName: string, pen: Pen, edit: { key: string; toggle: true }, stage: Stage,
 ) {
   const step: any = { edit };
   try {
-    step.hold = await holdZoneAndOpen(server, client, playerName, { min: pen.min, max: pen.max });
+    step.hold = await holdZoneAndOpen(server, client, playerName, { min: pen.min, max: pen.max }, stage);
     await waitForElement(client, { id: zoneSettingToken(edit.key) }, { timeoutMs: 8_000 });
     step.press = await applyZoneSetting(server, client, edit);
     await tick.sprint(server, 10);
@@ -145,11 +147,11 @@ async function applyPastureEdit(
 }
 
 async function applyPastureTarget(
-  server: any, client: any, playerName: string, standBlock: Vec, pen: Pen, target: number,
+  server: any, client: any, playerName: string, standBlock: Vec, pen: Pen, target: number, stage: Stage,
 ) {
   const step: any = { target };
   try {
-    step.hold = await holdZoneAndOpen(server, client, playerName, { min: pen.min, max: pen.max });
+    step.hold = await holdZoneAndOpen(server, client, playerName, { min: pen.min, max: pen.max }, stage);
     await waitForElement(client, { id: zoneSettingToken("target") }, { timeoutMs: 8_000 });
     step.press = await applyZoneSetting(server, client, { key: "target", count: target });
     await tick.sprint(server, 10);

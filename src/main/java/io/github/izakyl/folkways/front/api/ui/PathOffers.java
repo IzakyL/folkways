@@ -36,7 +36,7 @@ public final class PathOffers {
     @FunctionalInterface
     public interface Body {
 
-        /** What the offer asks before it is taken, drawn in the page; {@code done} is run once it has been. */
-        UIElement build(List<BlockPos> points, Runnable done);
+        /** What the offer asks before it is taken, drawn in the page; {@code taking} is told what was decided. */
+        UIElement build(List<BlockPos> points, Taking taking);
     }
 }

@@ -13,6 +13,7 @@ import {
   waitForAnyScreen,
   waitForElement,
 } from "../harness/bw-helpers";
+import { GROUND, type Stage } from "../harness/stage";
 
 type Vec = { x: number; y: number; z: number };
 
@@ -24,12 +25,13 @@ export type SlotView = { index: number; item: { id: string; count?: number | nul
 
 export type BoardAct = { page: string; row: number; act: number; id: string };
 
-export async function openContainerScreen(client: MinecraftClient, chest: Vec, attempts = OPEN_ATTEMPTS) {
+export async function openContainerScreen(client: MinecraftClient, chest: Vec, attempts = OPEN_ATTEMPTS,
+  stage: Stage = GROUND) {
   let opened: any = null;
   let seen: any = null;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     await safeAction(() => frames(client, 5));
-    opened = await safeAction(() => player.useBlock(client, { x: chest.x, y: chest.y, z: chest.z }, { face: "up" }));
+    opened = await safeAction(() => player.useBlock(client, stage.at(chest), { face: "up" }));
     await waitForAnyScreen(client, 8_000);
     seen = await safeScreen(client);
     if (screenOpen(seen)) {
@@ -61,8 +63,8 @@ async function laidOutBoardRows(client: MinecraftClient) {
     .filter((element) => element.width > 0 && /^folkways\.board\.row\./.test(element.id ?? ""));
 }
 
-export async function openSite(server: MinecraftServer, client: MinecraftClient, chest: Vec) {
-  const opened = await openContainerScreen(client, chest);
+export async function openSite(server: MinecraftServer, client: MinecraftClient, chest: Vec, stage: Stage = GROUND) {
+  const opened = await openContainerScreen(client, chest, OPEN_ATTEMPTS, stage);
   const entered = await enterSitePanel(server, client);
   return { opened, entered };
 }

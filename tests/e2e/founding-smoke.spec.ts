@@ -3,6 +3,7 @@ import { panelElements } from "../ldlib2";
 import { screen, world } from "@izakyl/blockwright-minecraft";
 import {
   foundColonyWithResidents,
+  foundingBox,
   openColonyPanelViaBook,
   countResidents,
   screenName,
@@ -13,28 +14,28 @@ import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { newRunId } from "../shared/harness/run-id";
+import { twins } from "../shared/harness/stage";
 
-const CONFIG_PATH = "blockwright.toml";
 const TARGET_RESIDENTS = 3;
 
-test("book founds a colony and the Household page lets people in one by one", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("book founds a colony and the Household page lets people in one by one"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
   const runId = newRunId();
   let pair: E2EPair | undefined;
-  const serverTrace = tracePath("e2e", "founding-server");
-  const clientTrace = tracePath("e2e", "founding-client");
+  const serverTrace = tracePath("e2e", stage.name("founding-server"));
+  const clientTrace = tracePath("e2e", stage.name("founding-client"));
 
   let server: any;
   let client: any;
   let founding: any;
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: serverTrace, instance: seededServer(`founding-server-${runId}`) },
-      client: { trace: clientTrace, instance: `founding-client-${runId}` },
-      snapshot: () => ({ containers: [founding?.foodChest], entityTypes: ["folkways:resident"] }),
+      config: stage.config,
+      server: { trace: serverTrace, instance: seededServer(stage.name(`founding-server-${runId}`)) },
+      client: { trace: clientTrace, instance: stage.name(`founding-client-${runId}`) },
+      snapshot: () => ({ containers: [founding?.foodChest && stage.at(founding.foodChest)], entityTypes: ["folkways:resident"] }),
     });
     ({ server, client } = pair);
 
@@ -45,12 +46,13 @@ test("book founds a colony and the Household page lets people in one by one", as
     const origin = { x: Math.round(playerPos.x) + 4, y: Math.round(playerPos.y), z: Math.round(playerPos.z) + 4 };
     await tryCommand(server, `gamemode survival ${playerName}`);
 
-    founding = await foundColonyWithResidents(server, client, playerName, { origin, residentCount: TARGET_RESIDENTS });
+    await stage.lay(server, foundingBox(origin));
+    founding = await foundColonyWithResidents(server, client, playerName, { origin, residentCount: TARGET_RESIDENTS, stage });
 
     const residents = await countResidents(server);
     expect(residents).toBeGreaterThanOrEqual(TARGET_RESIDENTS);
 
-    const panel = await openColonyPanelViaBook(server, client, playerName, founding.standBlock);
+    const panel = await openColonyPanelViaBook(server, client, playerName, founding.standBlock, stage);
     const tokens = (await panelElements(client)).map((element) => element.id).filter(Boolean);
     expect(screenName(panel)).toMatch(/ModularUIContainerScreen/);
     expect(tokens).toContain("folkways.tab.residents");

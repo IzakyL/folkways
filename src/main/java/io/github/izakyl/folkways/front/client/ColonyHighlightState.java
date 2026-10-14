@@ -57,6 +57,7 @@ public final class ColonyHighlightState {
     private static final float SATURATION = 0.62F;
     private static final float VALUE = 0.92F;
 
+    private static final GhostRenderer OWED = new GhostRenderer();
     private static final List<BlockPos> MEMBERS = new ArrayList<>();
     private static final List<ZoneSnapshot> ZONES = new ArrayList<>();
     private static final Map<UUID, List<Line>> NOTES = new HashMap<>();
@@ -81,7 +82,7 @@ public final class ColonyHighlightState {
         ZONES.addAll(packet.zones());
         Level level = Minecraft.getInstance().level;
         if (level != null) {
-            GhostRenderer.show(level, packet.ghosts());
+            OWED.show(level, packet.ghosts());
         }
         NOTES.clear();
         packet.notes().forEach(note -> NOTES.put(note.id(), note.lines()));
@@ -121,7 +122,7 @@ public final class ColonyHighlightState {
             MEMBERS.clear();
             ZONES.clear();
             PathSelection.overview(List.of());
-            GhostRenderer.clear();
+            OWED.clear();
             NOTES.clear();
             PLACARDS.clear();
             requestCooldown = 0;
@@ -137,7 +138,7 @@ public final class ColonyHighlightState {
 
     public static void render(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS
-            || (MEMBERS.isEmpty() && ZONES.isEmpty() && GhostRenderer.isEmpty() && PLACARDS.isEmpty()
+            || (MEMBERS.isEmpty() && ZONES.isEmpty() && OWED.isEmpty() && PLACARDS.isEmpty()
                 && NOTES.isEmpty() && pingedBlock() == null)) {
             return;
         }
@@ -156,23 +157,23 @@ public final class ColonyHighlightState {
 
         boolean works = Layer.WORKS.shown();
         if (works) {
-            GhostRenderer.drawModels(level, camera, partialTick);
+            OWED.drawModels(level, camera, partialTick);
         }
 
         VertexConsumer fills = buffers.getBuffer(RenderType.debugFilledBox());
         drawZoneFills(level, poseStack, fills, camera, partialTick);
-        drawPlacardFills(level, poseStack, fills, camera);
+        drawPlacardFills(level, poseStack, fills, camera, partialTick);
         if (works) {
-            GhostRenderer.drawFills(level, poseStack, fills, partialTick);
+            OWED.drawFills(level, poseStack, fills, partialTick);
         }
         buffers.endBatch(RenderType.debugFilledBox());
 
         VertexConsumer lines = buffers.getBuffer(RenderType.lines());
         drawMemberBoxes(level, poseStack, lines, camera, partialTick);
         drawZoneOutlines(level, poseStack, lines, camera, partialTick);
-        drawPlacardOutlines(level, poseStack, lines, camera);
+        drawPlacardOutlines(level, poseStack, lines, camera, partialTick);
         if (works) {
-            GhostRenderer.drawOutlines(level, poseStack, lines, partialTick);
+            OWED.drawOutlines(level, poseStack, lines, partialTick);
         }
         BlockPos pointed = pingedBlock();
         if (pointed != null) {
@@ -256,36 +257,43 @@ public final class ColonyHighlightState {
         return new float[] {rgb[0] * factor, rgb[1] * factor, rgb[2] * factor};
     }
 
-    private static void drawPlacardFills(BlockGetter level, PoseStack poseStack, VertexConsumer fills,
-            Vec3 camera) {
+    private static void drawPlacardFills(Level level, PoseStack poseStack, VertexConsumer fills,
+            Vec3 camera, float partialTick) {
         for (Placard placard : Layer.WORKS.shown() ? PLACARDS : List.<Placard>of()) {
             switch (placard.outline()) {
                 case Placard.Outline.Box box -> {
                     AABB bounds = AABB.encapsulatingFullBlocks(box.min(), box.max());
-                    if (bounds.getCenter().distanceTo(camera) <= PLACARD_RANGE) {
-                        LevelRenderer.addChainedFilledBoxVertices(poseStack, fills, bounds.minX, bounds.minY + 0.02D,
-                            bounds.minZ, bounds.maxX, bounds.minY + RIBBON_HEIGHT, bounds.maxZ,
-                            PLACARD_RGB[0], PLACARD_RGB[1], PLACARD_RGB[2], PLACARD_FILL);
+                    if (shownCentre(level, box.min(), bounds).distanceTo(camera) <= PLACARD_RANGE) {
+                        Placed.drawAt(level, poseStack, box.min(), partialTick, () ->
+                            LevelRenderer.addChainedFilledBoxVertices(poseStack, fills, bounds.minX, bounds.minY + 0.02D,
+                                bounds.minZ, bounds.maxX, bounds.minY + RIBBON_HEIGHT, bounds.maxZ,
+                                PLACARD_RGB[0], PLACARD_RGB[1], PLACARD_RGB[2], PLACARD_FILL));
                     }
                 }
                 case Placard.Outline.Path path -> {
-                    for (BlockPos cell : ribbon(path.points())) {
-                        if (Vec3.atCenterOf(cell).distanceTo(camera) > PLACARD_RANGE) {
+                    for (BlockPos cell : ribbon(level, path.points())) {
+                        if (Placed.at(level, cell, partialTick).centre().distanceTo(camera) > PLACARD_RANGE) {
                             continue;
                         }
-                        ribbonCell(level, poseStack, fills, cell, PLACARD_RGB, RIBBON_FILL);
+                        ribbonCell(level, poseStack, fills, cell, PLACARD_RGB, RIBBON_FILL, partialTick);
                     }
                 }
             }
         }
     }
 
-    static void ribbonCell(BlockGetter level, PoseStack poseStack, VertexConsumer fills, BlockPos cell,
-            float[] rgb, float alpha) {
+    // Where the middle of a box kept in storage around its corner shows.
+    private static Vec3 shownCentre(Level level, BlockPos corner, AABB bounds) {
+        return Placed.at(level, corner, 1.0F).point(bounds.getCenter().subtract(Vec3.atLowerCornerOf(corner)));
+    }
+
+    static void ribbonCell(Level level, PoseStack poseStack, VertexConsumer fills, BlockPos cell,
+            float[] rgb, float alpha, float partialTick) {
         double floor = floorOf(level, cell);
-        LevelRenderer.addChainedFilledBoxVertices(poseStack, fills, cell.getX(), floor + 0.02D,
-            cell.getZ(), cell.getX() + 1.0D, floor + RIBBON_HEIGHT, cell.getZ() + 1.0D,
-            rgb[0], rgb[1], rgb[2], alpha);
+        Placed.drawAt(level, poseStack, cell, partialTick, () ->
+            LevelRenderer.addChainedFilledBoxVertices(poseStack, fills, cell.getX(), floor + 0.02D,
+                cell.getZ(), cell.getX() + 1.0D, floor + RIBBON_HEIGHT, cell.getZ() + 1.0D,
+                rgb[0], rgb[1], rgb[2], alpha));
     }
 
     /** The middle of a ribbon's top face over a cell, where a line along the ribbon shows above the ground. */
@@ -297,11 +305,18 @@ public final class ColonyHighlightState {
         return level.getBlockState(cell).isAir() ? cell.getY() : cell.getY() + 1.0D;
     }
 
-    static Set<BlockPos> ribbon(List<BlockPos> points) {
+    // A stretch between points on different ships, or between a ship and the ground, is no ribbon: their cells
+    // are kept millions of blocks apart, and there is no way along the stored cells from one to the other.
+    static Set<BlockPos> ribbon(Level level, List<BlockPos> points) {
         Set<BlockPos> cells = new LinkedHashSet<>();
         for (int at = 1; at < points.size(); at++) {
             BlockPos from = points.get(at - 1);
             BlockPos to = points.get(at);
+            if (!Placed.together(level, from, to)) {
+                cells.add(from);
+                cells.add(to);
+                continue;
+            }
             int steps = Math.max(1, from.distManhattan(to));
             for (int step = 0; step <= steps; step++) {
                 double t = step / (double) steps;
@@ -315,30 +330,34 @@ public final class ColonyHighlightState {
         return cells;
     }
 
-    private static void drawPlacardOutlines(BlockGetter level, PoseStack poseStack, VertexConsumer lines,
-            Vec3 camera) {
+    private static void drawPlacardOutlines(Level level, PoseStack poseStack, VertexConsumer lines,
+            Vec3 camera, float partialTick) {
         for (Placard placard : Layer.WORKS.shown() ? PLACARDS : List.<Placard>of()) {
             switch (placard.outline()) {
                 case Placard.Outline.Box box -> {
                     AABB bounds = AABB.encapsulatingFullBlocks(box.min(), box.max());
-                    if (bounds.getCenter().distanceTo(camera) <= PLACARD_RANGE) {
-                        LevelRenderer.renderLineBox(poseStack, lines, bounds.inflate(0.02D),
-                            PLACARD_RGB[0], PLACARD_RGB[1], PLACARD_RGB[2], 1.0F);
+                    if (shownCentre(level, box.min(), bounds).distanceTo(camera) <= PLACARD_RANGE) {
+                        Placed.drawAt(level, poseStack, box.min(), partialTick, () ->
+                            LevelRenderer.renderLineBox(poseStack, lines, bounds.inflate(0.02D),
+                                PLACARD_RGB[0], PLACARD_RGB[1], PLACARD_RGB[2], 1.0F));
                     }
                 }
                 case Placard.Outline.Path path -> {
                     List<BlockPos> points = path.points();
                     for (int at = 0; at < points.size(); at++) {
-                        Vec3 here = Vec3.atCenterOf(points.get(at));
-                        if (here.distanceTo(camera) > PLACARD_RANGE) {
+                        BlockPos here = points.get(at);
+                        if (Placed.at(level, here, partialTick).centre().distanceTo(camera) > PLACARD_RANGE) {
                             continue;
                         }
-                        LevelRenderer.renderLineBox(poseStack, lines, new AABB(points.get(at)).inflate(0.02D),
-                            PLACARD_RGB[0], PLACARD_RGB[1], PLACARD_RGB[2], 1.0F);
-                        if (at > 0) {
-                            PathSelection.segment(poseStack, lines, surface(level, points.get(at - 1)),
-                                surface(level, points.get(at)), PLACARD_RGB, 1.0F);
-                        }
+                        BlockPos before = at > 0 ? points.get(at - 1) : null;
+                        Placed.drawAt(level, poseStack, here, partialTick, () -> {
+                            LevelRenderer.renderLineBox(poseStack, lines, new AABB(here).inflate(0.02D),
+                                PLACARD_RGB[0], PLACARD_RGB[1], PLACARD_RGB[2], 1.0F);
+                            if (before != null && Placed.together(level, before, here)) {
+                                PathSelection.segment(poseStack, lines, surface(level, before),
+                                    surface(level, here), PLACARD_RGB, 1.0F);
+                            }
+                        });
                     }
                 }
             }
@@ -379,6 +398,10 @@ public final class ColonyHighlightState {
         return lines;
     }
 
+    private static boolean hits(Aim aim, AABB box) {
+        return box.clip(aim.from(), aim.at(Aim.range())).isPresent();
+    }
+
     /** What a card says of the colony's own thing under the crosshair: a path, a work commissioned, or a zone. */
     static List<Line> aimedLines(Minecraft minecraft) {
         Optional<UUID> aimedPath = PathSelection.aimedPath(minecraft);
@@ -389,8 +412,8 @@ public final class ColonyHighlightState {
         }
         Aim aim = Aim.of(minecraft.player);
         for (Placard placard : Layer.WORKS.cards() ? PLACARDS : List.<Placard>of()) {
-            if (placard.outline() instanceof Placard.Outline.Box box && AABB.encapsulatingFullBlocks(box.min(), box.max())
-                    .clip(aim.from(), aim.at(Aim.range())).isPresent()) {
+            if (placard.outline() instanceof Placard.Outline.Box box
+                    && hits(aim.in(minecraft.level, box.min()), AABB.encapsulatingFullBlocks(box.min(), box.max()))) {
                 return placard.lines();
             }
         }
@@ -441,7 +464,7 @@ public final class ColonyHighlightState {
         MEMBERS.clear();
         ZONES.clear();
         PathSelection.overview(List.of());
-        GhostRenderer.clear();
+        OWED.clear();
         NOTES.clear();
         PLACARDS.clear();
         activeColonyId = null;

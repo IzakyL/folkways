@@ -4,6 +4,7 @@ import { defineTask, tick } from "@izakyl/blockwright-minecraft";
 import {
   foundColonyFast,
   foundColonyWithResidents,
+  foundingBox,
   razeFoundingSet,
   waitForGroundedPlayer,
   type Vec,
@@ -15,6 +16,7 @@ import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
+import { cover, twins } from "../shared/harness/stage";
 
 const RESIDENTS = 2;
 
@@ -190,7 +192,7 @@ public final class Task {
 `,
 });
 
-test("founding fast and founding through the panel leave the same colony state", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("founding fast and founding through the panel leave the same colony state"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   const runId = newRunId();
   let pair: E2EPair | undefined;
@@ -199,14 +201,14 @@ test("founding fast and founding through the panel leave the same colony state",
   let client: any;
   try {
     pair = await launchPair({
-      config: "blockwright.toml",
+      config: stage.config,
       server: {
-        trace: tracePath("e2e", "equivalence-server"),
-        instance: seededServer(`equivalence-server-${runId}`),
+        trace: tracePath("e2e", stage.name("equivalence-server")),
+        instance: seededServer(stage.name(`equivalence-server-${runId}`)),
       },
       client: {
-        trace: tracePath("e2e", "equivalence-client"),
-        instance: `equivalence-client-${runId}`,
+        trace: tracePath("e2e", stage.name("equivalence-client")),
+        instance: stage.name(`equivalence-client-${runId}`),
       },
     });
     ({ server, client } = pair);
@@ -224,19 +226,21 @@ test("founding fast and founding through the panel leave the same colony state",
     const fastAt: Vec = { x: base.x + 4, y: base.y, z: base.z + 4 };
     const panelAt: Vec = { x: base.x + 4, y: base.y, z: base.z + 84 };
 
+    // Both foundings on the one stage: aboard, one ship long enough for the two of them.
+    await stage.lay(server, cover(foundingBox(fastAt), foundingBox(panelAt)));
     const fastFounding = await foundColonyFast(server, client, playerName,
-      { origin: fastAt, residentCount: RESIDENTS });
+      { origin: fastAt, residentCount: RESIDENTS, stage });
     evidence.fast_founding = fastFounding.evidence;
     const fast = await dump(server, playerName, fastAt);
     evidence.fast = fast;
 
     await tryCommand(server, "kill @e[type=folkways:resident]");
     await tick.sprint(server, 20);
-    evidence.razed = await razeFoundingSet(server, fastAt);
+    evidence.razed = await razeFoundingSet(server, fastAt, stage);
     await tick.sprint(server, 20);
 
     const panelFounding = await foundColonyWithResidents(server, client, playerName,
-      { origin: panelAt, residentCount: RESIDENTS });
+      { origin: panelAt, residentCount: RESIDENTS, stage });
     evidence.panel_founding = panelFounding.evidence;
     const panel = await dump(server, playerName, panelAt);
     evidence.panel = panel;
@@ -256,8 +260,8 @@ test("founding fast and founding through the panel leave the same colony state",
   } finally {
     ensureOut("e2e");
     const body = JSON.stringify(evidence, null, 2);
-    writeFileSync(outAbs("e2e", "reports", "founding-equivalence.json"), body);
-    testInfo.attach("founding-equivalence", { body, contentType: "application/json" });
+    writeFileSync(outAbs("e2e", "reports", `${stage.name("founding-equivalence")}.json`), body);
+    testInfo.attach(stage.name("founding-equivalence"), { body, contentType: "application/json" });
     await pair?.teardown(testInfo);
   }
 });

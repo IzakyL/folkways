@@ -21,34 +21,28 @@ import net.starlark.java.eval.StarlarkList;
 
 final class Kept {
 
-    static final int MOST_VALUES = 4096;
-
     private static final String ITEM = "v";
 
     private Kept() {
     }
 
     static CompoundTag of(Dict<?, ?> kept) throws EvalException {
-        int[] count = {0};
-        return dict(kept, count);
+        return dict(kept);
     }
 
-    private static CompoundTag dict(Dict<?, ?> kept, int[] count) throws EvalException {
+    private static CompoundTag dict(Dict<?, ?> kept) throws EvalException {
         CompoundTag written = new CompoundTag();
         for (Map.Entry<?, ?> entry : kept.entrySet()) {
             if (!(entry.getKey() instanceof String key)) {
                 throw Starlark.errorf("what a pattern keeps is keyed by strings, got %s",
                     Starlark.type(entry.getKey()));
             }
-            written.put(key, value(entry.getValue(), count));
+            written.put(key, value(entry.getValue()));
         }
         return written;
     }
 
-    private static Tag value(Object value, int[] count) throws EvalException {
-        if (++count[0] > MOST_VALUES) {
-            throw Starlark.errorf("a pattern keeps at most %d values from one round to the next", MOST_VALUES);
-        }
+    private static Tag value(Object value) throws EvalException {
         if (value instanceof Boolean flag) {
             return ByteTag.valueOf(flag);
         }
@@ -62,13 +56,13 @@ final class Kept {
             return StringTag.valueOf(text);
         }
         if (value instanceof Dict<?, ?> nested) {
-            return dict(nested, count);
+            return dict(nested);
         }
         if (value instanceof Sequence<?> many) {
             ListTag list = new ListTag();
             for (Object each : many) {
                 CompoundTag wrapped = new CompoundTag();
-                wrapped.put(ITEM, value(each, count));
+                wrapped.put(ITEM, value(each));
                 list.add(wrapped);
             }
             return list;

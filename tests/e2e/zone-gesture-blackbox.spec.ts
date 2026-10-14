@@ -28,19 +28,18 @@ import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { waitForElement, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
-
-const CONFIG_PATH = "blockwright.toml";
+import { twins, type Stage } from "../shared/harness/stage";
 
 const BOOK_ITEM = "folkways:colony_book";
 
 const MARKED_SIZE = /^(\d+)x(\d+)x(\d+) marked/;
 
-test("zone gesture: mark, push a face, create it, right-click it open, then give it back", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("zone gesture: mark, push a face, create it, right-click it open, then give it back"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
   const runId = newRunId();
-  const clientInstance = `zone-gesture-client-${runId}`;
+  const clientInstance = stage.name(`zone-gesture-client-${runId}`);
 
   let pair: E2EPair | undefined;
   let server: any;
@@ -49,9 +48,9 @@ test("zone gesture: mark, push a face, create it, right-click it open, then give
 
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: tracePath("e2e", "zone-gesture-server"), instance: seededServer(`zone-gesture-server-${runId}`) },
-      client: { trace: tracePath("e2e", "zone-gesture-client"), instance: clientInstance },
+      config: stage.config,
+      server: { trace: tracePath("e2e", stage.name("zone-gesture-server")), instance: seededServer(stage.name(`zone-gesture-server-${runId}`)) },
+      client: { trace: tracePath("e2e", stage.name("zone-gesture-client")), instance: clientInstance },
     });
     ({ server, client } = pair);
 
@@ -62,7 +61,7 @@ test("zone gesture: mark, push a face, create it, right-click it open, then give
       y: Math.round(grounded.pos.y),
       z: Math.round(grounded.pos.z) + 4,
     };
-    await flattenPlot(server, origin);
+    await flattenPlot(server, origin, stage);
     await tryCommand(server, `gamemode survival ${playerName}`);
 
     const standBlock = { x: origin.x, y: origin.y, z: origin.z };
@@ -73,10 +72,10 @@ test("zone gesture: mark, push a face, create it, right-click it open, then give
     await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with ${BOOK_ITEM}`);
     await tick.sprint(server, 5);
 
-    evidence.found = await createColonyViaBook(server, client, playerName, standBlock);
+    evidence.found = await createColonyViaBook(server, client, playerName, standBlock, stage);
 
     evidence.zone_mode = await setBookGesture(server, client, playerName, "box");
-    evidence.mark = await markBox(server, client, playerName, standAt, farmGround, farmGround);
+    evidence.mark = await markBox(server, client, playerName, standAt, farmGround, farmGround, stage);
     const markedBefore = sizeOf(evidence.mark.marked?.text);
     expect(markedBefore, "after marking both corners the action bar must report the box size; if it does not, neither corner landed").not.toBeNull();
     expect(markedBefore, "both corners on the same block = 1x1x1").toEqual([1, 1, 1]);
@@ -105,9 +104,9 @@ test("zone gesture: mark, push a face, create it, right-click it open, then give
     evidence.shift_back = await heldScroll(server, client, [KEY_LEFT_CONTROL, KEY_LEFT_ALT], -1);
     expect(evidence.shift_back.bar?.text).toBe(`Moved to ${farmGround.x}, ${farmGround.y}, ${farmGround.z}`);
 
-    evidence.configure = await createMarkedZone(server, client, playerName, standBlock, "farm");
+    evidence.configure = await createMarkedZone(server, client, playerName, standBlock, "farm", stage);
 
-    evidence.plain_book = await openBookPage(server, client, playerName, standBlock);
+    evidence.plain_book = await openBookPage(server, client, playerName, standBlock, stage);
     evidence.plain_tokens = (await panelElements(client))
       .filter((element) => element.width > 0 && element.height > 0 && element.displayed !== false)
       .map((element) => element.id)
@@ -117,7 +116,7 @@ test("zone gesture: mark, push a face, create it, right-click it open, then give
 
     const registry = await colonyRegistry(server);
     const box = { min: farmGround, max: { ...farmGround, y: farmGround.y + 1 } };
-    evidence.hold = await holdZoneAndOpen(server, client, playerName, box);
+    evidence.hold = await holdZoneAndOpen(server, client, playerName, box, stage);
     await waitForElement(client, { id: "folkways.selection.release" }, { timeoutMs: 8_000 });
     evidence.click_release = await softly(() => clickElement(client, { id: "folkways.selection.release" }));
     await expect.poll(async () => {
@@ -129,7 +128,7 @@ test("zone gesture: mark, push a face, create it, right-click it open, then give
     pair?.failing(error);
     throw error;
   } finally {
-    testInfo.attach("zone-gesture-evidence.json", {
+    testInfo.attach(`${stage.name("zone-gesture-evidence")}.json`, {
       body: JSON.stringify(evidence, null, 2),
       contentType: "application/json",
     });
@@ -142,15 +141,12 @@ function sizeOf(text: string | undefined): [number, number, number] | null {
   return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
 }
 
-async function flattenPlot(server: any, origin: any) {
-  const minX = origin.x - 4;
-  const maxX = origin.x + 6;
-  const minZ = origin.z - 4;
-  const maxZ = origin.z + 6;
-  await tryCommand(server, `fill ${minX} ${origin.y} ${minZ} ${maxX} ${origin.y + 5} ${maxZ} minecraft:air`);
-  await tryCommand(
-    server,
-    `fill ${minX} ${origin.y - 1} ${minZ} ${maxX} ${origin.y - 1} ${maxZ} minecraft:smooth_stone`,
-  );
-  await tryCommand(server, `setblock ${commandPos(origin)} minecraft:smooth_stone`);
+async function flattenPlot(server: any, origin: any, stage: Stage) {
+  const min = { x: origin.x - 4, y: origin.y, z: origin.z - 4 };
+  const max = { x: origin.x + 6, y: origin.y + 5, z: origin.z + 6 };
+  await stage.lay(server, { min, max });
+  await tryCommand(server, `fill ${commandPos(stage.at(min))} ${commandPos(stage.at(max))} minecraft:air`);
+  await tryCommand(server,
+    `fill ${commandPos(stage.at({ ...min, y: origin.y - 1 }))} ${commandPos(stage.at({ ...max, y: origin.y - 1 }))} minecraft:smooth_stone`);
+  await tryCommand(server, `setblock ${commandPos(stage.at(origin))} minecraft:smooth_stone`);
 }

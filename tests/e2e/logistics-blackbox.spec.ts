@@ -1,32 +1,31 @@
 import { expect, test } from "@playwright/test";
 import { MinecraftTimeoutError, tick, world } from "@izakyl/blockwright-minecraft";
 import { deliverOrderViaSitePanel, optInContainerViaUI } from "../shared/colony/membership-optin";
-import { foundColonyFast, waitForGroundedPlayer,
+import { foundColonyFast, foundingBox, waitForGroundedPlayer,
   entityTypeMatches,
 } from "../shared/colony/colony-founding";
-import { prepareSafeWalkway } from "../shared/ui/world-ui";
+import { prepareSafeWalkwayOn, safeWalkwayBox } from "../shared/ui/world-ui";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, distance, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
-
-const CONFIG_PATH = "blockwright.toml";
+import { cover, twins, type Stage } from "../shared/harness/stage";
 
 const ITEM_TYPE = "minecraft:item";
 const PROVIDE_ITEM = "minecraft:cobblestone";
 const PROVIDE_COUNT = 8;
 const SOURCE_STOCK = 32;
 
-test("a one-shot order delivers colony stock into the container it was filed on", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("a one-shot order delivers colony stock into the container it was filed on"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
   const runId = newRunId();
   let pair: E2EPair | undefined;
-  const serverTrace = tracePath("e2e", "logistics-server");
-  const clientTrace = tracePath("e2e", "logistics-client");
+  const serverTrace = tracePath("e2e", stage.name("logistics-server"));
+  const clientTrace = tracePath("e2e", stage.name("logistics-client"));
 
   let server: any;
   let client: any;
@@ -34,10 +33,11 @@ test("a one-shot order delivers colony stock into the container it was filed on"
   let targetChest: any;
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: serverTrace, instance: seededServer(`logistics-server-${runId}`) },
-      client: { trace: clientTrace, instance: `logistics-client-${runId}` },
-      snapshot: () => ({ containers: [sourceChest, targetChest], entityTypes: ["folkways:resident", ITEM_TYPE] }),
+      config: stage.config,
+      server: { trace: serverTrace, instance: seededServer(stage.name(`logistics-server-${runId}`)) },
+      client: { trace: clientTrace, instance: stage.name(`logistics-client-${runId}`) },
+      snapshot: () => ({ containers: [sourceChest, targetChest].map((chest) => chest && stage.at(chest)),
+        entityTypes: ["folkways:resident", ITEM_TYPE] }),
     });
     ({ server, client } = pair);
 
@@ -49,28 +49,30 @@ test("a one-shot order delivers colony stock into the container it was filed on"
     sourceChest = { x: origin.x + 2, y: origin.y, z: origin.z + 2 };
     targetChest = { x: standPoint.x, y: standPoint.y, z: standPoint.z - 2 };
 
-    await prepareSafeWalkway(server, origin, standPoint);
+    await stage.lay(server, cover(foundingBox(origin), safeWalkwayBox(origin, standPoint)));
+    await prepareSafeWalkwayOn(server, stage, origin, standPoint);
     await tryCommand(server, `gamemode survival ${playerName}`);
-    await foundColonyFast(server, client, playerName, { origin, residentCount: 3 });
+    await foundColonyFast(server, client, playerName, { origin, residentCount: 3, stage });
 
     await tryCommand(server, `clear ${playerName} ${PROVIDE_ITEM}`);
-    await tryCommand(server, `tp ${playerName} ${standPoint.x + 0.5} ${standPoint.y} ${standPoint.z + 0.5} 180 20`);
-    await tryCommand(server, `execute positioned ${commandPos(origin)} run kill @e[type=${ITEM_TYPE},distance=..48]`);
+    const stand = stage.stand(standPoint);
+    await tryCommand(server, `tp ${playerName} ${stand.x + 0.5} ${stand.y} ${stand.z + 0.5} 180 20`);
+    await tryCommand(server, `execute positioned ${commandPos(stage.world(origin))} run kill @e[type=${ITEM_TYPE},distance=..48]`);
 
-    await tryCommand(server, `setblock ${commandPos(sourceChest)} minecraft:chest`);
-    await tryCommand(server, `item replace block ${commandPos(sourceChest)} container.0 with ${PROVIDE_ITEM} ${SOURCE_STOCK}`);
+    await tryCommand(server, `setblock ${commandPos(stage.at(sourceChest))} minecraft:chest`);
+    await tryCommand(server, `item replace block ${commandPos(stage.at(sourceChest))} container.0 with ${PROVIDE_ITEM} ${SOURCE_STOCK}`);
     await tick.sprint(server, 20);
-    const sourceStocked = (await readChest(server, sourceChest, PROVIDE_ITEM)).hasStack(SOURCE_STOCK);
+    const sourceStocked = (await readChest(server, stage, sourceChest, PROVIDE_ITEM)).hasStack(SOURCE_STOCK);
     expect(sourceStocked).toBe(true);
-    await optInContainerViaUI(server, client, playerName, sourceChest);
-    await tryCommand(server, `setblock ${commandPos(targetChest)} minecraft:chest`);
+    await optInContainerViaUI(server, client, playerName, sourceChest, stage);
+    await tryCommand(server, `setblock ${commandPos(stage.at(targetChest))} minecraft:chest`);
     await tick.sprint(server, 5);
-    await optInContainerViaUI(server, client, playerName, targetChest);
-    expect((await readChest(server, targetChest, PROVIDE_ITEM)).total).toBe(0);
+    await optInContainerViaUI(server, client, playerName, targetChest, stage);
+    expect((await readChest(server, stage, targetChest, PROVIDE_ITEM)).total).toBe(0);
 
-    await deliverOrderViaSitePanel(server, client, playerName, targetChest, PROVIDE_ITEM, PROVIDE_COUNT);
+    await deliverOrderViaSitePanel(server, client, playerName, targetChest, PROVIDE_ITEM, PROVIDE_COUNT, stage);
 
-    const final = await pollDelivery(server, sourceChest, targetChest);
+    const final = await pollDelivery(server, stage, sourceChest, targetChest);
 
     expect(final.targetTotal).toBe(PROVIDE_COUNT);
     expect(final.chestHasRemainder).toBe(true);
@@ -83,10 +85,10 @@ test("a one-shot order delivers colony stock into the container it was filed on"
   }
 });
 
-async function pollDelivery(server: any, sourceChest: any, targetChest: any) {
+async function pollDelivery(server: any, stage: Stage, sourceChest: any, targetChest: any) {
   await world.waitFor(
     server,
-    `if items block ${commandPos(targetChest)} container.* ${PROVIDE_ITEM}`,
+    `if items block ${commandPos(stage.at(targetChest))} container.* ${PROVIDE_ITEM}`,
     { maxTicks: 1200, stepTicks: 5 },
   ).catch((error: unknown) => {
     // Running out is fine here: the assertions below say what did or did not arrive.
@@ -95,13 +97,13 @@ async function pollDelivery(server: any, sourceChest: any, targetChest: any) {
   await tick.sprint(server, 200);
   const [entitiesResult, source, target] = await Promise.all([
     world.entities(server, { dimension: "minecraft:overworld", limit: 1000 }),
-    readChest(server, sourceChest, PROVIDE_ITEM),
-    readChest(server, targetChest, PROVIDE_ITEM),
+    readChest(server, stage, sourceChest, PROVIDE_ITEM),
+    readChest(server, stage, targetChest, PROVIDE_ITEM),
   ]);
   const itemsAtTarget = entitiesResult.entities
     .filter((entity: any) => entityTypeMatches(entity.type, ITEM_TYPE))
     .filter((entity: any) => itemEntityIsSpec(entity, PROVIDE_ITEM))
-    .filter((entity: any) => entity.position && distance(entity.position, targetChest) <= 3).length;
+    .filter((entity: any) => entity.position && distance(entity.position, stage.world(targetChest)) <= 3).length;
   return {
     targetTotal: target.total,
     chestHasRemainder: source.hasStack(SOURCE_STOCK - PROVIDE_COUNT),
@@ -110,10 +112,10 @@ async function pollDelivery(server: any, sourceChest: any, targetChest: any) {
   };
 }
 
-async function readChest(server: any, chest: any, itemId: string) {
-  const result = await world.container(server, chest, { dimension: "minecraft:overworld" });
+async function readChest(server: any, stage: Stage, chest: any, itemId: string) {
+  const result = await world.container(server, stage.at(chest), { dimension: "minecraft:overworld" });
   if (result.found === false || result.isContainer === false) {
-    throw new Error(`source chest at ${commandPos(chest)} is not a readable container: ${JSON.stringify(result)}`);
+    throw new Error(`source chest at ${commandPos(stage.at(chest))} is not a readable container: ${JSON.stringify(result)}`);
   }
   const matching = (result.slots ?? []).filter((slot: any) => slot.id === itemId);
   return {

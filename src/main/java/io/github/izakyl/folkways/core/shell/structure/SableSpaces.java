@@ -15,6 +15,8 @@ import net.minecraft.world.phys.Vec3;
 
 public final class SableSpaces implements WorldSpaces.Source {
 
+    private static final double FEET_DEPTH = 0.05D;
+
     @Override
     public Optional<Space> frame(Level level, UUID id) {
         SubLevelContainer container = SubLevelContainer.getContainer(level);
@@ -28,7 +30,31 @@ public final class SableSpaces implements WorldSpaces.Source {
 
     @Override
     public Optional<Space> aboard(Entity entity) {
-        return wrap(Sable.HELPER.getTrackingOrVehicleSubLevel(entity));
+        Optional<Space> tracked = wrap(Sable.HELPER.getTrackingOrVehicleSubLevel(entity));
+        return tracked.isPresent() ? tracked : standingOn(entity);
+    }
+
+    // Sable follows what moves about on a ship; a mob standing still on one, asleep or held in place, it does not.
+    // Such a body is aboard the ship whose solid block lies under its feet. Each ship is asked in turn, as the
+    // bounds Sable keeps of them are only drawn up as physics steps them.
+    private static Optional<Space> standingOn(Entity entity) {
+        Level level = entity.level();
+        SubLevelContainer container = SubLevelContainer.getContainer(level);
+        if (container == null) {
+            return Optional.empty();
+        }
+        Vec3 feet = entity.position().subtract(0.0D, FEET_DEPTH, 0.0D);
+        for (SubLevel ship : container.getAllSubLevels()) {
+            if (ship.isRemoved()) {
+                continue;
+            }
+            BlockPos cell = BlockPos.containing(ship.logicalPose().transformPositionInverse(feet));
+            if (ship.getPlot().getBoundingBox().contains(cell.getX(), cell.getY(), cell.getZ())
+                    && !level.getBlockState(cell).getCollisionShape(level, cell).isEmpty()) {
+                return wrap(ship);
+            }
+        }
+        return Optional.empty();
     }
 
     private static Optional<Space> wrap(SubLevel subLevel) {

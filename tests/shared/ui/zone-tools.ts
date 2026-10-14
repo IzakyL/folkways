@@ -1,11 +1,12 @@
 import { expect } from "@playwright/test";
-import { input, player, reflect, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { defineTask, input, javaTask, player, reflect, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { clickElement, type Element, panelElements } from "../../ldlib2";
 import { openColonyPanelViaBook, setBookGesture, type Vec } from "../colony/colony-founding";
 import { cellTextIn, pickCell, settlePanel, toggleCell, typeCell } from "./site-panel";
 import { drainActionBar, readActionBar } from "./zone-receipt";
 import { frames, safeAction, tryCommand, screenName, waitForElement, softly } from "../harness/bw-helpers";
+import { GROUND, type Stage } from "../harness/stage";
 
 export { setBookGesture };
 export type { BookGesture } from "../colony/colony-founding";
@@ -60,13 +61,17 @@ function round(value: number) {
   return Math.round(value * 10) / 10;
 }
 
-export async function aimAndLeftClick(server: MinecraftServer, client: MinecraftClient, playerName: string, standAt: Vec, block: Vec) {
+export async function aimAndLeftClick(server: MinecraftServer, client: MinecraftClient, playerName: string, standAt: Vec, block: Vec,
+  stage: Stage = GROUND) {
+  // Looked at from where the player stands once landed; set down a little above that on a ship's deck. Every
+  // coordinate is sent with its decimals: /tp moves a whole-number x or z to the middle of its block.
   const eye = { x: standAt.x, y: standAt.y + 1.62, z: standAt.z };
   const target = { x: block.x + 0.5, y: block.y + 1, z: block.z + 0.5 };
   const camera = cameraLookingAt(eye, target);
+  const at = stage.stand(standAt);
   const teleport = await tryCommand(
     server,
-    `tp ${playerName} ${standAt.x} ${standAt.y} ${standAt.z} ${camera.yaw} ${camera.pitch}`,
+    `tp ${playerName} ${at.x.toFixed(3)} ${at.y.toFixed(3)} ${at.z.toFixed(3)} ${camera.yaw} ${camera.pitch}`,
   );
   await tick.sprint(server, 3);
   const press = await safeAction(() =>
@@ -104,11 +109,12 @@ export async function markBox(
   standAt: Vec,
   min: Vec,
   max: Vec,
+  stage: Stage = GROUND,
 ) {
   await drainActionBar(client);
-  const corner1 = await aimAndLeftClick(server, client, playerName, standAt, min);
+  const corner1 = await aimAndLeftClick(server, client, playerName, standAt, min, stage);
   await tick.sprint(server, 3);
-  const corner2 = await aimAndLeftClick(server, client, playerName, standAt, max);
+  const corner2 = await aimAndLeftClick(server, client, playerName, standAt, max, stage);
   await tick.sprint(server, 5);
   return { corner_1: corner1, corner_2: corner2, marked: await readActionBar(client) };
 }
@@ -138,8 +144,9 @@ export async function openBookPage(
   client: MinecraftClient,
   playerName: string,
   standBlock: Vec,
+  stage: Stage = GROUND,
 ) {
-  const open_panel = await openColonyPanelViaBook(server, client, playerName, standBlock);
+  const open_panel = await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
   await settlePanel(server, client);
   return { open_panel };
 }
@@ -150,12 +157,13 @@ export async function createMarkedZone(
   playerName: string,
   standBlock: Vec,
   kind: ZoneKind,
+  stage: Stage = GROUND,
 ) {
   const token = zoneKindToken(kind);
   const registry = await colonyRegistry(server);
   const before = await zoneCount(server, registry);
   const evidence: any = { kind, kind_token: token, zones_before: before };
-  Object.assign(evidence, await openBookPage(server, client, playerName, standBlock));
+  Object.assign(evidence, await openBookPage(server, client, playerName, standBlock, stage));
   await waitForElement(client, { id: token }, { timeoutMs: 8_000 });
   evidence.click_kind = await clickElement(client, { id: token });
   await settlePanel(server, client);
@@ -206,6 +214,7 @@ export async function holdZoneAndOpen(
   client: MinecraftClient,
   playerName: string,
   box: { min: Vec; max: Vec },
+  stage: Stage = GROUND,
 ) {
   const cell = middleCell(box);
   const evidence: any = { box, cell, right_click: [] };
@@ -217,7 +226,7 @@ export async function holdZoneAndOpen(
     // standing on the middle cell must not stop the click.
     evidence.right_click.push(await safeAction(async () => ({
       aim: await player.aim(server, cell, {
-        player: playerName, face: "up", from: { x: cell.x + 0.5, y: cell.y + 1, z: cell.z + 0.5 },
+        player: playerName, face: "up", from: stage.stand({ x: cell.x + 0.5, y: cell.y + 1, z: cell.z + 0.5 }),
       }),
       click: await player.click(client, { button: "right" }),
     })));
@@ -231,8 +240,26 @@ export async function holdZoneAndOpen(
       missed = error;
     }
   }
-  throw missed;
+  // What the client held when no click opened the zone: the zones it knows of, and where the player looked from.
+  const seen = await softly(() => client.run(CLIENT_ZONES, undefined));
+  throw new Error(`no right-click on ${JSON.stringify(cell)} opened a zone's settings; the client knew ${JSON.stringify(seen)}: ${missed}`);
 }
+
+const CLIENT_ZONES = defineTask<undefined, Record<string, any>>({
+  name: "folkways.shared.client-zones",
+  side: "client",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: ["io.github.izakyl.folkways.front.client.ColonyHighlightState"],
+    body: `
+var player=net.minecraft.client.Minecraft.getInstance().player;
+var zones=new ArrayList<Object>();
+for(var zone:ColonyHighlightState.zones())zones.add(zone.min().toShortString()+".."+zone.max().toShortString());
+return Map.of("zones",zones,"eye",String.valueOf(player==null?null:player.getEyePosition()),
+  "look",String.valueOf(player==null?null:player.getLookAngle()));
+`,
+  }),
+});
 
 export async function configureZone(
   server: MinecraftServer,
@@ -241,10 +268,11 @@ export async function configureZone(
   standBlock: Vec,
   box: { min: Vec; max: Vec },
   edits: ZoneEdit[],
+  stage: Stage = GROUND,
 ) {
   const evidence: any = { box, edits: [] };
   try {
-    Object.assign(evidence, await holdZoneAndOpen(server, client, playerName, box));
+    Object.assign(evidence, await holdZoneAndOpen(server, client, playerName, box, stage));
     for (const edit of edits) {
       await waitForElement(client, { id: zoneSettingToken(edit.key) }, { timeoutMs: 8_000 });
       evidence.edits.push(await applyZoneSetting(server, client, edit));
@@ -252,7 +280,8 @@ export async function configureZone(
     }
   } finally {
     evidence.release = await releaseHeldZone(client);
-    await tryCommand(server, `tp ${playerName} ${standBlock.x + 0.5} ${standBlock.y} ${standBlock.z + 1.5}`);
+    const stand = stage.stand(standBlock);
+    await tryCommand(server, `tp ${playerName} ${stand.x + 0.5} ${stand.y} ${stand.z + 1.5}`);
     await tick.sprint(server, 5);
   }
   return evidence;

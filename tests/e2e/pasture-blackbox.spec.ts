@@ -4,6 +4,7 @@ import {
   commandPos,
   stockToolsForResidents,
   foundColonyFast,
+  foundingBox,
   optInViaBook,
   TRADE_TOOLS,
   waitForGroundedPlayer,
@@ -28,20 +29,20 @@ import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { newRunId } from "../shared/harness/run-id";
+import { twins } from "../shared/harness/stage";
 
-const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 3;
 
 const DEFAULT_PASTURE_TARGET = 4;
 const WOOL_ITEM = "minecraft:white_wool";
 
-test("pasture end-to-end: player carves a sheep pasture through the real panel, residents shear + breed", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("pasture end-to-end: player carves a sheep pasture through the real panel, residents shear + breed"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.standard);
   ensureOut("e2e");
   const runId = newRunId();
 
-  const serverTrace = tracePath("e2e", "pasture-server");
-  const clientTrace = tracePath("e2e", "pasture-client");
+  const serverTrace = tracePath("e2e", stage.name("pasture-server"));
+  const clientTrace = tracePath("e2e", stage.name("pasture-client"));
 
   let pair: E2EPair | undefined;
   let server: any;
@@ -50,12 +51,12 @@ test("pasture end-to-end: player carves a sheep pasture through the real panel, 
   let founding: any;
 
   try {
-    const clientInstance = `pasture-client-${runId}`;
+    const clientInstance = stage.name(`pasture-client-${runId}`);
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: serverTrace, instance: seededServer(`pasture-server-${runId}`) },
+      config: stage.config,
+      server: { trace: serverTrace, instance: seededServer(stage.name(`pasture-server-${runId}`)) },
       client: { trace: clientTrace, instance: clientInstance },
-      snapshot: () => ({ containers: [pen?.supplyChest, founding?.foodChest], entityTypes: ["folkways:resident", "minecraft:sheep"] }),
+      snapshot: () => ({ containers: [pen?.supplyChest, founding?.foodChest].map((chest) => chest && stage.at(chest)), entityTypes: ["folkways:resident", "minecraft:sheep"] }),
     });
     ({ server, client } = pair);
 
@@ -68,24 +69,25 @@ test("pasture end-to-end: player carves a sheep pasture through the real panel, 
       y: Math.round(grounded.pos.y),
       z: Math.round(grounded.pos.z) + 4,
     };
-    founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT });
+    await stage.lay(server, foundingBox(origin));
+    founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT, stage });
     expect(
       founding.residents,
       `residents=${founding.residents} (expected ${RESIDENT_COUNT})`,
     ).toBeGreaterThanOrEqual(RESIDENT_COUNT);
 
     pen = { ...penLayout(origin, 8, 2), supplyChest: { x: origin.x + 5, y: origin.y, z: origin.z + 8 } };
-    await buildPen(server, pen);
-    await mustCommand(server, `setblock ${commandPos(pen.supplyChest)} minecraft:chest{Items:[]}`);
+    await buildPen(server, pen, stage);
+    await mustCommand(server, `setblock ${commandPos(stage.at(pen.supplyChest))} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 3);
-    await optInViaBook(server, client, playerName, pen.supplyChest, "chest");
-    await mustCommand(server, `item replace block ${commandPos(pen.supplyChest)} container.0 with minecraft:wheat 8`);
+    await optInViaBook(server, client, playerName, pen.supplyChest, "chest", stage);
+    await mustCommand(server, `item replace block ${commandPos(stage.at(pen.supplyChest))} container.0 with minecraft:wheat 8`);
     await tick.sprint(server, 3);
 
     const zone = await createPastureZoneViaPanel(server, client, playerName, founding.standBlock, pen, {
       animal: "sheep",
       target: DEFAULT_PASTURE_TARGET,
-    });
+    }, stage);
     expect(zone.created, pastureZoneFailure(zone, "sheep", DEFAULT_PASTURE_TARGET)).toBe(true);
 
     const sheepPositions = [
@@ -95,13 +97,13 @@ test("pasture end-to-end: player carves a sheep pasture through the real panel, 
     for (const spot of sheepPositions) {
       await mustCommand(server, `summon minecraft:sheep ${spot.x} ${spot.y} ${spot.z} {Color:0b,Age:0,PersistenceRequired:1b}`);
     }
-    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${founding.standBlock.y} ${founding.standBlock.z + 1.5} 180 30`);
+    await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${stage.stand(founding.standBlock).y} ${founding.standBlock.z + 1.5} 180 30`);
     await tick.sprint(server, 20);
 
     await stockToolsForResidents(
-      server, pen.supplyChest, TRADE_TOOLS.herding, RESIDENT_COUNT, 1);
+      server, stage.at(pen.supplyChest), TRADE_TOOLS.herding, RESIDENT_COUNT, 1);
 
-    const herding = await observeHerding(server, pen, [pen.supplyChest, founding.foodChest]);
+    const herding = await observeHerding(server, pen, [pen.supplyChest, founding.foodChest].map((chest) => stage.at(chest)));
     const reasons: string[] = [];
     if (!herding.sheared_observed) {
       reasons.push(

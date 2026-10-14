@@ -27,8 +27,7 @@ import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, frames, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
-
-const CONFIG_PATH = "blockwright.toml";
+import { twins, type Stage } from "../shared/harness/stage";
 
 const BOOK_ITEM = "folkways:colony_book";
 
@@ -53,7 +52,7 @@ const OUTLINE_INFLATE = 0.02;
 const FILL_ALPHA = 0.16;
 const MIN_OUTLINE_ALPHA = 0.35;
 
-test("held-book lens: the outline reaches 160 blocks and the volume fill and card stop at 128", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("held-book lens: the outline reaches 160 blocks and the volume fill and card stop at 128"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.standard);
   ensureOut("e2e");
 
@@ -66,9 +65,9 @@ test("held-book lens: the outline reaches 160 blocks and the volume fill and car
 
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: tracePath("e2e", "lens-server"), instance: seededServer(`lens-server-${runId}`) },
-      client: { trace: tracePath("e2e", "lens-client"), instance: `lens-client-${runId}` },
+      config: stage.config,
+      server: { trace: tracePath("e2e", stage.name("lens-server")), instance: seededServer(stage.name(`lens-server-${runId}`)) },
+      client: { trace: tracePath("e2e", stage.name("lens-client")), instance: stage.name(`lens-client-${runId}`) },
     });
     ({ server, client } = pair);
 
@@ -81,7 +80,7 @@ test("held-book lens: the outline reaches 160 blocks and the volume fill and car
     };
     const groundY = origin.y - 1;
 
-    await flattenPlot(server, origin);
+    await flattenPlot(server, origin, stage);
     await tryCommand(server, `gamemode survival ${playerName}`);
     await tryCommand(server, `forceload add ${origin.x} ${origin.z - 180} ${origin.x + 8} ${origin.z + 8}`);
 
@@ -90,21 +89,21 @@ test("held-book lens: the outline reaches 160 blocks and the volume fill and car
     await tick.sprint(server, 5);
 
     const standBlock: Vec = { x: origin.x, y: origin.y, z: origin.z };
-    evidence.found = await createColonyViaBook(server, client, playerName, standBlock);
+    evidence.found = await createColonyViaBook(server, client, playerName, standBlock, stage);
 
     const memberChest: Vec = { x: origin.x - 2, y: origin.y, z: origin.z };
-    await tryCommand(server, `setblock ${commandPos(memberChest)} minecraft:chest{Items:[]}`);
+    await tryCommand(server, `setblock ${commandPos(stage.at(memberChest))} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 3);
-    evidence.opt_in = await optInViaBook(server, client, playerName, memberChest, "chest");
+    evidence.opt_in = await optInViaBook(server, client, playerName, memberChest, "chest", stage);
 
     const zoneMin: Vec = { x: origin.x + 3, y: groundY, z: origin.z + 3 };
     const zoneMax: Vec = { x: origin.x + 5, y: groundY, z: origin.z + 5 };
     evidence.zone_mode = await setBookGesture(server, client, playerName, "box");
-    evidence.corner_1 = await aimAndWorldLeftClick(server, client, playerName, zoneMin);
+    evidence.corner_1 = await aimAndWorldLeftClick(server, client, playerName, zoneMin, stage);
     await tick.sprint(server, 3);
-    evidence.corner_2 = await aimAndWorldLeftClick(server, client, playerName, zoneMax);
+    evidence.corner_2 = await aimAndWorldLeftClick(server, client, playerName, zoneMax, stage);
     await tick.sprint(server, 5);
-    evidence.configure_farm = await createMarkedZone(server, client, playerName, standBlock, "farm");
+    evidence.configure_farm = await createMarkedZone(server, client, playerName, standBlock, "farm", stage);
     await tick.sprint(server, 5);
 
     const zoneBox = {
@@ -212,8 +211,8 @@ test("held-book lens: the outline reaches 160 blocks and the volume fill and car
     throw error;
   } finally {
     const body = JSON.stringify(evidence, null, 2);
-    writeFileSync(outAbs("e2e", "reports", "lens-evidence.json"), body);
-    testInfo.attach("lens-evidence", { body, contentType: "application/json" });
+    writeFileSync(outAbs("e2e", "reports", `${stage.name("lens-evidence")}.json`), body);
+    testInfo.attach(stage.name("lens-evidence"), { body, contentType: "application/json" });
     await pair?.teardown(testInfo);
   }
 });
@@ -350,15 +349,12 @@ function countKinds(capture: DrawCaptureResult) {
   return counts;
 }
 
-async function flattenPlot(server: any, origin: Vec) {
-  const minX = origin.x - 6;
-  const maxX = origin.x + 8;
-  const minZ = origin.z - 6;
-  const maxZ = origin.z + 8;
-  await tryCommand(server, `fill ${minX} ${origin.y} ${minZ} ${maxX} ${origin.y + 5} ${maxZ} minecraft:air`);
-  await tryCommand(
-    server,
-    `fill ${minX} ${origin.y - 1} ${minZ} ${maxX} ${origin.y - 1} ${maxZ} minecraft:smooth_stone`,
-  );
-  await tryCommand(server, `setblock ${commandPos(origin)} minecraft:smooth_stone`);
+async function flattenPlot(server: any, origin: Vec, stage: Stage) {
+  const min = { x: origin.x - 6, y: origin.y, z: origin.z - 6 };
+  const max = { x: origin.x + 8, y: origin.y + 5, z: origin.z + 8 };
+  await stage.lay(server, { min, max });
+  await tryCommand(server, `fill ${commandPos(stage.at(min))} ${commandPos(stage.at(max))} minecraft:air`);
+  await tryCommand(server,
+    `fill ${commandPos(stage.at({ ...min, y: origin.y - 1 }))} ${commandPos(stage.at({ ...max, y: origin.y - 1 }))} minecraft:smooth_stone`);
+  await tryCommand(server, `setblock ${commandPos(stage.at(origin))} minecraft:smooth_stone`);
 }

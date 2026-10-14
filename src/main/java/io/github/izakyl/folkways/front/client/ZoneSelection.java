@@ -49,7 +49,7 @@ public final class ZoneSelection {
         Drawing.install(Shape.Gesture.BOX, new Draft<Marked>(ZoneSelection::marked, ZoneSelection::clear,
             ZoneSelection::measure, box -> box.sizeX() * box.sizeY() * box.sizeZ(),
             (colony, box, delegation, settings) -> new CreateZonePacket(colony, box.min(), box.max(), delegation, settings),
-            id -> BoxOffers.of(id).map(offer -> (box, done) -> offer.body().build(box.min(), box.max(), done))));
+            id -> BoxOffers.of(id).map(offer -> (box, taking) -> offer.body().build(box.min(), box.max(), taking))));
         Drawing.offers(Shape.Gesture.BOX, () -> BoxOffers.all().stream()
             .map(offer -> new Drawing.Offered(offer.id(), offer.nameKey(), offer.icon()))
             .toList());
@@ -107,10 +107,10 @@ public final class ZoneSelection {
     }
 
     private static Component measure(Marked box) {
+        BlockPos corner = shown(box.min());
         return Component.translatable("folkways.zoneconfig.size", box.sizeX(), box.sizeY(), box.sizeZ())
             .append(" ")
-            .append(Component.translatable("folkways.zoneconfig.corner",
-                box.min().getX(), box.min().getY(), box.min().getZ()));
+            .append(Component.translatable("folkways.zoneconfig.corner", corner.getX(), corner.getY(), corner.getZ()));
     }
 
     static int reach() {
@@ -196,14 +196,15 @@ public final class ZoneSelection {
             return true;
         }
         // The wheel draws towards the player whatever it has hold of, so a box entered is pulled the other way.
-        Direction towards = boxOfMarked().contains(Aim.of(minecraft.player).from())
+        Direction towards = boxOfMarked().contains(Aim.of(minecraft.player).in(minecraft.player.level(), min).from())
             ? aimedFace.getOpposite() : aimedFace;
         int by = towards.getAxisDirection().getStep() * step;
         Direction.Axis axis = aimedFace.getAxis();
         if (gripped().size() > 1) {
             min = min.relative(axis, by);
             max = max.relative(axis, by);
-            Draft.say(Component.translatable("folkways.zone.shifted", min.getX(), min.getY(), min.getZ()));
+            BlockPos corner = shown(min);
+            Draft.say(Component.translatable("folkways.zone.shifted", corner.getX(), corner.getY(), corner.getZ()));
             return true;
         }
         if (gripped().getFirst().getAxisDirection() == Direction.AxisDirection.POSITIVE) {
@@ -247,7 +248,10 @@ public final class ZoneSelection {
 
     private static BlockPos aimedCell(Player player) {
         if (FolkwaysClientGameEvents.modifierDown()) {
-            return BlockPos.containing(Aim.of(player).at(range));
+            // A cell in the air, at the reach the wheel set: on the ship the box is being marked on, if it is.
+            BlockPos marking = origin != null ? origin : min;
+            Aim aim = marking == null ? Aim.of(player) : Aim.of(player).in(player.level(), marking);
+            return BlockPos.containing(aim.at(range));
         }
         return Aim.cell(player).orElse(null);
     }
@@ -259,7 +263,7 @@ public final class ZoneSelection {
 
     private static Direction faceUnderCrosshair(Player player) {
         AABB box = boxOfMarked();
-        Aim aim = Aim.of(player);
+        Aim aim = Aim.of(player).in(player.level(), min);
         if (box.contains(aim.from())) {
             return Direction.getNearest(aim.look());
         }
@@ -271,14 +275,15 @@ public final class ZoneSelection {
         if (!Layer.ZONES.shown()) {
             return Optional.empty();
         }
-        Aim aim = Aim.of(player);
-        Vec3 eye = aim.from();
-        Vec3 end = aim.at(Aim.range());
+        Aim seen = Aim.of(player);
         ZoneSnapshot best = null;
         double bestDistance = Double.MAX_VALUE;
         for (ZoneSnapshot zone : ColonyHighlightState.zones()) {
+            // A zone keeps the cells of the ship it lies on, if it does: the ray is met there.
+            Aim aim = seen.in(player.level(), zone.min());
+            Vec3 eye = aim.from();
             AABB box = AABB.encapsulatingFullBlocks(zone.min(), zone.max());
-            Optional<Vec3> hit = box.clip(eye, end);
+            Optional<Vec3> hit = box.clip(eye, aim.at(Aim.range()));
             if (hit.isEmpty()) {
                 continue;
             }
@@ -289,6 +294,12 @@ public final class ZoneSelection {
             }
         }
         return Optional.ofNullable(best);
+    }
+
+    /** Where a cell of the box shows, for the player to be told: the cell itself unless the box is on a ship. */
+    private static BlockPos shown(BlockPos cell) {
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft.level == null ? cell : Placed.shown(minecraft.level, cell);
     }
 
     private static AABB boxOfMarked() {
@@ -309,6 +320,10 @@ public final class ZoneSelection {
         PoseStack poseStack = event.getPoseStack();
         poseStack.pushPose();
         poseStack.translate(-camera.x, -camera.y, -camera.z);
+        // The box is drawn where it shows: on a ship, moved and turned with it from the cells the ship keeps.
+        BlockPos anchor = min != null ? min : origin;
+        Placed.at(minecraft.level, anchor, event.getPartialTick().getGameTimeDeltaPartialTick(false)).enter(poseStack);
+        poseStack.translate(-anchor.getX(), -anchor.getY(), -anchor.getZ());
         MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
 
         if (min != null && aimedFace != null) {
@@ -337,6 +352,7 @@ public final class ZoneSelection {
                     DRAFT[0], DRAFT[1], DRAFT[2], PREVIEW);
             }
         }
+        poseStack.popPose();
         poseStack.popPose();
         buffers.endBatch(RenderType.lines());
     }

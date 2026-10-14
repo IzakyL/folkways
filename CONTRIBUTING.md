@@ -61,6 +61,13 @@ its own `playwright.config.ts` and `tsconfig.json`. Code more than one suite use
 `tests/shared/`; a suite imports from there and from `tests/ldlib2/`, never from another
 suite. Everything the suites write goes to `tests/out/`, which git ignores.
 
+An e2e spec about a colony's blocks runs twice, on the ground and on the deck of a
+[Sable](https://modrinth.com/mod/sable) ship (`for (const stage of twins()) test(stage.title(...), ...)`,
+from `tests/shared/harness/stage.ts`). Write it in plan coordinates, lay the floor with
+`stage.lay`, and cross into the game through the stage: `stage.at(cell)` for a block a command or
+read addresses, `stage.world(cell)` for where it shows, `stage.stand(at)` to set the player down. The
+`sable-*` specs cover what only a ship has.
+
 The repository's `.mcp.json` exposes the same harness to MCP-capable assistants, with
 the LDLib2 UI adapter in `tests/ldlib2/`.
 

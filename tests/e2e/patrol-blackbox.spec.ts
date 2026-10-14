@@ -5,6 +5,7 @@ import { clickElement } from "../ldlib2";
 import {
   commandPos,
   foundColonyFast,
+  foundingBox,
   openColonyPanelViaBook,
   stockToolsForResidents,
   waitForGroundedPlayer,
@@ -28,8 +29,8 @@ import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { newRunId } from "../shared/harness/run-id";
+import { twins, type Stage } from "../shared/harness/stage";
 
-const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 2;
 
 // A short ward, so a patroller has to walk the route again within the test or the wards on it lapse.
@@ -42,7 +43,7 @@ const WEAPON = "minecraft:stone_sword";
 
 const WARDS = "io.github.izakyl.folkways.plugins.patrol.Wards";
 
-test("patrol: player draws a route with the book, a patroller wards it lap after lap and strikes a monster on it", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("patrol: player draws a route with the book, a patroller wards it lap after lap and strikes a monster on it"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.standard);
   ensureOut("e2e");
   const runId = newRunId();
@@ -54,13 +55,13 @@ test("patrol: player draws a route with the book, a patroller wards it lap after
 
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
+      config: stage.config,
       server: {
-        trace: tracePath("e2e", "patrol-server"),
-        instance: seededServer(`patrol-server-${runId}`, { patrolWardTicks: WARD_TICKS, patrolWardRadius: WARD_RADIUS }),
+        trace: tracePath("e2e", stage.name("patrol-server")),
+        instance: seededServer(stage.name(`patrol-server-${runId}`), { patrolWardTicks: WARD_TICKS, patrolWardRadius: WARD_RADIUS }),
       },
-      client: { trace: tracePath("e2e", "patrol-client"), instance: `patrol-client-${runId}` },
-      snapshot: () => ({ containers: [founding?.foodChest], entityTypes: ["folkways:resident", "minecraft:husk"] }),
+      client: { trace: tracePath("e2e", stage.name("patrol-client")), instance: stage.name(`patrol-client-${runId}`) },
+      snapshot: () => ({ containers: [founding?.foodChest && stage.at(founding.foodChest)], entityTypes: ["folkways:resident", "minecraft:husk"] }),
     });
     ({ server, client } = pair);
 
@@ -73,10 +74,11 @@ test("patrol: player draws a route with the book, a patroller wards it lap after
       y: Math.round(grounded.pos.y),
       z: Math.round(grounded.pos.z) + 4,
     };
-    founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT });
+    await stage.lay(server, foundingBox(origin));
+    founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT, stage });
     expect(founding.residents, `residents=${founding.residents} (expected ${RESIDENT_COUNT})`)
       .toBeGreaterThanOrEqual(RESIDENT_COUNT);
-    await stockToolsForResidents(server, founding.foodChest, [WEAPON], RESIDENT_COUNT, 2);
+    await stockToolsForResidents(server, stage.at(founding.foodChest), [WEAPON], RESIDENT_COUNT, 2);
 
     // Two clicked points on the ground, 24 blocks apart along x: the route gets a stop at each end and
     // one between, and with an 8-block ward the ends are warded only by a patroller standing there.
@@ -87,8 +89,9 @@ test("patrol: player draws a route with the book, a patroller wards it lap after
     const ends = route.map((point) => ({ x: point.x, y: point.y + 1, z: point.z }));
     const offRoute: Vec = { x: origin.x - 12, y: origin.y, z: origin.z - 10 };
 
-    const drawn = await drawPatrolRoute(server, client, playerName, founding.standBlock, route);
-    expect(drawn.error, `drawing the route threw: ${JSON.stringify(drawn.error)}`).toBeUndefined();
+    const drawn = await drawPatrolRoute(server, client, playerName, founding.standBlock, route, stage);
+    expect(drawn.error, `drawing the route threw: ${JSON.stringify(drawn.error)} `
+      + `(action bar after raising the last point: ${JSON.stringify(drawn.raise?.bar?.text)})`).toBeUndefined();
 
     const registry = await colonyRegistry(server);
     expect(await pathCount(server, registry), "confirming the route on the book page should leave exactly one path")
@@ -131,7 +134,7 @@ test("patrol: player draws a route with the book, a patroller wards it lap after
 });
 
 async function drawPatrolRoute(
-  server: MinecraftServer, client: MinecraftClient, playerName: string, standBlock: Vec, route: Vec[],
+  server: MinecraftServer, client: MinecraftClient, playerName: string, standBlock: Vec, route: Vec[], stage: Stage,
 ) {
   const evidence: any = { route, points: [] };
   try {
@@ -139,7 +142,7 @@ async function drawPatrolRoute(
     await drainActionBar(client);
     for (const [index, point] of route.entries()) {
       evidence.points.push(await markCorner(server, client, point, new RegExp(`^Point ${index + 1} set down`),
-        () => aimAndWorldLeftClick(server, client, playerName, point)));
+        () => aimAndWorldLeftClick(server, client, playerName, point, stage)));
     }
     // The point set down last is the one held: the wheel with both keys lifts it a block, and lowers it again.
     const last = route[route.length - 1];
@@ -147,7 +150,7 @@ async function drawPatrolRoute(
     expect(evidence.raise.bar?.text).toBe(`Point ${route.length} at ${last.x}, ${last.y + 1}, ${last.z}`);
     evidence.lower = await heldScroll(server, client, [KEY_LEFT_CONTROL, KEY_LEFT_ALT], -1);
     expect(evidence.lower.bar?.text).toBe(`Point ${route.length} at ${last.x}, ${last.y}, ${last.z}`);
-    evidence.open = await openColonyPanelViaBook(server, client, playerName, standBlock);
+    evidence.open = await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
     await settlePanel(server, client);
     await waitForElement(client, { id: PATROL_KIND }, { timeoutMs: 8_000 });
     evidence.pick = await clickElement(client, { id: PATROL_KIND });

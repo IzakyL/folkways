@@ -60,7 +60,7 @@ public final class PathSelection {
             path -> Component.translatable("folkways.zoneconfig.drawn", path.points().size()),
             path -> path.points().size(),
             (colony, line, delegation, settings) -> new CreatePathPacket(colony, line.points(), delegation, settings),
-            id -> PathOffers.of(id).map(offer -> (line, done) -> offer.body().build(line.points(), done))));
+            id -> PathOffers.of(id).map(offer -> (line, taking) -> offer.body().build(line.points(), taking))));
         Drawing.offers(Shape.Gesture.LINE, () -> PathOffers.all().stream()
             .map(offer -> new Drawing.Offered(offer.id(), offer.nameKey(), offer.icon()))
             .toList());
@@ -160,7 +160,9 @@ public final class PathSelection {
         int step = verticalDelta > 0.0D ? Mth.ceil(verticalDelta) : Mth.floor(verticalDelta);
         BlockPos moved = POINTS.get(held).relative(pull(player), step);
         POINTS.set(held, moved);
-        Draft.say(Component.translatable("folkways.path.moved", held + 1, moved.getX(), moved.getY(), moved.getZ()));
+        // The player is told where the point shows, not the cell a ship keeps it in.
+        BlockPos shown = Placed.shown(player.level(), moved);
+        Draft.say(Component.translatable("folkways.path.moved", held + 1, shown.getX(), shown.getY(), shown.getZ()));
         return true;
     }
 
@@ -180,14 +182,18 @@ public final class PathSelection {
     /** The point of the draft whose post is under the crosshair, when it is not the one held already. */
     static Optional<Integer> aimedPoint(Player player) {
         Aim aim = Aim.of(player);
-        double reach = aim.block(player).map(hit -> hit.getLocation().distanceToSqr(aim.from()))
+        Level level = player.level();
+        // A block hit on a ship lands in the cells the ship keeps, and is measured from the eye as that ship sees it.
+        double reach = aim.block(player)
+            .map(hit -> hit.getLocation().distanceToSqr(aim.in(level, hit.getBlockPos()).from()))
             .orElse(Aim.range() * Aim.range()) + POST_SLACK;
         Integer best = null;
         for (int index = 0; index < POINTS.size(); index++) {
-            Optional<Vec3> hit = post(player.level(), POINTS.get(index)).inflate(0.1D)
-                .clip(aim.from(), aim.at(Aim.range()));
-            if (index != held && hit.isPresent() && hit.get().distanceToSqr(aim.from()) < reach) {
-                reach = hit.get().distanceToSqr(aim.from());
+            Aim there = aim.in(level, POINTS.get(index));
+            Optional<Vec3> hit = post(level, POINTS.get(index)).inflate(0.1D)
+                .clip(there.from(), there.at(Aim.range()));
+            if (index != held && hit.isPresent() && hit.get().distanceToSqr(there.from()) < reach) {
+                reach = hit.get().distanceToSqr(there.from());
                 best = index;
             }
         }
@@ -234,18 +240,21 @@ public final class PathSelection {
         poseStack.pushPose();
         poseStack.translate(-camera.x, -camera.y, -camera.z);
         MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
+        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
         // The draft is laid out as the road it would become: an amber ribbon on the ground through the points set
-        // down so far, running on, fainter, to the block the player is aiming at.
+        // down so far, running on, fainter, to the block the player is aiming at. Points are kept where the level
+        // stores them, and each piece is drawn where it shows: on a ship, with the ship.
         Optional<BlockPos> next = POINTS.isEmpty() || POINTS.size() >= MAX_POINTS ? Optional.empty() : aimed(minecraft);
-        Set<BlockPos> laid = ColonyHighlightState.ribbon(POINTS);
+        Set<BlockPos> laid = ColonyHighlightState.ribbon(level, POINTS);
         VertexConsumer fills = buffers.getBuffer(RenderType.debugFilledBox());
         for (BlockPos cell : laid) {
-            ColonyHighlightState.ribbonCell(level, poseStack, fills, cell, DRAFT, ColonyHighlightState.RIBBON_FILL);
+            ColonyHighlightState.ribbonCell(level, poseStack, fills, cell, DRAFT, ColonyHighlightState.RIBBON_FILL,
+                partialTick);
         }
         next.ifPresent(aim -> {
-            for (BlockPos cell : ColonyHighlightState.ribbon(List.of(POINTS.getLast(), aim))) {
+            for (BlockPos cell : ColonyHighlightState.ribbon(level, List.of(POINTS.getLast(), aim))) {
                 if (!laid.contains(cell)) {
-                    ColonyHighlightState.ribbonCell(level, poseStack, fills, cell, DRAFT, NEXT_FILL);
+                    ColonyHighlightState.ribbonCell(level, poseStack, fills, cell, DRAFT, NEXT_FILL, partialTick);
                 }
             }
         });
@@ -254,26 +263,37 @@ public final class PathSelection {
         VertexConsumer lines = buffers.getBuffer(RenderType.lines());
         for (var path : Layer.PATHS.shown() ? PATHS : List.<io.github.izakyl.folkways.front.engine.colony.ColonyPath>of()) {
             for (int at = 1; at < path.points().size(); at++) {
-                Vec3 a = ColonyHighlightState.surface(level, path.points().get(at - 1));
-                Vec3 b = ColonyHighlightState.surface(level, path.points().get(at));
-                if (a.distanceToSqr(camera) < 4096 || b.distanceToSqr(camera) < 4096)
-                    segment(poseStack, lines, a, b, SET, 1.0F);
+                BlockPos from = path.points().get(at - 1);
+                BlockPos to = path.points().get(at);
+                if (Placed.at(level, from, partialTick).centre().distanceToSqr(camera) < 4096
+                        || Placed.at(level, to, partialTick).centre().distanceToSqr(camera) < 4096) {
+                    stretch(level, poseStack, lines, from, to, SET, 1.0F, partialTick);
+                }
             }
         }
         // Each point set down stands as a short post on the ribbon, so it reads apart from the cursor's own outline.
         // The held one stands out in the colour of what is already set.
         for (int index = 0; index < POINTS.size(); index++) {
             float[] rgb = index == held ? SET : DRAFT;
-            LevelRenderer.renderLineBox(poseStack, lines, post(level, POINTS.get(index)), rgb[0], rgb[1], rgb[2], 1.0F);
+            BlockPos point = POINTS.get(index);
+            Placed.drawAt(level, poseStack, point, partialTick, () ->
+                LevelRenderer.renderLineBox(poseStack, lines, post(level, point), rgb[0], rgb[1], rgb[2], 1.0F));
         }
         for (int at = 1; at < POINTS.size(); at++) {
-            segment(poseStack, lines, ColonyHighlightState.surface(level, POINTS.get(at - 1)),
-                ColonyHighlightState.surface(level, POINTS.get(at)), DRAFT, 1.0F);
+            stretch(level, poseStack, lines, POINTS.get(at - 1), POINTS.get(at), DRAFT, 1.0F, partialTick);
         }
-        next.ifPresent(aim -> segment(poseStack, lines, ColonyHighlightState.surface(level, POINTS.getLast()),
-            ColonyHighlightState.surface(level, aim), DRAFT, NEXT_LINE));
+        next.ifPresent(aim -> stretch(level, poseStack, lines, POINTS.getLast(), aim, DRAFT, NEXT_LINE, partialTick));
         poseStack.popPose();
         buffers.endBatch(RenderType.lines());
+    }
+
+    // The line between two points over their ribbon, where it shows; none between a ship and what is off it.
+    private static void stretch(Level level, PoseStack poseStack, VertexConsumer lines, BlockPos from, BlockPos to,
+            float[] rgb, float alpha, float partialTick) {
+        if (Placed.together(level, from, to)) {
+            Placed.drawAt(level, poseStack, from, partialTick, () -> segment(poseStack, lines,
+                ColonyHighlightState.surface(level, from), ColonyHighlightState.surface(level, to), rgb, alpha));
+        }
     }
 
     private static Optional<BlockPos> aimed(Minecraft minecraft) {

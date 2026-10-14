@@ -14,12 +14,15 @@ public record Cue(List<Key> keys, Component does, float held) {
         USE,
         WHEEL,
         SNEAK,
+        JUMP,
         MODIFIER,
         ALTERNATE,
         OVERHEAD,
         WALK,
         DRAG,
         ESCAPE,
+        TAB,
+        BACKSPACE,
         DIGITS,
         PONDER
     }

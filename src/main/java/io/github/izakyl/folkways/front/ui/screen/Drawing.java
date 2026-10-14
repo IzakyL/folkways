@@ -44,6 +44,11 @@ public final class Drawing {
         default Optional<UIElement> offered(ResourceLocation offer) {
             return Optional.empty();
         }
+
+        /** The offer whose preview of this shape stands in the world now, to open on again. */
+        default Optional<ResourceLocation> previewed() {
+            return Optional.empty();
+        }
     }
 
     public record Offered(ResourceLocation id, String nameKey, ResourceLocation icon) {
@@ -234,13 +239,18 @@ public final class Drawing {
             }
             return;
         }
+        Optional<ResourceLocation> previewed = held().flatMap(Held::previewed);
         Candidate first = null;
+        Candidate resumed = null;
         boolean stands = false;
         for (Candidate candidate : candidates) {
             boolean shown = candidate.gesture() == holding;
             candidate.row().setDisplay(shown);
             if (shown && first == null) {
                 first = candidate;
+            }
+            if (shown && candidate.pick() instanceof Picked.Offer offer && previewed.equals(Optional.of(offer.id()))) {
+                resumed = candidate;
             }
             stands |= shown && candidate == picked;
         }
@@ -249,8 +259,9 @@ public final class Drawing {
         if (!stands) {
             picked = null;
             if (first != null) {
-                // The first is picked to begin with, so the page never opens on an empty half.
-                pick(first);
+                // The page opens again on an offer whose preview is out in the world, and otherwise on the
+                // first, so it never opens on an empty half.
+                pick(resumed != null ? resumed : first);
                 return;
             }
         }

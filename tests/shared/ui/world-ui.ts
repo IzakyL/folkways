@@ -4,6 +4,7 @@ import { isMinecraftError, player, tick, world, type MinecraftClient, type Minec
 import { errorSummary } from "@izakyl/blockwright-client";
 import { type Vec } from "../colony/colony-founding";
 import { commandPos, distance, tryCommand } from "../harness/bw-helpers";
+import { GROUND, type Stage } from "../harness/stage";
 
 export { tryCommand, errorSummary };
 
@@ -114,11 +115,12 @@ const CLICK_STANCES = [
   { x: 0.5, z: -0.5 },
 ];
 
-export async function aimAndWorldLeftClick(server: MinecraftServer, client: MinecraftClient, playerName: string, block: any) {
+export async function aimAndWorldLeftClick(server: MinecraftServer, client: MinecraftClient, playerName: string, block: any,
+  stage: Stage = GROUND) {
   for (let attempt = 1; ; attempt++) {
     const stance = CLICK_STANCES[(attempt - 1) % CLICK_STANCES.length];
     try {
-      return await player.clickBlock({ server, client }, block, {
+      return await stage.click({ server, client }, block, {
         player: playerName,
         from: { x: block.x + stance.x, y: block.y + 1, z: block.z + stance.z },
       });
@@ -177,11 +179,28 @@ export async function prepareSafeWalkway(
   origin: { x: number; y: number; z: number },
   ...points: Array<{ x: number; y: number; z: number }>
 ) {
-  const minX = Math.min(origin.x - 7, ...points.map((p) => p.x - 3));
-  const maxX = Math.max(origin.x + 7, ...points.map((p) => p.x + 3));
-  const minZ = Math.min(origin.z - 4, ...points.map((p) => p.z - 3));
-  const maxZ = Math.max(origin.z + 14, ...points.map((p) => p.z + 3));
-  const floorY = origin.y - 1;
-  await tryCommand(server, `fill ${minX} ${origin.y} ${minZ} ${maxX} ${origin.y + 6} ${maxZ} minecraft:air`);
-  await tryCommand(server, `fill ${minX} ${floorY} ${minZ} ${maxX} ${floorY} ${maxZ} minecraft:smooth_stone`);
+  return prepareSafeWalkwayOn(server, GROUND, origin, ...points);
+}
+
+/** The cells {@link prepareSafeWalkway} clears, from its floor's level up: what a stage must lay under it. */
+export function safeWalkwayBox(
+  origin: { x: number; y: number; z: number },
+  ...points: Array<{ x: number; y: number; z: number }>
+) {
+  return {
+    min: { x: Math.min(origin.x - 7, ...points.map((p) => p.x - 3)), y: origin.y, z: Math.min(origin.z - 4, ...points.map((p) => p.z - 3)) },
+    max: { x: Math.max(origin.x + 7, ...points.map((p) => p.x + 3)), y: origin.y + 6, z: Math.max(origin.z + 14, ...points.map((p) => p.z + 3)) },
+  };
+}
+
+export async function prepareSafeWalkwayOn(
+  server: MinecraftServer,
+  stage: Stage,
+  origin: { x: number; y: number; z: number },
+  ...points: Array<{ x: number; y: number; z: number }>
+) {
+  const { min, max } = safeWalkwayBox(origin, ...points);
+  const floorY = min.y - 1;
+  await tryCommand(server, `fill ${commandPos(stage.at(min))} ${commandPos(stage.at(max))} minecraft:air`);
+  await tryCommand(server, `fill ${commandPos(stage.at({ ...min, y: floorY }))} ${commandPos(stage.at({ ...max, y: floorY }))} minecraft:smooth_stone`);
 }

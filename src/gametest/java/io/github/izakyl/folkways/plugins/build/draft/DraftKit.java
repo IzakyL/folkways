@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.front.api.Schema;
@@ -38,6 +39,12 @@ final class DraftKit {
         return Pattern.parse(ResourceLocation.withDefaultNamespace(name), source,
                 wanted -> Optional.ofNullable(libraries.get(wanted.toString())))
             .orElseThrow(() -> new AssertionError("the pattern did not load"));
+    }
+
+    // A pattern the mod ships, loaded as the game loads it: its load() statements reach the libraries installed beside it.
+    static Pattern bundled(String name, String source) {
+        return Pattern.parse(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, name), source)
+            .orElseThrow(() -> new AssertionError(name + " did not load"));
     }
 
     static Hint zone(int x, int y, int z) {

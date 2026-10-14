@@ -79,9 +79,12 @@ public final class KeyHints {
                 case LINE -> lining(minecraft, cues);
             }
         }
-        cues.add(Cue.of("folkways.keys.gesture", Cue.Key.SNEAK, Cue.Key.WHEEL));
+        cues.add(Overhead.on() ? Cue.of("folkways.keys.gesture", Cue.Key.TAB)
+            : Cue.of("folkways.keys.gesture", Cue.Key.SNEAK, Cue.Key.WHEEL));
         if (Overhead.on()) {
             cues.add(Cue.of("folkways.keys.overhead.fly", Cue.Key.WALK));
+            cues.add(Cue.of("folkways.keys.overhead.up", Cue.Key.JUMP));
+            cues.add(Cue.of("folkways.keys.overhead.down", Cue.Key.SNEAK));
             cues.add(Cue.of("folkways.keys.overhead.turn", Cue.Key.DRAG));
             cues.add(Cue.of("folkways.keys.overhead.near", Cue.Key.WHEEL));
             cues.add(Cue.of("folkways.keys.overhead.leave", Cue.Key.OVERHEAD));
@@ -89,6 +92,17 @@ public final class KeyHints {
             cues.add(Cue.of("folkways.keys.overhead", Cue.Key.OVERHEAD));
         }
         return cues;
+    }
+
+    // With a preview out in the world, going back into the window is where it is built.
+    private static Cue setup() {
+        return Cue.of(ShapePreview.showing() ? "folkways.keys.setup.preview" : "folkways.keys.setup", Cue.Key.USE);
+    }
+
+    // From above, sneak only takes the camera down, and the drawing is let go with a key of its own.
+    private static Cue discard() {
+        return Overhead.on() ? Cue.of("folkways.keys.discard", Cue.Key.BACKSPACE)
+            : Cue.of("folkways.keys.discard", Cue.Key.SNEAK, Cue.Key.CLICK);
     }
 
     private static void pointing(Minecraft minecraft, List<Cue> cues) {
@@ -101,12 +115,12 @@ public final class KeyHints {
 
     private static void marking(Minecraft minecraft, List<Cue> cues) {
         if (ZoneSelection.marked().isPresent()) {
-            cues.add(Cue.of("folkways.keys.setup", Cue.Key.USE));
+            cues.add(setup());
             cues.add(Cue.of("folkways.keys.push", Cue.Key.MODIFIER, Cue.Key.WHEEL));
             cues.add(Cue.of("folkways.keys.push.far", Cue.Key.ALTERNATE, Cue.Key.WHEEL));
             cues.add(Cue.of("folkways.keys.shift", Cue.Key.MODIFIER, Cue.Key.ALTERNATE, Cue.Key.WHEEL));
             cues.add(Cue.of("folkways.keys.restart", Cue.Key.CLICK));
-            cues.add(Cue.of("folkways.keys.discard", Cue.Key.SNEAK, Cue.Key.CLICK));
+            cues.add(discard());
             return;
         }
         boolean cornered = ZoneSelection.drafting();
@@ -114,7 +128,7 @@ public final class KeyHints {
         cues.add(Cue.of("folkways.keys.corner.air", Cue.Key.MODIFIER, Cue.Key.CLICK));
         cues.add(Cue.of(Component.translatable("folkways.keys.reach", ZoneSelection.reach()),
             Cue.Key.MODIFIER, Cue.Key.WHEEL));
-        cues.add(cornered ? Cue.of("folkways.keys.discard", Cue.Key.SNEAK, Cue.Key.CLICK) : opening(minecraft));
+        cues.add(cornered ? discard() : opening(minecraft));
     }
 
     private static void lining(Minecraft minecraft, List<Cue> cues) {
@@ -131,9 +145,9 @@ public final class KeyHints {
         cues.add(Cue.of("folkways.keys.point.across", Cue.Key.ALTERNATE, Cue.Key.WHEEL));
         cues.add(Cue.of("folkways.keys.point.raise", Cue.Key.MODIFIER, Cue.Key.ALTERNATE, Cue.Key.WHEEL));
         if (PathSelection.drawn().isPresent()) {
-            cues.add(Cue.of("folkways.keys.setup", Cue.Key.USE));
+            cues.add(setup());
         }
-        cues.add(Cue.of("folkways.keys.discard", Cue.Key.SNEAK, Cue.Key.CLICK));
+        cues.add(discard());
     }
 
     /** What the use key opens when nothing is being drawn: the zone or path aimed at, or else the colony's panel. */

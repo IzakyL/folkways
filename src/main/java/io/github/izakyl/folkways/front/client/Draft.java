@@ -1,8 +1,11 @@
 package io.github.izakyl.folkways.front.client;
 
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import io.github.izakyl.folkways.front.api.Ghost;
+import io.github.izakyl.folkways.front.api.ui.Taking;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
 import io.github.izakyl.folkways.front.ui.screen.Drawing;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiFunction;
@@ -23,7 +26,7 @@ record Draft<D>(
     Function<D, Component> size,
     ToIntFunction<D> counted,
     Sender<D> sender,
-    Function<ResourceLocation, Optional<BiFunction<D, Runnable, UIElement>>> offer
+    Function<ResourceLocation, Optional<BiFunction<D, Taking, UIElement>>> offer
 ) implements Drawing.Held {
 
     @Override
@@ -38,6 +41,7 @@ record Draft<D>(
 
     @Override
     public void drop() {
+        ShapePreview.clear();
         dropped.run();
     }
 
@@ -49,6 +53,7 @@ record Draft<D>(
         }
         drawn.get().ifPresent(shape -> HeldBook.bound(player).ifPresent(book -> {
             PacketDistributor.sendToServer(sender.packet(book.colonyId(), shape, delegation, settings));
+            ShapePreview.clear();
             dropped.run();
         }));
     }
@@ -59,11 +64,33 @@ record Draft<D>(
         if (player == null) {
             return Optional.empty();
         }
-        // The shape stays drawn until the offer has been taken, so backing out of it loses nothing.
-        return drawn.get().flatMap(shape -> offer.apply(id).map(body -> body.apply(shape, () -> {
-            dropped.run();
-            player.closeContainer();
+        // The shape stays drawn until the offer has been taken, so backing out of it, or off to look at a
+        // preview, loses nothing.
+        return drawn.get().flatMap(shape -> offer.apply(id).map(body -> body.apply(shape, new Taking() {
+            @Override
+            public void done() {
+                ShapePreview.clear();
+                dropped.run();
+                player.closeContainer();
+            }
+
+            @Override
+            public void preview(List<Ghost> ghosts) {
+                ShapePreview.show(id, shape, drawn, ghosts);
+                player.closeContainer();
+                say(Component.translatable("folkways.draft.previewing"));
+            }
+
+            @Override
+            public boolean previewed() {
+                return ShapePreview.of(id, shape);
+            }
         })));
+    }
+
+    @Override
+    public Optional<ResourceLocation> previewed() {
+        return drawn.get().flatMap(shape -> ShapePreview.offer().filter(by -> ShapePreview.of(by, shape)));
     }
 
     static void say(Component message) {

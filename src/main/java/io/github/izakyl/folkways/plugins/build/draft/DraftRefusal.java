@@ -11,7 +11,7 @@ public enum DraftRefusal implements RefusalKind {
     NO_GROUND,
     UNLOADED,
     READ_TOO_FAR,
-    READ_BUDGET,
+    TIMED_OUT,
     WRONG_MARK,
     UNKNOWN_BLOCK;
 

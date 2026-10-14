@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import {
   commandPos,
   foundColonyFast,
+  foundingBox,
   openColonyPanelViaBook,
   optInViaBook,
   safeAction,
@@ -17,11 +18,11 @@ import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { frames, tryCommand, waitForElement, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
+import { twins, type Stage } from "../shared/harness/stage";
 
-const CONFIG_PATH = "blockwright.toml";
 const RESIDENT_COUNT = 2;
 
-test("the storage tab reads the stock of the colony the player is standing in", async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("the storage tab reads the stock of the colony the player is standing in"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   const runId = newRunId();
   let pair: E2EPair | undefined;
@@ -30,9 +31,9 @@ test("the storage tab reads the stock of the colony the player is standing in", 
   let client: any;
   try {
     pair = await launchPair({
-      config: CONFIG_PATH,
-      server: { trace: tracePath("e2e", "metrics-server"), instance: seededServer(`metrics-server-${runId}`) },
-      client: { trace: tracePath("e2e", "metrics-client"), instance: `metrics-client-${runId}` },
+      config: stage.config,
+      server: { trace: tracePath("e2e", stage.name("metrics-server")), instance: seededServer(stage.name(`metrics-server-${runId}`)) },
+      client: { trace: tracePath("e2e", stage.name("metrics-client")), instance: stage.name(`metrics-client-${runId}`) },
     });
     ({ server, client } = pair);
 
@@ -46,20 +47,21 @@ test("the storage tab reads the stock of the colony the player is standing in", 
     await tryCommand(server, `op ${playerName}`);
     await tryCommand(server, `gamemode creative ${playerName}`);
 
-    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT });
+    await stage.lay(server, foundingBox(origin));
+    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: RESIDENT_COUNT, stage });
     evidence.founding = { origin, residents: founding.residents, stand: founding.standBlock };
 
-    const before = await readStorage(server, client, playerName, founding.standBlock);
+    const before = await readStorage(server, client, playerName, founding.standBlock, stage);
     evidence.before = before;
 
     const chest: Vec = { x: origin.x + 6, y: origin.y, z: origin.z + 6 };
-    await tryCommand(server, `setblock ${commandPos(chest)} minecraft:chest`);
-    await tryCommand(server, `item replace block ${commandPos(chest)} container.0 with minecraft:cooked_beef 64`);
+    await tryCommand(server, `setblock ${commandPos(stage.at(chest))} minecraft:chest`);
+    await tryCommand(server, `item replace block ${commandPos(stage.at(chest))} container.0 with minecraft:cooked_beef 64`);
     await tick.sprint(server, 3);
-    evidence.opt_in = await optInViaBook(server, client, playerName, chest, "chest");
+    evidence.opt_in = await optInViaBook(server, client, playerName, chest, "chest", stage);
     await tick.sprint(server, 10);
 
-    const after = await readStorage(server, client, playerName, founding.standBlock);
+    const after = await readStorage(server, client, playerName, founding.standBlock, stage);
     evidence.after = after;
     expect(after.steak ?? figureMissing(after.drawn, STEAK), "the 64 cooked beef in the new member chest did not show up in the Steak slot")
       .toBeGreaterThanOrEqual((before.steak ?? 0) + 60);
@@ -69,16 +71,16 @@ test("the storage tab reads the stock of the colony the player is standing in", 
   } finally {
     ensureOut("e2e");
     const body = JSON.stringify(evidence, null, 2);
-    writeFileSync(outAbs("e2e", "reports", "metrics-evidence.json"), body);
-    testInfo.attach("metrics-evidence", { body, contentType: "application/json" });
+    writeFileSync(outAbs("e2e", "reports", `${stage.name("metrics-evidence")}.json`), body);
+    testInfo.attach(stage.name("metrics-evidence"), { body, contentType: "application/json" });
     await pair?.teardown(testInfo);
   }
 });
 
 const STEAK = "folkways.metrics.stock.minecraft.cooked_beef";
 
-async function readStorage(server: any, client: any, playerName: string, standBlock: Vec) {
-  await openColonyPanelViaBook(server, client, playerName, standBlock);
+async function readStorage(server: any, client: any, playerName: string, standBlock: Vec, stage: Stage) {
+  await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
   const tab = await softly(() => clickElement(client, { id: "folkways.tab.metrics" }));
   await softly(() => waitForElement(client, { id: "folkways.metrics.refresh" }, { timeoutMs: 8_000 }));
   const refresh = await softly(() => clickElement(client, { id: "folkways.metrics.refresh" }));
