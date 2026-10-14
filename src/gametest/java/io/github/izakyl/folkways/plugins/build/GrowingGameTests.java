@@ -19,13 +19,17 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestSequence;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -111,27 +115,53 @@ public final class GrowingGameTests {
         return rig.saved().get().getList("growing", Tag.TAG_COMPOUND).size();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    private static int round(Rig rig) {
+        return rig.saved().get().getList("growing", Tag.TAG_COMPOUND).getCompound(0).getInt("round");
+    }
+
+    // Rounds are drawn on a drafting thread and taken up on the server's; a test waits ticks for them to come back.
+    private static void drawn(GameTestHelper helper, CompletableFuture<?> drawing) {
+        helper.assertTrue(drawing.isDone(), "the drawing comes back");
+    }
+
+    private static void filed(GameTestHelper helper, CompletableFuture<Optional<Component>> grown, String what) {
+        Optional<Component> refused = grown.join();
+        helper.assertTrue(refused.isEmpty(), what + ", not " + refused.map(Component::getString).orElse(""));
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 200)
     public static void eachFinishedRoundFilesTheNextUntilThePatternIsDone(GameTestHelper helper) {
         Rig rig = rig(helper);
-        BuildPresence presence = new BuildPresence(rig.colony(), rig.level().getServer());
-        Growing fresh = begun(helper, rig);
-        helper.assertTrue(presence.grow(rig.level(), fresh).isEmpty(), "the first round is drawn and filed");
-        helper.assertValueEqual(standing(rig), 1, "one order stands for the first round");
+        AtomicReference<BuildPresence> presence =
+            new AtomicReference<>(new BuildPresence(rig.colony(), rig.level().getServer()));
+        CompletableFuture<Optional<Component>> first = presence.get().grow(rig.level(), begun(helper, rig));
         BlockPos start = helper.absolutePos(new BlockPos(2, 2, 2));
+        GameTestSequence steps = helper.startSequence()
+            .thenWaitUntil(() -> drawn(helper, first))
+            .thenExecute(() -> {
+                filed(helper, first, "the first round is drawn and filed");
+                helper.assertValueEqual(standing(rig), 1, "one order stands for the first round");
+            });
         for (int round = 0; round < 3; round++) {
+            int at = round;
             BlockPos step = start.offset(round, 0, 0);
-            helper.assertTrue(rig.level().getBlockState(step).isAir(), "round " + round + " is not built for free");
-            presence.settle(rig.level().getServer());
-            helper.assertValueEqual(standing(rig), 1, "the order for round " + round + " waits to be built");
-            rig.level().setBlock(step, Blocks.STONE.defaultBlockState(), 3);
-            presence = new BuildPresence(rig.colony(), rig.level().getServer());
-            presence.settle(rig.level().getServer());
+            AtomicInteger before = new AtomicInteger();
+            steps.thenExecute(() -> {
+                helper.assertTrue(rig.level().getBlockState(step).isAir(), "round " + at + " is not built for free");
+                presence.get().settle(rig.level().getServer());
+                helper.assertValueEqual(standing(rig), 1, "the order for round " + at + " waits to be built");
+                rig.level().setBlock(step, Blocks.STONE.defaultBlockState(), 3);
+                before.set(round(rig));
+                presence.set(new BuildPresence(rig.colony(), rig.level().getServer()));
+                presence.get().settle(rig.level().getServer());
+            }).thenWaitUntil(() -> helper.assertTrue(growing(rig) == 0 || round(rig) > before.get(),
+                "the round after " + at + " is drawn once it stands"));
         }
-        helper.assertValueEqual(standing(rig), 0, "no order stands once the pattern answers nothing");
-        helper.assertValueEqual(growing(rig), 0, "the growing retires when it is done");
-        helper.assertTrue(rig.level().getBlockState(start.offset(3, 0, 0)).isAir(), "no fourth step");
-        helper.succeed();
+        steps.thenExecute(() -> {
+            helper.assertValueEqual(standing(rig), 0, "no order stands once the pattern answers nothing");
+            helper.assertValueEqual(growing(rig), 0, "the growing retires when it is done");
+            helper.assertTrue(rig.level().getBlockState(start.offset(3, 0, 0)).isAir(), "no fourth step");
+        }).thenSucceed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
@@ -139,29 +169,34 @@ public final class GrowingGameTests {
         Rig rig = rig(helper);
         BuildPresence presence = new BuildPresence(rig.colony(), rig.level().getServer());
         Growing fresh = begun(helper, rig);
-        helper.assertTrue(presence.grow(rig.level(), fresh).isEmpty(), "the first round is filed");
-        presence.act(BuildContent.PAGE.id(), BuildAct.stopping(fresh.id()), Optional.empty(), rig.view());
-        helper.assertValueEqual(growing(rig), 0, "the growing is stopped");
-        presence.settle(rig.level().getServer());
-        presence.settle(rig.level().getServer());
-        helper.assertValueEqual(standing(rig), 0, "its round is cancelled");
-        helper.assertValueEqual(growing(rig), 0, "and nothing grows again");
-        helper.succeed();
+        CompletableFuture<Optional<Component>> first = presence.grow(rig.level(), fresh);
+        helper.startSequence().thenWaitUntil(() -> drawn(helper, first)).thenExecute(() -> {
+            filed(helper, first, "the first round is filed");
+            presence.act(BuildContent.PAGE.id(), BuildAct.stopping(fresh.id()), Optional.empty(), rig.view());
+            helper.assertValueEqual(growing(rig), 0, "the growing is stopped");
+            presence.settle(rig.level().getServer());
+            presence.settle(rig.level().getServer());
+            helper.assertValueEqual(standing(rig), 0, "its round is cancelled");
+            helper.assertValueEqual(growing(rig), 0, "and nothing grows again");
+        }).thenSucceed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
     public static void cancellingTheStandingRoundStopsTheGrowing(GameTestHelper helper) {
         Rig rig = rig(helper);
         BuildPresence presence = new BuildPresence(rig.colony(), rig.level().getServer());
-        helper.assertTrue(presence.grow(rig.level(), begun(helper, rig)).isEmpty(), "the first round is filed");
-        CompoundTag order = rig.saved().get().getCompound("book").getList("buildOrders", Tag.TAG_COMPOUND)
-            .getCompound(0);
-        presence.act(BuildContent.PAGE.id(), BuildAct.cancelling(order.getUUID("id")), Optional.empty(), rig.view());
-        presence.settle(rig.level().getServer());
-        presence.settle(rig.level().getServer());
-        helper.assertValueEqual(standing(rig), 0, "the round is cancelled");
-        helper.assertValueEqual(growing(rig), 0, "and the growing with it");
-        helper.succeed();
+        CompletableFuture<Optional<Component>> first = presence.grow(rig.level(), begun(helper, rig));
+        helper.startSequence().thenWaitUntil(() -> drawn(helper, first)).thenExecute(() -> {
+            filed(helper, first, "the first round is filed");
+            CompoundTag order = rig.saved().get().getCompound("book").getList("buildOrders", Tag.TAG_COMPOUND)
+                .getCompound(0);
+            presence.act(BuildContent.PAGE.id(), BuildAct.cancelling(order.getUUID("id")), Optional.empty(),
+                rig.view());
+            presence.settle(rig.level().getServer());
+            presence.settle(rig.level().getServer());
+            helper.assertValueEqual(standing(rig), 0, "the round is cancelled");
+            helper.assertValueEqual(growing(rig), 0, "and the growing with it");
+        }).thenSucceed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
@@ -172,18 +207,20 @@ public final class GrowingGameTests {
             .orElseThrow(() -> new AssertionError("test_slab is not loaded"));
         BlockPos start = helper.absolutePos(new BlockPos(1, 2, 1));
         Hint hint = new Hint.Zone(start, start.offset(39, 0, 39));
-        Rounds.Once once = Rounds.drawOnce(rig.level(), pattern, hint,
+        CompletableFuture<Rounds.Once> drawing = Rounds.drawOnce(rig.level(), pattern, hint,
             Chosen.load(pattern.knobs(), new CompoundTag()), Direction.NORTH);
-        if (!(once instanceof Rounds.Once.Drafted drafted)) {
-            helper.fail("the slab should be drawn, got " + once);
-            return;
-        }
-        helper.assertValueEqual(drafted.blueprint().blocks().size(), 1600, "every cell of the slab is kept");
-        helper.assertValueEqual(drafted.corner(), start, "the slab lies where it was marked");
-        helper.assertTrue(presence.file(rig.level(), drafted.blueprint(), drafted.corner(), "", Optional.empty(), "")
-            .isPresent(), "and it is filed as one order");
-        helper.assertTrue(rig.level().getBlockState(start).isAir(), "filing builds nothing for free");
-        helper.succeed();
+        helper.startSequence().thenWaitUntil(() -> drawn(helper, drawing)).thenExecute(() -> {
+            Rounds.Once once = drawing.join();
+            if (!(once instanceof Rounds.Once.Drafted drafted)) {
+                helper.fail("the slab should be drawn, got " + once);
+                return;
+            }
+            helper.assertValueEqual(drafted.blueprint().blocks().size(), 1600, "every cell of the slab is kept");
+            helper.assertValueEqual(drafted.corner(), start, "the slab lies where it was marked");
+            helper.assertTrue(presence.file(rig.level(), drafted.blueprint(), drafted.corner(), "", Optional.empty(),
+                "").isPresent(), "and it is filed as one order");
+            helper.assertTrue(rig.level().getBlockState(start).isAir(), "filing builds nothing for free");
+        }).thenSucceed();
     }
 
     @GameTest(template = "empty", timeoutTicks = 40)
@@ -254,31 +291,34 @@ public final class GrowingGameTests {
         Growing fresh = Growing.begun(MINE, "", hint, defaults(mine, "shallow"), Direction.NORTH, 3L,
             WorldPos.of(level, mark), Optional.empty(), "");
         BuildPresence presence = new BuildPresence(rig.colony(), level.getServer());
-        Optional<net.minecraft.network.chat.Component> refused = presence.grow(level, fresh);
-        helper.assertTrue(refused.isEmpty(), "the headframe is filed, not " + refused.map(Object::toString).orElse(""));
-        helper.assertValueEqual(standing(rig), 1, "one order stands for the headframe");
-        if (!(Rounds.draw(level, fresh) instanceof Round.Grew head)) {
-            helper.fail("the headframe draws again the same way");
-            return;
-        }
-        int placed = 0;
-        for (Draft.Cell cell : head.ready().draft().cells()) {
-            BlockPos at = head.ready().corner().offset(cell.offset());
-            if (!cell.state().isAir()) {
-                helper.assertTrue(!level.getBlockState(at).equals(cell.state()),
-                    "nothing of the headframe is there before it is built, at " + at.toShortString());
-                placed++;
+        CompletableFuture<Optional<Component>> first = presence.grow(level, fresh);
+        AtomicReference<CompletableFuture<Round>> again = new AtomicReference<>();
+        helper.startSequence().thenWaitUntil(() -> drawn(helper, first)).thenExecute(() -> {
+            filed(helper, first, "the headframe is filed");
+            helper.assertValueEqual(standing(rig), 1, "one order stands for the headframe");
+            again.set(Rounds.draw(level, fresh));
+        }).thenWaitUntil(() -> drawn(helper, again.get())).thenExecute(() -> {
+            if (!(again.get().join() instanceof Round.Grew head)) {
+                helper.fail("the headframe draws again the same way");
+                return;
             }
-        }
-        helper.assertTrue(placed > 60, "a headframe of posts, deck, rails and roof, got " + placed + " blocks");
-        for (Draft.Cell cell : head.ready().draft().cells()) {
-            level.setBlock(head.ready().corner().offset(cell.offset()), cell.state(), 3);
-        }
-        presence = new BuildPresence(rig.colony(), level.getServer());
-        presence.settle(level.getServer());
-        helper.assertValueEqual(standing(rig), 1, "the stair is filed once the headframe stands");
-        CompoundTag growing = rig.saved().get().getList("growing", Tag.TAG_COMPOUND).getCompound(0);
-        helper.assertValueEqual(growing.getInt("round"), 2, "the mine waits on its first flight");
-        helper.succeed();
+            int placed = 0;
+            for (Draft.Cell cell : head.ready().draft().cells()) {
+                BlockPos at = head.ready().corner().offset(cell.offset());
+                if (!cell.state().isAir()) {
+                    helper.assertTrue(!level.getBlockState(at).equals(cell.state()),
+                        "nothing of the headframe is there before it is built, at " + at.toShortString());
+                    placed++;
+                }
+            }
+            helper.assertTrue(placed > 60, "a headframe of posts, deck, rails and roof, got " + placed + " blocks");
+            for (Draft.Cell cell : head.ready().draft().cells()) {
+                level.setBlock(head.ready().corner().offset(cell.offset()), cell.state(), 3);
+            }
+            new BuildPresence(rig.colony(), level.getServer()).settle(level.getServer());
+        }).thenWaitUntil(() -> helper.assertValueEqual(round(rig), 2, "the mine waits on its first flight"))
+            .thenExecute(() -> helper.assertValueEqual(standing(rig), 1,
+                "the stair is filed once the headframe stands"))
+            .thenSucceed();
     }
 }

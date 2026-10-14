@@ -8,7 +8,6 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
@@ -43,7 +42,7 @@ public final class DraftCityWallGameTests {
             if (in == null) {
                 throw new AssertionError("city_wall.star is not bundled");
             }
-            return DraftKit.parse("city_wall", new String(in.readAllBytes(), StandardCharsets.UTF_8), Map.of());
+            return DraftKit.bundled("city_wall", new String(in.readAllBytes(), StandardCharsets.UTF_8));
         } catch (IOException unreadable) {
             throw new UncheckedIOException(unreadable);
         }
