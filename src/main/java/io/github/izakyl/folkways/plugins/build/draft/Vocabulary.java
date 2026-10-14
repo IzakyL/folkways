@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableMap;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Schema;
+import io.github.izakyl.folkways.front.api.notice.Notice;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,6 +40,7 @@ import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkList;
 import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.StarlarkValue;
+import net.starlark.java.eval.Tuple;
 
 @StarlarkBuiltin(name = "folkways", doc = "What a folkways pattern can say.")
 public final class Vocabulary implements StarlarkValue {
@@ -52,6 +54,49 @@ public final class Vocabulary implements StarlarkValue {
         ImmutableMap.Builder<String, Object> environment = ImmutableMap.builder();
         Starlark.addMethods(environment, INSTANCE);
         return environment.build();
+    }
+
+    @StarlarkBuiltin(name = "translation", doc = "A translation key used as a rejection's argument.")
+    public record Translation(String key) implements StarlarkValue {
+        @Override
+        public boolean isImmutable() {
+            return true;
+        }
+    }
+
+    @StarlarkMethod(name = "translated", doc = "An argument read in the player's language, rather than as literal text.",
+        parameters = {@Param(name = "key")})
+    public Translation translated(String key) throws EvalException {
+        checkTranslationKey(key);
+        return new Translation(key);
+    }
+
+    @StarlarkMethod(name = "reject", doc = "Stop drawing with a translation key and up to four arguments."
+        + " Arguments are text, numbers, booleans, or translated(key).",
+        parameters = {@Param(name = "key")}, extraPositionals = @Param(name = "args"), useStarlarkThread = true)
+    public Object reject(String key, Tuple args, StarlarkThread thread) throws EvalException {
+        checkTranslationKey(key);
+        if (args.size() > Notice.MAX_ARGS) {
+            throw Starlark.errorf("reject takes at most %d arguments", Notice.MAX_ARGS);
+        }
+        List<Notice.Arg> words = new ArrayList<>();
+        for (Object arg : args) {
+            if (arg instanceof Translation translation) {
+                words.add(Notice.named(translation.key()));
+            } else if (arg instanceof String || arg instanceof StarlarkInt || arg instanceof StarlarkFloat
+                    || arg instanceof Boolean) {
+                words.add(Notice.text(Starlark.str(arg)));
+            } else {
+                throw Starlark.errorf("reject arguments must be text, numbers, booleans, or translated(key)");
+            }
+        }
+        throw Derivation.of(thread).reject(new Notice(key, words));
+    }
+
+    private static void checkTranslationKey(String key) throws EvalException {
+        if (key.isBlank() || key.length() > Notice.MAX_KEY) {
+            throw Starlark.errorf("a translation key must contain 1-%d characters", Notice.MAX_KEY);
+        }
     }
 
     @StarlarkBuiltin(name = "shape", doc = "A region of a building's space.")

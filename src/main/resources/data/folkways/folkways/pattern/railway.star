@@ -29,6 +29,22 @@ lang = {
         "masonry": "砌体",
         "accent": "点缀",
     },
+    "zh_hk": {
+        "title": "鐵路",
+        "track": "路軌",
+        "ballast": "道砟",
+        "bed": "路基",
+        "masonry": "砌體",
+        "accent": "點綴",
+    },
+    "zh_tw": {
+        "title": "鐵路",
+        "track": "鐵軌",
+        "ballast": "道砟",
+        "bed": "路基",
+        "masonry": "砌體",
+        "accent": "點綴",
+    },
 }
 
 AIR = "minecraft:air"
@@ -96,8 +112,7 @@ def bend(one, other):
         return 0, 0
     dot = one["sx"] * other["sx"] + one["sz"] * other["sz"]
     if dot < 0:
-        fail("A railway cannot turn back on itself; bend at most 90° at a point" +
-            " / 铁路不能折返：每个转折点最多转 90°")
+        reject("folkways.draft.error.rail.bend")
     diagonal = one["sx"] != 0 and one["sz"] != 0
     if dot == 0:
         return BENDS[(0, 1)] if diagonal else BENDS[(1, 0)]
@@ -134,8 +149,7 @@ def grades(leg, first, last):
             height += rise
             at += span + 2
         return found
-    fail("Too steep to climb here: lengthen the run or ease the heights" +
-        " / 坡度过陡：请加长线路或减小高差")
+    reject("folkways.draft.error.rail.grade")
 
 def route(site):
     points = site.path.points
@@ -144,8 +158,7 @@ def route(site):
     for index in range(1, len(points)):
         sx, sz, steps, off = heading(point(x, y, z), points[index])
         if off > 2 or steps == 0:
-            fail("Each stretch of track runs straight along an axis or a 45° diagonal; line its ends up" +
-                " / 每段轨道只能沿坐标轴或 45° 斜线笔直铺设：请对齐两端")
+            reject("folkways.draft.error.rail.straight")
         legs.append({"x": x, "z": z, "sx": sx, "sz": sz, "n": steps, "y0": y, "y1": points[index].y,
             "diagonal": sx != 0 and sz != 0, "head": 0, "tail": steps})
         x, y, z = x + steps * sx, points[index].y, z + steps * sz
@@ -159,8 +172,7 @@ def route(site):
         bends.append((index, into, out))
     for leg in legs:
         if leg["tail"] - leg["head"] < 1:
-            fail("Too tight a bend: leave about ten blocks of straight track either side of each turn" +
-                " / 转弯过急：每个转折点两侧请各留约十格直线")
+            reject("folkways.draft.error.rail.tight")
         leg["climbs"] = grades(leg, leg["head"], leg["tail"])
     return legs, bends
 
@@ -463,7 +475,7 @@ def tunnel_column(site, out, sample, x, z, q, way):
 def rails(site, legs, bends):
     material = site.items("track")
     if not material:
-        fail("Choose the track to lay / 请选择要铺设的轨道")
+        reject("folkways.draft.error.rail.track")
     laid = {}
     joints = []
     ends = []
@@ -489,7 +501,7 @@ def rails(site, legs, bends):
 def meets(site, line, columns):
     material = site.items("track")
     if not material:
-        fail("Choose the track to lay / 请选择要铺设的轨道")
+        reject("folkways.draft.error.rail.track")
     found = {}
     for key, best in columns.items():
         x, z = key
@@ -510,7 +522,7 @@ def beside(met, x, z):
 def draw(site):
     for key in ["ballast", "bed", "masonry", "accent"]:
         if not site.items(key):
-            fail("Choose material for %s / 请选择材料" % key)
+            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
     legs, bends = route(site)
     line = samples(legs, bends)
     found = classify(site, line)

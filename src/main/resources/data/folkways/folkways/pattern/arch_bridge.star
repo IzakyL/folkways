@@ -33,6 +33,24 @@ lang = {
         "abutment": "桥台",
         "accent": "点缀",
     },
+    "zh_hk": {
+        "title": "拱橋",
+        "width": "寬度",
+        "arch": "拱",
+        "deck": "橋面",
+        "parapet": "護欄",
+        "abutment": "橋台",
+        "accent": "點綴",
+    },
+    "zh_tw": {
+        "title": "拱橋",
+        "width": "寬度",
+        "arch": "拱",
+        "deck": "橋面",
+        "parapet": "護欄",
+        "abutment": "橋臺",
+        "accent": "點綴",
+    },
 }
 
 def approach(site, band, z, y, direction):
@@ -67,7 +85,7 @@ def approach(site, band, z, y, direction):
         apron = [row.at(x = x, y = heights[x + 1]).sized(width = 1) for x in [-1, band.width]]
         return {"deck": group(deck + apron), "trim": trim + apron, "rails": rails,
                 "floor": min(heights)}
-    fail("No dry landing within 12 blocks of bridgehead / 桥头外 12 格内没有可平缓衔接的岸地")
+    reject("folkways.draft.error.bridge.landing")
 
 def height_at(z, span, rise, dy):
     t = float(z) / span
@@ -109,19 +127,19 @@ def clears(first, depth, spring, rise, ring, span, arch_rise, dy):
 
 def draw(site):
     if len(site.path.points) != 2:
-        fail("An arch bridge needs exactly two path points / 拱桥只支持两个路径点")
+        reject("folkways.draft.error.bridge.points")
     length = site.path.length
     if length < 6 or length > 96:
-        fail("Bridge span must be 6–96 blocks / 拱桥跨度须为 6–96 格")
+        reject("folkways.draft.error.bridge.span")
     width = site.count("width")
     if width < 3 or width > 15:
-        fail("Bridge width must be 3–15 blocks / 拱桥宽度须为 3–15 格")
+        reject("folkways.draft.error.bridge.width")
     dy = site.path.points[1].y - site.path.points[0].y
     if max(dy, -dy) > length / 4:
-        fail("Bridge ends are too steep / 桥头高差不得超过跨度的四分之一")
+        reject("folkways.draft.error.bridge.steep")
     for key in ["arch", "deck", "parapet", "abutment", "accent"]:
         if not site.items(key):
-            fail("Choose material for %s / 请选择材料" % key)
+            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
     run = site.path.stretches[0]
     band = run.sized(width = width, anchor = "center", parity = "low")
     span = band.depth - 1

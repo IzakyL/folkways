@@ -356,6 +356,7 @@ for(var placard:facing.placards(view)){
   for(var line:placard.lines()){
     if(line instanceof Line.Said said&&name.isEmpty())name=said.notice().component().getString();
     if(line instanceof Line.Literal literal&&name.isEmpty())name=literal.text();
+    if(line instanceof Line.Text text&&name.isEmpty())name=text.component().getString();
     if(line instanceof Line.Bar bar){placed=(int)bar.value();of=(int)bar.max();}
   }
   out.add(Map.of("id",placard.id().toString(),"name",name,"placed",placed,"of",of));

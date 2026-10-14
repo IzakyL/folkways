@@ -1,8 +1,11 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.front.api.notice.Notice;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 
 public sealed interface Drawn {
 
@@ -27,11 +30,21 @@ public sealed interface Drawn {
         }
     }
 
-    record Refused(DraftRefusal why, String detail) implements Drawn {
+    record Refused(DraftRefusal why, String detail, Optional<Notice> explanation) implements Drawn {
 
         public Refused {
             Objects.requireNonNull(why, "why");
             detail = detail == null ? "" : detail;
+            Objects.requireNonNull(explanation, "explanation");
+        }
+
+        public Refused(DraftRefusal why, String detail) {
+            this(why, detail, Optional.empty());
+        }
+
+        public Component component() {
+            return Component.translatable(why.translationKey(), explanation.map(Notice::component)
+                .orElseGet(() -> Component.literal(detail)));
         }
     }
 

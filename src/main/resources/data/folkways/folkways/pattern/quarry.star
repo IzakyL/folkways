@@ -11,6 +11,14 @@ lang = {
         "title": "采石场",
         "depth": "深度",
     },
+    "zh_hk": {
+        "title": "採石場",
+        "depth": "深度",
+    },
+    "zh_tw": {
+        "title": "採石場",
+        "depth": "深度",
+    },
 }
 
 # An open quarry: the ground inside the zone is cut away from the top down to a flat floor, depth below the lowest
@@ -26,12 +34,12 @@ def cell(work, x, z, y, width = 1, height = 1):
 def draw(site):
     zone = site.zone.sized(height = 1)
     if zone.width < 8 or zone.depth < 8 or zone.width > 64 or zone.depth > 64:
-        fail("A quarry must be 8–64 blocks on each side / 采石场每边须为 8–64 格")
+        reject("folkways.draft.error.quarry.size")
     depth = site.count("depth")
     if depth < 0 or depth > 16:
-        fail("Quarry depth must be 0–16 blocks / 采石场深度须为 0–16 格")
+        reject("folkways.draft.error.quarry.depth")
     if site.survey(zone).water > 0.2:
-        fail("The quarry is under water / 采石场大部分在水下")
+        reject("folkways.draft.error.quarry.water")
     width = zone.width
     deep = zone.depth
     top = {}
@@ -41,7 +49,7 @@ def draw(site):
             spot = zone.at(x = x, z = z).origin
             ground = site.ground(spot.x, spot.z)
             if ground == None:
-                fail("No ground under the quarry / 采石场下方没有地面")
+                reject("folkways.draft.error.quarry.ground")
             found = site.highest(spot.x, spot.z, "solid")
             top[(x, z)] = max(ground, found) if found != None else ground
             if (x == 0 or z == 0 or x == width - 1 or z == deep - 1) and (rim == None or ground < rim):
@@ -68,7 +76,7 @@ def draw(site):
                     dig.append(found)
             start = x if cut else None
     if not dig:
-        fail("Nothing here stands above the quarry's floor / 这里没有高于采石场底面的地面")
+        reject("folkways.draft.error.quarry.empty")
     report("floor", floor)
     report("cuts", len(dig))
     return [clear("dig", dig)]

@@ -44,6 +44,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -128,7 +129,7 @@ public final class ResidentsPage implements Draw {
         Label unmatched = Rows.text(Component.translatable("folkways.ui.residents.unmatched"));
         unmatched.setDisplay(false);
         Runnable refilter = () -> {
-            int matched = showRoster(rows);
+            int matched = showRoster(rows, player.registryAccess());
             empty.setDisplay(roster.isEmpty());
             unmatched.setDisplay(!roster.isEmpty() && matched == 0);
         };
@@ -162,7 +163,7 @@ public final class ResidentsPage implements Draw {
         showing.setRemoteDataSource(IDataSource.of(ignored -> { }, () -> shown));
         page.addSyncValue(showing.getSyncValue());
         page.addSyncValue(DataBindingBuilder.tagS2C(() -> detailTag(player))
-            .onSyncReceived(tag -> showDetail(tag))
+            .onSyncReceived(tag -> showDetail(tag, player.registryAccess()))
             .build()
             .getSyncValue());
         return page;
@@ -350,7 +351,7 @@ public final class ResidentsPage implements Draw {
             state.order.add(body.id());
             CompoundTag row = new CompoundTag();
             row.putString(ID, body.id().toString());
-            row.putString(NAME, body.mob().getDisplayName().getString());
+            row.put(NAME, Pages.text(player.registryAccess(), body.mob().getDisplayName()));
             row.put(DOING, told(body).save());
             Licences licences = body.licences();
             List<Vocation> trades = Vocations.all();
@@ -386,7 +387,7 @@ public final class ResidentsPage implements Draw {
             return tag;
         }
         tag.putString(ID, state.selected.toString());
-        tag.putString(NAME, body.get().mob().getDisplayName().getString());
+        tag.put(NAME, Pages.text(player.registryAccess(), body.get().mob().getDisplayName()));
         tag.putBoolean(NAMED, inlays.stream().anyMatch(inlay -> inlay.names(body.get())));
         tag.put(DOING, told(body.get()).save());
         ListTag tracks = new ListTag();
@@ -493,14 +494,14 @@ public final class ResidentsPage implements Draw {
     }
 
     // Fills the rows with the residents the search lets through and says how many it let through.
-    private int showRoster(List<Row> rows) {
+    private int showRoster(List<Row> rows, HolderLookup.Provider registries) {
         Predicate<RosterQuery.Entry> wanted = RosterQuery.parse(query, fields());
         List<ResourceLocation> trades = Vocations.ids();
         List<CompoundTag> list = new ArrayList<>();
         int matched = 0;
         for (int index = 0; index < roster.size(); index++) {
             CompoundTag entry = roster.getCompound(index);
-            if (wanted.test(entry(entry, trades))) {
+            if (wanted.test(entry(entry, trades, registries))) {
                 matched++;
                 if (list.size() < rows.size()) {
                     list.add(entry);
@@ -518,7 +519,7 @@ public final class ResidentsPage implements Draw {
             CompoundTag entry = list.get(index);
             row.element.setDisplay(true);
             name(row, entry.getString(ID));
-            row.name.setText(Component.literal(entry.getString(NAME)));
+            row.name.setText(Pages.readText(registries, entry.get(NAME)));
             SignLine.show(row.doing, Sentence.load(entry.getList(DOING, Tag.TAG_COMPOUND)));
             int[] priorities = entry.getIntArray(PRIORITIES);
             for (int trade = 0; trade < row.priorities.size(); trade++) {
@@ -539,7 +540,8 @@ public final class ResidentsPage implements Draw {
             List.of("doing", "work", Component.translatable("folkways.ui.residents.doing").getString()));
     }
 
-    private static RosterQuery.Entry entry(CompoundTag entry, List<ResourceLocation> trades) {
+    private static RosterQuery.Entry entry(CompoundTag entry, List<ResourceLocation> trades,
+            HolderLookup.Provider registries) {
         int[] priorities = entry.getIntArray(PRIORITIES);
         List<RosterQuery.Trade> known = new ArrayList<>();
         for (int trade = 0; trade < trades.size(); trade++) {
@@ -548,7 +550,7 @@ public final class ResidentsPage implements Draw {
                 List.of(id.getPath(), id.toString(), vocationName(id).getString()),
                 trade < priorities.length ? priorities[trade] : BARRED));
         }
-        return new RosterQuery.Entry(entry.getString(NAME),
+        return new RosterQuery.Entry(Pages.readText(registries, entry.get(NAME)).getString(),
             plain(Sentence.load(entry.getList(DOING, Tag.TAG_COMPOUND))), known);
     }
 
@@ -588,7 +590,7 @@ public final class ResidentsPage implements Draw {
         return standing > 0 ? Integer.toString(standing) : "–";
     }
 
-    private void showDetail(Tag tag) {
+    private void showDetail(Tag tag, HolderLookup.Provider registries) {
         CompoundTag compound = tag instanceof CompoundTag known ? known : new CompoundTag();
         boolean open = compound.getBoolean(OPEN);
         if (detail != null && open != detailShown) {
@@ -612,11 +614,11 @@ public final class ResidentsPage implements Draw {
             renameButton.setDisplay(ownRename);
         }
         if (nameField != null && !showing.isEmpty() && !showing.equals(state.filled)) {
-            nameField.setText(compound.getString(NAME));
+            nameField.setText(Pages.readText(registries, compound.get(NAME)).getString());
             state.filled = showing;
         }
         if (detail != null) {
-            detail.title(Component.literal(compound.getString(NAME)));
+            detail.title(Pages.readText(registries, compound.get(NAME)));
         }
         if (doing != null) {
             SignLine.show(doing, Sentence.load(compound.getList(DOING, Tag.TAG_COMPOUND)));

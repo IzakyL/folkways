@@ -76,6 +76,10 @@ final class DraftKit {
         throw new AssertionError("drawn");
     }
 
+    static String explanationKey(Drawn.Refused refused) {
+        return refused.explanation().map(notice -> notice.key()).orElse("");
+    }
+
     static Draft laid(GameTestHelper helper, List<Massing.Part> parts) {
         return ready(helper, Lattice.of(new Massing(parts))
             .map(lattice -> Fitter.fit(lattice, ORIGIN, 0L))

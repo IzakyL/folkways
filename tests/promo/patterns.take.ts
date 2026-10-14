@@ -702,6 +702,7 @@ for(var placard:facing.placards(view)){
   for(var line:placard.lines())lines.add(switch(line){
     case Line.Said said->said.notice().component().getString();
     case Line.Literal literal->literal.text();
+    case Line.Text text->text.component().getString();
     case Line.Goods goods->goods.stacks().stream().map(s->s.item()+"x"+s.count()).toList();
     case Line.Told told->told.sentence().tokens().stream().filter(t->t instanceof Sentence.Token.Ware)
       .map(t->{var w=(Sentence.Token.Ware)t;return w.item()+"x"+w.count();}).toList();

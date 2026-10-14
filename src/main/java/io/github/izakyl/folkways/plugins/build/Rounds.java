@@ -98,7 +98,7 @@ final class Rounds {
 
     private static Once blueprinted(ServerLevel level, Pattern pattern, Drawn drawn) {
         if (drawn instanceof Drawn.Refused refused) {
-            return new Once.Refused(Component.translatable(refused.why().translationKey(), refused.detail()));
+            return new Once.Refused(refused.component());
         }
         Drawn.Ready ready = (Drawn.Ready) drawn;
         return blueprintOf(level, pattern.id().getPath(), ready.draft())

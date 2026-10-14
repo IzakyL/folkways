@@ -68,6 +68,46 @@ lang = {
         "lamp": "灯具",
         "seal": "封堵",
     },
+    "zh_hk": {
+        "title": "礦井",
+        "level": "開採層",
+        "level.shallow": "淺層",
+        "level.copper": "銅",
+        "level.iron": "鐵",
+        "level.gold": "金",
+        "level.diamond": "鑽石",
+        "branch": "支巷長度",
+        "spacing": "支巷間距",
+        "pairs": "支巷對數",
+        "chase": "追礦脈",
+        "timber": "支護木",
+        "planks": "木板",
+        "stairs": "樓梯",
+        "rail": "欄杆",
+        "gate": "柵欄門",
+        "lamp": "燈具",
+        "seal": "封堵",
+    },
+    "zh_tw": {
+        "title": "礦井",
+        "level": "開採層",
+        "level.shallow": "淺層",
+        "level.copper": "銅",
+        "level.iron": "鐵",
+        "level.gold": "金",
+        "level.diamond": "鑽石",
+        "branch": "支巷長度",
+        "spacing": "支巷間距",
+        "pairs": "支巷對數",
+        "chase": "追礦脈",
+        "timber": "支護木",
+        "planks": "木材",
+        "stairs": "樓梯",
+        "rail": "欄杆",
+        "gate": "柵欄門",
+        "lamp": "燈具",
+        "seal": "封堵",
+    },
 }
 
 LEVELS = {"copper": 48, "iron": 16, "gold": -16, "diamond": -59}
@@ -207,7 +247,7 @@ def depth_of(site, y0):
     wanted = SHALLOW if level == "shallow" else site.altitude + y0 - LEVELS[level]
     if wanted >= 14:
         return LAP * (wanted // FALL) + 8 * (wanted % FALL // 3) + 1 + wanted % 3
-    fail("The chosen level lies above or too near the mine mouth / 所选矿层高于矿口或离矿口太近")
+    reject("folkways.draft.error.mine.level")
 
 def flooded(site, m, boxes):
     found = []
@@ -219,8 +259,7 @@ def flooded(site, m, boxes):
                 found.append(site.altitude + c[1])
     if len(found) > FLOODED:
         top = max(found)
-        fail("Water or lava floods the way on from height %d; drain it and the mine goes on" % top
-            + " / 前方高度 %d 起被水或岩浆淹没，排干后矿井会继续挖" % top)
+        reject("folkways.draft.error.mine.flooded", top)
 
 def guarded(site, m, boxes):
     flooded(site, m, boxes)
@@ -286,9 +325,9 @@ def head(site):
     m = frame(site, (zone.width - 1) // 2 - 4, (zone.depth - 1) // 2 - 4)
     ground = site.survey(room(m, -1, 0, -1, 11, 1, 11))
     if ground.median == None:
-        fail("No ground under the mine mouth / 矿口下方没有地面")
+        reject("folkways.draft.error.mine.ground")
     if ground.water > 0.25:
-        fail("The mine mouth lies in water / 矿口位于水中")
+        reject("folkways.draft.error.mine.water")
     heights = {}
     for a in range(-1, 10):
         for b in range(-1, 10):
@@ -451,10 +490,10 @@ def drift(site, m, k, chased):
 def grow(site):
     for key in ["timber", "planks", "stairs", "rail", "gate", "lamp", "seal"]:
         if not site.items(key):
-            fail("Choose material for %s / 请为 %s 选择材料" % (key, key))
+            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
     light = site.items("lamp")[0]
     if light.startswith("#") or not light.endswith("lantern"):
-        fail("The lamp must be a lantern / 灯具须为灯笼")
+        reject("folkways.draft.error.mine.lamp")
     k = site.kept
     if not k:
         return head(site)

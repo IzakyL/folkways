@@ -41,6 +41,28 @@ lang = {
         "post": "灯柱",
         "lamp": "灯具",
     },
+    "zh_hk": {
+        "title": "道路",
+        "width": "寬度",
+        "surface": "路面",
+        "edge": "路緣",
+        "fill": "填土",
+        "lights": "路燈",
+        "spacing": "路燈間距",
+        "post": "燈柱",
+        "lamp": "燈具",
+    },
+    "zh_tw": {
+        "title": "道路",
+        "width": "寬度",
+        "surface": "路面",
+        "edge": "路緣",
+        "fill": "填土",
+        "lights": "路燈",
+        "spacing": "路燈間距",
+        "post": "燈柱",
+        "lamp": "燈具",
+    },
 }
 
 POST = 3
@@ -73,13 +95,13 @@ def lights(line, columns, width, spacing):
 def draw(site):
     width = site.count("width")
     if width < 3 or width > 9:
-        fail("Road width must be 3–9 blocks / 道路宽度须为 3–9 格")
+        reject("folkways.draft.error.road.width")
     for key in ["surface", "edge", "fill", "post", "lamp"]:
         if not site.items(key):
-            fail("Choose material for %s / 请选择材料" % key)
+            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
     line = centreline(site, width)
     if line["length"] < 2 or line["length"] > 96:
-        fail("Road length must be 2–96 blocks; split longer roads into several / 道路长度须为 2–96 格，更长的请分段修建")
+        reject("folkways.draft.error.road.length")
     plan = profile(site, line, width)
     works = earthworks(site, line, plan, width)
     spine = trace(plan)

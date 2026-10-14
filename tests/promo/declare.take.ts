@@ -564,6 +564,7 @@ for(var facing:Facing.all(colony))for(var placard:facing.placards(view)){
   for(var line:placard.lines())lines.add(switch(line){
     case Line.Said said->said.notice().component().getString();
     case Line.Literal literal->literal.text();
+    case Line.Text text->text.component().getString();
     default->line.toString();
   });
   out.add(Map.of("id",placard.id().toString(),"lines",lines));

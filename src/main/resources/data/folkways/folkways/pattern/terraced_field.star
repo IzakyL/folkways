@@ -55,6 +55,36 @@ lang = {
         "gate": "栅栏门",
         "lamp": "灯具",
     },
+    "zh_hk": {
+        "title": "梯田",
+        "rise": "每級高度",
+        "spacing": "水渠間距",
+        "fenced": "圍欄",
+        "soil": "土壤",
+        "bund": "田埂",
+        "wall": "擋牆",
+        "cap": "壓頂",
+        "path": "小路",
+        "steps": "台階",
+        "fence": "柵欄",
+        "gate": "柵欄門",
+        "lamp": "燈具",
+    },
+    "zh_tw": {
+        "title": "梯田",
+        "rise": "每級高度",
+        "spacing": "水渠間距",
+        "fenced": "圍欄",
+        "soil": "土壤",
+        "bund": "田埂",
+        "wall": "擋牆",
+        "cap": "壓頂",
+        "path": "小路",
+        "steps": "臺階",
+        "fence": "柵欄",
+        "gate": "柵欄門",
+        "lamp": "燈具",
+    },
 }
 
 WATER = piece(key = {"w": "minecraft:water"}, layers = [["w"]])
@@ -98,7 +128,7 @@ def ground(site, work, seen):
         for x in range(work.width):
             found = height_at(site, work, x, z, seen)
             if found == None:
-                fail("No ground under the field / 田地下方没有地面")
+                reject("folkways.draft.error.field.ground")
             row.append(found)
         grid.append(row)
     return grid
@@ -354,18 +384,18 @@ def palette(items):
 def draw(site):
     zone = site.zone.sized(height = 1)
     if zone.width < 6 or zone.depth < 6 or zone.width > 56 or zone.depth > 56:
-        fail("A terraced field must be 6–56 blocks on each side / 梯田每边须为 6–56 格")
+        reject("folkways.draft.error.field.size")
     rise = site.count("rise")
     spacing = site.count("spacing")
     if rise < 1 or rise > 4:
-        fail("Terrace height must be 1–4 blocks / 梯田台阶高须为 1–4 格")
+        reject("folkways.draft.error.field.height")
     if spacing < 2 or spacing > 8:
-        fail("Water spacing must be 2–8 blocks / 水眼间距须为 2–8 格")
+        reject("folkways.draft.error.field.spacing")
     for key in ["soil", "bund", "wall", "cap", "path", "steps", "fence", "gate", "lamp"]:
         if not site.items(key):
-            fail("Choose material for %s / 请选择材料" % key)
+            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
     if site.survey(zone).water > 0.2:
-        fail("The field is under water / 田地大部分在水下")
+        reject("folkways.draft.error.field.water")
     seen = {}
     work = zone
     grid = ground(site, work, seen)
@@ -393,7 +423,7 @@ def draw(site):
             break
         count = 0
     if count == 0:
-        fail("Too steep to terrace / 坡度太陡，无法修成梯田")
+        reject("folkways.draft.error.field.steep")
     levels = [nearest(bottom) + (count - 1 - k) * rise for k in range(count)]
     edges = lips(surface, levels, rise, least)
 

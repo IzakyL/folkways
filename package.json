@@ -5,8 +5,9 @@
   "scripts": {
     "build": "gradle build",
     "setup": "node_modules/@izakyl/blockwright-client/dist/blockwright mods sync --config blockwright.toml",
-    "typecheck": "tsc -p tests/e2e && tsc -p tests/visual && tsc -p tests/bench && tsc -p tests/promo && tsc -p tests/fuzz",
+    "typecheck": "tsc -p tests/e2e && tsc -p tests/visual && tsc -p tests/bench && tsc -p tests/promo && tsc -p tests/fuzz && tsc -p tests/i18n",
     "test:unit": "node --test --experimental-strip-types \"tests/**/*.test.ts\"",
+    "test:i18n": "node --test --experimental-strip-types tests/i18n/lang.test.ts",
     "test:e2e": "npm exec -- playwright test --config tests/e2e/playwright.config.ts",
     "test:coverage": "npm run coverage:reset && BLOCKWRIGHT_COVERAGE=1 npm run test:e2e; status=$?; npm run coverage:report && exit $status",
     "coverage:report": "node_modules/@izakyl/blockwright-client/dist/blockwright coverage report --config blockwright.toml",

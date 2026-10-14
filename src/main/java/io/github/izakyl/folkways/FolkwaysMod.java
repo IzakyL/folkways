@@ -53,7 +53,7 @@ import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 public final class FolkwaysMod {
     public static final String MOD_ID = "folkways";
 
-    public static final String NETWORK_VERSION = "1";
+    public static final String NETWORK_VERSION = "2";
 
     private final Labor labor = new Labor();
 

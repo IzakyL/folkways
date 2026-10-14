@@ -37,7 +37,23 @@ public record Face(Map<String, List<Option>> offered, Map<String, Map<String, St
 
     public Optional<String> word(String language, String key) {
         String own = words.getOrDefault(language, Map.of()).get(key);
-        return Optional.ofNullable(own != null ? own : words.getOrDefault(FALLBACK, Map.of()).get(key));
+        if (own != null) {
+            return Optional.of(own);
+        }
+        // A custom pattern may provide only one Chinese locale. Prefer another Chinese wording to English.
+        List<String> relatives = switch (language) {
+            case "zh_hk" -> List.of("zh_tw", "zh_cn");
+            case "zh_tw" -> List.of("zh_hk", "zh_cn");
+            case "zh_cn" -> List.of("zh_tw", "zh_hk");
+            default -> List.of();
+        };
+        for (String relative : relatives) {
+            String translated = words.getOrDefault(relative, Map.of()).get(key);
+            if (translated != null) {
+                return Optional.of(translated);
+            }
+        }
+        return Optional.ofNullable(words.getOrDefault(FALLBACK, Map.of()).get(key));
     }
 
     public static String wordOf(String knob, Option option) {

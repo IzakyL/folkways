@@ -43,7 +43,7 @@ public final class ColonyLooks {
     public static List<Line> of(Colony colony, Body resident, List<ColonyView> views) {
         List<Line> lines = new ArrayList<>();
         Mob mob = resident.mob();
-        lines.add(Line.literal(mob.getDisplayName().getString()));
+        lines.add(Line.text(mob.getDisplayName()));
         lines.add(Line.gauge(Meter.HEALTH, Mth.ceil(mob.getHealth()), Mth.ceil(mob.getMaxHealth())));
         for (ColonyView view : views) {
             for (Facing facing : Facing.all(colony)) {

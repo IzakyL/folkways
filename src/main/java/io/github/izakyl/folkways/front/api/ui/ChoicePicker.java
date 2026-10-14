@@ -5,8 +5,11 @@ import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.DataBindingBuilder;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.SimpleBinding;
 import com.lowdragmc.lowdraglib2.gui.texture.ItemStackTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.data.Horizontal;
+import com.lowdragmc.lowdraglib2.gui.ui.data.Vertical;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import io.github.izakyl.folkways.front.api.Schema;
@@ -58,7 +61,7 @@ public final class ChoicePicker {
         for (ResourceLocation option : options) {
             rows.add(new Row(option.toString(), labelOf(option), iconOf(option)));
         }
-        return open(host, titleKey, rows, current == null ? null : current.toString(),
+        return open(host, Component.translatable(titleKey), rows, current == null ? null : current.toString(),
             picked -> confirmed.accept(ResourceLocation.parse(picked)));
     }
 
@@ -69,6 +72,11 @@ public final class ChoicePicker {
     // One of the rows: confirming hands back the key picked, when it is not the one already held.
     public static Dialog open(UIElement host, String title, List<Row> rows, @Nullable String current,
             Consumer<String> confirmed) {
+        return open(host, Component.translatable(title), rows, current, confirmed);
+    }
+
+    public static Dialog open(UIElement host, Component title, List<Row> rows, @Nullable String current,
+            Consumer<String> confirmed) {
         Set<String> held = current == null ? Set.of() : Set.of(current);
         return pick(host, title, rows, held, false,
             picked -> picked.stream().findFirst().ifPresent(confirmed));
@@ -77,10 +85,15 @@ public final class ChoicePicker {
     // Any of the rows: confirming hands back every key picked, in the order the rows stand.
     public static Dialog openMany(UIElement host, String title, List<Row> rows, Set<String> current,
             Consumer<List<String>> confirmed) {
+        return openMany(host, Component.translatable(title), rows, current, confirmed);
+    }
+
+    public static Dialog openMany(UIElement host, Component title, List<Row> rows, Set<String> current,
+            Consumer<List<String>> confirmed) {
         return pick(host, title, rows, current, true, confirmed);
     }
 
-    private static Dialog pick(UIElement host, String title, List<Row> offered, Set<String> current, boolean many,
+    private static Dialog pick(UIElement host, Component title, List<Row> offered, Set<String> current, boolean many,
             Consumer<List<String>> confirmed) {
         Dialog dialog = new Dialog();
         Set<String> picked = new LinkedHashSet<>();
@@ -137,7 +150,9 @@ public final class ChoicePicker {
         Tokens.name(cancel, "folkways.choice.cancel");
         mark(rows, offered, picked, confirm, held);
 
-        dialog.setTitle(title);
+        dialog.titleBar.addChildren(new Label().setText(title)
+            .textStyle(style -> style.textAlignVertical(Vertical.CENTER)
+                .textAlignHorizontal(Horizontal.CENTER).adaptiveWidth(true)));
         dialog.addContent(new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
                 .widthPercent(100).heightPercent(100).gapAll(3))

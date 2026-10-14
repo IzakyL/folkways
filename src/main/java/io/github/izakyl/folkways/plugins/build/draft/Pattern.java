@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
+import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.plugins.build.Joints;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -247,7 +248,9 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
 
     private Drawn run(Commission commission, Derivation drawing, Object fn) {
         if (!accepts(commission.hint())) {
-            return Drawn.refused(DraftRefusal.WRONG_MARK, commission.hint().kind());
+            String kind = commission.hint().kind();
+            return new Drawn.Refused(DraftRefusal.WRONG_MARK, kind,
+                Optional.of(new Notice("folkways.draft.mark." + kind, List.of())));
         }
         Set<ResourceLocation> missing = wanting(commission.settings());
         if (!missing.isEmpty()) {
@@ -290,7 +293,8 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
             return ready.counting(drawing.reports());
         } catch (EvalException stopped) {
             DraftRefusal why = drawing.stoppedFor();
-            return Drawn.refused(why == null ? DraftRefusal.PATTERN_FAILED : why, stopped.getMessage());
+            return new Drawn.Refused(why == null ? DraftRefusal.PATTERN_FAILED : why, stopped.getMessage(),
+                drawing.explanation());
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             return Drawn.refused(DraftRefusal.PATTERN_FAILED, "interrupted");

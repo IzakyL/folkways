@@ -4,7 +4,7 @@ import io.github.izakyl.folkways.front.api.notice.Line;
 import io.netty.buffer.ByteBuf;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.VarInt;
 import net.minecraft.network.codec.StreamCodec;
 
@@ -33,7 +33,7 @@ final class SyncCodecs {
         });
     }
 
-    static <B extends FriendlyByteBuf> StreamCodec<B, List<Line>> lines(int max) {
+    static <B extends RegistryFriendlyByteBuf> StreamCodec<B, List<Line>> lines(int max) {
         return StreamCodec.of((buffer, lines) -> Line.encodeAll(buffer, lines, max),
             buffer -> Line.decodeAll(buffer, max));
     }

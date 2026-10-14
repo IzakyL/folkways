@@ -50,6 +50,34 @@ lang = {
         "panel": "板壁",
         "roof": "屋顶",
     },
+    "zh_hk": {
+        "title": "城牆",
+        "height": "高度",
+        "thickness": "厚度",
+        "spacing": "敵樓間距",
+        "gate": "城門",
+        "wall": "牆體",
+        "base": "牆基",
+        "walkway": "馬道",
+        "trim": "壓頂",
+        "timber": "木構",
+        "panel": "板壁",
+        "roof": "屋頂",
+    },
+    "zh_tw": {
+        "title": "城牆",
+        "height": "高度",
+        "thickness": "厚度",
+        "spacing": "敵樓間距",
+        "gate": "城門",
+        "wall": "牆體",
+        "base": "牆基",
+        "walkway": "馬道",
+        "trim": "壓頂",
+        "timber": "木構",
+        "panel": "板壁",
+        "roof": "屋頂",
+    },
 }
 
 def ceiling(value):
@@ -64,7 +92,7 @@ def lane(run, width):
 def ground(site, run, width, z0, z1):
     found = site.survey(lane(run, width).at(z = z0).sized(depth = z1 - z0 + 1))
     if found.max == None:
-        fail("No ground under the wall / 城墙下方没有地面")
+        reject("folkways.draft.error.wall.ground")
     return found.min, found.max
 
 def inward(points):
@@ -125,7 +153,7 @@ def plan(runs, lengths, square, gate_length, spacing, gated, points, clearway):
                 longest = i
         z = lengths[longest] // 2
         if z - (gate_length - 1) // 2 < square // 2 + 3 or z + gate_length // 2 > lengths[longest] - (square - 1) // 2 - 3:
-            fail("Wall too short for a gatehouse / 城墙太短，放不下城门")
+            reject("folkways.draft.error.wall.gate_length")
         gate = {"run": longest, "z": z}
     middles = []
     if spacing > 0:
@@ -141,19 +169,19 @@ def plan(runs, lengths, square, gate_length, spacing, gated, points, clearway):
 def draw(site):
     points = site.path.points
     if len(points) < 2:
-        fail("A city wall needs at least two path points / 城墙至少需要两个路径点")
+        reject("folkways.draft.error.wall.points")
     height = site.count("height")
     thick = site.count("thickness")
     spacing = site.count("spacing")
     if height < 5 or height > 14:
-        fail("Wall height must be 5–14 blocks / 城墙高度须为 5–14 格")
+        reject("folkways.draft.error.wall.height")
     if thick < 3 or thick > 9:
-        fail("Wall thickness must be 3–9 blocks / 城墙厚度须为 3–9 格")
+        reject("folkways.draft.error.wall.thickness")
     if spacing != 0 and (spacing < 12 or spacing > 48):
-        fail("Tower spacing must be 0 or 12–48 blocks / 敌台间距须为 0 或 12–48 格")
+        reject("folkways.draft.error.wall.spacing")
     for key in ["wall", "base", "walkway", "trim", "timber", "panel", "roof"]:
         if not site.items(key):
-            fail("Choose material for %s / 请选择材料" % key)
+            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
     runs = site.path.stretches
     lengths = [run.depth - 1 for run in runs]
     square = thick + 4
@@ -161,16 +189,16 @@ def draw(site):
     for length in lengths:
         total += length
         if length < square + 3:
-            fail("Each wall stretch must be at least %d blocks / 每段城墙至少 %d 格" % (square + 3, square + 3))
+            reject("folkways.draft.error.wall.stretch", square + 3)
     for i in range(1, len(points) - 1):
         ax = points[i].x - points[i - 1].x
         az = points[i].z - points[i - 1].z
         bx = points[i + 1].x - points[i].x
         bz = points[i + 1].z - points[i].z
         if ax * bx + az * bz < 0:
-            fail("A corner turns back too sharply / 转角过急，不得超过直角")
+            reject("folkways.draft.error.wall.corner")
     if total > 120:
-        fail("A wall runs at most 120 blocks / 城墙总长不得超过 120 格")
+        reject("folkways.draft.error.wall.length")
     gate_width = 3 if height < 7 else 5
     gate_length = gate_width + 8
     towers, gate = plan(runs, lengths, square, gate_length, spacing, site.flag("gate"), points,
@@ -198,7 +226,7 @@ def draw(site):
         tower["scope"] = square_at(site, min(whole, int(along + 0.5)), square)
         found = site.survey(tower["scope"].outset(x = 1, z = 1))
         if found.max == None:
-            fail("No ground under the wall / 城墙下方没有地面")
+            reject("folkways.draft.error.wall.ground")
         tower["low"] = found.min
         tower["level"] = found.max + height + 1
         tower["kind"] = "tower"
@@ -215,7 +243,7 @@ def draw(site):
         centre = run.at(z = gate["z"]).center()
         floor = site.ground(centre.x, centre.z)
         if floor == None:
-            fail("No ground under the gate / 城门下方没有地面")
+            reject("folkways.draft.error.wall.gate_ground")
         gate["floor"] = floor
         gate["low"] = low
         gate["level"] = max(high, floor) + height + 2
@@ -224,7 +252,7 @@ def draw(site):
         stations[i] = sorted(stations[i], key = start_of)
         for k in range(1, len(stations[i])):
             if stations[i][k]["a"] - stations[i][k - 1]["b"] < 3:
-                fail("Towers and gate crowd each other; lengthen the wall or widen the spacing / 敌台与城门过于拥挤，请加长城墙或加大间距")
+                reject("folkways.draft.error.wall.crowded")
 
     chain = []
     walked = 0

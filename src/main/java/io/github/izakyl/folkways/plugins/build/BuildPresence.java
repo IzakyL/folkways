@@ -246,7 +246,7 @@ final class BuildPresence implements Facing {
                 return Optional.of(Component.translatable(DraftRefusal.NOTHING_DRAWN.translationKey(), ""));
             }
             if (next.order().isEmpty()) {
-                return Optional.of(Component.translatable(next.stuck(), next.stuckDetail()));
+                return Optional.of(next.stuckText());
             }
             growing.put(next.id(), next);
             spend(begun.name());
@@ -259,7 +259,7 @@ final class BuildPresence implements Facing {
         long retry = level.getGameTime() + RETRY_TICKS;
         return switch (drawn) {
             case Round.Ended ended -> null;
-            case Round.Stuck stuck -> one.stuck(stuck.refused().why().translationKey(), stuck.refused().detail(), retry);
+            case Round.Stuck stuck -> one.stuck(stuck.refused(), retry);
             case Round.Grew grew -> {
                 Optional<Blueprint> blueprint = Rounds.blueprintOf(level, one, grew.ready().draft());
                 if (blueprint.isEmpty()) {
@@ -618,7 +618,7 @@ final class BuildPresence implements Facing {
         Component detail = one.stuck().isEmpty()
             ? Component.translatable("folkways.page.build.growing", one.growth().round() + 1)
             : Component.translatable("folkways.page.build.growing.stuck", one.growth().round() + 1,
-                Component.translatable(one.stuck(), one.stuckDetail()));
+                one.stuckText());
         return new Board.Row(new ItemStack(Items.IRON_PICKAXE),
             Component.literal(one.name()),
             detail,

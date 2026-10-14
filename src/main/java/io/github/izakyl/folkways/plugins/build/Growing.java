@@ -3,6 +3,8 @@ package io.github.izakyl.folkways.plugins.build;
 import io.github.izakyl.folkways.core.api.persist.Reader;
 import io.github.izakyl.folkways.core.api.persist.Writer;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.front.api.notice.Notice;
+import io.github.izakyl.folkways.plugins.build.draft.Drawn;
 import io.github.izakyl.folkways.plugins.build.draft.Growth;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import java.util.Objects;
@@ -10,6 +12,7 @@ import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
@@ -29,6 +32,7 @@ record Growing(
     String playerName,
     String stuck,
     String stuckDetail,
+    Optional<Notice> stuckExplanation,
     long retryAt
 ) {
     private static final String TAG_ID = "id";
@@ -48,6 +52,7 @@ record Growing(
     private static final String TAG_PLAYER_NAME = "playerName";
     private static final String TAG_STUCK = "stuck";
     private static final String TAG_STUCK_DETAIL = "stuckDetail";
+    private static final String TAG_STUCK_EXPLANATION = "stuckExplanation";
     private static final String TAG_RETRY_AT = "retryAt";
 
     Growing {
@@ -66,12 +71,13 @@ record Growing(
         playerName = playerName == null ? "" : playerName;
         stuck = stuck == null ? "" : stuck;
         stuckDetail = stuckDetail == null ? "" : stuckDetail;
+        Objects.requireNonNull(stuckExplanation, "stuckExplanation");
     }
 
     static Growing begun(ResourceLocation pattern, String name, Hint hint, CompoundTag settings, Direction facing,
             long seed, WorldPos anchor, Optional<UUID> playerId, String playerName) {
         return new Growing(UUID.randomUUID(), pattern, name, hint, settings, facing, seed, anchor, Growth.first(hint),
-            Optional.empty(), false, playerId, playerName, "", "", 0L);
+            Optional.empty(), false, playerId, playerName, "", "", Optional.empty(), 0L);
     }
 
     long roundSeed() {
@@ -80,27 +86,37 @@ record Growing(
 
     Growing building(UUID placed, Growth next, boolean lastRound) {
         return new Growing(id, pattern, name, hint, settings, facing, seed, anchor, next, Optional.of(placed), lastRound,
-            playerId, playerName, "", "", 0L);
+            playerId, playerName, "", "", Optional.empty(), 0L);
     }
 
     Growing waiting() {
         return new Growing(id, pattern, name, hint, settings, facing, seed, anchor, growth, Optional.empty(), last,
-            playerId, playerName, stuck, stuckDetail, retryAt);
+            playerId, playerName, stuck, stuckDetail, stuckExplanation, retryAt);
     }
 
     Growing named(String given) {
         return new Growing(id, pattern, given, hint, settings, facing, seed, anchor, growth, order, last, playerId,
-            playerName, stuck, stuckDetail, retryAt);
+            playerName, stuck, stuckDetail, stuckExplanation, retryAt);
     }
 
     Growing stuck(String why, String detail, long retry) {
         return new Growing(id, pattern, name, hint, settings, facing, seed, anchor, growth, order, last, playerId,
-            playerName, why, detail, retry);
+            playerName, why, detail, Optional.empty(), retry);
+    }
+
+    Growing stuck(Drawn.Refused refused, long retry) {
+        return new Growing(id, pattern, name, hint, settings, facing, seed, anchor, growth, order, last, playerId,
+            playerName, refused.why().translationKey(), refused.detail(), refused.explanation(), retry);
+    }
+
+    Component stuckText() {
+        return Component.translatable(stuck, stuckExplanation.map(Notice::component)
+            .orElseGet(() -> Component.literal(stuckDetail)));
     }
 
     CompoundTag save() {
         BoundingBox reach = growth.reach();
-        return Writer.of()
+        CompoundTag tag = Writer.of()
             .uuid(TAG_ID, id)
             .id(TAG_PATTERN, pattern)
             .string(TAG_NAME, name)
@@ -121,6 +137,8 @@ record Growing(
             .string(TAG_STUCK_DETAIL, stuckDetail)
             .longValue(TAG_RETRY_AT, retryAt)
             .tag();
+        stuckExplanation.ifPresent(notice -> tag.put(TAG_STUCK_EXPLANATION, notice.save()));
+        return tag;
     }
 
     static Optional<Growing> load(Reader reader) {
@@ -143,6 +161,7 @@ record Growing(
             reader.flag(TAG_LAST).orElse(false), reader.uuid(TAG_PLAYER_ID),
             reader.string(TAG_PLAYER_NAME).orElse(""), reader.string(TAG_STUCK).orElse(""),
             reader.string(TAG_STUCK_DETAIL).orElse(""),
+            reader.blob(TAG_STUCK_EXPLANATION).map(Notice::load),
             reader.longValue(TAG_RETRY_AT).orElse(0L)));
     }
 }
