@@ -29,6 +29,11 @@ sealed interface Habit {
         return true;
     }
 
+    // Whether a stand may start at this cell of the plot, for a crop that needs the ground around it left bare.
+    default boolean sowsAt(Plot plot, BlockPos ground) {
+        return true;
+    }
+
     default int reach() {
         return 1;
     }
@@ -98,6 +103,13 @@ sealed interface Habit {
         @Override
         public boolean cuts(Crop crop, BlockState state) {
             return state.is(fruit);
+        }
+
+        // The fruit grows beside the vine, on whichever side has room: a vine on the plot's edge set it outside,
+        // where nobody harvests. The vines keep a cell in from the edge, and the ring left round them is the fruit's.
+        @Override
+        public boolean sowsAt(Plot plot, BlockPos ground) {
+            return plot.inside(ground);
         }
     }
 

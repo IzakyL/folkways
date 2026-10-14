@@ -64,6 +64,7 @@ final class Field {
         List<BlockPos> ground = new ArrayList<>(zone.cells());
         ground.sort(SCAN_ORDER);
         Map<BlockPos, Boolean> footed = new HashMap<>();
+        Plot plot = Plot.of(zone.cells());
         for (BlockPos cell : ground) {
             if (!Loaded.around(level, cell, crop.reach())) {
                 continue;
@@ -72,7 +73,7 @@ final class Field {
             List<BlockPos> ripe = unclaimed(crop.harvestFrom(level, cell), claimed);
             boolean hoe = crop.needsFarmland()
                 && Tillage.canTill(level, cell, state, Tillage.PLAIN_HOE);
-            stake(level, zone.cells(), cell, sown, footed).ifPresent(plant::add);
+            stake(level, plot, cell, sown, footed).ifPresent(plant::add);
             if (ripe.isEmpty() && !hoe) {
                 continue;
             }
@@ -140,10 +141,10 @@ final class Field {
     // A stand is sown from its first cell, whole or not at all and as one piece of work: every cell of it in the
     // plot, room for all of it, and somewhere to stand in reach of each cell still bare. A crop sown a cell at a time
     // is a stand of one.
-    private Optional<Job> stake(ServerLevel level, Set<BlockPos> plot, BlockPos cell, Set<BlockPos> sown,
+    private Optional<Job> stake(ServerLevel level, Plot plot, BlockPos cell, Set<BlockPos> sown,
             Map<BlockPos, Boolean> footed) {
         List<BlockPos> stand = crop.standAt(cell);
-        if (!plot.containsAll(stand)) {
+        if (!plot.containsAll(stand) || !crop.sowsAt(level, plot, cell)) {
             return Optional.empty();
         }
         for (BlockPos ground : stand) {
@@ -167,6 +168,14 @@ final class Field {
                 reached = from;
             } else {
                 reached.retainAll(from);
+            }
+        }
+        // Nobody sows a stalk in the way into the cell they stand in.
+        if (reached != null) {
+            for (BlockPos ground : bare) {
+                if (crop.inTheWay(level, ground.above())) {
+                    reached.remove(ground.above());
+                }
             }
         }
         Optional<Stances> footings = Stances.of(level, reached);

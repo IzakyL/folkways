@@ -149,6 +149,72 @@ public final class FieldChoresGameTests {
         helper.succeed();
     }
 
+    // A melon grows beside its vine: vines on the edge of the plot set fruit outside it, where nobody harvests. The
+    // vines keep a cell in, and the ring round them is left for the fruit.
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void melonVinesKeepACellInFromTheEdge(GameTestHelper helper) throws ReflectiveOperationException {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 1, 1));
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        Set<BlockPos> inner = new LinkedHashSet<>();
+        for (BlockPos cell : BlockPos.betweenClosed(origin, origin.offset(4, 0, 3))) {
+            level.setBlockAndUpdate(cell, Blocks.FARMLAND.defaultBlockState());
+            level.setBlockAndUpdate(cell.above(), Blocks.AIR.defaultBlockState());
+            level.setBlockAndUpdate(cell.above(2), Blocks.AIR.defaultBlockState());
+            cells.add(cell.immutable());
+            int x = cell.getX() - origin.getX();
+            int z = cell.getZ() - origin.getZ();
+            if (x > 0 && x < 4 && z > 0 && z < 3) {
+                inner.add(cell.immutable());
+            }
+        }
+
+        Set<BlockPos> sown = cellsOf(sweep(level, zone(level, cells), cells, "melon_stem", 1));
+        helper.assertTrue(sown.equals(inner), "melons are sown a cell in from the edge, got " + sown);
+        helper.succeed();
+    }
+
+    // Bamboo is a stalk nobody walks through. A plot of it is sown two rows at a time with an aisle between, and
+    // never in the cell the sower stands in: a plot sown wall to wall shut in whoever stood in it.
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void bambooIsSownWithAislesToWalkOutBy(GameTestHelper helper) throws ReflectiveOperationException {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 1, 1));
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        for (BlockPos cell : BlockPos.betweenClosed(origin, origin.offset(5, 0, 7))) {
+            level.setBlockAndUpdate(cell, Blocks.DIRT.defaultBlockState());
+            level.setBlockAndUpdate(cell.above(), Blocks.AIR.defaultBlockState());
+            level.setBlockAndUpdate(cell.above(2), Blocks.AIR.defaultBlockState());
+            cells.add(cell.immutable());
+        }
+
+        List<Job> jobs = jobsOf(sweep(level, zone(level, cells), cells, "bamboo", 1));
+        Set<BlockPos> sown = new LinkedHashSet<>();
+        for (Job job : jobs) {
+            sown.addAll(job.cells());
+            for (BlockPos ground : job.cells()) {
+                helper.assertFalse(job.footings().cells().contains(WorldPos.of(level, ground.above())),
+                    "nobody sows bamboo where they stand: " + ground);
+            }
+        }
+        for (BlockPos cell : cells) {
+            boolean aisle = (cell.getX() - origin.getX()) % 3 == 1;
+            helper.assertTrue(sown.contains(cell) != aisle,
+                (aisle ? "an aisle is left bare: " : "a row beside an aisle is sown: ") + cell);
+        }
+
+        Set<BlockPos> sugar = new LinkedHashSet<>();
+        for (BlockPos cell : BlockPos.betweenClosed(origin, origin.offset(2, 0, 0))) {
+            sugar.add(cell.immutable());
+        }
+        level.setBlockAndUpdate(origin.offset(0, 0, -1), Blocks.WATER.defaultBlockState());
+        level.setBlockAndUpdate(origin.offset(1, 0, -1), Blocks.WATER.defaultBlockState());
+        level.setBlockAndUpdate(origin.offset(2, 0, -1), Blocks.WATER.defaultBlockState());
+        Set<BlockPos> cane = cellsOf(sweep(level, zone(level, sugar), sugar, "sugar_cane", 2));
+        helper.assertTrue(cane.equals(sugar), "cane is walked through and wants no aisle, got " + cane);
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 20)
     public static void aFelledTreeTakesTheLeavesItHoldsUpAndNoOthers(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

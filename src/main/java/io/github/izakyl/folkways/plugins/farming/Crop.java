@@ -180,6 +180,16 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
         return (standing0.isAir() || standing0.canBeReplaced()) && sown().canSurvive(level, base);
     }
 
+    // Bamboo, unlike cane or a sapling, is a stalk nobody walks through: a field of it sown wall to wall shut in
+    // whoever stood in it.
+    boolean inTheWay(LevelReader level, BlockPos base) {
+        return !sown().getCollisionShape(level, base).isEmpty();
+    }
+
+    boolean sowsAt(LevelReader level, Plot plot, BlockPos ground) {
+        return habit.sowsAt(plot, ground) && !(inTheWay(level, ground.above()) && plot.aisle(ground));
+    }
+
     boolean roomAt(LevelReader level, List<BlockPos> stand) {
         return habit.hasRoom(level, bases(stand), Set.of());
     }
