@@ -9,6 +9,8 @@ import { tracePath } from "../shared/harness/out-paths";
 import { seededOffThreadServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { frames, safeScreen, screenName, waitForElement } from "../shared/harness/bw-helpers";
+import { createMarkedZone, setBookGesture } from "../shared/ui/zone-tools";
+import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
 
 test("resident names and cards, and a chest window that fits every GUI scale", async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
@@ -33,6 +35,28 @@ test("resident names and cards, and a chest window that fits every GUI scale", a
     await frames(client, 30);
     await run.shot(client, "01-resident-card", {
       subject: "Resident nameplate: the name and job lines should render in front of the backdrop", worldState: { origin }, hard: true,
+    });
+
+    // A zone six tall round the resident, seen from outside it: the zone's translucent face stands between the
+    // camera and the card, and must tint it, not hide it (issue #7).
+    const ground = origin.y - 1;
+    const zoneMin = { x: origin.x + 2, y: ground, z: origin.z + 2 };
+    const zoneMax = { x: origin.x + 6, y: ground + 6, z: origin.z + 6 };
+    await world.command(server, `setblock ${zoneMax.x} ${zoneMax.y} ${zoneMax.z} minecraft:smooth_stone`);
+    await setBookGesture(server, client, player, "box");
+    await aimAndWorldLeftClick(server, client, player, zoneMin);
+    await tick.sprint(server, 3);
+    await aimAndWorldLeftClick(server, client, player, zoneMax);
+    await tick.sprint(server, 5);
+    await createMarkedZone(server, client, player, founded.standBlock, "farm");
+    await world.command(server, `setblock ${zoneMax.x} ${zoneMax.y} ${zoneMax.z} minecraft:air`);
+    await world.command(server, `tp @e[type=folkways:resident,limit=1] ${origin.x + 4} ${origin.y} ${origin.z + 4}`);
+    await world.command(server, `tp ${player} ${origin.x + 4} ${origin.y} ${origin.z + 9} 180 0`);
+    await tick.sprint(server, 8);
+    await frames(client, 30);
+    await run.shot(client, "01b-resident-card-in-zone", {
+      subject: "The same resident inside a zone six tall, seen from outside it: the whole card shows, tinted by the zone's face, not cut off",
+      worldState: { origin, zoneMin, zoneMax }, hard: true,
     });
 
     const chest = { x: founded.origin.x + 4, y: origin.y, z: origin.z };

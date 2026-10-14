@@ -187,16 +187,18 @@ public final class FolkwaysClientGameEvents {
         };
     }
 
+    // The cards go down first: the translucent fills drawn after them write depth, and would hide a card behind them.
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
+        ColonyHighlightState.queueCards(event);
+        LookLineCards.render(event);
+        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
+            WorldCards.flush(Minecraft.getInstance(), event.getPoseStack(), event.getCamera().getPosition());
+        }
         ZoneSelection.render(event);
         PathSelection.render(event);
         ShapePreview.render(event);
         ColonyHighlightState.render(event);
-        LookLineCards.render(event);
         AimCursor.render(event);
-        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
-            WorldCards.flush(Minecraft.getInstance(), event.getPoseStack(), event.getCamera().getPosition());
-        }
     }
 }

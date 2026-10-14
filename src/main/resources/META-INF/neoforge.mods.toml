@@ -109,3 +109,6 @@ config = "folkways-wares.mixins.json"
 
 [[mixins]]
 config = "folkways-person.mixins.json"
+
+[[mixins]]
+config = "folkways-front.mixins.json"

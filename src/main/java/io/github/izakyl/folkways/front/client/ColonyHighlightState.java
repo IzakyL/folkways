@@ -136,14 +136,20 @@ public final class ColonyHighlightState {
         }
     }
 
-    public static void render(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS
-            || (MEMBERS.isEmpty() && ZONES.isEmpty() && OWED.isEmpty() && PLACARDS.isEmpty()
-                && NOTES.isEmpty() && pingedBlock() == null)) {
-            return;
+    /** Queues the colony's cards, ahead of {@link #render}: they go down before the fills that would hide them. */
+    public static void queueCards(RenderLevelStageEvent event) {
+        Minecraft minecraft = shown(event);
+        if (minecraft != null) {
+            queueCards(minecraft, event.getCamera().getPosition(),
+                event.getPartialTick().getGameTimeDeltaPartialTick(false));
         }
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || minecraft.player == null || heldColonyId(minecraft.player) == null) {
+    }
+
+    // The fills write depth: a card drawn after them behind a zone's face failed the depth test and was gone, or
+    // cut in half where it crossed the face. Drawn after the cards, a face only tints what it stands in front of.
+    public static void render(RenderLevelStageEvent event) {
+        Minecraft minecraft = shown(event);
+        if (minecraft == null) {
             return;
         }
 
@@ -184,9 +190,21 @@ public final class ColonyHighlightState {
         }
         buffers.endBatch(RenderType.lines());
 
-        queueCards(minecraft, camera, partialTick);
         poseStack.popPose();
         buffers.endBatch();
+    }
+
+    private static Minecraft shown(RenderLevelStageEvent event) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS
+            || (MEMBERS.isEmpty() && ZONES.isEmpty() && OWED.isEmpty() && PLACARDS.isEmpty()
+                && NOTES.isEmpty() && pingedBlock() == null)) {
+            return null;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || minecraft.player == null || heldColonyId(minecraft.player) == null) {
+            return null;
+        }
+        return minecraft;
     }
 
     private static void drawZoneFills(Level level, PoseStack poseStack, VertexConsumer fills, Vec3 viewer,
