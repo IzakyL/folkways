@@ -263,9 +263,10 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     await put(server, stage, cells.supply, 0, "minecraft:iron_ingot", 6);
     await put(server, stage, cells.supply, 1, "minecraft:oak_planks", 2);
     await read("read", "two");
+    // A one-shot delivery raises the target stock to its count; the first 24 dishes are still real stock.
     evidence.parallelOrders = [
-      await deliverOrderViaSitePanel(server, client, playerName, cells.noodles, NOODLES, SERVINGS, stage),
-      await deliverOrderViaSitePanel(server, client, playerName, cells.meat, MEAT, SERVINGS, stage),
+      await deliverOrderViaSitePanel(server, client, playerName, cells.noodles, NOODLES, SERVINGS * 2, stage),
+      await deliverOrderViaSitePanel(server, client, playerName, cells.meat, MEAT, SERVINGS * 2, stage),
     ];
     await put(server, stage, cells.supply, 2, DOUGH, BATCHES);
     await put(server, stage, cells.supply, 3, "minecraft:chicken", BATCHES);
