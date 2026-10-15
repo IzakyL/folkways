@@ -54,7 +54,7 @@ import net.minecraft.client.Minecraft;
  */
 public final class Panel {
     public static final int DEFAULT_MAX_DEPTH = 24;
-    public static final int DEFAULT_MAX_NODES = 8_000;
+    public static final int DEFAULT_MAX_NODES = 20_000;
 
     private Panel() {
     }

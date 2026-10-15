@@ -38,7 +38,7 @@ export interface PanelReadOptions extends CallOptions {
    * element at this depth are not read, and the read is marked truncated. Default 24.
    */
   maxDepth?: number;
-  /** The most elements read; more marks the read truncated. Default 8000. */
+  /** The most elements read; more marks the read truncated. Default 20000. */
   maxNodes?: number;
 }
 
