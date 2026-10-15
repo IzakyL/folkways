@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.resident.body.Licences;
 import io.github.izakyl.folkways.core.api.resident.body.PackKeeps;
+import io.github.izakyl.folkways.core.api.resident.body.TaskTools;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
@@ -24,10 +25,12 @@ final class Kit {
 
     private final Set<ItemSpec> specs;
     private final List<Amount> kept;
+    private final java.util.function.Predicate<ItemStack> borrowed;
 
-    private Kit(Set<ItemSpec> specs, List<Amount> kept) {
+    private Kit(Set<ItemSpec> specs, List<Amount> kept, java.util.function.Predicate<ItemStack> borrowed) {
         this.specs = specs;
         this.kept = kept;
+        this.borrowed = borrowed;
     }
 
     static Kit of(Colony colony, Body body) {
@@ -40,7 +43,7 @@ final class Kit {
                 }
             }
         }
-        return new Kit(Set.copyOf(wanted), PackKeeps.of(colony, body));
+        return new Kit(Set.copyOf(wanted), PackKeeps.of(colony, body), stack -> TaskTools.holds(body.id(), stack));
     }
 
     // The part of a kit's tool the colony lets its residents take up; nothing, when it allows none of it.
