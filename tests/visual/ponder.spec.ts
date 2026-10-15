@@ -25,6 +25,7 @@ const SCENES = [
   "fishing",
   "groundwork",
   "orders",
+  "creative_supplies",
   "rail",
   "dispatch",
   "golems",

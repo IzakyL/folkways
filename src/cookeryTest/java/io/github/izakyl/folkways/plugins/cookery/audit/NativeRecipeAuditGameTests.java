@@ -41,12 +41,22 @@ public final class NativeRecipeAuditGameTests {
         JsonArray recipes = new JsonArray();
         Map<String, Integer> types = new LinkedHashMap<>();
         int nativeCount = 0;
+        JsonArray fixtures = new JsonArray();
         for (RecipeHolder<?> holder : level.getRecipeManager().getRecipes().stream()
                 .sorted(Comparator.comparing(one -> one.id().toString())).toList()) {
             Recipe<?> recipe = holder.value();
+            var type = BuiltInRegistries.RECIPE_TYPE.getKey(recipe.getType());
+            // Cookery registers its serializers but uses RecipeType.simple without a type-registry entry.
+            if (type == null) type = net.minecraft.resources.ResourceLocation.tryParse(recipe.getType().toString());
+            if (type == null) {
+                helper.assertFalse(holder.id().getNamespace().equals("kaleidoscope_cookery"),
+                    "every native Cookery recipe names its actual production type");
+                fixtures.add(holder.id().toString());
+                continue;
+            }
             JsonObject row = new JsonObject();
             row.addProperty("id", holder.id().toString());
-            row.addProperty("type", BuiltInRegistries.RECIPE_TYPE.getKey(recipe.getType()).toString());
+            row.addProperty("type", type.toString());
             row.add("definition", Recipe.CODEC.encodeStart(ops, recipe).getOrThrow());
             JsonArray resolved = new JsonArray();
             recipe.getIngredients().forEach(ingredient -> {
@@ -65,6 +75,7 @@ public final class NativeRecipeAuditGameTests {
                 types.merge(row.get("type").getAsString(), 1, Integer::sum);
             }
         }
+        audit.add("unregistered_test_fixtures", fixtures);
         audit.addProperty("native_recipe_count", nativeCount);
         audit.add("native_types", new GsonBuilder().create().toJsonTree(types));
         audit.add("recipes", recipes);

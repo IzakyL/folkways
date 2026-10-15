@@ -35,6 +35,12 @@ public final class PonderScenery {
     private PonderScenery() {
     }
 
+    public static ItemStack book(io.github.izakyl.folkways.front.api.Shape.Gesture gesture) {
+        ItemStack book = new ItemStack(io.github.izakyl.folkways.front.engine.registry.FolkwaysItems.COLONY_BOOK.get());
+        io.github.izakyl.folkways.front.engine.item.ColonyBookItem.setGesture(book, gesture);
+        return book;
+    }
+
     public static void openWorld(SceneBuilder scene, SceneBuildingUtil util, int plateSize) {
         scene.addInstruction(active -> {
             active.getWorld().setBounds(new BoundingBox(0, 0, 0, WORLD_SIZE - 1, WORLD_SIZE - 1, WORLD_SIZE - 1));

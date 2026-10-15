@@ -9,6 +9,7 @@ public final class CookeryPlugin {
     }
 
     public static void install(IEventBus modBus) {
+        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) modBus.addListener(CookeryScenes::declare);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
             io.github.izakyl.folkways.plugins.cookery.millstone.MillstoneDrive::joined);
         modBus.addListener(Declaring.class, CookeryContent::declare);

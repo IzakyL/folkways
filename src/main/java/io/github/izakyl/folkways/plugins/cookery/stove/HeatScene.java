@@ -4,8 +4,6 @@ import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
-import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
-import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
@@ -35,8 +33,7 @@ public final class HeatScene {
         scene.world().setBlock(magma.above(), ModBlocks.STOCKPOT.get().defaultBlockState(), false);
         scene.world().showSection(util.select().fromTo(0, 0, 0, 6, 2, 6), Direction.DOWN);
         scene.idle(15);
-        ItemStack book = new ItemStack(FolkwaysItems.COLONY_BOOK.get());
-        ColonyBookItem.setGesture(book, Shape.Gesture.POINT);
+        ItemStack book = PonderScenery.book(Shape.Gesture.POINT);
         scene.overlay().showControls(util.vector().topOf(stove), Pointing.DOWN, 60).leftClick().withItem(book);
         scene.overlay().showText(80).text("Mark the stove as a kitchen appliance. The colony tends its ignition separately from the food cooking above it.")
             .pointAt(util.vector().centerOf(stove)).placeNearTarget().attachKeyFrame();
