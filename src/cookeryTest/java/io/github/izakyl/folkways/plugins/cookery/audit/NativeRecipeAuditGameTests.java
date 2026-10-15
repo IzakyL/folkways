@@ -78,7 +78,7 @@ public final class NativeRecipeAuditGameTests {
             ItemStack result = recipe.getResultItem(level.registryAccess());
             if (!result.isEmpty()) row.add("result", ItemStack.CODEC.encodeStart(ops, result).getOrThrow());
             recipes.add(row);
-            if (holder.id().getNamespace().equals("kaleidoscope_cookery")) {
+            if (owned.contains(holder.id().toString())) {
                 nativeCount++;
                 types.merge(row.get("type").getAsString(), 1, Integer::sum);
             }

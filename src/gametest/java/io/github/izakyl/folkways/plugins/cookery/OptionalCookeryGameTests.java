@@ -31,9 +31,12 @@ public final class OptionalCookeryGameTests {
         var knifeTag = ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "kitchen_knife");
         var crafting = io.github.izakyl.folkways.core.api.vocation.Vocations.required(
             ResourceLocation.fromNamespaceAndPath("folkways", "crafting"));
-        helper.assertTrue(crafting.kit().stream().anyMatch(tool -> tool.tag()
+        helper.assertFalse(crafting.kit().stream().anyMatch(tool -> tool.tag()
+                .map(tag -> tag.location().equals(knifeTag)).orElse(false)),
+            "a kitchen knife is shared per task and never requested as every resident's career kit");
+        helper.assertTrue(io.github.izakyl.folkways.core.api.work.Tools.sharedGoods().stream().anyMatch(tool -> tool.tag()
                 .map(tag -> tag.location().equals(knifeTag)).orElse(false)) == installed,
-            "the crafting kit only names real kitchen knives when Cookery is installed");
+            "shared kitchen knife support is registered only when Cookery is present");
         try {
             helper.assertTrue(colony.service(owner, Object.class).isPresent() == installed,
                 "the real colony only has a kitchen service when the optional mod is installed");

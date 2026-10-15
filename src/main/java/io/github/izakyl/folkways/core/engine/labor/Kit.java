@@ -83,7 +83,7 @@ final class Kit {
     }
 
     boolean holds(ItemStack stack) {
-        if (stack.isEmpty()) {
+        if (stack.isEmpty() || borrowed.test(stack)) {
             return true;
         }
         for (ItemSpec spec : specs) {
