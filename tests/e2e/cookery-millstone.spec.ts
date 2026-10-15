@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
-import { defineTask, javaTask, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, player, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement } from "../ldlib2";
-import { foundColonyFast, foundingBox, openColonyPanelViaBook, optInViaBook, vocationPriority, waitForGroundedPlayer } from "../shared/colony/colony-founding";
+import { foundColonyFast, foundingBox, optInViaBook, vocationPriority, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { deliverOrderViaSitePanel } from "../shared/colony/membership-optin";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import { scrollCellIntoView, wheelCell } from "../shared/ui/site-panel";
@@ -118,7 +118,9 @@ async function crafting(server: MinecraftServer, client: MinecraftClient, name: 
   const cell = "folkways.resident.vocation.folkways.crafting." + uuid.slice(0, 8);
   const evidence: Record<string, any> = { before: await vocationPriority(server, uuid, CRAFTING), target };
   try {
-    await openColonyPanelViaBook(server, client, name, at, stage);
+    // A marked chest opens its own site board. Use the actual book in air for the global residents page.
+    await screen.dismiss(client); evidence.open = await player.useItem(client, { hand: "main-hand" });
+    await screen.waitFor(client, "ModularUIContainerScreen", { timeoutMs: 10000 });
     await clickElement(client, { id: "folkways.tab.residents" }); await waitForElement(client, { id: row }, { timeoutMs: 10000 });
     await scrollCellIntoView(server, client, row, cell);
     let priority = evidence.before as number;
