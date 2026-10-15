@@ -27,7 +27,7 @@ import io.github.izakyl.folkways.core.engine.plan.Solving;
 import io.github.izakyl.folkways.core.engine.plan.Stands;
 import io.github.izakyl.folkways.core.engine.plan.Stock;
 import io.github.izakyl.folkways.core.engine.plan.Situation;
-import io.github.izakyl.folkways.core.engine.plan.haul.Haul;
+import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -178,7 +178,7 @@ public final class InputReservationGameTests {
             builder.container(new Stash(f.target), Set.of(new Stand(f.target)));
             stands = builder.done();
             var spec = NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(f.target), Stances.at(f.target), Workload.Once.of(1))
-                .vocation(Haul.trade()).needs(new Need(SEEDS, 129, true)).done();
+                .vocation(Vocations.required(Vocations.HAULING)).needs(new Need(SEEDS, 129, true)).done();
             consumer = new Node() {
                 public NodeSpec spec() { return spec; }
                 public Outcome commit(ServerLevel at, Worker who) { return Outcome.done(); }
