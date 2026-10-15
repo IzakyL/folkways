@@ -281,10 +281,15 @@ public final class MillstoneGameTests {
     @GameTest(template = "empty")
     public static void arrivingWithinTheCoreStanceToleranceStillLoadsAtTheReachBoundary(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
-            BlockPos footing = rig.cell.offset(-2, 0, -4);
-            rig.level.setBlockAndUpdate(footing.below(), Blocks.STONE.defaultBlockState());
+            BlockPos footing = rig.cell.offset(-3, 0, -3);
             rig.stances = Stances.at(rig.level, footing);
             rig.actor.setPos(footing.getX() + 0.397, footing.getY(), footing.getZ() - 0.118);
+            BlockPos actual = rig.actor.blockPosition();
+            rig.level.setBlockAndUpdate(actual.below(), Blocks.STONE.defaultBlockState());
+            rig.level.setBlockAndUpdate(actual, Blocks.AIR.defaultBlockState());
+            rig.level.setBlockAndUpdate(actual.above(), Blocks.AIR.defaultBlockState());
+            helper.assertTrue(MillstoneStation.inSight(rig.level, footing, rig.cell), "the reserved footing sees a native part of this mill, without another test structure blocking its ray");
+            helper.assertTrue(MillstoneDrive.exit(rig.level, rig.at, rig.actor).isPresent(), "the real native motor has a supported departure path before loading");
             helper.assertTrue(io.github.izakyl.folkways.core.api.terms.Reach.standingIn(rig.actor, rig.stances), "ordinary core navigation has legitimately arrived within its 0.9-block tolerance");
             helper.assertTrue(io.github.izakyl.folkways.core.api.terms.Reach.withinReach(footing, rig.cell)
                 && !io.github.izakyl.folkways.core.api.terms.Reach.withinReach(rig.actor.blockPosition(), rig.cell), "rounding the actual body down crosses the reach boundary despite a valid reserved footing");
