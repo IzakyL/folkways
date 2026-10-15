@@ -270,8 +270,12 @@ public final class CookeryRegistrationGameTests {
             rig.level.setBlockAndUpdate(cell, nativeState); rig.mark(cell);
             Colony next = Colonies.mint(rig.level.getServer());
             try {
-                helper.assertTrue(MemberToggle.toggleAt(rig.level, next, cell, rig.player).refusal().filter(MemberToggle.Refusal.ANOTHER_COLONY::equals).isPresent(),
+                var original = rig.colony.holdingAt(at).orElseThrow();
+                helper.assertTrue(MemberToggle.toggleAt(rig.level, next, cell, rig.player).refusal()
+                        .filter(notice -> notice.key().equals(MemberToggle.Refusal.ANOTHER_COLONY.translationKey())).isPresent(),
                     "a different colony's real book cannot steal an owned native point");
+                helper.assertTrue(rig.colony.holdingAt(at).filter(original::equals).isPresent()
+                        && next.holdingAt(at).isEmpty(), "the refusal preserves the same original point and creates no second owner");
                 rig.colony.raze();
                 helper.assertTrue(rig.level.getBlockState(cell).equals(nativeState), "raze does not change native compost progress or contents");
                 helper.assertTrue(MemberToggle.toggleAt(rig.level, next, cell, rig.player).refusal().isEmpty(), "the released position can join another colony");

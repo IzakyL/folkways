@@ -25,6 +25,8 @@ public final class RiceScene {
         scene.title("cookery_rice", "Rice: from a flooded plot to a bowl");
         PonderScenery.openWorld(scene, util, 9);
         PonderScenery.ground(scene, util, 9, Blocks.DIRT);
+        scene.world().setBlocks(util.select().fromTo(2, 0, 2, 4, 0, 3),
+            Blocks.FARMLAND.defaultBlockState().setValue(BlockStateProperties.MOISTURE, 7), false);
         scene.world().setBlocks(util.select().fromTo(2, 1, 2, 4, 1, 3), Blocks.WATER.defaultBlockState(), false);
         scene.world().setBlock(util.grid().at(1, 1, 6), Blocks.CHEST.defaultBlockState(), false);
         scene.world().setBlock(util.grid().at(4, 1, 6), ModBlocks.MILLSTONE.get().defaultBlockState(), false);

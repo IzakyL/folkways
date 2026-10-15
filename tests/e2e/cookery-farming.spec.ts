@@ -98,7 +98,7 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     expect((await inventory(server, stage, containers)).totals[HAT] ?? 0, "the clothing selector is a sample, not a physical free hat").toBe(0);
 
     // Mark the actual ground before adding water, so the book can address its visible surface.
-    await world.command(server, `setblock ${block(layout.riceGround)} minecraft:dirt`);
+    await world.command(server, `setblock ${block(layout.riceGround)} minecraft:farmland[moisture=7]`);
     await setBookGesture(server, client, player, "box");
     await aimAndWorldLeftClick(server, client, player, layout.riceGround, stage);
     await aimAndWorldLeftClick(server, client, player, layout.riceGround, stage);
