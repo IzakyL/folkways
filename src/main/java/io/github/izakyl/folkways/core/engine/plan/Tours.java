@@ -10,7 +10,6 @@ import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.travel.Faring;
 import io.github.izakyl.folkways.core.engine.travel.Journey;
@@ -606,6 +605,7 @@ final class Tours {
         int joins = 0;
         // The nearest hand whose way there is not known yet: the one way worth asking for.
         Seat waits = null;
+        List<WorldPos> waitsFor = List.of();
         // A hand that could not start before the horizon even riding the whole way, on a route deep enough, is not
         // asked the way at all.
         boolean grouped = continuing(id);
@@ -660,8 +660,9 @@ final class Tours {
             Fit fit = fit(seat, node, candidate.held());
             if (fit.why() != null) {
                 worst = worse(worst, fit.why());
-                if (fit.why() == Unassigned.Reason.WAY_PENDING && waits == null) {
+                if (!fit.pending().isEmpty() && waits == null) {
                     waits = seat;
+                    waitsFor = fit.pending();
                 }
                 if (fit.why() == Unassigned.Reason.WAY_PENDING && ++pending >= MOST_PENDING_FARES
                         && best == null) {
@@ -683,9 +684,9 @@ final class Tours {
         }
         // Weighing the hands asked for no way: a hand that might have done it sooner, had its way been known, has
         // that way asked for now.
-        if (waits != null && !quiet && !goals.isEmpty()
-                && sought.add(new Route(waits.hand.who().kind(), waits.cursor, goals))) {
-            ways.journey(waits.hand.who(), waits.cursor, new LinkedHashSet<>(goals), Urgency.PLANNING);
+        if (waits != null && !quiet
+                && sought.add(new Route(waits.hand.who().kind(), waits.cursor, waitsFor))) {
+            ways.journey(waits.hand.who(), waits.cursor, new LinkedHashSet<>(waitsFor), Urgency.PLANNING);
         }
         if (best == null && worst == Unassigned.Reason.PACK_BUSY && insert(id, seats, mustBe)) {
             return Optional.empty();
@@ -987,28 +988,48 @@ final class Tours {
     }
 
     // `idle` is how long the hand would stand at the work before it may start, waiting on work laid elsewhere.
-    private record Fit(Placed placed, Unassigned.Reason why, int idle) {
+    private record Fit(Placed placed, Unassigned.Reason why, int idle, List<WorldPos> pending) {
 
-        Fit(Unassigned.Reason why) {
-            this(null, why, 0);
+        Fit(Unassigned.Reason why, List<WorldPos> pending) {
+            this(null, why, 0, pending);
         }
     }
 
     // Where and when the node would go on the end of this seat's route, or why it cannot.
     private Fit fit(Seat seat, Vertex node, Map<ItemSpec, Long> held) {
-        Faring fare = travel(seat, node);
-        if (!(fare instanceof Faring.Yes(Journey by))) {
+        List<WorldPos> goals = destinations(node);
+        Faring fare = travel(seat, node, goals);
+        if (!(fare instanceof Faring.Yes)) {
             return new Fit(fare instanceof Faring.Later
-                ? Unassigned.Reason.WAY_PENDING : Unassigned.Reason.NO_WAY);
+                ? Unassigned.Reason.WAY_PENDING : Unassigned.Reason.NO_WAY,
+                fare instanceof Faring.Later ? goals : List.of());
         }
-        int there = seat.clock + ticks(by, seat.hand.pace());
-        int start = Math.max(there, earliestAfter(node.id()));
-        int finish = start + labor(seat, node, seat.hand.pace());
-        Optional<Stand> at = free(seat, node, new Span(start, finish));
-        if (at.isEmpty()) {
-            return new Fit(Unassigned.Reason.NO_FREE_STAND);
+        Unassigned.Reason why = Unassigned.Reason.NO_WAY;
+        List<WorldPos> pending = List.of();
+        // A journey to a set only promises a way to one member. The stand reserved, its time and the next
+        // journey's origin must all follow the same, individually known way.
+        for (WorldPos goal : goals.isEmpty() ? List.of(seat.cursor) : goals) {
+            Faring exact = goals.size() <= 1 ? fare : travel(seat, node, List.of(goal));
+            if (!(exact instanceof Faring.Yes(Journey by))) {
+                if (exact instanceof Faring.Later) {
+                    why = worse(why, Unassigned.Reason.WAY_PENDING);
+                    if (pending.isEmpty()) {
+                        pending = List.of(goal);
+                    }
+                }
+                continue;
+            }
+            int there = seat.clock + ticks(by, seat.hand.pace());
+            int start = Math.max(there, earliestAfter(node.id()));
+            int finish = start + labor(seat, node, seat.hand.pace());
+            Stand at = new Stand(goal);
+            if (!node.plan().stands().isEmpty() && !free(at, new Span(start, finish))) {
+                why = worse(why, Unassigned.Reason.NO_FREE_STAND);
+                continue;
+            }
+            return new Fit(new Placed(start, finish, at, seat.base, held), null, start - there, List.of());
         }
-        return new Fit(new Placed(start, finish, at.get(), seat.base, held), null, start - there);
+        return new Fit(why, pending);
     }
 
     // Work that joins the work before it on the route shares that work's wind-up.
@@ -1461,12 +1482,8 @@ final class Tours {
         }).orElse(null);
     }
 
-    private Faring travel(Seat seat, Vertex node) {
-        if (seat.hand.id().equals(heldBy.get(node.id()))) {
-            return Faring.yes(new Journey(0, 0, List.of()));
-        }
-        List<WorldPos> goals = destinations(node);
-        if (goals.isEmpty()) {
+    private Faring travel(Seat seat, Vertex node, List<WorldPos> goals) {
+        if (goals.isEmpty() || seat.hand.id().equals(heldBy.get(node.id())) && goals.contains(seat.cursor)) {
             return Faring.yes(new Journey(0, 0, List.of()));
         }
         Route route = new Route(seat.hand.who().kind(), seat.cursor, goals);
@@ -1493,23 +1510,13 @@ final class Tours {
         return List.copyOf(goals);
     }
 
-    // Work with nowhere it must stand is done where the worker already is.
-    private Optional<Stand> free(Seat seat, Vertex node, Span when) {
-        Set<Stand> cells = node.plan().stands();
-        if (cells.isEmpty()) {
-            return Optional.of(new Stand(node.node().spec().stances() instanceof Stances.Wherever
-                ? seat.cursor : node.node().spec().site().where()));
-        }
-        for (Stand cell : cells) {
-            boolean taken = false;
-            for (Span held : spots.getOrDefault(cell, List.of())) {
-                taken |= held.overlaps(when);
-            }
-            if (!taken) {
-                return Optional.of(cell);
+    private boolean free(Stand at, Span when) {
+        for (Span held : spots.getOrDefault(at, List.of())) {
+            if (held.overlaps(when)) {
+                return false;
             }
         }
-        return Optional.empty();
+        return true;
     }
 
     private int earliestAfter(UUID id) {
