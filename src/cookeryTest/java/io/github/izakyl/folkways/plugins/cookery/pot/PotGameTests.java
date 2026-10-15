@@ -125,7 +125,14 @@ public final class PotGameTests {
     @GameTest(template = "empty", timeoutTicks = 350)
     public static void nativeFoodContainersReturnFromPotInsertionExactlyOnce(GameTestHelper helper) {
         Rig rig = new Rig(helper, "pot/cooked_rice_to_sticky_rice_cake_1", 1);
-        rig.put(new ItemStack(ModItems.COOKED_RICE.get()));
+        ItemStack rice = new ItemStack(ModItems.COOKED_RICE.get());
+        var food = rice.get(DataComponents.FOOD);
+        // Native ItemUtils reads FOOD.usingConvertsTo before the crafting remainder or IHasContainer.
+        // Exercise its real component-based container path, instead of assuming every rice item returns a bowl.
+        rice.set(DataComponents.FOOD, new net.minecraft.world.food.FoodProperties(food.nutrition(), food.saturation(),
+            food.canAlwaysEat(), food.eatSeconds(), Optional.of(new ItemStack(Items.BOWL)), food.effects()));
+        helper.assertTrue(ItemUtils.getContainerItem(rice) == Items.BOWL, "this actual ingredient declares its native returned container");
+        rig.put(rice);
         rig.put(new ItemStack(ModItems.OIL.get()));
         rig.start();
         helper.assertValueEqual(rig.count(Items.BOWL), 1L, "the real native ingredient insertion returns the rice bowl");
@@ -138,6 +145,22 @@ public final class PotGameTests {
         });
     }
 
+    @GameTest(template = "empty", timeoutTicks = 350)
+    public static void defaultCookedRiceDoesNotInventABowlOmittedByNativeContainerLogic(GameTestHelper helper) {
+        Rig rig = new Rig(helper, "pot/cooked_rice_to_sticky_rice_cake_1", 1);
+        ItemStack rice = new ItemStack(ModItems.COOKED_RICE.get());
+        helper.assertTrue(rice.getCraftingRemainingItem().is(Items.BOWL) && ItemUtils.getContainerItem(rice) == Items.AIR,
+            "the pinned native API's FOOD branch returns no insertion container despite the crafting bowl remainder");
+        rig.put(rice);
+        rig.put(new ItemStack(ModItems.OIL.get()));
+        rig.start();
+        helper.assertValueEqual(rig.count(Items.BOWL), 0L, "Folkways does not generate a bowl that the native insertion never produced");
+        afterCooking(rig, ready -> {
+            ready.finish(true);
+            helper.assertValueEqual(ready.count(Items.BOWL), 0L, "take-out does not add an omitted native byproduct later");
+            helper.assertValueEqual(ready.count(ModItems.COOKED_RICE.get()), 0L, "the original ingredient is actually consumed");
+        });
+    }
     @GameTest(template = "empty")
     public static void aFailureAfterNativeIngredientAcceptanceRollsBackOilFoodAndClaimTogether(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {

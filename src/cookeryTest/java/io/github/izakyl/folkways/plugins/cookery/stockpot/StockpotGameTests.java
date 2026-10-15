@@ -905,8 +905,8 @@ public final class StockpotGameTests {
     }
     @GameTestGenerator
     public static List<TestFunction> allNativeStockpotRecipes() {
-        List<TestFunction> tests = new ArrayList<>(NativeCookingMatrix.recipes("stockpot", 77, 500, StockpotGameTests::nativeRecipe));
-        tests.addAll(NativeCookingMatrix.recipes("flex_stockpot", 28, 500, StockpotGameTests::nativeRecipe));
+        List<TestFunction> tests = new ArrayList<>(NativeCookingMatrix.recipes("stockpot", 77, 1100, StockpotGameTests::nativeRecipe));
+        tests.addAll(NativeCookingMatrix.recipes("flex_stockpot", 28, 1100, StockpotGameTests::nativeRecipe));
         return List.copyOf(tests);
     }
 
