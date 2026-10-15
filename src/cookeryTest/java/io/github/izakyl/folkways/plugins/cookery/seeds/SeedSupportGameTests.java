@@ -55,14 +55,16 @@ public final class SeedSupportGameTests {
     public static void register(RegisterGameTestsEvent event) { event.register(SeedSupportGameTests.class); }
 
     @GameTest(template = "empty")
-    public static void registeredSeedServiceAndComposterRequireARealWornHat(GameTestHelper helper) {
+    public static void mintingAColonyRegistersOneSeedServiceAndCompostNeedsARealWornHat(GameTestHelper helper) {
         try (var rig = new Fixture(helper)) {
             var delegation = Enrollments.of(CookeryContent.ID).delegations().stream()
                 .filter(choice -> choice.id().equals(SeedPresence.GRASS)).findFirst().orElseThrow();
             helper.assertTrue(delegation.shape() instanceof Shape.Volume, "seed grassland is a real book volume delegation");
             helper.assertTrue(delegation.schema().settings().stream().anyMatch(setting -> setting instanceof Schema.Setting.Flag flag
                 && flag.key().equals(SeedPresence.RESTORE_GRASS) && flag.byDefault()), "native grass restoration is a zone setting");
-            helper.assertTrue(rig.colony.service(SeedPresence.ID, SeedPresence.class).isPresent(), "seed tasks have their registered colony lifecycle");
+            var seeds = rig.colony.service(SeedPresence.ID, SeedPresence.class).orElseThrow();
+            helper.assertTrue(rig.colony.service(SeedPresence.ID, SeedSupport.class).isEmpty(),
+                "one owner shares exactly its one complete seed service");
             rig.body.pack().setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
             rig.body.pack().setItem(1, new ItemStack(Items.WHEAT_SEEDS, 64));
             rig.body.pack().setItem(2, new ItemStack(Items.WHEAT_SEEDS, 2));
@@ -71,11 +73,13 @@ public final class SeedSupportGameTests {
             rig.level.setBlock(at, Blocks.COMPOSTER.defaultBlockState(), Block.UPDATE_ALL);
             var station = KitchenStations.find(rig.level.getBlockState(at)).orElseThrow();
             var bookings = new KitchenBookings();
-            helper.assertTrue(!rig.support.enabled(), "a hat only carried in the pack does not activate seed work");
+            helper.assertTrue(!seeds.enabled(), "a hat only carried in the pack does not activate seed work");
             helper.assertTrue(station.recovery(rig.colony.id(), rig.level, WorldPos.of(rig.level, at), Stances.WHEREVER,
                 bookings, () -> {}).isEmpty(), "the registered composter does not feed without worn farming equipment");
             rig.body.setItemSlot(EquipmentSlot.HEAD, rig.body.pack().removeItem(3, 1));
-            helper.assertTrue(rig.support.enabled(), "the actual head slot activates farming seed support");
+            helper.assertTrue(seeds.enabled(), "the actual head slot activates farming seed support");
+            helper.assertValueEqual(seeds.budget(rig.level).tally(Items.WHEAT_SEEDS).physical(), 130L,
+                "the single registered seed service exposes its actual physical stock budget");
             helper.assertTrue(!station.recovery(rig.colony.id(), rig.level, WorldPos.of(rig.level, at), Stances.WHEREVER,
                 bookings, () -> {}).isEmpty(), "the real registered provider sees actual surplus after equipment is worn");
         }
@@ -195,7 +199,7 @@ public final class SeedSupportGameTests {
             colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
             body.joinColony(colony.id());
             colony.entered(body);
-            support = colony.service(SeedPresence.ID, SeedSupport.class).orElseThrow();
+            support = new SeedSupport(colony, level.getServer());
         }
         public void close() { body.discard(); colony.raze(); }
     }
