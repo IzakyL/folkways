@@ -5,6 +5,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
@@ -12,6 +13,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -105,6 +107,35 @@ public final class RackContainerGameTests {
         helper.assertTrue(ItemStack.matches(Containers.extract(current, stack -> true, 1), knife),
             "the real reloaded BE preserves and releases the original named, worn tool exactly once");
         helper.assertTrue(current.isEmpty(), "the newly loaded rack is physically empty after extraction");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void nativeClicksAndTheContainerOperateOnTheSamePhysicalTool(GameTestHelper helper) {
+        KitchenwareRacksBlockEntity rack = rack(helper);
+        RackContainer view = new RackContainer(rack);
+        var body = PersonBody.RESIDENT.get().create(helper.getLevel());
+        body.setNoAi(true);
+        body.moveTo(rack.getBlockPos().getX() + 0.5, rack.getBlockPos().getY(), rack.getBlockPos().getZ() + 1.5);
+        helper.getLevel().addFreshEntity(body);
+        try {
+            ItemStack named = new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get());
+            named.set(DataComponents.CUSTOM_NAME, Component.literal("One physical shared tool"));
+            named.setDamageValue(11);
+            ItemStack offered = named.copy();
+            helper.assertTrue(rack.onClick(body, offered, true) && offered.isEmpty(),
+                "the original mod interaction consumes one tool into its left slot");
+            ItemStack taken = Containers.extract(view, stack -> true, 1);
+            helper.assertTrue(ItemStack.matches(taken, named) && rack.getItemLeft().isEmpty(),
+                "the adapter removes exactly the physical tool accepted by the native interaction");
+            helper.assertTrue(Containers.insert(view, taken).isEmpty(), "the same physical tool goes back through the adapter");
+            body.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            helper.assertTrue(rack.onClick(body, ItemStack.EMPTY, true), "the native empty-hand interaction retrieves it again");
+            helper.assertTrue(ItemStack.matches(body.getMainHandItem(), named) && view.isEmpty(),
+                "the native interaction sees the adapter's real slot and preserves all tool components");
+        } finally {
+            body.discard();
+        }
         helper.succeed();
     }
 
