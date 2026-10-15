@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { defineTask, input, javaTask, media, player, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { clickElement, hoverElement, panelElements } from "../ldlib2";
 import { actsForColony, waitForGroundedPlayer } from "../shared/colony/colony-founding";
@@ -34,6 +34,22 @@ return Map.of("folders",Scenes.declared().stream().map(folder->folder.id().toStr
 ` }),
 });
 
+const SET_LANGUAGE = defineTask<{ locale: string }, string>({
+  name: "folkways.cookery.ponder-set-language", side: "client", timeoutMs: 20_000,
+  source: javaTask({ imports: ["net.minecraft.client.Minecraft"], body: `
+var minecraft=(Minecraft)ctx.client();var locale=Args.of(ctx).string("locale");
+minecraft.getLanguageManager().setSelected(locale);minecraft.options.languageCode=locale;
+minecraft.reloadResourcePacks();return locale;
+` }),
+});
+const READ_LANGUAGE = defineTask<void, { locale: string; title: string }>({
+  name: "folkways.cookery.ponder-read-language", side: "client", timeoutMs: 20_000,
+  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.network.chat.Component"], body: `
+var minecraft=(Minecraft)ctx.client();return Map.of("locale",minecraft.getLanguageManager().getSelected(),
+"title",Component.translatable("folkways.ponder.cookery_orders.header").getString());
+` }),
+});
+
 const READ_BOOK = defineTask<void, any[]>({
   name: "folkways.cookery.ponder-read-book", side: "server", timeoutMs: 20_000,
   source: javaTask({ imports: ["net.minecraft.core.registries.BuiltInRegistries"], body: `
@@ -46,13 +62,23 @@ return ctx.server().getPlayerList().getPlayers().stream().map(player->Map.of(
 for (const installed of [false, true]) test("cookery lessons: " + (installed ? "all lessons, UI entries, keyframes and item links" : "optional mod absent"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   const runId = newRunId(); let pair: E2EPair | undefined;
-  const evidence: Record<string, any> = { installed, scenes: [], shots: [] };
+  const locale = process.env.FOLKWAYS_PONDER_LANGUAGE ?? "en_us";
+  expect(["en_us", "zh_cn", "zh_hk", "zh_tw"]).toContain(locale);
+  const evidence: Record<string, any> = { installed, locale, scenes: [], shots: [] };
   try {
     pair = await launchPair({ config: installed ? "blockwright.toml#cookery" : "blockwright.toml",
       server: { trace: tracePath("e2e", "cookery-ponder-server-" + runId), instance: seededServer("cookery-ponder-server-" + runId) },
       client: { trace: tracePath("e2e", "cookery-ponder-client-" + runId), instance: "cookery-ponder-client-" + runId } });
     const { server, client } = pair;
     const grounded = await waitForGroundedPlayer(server); const name = grounded.name;
+    if (locale !== "en_us") {
+      await client.run(SET_LANGUAGE, { locale });
+      const catalog = JSON.parse(readFileSync("src/main/resources/assets/folkways/lang/" + locale + ".json", "utf8"));
+      await expect.poll(async () => client.run(READ_LANGUAGE), { timeout: 30_000 }).toEqual({
+        locale, title: catalog["folkways.ponder.cookery_orders.header"],
+      });
+      await frames(client, 5);
+    }
     await world.command(server, "difficulty peaceful");
     await world.command(server, "ponder folkways:colony_book " + name); await frames(client, 5);
     expect(screenName(await safeScreen(client))).toMatch(/PonderUI/);
