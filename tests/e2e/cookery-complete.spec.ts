@@ -26,16 +26,97 @@ const CASES = [
 ] as const;
 const MATERIALS = ["minecraft:oak_planks", "minecraft:iron_ingot", "minecraft:brick"];
 
-const READ_WORKERS = defineTask<void, any[]>({
-  name: "folkways.cookery.complete-read-workers", side: "server", timeoutMs: 20_000,
-  source: javaTask({ imports: ["io.github.izakyl.folkways.core.api.resident.body.Bodies"], body: `
-var rows=new ArrayList<Object>();
-for(var entity:ctx.server().overworld().getAllEntities()) Bodies.of(entity).ifPresent(body->{
-  var row=new LinkedHashMap<String,Object>();row.put("uuid",body.id().toString());
-  row.put("doing",body.doing().map(Object::toString).orElse(""));
-  row.put("balk",body.balk().map(reason->Map.of("doing",reason.doing().toString(),"why",reason.why().translationKey(),"at",reason.at())).orElse(Map.of()));
-  rows.add(row);
-});return rows;
+// Reads the already-published server-thread graph and cached survey. It never asks the planner,
+// drains diagnostics, changes assignments or requests paths while collecting failure evidence.
+const READ_LABOR = defineTask<void, any>({
+  name: "folkways.cookery.complete-read-labor", side: "server", timeoutMs: 20_000,
+  source: javaTask({ imports: [
+    "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+    "io.github.izakyl.folkways.core.engine.labor.Labor",
+    "io.github.izakyl.folkways.core.engine.labor.ColonyLabor",
+    "io.github.izakyl.folkways.core.engine.plan.WeaveView",
+    "io.github.izakyl.folkways.core.engine.plan.Schedule",
+    "io.github.izakyl.folkways.core.engine.plan.Diagnosis",
+    "io.github.izakyl.folkways.core.engine.plan.Crew",
+  ], members: `
+private static Object field(Object owner, String name) throws Exception {
+    var field = owner.getClass().getDeclaredField(name);
+    field.setAccessible(true);
+    return field.get(owner);
+}
+`, body: `
+var level = ctx.server().overworld();
+var workers = new ArrayList<Object>();
+UUID colony = null;
+for (var entity : level.getAllEntities()) {
+    var found = Bodies.of(entity);
+    if (found.isEmpty()) continue;
+    var body = found.get();
+    if (colony == null) colony = body.colonyId().orElse(null);
+    workers.add(Map.of("uuid", body.id().toString(),
+        "packCapacity", body.pack().getContainerSize(),
+        "occupiedSlots", java.util.stream.IntStream.range(0, body.pack().getContainerSize())
+            .filter(slot -> !body.pack().getItem(slot).isEmpty()).count(),
+        "doing", body.doing().map(Object::toString).orElse(""),
+        "balk", body.balk().map(Object::toString).orElse("")));
+}
+var snapshot = new LinkedHashMap<String,Object>();
+if (colony != null) {
+    var site = Labor.class.getDeclaredMethod("site", UUID.class, net.minecraft.resources.ResourceKey.class);
+    site.setAccessible(true);
+    var found = (Optional<?>)site.invoke(null, colony, level.dimension());
+    if (found.isPresent()) {
+        var labor = (ColonyLabor)found.get();
+        var graph = (WeaveView)field(labor, "graph");
+        if (graph.size() > 256) throw new IllegalStateException("observer exceeded 256 graph nodes");
+        var nodes = new ArrayList<Object>();
+        for (var vertex : graph.vertices().values().stream().sorted(Comparator.comparing(v -> v.id().toString())).toList()) {
+            var node = vertex.node();
+            var plan = vertex.plan();
+            var row = new LinkedHashMap<String,Object>();
+            row.put("id", vertex.id().toString()); row.put("kind", node.getClass().getSimpleName());
+            row.put("doing", node.spec().doing().toString()); row.put("about", node.spec().about().orElse(""));
+            row.put("site", node.spec().site().where().toString());
+            row.put("needs", node.spec().needs().stream().map(Object::toString).toList());
+            row.put("gives", node.spec().gives().stream().map(Object::toString).toList());
+            row.put("leaves", node.spec().leaves().stream().map(Object::toString).toList());
+            row.put("carrying", plan.carrying().stream().map(Object::toString).toList());
+            row.put("draws", plan.draws().stream().map(Object::toString).toList());
+            row.put("from", plan.from().stream().map(Object::toString).toList());
+            row.put("into", plan.into().stream().map(Object::toString).toList());
+            row.put("planStances", plan.stands().stream().map(Object::toString).sorted().toList());
+            row.put("before", graph.before(vertex.id()).stream().map(Object::toString).sorted().toList());
+            row.put("group", graph.group(vertex.id()).stream().map(Object::toString).sorted().toList());
+            row.put("pin", Optional.ofNullable(graph.pin(vertex.id())).map(Object::toString).orElse(""));
+            row.put("worker", node.worker().map(Object::toString).orElse(""));
+            row.put("state", labor.state(vertex.id()).map(Enum::name).orElse("unknown"));
+            nodes.add(row);
+        }
+        snapshot.put("nodes", nodes);
+        snapshot.put("held", graph.held().stream().map(Object::toString).sorted().toList());
+        snapshot.put("inputWorkers", field(labor, "inputWorkers").toString());
+        var schedule = (Schedule)field(labor, "schedule");
+        var tours = new TreeMap<String,Object>();
+        for (var tour : schedule.tours().values()) tours.put(tour.resident().toString(),
+            tour.nodes().stream().map(Object::toString).toList());
+        snapshot.put("tours", tours);
+        var diagnosis = (Diagnosis)field(labor, "diagnosis");
+        snapshot.put("unassigned", diagnosis.unassigned().stream().map(Object::toString).sorted().toList());
+        snapshot.put("shortfalls", diagnosis.shortfalls().stream().map(Object::toString).sorted().toList());
+        var hands = (Map<?,?>)field(field(labor, "survey"), "hands");
+        var crew = new ArrayList<Object>();
+        for (var raw : hands.values()) {
+            var hand = (Crew.Hand)raw;
+            crew.add(Map.of("id", hand.id().toString(), "at", hand.at().toString(),
+                "packCells", hand.packCells(), "packCapacity", hand.packCapacity(),
+                "holding", hand.holding().map(Object::toString).orElse(""),
+                "cargo", hand.cargo().stream().map(Object::toString).toList(),
+                "tools", hand.tools().stream().map(Object::toString).toList()));
+        }
+        snapshot.put("crew", crew);
+    }
+}
+return Map.of("workers", workers, "graph", snapshot);
 ` }),
 });
 
@@ -44,7 +125,19 @@ for(var entity:ctx.server().overworld().getAllEntities()) Bodies.of(entity).ifPr
 for (const scenario of CASES) for (const stage of twins()) test(stage.title("complete cookery order: " + scenario.dish), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   const runId = newRunId();
-  const evidence: Record<string, any> = { scenario, stage: stage.kind, whitelist: [...scenario.food, ...MATERIALS], samples: [] };
+  const evidence: Record<string, any> = { scenario, stage: stage.kind, whitelist: [...scenario.food, ...MATERIALS], samples: [], workGraphs: {} };
+  const knownGraphs = new Map<string, string>();
+  const samplePhysical = async (server: MinecraftServer, layout: ReturnType<typeof kitchen>) => {
+    const sample = await physical(server, stage, layout);
+    const fingerprint = JSON.stringify(sample.labor);
+    let id = knownGraphs.get(fingerprint);
+    if (id === undefined) {
+      if (knownGraphs.size >= 4096) throw new Error("observer exceeded 4096 distinct graphs");
+      id = "graph-" + knownGraphs.size; knownGraphs.set(fingerprint, id); evidence.workGraphs[id] = sample.labor;
+    }
+    const { labor, ...state } = sample;
+    return { ...state, workGraph: id };
+  };
   let pair: E2EPair | undefined;
   let cells: ReturnType<typeof kitchen> | undefined;
   try {
@@ -88,7 +181,7 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
       await optInViaBook(server, client, name, at, "worksite", stage);
     }
     evidence.rackMark = await markSouthRack(server, client, name, cells.rack, stage);
-    evidence.initial = await physical(server, stage, cells);
+    evidence.initial = await samplePhysical(server, cells);
     expect(evidence.initial.tools, "three crafters start without a knife or spatula").toEqual([]);
     const before = await world.block(server, stage.at(cells.source), { nbt: true });
     for (const ingredient of scenario.food) expect(Number((before.nbt as any).generated[ingredient] ?? 0), "no food ingredients were generated before the food order").toBe(0);
@@ -97,14 +190,14 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
     await screen.dismiss(client);
     let done = false;
     for (let elapsed = 0; elapsed <= 16000; elapsed += 40) {
-      const sample = await physical(server, stage, cells);
+      const sample = await samplePhysical(server, cells);
       evidence.samples.push({ elapsed, ...sample });
       if (sample.target.some((stack: any) => stack.id === scenario.dish && Number(stack.count ?? 1) >= 1)) { evidence.elapsed = elapsed; done = true; break; }
       await tick.sprint(server, 40);
     }
     expect(done, "the only final order must complete all real intermediate tasks, with no injected tools or products").toBe(true);
     await tick.sprint(server, 240);
-    evidence.final = await physical(server, stage, cells);
+    evidence.final = await samplePhysical(server, cells);
     const source = await world.block(server, stage.at(cells.source), { nbt: true });
     const generated = (source.nbt as any).generated as Record<string, number | string>;
     evidence.generated = generated;
@@ -124,13 +217,13 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
     } else expect(evidence.final.tools, "a tool-free native recipe never creates kitchen tools").toEqual([]);
     expect(evidence.final.millBound, "the millstone releases its actual driver").toBe(false);
     await tick.sprint(server, 120);
-    const stable = await physical(server, stage, cells);
+    const stable = await samplePhysical(server, cells);
     expect(stable.millBound, "an exited driver must not be captured again").toBe(false);
     expect(stable.target.filter((stack: any) => stack.id === scenario.dish).reduce((sum: number, stack: any) => sum + Number(stack.count ?? 1), 0)).toBe(1);
   } catch (error) {
     pair?.failing(error); evidence.failure = String(error); throw error;
   } finally {
-    if (pair && cells) evidence.atEnd = await physical(pair.server, stage, cells).catch(error => ({ error: String(error) }));
+    if (pair && cells) evidence.atEnd = await samplePhysical(pair.server, cells).catch(error => ({ error: String(error) }));
     const file = testInfo.outputPath("complete-cookery-evidence.json"); writeFileSync(file, JSON.stringify(evidence, null, 2));
     await testInfo.attach("complete-cookery-evidence", { path: file, contentType: "application/json" });
     await pair?.teardown(testInfo);
@@ -161,7 +254,8 @@ async function physical(server: MinecraftServer, stage: Stage, cells: ReturnType
     ...residents.flatMap(resident => collectStacks(resident.pack)), ...drops.map(drop => drop.stack)]
     .filter(stack => stack?.id?.includes("kitchen_knife") || stack?.id?.includes("kitchen_shovel"));
   const millTag = state.mill.nbt as any;
-  return { workers: await server.run(READ_WORKERS), state, target: (state.target.nbt as any)?.Items ?? [], residents, drops, tools, rackTools,
+  const labor = await server.run(READ_LABOR);
+  return { workers: labor.workers, labor: labor.graph, state, target: (state.target.nbt as any)?.Items ?? [], residents, drops, tools, rackTools,
     millBound: Array.isArray(millTag?.EntityId) ? millTag.EntityId.some((part: number) => part !== 0) : Boolean(millTag?.EntityId) };
 }
 
