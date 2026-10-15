@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.plugins.cookery.tools;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.engine.plan.Staged;
+import io.github.izakyl.folkways.core.api.work.Staged;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Leaves;

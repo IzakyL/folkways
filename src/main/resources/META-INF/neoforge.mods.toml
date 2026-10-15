@@ -126,3 +126,6 @@ config="folkways-cookery.mixins.json"
 
 [[mixins]]
 config = "folkways-cookery-spit.mixins.json"
+
+[[mixins]]
+config = "folkways-cookery-steamer.mixins.json"

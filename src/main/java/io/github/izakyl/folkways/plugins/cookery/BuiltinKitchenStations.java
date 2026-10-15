@@ -26,6 +26,7 @@ final class BuiltinKitchenStations {
         KitchenStations.register(new Stockpot());
         KitchenStations.register(new io.github.izakyl.folkways.plugins.cookery.stove.StoveStation());
         KitchenStations.register(new io.github.izakyl.folkways.plugins.cookery.spit.SpitStation());
+        KitchenStations.register(new io.github.izakyl.folkways.plugins.cookery.steamer.SteamerStation());
         KitchenStations.register(new io.github.izakyl.folkways.plugins.cookery.millstone.MillstoneStation());
     }
 

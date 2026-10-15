@@ -1,6 +1,11 @@
 package io.github.izakyl.folkways.core.api.work;
 
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
@@ -9,18 +14,22 @@ import net.neoforged.neoforge.common.ItemAbility;
 
 public final class Tools {
 
-    private static volatile java.util.Map<ToolNeed, io.github.izakyl.folkways.core.api.terms.ItemSpec> suppliedTools =
-        java.util.Map.of();
+    private static volatile Map<ToolNeed, ItemSpec> suppliedTools =
+        Map.of();
 
-    public static synchronized void shared(ToolNeed need, io.github.izakyl.folkways.core.api.terms.ItemSpec goods) {
-        java.util.Map<ToolNeed, io.github.izakyl.folkways.core.api.terms.ItemSpec> next =
-            new java.util.LinkedHashMap<>(suppliedTools);
-        next.put(java.util.Objects.requireNonNull(need), java.util.Objects.requireNonNull(goods));
-        suppliedTools = java.util.Map.copyOf(next);
+    public static synchronized void shared(ToolNeed need, ItemSpec goods) {
+        Map<ToolNeed, ItemSpec> next =
+            new LinkedHashMap<>(suppliedTools);
+        next.put(Objects.requireNonNull(need), Objects.requireNonNull(goods));
+        suppliedTools = Map.copyOf(next);
     }
 
-    public static Optional<io.github.izakyl.folkways.core.api.terms.ItemSpec> shared(ToolNeed need) {
+    public static Optional<ItemSpec> shared(ToolNeed need) {
         return Optional.ofNullable(suppliedTools.get(need));
+    }
+
+    public static List<ItemSpec> sharedGoods() {
+        return List.copyOf(new LinkedHashSet<>(suppliedTools.values()));
     }
 
     // Planning may schedule a missing shared tool only when its physical delivery is a declared prerequisite.

@@ -232,6 +232,7 @@ public final class CookeryRegistrationGameTests {
         final ResidentEntity body;
         final StockpotBlockEntity pot;
         final SimpleContainer pack = new SimpleContainer(36);
+        final Container sharedTools;
         final List<Hold> holds = new ArrayList<>();
         final Worker worker;
 
@@ -249,6 +250,10 @@ public final class CookeryRegistrationGameTests {
             player = FakePlayerFactory.getMinecraft(level);
             colony = Colonies.mint(level.getServer());
             presence = colony.service(CookeryContent.ID, CookeryPresence.class).orElseThrow();
+            BlockPos toolsCell = helper.absolutePos(new BlockPos(1, 1, 5));
+            level.setBlockAndUpdate(toolsCell, Blocks.CHEST.defaultBlockState());
+            sharedTools = Containers.at(level, toolsCell).orElseThrow();
+            colony.stores(CookeryContent.ID, level.dimension(), List.of(WorldPos.of(level, toolsCell)));
             body = PersonBody.RESIDENT.get().create(level);
             body.setNoAi(true);
             body.moveTo(potCell.getX() - 0.5, potCell.getY() - 1, potCell.getZ() + 1.5, 0, 0);
@@ -302,15 +307,28 @@ public final class CookeryRegistrationGameTests {
         }
 
         void firstPiece(Node work) {
-            Node piece = work;
-            if (work.spec().workload() instanceof Workload.Within within) {
-                var turn = within.next(level, worker);
-                helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "production starts with an actual work piece");
-                piece = ((Workload.Within.Turn.Piece) turn).node();
+            // A published kitchen task can first borrow its shared tool. Continue to the actual food load.
+            for (int step = 0; step < 8; step++) {
+                Node piece = work;
+                Workload.Within within = work.spec().workload() instanceof Workload.Within nested ? nested : null;
+                if (within != null) {
+                    var turn = within.next(level, worker);
+                    helper.assertTrue(turn instanceof Workload.Within.Turn.Piece,
+                        "production prepares or loads a physical batch: " + turn);
+                    piece = ((Workload.Within.Turn.Piece) turn).node();
+                }
+                piece.spec().stances().cells().stream().findFirst().ifPresent(at ->
+                    body.moveTo(at.cell().getX() + 0.5, at.cell().getY(), at.cell().getZ() + 0.5));
+                Outcome outcome = Commit.run(level, piece, worker);
+                helper.assertTrue(outcome instanceof Outcome.Done, "the physical production piece commits: " + outcome);
+                ((Outcome.Done) outcome).made().forEach(this::put);
+                piece.released(level, worker, Ending.DONE);
+                piece.ended(level, Ending.DONE);
+                if (within != null) within.ended(level, piece, Ending.DONE);
+                if (level.getBlockEntity(boardCell) instanceof ChoppingBoardBlockEntity board
+                        && !board.getCurrentCutStack().isEmpty() || !pot.isEmpty()) return;
             }
-            Outcome outcome = Commit.run(level, piece, worker);
-            helper.assertTrue(outcome instanceof Outcome.Done, "the actual first production operation commits: " + outcome);
-            ((Outcome.Done) outcome).made().forEach(this::put);
+            throw new AssertionError("production never reached its actual food loading action");
         }
 
         void prepareRice() {
@@ -323,7 +341,9 @@ public final class CookeryRegistrationGameTests {
         }
 
         void put(ItemStack stack) {
-            helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "fixture output fits in the pack");
+            Container into = stack.is(com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod.KITCHEN_KNIFE)
+                ? sharedTools : pack;
+            helper.assertTrue(Containers.insert(into, stack).isEmpty(), "fixture output fits in its physical store or pack");
         }
 
         void operate(ItemStack hand, Supplier<Boolean> action) {

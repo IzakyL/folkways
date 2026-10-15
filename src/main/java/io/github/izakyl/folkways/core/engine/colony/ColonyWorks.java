@@ -149,6 +149,7 @@ public final class ColonyWorks extends Stretch implements Colony {
     @Override
     public void submit(ResourceLocation owner, ResourceKey<Level> dimension, Grown work,
             BiConsumer<UUID, Ending> ended) {
+        work = io.github.izakyl.folkways.core.api.work.WorkDecorators.apply(this, work);
         Submission fresh = new Submission(owner, dimension, work, java.util.Objects.requireNonNull(ended));
         boolean blocked = false;
         for (UUID node : fresh.left) {
@@ -313,7 +314,8 @@ public final class ColonyWorks extends Stretch implements Colony {
     @Override
     public void publish(ResourceLocation owner, ResourceKey<Level> dimension,
                         Collection<Workshop> offering) {
-        if (workshops.publish(owner, dimension, List.copyOf(offering))) {
+        if (workshops.publish(owner, dimension, offering.stream().map(workshop ->
+                io.github.izakyl.folkways.core.api.work.WorkDecorators.apply(this, workshop)).toList())) {
             listener(dimension).ifPresent(Listening::offered);
         }
     }

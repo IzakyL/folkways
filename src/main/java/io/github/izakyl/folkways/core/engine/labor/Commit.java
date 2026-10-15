@@ -10,7 +10,7 @@ import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.plan.Staged;
+import io.github.izakyl.folkways.core.api.work.Staged;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;

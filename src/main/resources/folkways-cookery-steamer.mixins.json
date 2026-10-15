@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.plugins.cookery.steamer.mixin",
+  "plugin": "io.github.izakyl.folkways.plugins.cookery.CookeryMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "SteamerBlockEntityMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

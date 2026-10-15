@@ -34,6 +34,7 @@ public final class CookeryPresence implements Facing, Holding.Watch {
     private final Colony colony;
     private final MinecraftServer server;
     private final Sweep sweep;
+    private final io.github.izakyl.folkways.plugins.cookery.tools.TaskTools tools;
     private final KitchenBookings bookings = new KitchenBookings();
     private final Map<WorldPos, Station> stations = new LinkedHashMap<>();
     private final Set<ResourceKey<Level>> published = new LinkedHashSet<>();
@@ -42,6 +43,7 @@ public final class CookeryPresence implements Facing, Holding.Watch {
     public CookeryPresence(Colony colony, MinecraftServer server) {
         this.colony = colony;
         this.server = server;
+        this.tools = new io.github.izakyl.folkways.plugins.cookery.tools.TaskTools(colony, server);
         this.sweep = new Sweep(colony, CookeryContent.ID, 40);
     }
 
@@ -69,7 +71,10 @@ public final class CookeryPresence implements Facing, Holding.Watch {
         sweep.nudge();
     }
 
+    public io.github.izakyl.folkways.plugins.cookery.tools.TaskTools tools() { return tools; }
+
     public void tick(MinecraftServer server) {
+        tools.tick(server);
         for (ServerLevel level : server.getAllLevels()) {
             KitchenStations.all().forEach(station -> station.tick(level, colony.id()));
         }
@@ -136,7 +141,7 @@ public final class CookeryPresence implements Facing, Holding.Watch {
 
     public List<Grown> goals(ColonyView view) {
         ServerLevel level = view.level();
-        List<Grown> goals = new ArrayList<>();
+        List<Grown> goals = new ArrayList<>(tools.goals(view));
         stations.forEach((at, station) -> {
             if (at.in(level) && level.isLoaded(at.block(level)) && station.stances().isPresent()) {
                 Stances stances = station.stances().get();
@@ -155,6 +160,7 @@ public final class CookeryPresence implements Facing, Holding.Watch {
     }
 
     public void closed(Closing why) {
+        tools.closed(why);
         KitchenStations.all().forEach(provider -> provider.stop(colony.id(), why));
         if (why != Closing.SHUTDOWN) {
             stations.forEach((at, station) -> {

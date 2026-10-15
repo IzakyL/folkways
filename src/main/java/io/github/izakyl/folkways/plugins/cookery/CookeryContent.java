@@ -47,7 +47,9 @@ public final class CookeryContent {
             (colony, item) -> Fronts.of(colony).settings(ID).items("clothing")
                 .filter(items -> Goods.matches(item.getDefaultInstance(), items)).isPresent());
         event.urges(ID, io.github.izakyl.folkways.plugins.cookery.millstone.MillstoneDrive::urges);
-        event.kit(WaresContent.CRAFTING, ItemSpec.of(TagMod.KITCHEN_KNIFE));
+        io.github.izakyl.folkways.plugins.cookery.tools.TaskTools.register();
+        io.github.izakyl.folkways.core.api.work.WorkDecorators.register(ID, (colony, work) ->
+            colony.service(ID, CookeryPresence.class).map(state -> state.tools().decorate(work)).orElse(work));
         event.colony(ID, scope -> {
             CookeryPresence state = new CookeryPresence(scope.colony(), scope.server());
             scope.share(state);
