@@ -40,8 +40,8 @@ for (const installed of [false, true]) test("cookery lessons: " + (installed ? "
   const evidence: Record<string, any> = { installed, scenes: [], shots: [] };
   try {
     pair = await launchPair({ config: installed ? "blockwright.toml#cookery" : "blockwright.toml",
-      server: { trace: tracePath("e2e", "cookery-ponder-server"), instance: seededServer("cookery-ponder-server-" + runId) },
-      client: { trace: tracePath("e2e", "cookery-ponder-client"), instance: "cookery-ponder-client-" + runId } });
+      server: { trace: tracePath("e2e", "cookery-ponder-server-" + runId), instance: seededServer("cookery-ponder-server-" + runId) },
+      client: { trace: tracePath("e2e", "cookery-ponder-client-" + runId), instance: "cookery-ponder-client-" + runId } });
     const { server, client } = pair;
     const grounded = await waitForGroundedPlayer(server); const name = grounded.name;
     await world.command(server, "difficulty peaceful");

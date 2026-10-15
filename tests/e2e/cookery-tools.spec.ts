@@ -185,8 +185,8 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
   try {
     pair = await launchPair({
       config: "blockwright.toml#" + (stage.kind === "ground" ? "cookery" : "cookery-sable"),
-      server: { trace: tracePath("e2e", stage.name("cookery-tools-server")), instance: seededServer(stage.name("cookery-tools-server-" + runId)) },
-      client: { trace: tracePath("e2e", stage.name("cookery-tools-client")), instance: stage.name("cookery-tools-client-" + runId) },
+      server: { trace: tracePath("e2e", stage.name("cookery-tools-server-" + runId)), instance: seededServer(stage.name("cookery-tools-server-" + runId)) },
+      client: { trace: tracePath("e2e", stage.name("cookery-tools-client-" + runId)), instance: stage.name("cookery-tools-client-" + runId) },
       snapshot: () => ({ containers: cells ? [cells.supply, cells.noodles, cells.meat].map(at => stage.at(at)) : [],
         entityTypes: ["folkways:resident", "minecraft:item"] }),
     });

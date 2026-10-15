@@ -29,8 +29,8 @@ for (const stage of twins()) test(stage.title("millstone interruption: release, 
   try {
     pair = await launchPair({
       config: "blockwright.toml#" + (stage.kind === "ground" ? "cookery" : "cookery-sable"),
-      server: { trace: tracePath("e2e", stage.name("millstone-server")), instance: seededServer(stage.name("millstone-server-" + runId)) },
-      client: { trace: tracePath("e2e", stage.name("millstone-client")), instance: stage.name("millstone-client-" + runId) },
+      server: { trace: tracePath("e2e", stage.name("millstone-server-" + runId)), instance: seededServer(stage.name("millstone-server-" + runId)) },
+      client: { trace: tracePath("e2e", stage.name("millstone-client-" + runId)), instance: stage.name("millstone-client-" + runId) },
       snapshot: () => ({ containers: cells ? [stage.at(cells.supply), stage.at(cells.flour), stage.at(cells.next), stage.at(cells.mill)] : [], entityTypes: ["folkways:resident", "minecraft:item"] }),
     });
     const { server, client } = pair;

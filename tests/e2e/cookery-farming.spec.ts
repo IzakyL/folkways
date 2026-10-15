@@ -53,8 +53,8 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
   try {
     pair = await launchPair({
       config: stage.kind === "ground" ? "blockwright.toml#cookery" : "blockwright.toml#cookery-sable",
-      server: { trace: tracePath("e2e", stage.name("cookery-farming-server")), instance: serverName },
-      client: { trace: tracePath("e2e", stage.name("cookery-farming-client")), instance: stage.name(`cookery-farming-client-${runId}`) },
+      server: { trace: tracePath("e2e", stage.name("cookery-farming-server-" + runId)), instance: serverName },
+      client: { trace: tracePath("e2e", stage.name("cookery-farming-client-" + runId)), instance: stage.name(`cookery-farming-client-${runId}`) },
       snapshot: () => ({ containers: containers.map((at) => stage.at(at)), entityTypes: [RESIDENT, ITEM] }),
     });
     const { server, client } = pair;

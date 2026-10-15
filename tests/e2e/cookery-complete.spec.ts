@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
-import { screen, tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, screen, tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { foundColonyFast, foundingBox, optInViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { deliverOrderViaSitePanel } from "../shared/colony/membership-optin";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -26,6 +26,19 @@ const CASES = [
 ] as const;
 const MATERIALS = ["minecraft:oak_planks", "minecraft:iron_ingot"];
 
+const READ_WORKERS = defineTask<void, any[]>({
+  name: "folkways.cookery.complete-read-workers", side: "server", timeoutMs: 20_000,
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.api.resident.body.Bodies"], body: `
+var rows=new ArrayList<Object>();
+for(var entity:ctx.server().overworld().getAllEntities()) Bodies.of(entity).ifPresent(body->{
+  var row=new LinkedHashMap<String,Object>();row.put("uuid",body.id().toString());
+  row.put("doing",body.doing().map(Object::toString).orElse(""));
+  row.put("balk",body.balk().map(reason->Map.of("doing",reason.doing().toString(),"why",reason.why().translationKey(),"at",reason.at())).orElse(Map.of()));
+  rows.add(row);
+});return rows;
+` }),
+});
+
 // The objective runtime graph is produced by tests/shared/cookery/recipe-graph.mjs.
 // There is one final delivery only: no orders for flour, dough, noodles, rice, stir-fry or tools.
 for (const scenario of CASES) for (const stage of twins()) test(stage.title("complete cookery order: " + scenario.dish), async ({}, testInfo) => {
@@ -37,8 +50,8 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
   try {
     pair = await launchPair({
       config: "blockwright.toml#" + (stage.kind === "ground" ? "cookery" : "cookery-sable"),
-      server: { trace: tracePath("e2e", stage.name("complete-cookery-server")), instance: seededServer(stage.name("complete-cookery-server-" + runId)) },
-      client: { trace: tracePath("e2e", stage.name("complete-cookery-client")), instance: stage.name("complete-cookery-client-" + runId) },
+      server: { trace: tracePath("e2e", stage.name("complete-cookery-server-" + runId)), instance: seededServer(stage.name("complete-cookery-server-" + runId)) },
+      client: { trace: tracePath("e2e", stage.name("complete-cookery-client-" + runId)), instance: stage.name("complete-cookery-client-" + runId) },
       snapshot: () => ({ containers: cells ? [stage.at(cells.target), stage.at(cells.store)] : [], entityTypes: ["folkways:resident", "minecraft:item"] }),
     });
     const { server, client } = pair;
@@ -147,7 +160,7 @@ async function physical(server: MinecraftServer, stage: Stage, cells: ReturnType
     ...residents.flatMap(resident => collectStacks(resident.pack)), ...drops.map(drop => drop.stack)]
     .filter(stack => stack?.id?.includes("kitchen_knife") || stack?.id?.includes("kitchen_shovel"));
   const millTag = state.mill.nbt as any;
-  return { state, target: (state.target.nbt as any)?.Items ?? [], residents, drops, tools, rackTools,
+  return { workers: await server.run(READ_WORKERS), state, target: (state.target.nbt as any)?.Items ?? [], residents, drops, tools, rackTools,
     millBound: Array.isArray(millTag?.EntityId) ? millTag.EntityId.some((part: number) => part !== 0) : Boolean(millTag?.EntityId) };
 }
 
