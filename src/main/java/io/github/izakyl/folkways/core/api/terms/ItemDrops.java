@@ -38,6 +38,14 @@ public final class ItemDrops {
         public List<ItemStack> items() {
             return items;
         }
+
+        // Some native interactions deliver their first product into a hand before dropping the rest.
+        public CaptureFailure including(ItemStack delivered) {
+            if (delivered.isEmpty()) return this;
+            List<ItemStack> all = new ArrayList<>(items);
+            all.add(delivered.copy());
+            return new CaptureFailure(this, all);
+        }
     }
 
     public static <T> Captured<T> capture(ServerLevel level, AABB bounds, Supplier<T> action) {

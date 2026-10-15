@@ -42,6 +42,9 @@ public final class KitchenDelivery {
                 outputs.add(returned.copy());
             }
             return new Result(captured.result(), outputs);
+        } catch (ItemDrops.CaptureFailure broken) {
+            ItemStack returned = body.getMainHandItem();
+            throw returned != hand ? broken.including(returned) : broken;
         } finally {
             body.setItemInHand(InteractionHand.MAIN_HAND, previous);
         }
