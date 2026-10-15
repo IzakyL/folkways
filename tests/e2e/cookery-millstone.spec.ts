@@ -182,7 +182,10 @@ for(var entity:level.getAllEntities()){
     var row=new LinkedHashMap<String,Object>();row.put("uuid",entity.getUUID().toString());row.put("x",entity.getX());row.put("y",entity.getY());row.put("z",entity.getZ());
     row.put("local",Map.of("x",local.x,"y",local.y,"z",local.z));row.put("walked",entity.walkDist);row.put("bound",mill.isBoundTo((net.minecraft.world.entity.LivingEntity)entity));
     row.put("outside",Math.max(Math.abs((int)Math.floor(local.x)-station.cell().getX()),Math.abs((int)Math.floor(local.z)-station.cell().getZ()))>=3);
-    row.put("exiting",entity.getPersistentData().contains("folkways.cookery.millstone.exit"));row.put("goods",goods);residents.add(row);
+    row.put("exiting",entity.getPersistentData().contains("folkways.cookery.millstone.exit"));row.put("goods",goods);
+    row.put("doing",body.get().doing().map(Object::toString).orElse(""));
+    row.put("balk",body.get().balk().map(reason->Map.of("doing",reason.doing().toString(),"why",reason.why().translationKey(),"at",reason.at())).orElse(Map.of()));
+    row.put("licenses",body.get().licences().serializeNBT(level.registryAccess()).toString());residents.add(row);
   }else if(entity instanceof ItemEntity drop&&!drop.getItem().isEmpty()){
     var stack=drop.getItem();drops.add(Map.of("uuid",entity.getUUID().toString(),"stack",Map.of("id",BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),"count",stack.getCount())));
   }
