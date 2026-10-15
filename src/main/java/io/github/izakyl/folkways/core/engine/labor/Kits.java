@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.engine.labor;
 
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.Equipment;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Delivery;
@@ -38,6 +39,17 @@ final class Kits {
             if (!carried && mine.add(id)) {
                 to.accept(new Message.Submitted(Haul.DOMAIN, Grown.of(
                     Delivery.to(id, Haul.DOMAIN, at, Stances.WHEREVER, tool, 1, count -> { }))));
+            }
+        }
+        for (Equipment.Demand clothing : Equipment.wanted(colony, body)) {
+            UUID id = UUID.nameUUIDFromBytes((body.id() + "|clothing|" + clothing.slot().getName()
+                + "|" + clothing.items().describe()).getBytes(StandardCharsets.UTF_8));
+            if (Equipment.carried(body, clothing) <= 0) {
+                still.add(id);
+                if (mine.add(id)) {
+                    to.accept(new Message.Submitted(Haul.DOMAIN, Grown.of(Delivery.to(id, Haul.DOMAIN, at,
+                        Stances.WHEREVER, clothing.items(), 1, count -> { }))));
+                }
             }
         }
         // Asked for, but now carried or no longer in the kit - the colony may have narrowed its tools.

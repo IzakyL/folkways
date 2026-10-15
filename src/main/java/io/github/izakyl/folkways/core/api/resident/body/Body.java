@@ -77,6 +77,8 @@ public interface Body {
     }
 
     default void leaveColony() {
+        Equipment.release(this);
+        TaskTools.forget(id());
         state().unbind();
         dismissed();
     }

@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.engine.labor;
 
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.Equipment;
 import io.github.izakyl.folkways.core.api.resident.body.Licence;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Stand;
@@ -130,6 +131,9 @@ final class Survey {
 
     boolean answer(ServerLevel level, ColonyData colony, Map<UUID, Body> present, Consumer<Body> seen) {
         for (Body body : present.values()) {
+            if (Equipment.reconcile(colony.works(), body)) {
+                handsOf.add(body.id());
+            }
             Crew.Hand cached = hands.get(body.id());
             if (cached != null && !cached.at().realm().equals(WorldSpaces.at(body.mob()).realm())) {
                 handsOf.add(body.id());
@@ -318,6 +322,7 @@ final class Survey {
             licencesRead.remove(resident);
             return hands.remove(resident) != null;
         }
+        Equipment.reconcile(colony.works(), body);
         licencesRead.put(resident, body.licences().revision());
         Kit kit = Kit.of(colony.works(), body);
         List<Licence> licences = new ArrayList<>();
