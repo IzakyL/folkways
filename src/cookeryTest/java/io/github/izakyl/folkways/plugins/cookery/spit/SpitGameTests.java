@@ -186,6 +186,55 @@ public final class SpitGameTests {
                 })).toList();
     }
 
+    @net.minecraft.gametest.framework.GameTestGenerator
+    public static java.util.Collection<net.minecraft.gametest.framework.TestFunction> nativeOwnedCampfireRecipes() {
+        List<net.minecraft.resources.ResourceLocation> ids = new java.util.ArrayList<>();
+        try (var stream = SpitGameTests.class.getResourceAsStream("/cookery-native-recipes.json")) {
+            if (stream == null) { throw new IllegalStateException("the pinned native recipe manifest is missing"); }
+            for (var value : com.google.gson.JsonParser.parseReader(new java.io.InputStreamReader(stream,
+                    java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonArray("recipes")) {
+                String id = value.getAsString();
+                if (id.startsWith("minecraft:") && id.endsWith("_from_campfire_cooking")) {
+                    ids.add(net.minecraft.resources.ResourceLocation.parse(id));
+                }
+            }
+        } catch (java.io.IOException broken) { throw new IllegalStateException("cannot read pinned native recipes", broken); }
+        if (ids.size() != 7) { throw new IllegalStateException("expected all 7 native-owned campfire recipes, got " + ids.size()); }
+        return ids.stream().map(id -> new net.minecraft.gametest.framework.TestFunction("cookery_spit_owned_matrix",
+            "folkways:spit_owned_matrix_" + id.getPath(), "folkways:empty", 1000, 0L, true, helper -> {
+                var level = helper.getLevel();
+                var recipe = level.getRecipeManager().getAllRecipesFor(net.minecraft.world.item.crafting.RecipeType.CAMPFIRE_COOKING)
+                    .stream().filter(holder -> holder.id().equals(id)).findFirst().orElseThrow();
+                ItemStack input = recipe.value().getIngredients().getFirst().getItems()[0].copyWithCount(1);
+                var nativeSelection = level.getRecipeManager().getRecipeFor(net.minecraft.world.item.crafting.RecipeType.CAMPFIRE_COOKING,
+                    new net.minecraft.world.item.crafting.SingleRecipeInput(input), level).orElseThrow();
+                helper.assertTrue(nativeSelection.id().equals(id), id + ": the actual native matcher selects this manifest recipe");
+                helper.assertValueEqual(recipe.value().getCookingTime(), 600, id + ": the pinned native cooking time remains unchanged");
+                ItemStack output = recipe.value().assemble(new net.minecraft.world.item.crafting.SingleRecipeInput(input), level.registryAccess());
+                helper.assertValueEqual(output.getCount(), 1, id + ": the native tower's one-result-per-input rule is applicable");
+                Rig rig = new Rig(helper, false, input, output);
+                ItemStack knife = rig.pack.getItem(1); ItemStack originalKnife = knife.copy();
+                SpitWork work = rig.load(); long started = level.getGameTime();
+                helper.assertTrue(ItemStack.matches(rig.spit().cookedItem, output.copyWithCount(2)), id + ": native loading creates the actual component-preserving output");
+                afterCooking(rig, ready -> {
+                    helper.assertTrue(ready.level.getGameTime() - started >= 600, id + ": six hundred real powered ticker steps elapsed");
+                    helper.assertTrue(ready.step(work) instanceof Outcome.Done, id + ": the actual native knife interaction serves the batch");
+                    int portions = 0; int knives = 0;
+                    for (int slot = 0; slot < ready.pack.getContainerSize(); slot++) {
+                        ItemStack stack = ready.pack.getItem(slot); if (stack.isEmpty()) { continue; }
+                        if (ItemStack.isSameItemSameComponents(stack, output)) { portions += stack.getCount(); }
+                        else if (ItemStack.isSameItemSameComponents(stack, originalKnife)) { knives += stack.getCount(); }
+                        else { helper.fail(id + ": unexpected physical inventory after cooking: " + stack); }
+                    }
+                    helper.assertValueEqual(portions, 2, id + ": both real portions retain every native result component");
+                    helper.assertValueEqual(knives, 1, id + ": exactly the borrowed native knife remains");
+                    helper.assertTrue(ready.pack.getItem(1) == knife && ItemStack.matches(knife, originalKnife), id + ": native serving preserves the actual unworn knife reference");
+                    helper.assertTrue(ready.spit().cookedItem.isEmpty() && ready.spit().cookingItem.isEmpty()
+                        && SpitBatch.read(ready.spit(), ready.level).isEmpty() && ready.drops().isEmpty(), id + ": no raw input, claim or loose duplicate remains");
+                    helper.assertTrue(work.commit(ready.level, ready) instanceof Outcome.Done, id + ": the actual production offer settles exactly once");
+                });
+            })).toList();
+    }
     private static void afterCooking(Rig rig, Consumer<Rig> check) {
         rig.helper.startSequence().thenWaitUntil(() -> rig.helper.assertTrue(rig.spit().cookTime <= 0 && rig.spit().cookingItem.isEmpty(),
             "the real powered block ticker finishes the recipe")).thenExecute(() -> {
