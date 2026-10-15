@@ -57,6 +57,11 @@ public final class TeaScene {
         scene.world().setBlock(pot, ModBlocks.TEAPOT.get().defaultBlockState(), false);
         resident.hold(scene, new ItemStack(tea, 12)); resident.walkTo(scene, util.vector().topOf(1, 0, 2));
         scene.overlay().showText(95).text("The one real, now-empty pot returns to its original station. The twelve filled cups and the empty fluid bucket enter logistics once; neither a duplicate pot nor twelve leftover empty cups are created.")
-            .pointAt(util.vector().topOf(store)).placeNearTarget().attachKeyFrame(); scene.idle(105); scene.markAsFinished();
+            .pointAt(util.vector().topOf(store)).placeNearTarget().attachKeyFrame(); scene.idle(105);
+        resident.walkTo(scene, util.vector().topOf(3, 0, 5));
+        resident.hold(scene, TeacupRegistry.getItem(TeacupRegistry.MYSTERY_TEA).getDefaultInstance().copyWithCount(4));
+        scene.overlay().showOutline(PonderPalette.RED, pot, util.select().position(pot), 145);
+        scene.overlay().showText(145).text("Normal tea orders use matching native recipes. Only an explicit Mystery Tea order brews an unmatched ingredient: 200 ticks of input waiting, then 2,400 ticks of native brewing with heat. It yields four real cups instead of twelve, so prepare four empty cups.")
+            .pointAt(util.vector().topOf(pot)).placeNearTarget().attachKeyFrame(); scene.idle(155); scene.markAsFinished();
     }
 }

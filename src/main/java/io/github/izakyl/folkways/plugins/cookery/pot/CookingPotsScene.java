@@ -89,6 +89,14 @@ public final class CookingPotsScene {
         scene.overlay().showText(100).text("Fixed recipes and flexible recipes use the native matching rules. Flexible dishes keep the quality calculated by the actual appliance. Accepted batches survive cancellation and reload; recovery takes the owned result rather than spending the ingredients again.")
             .pointAt(util.vector().topOf(store)).placeNearTarget().attachKeyFrame();
         scene.idle(110);
+        resident.walkTo(scene, util.vector().topOf(2, 0, 3));
+        resident.hold(scene, FoodBiteRegistry.getItem(FoodBiteRegistry.SUSPICIOUS_STIR_FRY).getDefaultInstance());
+        scene.overlay().showOutline(PonderPalette.RED, pot, util.select().position(pot), 150);
+        scene.overlay().showText(150).text("Normal orders use matching native recipes. Only an explicit Suspicious Stir-Fry or Dark Cuisine order chooses unmatched ingredients. Suspicious Stir-Fry is served after cooking; only a Dark Cuisine order waits for the real burnt state. An accidentally burnt normal dish does not complete its original order.")
+            .pointAt(util.vector().topOf(pot)).placeNearTarget().attachKeyFrame();
+        scene.idle(80);
+        resident.hold(scene, FoodBiteRegistry.getItem(FoodBiteRegistry.DARK_CUISINE).getDefaultInstance());
+        scene.idle(80);
         scene.markAsFinished();
     }
 }
