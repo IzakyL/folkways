@@ -188,12 +188,13 @@ public final class TaskTools {
     Optional<ToolStock.Destination> destination(ServerLevel level, KitchenTools.Lease lease, ItemStack stack) {
         List<ToolStock.Destination> destinations = stock.destinations(level, stack);
         WorldPos home = returningTo.get(lease.id());
-        Optional<ToolStock.Destination> chosen = destinations.stream().filter(target -> target.at().equals(home)).findFirst();
-        if (chosen.isEmpty()) chosen = destinations.stream().filter(target -> {
+        java.util.function.Predicate<ToolStock.Destination> room = target -> {
             long others = returningTo.entrySet().stream().filter(entry -> !entry.getKey().equals(lease.id())
                 && entry.getValue().equals(target.at()) && borrowed.containsKey(entry.getKey())).count();
             return stock.store(level, target.at()).map(store -> ToolStock.roomCount(store, stack) > others).orElse(false);
-        }).findFirst();
+        };
+        Optional<ToolStock.Destination> chosen = destinations.stream().filter(target -> target.at().equals(home)).filter(room).findFirst();
+        if (chosen.isEmpty()) chosen = destinations.stream().filter(room).findFirst();
         if (chosen.isPresent()) {
             WorldPos next = chosen.get().at();
             if (!next.equals(returningTo.put(lease.id(), next))) persist();
@@ -220,6 +221,7 @@ public final class TaskTools {
         }
         return List.copyOf(promises);
     }
+
     void persist() {
         var saved = pool.save(colony.id());
         var items = new ListTag();

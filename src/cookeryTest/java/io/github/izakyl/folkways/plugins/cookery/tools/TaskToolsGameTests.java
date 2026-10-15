@@ -10,6 +10,14 @@ import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.front.api.Facings;
+import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.plugins.orders.OrderReturns;
+import io.github.izakyl.folkways.plugins.orders.Orders;
+import io.github.izakyl.folkways.plugins.orders.OrdersContent;
+import net.minecraft.core.registries.BuiltInRegistries;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Stash;
@@ -56,6 +64,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -349,6 +358,165 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void twoActuallyBorrowedRackKnivesDoNotRefillTheirStandingTarget(GameTestHelper helper) throws Exception {
+        try (var loans = new LoanRig(helper)) {
+            Rig rig = loans.rig;
+            loans.stock(rig.rack);
+            loans.file(rig.rackAt, 2, true);
+            loans.borrow();
+            helper.assertTrue(rig.rack.isEmpty(), "two different residents actually emptied the real rack by borrowing");
+            helper.assertValueEqual(OrderReturns.count(rig.colony.works(), rig.rackAt, KNIVES), 2L,
+                "two physical tools are promised back to this specific rack");
+            loans.refresh();
+            helper.assertTrue(Orders.commitments(rig.colony.works(), KNIVES).isEmpty(),
+                "standing maintain two never starts another Filling while its two real tools are in use");
+            loans.returnOne(rig.tools, loans.other);
+            helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "one actual tool has returned");
+            helper.assertValueEqual(OrderReturns.count(rig.colony.works(), rig.rackAt, KNIVES), 1L,
+                "that completed physical return stops being counted as a promise");
+            loans.refresh();
+            helper.assertTrue(Orders.commitments(rig.colony.works(), KNIVES).isEmpty(), "one actual plus one returning still satisfies exactly two");
+            loans.returnOne(rig.tools, rig.body);
+            helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 2L, "both original physical knives are back");
+            helper.assertValueEqual(OrderReturns.count(rig.colony.works(), rig.rackAt, KNIVES), 0L, "returned inventory is never counted twice");
+            loans.refresh();
+            helper.assertTrue(Orders.commitments(rig.colony.works(), KNIVES).isEmpty(), "ordinary real stock still satisfies the same target");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aStandingThreeToolWarehouseOnlyOrdersItsOneRealGap(GameTestHelper helper) throws Exception {
+        try (var loans = new LoanRig(helper)) {
+            Rig rig = loans.rig;
+            loans.stock(rig.chest);
+            // Three is a legitimate warehouse target; the native two-slot rack cannot physically hold three.
+            loans.file(rig.chestAt, 3, true);
+            loans.borrow();
+            helper.assertTrue(rig.chest.isEmpty(), "the same two real warehouse tools were borrowed");
+            helper.assertValueEqual(OrderReturns.count(rig.colony.works(), rig.chestAt, KNIVES), 2L,
+                "a standing stock warehouse retains the return destination of its borrowed inventory");
+            helper.assertValueEqual(OrderReturns.count(rig.colony.works(), rig.rackAt, KNIVES), 0L,
+                "the same two tools cannot be promised to another target as well");
+            loans.refresh();
+            helper.assertValueEqual(Orders.commitments(rig.colony.works(), KNIVES).values().stream().mapToLong(Long::longValue).sum(), 1L,
+                "maintain three with two actual returning tools asks for precisely one more");
+            loans.file(rig.chestAt, 3, false);
+            loans.refresh();
+            helper.assertValueEqual(Orders.commitments(rig.colony.works(), KNIVES).values().stream().mapToLong(Long::longValue).sum(), 3L,
+                "a one-shot delivery retains its original actual-target-stock meaning");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void cancelAndReloadRetainReturnsButAStolenPhysicalKnifeDoesNot(GameTestHelper helper) throws Exception {
+        try (var loans = new LoanRig(helper)) {
+            Rig rig = loans.rig;
+            loans.stock(rig.rack);
+            loans.file(rig.rackAt, 2, true);
+            loans.borrow();
+            rig.tools.closed(Closing.SHUTDOWN);
+            TaskTools restored = new TaskTools(rig.colony.works(), rig.level.getServer());
+            try {
+                helper.assertTrue(restored.pool.leases(rig.colony.colonyId()).stream().allMatch(lease -> lease.phase() == KitchenTools.Phase.RETURNING),
+                    "reload restores only physical returns, never running food actions");
+                helper.assertValueEqual(OrderReturns.count(rig.colony.works(), rig.rackAt, KNIVES), 2L,
+                    "the two actual borrower packs and their saved return target survive reload");
+                loans.refresh();
+                helper.assertTrue(Orders.commitments(rig.colony.works(), KNIVES).isEmpty(), "reload cannot create a duplicate two-knife refill");
+                int slot = IntStream.range(0, loans.other.pack().getContainerSize()).filter(index ->
+                    Goods.matches(loans.other.pack().getItem(index), KNIVES)).findFirst().orElseThrow();
+                ItemStack stolen = loans.other.pack().removeItem(slot, 1);
+                helper.assertTrue(!stolen.isEmpty(), "the player really takes an existing borrowed tool");
+                helper.assertValueEqual(OrderReturns.count(rig.colony.works(), rig.rackAt, KNIVES), 1L,
+                    "an item absent from its loaded physical borrower cannot still promise a return");
+                loans.refresh();
+                helper.assertValueEqual(Orders.commitments(rig.colony.works(), KNIVES).values().stream().mapToLong(Long::longValue).sum(), 1L,
+                    "the one genuine missing tool creates one standing refill");
+                loans.returnOne(restored, rig.body);
+                helper.assertValueEqual(OrderReturns.count(rig.colony.works(), rig.rackAt, KNIVES), 0L,
+                    "returning the surviving tool settles only its own promise");
+                helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "exactly that original surviving knife is really in the rack");
+                helper.assertTrue(Containers.insert(rig.chest, stolen).isEmpty(), "the stolen physical item remains accounted for outside the target");
+            } finally { restored.closed(Closing.SHUTDOWN); }
+        }
+        helper.succeed();
+    }
+
+    private static final class LoanRig implements AutoCloseable {
+        final Rig rig;
+        final Body other;
+        final Worker second;
+        LoanRig(GameTestHelper helper) {
+            rig = new Rig(helper);
+            other = PersonBody.RESIDENT.get().create(rig.level);
+            other.mob().setNoAi(true);
+            other.mob().moveTo(rig.boardCell.getCenter()); rig.level.addFreshEntity(other.mob());
+            rig.colony.works().hold(other.kind().id(), Held.Entity.of(other.mob())).orElseThrow();
+            second = new Worker() {
+                public Resident resident() { return other.resident(); }
+                public Mob body() { return other.mob(); }
+                public Container pack() { return other.pack(); }
+                public List<Store> within() { return rig.worker.within(); }
+                public ItemStack held(ToolNeed need) { return Tools.from(other.pack().contents(), need).orElse(ItemStack.EMPTY); }
+                public void spill(ItemStack stack) { if (!stack.isEmpty()) throw new AssertionError("unexpected spill: " + stack); }
+                public int rankOf(String perk) { return 0; }
+                public List<Node> route() { return List.of(); }
+                public Placement placement() { return Placement.NOWHERE; }
+            };
+        }
+        void stock(Container into) {
+            into.setItem(0, rig.namedKnife());
+            ItemStack another = rig.namedKnife(); another.setDamageValue(37);
+            another.set(DataComponents.CUSTOM_NAME, Component.literal("Second shared knife"));
+            into.setItem(1, another);
+        }
+        void file(WorldPos at, int count, boolean standing) {
+            var front = ColonyFront.of(rig.colony.works());
+            rig.helper.assertTrue(front.setSetting(OrdersContent.ID, "item", new ColonySettings.Value.Items(List.of(
+                ItemFilter.item(BuiltInRegistries.ITEM.getKey(ModItems.IRON_KITCHEN_KNIFE.get()))))), "the real player item setting selects an iron knife");
+            rig.helper.assertTrue(front.setSetting(OrdersContent.ID, "low", new ColonySettings.Value.Count(1)), "the real low-water setting is one");
+            rig.helper.assertTrue(front.setSetting(OrdersContent.ID, "count", new ColonySettings.Value.Count(count)), "the real high-water target is filed");
+            rig.helper.assertTrue(!Facings.of(rig.colony.works(), OrdersContent.ID).orElseThrow().act(OrdersContent.ID,
+                standing ? "maintain" : "deliver", Optional.of(at.block(rig.level)), rig.colony.works().view(rig.level)).refused(),
+                "the actual front action creates the player order");
+        }
+        void refresh() throws Exception {
+            Object orders = rig.colony.works().service(OrdersContent.ID, Object.class).orElseThrow();
+            var refresh = orders.getClass().getDeclaredMethod("refresh", net.minecraft.server.MinecraftServer.class);
+            refresh.setAccessible(true); refresh.invoke(orders, rig.level.getServer());
+        }
+        void borrow() {
+            Node first = rig.simple(new AtomicInteger(), false);
+            Node next = rig.simple(new AtomicInteger(), false);
+            borrow(first, rig.worker); borrow(next, second);
+        }
+        void borrow(Node work, Worker who) {
+            rig.helper.assertTrue(work.ready(rig.level), "an actual additional knife permits the next borrowing turn");
+            var turn = ((Workload.Within)work.spec().workload()).next(rig.level, who);
+            rig.helper.assertTrue(turn instanceof Workload.Within.Turn.Piece piece && piece.node() instanceof ToolAction.Borrow,
+                "the first real preparation is a physical borrow");
+            Node piece = ((Workload.Within.Turn.Piece)turn).node();
+            stand(piece, who.body());
+            rig.helper.assertTrue(Commit.run(rig.level, piece, who) instanceof Outcome.Done, "the real source transfers one knife into this borrower's pack");
+            ((Workload.Within)work.spec().workload()).ended(rig.level, piece, Ending.DONE);
+        }
+        void returnOne(TaskTools service, Body borrower) {
+            var lease = service.pool.leases(rig.colony.colonyId()).stream().filter(item -> item.resident().equals(borrower.id())).findFirst().orElseThrow();
+            var target = service.destination(rig.level, lease, service.tool(lease).orElseThrow()).orElseThrow();
+            var returning = new ToolAction.Return(service, lease, target);
+            Worker who = borrower.id().equals(rig.body.id()) ? rig.worker : second;
+            stand(returning, who.body());
+            rig.helper.assertTrue(Commit.run(rig.level, returning, who) instanceof Outcome.Done, "the original physical tool is really returned to its promised target");
+        }
+        static void stand(Node work, Mob body) {
+            var at = work.spec().stances().cells().stream().findFirst().orElseThrow().cell();
+            body.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
+        }
+        public void close() { other.mob().discard(); rig.close(); }
+    }
     private static final class Rig implements AutoCloseable {
         final GameTestHelper helper;
         final ServerLevel level;
