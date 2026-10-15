@@ -101,6 +101,11 @@ public final class KitchenTools {
         return decision(request, inventory);
     }
 
+    // Replenishment is demand from adopted work, not an execution turn. A downstream task whose food
+    // prerequisites are unfinished must never enter the physical borrowing queue ahead of its producer.
+    public synchronized Decision supply(UUID colony, ItemSpec tools, Inventory inventory) {
+        return decision(new Request(colony, replenishment(colony, tools), tools), inventory, false);
+    }
     public synchronized Optional<Lease> reserve(UUID colony, UUID node, ItemSpec tools, UUID resident,
                                                 Inventory inventory) {
         Request request = new Request(colony, node, tools);
@@ -216,11 +221,15 @@ public final class KitchenTools {
     }
 
     private Decision decision(Request request, Inventory inventory) {
+        return decision(request, inventory, true);
+    }
+
+    private Decision decision(Request request, Inventory inventory, boolean execution) {
         Optional<Lease> own = loan(request);
         if (own.isPresent()) {
             return answer(own.get().phase() == Phase.BORROWED ? Status.BORROWED : Status.BUSY);
         }
-        if (!first(request)) {
+        if (execution && !first(request)) {
             return answer(Status.BUSY);
         }
         List<Tool> matching = inventory.tools().stream()

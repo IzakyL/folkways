@@ -83,9 +83,6 @@ final class ToolWork implements Node, Workload.Within {
         }
         families = List.copyOf(allowed);
         service.started(this);
-        for (ItemSpec family : families) {
-            service.pool.request(service.colony.id(), id(), family, service.stock.read(level, family).inventory());
-        }
         return Optional.empty();
     }
 

@@ -204,7 +204,7 @@ public final class TaskTools {
                         needed.add(supply.request().id());
                     }
                 }
-                var decision = pool.request(colony.id(), work.id(), family, inventory);
+                var decision = pool.supply(colony.id(), family, inventory);
                 decision.replenishment().ifPresent(request -> {
                     needed.add(request.id());
                     if (supplying.containsKey(request.id())) {

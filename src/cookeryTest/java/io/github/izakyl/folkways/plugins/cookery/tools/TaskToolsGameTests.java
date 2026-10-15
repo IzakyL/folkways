@@ -304,6 +304,30 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
     @GameTest(template = "empty")
+    public static void adoptingTheConsumerBeforeItsProducerCannotTakeTheProducersBorrowingTurn(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            // WeaveDelta.put is Map.copyOf: adoption order is not dependency order. The actual core only
+            // asks ready after checking graph.before, so the consumer is adopted but not yet polled ready.
+            AtomicInteger downstreamDone = new AtomicInteger();
+            AtomicInteger upstreamDone = new AtomicInteger();
+            Node downstream = rig.simple(downstreamDone, false);
+            Node upstream = rig.simple(upstreamDone, false);
+            rig.tools.tick(rig.level.getServer());
+            helper.assertTrue(upstream.ready(rig.level),
+                "an adopted downstream task and the supply scan do not reserve a queue position before food prerequisites finish");
+            rig.finish(upstream);
+            helper.assertValueEqual(upstreamDone.get(), 1, "the actual upstream tool action completes first");
+            helper.assertTrue(downstream.ready(rig.level), "after the producer returns its real knife, its consumer can borrow it");
+            rig.finish(downstream);
+            helper.assertValueEqual(downstreamDone.get(), 1, "the actual dependent tool action then completes once");
+            helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "reverse adoption still uses exactly one returned native knife");
+            helper.assertTrue(rig.body.pack().contents().stream().noneMatch(stack -> stack.is(TagMod.KITCHEN_KNIFE)),
+                "both actual tasks leave the reusable knife in the rack");
+        }
+        helper.succeed();
+    }
+    @GameTest(template = "empty")
     public static void nativeBreakageReleasesTheLoanAndAllowsOneReplacement(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             ItemStack lastUse = rig.namedKnife();
