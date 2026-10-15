@@ -112,6 +112,13 @@ final class FarmPresence implements Facing {
         if (crop.isEmpty()) {
             return Optional.empty();
         }
+        if (crop.get().behavior().isPresent()) {
+            List<net.minecraft.world.item.Item> seeds = crop.get().behavior().get().seeds();
+            net.minecraft.world.item.Item preferred = seeds.stream().filter(seed -> Fronts.of(colony)
+                .stocked(level.getServer(), io.github.izakyl.folkways.core.api.terms.Goods.specOf(seed.getDefaultInstance())) > 0)
+                .findFirst().orElse(seeds.getFirst());
+            crop = Optional.of(crop.get().using(preferred));
+        }
         Plot plot = new Plot(level.dimension(), chosen);
         Field field = fields.get(plot);
         if (field == null) {

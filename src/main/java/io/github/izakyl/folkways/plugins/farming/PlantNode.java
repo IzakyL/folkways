@@ -32,6 +32,8 @@ final class PlantNode extends FarmNode {
     @Override
     Outcome work(ServerLevel level, Worker who, Job job) {
         BlockState sown = crop.sown();
+        List<ItemStack> seeds = who.supplied().stream().map(ItemStack::copy)
+            .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         List<WorkNoise> heard = new ArrayList<>();
         if (!level.isLoaded(job.cell()) || !crop.roomAt(level, crop.standAt(job.cell()))) {
             return refuse(FarmRefusal.NOTHING_TO_WORK);
@@ -47,11 +49,12 @@ final class PlantNode extends FarmNode {
             if (!standing.isAir() && !standing.canBeReplaced()) {
                 continue;
             }
-            if (!sown.canSurvive(level, base)) {
+            ItemStack seed = seeds.stream().filter(stack -> Goods.matches(stack, crop.seedSpec()))
+                .findFirst().orElse(ItemStack.EMPTY);
+            if (seed.isEmpty() || !crop.plant(level, who, base, seed)) {
                 barren = true;
                 continue;
             }
-            level.setBlock(base, sown, 3);
             heard.add(WorkNoise.placed(base, sown));
         }
         if (heard.isEmpty()) {
@@ -60,24 +63,6 @@ final class PlantNode extends FarmNode {
                 : new Outcome.Done(List.of(), List.of(), Optional.empty(), who.supplied());
         }
         return new Outcome.Done(List.copyOf(heard), List.of(),
-            Optional.of(new Xp(FarmingContent.trade(), heard.size())), unsown(who.supplied(), heard.size()));
-    }
-
-    // The seed handed over for cells that turned out not to want it.
-    private List<ItemStack> unsown(List<ItemStack> supplied, int used) {
-        List<ItemStack> back = new ArrayList<>(supplied.size());
-        int left = used;
-        for (ItemStack stack : supplied) {
-            ItemStack kept = stack.copy();
-            if (left > 0 && Goods.matches(kept, crop.seedSpec())) {
-                int taken = Math.min(left, kept.getCount());
-                kept.shrink(taken);
-                left -= taken;
-            }
-            if (!kept.isEmpty()) {
-                back.add(kept);
-            }
-        }
-        return back;
+            Optional.of(new Xp(FarmingContent.trade(), heard.size())), seeds.stream().filter(stack -> !stack.isEmpty()).toList());
     }
 }

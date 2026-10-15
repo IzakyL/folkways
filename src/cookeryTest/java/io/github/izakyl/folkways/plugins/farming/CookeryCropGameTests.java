@@ -108,6 +108,17 @@ public final class CookeryCropGameTests {
             helper.assertTrue(field.crop.harvestFrom(field.level(), field.ground).equals(List.of(field.ground.above())),
                 "the mature real crop is recognized for harvesting");
             Outcome.Done done = field.harvest();
+            if (block == ModBlocks.CHILI_CROP.get()) {
+                helper.assertTrue(done.made().size() == 1 && (done.made().getFirst().is(ModItems.RED_CHILI.get())
+                    || done.made().getFirst().is(ModItems.GREEN_CHILI.get())), "native picking yields exactly one red or green chili");
+                helper.assertValueEqual(field.level().getBlockState(field.ground.above()).getValue(CropBlock.AGE), 5,
+                    "native picking preserves the plant at age five");
+                helper.assertValueEqual((int) Goods.countIn(field.pack, field.crop.seedSpec()), 1,
+                    "picking spends no seed on the surviving plant");
+                field.grow();
+                helper.assertTrue(field.harvest().made().size() == 1, "the surviving plant can be picked again");
+                return;
+            }
             helper.assertTrue(done.made().stream().anyMatch(stack -> stack.is(food) && stack.getCount() > 0),
                 "real loot yields cookery food");
             helper.assertTrue(done.made().stream().anyMatch(stack -> stack.is(seed) && stack.getCount() > 0),
@@ -123,7 +134,7 @@ public final class CookeryCropGameTests {
         }
     }
 
-    private static final class Field implements AutoCloseable {
+    static final class Field implements AutoCloseable {
         final GameTestHelper helper;
         final BlockPos ground;
         final Body body;

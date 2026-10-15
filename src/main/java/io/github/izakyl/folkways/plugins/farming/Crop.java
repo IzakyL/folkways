@@ -23,7 +23,7 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 
 record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, ItemSpec seedSpec,
-            Substrate substrate, Habit habit) {
+            Substrate substrate, Habit habit, Optional<CropBehavior> behavior) {
 
     enum Substrate {
         FARMLAND,
@@ -58,12 +58,16 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
 
     private static volatile List<ResourceLocation> sowable;
 
+    static void forgetSowable() {
+        sowable = null;
+    }
+
     static List<ResourceLocation> sowable() {
         List<ResourceLocation> known = sowable;
         if (known == null) {
             List<ResourceLocation> found = new ArrayList<>();
             for (Block block : BuiltInRegistries.BLOCK) {
-                if (block instanceof CropBlock || block instanceof SaplingBlock || NAMED.containsKey(block)) {
+                if (block instanceof CropBlock || block instanceof SaplingBlock || NAMED.containsKey(block) || CropBehaviors.of(block).isPresent()) {
                     found.add(BuiltInRegistries.BLOCK.getKey(block));
                 }
                 if (EITHER_WAY.contains(block)) {
@@ -86,19 +90,22 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
         if (block.isEmpty() || square && !EITHER_WAY.contains(block.get())) {
             return Optional.empty();
         }
+        Optional<CropBehavior> behavior = CropBehaviors.of(block.get());
         Optional<Shape> shape = square
             ? Optional.of(new Shape(Substrate.NATURAL, SQUARE_TREE, Set.of(block.get())))
-            : shapeOf(block.get());
+            : behavior.map(adapted -> new Shape(adapted.needsFarmland() ? Substrate.FARMLAND : Substrate.NATURAL,
+                new Habit.Herb(), Set.of(block.get()))).or(() -> shapeOf(block.get()));
         if (shape.isEmpty()) {
             return Optional.empty();
         }
-        Optional<Item> seed = seedOf(level, where, block.get());
+        Optional<Item> seed = behavior.flatMap(adapted -> adapted.seeds().stream().findFirst())
+            .or(() -> seedOf(level, where, block.get()));
         if (seed.isEmpty()) {
             return Optional.empty();
         }
         ResourceLocation seedId = BuiltInRegistries.ITEM.getKey(seed.get());
         return Optional.of(new Crop(id, block.get(), shape.get().standing(), seed.get(),
-            ItemSpec.of(seedId), shape.get().substrate(), shape.get().habit()));
+            ItemSpec.of(seedId), shape.get().substrate(), shape.get().habit(), behavior));
     }
 
     private static Optional<Shape> shapeOf(Block block) {
@@ -126,6 +133,23 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
             : Optional.of(asItem);
     }
 
+    Crop using(Item item) {
+        return new Crop(id, block, standing, item, ItemSpec.of(BuiltInRegistries.ITEM.getKey(item)),
+            substrate, habit, behavior);
+    }
+
+    boolean plant(net.minecraft.server.level.ServerLevel level,
+                  io.github.izakyl.folkways.core.api.work.Worker who, BlockPos base, ItemStack seed) {
+        if (behavior.isPresent()) {
+            return behavior.get().plant(level, who, base, seed);
+        }
+        if (!bare(level, base) || !level.setBlock(base, sown(), 3)) {
+            return false;
+        }
+        seed.shrink(1);
+        return true;
+    }
+
     Block fruit() {
         return habit instanceof Habit.Stem stem ? stem.fruit() : block;
     }
@@ -144,15 +168,16 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
     }
 
     BlockState sown() {
-        return block.defaultBlockState();
+        return behavior.map(CropBehavior::planted).orElseGet(block::defaultBlockState);
     }
 
     List<BlockPos> harvestFrom(LevelReader level, BlockPos ground) {
-        return habit.harvest(this, level, ground.above());
+        return behavior.map(adapted -> adapted.harvest(level, ground.above()))
+            .orElseGet(() -> habit.harvest(this, level, ground.above()));
     }
 
     List<BlockPos> canopyOf(LevelReader level, List<BlockPos> cut) {
-        return habit.canopy(level, cut);
+        return behavior.map(adapted -> adapted.attached(level, cut)).orElseGet(() -> habit.canopy(level, cut));
     }
 
     List<BlockPos> standAt(BlockPos ground) {
@@ -176,6 +201,9 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
     }
 
     boolean bare(LevelReader level, BlockPos base) {
+        if (behavior.isPresent()) {
+            return behavior.get().canPlant(level, base);
+        }
         BlockState standing0 = level.getBlockState(base);
         return (standing0.isAir() || standing0.canBeReplaced()) && sown().canSurvive(level, base);
     }
@@ -201,10 +229,13 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
     }
 
     int reach() {
-        return habit.reach();
+        return behavior.map(CropBehavior::reach).orElseGet(habit::reach);
     }
 
     boolean ripe(LevelReader level, BlockPos base) {
+        if (behavior.isPresent()) {
+            return behavior.get().ripe(level, base);
+        }
         BlockState state = level.getBlockState(base);
         if (!grows(state)) {
             return false;
