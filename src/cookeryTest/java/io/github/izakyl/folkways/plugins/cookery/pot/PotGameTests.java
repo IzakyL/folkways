@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.plugins.cookery.pot;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IPot;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.container.SimpleInput;
+import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.PotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
@@ -26,8 +28,12 @@ import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.plugins.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.cookery.testing.NativeCookingMatrix;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -35,6 +41,8 @@ import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestGenerator;
+import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -293,6 +301,47 @@ public final class PotGameTests {
         helper.succeed();
     }
 
+    @GameTestGenerator
+    public static List<TestFunction> allNativePotRecipes() {
+        List<TestFunction> tests = new ArrayList<>(NativeCookingMatrix.recipes("pot", 198, 400, PotGameTests::nativeRecipe));
+        tests.addAll(NativeCookingMatrix.recipes("flex_pot", 27, 400, PotGameTests::nativeRecipe));
+        return List.copyOf(tests);
+    }
+
+    private static void nativeRecipe(GameTestHelper helper, ResourceLocation recipe) {
+        Rig rig = new Rig(helper, recipe.getPath(), 1);
+        List<ItemStack> inputs = NativeCookingMatrix.ingredients(rig.plan.recipe().ingredients(), rig.plan.flexible(),
+            chosen -> rig.plan.selected(rig.level, new SimpleInput(chosen))).orElseThrow(() ->
+                new AssertionError("no actual ingredient assignment selects the pinned native recipe: " + recipe));
+        Map<Item, Long> expected = new LinkedHashMap<>();
+        NativeCookingMatrix.count(expected, new ItemStack(ModItems.KITCHEN_SHOVEL.get()));
+        for (ItemStack input : inputs) {
+            if (input.isEmpty()) continue;
+            rig.put(input);
+            Item container = ItemUtils.getContainerItem(input);
+            if (container != Items.AIR) NativeCookingMatrix.count(expected, container.getDefaultInstance());
+        }
+        rig.put(new ItemStack(ModItems.OIL.get()));
+        if (rig.plan.carrier().isPresent()) {
+            ItemStack carrier = java.util.Arrays.stream(rig.plan.recipe().carrier().getItems()).filter(stack -> !stack.isEmpty())
+                .findFirst().orElseThrow().copyWithCount(rig.plan.count());
+            rig.put(carrier);
+        }
+        rig.start();
+        afterCooking(rig, ready -> {
+            ItemStack actualProduct = ready.pot.getResult().copy();
+            helper.assertTrue(ItemStack.matches(actualProduct, ready.plan.result(ready.level, inputs)),
+                "the requested native resource actually cooked its own result and native quality: " + recipe);
+            ready.finish(true);
+            helper.assertTrue(ready.stacks().stream().filter(stack -> ItemStack.isSameItemSameComponents(stack, actualProduct))
+                    .mapToLong(ItemStack::getCount).sum() == actualProduct.getCount(),
+                "the entire native product stack and all its components reached real logistics: " + recipe);
+            NativeCookingMatrix.count(expected, actualProduct);
+            NativeCookingMatrix.inventory(helper, ready.pack, expected, recipe);
+            helper.assertTrue(ready.level.getEntitiesOfClass(ItemEntity.class, new AABB(ready.cell).inflate(3)).isEmpty(),
+                "native products and containers are not duplicated as loose drops: " + recipe);
+        });
+    }
     private static void afterCooking(Rig rig, Consumer<Rig> assertion) {
         rig.helper.startSequence().thenWaitUntil(rig::finished).thenExecute(() -> {
             try { assertion.accept(rig); } finally { rig.close(); }

@@ -1,6 +1,9 @@
 package io.github.izakyl.folkways.plugins.cookery.stockpot;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.container.StockpotInput;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.soupbase.SoupBaseManager;
+import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.StockpotRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.StockpotVisuals;
@@ -46,17 +49,21 @@ import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
 import io.github.izakyl.folkways.plugins.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.cookery.testing.NativeCookingMatrix;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.function.Consumer;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestGenerator;
+import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -895,6 +902,57 @@ public final class StockpotGameTests {
             }
         }
         helper.succeed();
+    }
+    @GameTestGenerator
+    public static List<TestFunction> allNativeStockpotRecipes() {
+        List<TestFunction> tests = new ArrayList<>(NativeCookingMatrix.recipes("stockpot", 77, 500, StockpotGameTests::nativeRecipe));
+        tests.addAll(NativeCookingMatrix.recipes("flex_stockpot", 28, 500, StockpotGameTests::nativeRecipe));
+        return List.copyOf(tests);
+    }
+
+    private static void nativeRecipe(GameTestHelper helper, ResourceLocation recipe) {
+        Rig rig = new Rig(helper, recipe, false);
+        List<ItemStack> inputs = NativeCookingMatrix.ingredients(rig.plan.recipe().ingredients(), rig.plan.flexible(),
+            chosen -> rig.plan.selected(rig.level, new StockpotInput(chosen, rig.plan.recipe().soupBase()))).orElseThrow(() ->
+                new AssertionError("no actual ingredient assignment selects the pinned native recipe: " + recipe));
+        var base = SoupBaseManager.getSoupBase(rig.plan.recipe().soupBase());
+        ItemStack soup = base.getDisplayStack().copyWithCount(1);
+        if (soup.isEmpty() || !base.isSoupBase(soup)) {
+            soup = Goods.members(rig.plan.soup().spec()).stream().map(Item::getDefaultInstance)
+                .filter(base::isSoupBase).findFirst().orElseThrow();
+        }
+        Map<Item, Long> expected = new LinkedHashMap<>();
+        NativeCookingMatrix.count(expected, new ItemStack(Items.BUCKET));
+        NativeCookingMatrix.count(expected, ModItems.STOCKPOT_LID.get().getDefaultInstance());
+        rig.put(soup);
+        for (ItemStack input : inputs) {
+            if (input.isEmpty()) continue;
+            rig.put(input);
+            Item container = ItemUtils.getContainerItem(input);
+            if (container != Items.AIR) NativeCookingMatrix.count(expected, container.getDefaultInstance());
+        }
+        if (rig.plan.carrier().isPresent()) {
+            ItemStack carrier = java.util.Arrays.stream(rig.plan.recipe().carrier().getItems()).filter(stack -> !stack.isEmpty())
+                .findFirst().orElseThrow().copyWithCount(rig.plan.portions());
+            rig.put(carrier);
+        }
+        rig.put(ModItems.STOCKPOT_LID.get().getDefaultInstance());
+        rig.load();
+        afterCooking(rig, ready -> {
+            helper.assertValueEqual(ready.pot.saveCustomOnly(ready.level.registryAccess()).getString("RecipeId"), recipe.toString(),
+                "the real block executed the pinned native resource rather than silently selecting another recipe");
+            ItemStack actualProduct = ready.pot.getResult().copyWithCount(ready.plan.portions());
+            helper.assertTrue(ItemStack.matches(actualProduct, ready.plan.expectedResult(ready.level, inputs)),
+                "the actual resource cooked its complete native output and quality: " + recipe);
+            ready.take();
+            long matching = java.util.stream.IntStream.range(0, ready.pack.getContainerSize()).mapToObj(ready.pack::getItem)
+                .filter(stack -> ItemStack.isSameItemSameComponents(stack, actualProduct)).mapToLong(ItemStack::getCount).sum();
+            helper.assertValueEqual(matching, (long) ready.plan.portions(), "every separately served native portion retains its exact components: " + recipe);
+            NativeCookingMatrix.count(expected, actualProduct);
+            NativeCookingMatrix.inventory(helper, ready.pack, expected, recipe);
+            helper.assertTrue(ready.level.getEntitiesOfClass(ItemEntity.class, new net.minecraft.world.phys.AABB(ready.cell).inflate(3)).isEmpty(),
+                "all native products and containers reach actual logistics without loose duplicates: " + recipe);
+        });
     }
     private static void afterCooking(Rig rig, Consumer<Rig> assertion) {
         rig.helper.startSequence().thenWaitUntil(rig::finished).thenExecute(() -> {
