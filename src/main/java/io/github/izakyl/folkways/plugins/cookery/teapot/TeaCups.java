@@ -7,6 +7,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.TeacupItem;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.TeapotItem;
 import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -26,6 +27,11 @@ import net.minecraft.world.phys.Vec3;
 /** Narrow equivalents of the two hard-Player cup interactions, using real placed blocks and pot data. */
 final class TeaCups {
     private TeaCups() { }
+    static List<BlockPos> places(ServerLevel level, BlockPos pot) {
+        return java.util.stream.StreamSupport.stream(Direction.Plane.HORIZONTAL.spliterator(), false)
+            .map(pot::relative).filter(cell -> level.isLoaded(cell) && level.getBlockState(cell).isAir()
+                && level.getBlockState(cell.below()).isFaceSturdy(level, cell.below(), Direction.UP)).toList();
+    }
     static boolean place(ServerLevel level, BlockPos at, ItemStack actual) {
         if (!(actual.getItem() instanceof BlockItem item) || !level.getBlockState(at).isAir()) { return false; }
         var hit = new BlockHitResult(Vec3.atCenterOf(at).add(0, -0.5, 0), Direction.UP, at.below(), false);

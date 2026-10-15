@@ -11,6 +11,8 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -172,10 +174,16 @@ public final class TeapotGameTests {
         Rig rig = new Rig(helper, "barley_tea"); TeapotWork work = rig.load();
         for (Direction side : Direction.Plane.HORIZONTAL) { rig.level.setBlockAndUpdate(rig.cell.relative(side), ModBlocks.EMPTY_CUP.get().defaultBlockState()); }
         afterBrewing(rig, ready -> {
-            helper.assertTrue(ready.step(work) instanceof Outcome.Failed, "without a new empty reachable place, serving refuses");
+            helper.assertTrue(work.next(ready.level, ready) instanceof Workload.Within.Turn.Wait,
+                "with all player cup positions occupied, the actual finished batch waits without issuing a destructive action");
             for (Direction side : Direction.Plane.HORIZONTAL) { helper.assertTrue(ready.level.getBlockState(ready.cell.relative(side)).is(ModBlocks.EMPTY_CUP.get()), "each player's real cup is preserved"); }
             helper.assertValueEqual(ready.count(ModItems.EMPTY_CUP.get()), 12L, "the task's own cups return after refusal");
             helper.assertValueEqual(ready.pot().getResult().getCount(), 12, "none of the native tea is taken");
+            ready.level.setBlockAndUpdate(ready.cell.west(), Blocks.AIR.defaultBlockState());
+            helper.assertTrue(ready.step(work) instanceof Outcome.Done, "freeing one actual cup position resumes the same native finished batch");
+            for (Direction side : List.of(Direction.NORTH, Direction.EAST, Direction.SOUTH))
+                helper.assertTrue(ready.level.getBlockState(ready.cell.relative(side)).is(ModBlocks.EMPTY_CUP.get()), "remaining player cups are never overwritten");
+            ready.assertServed();
         });
     }
 
@@ -405,6 +413,85 @@ public final class TeapotGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 900)
+    public static void thePublishedTeaStanceMustReachBothThePotAndItsOnlyActualCupPosition(GameTestHelper helper) {
+        Rig rig = new Rig(helper, "barley_tea");
+        var offered = edgeGeometry(rig);
+        TeapotWork work = rig.plan(offered);
+        helper.assertTrue(!work.spec().stances().cells().contains(WorldPos.of(rig.level, rig.cell.offset(4, 0, 2))),
+            "a real pot-reaching edge that cannot reach the only cup position is not published to the planner");
+        helper.assertTrue(work.spec().stances().cells().contains(WorldPos.of(rig.level, rig.cell.west(2))),
+            "the same real catalogue retains a stance that reaches both physical operations");
+        rig.actor.setPos(Vec3.atBottomCenterOf(rig.cell.west(2)));
+        helper.assertTrue(rig.step(work) instanceof Outcome.Done && rig.step(work) instanceof Outcome.Done,
+            "the planned safe stance loads the actual bucket and ingredient");
+        afterBrewing(rig, ready -> {
+            helper.assertTrue(ready.step(work) instanceof Outcome.Done, "the same published stance serves twelve actual cups");
+            ready.assertServed();
+        });
+    }
+
+    @GameTest(template = "empty")
+    public static void noServingFootingMeansNoNewTeaInvestment(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, "barley_tea")) {
+            edgeGeometry(rig);
+            var onlyFarPotStance = Stances.at(rig.level, rig.cell.offset(4, 0, 2));
+            helper.assertTrue(new TeapotStation().freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at,
+                onlyFarPotStance, rig.bookings, () -> {}).isEmpty(),
+                "the planner cannot invest a new batch whose actual published footing cannot serve any cup");
+            helper.assertTrue(TeapotStation.empty(rig.pot()), "the actual pot remains empty");
+            helper.assertValueEqual(rig.count(rig.job.bucket().getItem()), 1L, "the original fluid bucket stays physical and unspent");
+            helper.assertValueEqual(rig.count(rig.job.input().getItem()), 1L, "the original tea ingredient stays unspent");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 900)
+    public static void changingThePlayersCupLayoutReplansTheFinishedTeaWithoutReinvestingIngredients(GameTestHelper helper) {
+        Rig rig = new Rig(helper, "barley_tea");
+        edgeGeometry(rig);
+        rig.level.setBlockAndUpdate(rig.cell.east().below(), Blocks.STONE.defaultBlockState());
+        rig.level.setBlockAndUpdate(rig.cell.west(), ModBlocks.EMPTY_CUP.get().defaultBlockState());
+        TeapotWork work = rig.plan(Stances.at(rig.level, rig.cell.offset(4, 0, 2)));
+        helper.assertTrue(rig.step(work) instanceof Outcome.Done && rig.step(work) instanceof Outcome.Done,
+            "the first actual cup layout permits the original pot-reaching stance");
+        afterBrewing(rig, ready -> {
+            ready.level.setBlockAndUpdate(ready.cell.east(), ModBlocks.EMPTY_CUP.get().defaultBlockState());
+            ready.level.setBlockAndUpdate(ready.cell.west(), Blocks.AIR.defaultBlockState());
+            var before = ready.pot().saveWithoutMetadata(ready.level.registryAccess());
+            helper.assertTrue(work.next(ready.level, ready) instanceof Workload.Within.Turn.Leave,
+                "a different available cup position releases the now unsuitable old stance for recovery");
+            helper.assertTrue(work.commit(ready.level, ready) instanceof Outcome.Failed,
+                "repositioning never pretends the unserved original tea was delivered");
+            work.ended(ready.level, Ending.DROPPED);
+            helper.assertTrue(before.equals(ready.pot().saveWithoutMetadata(ready.level.registryAccess())),
+                "replanning preserves the exact real finished tea, fluid, input and ownership");
+            Stances fresh = new TeapotStation().stances(ready.level, ready.at).orElseThrow();
+            TeapotWork recovered = ready.recover(fresh);
+            helper.assertTrue(!recovered.spec().stances().cells().contains(WorldPos.of(ready.level, ready.cell.offset(4, 0, 2))),
+                "recovery publishes a newly usable stance, rather than repeating the same blocked edge");
+            var feet = recovered.spec().stances().cells().iterator().next().cell();
+            ready.actor.setPos(Vec3.atBottomCenterOf(feet));
+            helper.assertTrue(ready.step(recovered) instanceof Outcome.Done, "the preserved twelve real portions are served from the new safe stance");
+            helper.assertTrue(ready.level.getBlockState(ready.cell.east()).is(ModBlocks.EMPTY_CUP.get()), "the player's new east cup remains untouched");
+            ready.assertServed();
+        });
+    }
+
+    private static Stances edgeGeometry(Rig rig) {
+        BlockPos bad = rig.cell.offset(4, 0, 2), safe = rig.cell.west(2), cup = rig.cell.west();
+        for (Direction side : Direction.Plane.HORIZONTAL) rig.level.setBlockAndUpdate(rig.cell.relative(side).below(), Blocks.AIR.defaultBlockState());
+        for (BlockPos support : List.of(bad.below(), safe.below(), cup.below())) rig.level.setBlockAndUpdate(support, Blocks.STONE.defaultBlockState());
+        rig.actor.setPos(Vec3.atBottomCenterOf(bad));
+        rig.helper.assertTrue(Footing.withFeetAt(rig.level, bad) && Footing.withFeetAt(rig.level, safe), "both candidates are actual standable footings");
+        rig.helper.assertTrue(Reach.withinReach(bad, rig.cell) && Reach.inSight(rig.level, bad, rig.cell), "the old edge truly reaches and sees the actual pot");
+        rig.helper.assertTrue(!Reach.withinReach(bad, cup), "the only cup position is outside that old stance's real reach");
+        rig.helper.assertTrue(Reach.withinReach(safe, rig.cell) && Reach.inSight(rig.level, safe, rig.cell)
+            && Reach.withinReach(safe, cup) && Reach.inSight(rig.level, safe, cup), "the alternative reaches and sees both native operations");
+        rig.helper.assertValueEqual(TeaCups.places(rig.level, rig.cell), List.of(cup), "real table support leaves only the west cup position available");
+        return Stances.at(WorldPos.of(rig.level, bad), WorldPos.of(rig.level, safe));
+    }
+
     private static void withMatchingSeedRecipe(Rig rig, Runnable check) {
         List<RecipeHolder<?>> saved = List.copyOf(rig.level.getRecipeManager().getRecipes());
         List<RecipeHolder<?>> changed = new ArrayList<>(saved);
@@ -443,8 +530,9 @@ public final class TeapotGameTests {
             stances = Stances.at(level, actor.blockPosition()); pack.setItem(0, job.bucket()); pack.setItem(1, new ItemStack(ModItems.EMPTY_CUP.get(), job.output().getCount())); pack.setItem(2, job.input().copy());
         }
         TeapotBlockEntity pot() { return (TeapotBlockEntity) level.getBlockEntity(cell); }
-        TeapotWork plan() {
-            var bench = new TeapotStation().freeze(UUID.randomUUID(), colony, level, at, stances, bookings, () -> changed.run()).orElseThrow();
+        TeapotWork plan() { return plan(stances); }
+        TeapotWork plan(Stances offered) {
+            var bench = new TeapotStation().freeze(UUID.randomUUID(), colony, level, at, offered, bookings, () -> changed.run()).orElseThrow();
             Produce wanted = Produce.of(CookeryContent.ID, new WorkSite.AtBlock(at), Goods.specOf(job.output()), job.output().getCount(), Produce.UNBOUNDED);
             var option = bench.options(wanted, Grown.of(wanted)).stream().filter(change -> change.replacement().nodes().getFirst().spec().needs().stream()
                 .anyMatch(need -> Goods.matches(job.input(), need.spec()))).findFirst().orElseThrow();
@@ -458,9 +546,10 @@ public final class TeapotGameTests {
             helper.assertTrue(ItemStack.matches(pot().getInput(), job.input()), "the actual native ingredient is present");
             return work;
         }
-        TeapotWork recover() {
+        TeapotWork recover() { return recover(stances); }
+        TeapotWork recover(Stances offered) {
             if (hold != null) { hold.release(Ending.REVOKED); hold = null; }
-            var recovered = new TeapotStation().recovery(colony, level, at, stances, bookings, () -> changed.run());
+            var recovered = new TeapotStation().recovery(colony, level, at, offered, bookings, () -> changed.run());
             helper.assertValueEqual(recovered.size(), 1, "the actual owned batch has one recovery task");
             current = (TeapotWork) recovered.getFirst().nodes().getFirst(); helper.assertTrue(current.planned(level).isEmpty(), "the recovery acquires the current native station turn"); return current;
         }

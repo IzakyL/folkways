@@ -22,6 +22,7 @@ import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
 import io.github.izakyl.folkways.plugins.cookery.KitchenStation;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -40,6 +41,18 @@ public final class TeapotStation implements KitchenStation {
     static boolean empty(TeapotBlockEntity pot) {
         return pot.getStatus() == ITeapot.PUT_INGREDIENT && pot.getInput().isEmpty() && pot.getResult().isEmpty()
             && pot.getTeaFluidId().equals(TeapotRecipeSerializer.EMPTY_TEA_FLUID);
+    }
+    @Override
+    public Optional<Stances> stances(ServerLevel level, WorldPos at) {
+        return KitchenStation.super.stances(level, at).flatMap(offered -> servingStances(level, at, offered));
+    }
+    static Optional<Stances> servingStances(ServerLevel level, WorldPos at, Stances offered) {
+        var working = new LinkedHashSet<WorldPos>();
+        for (var cup : TeaCups.places(level, at.block(level))) {
+            KitchenStation.reaching(level, offered, List.of(at, WorldPos.of(level, cup))).ifPresent(accepted ->
+                accepted.cells().stream().filter(footing -> !footing.cell().equals(cup)).forEach(working::add));
+        }
+        return Stances.of(working);
     }
     static List<Job> jobs(ServerLevel level) {
         List<Job> jobs = new ArrayList<>(level.getRecipeManager().getAllRecipesFor(com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes.TEAPOT_RECIPE).stream()
@@ -65,14 +78,16 @@ public final class TeapotStation implements KitchenStation {
     public Optional<Workshop> freeze(UUID key, UUID colony, ServerLevel level, WorldPos at,
                                      Stances stances, KitchenBookings bookings, Runnable changed) {
         if (pot(level, at).filter(TeapotStation::empty).isEmpty()) { return Optional.empty(); }
-        return Optional.of(new Bench(key, colony, at, stances, jobs(level), bookings, changed));
+        return servingStances(level, at, stances).map(working -> new Bench(key, colony, at, working, jobs(level), bookings, changed));
     }
     public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
                                 KitchenBookings bookings, Runnable changed) {
         if (!bookings.free(at)) { return List.of(); }
+        var working = servingStances(level, at, stances);
+        if (working.isEmpty()) { return List.of(); }
         return pot(level, at).flatMap(pot -> TeaBatch.read(pot, level)).filter(batch -> batch.colony().equals(colony)).map(batch -> {
             Job job = new Job(batch.recipe(), batch.fluid(), batch.ingredient(), batch.output(), batch.time(), batch.mode());
-            return List.of(Grown.of(new TeapotWork(colony, at, stances, job, bookings, changed, batch)));
+            return List.of(Grown.of(new TeapotWork(colony, at, working.get(), job, bookings, changed, batch)));
         }).orElse(List.of());
     }
     public void release(UUID colony, ServerLevel level, WorldPos at) { pot(level, at).filter(pot -> TeaBatch.ours(pot, colony)).ifPresent(TeaBatch::clear); }

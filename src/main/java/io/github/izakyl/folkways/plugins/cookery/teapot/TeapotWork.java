@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -102,6 +101,15 @@ final class TeapotWork implements Node, Workload.Within {
         var pot = TeapotStation.pot(level, at).orElseThrow();
         if (!fluid || !ingredient) { return new Turn.Piece(new Action(!fluid ? Kind.FLUID : Kind.INGREDIENT)); }
         if (pot.getStatus() != ITeapot.FINISHED) { return WAIT; }
+        if (cupPlace(level, who).isEmpty()) {
+            // All tables may be occupied temporarily. Keep the real finished tea and wait for a space.
+            // If another stance can serve it now, release this old placement so recovery publishes that stance.
+            if (new TeapotStation().stances(level, at).isPresent()) {
+                failed = CookeryRefusal.STATION_BUSY;
+                return LEAVE;
+            }
+            return WAIT;
+        }
         return new Turn.Piece(new Action(Kind.SERVE));
     }
     public void ended(ServerLevel level, Node piece, Ending how) { if (how instanceof Ending.Failed failure) { failed = failure.why(); } }
@@ -124,11 +132,8 @@ final class TeapotWork implements Node, Workload.Within {
         return feet(level, who).filter(feet -> Reach.withinReach(feet, target) && Reach.inSight(level, feet, target)).isPresent();
     }
     private Optional<BlockPos> cupPlace(ServerLevel level, Worker who) {
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            BlockPos cell = at.block(level).relative(side);
-            if (level.isLoaded(cell) && level.getBlockState(cell).isAir()
-                    && level.getBlockState(cell.below()).isFaceSturdy(level, cell.below(), Direction.UP)
-                    && feet(level, who).filter(feet -> !feet.equals(cell)).isPresent() && reachable(level, who, cell)) { return Optional.of(cell); }
+        for (BlockPos cell : TeaCups.places(level, at.block(level))) {
+            if (feet(level, who).filter(feet -> !feet.equals(cell)).isPresent() && reachable(level, who, cell)) { return Optional.of(cell); }
         }
         return Optional.empty();
     }
