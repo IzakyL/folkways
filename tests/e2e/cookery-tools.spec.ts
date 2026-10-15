@@ -323,7 +323,8 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     }
     evidence.rackMarked = await markSouthRack(server, client, playerName, cells.rack, stage);
     await put(server, stage, cells.supply, 0, "minecraft:iron_ingot", 3);
-    await put(server, stage, cells.supply, 1, "minecraft:oak_planks", 1);
+    // A native stick recipe needs two planks; the extra knife is still made from raw materials.
+    await put(server, stage, cells.supply, 1, "minecraft:oak_planks", 2);
     await world.command(server, "gamemode survival " + playerName);
     const read = async (mode: string, phase: string) => {
       const value = await observe(server, stage, cells!, playerName, mode, phase);
