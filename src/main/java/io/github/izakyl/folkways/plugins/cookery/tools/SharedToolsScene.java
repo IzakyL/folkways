@@ -84,7 +84,7 @@ public final class SharedToolsScene {
         first.hold(scene, ItemStack.EMPTY);
         scene.world().modifyBlockEntity(rack, KitchenwareRacksBlockEntity.class,
             holder -> holder.setItemLeft(new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get())));
-        scene.overlay().showText(95).text("Want two tasks to run at once? Set an explicit maintain order for two knives. Existing supply orders are respected, while an unreachable or unloaded tool is not mistaken for a destroyed one.")
+        scene.overlay().showText(95).text("For two parallel tasks, set a knife maintain order with both its minimum and target at two. Actual borrowed knives promised back to that store still count, so borrowing them does not manufacture spare copies.")
             .pointAt(util.vector().topOf(store)).placeNearTarget().attachKeyFrame();
         scene.idle(105);
         scene.world().modifyBlockEntity(rack, KitchenwareRacksBlockEntity.class,
