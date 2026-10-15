@@ -11,6 +11,10 @@ Saves, data pack formats and the Java API may still change between versions.
 - **A colony is the blocks you mark.** A Colony Book founds the colony. Clicking a chest,
   a bed or a work station with it makes that block part of the colony. Nothing is claimed
   by fencing off land.
+- **Colonies belong to players, not books.** Whoever founds a colony keeps it, invites other
+  players from its Members page (they join once they accept), and alone can end it. One
+  player can keep several colonies and switch between them from the panel's title. Any
+  Colony Book opens the colony you are acting for, so a lost or stolen book loses nothing.
 - **Residents plan their own day.** Each trade (farm, herd, fish, haul, craft, build,
   patrol, drive, dispatch) is ranked per resident on the Workforce page. You rank trades,
   never tasks. The colony works out what to fetch, from where, in what order.
@@ -58,12 +62,13 @@ install.
 | [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib | Its built-in maid models become looks a colony can switch on, one by one or a whole pack at once. They are read from the installed mod and never copied or sent |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+ | The Colony Book aims along its third-person crosshair |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi) | Item filters in the colony panel open the recipe viewer's ingredient list |
+| [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+ | A colony's founder can hand it to their party: from then on the party's members keep the colony and its owner holds the founder's rights |
 
 ## Getting started
 
 1. Craft a **Colony Book** from a book.
-2. Right-click to open the colony panel and press **New Colony**. The book becomes the
-   colony's deed.
+2. Right-click to open the colony panel and press **New Colony**. You are the new
+   colony's founder; click the panel's title to switch colonies or found another.
 3. Left-click chests, beds and work stations (crafting table, furnace, …) to add them to
    the colony.
 4. Stock some food and leave a free bed. Newcomers arrive over time; let them in from the

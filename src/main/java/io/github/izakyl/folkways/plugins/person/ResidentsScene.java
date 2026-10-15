@@ -166,7 +166,7 @@ public final class ResidentsScene {
             util.select().fromTo(3, 1, 4, 3, 2, 4), 90);
         scene.overlay()
             .showText(90)
-            .text("Pointing the book at one of your residents strikes him off the roster. If one dies, everyone carrying the colony's book is told.")
+            .text("Pointing the book at one of your residents strikes him off the roster. If one dies, everyone who keeps the colony is told.")
             .pointAt(residentA.at().add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();

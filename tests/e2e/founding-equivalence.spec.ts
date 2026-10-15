@@ -53,14 +53,13 @@ public final class Task {
         if (player == null) {
             throw Fail.notFound("no online player named " + who);
         }
-        Object book = call(player, "getMainHandItem");
-        Object bound = maybe(callStatic(BOOK_ITEM, "boundColonyId", book)).orElse(null);
-        out.put("book_bound", Boolean.valueOf(bound != null));
+        Object bound = maybe(callStatic(CURRENT, "id", player)).orElse(null);
+        out.put("acts_for_colony", Boolean.valueOf(bound != null));
         if (bound == null) {
-            throw Fail.notFound("the main hand book carries no folkways:colony_id", out);
+            throw Fail.notFound("the player acts for no colony", out);
         }
         out.put("colony_id", String.valueOf(bound));
-        out.put("holds_book_bound_to", callStatic(BOOK_ITEM, "holdsBookBoundTo", player, bound));
+        out.put("holds_book_for", callStatic(BOOK_ITEM, "holdsBookFor", player, bound));
 
         Object colony = maybe(callStatic(GROUND, "of", server, bound)).orElse(null);
         out.put("registry_present", Boolean.valueOf(colony != null));
@@ -185,6 +184,7 @@ public final class Task {
     }
 
     private static final String BOOK_ITEM = "io.github.izakyl.folkways.front.engine.item.ColonyBookItem";
+    private static final String CURRENT = "io.github.izakyl.folkways.front.engine.charter.CurrentColony";
     private static final String GROUND = "io.github.izakyl.folkways.front.engine.colony.ColonyGround";
     private static final String STORE = "folkways:store";
     private static final String DOMAINS = "io.github.izakyl.folkways.core.api.colony.Contributions";
@@ -275,8 +275,8 @@ async function dump(server: any, playerName: string, origin: Vec): Promise<Colon
 function substantial(state: ColonyTaskValue, path: string) {
   const seen = () => ` (the ${path} dump read ${JSON.stringify(state)})`;
 
-  expect(state.book_bound, `after ${path} founding the main-hand book is not bound to the colony${seen()}`).toBe(true);
-  expect(state.holds_book_bound_to, `after ${path} founding holdsBookBoundTo does not recognize the book${seen()}`).toBe(true);
+  expect(state.acts_for_colony, `after ${path} founding the player acts for no colony${seen()}`).toBe(true);
+  expect(state.holds_book_for, `after ${path} founding holdsBookFor does not recognize the book in hand${seen()}`).toBe(true);
   expect(state.registry_present, `the colony minted by ${path} founding is not in the registry${seen()}`).toBe(true);
   expect(state.roster, `the ${path} founding roster does not hold ${RESIDENTS} people${seen()}`).toBe(RESIDENTS);
   expect(state.members, `the ${path} founding member cells are not "${RESIDENTS} beds + 1 food chest"${seen()}`)

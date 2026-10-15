@@ -1,15 +1,14 @@
 package io.github.izakyl.folkways.front.engine.item;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.front.api.Shape;
+import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
+import io.github.izakyl.folkways.front.engine.charter.LegacyBooks;
 import io.github.izakyl.folkways.front.engine.colony.ColonyBoards;
-import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysDataComponents;
 import io.github.izakyl.folkways.front.ui.screen.ColonyShell;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -21,6 +20,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 
+// The book is how a player reaches the colony they act for, not what lets them: any colony book opens the panel and
+// marks the world for whichever colony the player has chosen, if they keep it.
 public final class ColonyBookItem extends Item {
     public ColonyBookItem(Properties properties) {
         super(properties);
@@ -33,9 +34,10 @@ public final class ColonyBookItem extends Item {
         if (!(level instanceof ServerLevel serverLevel) || !(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResult.sidedSuccess(level.isClientSide);
         }
+        LegacyBooks.takeUp(serverPlayer, stack);
         // A block the colony keeps a board for opens on that board; anything else opens the colony's own panel.
         BlockPos at = context.getClickedPos();
-        if (liveColony(serverLevel, stack, serverPlayer)
+        if (CurrentColony.of(serverPlayer)
                 .flatMap(colony -> ColonyBoards.firstAt(serverLevel, colony, at)).isPresent()) {
             ColonyShell.openAt(serverPlayer, at);
         } else {
@@ -47,29 +49,11 @@ public final class ColonyBookItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
-        if (level instanceof ServerLevel serverLevel && player instanceof ServerPlayer serverPlayer) {
-            open(serverLevel, stack, serverPlayer);
+        if (player instanceof ServerPlayer serverPlayer) {
+            LegacyBooks.takeUp(serverPlayer, stack);
+            ColonyShell.open(serverPlayer);
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
-    }
-
-    private static void open(ServerLevel level, ItemStack stack, ServerPlayer player) {
-        liveColony(level, stack, player);
-        ColonyShell.open(player);
-    }
-
-    public static Optional<Colony> liveColony(ServerLevel level, ItemStack stack, Player player) {
-        Optional<UUID> bound = boundColonyId(stack);
-        if (bound.isPresent() && ColonyGround.razed(level, bound.get())) {
-            stack.remove(FolkwaysDataComponents.COLONY_ID.get());
-            player.displayClientMessage(Component.translatable("folkways.colony.razed.book"), true);
-            return Optional.empty();
-        }
-        return bound.flatMap(id -> ColonyGround.of(level.getServer(), id));
-    }
-
-    public static Optional<UUID> boundColonyId(ItemStack stack) {
-        return Optional.ofNullable(stack.get(FolkwaysDataComponents.COLONY_ID.get()));
     }
 
     public static Shape.Gesture gesture(ItemStack stack) {
@@ -81,39 +65,18 @@ public final class ColonyBookItem extends Item {
         stack.set(FolkwaysDataComponents.BOOK_GESTURE.get(), gesture);
     }
 
-    public static Optional<ItemStack> heldBookBoundTo(Player player, UUID colonyId) {
+    public static Optional<ItemStack> heldBook(Player player) {
         for (InteractionHand hand : InteractionHand.values()) {
             ItemStack stack = player.getItemInHand(hand);
-            if (stack.getItem() instanceof ColonyBookItem && boundColonyId(stack).filter(colonyId::equals).isPresent()) {
+            if (stack.getItem() instanceof ColonyBookItem) {
                 return Optional.of(stack);
             }
         }
         return Optional.empty();
     }
 
-    public static boolean holdsBookBoundTo(Player player, UUID colonyId) {
-        return heldBookBoundTo(player, colonyId).isPresent();
+    // A book in hand, while the player acts for that colony.
+    public static boolean holdsBookFor(Player player, UUID colonyId) {
+        return heldBook(player).isPresent() && CurrentColony.id(player).filter(colonyId::equals).isPresent();
     }
-
-    public static boolean carriesBookBoundTo(Player player, UUID colonyId) {
-        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-            ItemStack stack = player.getInventory().getItem(slot);
-            if (stack.getItem() instanceof ColonyBookItem
-                    && boundColonyId(stack).filter(colonyId::equals).isPresent()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static UUID bindNewColony(ItemStack stack, ServerLevel level) {
-        UUID minted = ColonyGround.found(level).id();
-        stack.set(FolkwaysDataComponents.COLONY_ID.get(), minted);
-        return minted;
-    }
-
-    public static void linkExistingColony(ItemStack stack, UUID colonyId) {
-        stack.set(FolkwaysDataComponents.COLONY_ID.get(), colonyId);
-    }
-
 }

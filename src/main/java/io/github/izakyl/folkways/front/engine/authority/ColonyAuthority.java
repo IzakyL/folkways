@@ -2,6 +2,8 @@ package io.github.izakyl.folkways.front.engine.authority;
 
 import com.lowdragmc.lowdraglib2.gui.holder.ModularUIContainerMenu;
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.front.engine.charter.Charters;
+import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
 import io.github.izakyl.folkways.front.engine.colony.Residents;
 import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
@@ -11,8 +13,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
 
+// A player acting for a colony they keep. Whatever names the colony (an open panel, a block it holds, the colony the
+// player has chosen), the player must be among its keepers, or there is no authority at all.
 public final class ColonyAuthority {
 
     public interface Panel {
@@ -37,26 +40,28 @@ public final class ColonyAuthority {
 
     private static Optional<ColonyAuthority> byContext(ServerPlayer player, Optional<AtBlock> at) {
         ServerLevel level = player.serverLevel();
+        MinecraftServer server = level.getServer();
         Optional<UUID> panel = openPanelColony(player);
         if (panel.isPresent()) {
-            return ColonyGround.of(level.getServer(), panel.get())
+            return ColonyGround.of(server, panel.get())
+                .filter(colony -> kept(player, colony))
                 .map(colony -> new ColonyAuthority(colony, at));
         }
-        Optional<Colony> byContainer = at.flatMap(block -> ColonyGround.ofBlock(level, block.pos()));
+        Optional<Colony> byContainer = at.flatMap(block -> ColonyGround.ofBlock(level, block.pos()))
+            .filter(colony -> kept(player, colony));
         if (byContainer.isPresent()) {
             return Optional.of(new ColonyAuthority(byContainer.get(), at));
         }
-        return heldBookColony(player)
-            .flatMap(id -> ColonyGround.of(level.getServer(), id))
-            .map(colony -> new ColonyAuthority(colony, at));
+        return CurrentColony.of(player).map(colony -> new ColonyAuthority(colony, at));
     }
 
+    // Through the book in hand, for the colony the player has chosen: what a click out in the world acts with.
     public static Optional<ColonyAuthority> ofHeldBook(ServerPlayer player, UUID colonyId,
             Optional<BlockPos> named) {
-        if (!ColonyBookItem.holdsBookBoundTo(player, colonyId)) {
+        if (!ColonyBookItem.holdsBookFor(player, colonyId)) {
             return Optional.empty();
         }
-        Optional<Colony> colony = ColonyGround.of(player.serverLevel().getServer(), colonyId);
+        Optional<Colony> colony = CurrentColony.of(player);
         if (colony.isEmpty()) {
             return Optional.empty();
         }
@@ -83,19 +88,13 @@ public final class ColonyAuthority {
         return Residents.of(colony, server, residentId).map(OwnedResident::new);
     }
 
+    private static boolean kept(ServerPlayer player, Colony colony) {
+        return Charters.member(player.getServer(), colony, player.getUUID());
+    }
+
     private static Optional<UUID> openPanelColony(ServerPlayer player) {
         return player.containerMenu instanceof ModularUIContainerMenu menu
             && menu.uiHolder instanceof Panel panel
             ? panel.colonyId() : Optional.empty();
-    }
-
-    private static Optional<UUID> heldBookColony(ServerPlayer player) {
-        for (InteractionHand hand : InteractionHand.values()) {
-            Optional<UUID> bound = ColonyBookItem.boundColonyId(player.getItemInHand(hand));
-            if (bound.isPresent()) {
-                return bound;
-            }
-        }
-        return Optional.empty();
     }
 }

@@ -122,6 +122,22 @@ url = "https://cdn.modrinth.com/data/kepjj2sy/versions/woekHsje/ShoulderSurfing-
 sha512 = "4497d2f8a992d6d8985b1a6fa7018158a877521052302682866f89171d14eafa7c6b75d92c6e08531003476bc292f71c67c7e4f34b8c1a6864074a3b0dcd7e75"
 target = []
 
+# A colony can be handed to an FTB Teams party, which then says who keeps it; installed only by the ftbteams profile.
+[mods.ftbteams]
+url = "https://maven.ftb.dev/releases/dev/ftb/mods/ftb-teams-neoforge/2101.1.11/ftb-teams-neoforge-2101.1.11.jar"
+sha512 = "21c9350c6c7ec54ee54b74f2bdc0a44f91005bedda3caf27d673b2f2bcad1dbef5aec970201ec8e959db2a1743ceb2e24ae99a9e36744dce740a0ab1dad01c52"
+target = []
+
+[mods.ftblibrary]
+url = "https://maven.ftb.dev/releases/dev/ftb/mods/ftb-library-neoforge/2101.1.37/ftb-library-neoforge-2101.1.37.jar"
+sha512 = "36f7e2fd41de638b044ad2b391f69f276ab28df3d86cf9d83638a2e0432ef151e1737ce60d671901d0a3b49424c9ba1a09c0293fc0c6637871020b46feae9159"
+target = []
+
+[mods.architectury]
+url = "https://cdn.modrinth.com/data/lhGA9TYQ/versions/1IiqEQGl/architectury-13.0.11-neoforge.jar"
+sha512 = "d9f7c3bb8162577dfb461ffdf04bd6a3563c7586934a0e2a744c14421beffb8286f0d88d4c758317003f20f99fe8072a39b9d675af061e036970d36db36027f0"
+target = []
+
 # Measures folkways itself, mixins included; off unless BLOCKWRIGHT_COVERAGE=1 (npm run test:coverage).
 [coverage]
 mods = ["folkways"]
@@ -288,3 +304,9 @@ shouldersurfing = { target = ["client"] }
 # The e2e pair with Sable on both sides, for the aboard twin of each spec and the Sable-only specs.
 [profile.sable.mods]
 sable = { target = ["server", "client"] }
+
+# The e2e pair with FTB Teams on both sides, for a colony handed to a party.
+[profile.ftbteams.mods]
+ftbteams = { target = ["server", "client"] }
+ftblibrary = { target = ["server", "client"] }
+architectury = { target = ["server", "client"] }

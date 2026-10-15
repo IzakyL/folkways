@@ -15,11 +15,12 @@ public final class PageKinds {
     public static final PageKind CITIZENS =
         core("residents", "player_head", "residents");
     public static final PageKind METRICS = core("metrics", "chest", "colony_panel");
+    public static final PageKind MEMBERS = core("members", "bell", "colony_panel");
     public static final PageKind LESSONS = core("lessons", "knowledge_book", "basics");
     public static final PageKind SETTINGS = core("settings", "comparator", "colony_panel");
 
     public static final List<PageKind> CORE =
-        List.of(CITIZENS, METRICS, LESSONS, SETTINGS);
+        List.of(CITIZENS, METRICS, MEMBERS, LESSONS, SETTINGS);
 
     // Listed last, under the preferences heading, below every plugin's page.
     public static final List<PageKind> TRAILING = List.of(LESSONS, SETTINGS);
@@ -59,6 +60,7 @@ public final class PageKinds {
     public static void registerUi(RegisteringUi event) {
         event.page(CITIZENS.id(), ResidentsPage::new);
         event.page(METRICS.id(), MetricsPage::create);
+        event.page(MEMBERS.id(), MembersPage::new);
         event.page(LESSONS.id(), LessonsPage::create);
         event.page(SETTINGS.id(), SettingsPage::of);
     }

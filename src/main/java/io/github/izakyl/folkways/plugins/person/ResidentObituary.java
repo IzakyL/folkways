@@ -21,7 +21,7 @@ public final class ResidentObituary {
             resident.getCombatTracker().getDeathMessage(),
             Component.translatable("chat.coordinates", where.getX(), where.getY(), where.getZ()));
         for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
-            if (resident.colonyId().filter(id -> Books.carried(player, id)).isPresent()) {
+            if (resident.colonyId().filter(id -> Books.keeps(player, id)).isPresent()) {
                 player.sendSystemMessage(notice);
             }
         }

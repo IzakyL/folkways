@@ -22,11 +22,12 @@ import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
 import io.github.izakyl.folkways.front.api.ui.Windows;
 import io.github.izakyl.folkways.front.engine.authority.ColonyAuthority;
+import io.github.izakyl.folkways.front.engine.charter.Charters;
+import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.front.engine.colony.ColonyBoards;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
 import io.github.izakyl.folkways.front.engine.colony.ColonySites;
 import io.github.izakyl.folkways.front.engine.colony.SiteBoard;
-import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
 import io.github.izakyl.folkways.front.engine.net.FolkwaysUiNetworkEvents;
 import io.github.izakyl.folkways.front.ui.UiRegistrations;
 import java.util.LinkedHashMap;
@@ -38,11 +39,11 @@ import java.util.WeakHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
 
 public final class ColonyShell
     implements FolkwaysUI, PlayerUIMenuType.PlayerUIHolder, ColonyAuthority.Panel {
@@ -87,7 +88,7 @@ public final class ColonyShell
     private ColonyShell(Player player, Optional<BlockPos> at, boolean atSite) {
         site = at;
         this.atSite = atSite;
-        colonyId = heldColonyId(player).or(() -> siteColonyId(player, at));
+        colonyId = CurrentColony.id(player).or(() -> siteColonyId(player, at));
     }
 
     private static Optional<ResourceLocation> answeringPage(Player player, Optional<BlockPos> at) {
@@ -106,6 +107,7 @@ public final class ColonyShell
             return Optional.empty();
         }
         return at.flatMap(pos -> ColonyGround.ofBlock(serverPlayer.serverLevel(), pos))
+            .filter(colony -> Charters.member(serverPlayer.getServer(), colony, serverPlayer.getUUID()))
             .map(Colony::id);
     }
 
@@ -207,18 +209,18 @@ public final class ColonyShell
             ? Optional.of(shell) : Optional.empty();
     }
 
-    private static Optional<UUID> heldColonyId(Player player) {
-        for (InteractionHand hand : InteractionHand.values()) {
-            Optional<UUID> bound = ColonyBookItem.boundColonyId(player.getItemInHand(hand));
-            if (bound.isPresent()) {
-                return bound;
-            }
-        }
-        return Optional.empty();
-    }
-
     public static void open(ServerPlayer player) {
         PlayerUIMenuType.openUI(player, ID);
+    }
+
+    // The panel again, for another colony: on the next tick, once the press that asked for it is done with this one.
+    static void reopen(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        server.tell(new TickTask(server.getTickCount(), () -> {
+            if (!player.hasDisconnected()) {
+                open(player);
+            }
+        }));
     }
 
     /** The window of one block the colony holds: its board alone, without the colony's other pages. */
@@ -246,6 +248,14 @@ public final class ColonyShell
         Window panel = desk.panel(Window.of("colony",
             Component.translatable("folkways.panel.title"),
             0f, 0f, PANEL_WIDTH, PANEL_HEIGHT, MIN_WIDTH, MIN_HEIGHT));
+        // The title names the colony, and pressed, lists the others the player keeps in place of the pages.
+        boolean[] choosing = {false};
+        boolean[] settled = {false};
+        Button heading = new Button().setText(Component.translatable("folkways.panel.title"));
+        heading.layout(layout -> layout.widthAuto().flexShrink(1).minWidth(0).height(Window.TITLE_HEIGHT - 4));
+        heading.setOnClick(event -> choosing[0] = !choosing[0]);
+        Tokens.name(heading, "folkways.charter.heading");
+        panel.lead(heading);
         panel.open();
         panel.onDismiss(() -> {
             if (player instanceof ServerPlayer serverPlayer) {
@@ -299,7 +309,8 @@ public final class ColonyShell
                 .flexGrow(1).flexShrink(1).minHeight(0).gapAll(Rows.GAP))
             .addChildren(nav, pane);
 
-        UIElement founding = founding(player);
+        UIElement chooser = new Chooser().build(player, () -> choosing[0] = false);
+        chooser.setDisplay(false);
         UIElement configuration = Rows.page();
         configuration.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
         Tokens.name(configuration, "folkways.selection.page");
@@ -309,7 +320,7 @@ public final class ColonyShell
         settings.setDisplay(false);
         configuration.addChildren(draft, settings);
         configuration.setDisplay(false);
-        panel.body().addChildren(founding, workspace, configuration);
+        panel.body().addChildren(chooser, workspace, configuration);
         desk.root().addSyncValue(DataBindingBuilder.tagS2C(() -> selectionSettings.reading(player))
             .onSyncReceived(tag -> {
                 editingSelection = selectionSettings.show(player, tag);
@@ -336,7 +347,8 @@ public final class ColonyShell
             boolean configuring = drawing || editingSelection;
             configuration.setDisplay(configuring);
             draft.setDisplay(drawing && !editingSelection);
-            workspace.setDisplay(!configuring && !founding.isDisplayed());
+            chooser.setDisplay(!configuring && (!settled[0] || choosing[0]));
+            workspace.setDisplay(!configuring && !chooser.isDisplayed());
         });
 
         Map<ResourceLocation, Pane> panes = new LinkedHashMap<>();
@@ -351,10 +363,15 @@ public final class ColonyShell
 
         UIElement root = desk.root();
         root.addSyncValue(DataBindingBuilder.boolS2C(() -> Pages.colonyOf(player).isPresent())
-            .onSyncReceived(settled -> {
-                workspace.setDisplay(settled);
-                founding.setDisplay(!settled);
+            .onSyncReceived(kept -> {
+                settled[0] = kept;
+                workspace.setDisplay(kept && !choosing[0]);
+                chooser.setDisplay(!kept || choosing[0]);
             })
+            .build()
+            .getSyncValue());
+        root.addSyncValue(DataBindingBuilder.componentS2C(() -> heading(player))
+            .onSyncReceived(title -> heading.setText(title))
             .build()
             .getSyncValue());
         return new ModularUI(UI.of(root,
@@ -413,26 +430,13 @@ public final class ColonyShell
         });
     }
 
-    private static UIElement founding(Player player) {
-        Button create = new Button()
-            .setText(Component.translatable("folkways.action.new_colony"))
-            .setOnServerClick(event -> found(player));
-        Tokens.name(create, "folkways.colony.create");
-        UIElement strip = Rows.page().addChildren(
-            Rows.text(Component.translatable("folkways.colony.create")),
-            Rows.strip().addChildren(create));
-        strip.setDisplay(false);
-        return strip;
-    }
-
-    private static void found(Player player) {
-        if (!(player instanceof ServerPlayer serverPlayer)) {
-            return;
-        }
-        ItemStack book = serverPlayer.getMainHandItem();
-        if (book.getItem() instanceof ColonyBookItem && ColonyBookItem.boundColonyId(book).isEmpty()) {
-            ColonyBookItem.bindNewColony(book, serverPlayer.serverLevel());
-        }
+    private static Component heading(Player player) {
+        Component title = player instanceof ServerPlayer serverPlayer
+            ? Pages.colonyOf(player)
+                .map(colony -> Charters.title(serverPlayer.getServer(), Charters.of(serverPlayer.getServer(), colony)))
+                .orElseGet(() -> Component.translatable("folkways.panel.title"))
+            : Component.translatable("folkways.panel.title");
+        return Component.translatable("folkways.charter.heading", title);
     }
 
     private static Draw drawOf(PageKind kind) {

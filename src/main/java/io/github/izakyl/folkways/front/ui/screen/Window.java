@@ -266,6 +266,14 @@ public final class Window implements Pane {
         caption.setText(text);
     }
 
+    // A control in the caption's place, at the left of the title bar; the rest of the bar still drags the window.
+    public Window lead(UIElement control) {
+        UIElement rest = new UIElement().layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
+        titleBar.clearAllChildren();
+        titleBar.addChildren(control, rest, closeButton);
+        return this;
+    }
+
     public Window setOnClose(Runnable closed) {
         onClose = closed;
         return this;

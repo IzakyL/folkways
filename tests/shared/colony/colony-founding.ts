@@ -220,12 +220,10 @@ export async function foundColonyFast(
   const bind = await runColonyTask(server, BIND_COLONY, { player: playerName });
   const colonyId = String(bind.colony_id);
   evidence.steps.push({ step: "createColony", via: "task", ...bind });
-  const bound = await probe(server, `if data entity ${playerName} SelectedItem.components."folkways:colony_id"`);
-  if (!bound) {
+  if (!(await actsForColony(server, playerName))) {
     throw new Error(
-      `foundColonyFast: ColonyBookItem.bindNewColony returned ${colonyId}, `
-        + `but the main-hand book has no folkways:colony_id - it bound a book other than the one in hand, `
-        + `or that slot never synced back (task receipt ${JSON.stringify(bind)})`);
+      `foundColonyFast: the task founded ${colonyId}, but ${playerName} has no folkways:current_colony `
+        + `(task receipt ${JSON.stringify(bind)})`);
   }
   evidence.colonyId = colonyId;
 
@@ -294,15 +292,26 @@ export async function razeFoundingSet(server: MinecraftServer, origin: Vec, stag
   return { min, max, itemsLeft: (left.entities ?? []).length };
 }
 
+/** Whether the player has a colony they act for: the one any colony book in hand reaches. */
+export function actsForColony(server: MinecraftServer, playerName: string): Promise<boolean> {
+  return probe(server, `if data entity ${playerName} "neoforge:attachments"."folkways:current_colony"`);
+}
+
 export async function createColonyViaBook(server: MinecraftServer, client: MinecraftClient, playerName: string, standBlock: Vec,
   stage: Stage = GROUND) {
   const panel = await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
+  // A player who already keeps a colony opens on its pages; the panel's title lists their colonies and New Colony.
+  const elements = await panelElements(client);
+  if (!elements.some((element) => element.id === "folkways.colony.create" && element.width > 0)) {
+    await clickElement(client, { id: "folkways.charter.heading" });
+    await tick.sprint(server, 2);
+  }
   const click = await clickElement(client, { id: "folkways.colony.create" });
   await tick.sprint(server, 10);
   await screen.dismiss(client);
-  const bound = await probe(server, `if data entity ${playerName} SelectedItem.components."folkways:colony_id"`);
+  const bound = await actsForColony(server, playerName);
   if (!bound) {
-    throw new Error(`createColony: clicked folkways.colony.create, but the main-hand book is not bound to a colonyId`
+    throw new Error(`createColony: clicked folkways.colony.create, but ${playerName} acts for no colony`
       + ` (panel ${screenName(panel)}, click receipt ${JSON.stringify(summarize(click))})`);
   }
   return { step: "createColony", click: summarize(click), bound };

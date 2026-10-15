@@ -37,9 +37,9 @@ public final class BookModesScene {
         scene.world().showSection(util.select().fromTo(0, 0, 0, PLATE - 1, 1, PLATE - 1), Direction.DOWN);
         scene.idle(20);
 
-        ItemStack pointBook = SceneBooks.bound(Shape.Gesture.POINT);
-        ItemStack boxBook = SceneBooks.bound(Shape.Gesture.BOX);
-        ItemStack lineBook = SceneBooks.bound(Shape.Gesture.LINE);
+        ItemStack pointBook = SceneBooks.book(Shape.Gesture.POINT);
+        ItemStack boxBook = SceneBooks.book(Shape.Gesture.BOX);
+        ItemStack lineBook = SceneBooks.book(Shape.Gesture.LINE);
 
         Selection chestArea = util.select().position(chest);
         Selection framed = util.select().fromTo(3, 1, 1, 5, 2, 3);
@@ -53,7 +53,7 @@ public final class BookModesScene {
 
         scene.overlay()
             .showText(70)
-            .text("A left click with a bound book acts on the world. Which of three things it does shows on the book itself.")
+            .text("A left click with the book acts on the world. Which of three things it does shows on the book itself.")
             .pointAt(middle)
             .attachKeyFrame();
         scene.idle(80);

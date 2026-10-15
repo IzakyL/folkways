@@ -84,7 +84,7 @@ public final class SettingsPage implements Draw {
         table.addChildren(Rows.row().addChildren(
             Rows.icon(ItemStack.EMPTY),
             Rows.name(Component.translatable("folkways.settings.colony")),
-            razing.asker()));
+            razing.asker(player)));
 
         ScrollerView scroller = Rows.fills(Rows.box());
         scroller.addScrollViewChild(table);

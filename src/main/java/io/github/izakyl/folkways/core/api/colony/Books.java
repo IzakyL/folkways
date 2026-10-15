@@ -4,17 +4,16 @@ import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
 
 public final class Books {
 
     public interface Source {
 
-        Optional<UUID> boundColony(ItemStack stack);
-
+        // The colony a book in the player's hand reaches: the one they act for, while they hold any book.
         Optional<UUID> heldColony(Player player);
 
-        boolean carried(Player player, UUID colony);
+        // Whether the player is one of the colony's keepers.
+        boolean keeps(ServerPlayer player, UUID colony);
 
         Optional<Colony> acting(Player player);
 
@@ -24,17 +23,12 @@ public final class Books {
     private static final Source NONE = new Source() {
 
         @Override
-        public Optional<UUID> boundColony(ItemStack stack) {
-            return Optional.empty();
-        }
-
-        @Override
         public Optional<UUID> heldColony(Player player) {
             return Optional.empty();
         }
 
         @Override
-        public boolean carried(Player player, UUID colony) {
+        public boolean keeps(ServerPlayer player, UUID colony) {
             return false;
         }
 
@@ -58,16 +52,12 @@ public final class Books {
         held = source;
     }
 
-    public static Optional<UUID> boundColony(ItemStack stack) {
-        return held.boundColony(stack);
-    }
-
     public static Optional<UUID> heldColony(Player player) {
         return held.heldColony(player);
     }
 
-    public static boolean carried(Player player, UUID colony) {
-        return held.carried(player, colony);
+    public static boolean keeps(ServerPlayer player, UUID colony) {
+        return held.keeps(player, colony);
     }
 
     public static Optional<Colony> acting(Player player) {

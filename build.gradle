@@ -107,6 +107,8 @@ dependencies {
 
     compileOnly lib("modulargolems"), lib("l2library"), lib("l2core"), lib("l2serial")
 
+    compileOnly lib("ftbteams"), lib("architectury")
+
     compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
         transitive = false
     }

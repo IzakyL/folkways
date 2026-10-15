@@ -24,7 +24,7 @@ return Map.of("ok", true, "pages", pages);
   }),
 });
 
-/** Adds one zone of every volume delegation beside the player, in the colony their main-hand book names. */
+/** Adds one zone of every volume delegation beside the player, in the colony they act for. */
 export const ZONE_FIXTURES = defineTask<{ player: string }, { ok: true; zones: Array<{ id: string; type: string }> }>({
   name: "folkways.visual.zone-fixtures",
   side: "server",
@@ -37,7 +37,7 @@ export const ZONE_FIXTURES = defineTask<{ player: string }, { ok: true; zones: A
       "io.github.izakyl.folkways.front.engine.colony.ZoneDrafts",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
-      "io.github.izakyl.folkways.front.engine.item.ColonyBookItem",
+      "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
     ],
     body: `
 MinecraftServer server = ctx.server();
@@ -46,7 +46,7 @@ var player = server.getPlayerList().getPlayerByName(name);
 if (player == null) {
     throw Fail.notFound("no online player named " + name);
 }
-var colony = ColonyGround.of(server, ColonyBookItem.boundColonyId(player.getMainHandItem()).orElseThrow()).orElseThrow();
+var colony = CurrentColony.of(player).orElseThrow();
 var zones = new ArrayList<Map<String, Object>>();
 for (var type : Enrollments.delegations()) {
     if (!(type.shape() instanceof Shape.Volume)) continue;

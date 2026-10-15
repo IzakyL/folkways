@@ -18,7 +18,7 @@ npm run setup    # downloads the integration mods and writes .blockwright/mods.j
 ```
 
 `npm run setup` must run before the first Gradle build. The build compiles against the
-optional integrations (Create, JEI, EMI, GeckoLib, Modular Golems, Sable) from the jars it
+optional integrations (Create, JEI, EMI, GeckoLib, Modular Golems, Sable, FTB Teams) from the jars it
 downloads, as pinned in `blockwright.toml`.
 
 ## Layout

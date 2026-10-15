@@ -49,7 +49,7 @@ public final class ConductorSeat {
         if (!schedule && !held.isEmpty()) {
             return false;
         }
-        Optional<UUID> colony = Books.boundColony(player.getOffhandItem());
+        Optional<UUID> colony = Books.heldColony(player);
         if (colony.isEmpty()) {
             if (schedule && player.level().isClientSide) {
                 player.displayClientMessage(Component.translatable("folkways.rail.no_book"), true);

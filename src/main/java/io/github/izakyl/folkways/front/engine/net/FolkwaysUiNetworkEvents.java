@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.front.client.ColonyHighlightState;
 import io.github.izakyl.folkways.front.client.ColonyLookState;
 import io.github.izakyl.folkways.front.engine.authority.AtBody;
 import io.github.izakyl.folkways.front.engine.authority.ColonyAuthority;
+import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGhosts;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
@@ -83,6 +84,8 @@ public final class FolkwaysUiNetworkEvents {
             (packet, context) -> onClient(context, () -> ColonyLookState.handleLookAtSnapshot(packet)));
         registrar.playToClient(ColonyOverviewPacket.TYPE, ColonyOverviewPacket.STREAM_CODEC,
             (packet, context) -> onClient(context, () -> ColonyHighlightState.handleColonyOverview(packet)));
+        registrar.playToClient(CurrentColonyPacket.TYPE, CurrentColonyPacket.STREAM_CODEC,
+            (packet, context) -> onClient(context, () -> CurrentColony.heard(packet.colonyId())));
     }
 
     private static <T extends CustomPacketPayload> IPayloadHandler<T> asPlayer(BiConsumer<T, ServerPlayer> work) {

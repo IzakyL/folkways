@@ -9,13 +9,14 @@ import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.RegisteringUi;
 import io.github.izakyl.folkways.front.engine.authority.ColonyAuthority;
+import io.github.izakyl.folkways.front.engine.charter.FtbTeams;
+import io.github.izakyl.folkways.front.engine.charter.Teams;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.item.BookLookup;
 import io.github.izakyl.folkways.front.engine.item.FilterStackCodec;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysDataComponents;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
-import io.github.izakyl.folkways.front.engine.registry.FolkwaysRecipes;
 import io.github.izakyl.folkways.front.ui.screen.ColonyShell;
 import io.github.izakyl.folkways.front.ui.screen.PageKinds;
 import java.util.Optional;
@@ -23,6 +24,7 @@ import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 
 public final class Front {
@@ -44,10 +46,12 @@ public final class Front {
         FilterStacks.install(new FilterStackCodec());
         FrontLifecycle.install();
         BookLookup.install();
+        if (ModList.get().isLoaded(FtbTeams.MOD_ID)) {
+            Teams.install(new FtbTeams());
+        }
         FolkwaysDataComponents.register(modBus);
         FolkwaysItems.register(modBus);
         FolkwaysPlayerAttachments.register(modBus);
-        FolkwaysRecipes.register(modBus);
         ColonyShell.register();
         modBus.addListener(RegisteringUi.class, PageKinds::registerUi);
         modBus.addListener(BuildCreativeModeTabContentsEvent.class, event -> {

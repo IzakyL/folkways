@@ -9,19 +9,21 @@ import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
+import io.github.izakyl.folkways.front.engine.charter.CharterRefusal;
+import io.github.izakyl.folkways.front.engine.charter.Charters;
+import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
 import io.github.izakyl.folkways.front.engine.colony.ColonyMetrics;
-import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
-import io.github.izakyl.folkways.front.engine.registry.FolkwaysDataComponents;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
 
-// Ending a colony for good: a warning button, and a page that asks for the phrase typed out before it does it.
+// Ending a colony for good: a warning button, and a page that asks for the phrase typed out before it does it. Only
+// the founder may.
 final class Razing {
 
     private static final int WARNING_COLOR = 0xFFB0554A;
@@ -31,13 +33,25 @@ final class Razing {
     private Integer leaving;
 
     // The button that asks; it lives wherever the page puts it.
-    Button asker() {
+    Button asker(Player player) {
         return warning(named("folkways.metrics.raze", new Button()
             .setText(Component.translatable("folkways.metrics.raze"))
             .setOnServerClick(event -> {
+                if (!allowed(player)) {
+                    player.displayClientMessage(
+                        Component.translatable(CharterRefusal.FOUNDER_ONLY.translationKey()), true);
+                    return;
+                }
                 leaving = null;
                 confirming = true;
             })));
+    }
+
+    // Ending it is the founder's alone.
+    private static boolean allowed(Player player) {
+        Optional<Colony> colony = Pages.colonyOf(player);
+        return player instanceof ServerPlayer serverPlayer && colony.isPresent()
+            && Charters.founder(serverPlayer.getServer(), colony.get(), serverPlayer.getUUID());
     }
 
     // Shows the asking page in place of the given one while the player is deciding.
@@ -52,6 +66,7 @@ final class Razing {
         TextField field = new TextField();
         field.layout(layout -> layout.widthPercent(100).flexShrink(1).minWidth(0));
         field.bind(DataBindingBuilder.stringC2S(text -> typed = text).build());
+        Tokens.name(field, "folkways.metrics.raze.field");
 
         UIElement asking = Rows.page().addChildren(cost, prompt, field,
             Rows.actions(
@@ -101,7 +116,7 @@ final class Razing {
     }
 
     private void raze(Player player) {
-        if (!(player instanceof ServerPlayer serverPlayer) || !typed.trim().equals(phrase())) {
+        if (!(player instanceof ServerPlayer serverPlayer) || !typed.trim().equals(phrase()) || !allowed(player)) {
             return;
         }
         Optional<Colony> colony = Pages.colonyOf(player);
@@ -109,13 +124,10 @@ final class Razing {
         if (colony.isEmpty() || ColonyGround.razed(level, colony.get().id())) {
             return;
         }
+        List<UUID> keepers = Charters.of(level.getServer(), colony.get()).members();
         int sentOff = ColonyGround.raze(level, colony.get());
-        for (InteractionHand hand : InteractionHand.values()) {
-            ItemStack book = serverPlayer.getItemInHand(hand);
-            if (ColonyBookItem.boundColonyId(book).filter(colony.get().id()::equals).isPresent()) {
-                book.remove(FolkwaysDataComponents.COLONY_ID.get());
-            }
-        }
+        // Each keeper's book goes on to another colony they keep, or to none.
+        CurrentColony.refresh(level.getServer(), keepers);
         confirming = false;
         serverPlayer.closeContainer();
         serverPlayer.displayClientMessage(

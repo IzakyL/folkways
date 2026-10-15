@@ -9,6 +9,8 @@ const IMPORTS = [
   "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
   "io.github.izakyl.folkways.front.engine.colony.Endorsements",
   "io.github.izakyl.folkways.front.engine.colony.MemberToggle",
+  "io.github.izakyl.folkways.front.engine.charter.Charters",
+  "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
   "io.github.izakyl.folkways.front.engine.item.ColonyBookItem",
   "io.github.izakyl.folkways.front.api.notice.Attempt",
   "io.github.izakyl.folkways.front.api.notice.Notice",
@@ -43,7 +45,7 @@ private static String refusalKey(Attempt attempt) {
 }
 `;
 
-/** Binds the player's main-hand colony book to a new colony (or reports the one it already names). */
+/** Founds a colony for the player and makes it the one they act for (or reports the one they already act for). */
 export const BIND_COLONY = defineTask<{ player: string }, ColonyTaskValue>({
   name: "folkways.colony.bind",
   side: "server",
@@ -60,18 +62,20 @@ if (!(book.getItem() instanceof ColonyBookItem)) {
     throw Fail.invalid("main hand holds " + book.getItem() + ", not a folkways:colony_book");
 }
 
-Optional<UUID> already = ColonyBookItem.boundColonyId(book);
+Optional<UUID> already = CurrentColony.of(player).map(Colony::id);
 boolean minted = already.isEmpty();
-UUID id = minted
-    ? ColonyBookItem.bindNewColony(book, player.serverLevel())
-    : already.get();
+UUID id = already.orElseGet(() -> {
+    Colony founded = Charters.found(player, "");
+    CurrentColony.choose(player, founded);
+    return founded.id();
+});
 
 Map<String, Object> out = new LinkedHashMap<String, Object>();
 out.put("ok", Boolean.TRUE);
 out.put("minted", Boolean.valueOf(minted));
 out.put("colony_id", String.valueOf(id));
-out.put("bound_on_book", ColonyBookItem.boundColonyId(book)
-    .map(bound -> String.valueOf(bound)).orElse(null));
+out.put("current_colony", CurrentColony.id(player)
+    .map(current -> String.valueOf(current)).orElse(null));
 out.put("registry_has_colony", Boolean.valueOf(
     ColonyGround.of(server, id).isPresent()));
 return Sync.stamp(out);

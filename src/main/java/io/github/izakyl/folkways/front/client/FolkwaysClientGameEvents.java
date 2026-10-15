@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.front.engine.item.BookGestures;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
 import io.github.izakyl.folkways.front.engine.net.SetBookGesturePacket;
@@ -69,6 +70,7 @@ public final class FolkwaysClientGameEvents {
         Overhead.forget();
         Desk.forget();
         ShapePreview.clear();
+        CurrentColony.forgetOnClient();
     }
 
     @SubscribeEvent

@@ -60,7 +60,7 @@ public final class ColonyPanelScene {
             PonderScenery.body(scene, SceneBooks.resident(), util.vector().topOf(4, 0, 3), FACING_WEST);
         scene.idle(15);
 
-        ItemStack book = SceneBooks.bound();
+        ItemStack book = SceneBooks.book();
         Selection chestArea = util.select().position(chest);
         Selection stations = util.select().fromTo(table, furnace);
         Selection beds = util.select().fromTo(bedHead, bedFoot);
@@ -72,7 +72,7 @@ public final class ColonyPanelScene {
         scene.idle(55);
         scene.overlay()
             .showText(80)
-            .text("A right click with the bound book opens the colony panel. Its pages are listed down the left side, in three groups.")
+            .text("A right click with the book opens the colony panel. Its pages are listed down the left side, in three groups.")
             .pointAt(middle)
             .attachKeyFrame();
         scene.idle(90);

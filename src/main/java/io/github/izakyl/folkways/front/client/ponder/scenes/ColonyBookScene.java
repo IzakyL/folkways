@@ -48,8 +48,7 @@ public final class ColonyBookScene {
         scene.world().showSection(util.select().fromTo(0, 0, 0, PLATE - 1, 1, PLATE - 1), Direction.DOWN);
         scene.idle(20);
 
-        ItemStack blank = SceneBooks.blank();
-        ItemStack book = SceneBooks.bound();
+        ItemStack book = SceneBooks.book();
         Selection chestArea = util.select().position(chest);
         Selection sites = util.select().position(table).add(util.select().fromTo(bedHead, bedFoot));
         Selection refused = util.select().position(log);
@@ -57,23 +56,23 @@ public final class ColonyBookScene {
 
         scene.overlay()
             .showText(70)
-            .text("An empty colony book is crafted from a plain book. It belongs to no colony yet.")
+            .text("A colony book is crafted from a plain book. It is how you reach your colonies, not what makes them yours.")
             .pointAt(ground)
             .attachKeyFrame();
         scene.idle(80);
 
-        scene.overlay().showControls(ground, Pointing.DOWN, 50).rightClick().withItem(blank);
+        scene.overlay().showControls(ground, Pointing.DOWN, 50).rightClick().withItem(book);
         scene.idle(55);
         scene.overlay()
             .showText(100)
-            .text("A right click opens the colony panel. With the empty book in your main hand it offers one button, New Colony. Press it, and the book is the new colony's deed.")
+            .text("A right click opens the colony panel. Before you keep any colony it offers one button, New Colony. Press it, and you are the new colony's founder.")
             .pointAt(ground)
             .attachKeyFrame();
         scene.idle(110);
 
         scene.overlay()
             .showText(60)
-            .text("Craft that book together with a blank one to get a second deed for the same colony.")
+            .text("The colony goes with you, not the book: any colony book opens it. Click the title of the panel to switch between your colonies, or to found another.")
             .pointAt(ground)
             .attachKeyFrame();
         scene.idle(70);
@@ -83,7 +82,7 @@ public final class ColonyBookScene {
         scene.overlay().showOutline(PonderPalette.GREEN, "storage", chestArea, 70);
         scene.overlay()
             .showText(70)
-            .text("Left click a chest with the bound book and it joins the colony as storage. Click it again to take it back out.")
+            .text("Left click a chest with the book and it joins the colony as storage. Click it again to take it back out.")
             .pointAt(util.vector().blockSurface(chest, Direction.SOUTH))
             .placeNearTarget()
             .attachKeyFrame();
