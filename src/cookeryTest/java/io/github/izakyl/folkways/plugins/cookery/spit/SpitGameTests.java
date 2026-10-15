@@ -165,6 +165,27 @@ public final class SpitGameTests {
         helper.succeed();
     }
 
+    @net.minecraft.gametest.framework.GameTestGenerator
+    public static java.util.Collection<net.minecraft.gametest.framework.TestFunction> nativeCampfireRecipes() {
+        return List.of("baked_potato", "cooked_beef", "cooked_chicken", "cooked_cod", "cooked_mutton", "cooked_porkchop",
+            "cooked_rabbit", "cooked_salmon", "dried_kelp").stream().map(name -> new net.minecraft.gametest.framework.TestFunction(
+                "cookery_spit_matrix", "folkways:spit_matrix_" + name, "folkways:empty", 1000, 0L, true, helper -> {
+                    var id = net.minecraft.resources.ResourceLocation.withDefaultNamespace(name + "_from_campfire_cooking");
+                    var recipe = helper.getLevel().getRecipeManager().getAllRecipesFor(net.minecraft.world.item.crafting.RecipeType.CAMPFIRE_COOKING)
+                        .stream().filter(holder -> holder.id().equals(id)).findFirst().orElseThrow();
+                    ItemStack input = recipe.value().getIngredients().getFirst().getItems()[0];
+                    ItemStack output = recipe.value().getResultItem(helper.getLevel().registryAccess()).copyWithCount(1);
+                    Rig rig = new Rig(helper, false, input, output); SpitWork work = rig.load(); long started = rig.level.getGameTime();
+                    afterCooking(rig, ready -> {
+                        helper.assertTrue(ready.level.getGameTime() - started >= recipe.value().getCookingTime(), id + ": the real native clock elapsed");
+                        helper.assertTrue(ready.step(work) instanceof Outcome.Done, id + ": native cooking is safely served with the actual knife");
+                        helper.assertValueEqual(ready.count(output.getItem()), 2L, id + ": both native portions enter the real pack");
+                        helper.assertValueEqual(ready.count(input.getItem()), 0L, id + ": the two real ingredients were spent once");
+                        helper.assertTrue(ready.spit().cookedItem.isEmpty() && ready.spit().cookingItem.isEmpty() && ready.drops().isEmpty(), id + ": no physical or loose duplicate remains");
+                    });
+                })).toList();
+    }
+
     private static void afterCooking(Rig rig, Consumer<Rig> check) {
         rig.helper.startSequence().thenWaitUntil(() -> rig.helper.assertTrue(rig.spit().cookTime <= 0 && rig.spit().cookingItem.isEmpty(),
             "the real powered block ticker finishes the recipe")).thenExecute(() -> {
@@ -182,8 +203,14 @@ public final class SpitGameTests {
         final KitchenBookings bookings = new KitchenBookings();
         final SimpleContainer pack = new SimpleContainer(12);
         final ResidentEntity actor;
+        final ItemStack input;
+        final ItemStack output;
         Hold hold;
         Rig(GameTestHelper helper, boolean playerLower) {
+            this(helper, playerLower, new ItemStack(Items.BEEF), new ItemStack(Items.COOKED_BEEF));
+        }
+        Rig(GameTestHelper helper, boolean playerLower, ItemStack input, ItemStack output) {
+            this.input = input.copyWithCount(1); this.output = output.copyWithCount(1);
             this.helper = helper; level = helper.getLevel(); cell = helper.absolutePos(new BlockPos(2, 1, 2));
             for (int x = -1; x <= 1; x++) { for (int z = -1; z <= 1; z++) {
                 level.setBlockAndUpdate(cell.offset(x, -1, z), Blocks.STONE.defaultBlockState());
@@ -200,7 +227,7 @@ public final class SpitGameTests {
             actor.setNoAi(true);
             level.addFreshEntity(actor);
             stances = Stances.at(level, actor.blockPosition());
-            pack.setItem(0, new ItemStack(Items.BEEF, 2));
+            pack.setItem(0, input.copyWithCount(2));
             pack.setItem(1, new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get()));
         }
         void power(boolean on) {
@@ -211,7 +238,7 @@ public final class SpitGameTests {
         ShawarmaSpitBlockEntity spit() { return (ShawarmaSpitBlockEntity) level.getBlockEntity(part.block(level)); }
         SpitWork plan() {
             var bench = new SpitStation().freeze(UUID.randomUUID(), colony, level, at, stances, bookings, () -> {}).orElseThrow();
-            Produce wanted = Produce.of(CookeryContent.ID, new WorkSite.AtBlock(at), Goods.specOf(new ItemStack(Items.COOKED_BEEF)), 2, Produce.UNBOUNDED);
+            Produce wanted = Produce.of(CookeryContent.ID, new WorkSite.AtBlock(at), Goods.specOf(output), 2, Produce.UNBOUNDED);
             var option = bench.options(wanted, Grown.of(wanted)).getFirst();
             hold = option.holds().getFirst();
             helper.assertTrue(hold.take().isEmpty(), "the real tower is booked");
@@ -225,7 +252,10 @@ public final class SpitGameTests {
             return work;
         }
         Outcome step(SpitWork work) {
-            Node piece = ((Workload.Within.Turn.Piece) work.next(level, this)).node();
+            var turn = work.next(level, this);
+            helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "expected native spit action, got " + turn + "; refusal=" + work.refusal(level)
+                + "; input=" + spit().cookingItem + "; output=" + spit().cookedItem + "; time=" + spit().cookTime);
+            Node piece = ((Workload.Within.Turn.Piece) turn).node();
             Outcome result = Commit.run(level, piece, this);
             if (result instanceof Outcome.Done done) {
                 done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "the native output fits"));

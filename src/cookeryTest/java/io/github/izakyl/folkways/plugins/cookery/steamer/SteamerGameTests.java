@@ -232,6 +232,27 @@ public final class SteamerGameTests {
         helper.succeed();
     }
 
+    @net.minecraft.gametest.framework.GameTestGenerator
+    public static java.util.Collection<net.minecraft.gametest.framework.TestFunction> nativeSteamerRecipes() {
+        return List.of("mantou", "baozi", "qingtuan", "bamboo_tube_rice").stream().map(name -> new net.minecraft.gametest.framework.TestFunction(
+            "cookery_steamer_matrix", "folkways:steamer_matrix_" + name, "folkways:empty", 2000, 0L, true, helper -> {
+                var id = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "steamer/" + name);
+                var recipe = helper.getLevel().getRecipeManager().getAllRecipesFor(com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes.STEAMER_RECIPE)
+                    .stream().filter(holder -> holder.id().equals(id)).findFirst().orElseThrow();
+                ItemStack input = recipe.value().getIngredient().getItems()[0];
+                ItemStack output = recipe.value().getResultItem(helper.getLevel().registryAccess());
+                Rig rig = new Rig(helper, true, false, 2, input, output); SteamerWork work = rig.load(2); long started = rig.level.getGameTime();
+                afterCooking(rig, ready -> {
+                    helper.assertTrue(ready.level.getGameTime() - started >= recipe.value().getCookTick(), id + ": the actual native steaming time elapsed");
+                    helper.assertTrue(ready.step(work) instanceof Outcome.Done, id + ": native steamed food is actually taken");
+                    helper.assertValueEqual(ready.count(output.getItem()), (long) output.getCount() * 2, id + ": every actual native portion enters the pack");
+                    helper.assertValueEqual(ready.count(input.getItem()), 0L, id + ": both actual ingredients were spent once");
+                    helper.assertTrue(ready.steamer().getItems().stream().allMatch(ItemStack::isEmpty) && ready.drops().isEmpty(), id + ": no slot or loose duplicate remains");
+                    helper.assertTrue(ready.level.getBlockState(ready.cell).is(ModBlocks.STEAMER.get()), id + ": native serving never dismantles the station");
+                });
+            })).toList();
+    }
+
     private static void afterCooking(Rig rig, Consumer<Rig> check) {
         rig.helper.startSequence().thenWaitUntil(() -> rig.helper.assertTrue(SteamerStation.ripe(rig.steamer()),
             "the real heated native ticker steams the actual ingredients")).thenExecute(() -> {
@@ -250,8 +271,14 @@ public final class SteamerGameTests {
         final SimpleContainer pack = new SimpleContainer(12);
         final ResidentEntity actor;
         final int requested;
+        final ItemStack input;
+        final ItemStack output;
         Hold hold;
         Rig(GameTestHelper helper, boolean half, boolean stack, int requested) {
+            this(helper, half, stack, requested, new ItemStack(ModItems.RAW_DOUGH.get()), new ItemStack(ModItems.MANTOU.get()));
+        }
+        Rig(GameTestHelper helper, boolean half, boolean stack, int requested, ItemStack input, ItemStack output) {
+            this.input = input.copyWithCount(1); this.output = output.copy();
             this.helper = helper; level = helper.getLevel(); this.requested = requested;
             cell = helper.absolutePos(new BlockPos(2, 1, 2));
             for (int x = -1; x <= 1; x++) { for (int z = -1; z <= 1; z++) {
@@ -266,13 +293,13 @@ public final class SteamerGameTests {
             actor.setNoAi(true);
             level.addFreshEntity(actor);
             stances = Stances.at(level, actor.blockPosition());
-            pack.setItem(0, new ItemStack(ModItems.RAW_DOUGH.get(), requested));
+            pack.setItem(0, input.copyWithCount(requested));
         }
         SteamerBlockEntity lower() { return (SteamerBlockEntity) level.getBlockEntity(cell); }
         SteamerBlockEntity steamer() { return (SteamerBlockEntity) level.getBlockEntity(part.block(level)); }
         SteamerWork plan() {
             var bench = new SteamerStation().freeze(UUID.randomUUID(), colony, level, at, stances, bookings, () -> {}).orElseThrow();
-            Produce wanted = Produce.of(CookeryContent.ID, new WorkSite.AtBlock(at), Goods.specOf(new ItemStack(ModItems.MANTOU.get())), requested, Produce.UNBOUNDED);
+            Produce wanted = Produce.of(CookeryContent.ID, new WorkSite.AtBlock(at), Goods.specOf(output), (long) requested * output.getCount(), Produce.UNBOUNDED);
             var option = bench.options(wanted, Grown.of(wanted)).getFirst();
             hold = option.holds().getFirst();
             helper.assertTrue(hold.take().isEmpty(), "the whole steamer column is booked");
