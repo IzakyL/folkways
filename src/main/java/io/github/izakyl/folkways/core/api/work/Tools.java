@@ -32,6 +32,12 @@ public final class Tools {
         return List.copyOf(new LinkedHashSet<>(suppliedTools.values()));
     }
 
+    // A task-owned tool is reserved for its declared family, even if it also inherits a generic shovel or sword tag.
+    public static boolean sharedItem(ItemStack stack) {
+        return !stack.isEmpty() && suppliedTools.values().stream()
+            .anyMatch(goods -> io.github.izakyl.folkways.core.api.terms.Goods.matches(stack, goods));
+    }
+
     // Planning may schedule a missing shared tool only when its physical delivery is a declared prerequisite.
     public static boolean canPrepare(ResourceLocation kind, NodeSpec spec, List<ItemStack> held) {
         if (ResidentKinds.barehanded(kind, spec.vocation())) {
@@ -54,6 +60,10 @@ public final class Tools {
     }
 
     public static boolean answers(ItemStack stack, ToolNeed need) {
+        if (!(need instanceof ToolNeed.None) && sharedItem(stack) && shared(need)
+                .filter(goods -> io.github.izakyl.folkways.core.api.terms.Goods.matches(stack, goods)).isEmpty()) {
+            return false;
+        }
         return switch (need) {
             case ToolNeed.None ignored -> true;
             case ToolNeed.Ability(ItemAbility ability) -> !stack.isEmpty() && stack.canPerformAction(ability);

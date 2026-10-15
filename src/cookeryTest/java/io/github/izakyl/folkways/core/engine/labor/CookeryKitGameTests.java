@@ -47,9 +47,23 @@ public final class CookeryKitGameTests {
             helper.assertFalse(requests.stream().filter(message -> message instanceof Message.Submitted)
                 .map(message -> (Message.Submitted) message).flatMap(message -> message.work().nodes().stream())
                 .filter(node -> node instanceof Delivery).map(node -> (Delivery) node)
-                .anyMatch(delivery -> Goods.overlap(delivery.goods().spec(), ItemSpec.of(TagMod.KITCHEN_KNIFE))),
-                "three residents do not trigger three standing kitchen-knife deliveries");
+                .anyMatch(delivery -> io.github.izakyl.folkways.core.api.work.Tools.sharedGoods().stream()
+                    .anyMatch(family -> Goods.overlap(delivery.goods().spec(), family))),
+                "three residents do not request standing knives, shovels or sickles through any career kit");
         } finally { colony.raze(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aKitchenShovelCannotBeTakenAsAnOrdinaryBuildingShovel(GameTestHelper helper) {
+        ItemStack shovel = new ItemStack(ModItems.KITCHEN_SHOVEL.get());
+        helper.assertTrue(io.github.izakyl.folkways.core.api.work.Tools.sharedItem(shovel), "the actual native spatula is task-owned");
+        helper.assertTrue(io.github.izakyl.folkways.core.api.work.Tools.answers(shovel,
+            new io.github.izakyl.folkways.core.api.work.ToolNeed.Tagged(TagMod.KITCHEN_SHOVEL)), "the shared cooking family accepts its actual tool");
+        helper.assertFalse(io.github.izakyl.folkways.core.api.work.Tools.answers(shovel,
+            new io.github.izakyl.folkways.core.api.work.ToolNeed.Tagged(net.minecraft.tags.ItemTags.SHOVELS)), "a building task cannot steal the cooking spatula");
+        helper.assertTrue(io.github.izakyl.folkways.core.api.work.Tools.answers(net.minecraft.world.item.Items.IRON_SHOVEL.getDefaultInstance(),
+            new io.github.izakyl.folkways.core.api.work.ToolNeed.Tagged(net.minecraft.tags.ItemTags.SHOVELS)), "ordinary building shovels retain native eligibility");
         helper.succeed();
     }
 

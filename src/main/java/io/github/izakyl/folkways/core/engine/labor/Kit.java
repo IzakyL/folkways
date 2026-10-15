@@ -59,7 +59,8 @@ final class Kit {
         Set<Item> named = new LinkedHashSet<>();
         collect(tool, named);
         List<ItemSpec> kept = named.stream()
-            .filter(item -> KitRules.allows(colony, item))
+            .filter(item -> KitRules.allows(colony, item)
+                && !io.github.izakyl.folkways.core.api.work.Tools.sharedItem(item.getDefaultInstance()))
             .map(item -> ItemSpec.of(BuiltInRegistries.ITEM.getKey(item)))
             .toList();
         if (kept.size() == named.size()) {
