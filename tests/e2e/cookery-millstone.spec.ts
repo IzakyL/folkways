@@ -183,7 +183,10 @@ for(var entity:level.getAllEntities()){
     var goods=new LinkedHashMap<String,Integer>();for(var stack:body.get().pack().contents())if(!stack.isEmpty())goods.merge(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),stack.getCount(),Integer::sum);
     var row=new LinkedHashMap<String,Object>();row.put("uuid",entity.getUUID().toString());row.put("x",entity.getX());row.put("y",entity.getY());row.put("z",entity.getZ());
     row.put("local",Map.of("x",local.x,"y",local.y,"z",local.z));row.put("walked",entity.walkDist);row.put("bound",mill.isBoundTo((net.minecraft.world.entity.LivingEntity)entity));
-    row.put("outside",Math.max(Math.abs((int)Math.floor(local.x)-station.cell().getX()),Math.abs((int)Math.floor(local.z)-station.cell().getZ()))>=3);
+    // Native stepOn belongs to the nine blocks at center +/- 1. Check the whole body footprint,
+    // rather than requiring arrival at an extra padding cell beyond the navigation tolerance.
+    double half=entity.getBbWidth()/2.0;int cx=station.cell().getX(),cz=station.cell().getZ();
+    row.put("outside",local.x+half<=cx-1||local.x-half>=cx+2||local.z+half<=cz-1||local.z-half>=cz+2);
     row.put("exiting",entity.getPersistentData().contains("folkways.cookery.millstone.exit"));row.put("goods",goods);
     row.put("doing",body.get().doing().map(Object::toString).orElse(""));
     row.put("balk",body.get().balk().map(reason->Map.of("doing",reason.doing().toString(),"why",reason.why().translationKey(),"at",reason.at())).orElse(Map.of()));
