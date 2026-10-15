@@ -238,7 +238,10 @@ public final class SeedPresence implements Facing {
             Optional<ZoneView> marked = zone(level, zone);
             if (!enabled.getAsBoolean() || marked.isEmpty() || restore && !marked.get().settings().flag(RESTORE_GRASS) || !ground.in(level)
                     || bookings.cancelled(anchor, id(), generation) || !bookings.first(anchor, id())
-                    || !who.body().getUUID().equals(worker)) return Outcome.failed(SeedRefusal.AREA_CHANGED);
+                    || !who.body().getUUID().equals(worker)
+                    || Bodies.of(who.body()).filter(body -> body.licences().of(FarmingContent.trade()).isPresent()).isEmpty()) {
+                return Outcome.failed(SeedRefusal.AREA_CHANGED);
+            }
             if (budgets.apply(level).reserves().stream().noneMatch(reserve -> reserve.missing() > 0
                     && reserve.alternatives().stream().anyMatch(grassSeeds()::contains))) {
                 return new Outcome.Done(List.of(), List.of(), Optional.empty(), who.supplied());

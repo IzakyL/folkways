@@ -154,6 +154,8 @@ public final class CompostStation implements KitchenStation {
 
         public Outcome commit(ServerLevel level, Worker who) {
             if (!at.in(level) || bookings.cancelled(at, id(), generation) || !bookings.first(at, id())
+                    || io.github.izakyl.folkways.core.api.resident.body.Bodies.of(who.body())
+                        .filter(body -> body.licences().of(FarmingContent.trade()).isPresent()).isEmpty()
                     || !Reach.stanceHolding(who.body(), spec.stances())
                         .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
                         .filter(feet -> Reach.withinReach(feet, at.block(level))

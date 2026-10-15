@@ -247,6 +247,33 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty_large")
+    public static void aBookedSourceLosingItsOwnHatOrFarmingLicenceCannotSpendBoneMeal(GameTestHelper helper) {
+        for (boolean revokeLicence : List.of(false, true)) {
+            try (Fixture rig = new Fixture(helper)) {
+                rig.mark(true); rig.wearHat(); rig.body.pack().setItem(1, new ItemStack(Items.BONE_MEAL));
+                rig.presence.refresh(rig.level.getServer()); Node old = rig.source();
+                helper.assertTrue(old.planned(rig.level).isEmpty(), "the real source is adopted before the resident changes");
+                if (revokeLicence) {
+                    var trade = rig.body.licences().trade(io.github.izakyl.folkways.plugins.farming.FarmingContent.trade()).orElseThrow();
+                    rig.body.licences().allow(trade, false);
+                } else {
+                    ItemStack hat = rig.body.getItemBySlot(EquipmentSlot.HEAD);
+                    rig.body.setItemSlot(EquipmentSlot.HEAD, ItemStack.EMPTY); rig.body.pack().setItem(0, hat);
+                }
+                // This fixture's global enabled supplier deliberately stays true, like a second hat-wearing farmer.
+                helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(), "the ineligible worker's root is no longer wanted");
+                helper.assertTrue(Commit.run(rig.level, old, rig) instanceof Outcome.Failed, "the already adopted action rechecks its own actual worker");
+                helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 1L,
+                    "cancelling the worker leaves its one real bone meal unspent");
+                helper.assertTrue(rig.allowed.stream().noneMatch(cell -> rig.level.getBlockState(cell.above()).is(Blocks.SHORT_GRASS)),
+                    "no terrain is changed after hat or farming permission is withdrawn");
+                old.ended(rig.level, Ending.REVOKED);
+            }
+        }
+        helper.succeed();
+    }
+
     private static final class Fixture implements Worker, AutoCloseable {
         final ServerLevel level;
         final BlockPos center;
