@@ -128,8 +128,8 @@ public final class CookerySickleGameTests {
                 } else field.grow();
                 field.pack.setItem(1, new ItemStack(ModItems.SICKLE.get()));
                 Outcome.Done done = (Outcome.Done) Commit.run(field.level(), node(field, chores()), field.worker);
-                helper.assertTrue(done.made().stream().anyMatch(stack -> stack.is(field.crop.seed())),
-                    "native whole-harvest loot includes the actual seed");
+                helper.assertTrue(done.made().stream().anyMatch(stack -> stack.is(tea ? ModItems.FRESH_TEA_LEAVES.get() : field.crop.seed())),
+                    "native whole-harvest loot includes its real guaranteed product; tea seeds remain probabilistic");
                 helper.assertValueEqual(field.level().getBlockState(field.ground.above())
                     .getValue(tea ? TeaTreeBlock.AGE : CropBlock.AGE), 0,
                     "sickle harvest differs from the ordinary age-three/five pick");
