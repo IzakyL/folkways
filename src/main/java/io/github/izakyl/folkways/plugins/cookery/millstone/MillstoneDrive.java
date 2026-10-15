@@ -25,6 +25,7 @@ import io.github.izakyl.folkways.plugins.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.minecraft.world.phys.Vec3;
 
 /** Runtime permission never survives a save; the real ingredients and the obligation to leave do. */
@@ -76,6 +79,7 @@ public final class MillstoneDrive {
         Conveyance path;
         float started;
         boolean awaited;
+        long stepped = Long.MIN_VALUE;
         Exit(WorldPos at, UUID colony, WorldPos target, boolean awaited) {
             this.at = at; this.colony = colony; this.target = target; this.awaited = awaited;
         }
@@ -195,6 +199,7 @@ public final class MillstoneDrive {
 
     private static void queueExit(Mob actor, WorldPos at, UUID colony, WorldPos target, boolean awaited) {
         if (!actor.isAlive() || actor.isPassenger()) { return; }
+        installExitGoal(actor);
         Exit existing = EXITS.get(actor.getUUID());
         if (existing != null) { existing.awaited = awaited; return; }
         EXITS.put(actor.getUUID(), new Exit(at, colony, target, awaited));
@@ -218,6 +223,8 @@ public final class MillstoneDrive {
             EXITS.put(actor.getUUID(), exit);
         }
         if (!actor.isAlive() || actor.isPassenger() || !exit.at.in(level)) { return false; }
+        if (exit.stepped == level.getGameTime()) { return false; }
+        exit.stepped = level.getGameTime();
         if (exit.target == null || !Footing.withFeetAt(level, exit.target.block(level))) {
             if (exit.path != null) { exit.path.release(level, actor); }
             exit.path = null;
@@ -247,6 +254,39 @@ public final class MillstoneDrive {
         return false;
     }
 
+    public static void joined(EntityJoinLevelEvent event) {
+        if (event.getLevel() instanceof ServerLevel && event.getEntity() instanceof Mob actor && exiting(actor)) {
+            installExitGoal(actor);
+        }
+    }
+
+    private static void installExitGoal(Mob actor) {
+        if (actor.goalSelector.getAvailableGoals().stream().noneMatch(goal -> goal.getGoal() instanceof ExitGoal)) {
+            actor.goalSelector.addGoal(-1, new ExitGoal(actor));
+        }
+    }
+
+    // A destroyed colony has no urge source left. Its former residents still finish their physical exit.
+    private static final class ExitGoal extends Goal {
+        private final Mob actor;
+        ExitGoal(Mob actor) { this.actor = actor; setFlags(EnumSet.of(Flag.MOVE)); }
+        public boolean canUse() {
+            Exit exit = EXITS.get(actor.getUUID());
+            return actor.isAlive() && !actor.isPassenger() && exiting(actor) && (exit == null || !exit.awaited);
+        }
+        public boolean canContinueToUse() { return canUse(); }
+        public boolean requiresUpdateEveryTick() { return true; }
+        public void tick() {
+            if (actor.level() instanceof ServerLevel level) { leave(level, actor); }
+        }
+        public void stop() {
+            Exit exit = EXITS.get(actor.getUUID());
+            if (exit != null && exit.path != null && actor.level() instanceof ServerLevel level) {
+                exit.path.release(level, actor);
+                exit.path = null;
+            }
+        }
+    }
     public static List<Urge> urges(Colony colony, Worker who, ColonyView view) {
         Mob actor = who.body();
         Exit exit = EXITS.get(actor.getUUID());

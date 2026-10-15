@@ -174,6 +174,24 @@ public final class MillstoneGameTests {
         });
     }
 
+    @GameTest(template = "empty", timeoutTicks = 120)
+    public static void removingTheColonyStillLetsItsFormerMotorWalkOut(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        MillstoneWork work = rig.plan(3);
+        helper.assertTrue(rig.step(work) instanceof Outcome.Done, "the native mill accepted its ingredients");
+        float walked = rig.actor.walkDist;
+        new MillstoneStation().stop(rig.colony, io.github.izakyl.folkways.core.api.colony.Closing.RAZED);
+        rig.hold.release(Ending.REVOKED);
+        helper.assertTrue(!rig.mill().hasEntity(), "colony closure unbinds the resident immediately");
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(!MillstoneDrive.exiting(rig.actor),
+            "the former resident exits without a remaining colony urge source")).thenExecute(() -> {
+                try {
+                    helper.assertTrue(rig.actor.walkDist > walked + 0.05F, "the independent exit uses actual movement");
+                    helper.assertValueEqual(rig.mill().getInput().getCount(), 3, "physical input remains after closure");
+                    helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "closure never duplicates accepted input");
+                } finally { rig.close(); }
+            }).thenSucceed();
+    }
     private static final class Rig implements Worker, AutoCloseable {
         final GameTestHelper helper;
         final ServerLevel level;
