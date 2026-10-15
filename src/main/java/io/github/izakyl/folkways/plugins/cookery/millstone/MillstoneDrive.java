@@ -23,6 +23,7 @@ import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
 import io.github.izakyl.folkways.plugins.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
+import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -71,7 +72,7 @@ public final class MillstoneDrive {
             surroundings = surroundings((ServerLevel) actor.level(), at);
         }
         boolean valid() {
-            return driving && actor.isAlive() && !actor.isPassenger() && actor.hurtTime == 0
+            return driving && actor.isAlive() && !actor.isPassenger() && actor.hurtTime == 0 && licensed(actor)
                 && !mill.isRemoved() && bookings.valid(at, turn, generation) && bookings.first(at, turn);
         }
     }
@@ -87,6 +88,10 @@ public final class MillstoneDrive {
         Exit(WorldPos at, UUID colony, Mob actor, WorldPos target, boolean awaited) {
             this.at = at; this.colony = colony; this.actor = actor; this.target = target; this.awaited = awaited;
         }
+    }
+
+    static boolean licensed(Mob actor) {
+        return Bodies.of(actor).flatMap(body -> body.licences().of(WaresContent.trade())).isPresent();
     }
 
     public static boolean permitted(MillstoneBlockEntity mill, LivingEntity entity) {
@@ -124,7 +129,7 @@ public final class MillstoneDrive {
                         KitchenBookings bookings, UUID turn, long generation) {
         var mill = MillstoneStation.mill(level, at);
         Optional<WorldPos> exit = exit(level, at, actor);
-        if (mill.isEmpty() || exit.isEmpty() || mill.get().hasEntity() || LEASES.containsKey(actor.getUUID())
+        if (!licensed(actor) || mill.isEmpty() || exit.isEmpty() || mill.get().hasEntity() || LEASES.containsKey(actor.getUUID())
                 || exiting(actor) || !bookings.valid(at, turn, generation) || !bookings.first(at, turn)) {
             return false;
         }

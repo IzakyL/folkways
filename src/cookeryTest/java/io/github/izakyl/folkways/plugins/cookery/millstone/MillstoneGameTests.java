@@ -23,6 +23,7 @@ import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
+import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
@@ -150,6 +151,65 @@ public final class MillstoneGameTests {
                     helper.assertTrue(recovery.size() == 1 && recovery.getFirst().nodes().getFirst().spec().needs().isEmpty(),
                         "recovery adopts the accepted native batch without another input budget");
                 } finally { rig.close(); }
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 1000)
+    public static void revokingTheActiveMotorLicenceLeavesAndPausesItsActualBatchUntilRestored(GameTestHelper helper) {
+        Rig rig = new Rig(helper); MillstoneWork original = rig.plan(3); rig.load(original);
+        Node driving = ((Workload.Within.Turn.Piece) original.next(rig.level, rig)).node();
+        var licence = rig.actor.licences().trade(WaresContent.trade()).orElseThrow();
+        ItemStack accepted = rig.mill().getInput().copy();
+        int initialProgress = rig.mill().saveWithoutMetadata(rig.level.registryAccess()).getInt("Progress");
+        int[] paused = { -1 }; float[] walked = { 0 }; MillstoneWork[] resumed = { null }; Node[] resumedDrive = { null };
+        helper.startSequence().thenIdle(20).thenExecute(() -> {
+            int actual = rig.mill().saveWithoutMetadata(rig.level.registryAccess()).getInt("Progress");
+            helper.assertTrue(actual > 100 && actual < initialProgress && rig.mill().isBoundTo(rig.actor), "the real native ticker is actively grinding the already accepted unfinished input");
+            walked[0] = rig.actor.walkDist;
+            rig.actor.licences().allow(licence, false);
+            helper.assertTrue(rig.actor.licences().of(WaresContent.trade()).isEmpty()
+                && !MillstoneDrive.permitted(rig.mill(), rig.actor), "withholding the actual task licence immediately revokes the native motor permission");
+        }).thenWaitUntil(() -> helper.assertTrue(!rig.mill().hasEntity(), "the native tick releases the unlicensed motor before the accepted batch finishes"))
+            .thenExecute(() -> {
+                paused[0] = rig.mill().saveWithoutMetadata(rig.level.registryAccess()).getInt("Progress");
+                helper.assertTrue(paused[0] > 0 && MillstoneDrive.exiting(rig.actor), "the unfinished native batch is paused while the released resident still owes a physical departure");
+                helper.assertTrue(ItemStack.matches(rig.mill().getInput(), accepted), "revocation preserves the exact native input and components");
+            }).thenWaitUntil(() -> helper.assertTrue(!((Workload.Continuous) driving.spec().workload()).holds(rig.level, rig)
+                && !MillstoneDrive.exiting(rig.actor), "the active Within drive ends only after its former motor actually walks clear"))
+            .thenExecute(() -> {
+                helper.assertTrue(rig.actor.walkDist > walked[0] + 0.05F, "revoking the vocation never substitutes teleportation or in-place unbinding for departure");
+                Outcome failure = Commit.run(rig.level, driving, rig);
+                helper.assertTrue(failure instanceof Outcome.Failed, "the unlicensed old drive does not pretend its unfinished recipe completed");
+                var ending = new Ending.Failed(driving.id(), ((Outcome.Failed) failure).why());
+                original.ended(rig.level, driving, ending); driving.released(rig.level, rig, ending); original.ended(rig.level, ending);
+                rig.hold.release(ending); rig.hold = null;
+                helper.assertTrue(new MillstoneStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {})
+                    .getFirst().nodes().getFirst().spec().needs().isEmpty(), "the original accepted batch remains available to recovery without another wheat budget");
+            }).thenIdle(80).thenExecute(() -> {
+                helper.assertTrue(!rig.mill().hasEntity() && !MillstoneDrive.exiting(rig.actor), "a revoked motor cannot be captured again while idle");
+                helper.assertValueEqual(rig.mill().saveWithoutMetadata(rig.level.registryAccess()).getInt("Progress"), paused[0], "the original native progress remains exactly paused without an authorized motor");
+                helper.assertTrue(ItemStack.matches(rig.mill().getInput(), accepted) && rig.mill().isOutputEmpty(), "neither accepted input nor finished output is invented while the vocation is disabled");
+                helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "the cancelled work never refunds native-owned wheat");
+                rig.actor.licences().allow(licence, true);
+                resumed[0] = (MillstoneWork) new MillstoneStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {})
+                    .getFirst().nodes().getFirst();
+                helper.assertTrue(resumed[0].spec().needs().isEmpty() && resumed[0].planned(rig.level).isEmpty(), "restoring the task licence adopts the same persistent batch without reinserting input");
+                resumedDrive[0] = ((Workload.Within.Turn.Piece) resumed[0].next(rig.level, rig)).node();
+                helper.assertTrue(((Workload.Continuous) resumedDrive[0].spec().workload()).holds(rig.level, rig)
+                    && rig.mill().isBoundTo(rig.actor), "the restored resident really rebinds as the native motor");
+                helper.assertValueEqual(rig.mill().saveWithoutMetadata(rig.level.registryAccess()).getInt("Progress"), paused[0], "binding recovery does not reset the native countdown");
+            }).thenWaitUntil(() -> helper.assertTrue(rig.mill().getInput().isEmpty(), "the resumed native ticker eventually produces the original real output"))
+            .thenWaitUntil(() -> helper.assertTrue(!((Workload.Continuous) resumedDrive[0].spec().workload()).holds(rig.level, rig), "the restored motor also physically leaves after successful grinding"))
+            .thenExecute(() -> {
+                try {
+                    helper.assertTrue(Commit.run(rig.level, resumedDrive[0], rig) instanceof Outcome.Done, "the recovered native drive actually completes");
+                    resumed[0].ended(rig.level, resumedDrive[0], Ending.DONE);
+                    helper.assertTrue(rig.step(resumed[0]) instanceof Outcome.Done && resumed[0].commit(rig.level, rig) instanceof Outcome.Done, "the actual stored output is collected and settled once");
+                    helper.assertValueEqual(rig.count(ModItems.FLOUR.get()), 3L, "the exact three original wheat become three actual flour after licence restoration");
+                    helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "no raw input is duplicated by either revocation or restoration");
+                    helper.assertTrue(rig.mill().isOutputEmpty() && !rig.mill().hasEntity()
+                        && rig.level.getEntitiesOfClass(ItemEntity.class, new net.minecraft.world.phys.AABB(rig.cell).inflate(5)).isEmpty(), "native slots, motor and loose outputs all settle without duplicates");
+                } finally { if (resumed[0] != null) { resumed[0].ended(rig.level, Ending.DONE); } rig.close(); }
             }).thenSucceed();
     }
 

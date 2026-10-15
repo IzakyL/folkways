@@ -132,7 +132,8 @@ final class MillstoneWork implements Node, Workload.Within {
         public NodeSpec spec() { return spec; }
         public Optional<RefusalKind> refusal(ServerLevel level) { return MillstoneWork.this.refusal(level); }
         public Outcome commit(ServerLevel level, Worker who) {
-            if (refusal(level).isPresent() || !bookings.first(at, MillstoneWork.this.id()) || !reachable(level, who, spec.stances())) {
+            if (refusal(level).isPresent() || !MillstoneDrive.licensed(who.body())
+                    || !bookings.first(at, MillstoneWork.this.id()) || !reachable(level, who, spec.stances())) {
                 return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             }
             var mill = MillstoneStation.mill(level, at).orElseThrow();
@@ -204,6 +205,12 @@ final class MillstoneWork implements Node, Workload.Within {
         public boolean holds(ServerLevel level, Worker who) {
             if (refusal(level).isPresent()) { MillstoneDrive.interrupt(who.body()); return false; }
             var mill = MillstoneStation.mill(level, at).orElseThrow();
+            if (!MillstoneDrive.licensed(who.body())) {
+                if (mill.isBoundTo(who.body())) { MillstoneDrive.interrupt(who.body()); }
+                if (MillstoneDrive.exiting(who.body()) && !MillstoneDrive.leave(level, who.body())) { return true; }
+                failed = CookeryRefusal.STATION_CHANGED;
+                return false;
+            }
             var owned = MillstoneBatch.read(mill, level).orElseThrow();
             if (owned.ready()) { return !MillstoneDrive.leave(level, who.body()); }
             if (MillstoneDrive.exiting(who.body()) && !MillstoneDrive.leave(level, who.body())) { return true; }
@@ -214,7 +221,7 @@ final class MillstoneWork implements Node, Workload.Within {
             return true;
         }
         public Outcome commit(ServerLevel level, Worker who) {
-            return failed == null && refusal(level).isEmpty() && MillstoneStation.mill(level, at)
+            return failed == null && MillstoneDrive.licensed(who.body()) && refusal(level).isEmpty() && MillstoneStation.mill(level, at)
                     .flatMap(mill -> MillstoneBatch.read(mill, level)).filter(MillstoneBatch.Batch::ready).isPresent()
                     && !MillstoneDrive.exiting(who.body()) ? Outcome.done()
                 : Outcome.failed(failed == null ? CookeryRefusal.STATION_CHANGED : failed);
