@@ -477,13 +477,15 @@ public final class TaskToolsGameTests {
             var front = ColonyFront.of(rig.colony.works());
             front.setSetting(OrdersContent.ID, "item", new ColonySettings.Value.Items(List.of(
                 ItemFilter.item(BuiltInRegistries.ITEM.getKey(ModItems.IRON_KITCHEN_KNIFE.get())))));
-            front.setSetting(OrdersContent.ID, "low", new ColonySettings.Value.Count(1));
+            // Set the player low-water threshold to the target so any genuine gap triggers a batch.
+            int low = standing ? count : 1;
+            front.setSetting(OrdersContent.ID, "low", new ColonySettings.Value.Count(low));
             front.setSetting(OrdersContent.ID, "count", new ColonySettings.Value.Count(count));
             // setSetting reports a change, so an already selected value legitimately returns false.
             var settings = front.settings(OrdersContent.ID);
             rig.helper.assertTrue(settings.items("item").filter(goods -> Goods.members(goods).equals(
                 java.util.Set.of(ModItems.IRON_KITCHEN_KNIFE.get()))).isPresent(), "the real player item setting selects only an iron knife");
-            rig.helper.assertValueEqual(settings.count("low"), 1, "the real low-water setting is one");
+            rig.helper.assertValueEqual(settings.count("low"), low, "the real low-water setting preserves the player trigger");
             rig.helper.assertValueEqual(settings.count("count"), count, "the real high-water target is filed");
             rig.helper.assertTrue(!Facings.of(rig.colony.works(), OrdersContent.ID).orElseThrow().act(OrdersContent.ID,
                 standing ? "maintain" : "deliver", Optional.of(at.block(rig.level)), rig.colony.works().view(rig.level)).refused(),

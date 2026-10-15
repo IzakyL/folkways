@@ -58,7 +58,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class CookeryChainPlanningGameTests {
     private static final String K = "kaleidoscope_cookery:";
     private static final List<String> BASE = List.of("minecraft:wheat_seeds", K + "green_chili", K + "rice_panicle",
-        "minecraft:brown_mushroom", "minecraft:porkchop", "minecraft:water_bucket", "minecraft:oak_planks", "minecraft:iron_ingot");
+        "minecraft:brown_mushroom", "minecraft:porkchop", "minecraft:water_bucket", "minecraft:oak_planks", "minecraft:iron_ingot", "minecraft:brick");
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(CookeryChainPlanningGameTests.class); }
@@ -123,7 +123,7 @@ public final class CookeryChainPlanningGameTests {
                 List.of(new Message.Submitted(CookeryContent.ID, Grown.of(consumer))), 0);
             var needs = result.weave().vertices().values().stream().map(vertex -> vertex.node().spec().needs()).toList();
             helper.assertTrue(result.diagnosis().shortfalls().isEmpty(),
-                "the full real catalogue can make " + product + " using only six raw foods and planks/iron, without any intermediate order: "
+                "the full real catalogue can make " + product + " using only six raw foods and plank/iron/brick materials, without any intermediate order: "
                     + result.diagnosis() + "; actual planned needs=" + needs);
             helper.assertTrue(result.weave().vertices().size() > 1, "the planner expands actual executable intermediate production");
         } finally {
