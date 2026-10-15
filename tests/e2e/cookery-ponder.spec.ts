@@ -45,7 +45,7 @@ minecraft.reloadResourcePacks();return locale;
 const SET_GUI_SCALE = defineTask<{ scale: number }, number>({
   name: "folkways.cookery.ponder-set-gui-scale", side: "client", timeoutMs: 20_000,
   source: javaTask({ imports: ["net.minecraft.client.Minecraft"], body: `
-var minecraft=(Minecraft)ctx.client();int scale=Args.of(ctx).number("scale").intValue();
+var minecraft=(Minecraft)ctx.client();int scale=(int)Args.of(ctx).number("scale");
 minecraft.options.guiScale().set(scale);minecraft.resizeDisplay();return scale;
 ` }),
 });
