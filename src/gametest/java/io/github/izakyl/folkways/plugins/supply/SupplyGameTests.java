@@ -54,6 +54,8 @@ public final class SupplyGameTests {
             helper.assertTrue(rig.colony.storesIn(helper.getLevel().dimension()).isEmpty(), "registering the source never adds it as storage");
             var done = (Outcome.Done) node.commit(helper.getLevel(), rig);
             helper.assertValueEqual(done.made().getFirst().getCount(), 64, "exactly one finite physical stack is generated");
+            helper.assertTrue(node.refusal(helper.getLevel()).isEmpty(),
+                "a completed physical withdrawal must settle successfully without growing a duplicate replacement");
             helper.assertValueEqual(rig.box.generated().get("minecraft:stone"), 64L, "only goods actually generated are counted");
             helper.assertTrue(node.commit(helper.getLevel(), rig) instanceof Outcome.Failed, "a completed withdrawal cannot replay and duplicate its stack");
         }

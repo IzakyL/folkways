@@ -66,7 +66,7 @@ record SupplyWorkshop(UUID key, Colony colony, WorldPos at, Stances stances, Sup
         }
 
         public Optional<io.github.izakyl.folkways.core.api.terms.RefusalKind> refusal(ServerLevel level) {
-            return valid(level) ? Optional.empty() : Optional.of(SupplyRefusal.SOURCE_CHANGED);
+            return used || valid(level) ? Optional.empty() : Optional.of(SupplyRefusal.SOURCE_CHANGED);
         }
 
         public Outcome commit(ServerLevel level, Worker who) {

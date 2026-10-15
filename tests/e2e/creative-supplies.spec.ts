@@ -88,7 +88,7 @@ for (const stage of twins()) test(stage.title("creative supplies: configure a re
     const final = await world.block(server, stage.at(source), { nbt: true });
     const counts = (final.nbt as { generated: Record<string, number> }).generated;
     expect(Object.keys(counts), "the source never supplies bread, tools or any unwhitelisted shortcut").toEqual(["minecraft:wheat"]);
-    expect(counts["minecraft:wheat"], "four actual breads require twelve real wheat").toBe(12);
+    expect(Number(counts["minecraft:wheat"]), "four actual breads require twelve real wheat").toBe(12);
     evidence.final = { source: final, bread };
   } catch (error) {
     pair?.failing(error);
