@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
+import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
 import io.github.izakyl.folkways.front.api.ui.Taking;
@@ -32,11 +33,9 @@ import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.build.draft.World;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import net.minecraft.SharedConstants;
@@ -443,6 +442,7 @@ public final class DraftPanel {
         // Options this game has not loaded the block of are left out, as a pack may offer another mod's.
         private UIElement any(Schema.Setting.Items items) {
             List<ChoicePicker.Row> rows = new ArrayList<>();
+            List<ItemPicker.Offer> offers = new ArrayList<>();
             Map<String, ItemFilter> filters = new LinkedHashMap<>();
             for (Face.Option option : chosen.face().offered(items.key())) {
                 ItemFilter filter = filterOf(option);
@@ -450,8 +450,10 @@ public final class DraftPanel {
                     continue;
                 }
                 ItemStack icon = option.icon().map(DraftPanel::stackOf).orElse(ItemStack.EMPTY);
-                rows.add(new ChoicePicker.Row(option.key(), worded(Face.wordOf(items.key(), option), naming(filter)),
-                    icon.isEmpty() ? FilterStacks.of(filter) : icon));
+                Component label = worded(Face.wordOf(items.key(), option), naming(filter));
+                ItemStack worn = icon.isEmpty() ? FilterStacks.of(filter) : icon;
+                rows.add(new ChoicePicker.Row(option.key(), label, worn));
+                offers.add(new ItemPicker.Offer(filter, label, worn));
                 filters.put(option.key(), filter);
             }
             Button press = new Button().noText();
@@ -460,19 +462,11 @@ public final class DraftPanel {
                 List<ItemFilter> held = values.filtersOf(items.key());
                 wear(press, rows.stream().filter(each -> held.contains(filters.get(each.key()))).toList());
             };
-            press.setOnClick(event -> {
-                List<ItemFilter> held = values.filtersOf(items.key());
-                Set<String> ticked = new LinkedHashSet<>();
-                filters.forEach((key, filter) -> {
-                    if (held.contains(filter)) {
-                        ticked.add(key);
-                    }
-                });
-                ChoicePicker.openMany(press, worded(items.key(), items.name()), rows, ticked, picked -> {
-                    values.hold(items.key(), picked.stream().map(filters::get).toList());
+            press.setOnClick(event -> ItemPicker.among(press, worded(items.key(), items.name()), offers,
+                values.filtersOf(items.key()), picked -> {
+                    values.hold(items.key(), picked);
                     show.run();
-                });
-            });
+                }));
             show.run();
             return press;
         }

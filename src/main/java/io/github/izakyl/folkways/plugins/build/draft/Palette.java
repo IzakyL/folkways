@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.core.api.terms.ItemQuery;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -166,6 +167,11 @@ final class Palette {
 
     static Set<Block> blocksOf(ItemFilter filter) {
         Set<Block> blocks = new LinkedHashSet<>();
+        if (filter.query()) {
+            ItemQuery.parse(filter.text()).ifPresent(query -> query.items()
+                .forEach(item -> placed(item).ifPresent(blocks::add)));
+            return blocks;
+        }
         if (filter.tag()) {
             TagKey<Item> tag = TagKey.create(Registries.ITEM, filter.id());
             BuiltInRegistries.ITEM.getTag(tag).ifPresent(members -> {

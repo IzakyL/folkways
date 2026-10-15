@@ -50,6 +50,11 @@ public final class ChoicePicker {
         aboveWindows = depth;
     }
 
+    // How high a dialog must sit to show over every window open now.
+    public static int depth() {
+        return aboveWindows.getAsInt();
+    }
+
     public static Dialog open(UIElement host, Schema.Setting.Choice choice, ResourceLocation current,
             Consumer<ResourceLocation> confirmed) {
         return open(host, choice.nameKey(), choice.options(), current, confirmed);

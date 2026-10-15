@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 import { defineTask, input, javaTask, player, reflect, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { clickElement, type Element, panelElements } from "../../ldlib2";
-import { openColonyPanelViaBook, setBookGesture, type Vec } from "../colony/colony-founding";
+import { chooseInSelector, openColonyPanelViaBook, setBookGesture, type Vec } from "../colony/colony-founding";
 import { cellTextIn, pickCell, settlePanel, toggleCell, typeCell } from "./site-panel";
 import { drainActionBar, readActionBar } from "./zone-receipt";
 import { frames, safeAction, tryCommand, screenName, waitForElement, softly } from "../harness/bw-helpers";
@@ -123,6 +123,7 @@ export const ZONE_KIND_ID = {
   farm: "folkways:farm",
   pasture: "folkways:pasture",
   fish: "folkways:fish",
+  ground: "folkways:ground",
 } as const;
 
 export type ZoneKind = keyof typeof ZONE_KIND_ID;
@@ -182,7 +183,8 @@ export async function createMarkedZone(
 export type ZoneEdit =
   | { key: string; count: number }
   | { key: string; option: string; shot?: string }
-  | { key: string; toggle: true };
+  | { key: string; toggle: true }
+  | { key: string; item: string; query?: string };
 
 export async function applyZoneSetting(
   server: MinecraftServer, client: MinecraftClient, edit: ZoneEdit,
@@ -193,6 +195,15 @@ export async function applyZoneSetting(
   }
   if ("option" in edit) {
     return { key: edit.key, ...await pickCell(server, client, token, edit.option, edit.shot) };
+  }
+  if ("item" in edit) {
+    // The setting's button opens the item picker; the item is searched for, picked, and confirmed there.
+    const before = cellTextIn(await panelElements(client), token);
+    const open = await clickElement(client, { id: token });
+    const picked = await chooseInSelector(client, edit.item, edit.query ?? edit.item, open);
+    await waitForElement(client, { id: "folkways.selector.close" }, { state: "absent", timeoutMs: 8_000 });
+    await settlePanel(server, client);
+    return { key: edit.key, before, after: cellTextIn(await panelElements(client), token), ...picked };
   }
   const before = cellTextIn(await panelElements(client), token);
   const evidence = await toggleCell(server, client, token);

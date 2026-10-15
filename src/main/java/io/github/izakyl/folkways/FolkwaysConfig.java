@@ -24,6 +24,7 @@ public final class FolkwaysConfig {
     private static final ModConfigSpec.IntValue MAX_FISH_CELLS;
     private static final ModConfigSpec.IntValue MAX_PASTURE_CELLS;
     private static final ModConfigSpec.IntValue MAX_FARM_CELLS;
+    private static final ModConfigSpec.IntValue MAX_GROUNDWORK_CELLS;
     private static final ModConfigSpec.IntValue MAX_PATROL_POINTS;
     private static final ModConfigSpec.IntValue PATROL_WARD_RADIUS;
     private static final ModConfigSpec.IntValue PATROL_WARD_TICKS;
@@ -113,6 +114,11 @@ public final class FolkwaysConfig {
                 "work is looked for, so raising this lets one zone stand in for several and makes each",
                 "sweep over it longer.")
             .defineInRange("maxFarmCells", 4_096, 1, 262_144);
+        MAX_GROUNDWORK_CELLS = BUILDER
+            .comment("Largest box a player may mark out to clear, fill, weed, fell or haul from, in cells. It",
+                "is walked cell by cell when work is looked for, so a deep box costs more to keep watch on",
+                "than a shallow one.")
+            .defineInRange("maxGroundworkCells", 16_384, 1, 262_144);
         MAX_PATROL_POINTS = BUILDER
             .comment("Most points a player may click to draw one patrol route. Patrollers stop along it",
                 "no further apart than a ward reaches, and walk it end to end and back.")
@@ -329,6 +335,10 @@ public final class FolkwaysConfig {
 
     public static int maxFarmCells() {
         return read(MAX_FARM_CELLS);
+    }
+
+    public static int maxGroundworkCells() {
+        return read(MAX_GROUNDWORK_CELLS);
     }
 
     public static int maxBuildCells() {

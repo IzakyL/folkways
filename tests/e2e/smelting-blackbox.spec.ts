@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   errorSummary,
 } from "@izakyl/blockwright-client";
-import { screen, tick, world } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { writeFileSync } from "node:fs";
 import { clickElement } from "../ldlib2";
 import {
@@ -16,8 +16,9 @@ import {
   waitForGroundedPlayer,
   type Vec,
 } from "../shared/colony/colony-founding";
-import { boardAct, boardRows, firstEmptyGridSlot, slotItem } from "../shared/ui/site-panel";
+import { boardAct, boardRows } from "../shared/ui/site-panel";
 import { readDoing } from "../shared/colony/resident-probe";
+import { runColonyTask } from "../shared/colony/colony-tasks";
 import { countInResidentPacks, mustCommand } from "../shared/ui/world-ui";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
@@ -99,7 +100,8 @@ for (const stage of twins()) test(stage.title("smelting end-to-end: the fuel pol
         + ` coal and charcoal and neither was in storage — the furnace path is ignoring WaresContent.FUEL`,
     ).toBe(false);
 
-    const policy = await allowFuelViaPanel(server, client, playerName, founding.standBlock, stage);
+    const policy = await allowFuelViaPanel(server, client, playerName, founding.standBlock, stage,
+      String(founding.evidence.colonyId));
     const smelted = await pollForOutput(server, watched, SMELT_PHASE_TICKS);
     writeFileSync(outAbs("e2e", "reports", `${stage.name("smelting-evidence")}.json`), JSON.stringify({
       policy,
@@ -115,15 +117,15 @@ for (const stage of twins()) test(stage.title("smelting end-to-end: the fuel pol
 
     expect(
       policy.entry_visible,
-      "the oak_planks entry never came back in the fuel grid — the item action did not reach the server (or was rejected)",
+      "the oak_planks rule never reached the fuel list — the picker's confirm did not reach the server (or was rejected)",
     ).toBe(true);
     expect(
       smelted.found,
-      `${SMELT_OUTPUT} never appeared anywhere after oak_planks was put into the fuel grid: nobody`
+      `${SMELT_OUTPUT} never appeared anywhere after oak_planks was ticked in the fuel picker: nobody`
         + " carried a plank to the loaded, cold furnace. The same furnace lights within ~520 ticks when a"
         + " coal is dropped into the member chest while the fuel list is left untouched, so the chore and"
-        + " the dispatch both work — what did not arrive is the edit: the grid slot syncs back holding"
-        + " oak_planks, and the colony still burns by the untouched default.",
+        + " the dispatch both work — what did not arrive is the edit: the picker confirmed oak_planks,"
+        + " and the colony still burns by the untouched default.",
     ).toBe(true);
   } catch (error) {
     pair?.failing(error);
@@ -134,24 +136,21 @@ for (const stage of twins()) test(stage.title("smelting end-to-end: the fuel pol
 
 });
 
-async function allowFuelViaPanel(server: any, client: any, playerName: string, standBlock: Vec, stage: Stage) {
+async function allowFuelViaPanel(
+  server: any, client: any, playerName: string, standBlock: Vec, stage: Stage, colonyId: string,
+) {
   const evidence: any = { item: POLICY_FUEL };
   evidence.open_panel = await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
   evidence.click_craft_tab = await softly(() => clickElement(client, { id: CRAFT_TAB }));
   await waitForElement(client, { idPattern: `folkways.board.edit.${CRAFT_PAGE}.*` }, { timeoutMs: 8_000 });
   const fuel = await fuelEditToken(client);
   evidence.fuel_edit = fuel;
-  evidence.open_fuel_grid = await softly(() => clickElement(client, { id: fuel }));
-  await tick.sprint(server, 5);
-  await safeAction(() => frames(client, 3));
-
-  const slot = await firstEmptyGridSlot(client);
-  evidence.slot = slot;
-  evidence.pick_fuel = await pickViaSelector(client, slot, POLICY_FUEL, "oak_planks");
+  // The fuel edit opens the item picker; oak planks are ticked there as one more rule, and confirmed.
+  evidence.pick_fuel = await pickViaSelector(client, fuel, POLICY_FUEL, "oak_planks");
   await tick.sprint(server, 10);
-  const settled = await slotItem(client, slot);
-  evidence.settled = settled;
-  evidence.entry_visible = settled?.id === POLICY_FUEL;
+  const held = await runColonyTask(server, FUEL_RULES, { colony_id: colonyId });
+  evidence.rules = held.rules;
+  evidence.entry_visible = Array.isArray(held.rules) && held.rules.includes(POLICY_FUEL);
   await screen.dismiss(client);
   await tick.sprint(server, 10);
   return evidence;
@@ -223,3 +222,30 @@ async function pollForOutput(server: any, watched: Vec[], maxTicks: number) {
   }
   return { found: false, ticks: maxTicks, reason: outcome.reason };
 }
+
+// The colony's fuel rules as the server holds them, each as it describes itself.
+const FUEL_RULES = defineTask<{ colony_id: string }, Record<string, any>>({
+  name: "folkways.smelting.fuel-rules",
+  side: "server",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: [
+      "io.github.izakyl.folkways.core.api.terms.ItemFilter",
+      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.plugins.wares.WaresContent",
+    ],
+    body: `
+Args args = Args.of(ctx);
+var colony = ColonyGround.of(ctx.server(), UUID.fromString(args.string("colony_id")))
+    .orElseThrow(() -> Fail.notFound("no colony"));
+List<String> rules = new ArrayList<String>();
+for (ItemFilter rule : ColonyFront.of(colony).settings(WaresContent.ID).entries("fuel")) {
+    rules.add(rule.describe());
+}
+Map<String, Object> out = new LinkedHashMap<String, Object>();
+out.put("rules", rules);
+return Sync.stamp(out);
+`,
+  }),
+});

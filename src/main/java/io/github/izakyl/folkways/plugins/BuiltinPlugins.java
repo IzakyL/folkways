@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.plugins.dispatch.DispatchPlugin;
 import io.github.izakyl.folkways.plugins.farming.FarmingPlugin;
 import io.github.izakyl.folkways.plugins.fishing.FishingPlugin;
 import io.github.izakyl.folkways.plugins.golem.GolemPlugin;
+import io.github.izakyl.folkways.plugins.groundwork.GroundworkPlugin;
 import io.github.izakyl.folkways.plugins.orders.OrdersPlugin;
 import io.github.izakyl.folkways.plugins.pasture.PasturePlugin;
 import io.github.izakyl.folkways.plugins.patrol.PatrolPlugin;
@@ -28,6 +29,7 @@ public final class BuiltinPlugins {
         FarmingPlugin.install(modBus);
         PasturePlugin.install(modBus);
         FishingPlugin.install(modBus);
+        GroundworkPlugin.install(modBus);
         PatrolPlugin.install(modBus);
         OrdersPlugin.install(modBus);
         RailPlugin.install(modBus);

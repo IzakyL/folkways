@@ -522,38 +522,19 @@ export async function setVocationPriorityViaPanel(
 const SELECTOR_CLOSE = "folkways.selector.close";
 const SELECTOR_SEARCH = "folkways.selector.search";
 const SELECTOR_RESULT = "folkways.selector.result.";
+const SELECTOR_CONFIRM = "folkways.selector.confirm";
 
+// Opens the item picker from the control that asks for it, then picks one item there and confirms.
 export async function pickViaSelector(
   client: MinecraftClient,
-  opener: string | number,
+  opener: string,
   registryId: string,
   query = "",
 ) {
-  const slot = openerSlot(opener);
-  const evidence: any = { opener, open: await clickGridSlot(client, slot) };
+  const evidence: any = { opener, open: await clickUnverified(client, { id: opener }) };
   Object.assign(evidence, await chooseInSelector(client, registryId, query, evidence.open));
   await waitForElement(client, { id: SELECTOR_CLOSE }, { state: "absent", timeoutMs: 8_000 });
   return evidence;
-}
-
-async function clickGridSlot(client: MinecraftClient, index: number) {
-  const elements = await panelElements(client);
-  const cells = elements
-    .filter((element) => element.className.endsWith(".ItemSlot"))
-    .filter((element) => element.displayed && element.visible && element.width > 0);
-  const cell = cells[index];
-  if (!cell) {
-    const all = elements.filter((element) => element.className.endsWith(".ItemSlot"));
-    throw new Error(
-      `the item list grid has no cell ${index}: the tree has ${all.length} ItemSlots, ${cells.length} of them laid out`
-        + ` (${all.slice(0, 3).map((e) => `${e.x},${e.y} ${e.width}x${e.height} shown=${e.displayed}`).join(" | ")}). `
-        + `Panel has ${elements.length} elements, windows `
-        + `${JSON.stringify(elements.filter((e) => e.id?.startsWith("folkways.window.") && !e.id.includes("close"))
-            .map((e) => `${e.id} shown=${e.displayed} ${e.x},${e.y} ${e.width}x${e.height}`))}.`,
-    );
-  }
-  const press = await pressAtHovered(client, cell.x + cell.width / 2, cell.y + cell.height / 2);
-  return { index, cell: { x: cell.x, y: cell.y, width: cell.width, height: cell.height }, press };
 }
 
 export async function chooseInSelector(
@@ -568,13 +549,11 @@ export async function chooseInSelector(
     await waitForElement(client, { id: SELECTOR_CLOSE }, { timeoutMs: 8_000 });
   } catch (error) {
     const elements = await panelElements(client);
-    const slots = elements.filter((element) => element.className.endsWith(".ItemSlot"));
     throw new Error(
       `the selector did not open. ${error instanceof Error ? error.message : String(error)}\n`
-        + `the panel had ${slots.length} ItemSlots at the time`
-        + ` (${slots.slice(0, 3).map((s) => `${s.x},${s.y} ${s.width}x${s.height} shown=${s.displayed}`).join(" | ")}), `
-        + `and the open attempt returned ${JSON.stringify(opened)}. `
-        + `The selector opens on MOUSE_DOWN on a list grid cell, and only when the cursor holds nothing and the cell is empty.`,
+        + `the open attempt returned ${JSON.stringify(opened)}; the panel had ${elements.length} elements, `
+        + `${JSON.stringify(elements.filter((e) => e.id?.startsWith("folkways.selector")).map((e) => e.id))} of them the picker's. `
+        + `The picker opens on a click of the setting's button, from its rows or the board's edit act.`,
     );
   }
   if (query) {
@@ -587,6 +566,8 @@ export async function chooseInSelector(
     }
   }
   evidence.pick = await clickUnverified(client, { id: resultId });
+  // Picked, or ticked as a rule, the choice stands once it is confirmed.
+  evidence.confirm = await clickUnverified(client, { id: SELECTOR_CONFIRM });
   return evidence;
 }
 
@@ -622,17 +603,6 @@ async function selectorMiss(client: MinecraftClient, error: unknown, evidence: u
   const seen = (await panelElements(client)).map((element) => element.id || element.className);
   return new Error(`${String(error)}\nevidence: ${JSON.stringify(evidence)}`
     + `\nselector element tree right now: ${JSON.stringify(seen)}`);
-}
-
-function openerSlot(opener: string | number): number {
-  if (typeof opener === "number") {
-    return opener;
-  }
-  const match = /^slot#(\d+)$/.exec(opener);
-  if (!match) {
-    throw new Error(`selector: opener must be a slot index, got ${JSON.stringify(opener)}`);
-  }
-  return Number(match[1]);
 }
 
 const SETTLERS_TAB = "folkways.page.person";

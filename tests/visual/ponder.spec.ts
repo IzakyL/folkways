@@ -23,6 +23,7 @@ const SCENES = [
   "farming",
   "pasture",
   "fishing",
+  "groundwork",
   "orders",
   "rail",
   "dispatch",

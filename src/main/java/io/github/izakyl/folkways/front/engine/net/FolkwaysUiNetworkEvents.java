@@ -26,7 +26,6 @@ import io.github.izakyl.folkways.front.engine.colony.Endorsements;
 import io.github.izakyl.folkways.front.engine.colony.MemberToggle;
 import io.github.izakyl.folkways.front.engine.colony.ZoneDrafts;
 import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
-import io.github.izakyl.folkways.front.ui.menu.FilterSlot;
 import io.github.izakyl.folkways.front.ui.screen.ColonyShell;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -40,7 +39,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -60,8 +58,6 @@ public final class FolkwaysUiNetworkEvents {
     @SubscribeEvent
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(FolkwaysMod.NETWORK_VERSION);
-        registrar.playToServer(FilterActionPacket.TYPE, FilterActionPacket.STREAM_CODEC,
-            asPlayer(FolkwaysUiNetworkEvents::filterAction));
         registrar.playToServer(RequestColonyOverviewPacket.TYPE, RequestColonyOverviewPacket.STREAM_CODEC,
             asPlayer((packet, player) -> ColonyAuthority.ofHeldBook(player, packet.colonyId())
                 .ifPresent(authority -> PacketDistributor.sendToPlayer(player,
@@ -101,22 +97,6 @@ public final class FolkwaysUiNetworkEvents {
         if (FMLEnvironment.dist == Dist.CLIENT) {
             context.enqueueWork(work);
         }
-    }
-
-    private static void filterAction(FilterActionPacket packet, ServerPlayer player) {
-        AbstractContainerMenu menu = player.containerMenu;
-        if (packet.slotIndex() < 0 || packet.slotIndex() >= menu.slots.size()) {
-            return;
-        }
-        if (!(menu.getSlot(packet.slotIndex()) instanceof FilterSlot slot)) {
-            return;
-        }
-        switch (packet.action()) {
-            case STEP_UP -> slot.increase(menu.getCarried());
-            case STEP_DOWN -> slot.decrease(menu.getCarried());
-            case DROP -> slot.set(packet.stack());
-        }
-        menu.broadcastChanges();
     }
 
     private static void setBookGesture(SetBookGesturePacket packet, ServerPlayer player) {

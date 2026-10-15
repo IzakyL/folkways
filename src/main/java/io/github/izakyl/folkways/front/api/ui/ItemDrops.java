@@ -1,4 +1,4 @@
-package io.github.izakyl.folkways.front.ui.screen;
+package io.github.izakyl.folkways.front.api.ui;
 
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;

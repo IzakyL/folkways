@@ -1,5 +1,5 @@
 import { clickElement, type Element, panelElements, selectElement, HOVER_REFRESH_FRAMES } from "../../ldlib2";
-import { input, media, player, reflect, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { input, media, player, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import {
   clickUnverified,
   frames,
@@ -21,7 +21,6 @@ type Vec = { x: number; y: number; z: number };
 const OPEN_ATTEMPTS = 3;
 const ENTER_ATTEMPTS = 20;
 
-export type SlotView = { index: number; item: { id: string; count?: number | null } | null };
 
 export type BoardAct = { page: string; row: number; act: number; id: string };
 
@@ -102,34 +101,6 @@ export async function boardAct(
       + ` (present: ${JSON.stringify(acts.map((one) => one.id))})`);
   }
   return found;
-}
-
-async function gridSlots(client: MinecraftClient): Promise<SlotView[]> {
-  const result = await reflect.query(client, {
-    root: { kind: "static", className: "net.minecraft.client.Minecraft", path: "getInstance().screen.getMenu()" },
-    select: { active: "isActive()", itemId: "getItem().getItem().builtInRegistryHolder().key().location().toString()",
-      count: "getItem().getCount()" },
-    expand: { path: "slots" }, limits: { maxDepth: 1, maxItems: 256 },
-  });
-  return (result.tree?.children ?? [])
-    .filter(node => node.class?.endsWith(".FilterSlot") && node.values?.active === true)
-    .map((node, index) => {
-      const id = node.values?.itemId;
-      return { index, item: typeof id === "string" && id !== "minecraft:air"
-        ? { id, count: Number(node.values?.count ?? 1) } : null };
-    });
-}
-
-export async function slotItem(client: MinecraftClient, index: number): Promise<SlotView["item"]> {
-  return (await gridSlots(client))[index]?.item ?? null;
-}
-
-export async function firstEmptyGridSlot(client: MinecraftClient): Promise<number> {
-  const empty = (await gridSlots(client)).find(slot => !slot.item);
-  if (empty === undefined) {
-    throw new Error("site: this grid has no empty slot");
-  }
-  return empty.index;
 }
 
 export async function elementBounds(client: MinecraftClient, id: string) {

@@ -53,20 +53,25 @@ public record Schema(List<Setting> settings) {
             }
         }
 
-        // A single one names exactly one item, picked from a search rather than laid out in a filter grid.
-        record Items(String key, String nameKey, ResourceLocation icon, List<ItemFilter> byDefault, boolean single)
-            implements Setting {
+        // A single one names exactly one item, where the others hold rules: items, tags and searches. A list of
+        // blocks offers only what places one.
+        record Items(String key, String nameKey, ResourceLocation icon, List<ItemFilter> byDefault, boolean single,
+                     boolean blocks) implements Setting {
 
             public Items {
                 byDefault = List.copyOf(byDefault);
             }
 
             public Items(String key, String nameKey, ResourceLocation icon, List<ItemFilter> byDefault) {
-                this(key, nameKey, icon, byDefault, false);
+                this(key, nameKey, icon, byDefault, false, false);
             }
 
             public static Items one(String key, String nameKey, ResourceLocation icon) {
-                return new Items(key, nameKey, icon, List.of(), true);
+                return new Items(key, nameKey, icon, List.of(), true, false);
+            }
+
+            public static Items oneBlock(String key, String nameKey, ResourceLocation icon, ResourceLocation byDefault) {
+                return new Items(key, nameKey, icon, List.of(ItemFilter.item(byDefault)), true, true);
             }
         }
     }

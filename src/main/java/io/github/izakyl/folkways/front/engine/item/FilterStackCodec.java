@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.front.engine.item;
 
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.core.api.terms.ItemQuery;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysDataComponents;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
@@ -24,6 +25,12 @@ public final class FilterStackCodec implements FilterStacks.Codec {
 
     @Override
     public ItemStack of(ItemFilter filter) {
+        // A query wears the first item it finds.
+        if (filter.query()) {
+            return ItemQuery.parse(filter.text()).flatMap(query -> query.items().stream().findFirst())
+                .map(ItemStack::new)
+                .orElse(ItemStack.EMPTY);
+        }
         if (filter.tag()) {
             ItemStack stack = new ItemStack(FolkwaysItems.TAG_FILTER.get());
             stack.set(FolkwaysDataComponents.FILTER_TAG.get(), filter.id());

@@ -10,6 +10,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
@@ -18,6 +19,9 @@ import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
 import io.github.izakyl.folkways.front.api.ui.Draw;
+import io.github.izakyl.folkways.front.api.ui.FilterStacks;
+import io.github.izakyl.folkways.front.api.ui.ItemDrops;
+import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.SignLine;
@@ -75,6 +79,10 @@ public final class DomainPage implements Draw {
     private static final String SETTING = "setting";
     private static final String CHOSEN = "chosen";
     private static final String PICKS = "picks";
+    private static final String HELD = "held";
+    private static final String SINGLE = "single";
+    private static final String BLOCKS = "blocks";
+    private static final String NAME = "name";
 
     private static final int KIND_NONE = 0;
     private static final int KIND_DO = 1;
@@ -124,6 +132,7 @@ public final class DomainPage implements Draw {
         figures.layout(layout -> layout.widthAuto().flexShrink(0));
         UIElement grid = Rows.grid();
         drawn.asking = new ChoicePicker.Asking(grid, (key, option) -> choose(player, key, option));
+        drawn.sending = new ItemPicker.Sending(grid, (key, filters) -> hold(player, key, filters));
         for (int index = 0; index < ROW_SLOTS; index++) {
             grid.addChildren(slot(player, drawn, index));
         }
@@ -288,9 +297,6 @@ public final class DomainPage implements Draw {
             if (act instanceof Board.Act.Open open) {
                 entry.putString(TARGET, open.page().toString());
             }
-            if (act instanceof Board.Act.Edit edit && itemList(edit.settingKey())) {
-                entry.putString(TARGET, edit.settingKey());
-            }
             if (act instanceof Board.Act.Edit edit) {
                 setting(edit.settingKey()).ifPresent(pair -> {
                     if (pair.setting() instanceof Schema.Setting.Count count) {
@@ -305,9 +311,14 @@ public final class DomainPage implements Draw {
                         entry.putString(CHOSEN, SettingsPage.choiceOf(
                             player, new SettingsPage.Scope.AtColony(pair.scope()), choice).toString());
                     }
-                    if (pair.setting() instanceof Schema.Setting.Items items && items.single()) {
+                    if (pair.setting() instanceof Schema.Setting.Items items) {
                         entry.putString(SETTING, items.key());
                         entry.putBoolean(PICKS, true);
+                        entry.putString(HELD, ItemPicker.encode(SettingsPage.itemsOf(
+                            player, new SettingsPage.Scope.AtColony(pair.scope()), items)));
+                        entry.putBoolean(SINGLE, items.single());
+                        entry.putBoolean(BLOCKS, items.blocks());
+                        entry.putString(NAME, items.nameKey());
                     }
                 });
             }
@@ -403,12 +414,6 @@ public final class DomainPage implements Draw {
         return ColonySchemas.of(scope).find(key).map(setting -> new Declared(scope, setting));
     }
 
-    private boolean itemList(String key) {
-        return setting(key)
-            .filter(pair -> pair.setting() instanceof Schema.Setting.Items items && !items.single())
-            .isPresent();
-    }
-
     private void carryOut(Player player, int index, int slot) {
         if (!(player instanceof ServerPlayer serverPlayer)) {
             return;
@@ -435,10 +440,7 @@ public final class DomainPage implements Draw {
             case Board.Act.Edit edit -> setting(edit.settingKey()).ifPresent(pair -> {
                 SettingsPage.Scope where = new SettingsPage.Scope.AtColony(pair.scope());
                 switch (pair.setting()) {
-                    case Schema.Setting.Items items -> {
-                        if (!items.single()) {
-                            ItemListEditor.open(player, pair.scope(), items.key());
-                        }
+                    case Schema.Setting.Items ignored -> {
                     }
                     case Schema.Setting.Flag flag ->
                         SettingsPage.setFlag(player, where, flag, !SettingsPage.flagOf(player, where, flag));
@@ -461,8 +463,13 @@ public final class DomainPage implements Draw {
             if (pair.setting() instanceof Schema.Setting.Choice choice) {
                 SettingsPage.setChoice(player, where, choice, option);
             }
-            if (pair.setting() instanceof Schema.Setting.Items items && items.single()) {
-                SettingsPage.setItem(player, where, items, option);
+        });
+    }
+
+    private void hold(Player player, String key, List<ItemFilter> filters) {
+        setting(key).ifPresent(pair -> {
+            if (pair.setting() instanceof Schema.Setting.Items items) {
+                SettingsPage.setItems(player, new SettingsPage.Scope.AtColony(pair.scope()), items, filters);
             }
         });
     }
@@ -495,9 +502,13 @@ public final class DomainPage implements Draw {
         private int[][] kinds = new int[ROW_SLOTS][ACT_SLOTS];
         private ResourceLocation[][] opens = new ResourceLocation[ROW_SLOTS][ACT_SLOTS];
         private BlockPos[][] pings = new BlockPos[ROW_SLOTS][ACT_SLOTS];
-        private String[][] lists = new String[ROW_SLOTS][ACT_SLOTS];
         private String[][] choices = new String[ROW_SLOTS][ACT_SLOTS];
         private String[][] picks = new String[ROW_SLOTS][ACT_SLOTS];
+        private String[][] held = new String[ROW_SLOTS][ACT_SLOTS];
+        private boolean[][] single = new boolean[ROW_SLOTS][ACT_SLOTS];
+        private boolean[][] blocks = new boolean[ROW_SLOTS][ACT_SLOTS];
+        private String[][] named = new String[ROW_SLOTS][ACT_SLOTS];
+        private ItemPicker.Sending sending;
         private ResourceLocation[][] chosen = new ResourceLocation[ROW_SLOTS][ACT_SLOTS];
         private ChoicePicker.Asking asking;
         private final String[][] typed = new String[ROW_SLOTS][ACT_SLOTS];
@@ -539,12 +550,11 @@ public final class DomainPage implements Draw {
         }
 
         private void editAt(Player player, Button press, int index, int slot) {
-            String key = lists[index][slot];
-            if (key != null) {
-                setting(key).ifPresent(pair -> ItemListEditor.open(player, pair.scope(), key));
-            }
-            if (picks[index][slot] != null) {
-                SelectorDialog.openItems(press, stack -> pickAt(index, slot, stack));
+            String picking = picks[index][slot];
+            if (picking != null) {
+                SettingsPage.openItems(press, Component.translatable(named[index][slot]), single[index][slot],
+                    blocks[index][slot], ItemPicker.decode(held[index][slot]),
+                    filters -> sending.send(picking, filters));
             }
             String choosing = choices[index][slot];
             if (choosing != null) {
@@ -557,12 +567,23 @@ public final class DomainPage implements Draw {
             }
         }
 
-        // An item for a setting naming one, from its search or dragged onto its button from a recipe viewer.
+        // An item dragged onto the button from a recipe viewer: the one named, or one more rule.
         private void pickAt(int index, int slot, ItemStack stack) {
             String picking = picks[index][slot];
-            if (picking != null && !stack.isEmpty()) {
-                asking.ask(picking, BuiltInRegistries.ITEM.getKey(stack.getItem()));
+            if (picking == null || stack.isEmpty()) {
+                return;
             }
+            if (single[index][slot]) {
+                sending.send(picking, List.of(ItemFilter.item(BuiltInRegistries.ITEM.getKey(stack.getItem()))));
+                return;
+            }
+            FilterStacks.parse(stack).ifPresent(dropped -> {
+                List<ItemFilter> rules = new ArrayList<>(ItemPicker.decode(held[index][slot]));
+                if (!rules.contains(dropped)) {
+                    rules.add(dropped);
+                    sending.send(picking, rules);
+                }
+            });
         }
 
         private void openAt(Player player, int index, int slot) {
@@ -701,10 +722,10 @@ public final class DomainPage implements Draw {
                     kinds[index][slot] = KIND_NONE;
                     opens[index][slot] = null;
                     pings[index][slot] = null;
-                    lists[index][slot] = null;
                     choices[index][slot] = null;
                     chosen[index][slot] = null;
                     picks[index][slot] = null;
+                    held[index][slot] = null;
                     forget(index, slot);
                     continue;
                 }
@@ -719,13 +740,15 @@ public final class DomainPage implements Draw {
                     ? ResourceLocation.tryParse(entry.getString(TARGET)) : null;
                 pings[index][slot] = kinds[index][slot] == KIND_PING
                     ? NbtUtils.readBlockPos(entry, TARGET).orElse(null) : null;
-                lists[index][slot] = kinds[index][slot] == KIND_EDIT && !entry.getString(TARGET).isEmpty()
-                    ? entry.getString(TARGET) : null;
                 boolean choosing = kinds[index][slot] == KIND_EDIT && entry.contains(CHOSEN);
                 choices[index][slot] = choosing ? entry.getString(SETTING) : null;
                 chosen[index][slot] = choosing ? ResourceLocation.tryParse(entry.getString(CHOSEN)) : null;
                 picks[index][slot] = kinds[index][slot] == KIND_EDIT && entry.getBoolean(PICKS)
                     ? entry.getString(SETTING) : null;
+                held[index][slot] = entry.getString(HELD);
+                single[index][slot] = entry.getBoolean(SINGLE);
+                blocks[index][slot] = entry.getBoolean(BLOCKS);
+                named[index][slot] = entry.getString(NAME);
 
                 boolean counts = number != null && kinds[index][slot] == KIND_EDIT
                     && entry.contains(RAW);

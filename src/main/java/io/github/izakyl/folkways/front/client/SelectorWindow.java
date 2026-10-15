@@ -5,10 +5,11 @@ import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UI;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager;
-import io.github.izakyl.folkways.front.ui.screen.SelectorDialog;
+import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
@@ -26,7 +27,8 @@ public final class SelectorWindow {
             .layout(layout -> layout.widthPercent(100).heightPercent(100));
         ModularUI ui = new ModularUI(UI.of(root, StylesheetManager.MC), minecraft.player);
         minecraft.setScreen(new Held(ui, parent));
-        SelectorDialog.open(ui, chosen)
+        ItemPicker.one(root, Component.translatable("folkways.selector.title"), null, false,
+                id -> chosen.accept(new ItemStack(BuiltInRegistries.ITEM.get(id))))
             .darkenBackground()
             .setOnClose(() -> minecraft.setScreen(parent));
     }

@@ -18,6 +18,7 @@ import io.github.izakyl.folkways.front.api.Shape;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.world.level.block.state.BlockState;
 
 public final class FarmingContent {
 
@@ -85,6 +86,11 @@ public final class FarmingContent {
 
     public static Vocation trade() {
         return Vocations.required(VOCATION);
+    }
+
+    // What a farmer pulls up before tilling, for work that weeds ground it never tills.
+    public static boolean weed(BlockState state) {
+        return Tillage.weeds(state);
     }
 
     private static Schema.Setting crop() {

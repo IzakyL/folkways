@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
 import io.github.izakyl.folkways.front.api.ui.Draw;
+import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
@@ -21,13 +22,16 @@ import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySchemas;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.front.engine.colony.ColonyZone;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -35,10 +39,7 @@ public final class SettingsPage implements Draw {
 
     static final int CONTROL_MIN = 28;
 
-    @FunctionalInterface
-    public interface ItemListEditor {
-        void open(Player player, ResourceLocation scope, String key);
-    }
+    private static final int MOST_RULES = 64;
 
     public sealed interface Scope {
 
@@ -52,18 +53,11 @@ public final class SettingsPage implements Draw {
         }
     }
 
-    private static volatile ItemListEditor editor = (player, scope, key) -> {
-    };
-
     private SettingsPage() {
     }
 
     public static SettingsPage of() {
         return new SettingsPage();
-    }
-
-    public static void install(ItemListEditor installed) {
-        editor = installed;
     }
 
     @Override
@@ -153,16 +147,49 @@ public final class SettingsPage implements Draw {
         return press;
     }
 
+    // The rules held, worn as the first one's icon and what they come to; a click opens the picker on them.
     private static UIElement opener(Player player, ResourceLocation scope,
             Schema.Setting.Items items) {
+        Scope where = new Scope.AtColony(scope);
         Label shown = Rows.value(Component.empty());
-        shown.bind(DataBindingBuilder.componentS2C(() -> label(player, scope, items)).build());
+        shown.bind(DataBindingBuilder.componentS2C(() -> label(player, where, items)).build());
         Button press = new Button().noText();
         press.layout(layout -> layout.widthAuto().minWidth(CONTROL_MIN).flexShrink(0));
-        press.addChildren(shown);
-        press.setOnClick(event -> editor.open(player, scope, items.key()));
-        press.setOnServerClick(event -> editor.open(player, scope, items.key()));
+        UIElement worn = Rows.icon(ItemStack.EMPTY);
+        press.addChildren(worn, shown);
+        String[] current = { "" };
+        press.addSyncValue(DataBindingBuilder.stringS2C(() -> ItemPicker.encode(itemsOf(player, where, items)))
+            .onSyncReceived(raw -> {
+                if (!raw.equals(current[0])) {
+                    current[0] = raw;
+                    worn.style(style -> style.background(new ItemStackTexture(firstIcon(raw))));
+                }
+            }).build().getSyncValue());
+        ItemPicker.Sending sending = new ItemPicker.Sending(press, (key, filters) -> {
+            if (key.equals(items.key())) {
+                setItems(player, where, items, filters);
+            }
+        });
+        press.setOnClick(event -> openItems(press, items.name(), items.single(), items.blocks(),
+            ItemPicker.decode(current[0]), filters -> sending.send(items.key(), filters)));
         return press;
+    }
+
+    // The picker a setting of items asks for: one item, or rules.
+    static void openItems(UIElement host, Component title, boolean single, boolean blocks, List<ItemFilter> held,
+            Consumer<List<ItemFilter>> confirmed) {
+        if (single) {
+            ResourceLocation current = held.stream().filter(filter -> filter.kind() == ItemFilter.Kind.ITEM)
+                .map(ItemFilter::id).findFirst().orElse(null);
+            ItemPicker.one(host, title, current, blocks, id -> confirmed.accept(List.of(ItemFilter.item(id))));
+        } else {
+            ItemPicker.many(host, title, held, blocks, confirmed);
+        }
+    }
+
+    static ItemStack firstIcon(String raw) {
+        List<ItemFilter> held = ItemPicker.decode(raw);
+        return held.isEmpty() ? ItemStack.EMPTY : ItemPicker.iconOf(held.getFirst());
     }
 
     static Component label(Player player, ResourceLocation scope, Schema.Setting setting) {
@@ -179,8 +206,9 @@ public final class SettingsPage implements Draw {
                 flagOf(held, flag) ? "folkways.action.on" : "folkways.action.off");
             case Schema.Setting.Count count -> Component.literal(Integer.toString(countOf(held, count)));
             case Schema.Setting.Choice choice -> ChoicePicker.labelOf(choiceOf(held, choice));
-            case Schema.Setting.Items items -> Component.translatable("folkways.settings.entries",
-                held.entries(items.key()).size());
+            case Schema.Setting.Items items -> items.single()
+                ? itemsOf(held, items).stream().findFirst().map(ItemPicker::labelOf).orElse(Component.empty())
+                : Component.translatable("folkways.settings.entries", itemsOf(held, items).size());
         };
     }
 
@@ -200,10 +228,39 @@ public final class SettingsPage implements Draw {
     }
 
     static void setItem(Player player, Scope where, Schema.Setting.Items items, ResourceLocation item) {
-        if (BuiltInRegistries.ITEM.containsKey(item)) {
-            put(player, where, items, items.key(),
-                new ColonySettings.Value.Items(List.of(ItemFilter.item(item))));
+        setItems(player, where, items, List.of(ItemFilter.item(item)));
+    }
+
+    // What a client sends is weighed again here: a lone item where one is named, blocks where blocks are.
+    static void setItems(Player player, Scope where, Schema.Setting.Items items, List<ItemFilter> filters) {
+        List<ItemFilter> kept = new ArrayList<>();
+        for (ItemFilter filter : filters) {
+            if (kept.size() < MOST_RULES && allowed(items, filter) && !kept.contains(filter)) {
+                kept.add(filter);
+            }
         }
+        if (items.single() && kept.size() != 1) {
+            return;
+        }
+        put(player, where, items, items.key(), new ColonySettings.Value.Items(List.copyOf(kept)));
+    }
+
+    private static boolean allowed(Schema.Setting.Items items, ItemFilter filter) {
+        return switch (filter.kind()) {
+            case ITEM -> BuiltInRegistries.ITEM.getOptional(filter.id())
+                .filter(item -> item != Items.AIR && (!items.blocks() || item instanceof BlockItem))
+                .isPresent();
+            case TAG, QUERY -> !items.single();
+        };
+    }
+
+    static List<ItemFilter> itemsOf(Player player, Scope where, Schema.Setting.Items items) {
+        return filled(player, where).map(held -> itemsOf(held, items)).orElse(items.byDefault());
+    }
+
+    private static List<ItemFilter> itemsOf(ColonySettings held, Schema.Setting.Items items) {
+        return held.valueOf(items.key()).orElse(null) instanceof ColonySettings.Value.Items set
+            ? set.value() : items.byDefault();
     }
 
     static void setFlag(Player player, Scope where, Schema.Setting.Flag flag, boolean on) {
@@ -224,7 +281,7 @@ public final class SettingsPage implements Draw {
             case Schema.Setting.Flag flag -> new ColonySettings.Value.Flag(flagOf(held, flag));
             case Schema.Setting.Count count -> new ColonySettings.Value.Count(countOf(held, count));
             case Schema.Setting.Choice choice -> new ColonySettings.Value.Choice(choiceOf(held, choice));
-            case Schema.Setting.Items ignored -> null;
+            case Schema.Setting.Items items -> new ColonySettings.Value.Items(itemsOf(held, items));
         };
     }
 

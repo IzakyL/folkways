@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.core.api.perk.PerkPool;
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.core.api.resident.body.FolkwaysAttachments;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.ItemQuery;
 import io.github.izakyl.folkways.core.api.terms.Structures;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
@@ -68,7 +69,10 @@ public final class FolkwaysMod {
         modBus.addListener(FolkwaysMod::reportDegradedMixins);
         NeoForge.EVENT_BUS.addListener(this::onServerStarting);
         NeoForge.EVENT_BUS.addListener(labor::onServerTick);
-        NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.TagsUpdatedEvent.class, event -> Goods.forgetTags());
+        NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.TagsUpdatedEvent.class, event -> {
+            Goods.forgetTags();
+            ItemQuery.forget();
+        });
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onServerStopped);
     }

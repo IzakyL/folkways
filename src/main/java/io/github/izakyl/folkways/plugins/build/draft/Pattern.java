@@ -189,7 +189,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
 
     private static void unloaded(Schema.Setting.Items slot, Set<ResourceLocation> into) {
         for (ItemFilter filter : slot.byDefault()) {
-            if (!filter.tag() && !BuiltInRegistries.ITEM.containsKey(filter.id())) {
+            if (filter.kind() == ItemFilter.Kind.ITEM && !BuiltInRegistries.ITEM.containsKey(filter.id())) {
                 into.add(filter.id());
             }
         }

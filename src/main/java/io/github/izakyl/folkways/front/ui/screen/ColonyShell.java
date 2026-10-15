@@ -73,7 +73,6 @@ public final class ColonyShell
     private final Optional<BlockPos> site;
     private final boolean atSite;
     private Map<ResourceLocation, Pane> opened = Map.of();
-    private ItemListEditor lists;
     private final ZoneSettings selectionSettings = ZoneSettings.create();
     private boolean editingSelection;
 
@@ -155,9 +154,6 @@ public final class ColonyShell
             }
         }
         opened = Map.copyOf(panes);
-        lists = ItemListEditor.create(player);
-        lists.livesIn(windows.add("item_list",
-            Component.translatable("folkways.settings.items"), lists.build()));
         desk.root().addSyncValue(DataBindingBuilder.stringS2C(() -> answeringPage(player, site)
             .map(ResourceLocation::toString).orElse(""))
             .onSyncReceived(id -> {
@@ -209,10 +205,6 @@ public final class ColonyShell
         return player.containerMenu instanceof ModularUIContainerMenu menu
             && menu.uiHolder instanceof ColonyShell shell
             ? Optional.of(shell) : Optional.empty();
-    }
-
-    Optional<ItemListEditor> itemLists() {
-        return Optional.ofNullable(lists);
     }
 
     private static Optional<UUID> heldColonyId(Player player) {
@@ -356,10 +348,6 @@ public final class ColonyShell
                 Component.translatable(kind.nameKey()), windowed(kind, player, windows)));
         }
         opened = Map.copyOf(panes);
-
-        lists = ItemListEditor.create(player);
-        lists.livesIn(windows.add("item_list",
-            Component.translatable("folkways.settings.items"), lists.build()));
 
         UIElement root = desk.root();
         root.addSyncValue(DataBindingBuilder.boolS2C(() -> Pages.colonyOf(player).isPresent())

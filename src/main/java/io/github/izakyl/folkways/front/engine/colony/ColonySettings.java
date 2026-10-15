@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.persist.Entries;
 import io.github.izakyl.folkways.core.api.persist.Reader;
 import io.github.izakyl.folkways.core.api.persist.Writer;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.core.api.terms.ItemQuery;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -84,11 +86,15 @@ public final class ColonySettings implements Settings {
         }
         List<ItemSpec> allowed = new ArrayList<>(entries.size());
         for (ItemFilter entry : entries) {
-            allowed.add(entry.tag()
-                ? ItemSpec.of(TagKey.create(Registries.ITEM, entry.id()))
-                : ItemSpec.of(entry.id()));
+            switch (entry.kind()) {
+                case ITEM -> allowed.add(ItemSpec.of(entry.id()));
+                case TAG -> allowed.add(ItemSpec.of(TagKey.create(Registries.ITEM, entry.id())));
+                // A query stands for what it finds now: tags reloaded, it is asked again.
+                case QUERY -> ItemQuery.parse(entry.text()).ifPresent(query -> query.items()
+                    .forEach(item -> allowed.add(ItemSpec.of(BuiltInRegistries.ITEM.getKey(item)))));
+            }
         }
-        return Optional.of(ItemSpec.anyOf(allowed));
+        return allowed.isEmpty() ? Optional.empty() : Optional.of(ItemSpec.anyOf(allowed));
     }
 
     public List<ItemFilter> entries(String key) {
@@ -130,8 +136,11 @@ public final class ColonySettings implements Settings {
             case Value.Flag flag -> saved.flag("flag", flag.value());
             case Value.Count count -> saved.integer("count", count.value());
             case Value.Choice choice -> saved.id("choice", choice.value());
-            case Value.Items items -> saved.children("items", items.value(), entry ->
-                Writer.of().id(entry.tag() ? "tag" : "item", entry.id()).tag());
+            case Value.Items items -> saved.children("items", items.value(), entry -> switch (entry.kind()) {
+                case ITEM -> Writer.of().id("item", entry.id()).tag();
+                case TAG -> Writer.of().id("tag", entry.id()).tag();
+                case QUERY -> Writer.of().string("query", entry.text()).tag();
+            });
         }
         return saved.tag();
     }
@@ -165,7 +174,11 @@ public final class ColonySettings implements Settings {
 
     private static Optional<ItemFilter> readEntry(Reader entry) {
         Optional<ItemFilter> tag = entry.id("tag").map(ItemFilter::tag);
-        return tag.isPresent() ? tag : entry.id("item").map(ItemFilter::item);
+        if (tag.isPresent()) {
+            return tag;
+        }
+        Optional<ItemFilter> query = entry.string("query").flatMap(ItemFilter::query);
+        return query.isPresent() ? query : entry.id("item").map(ItemFilter::item);
     }
 
     private static Value defaultOf(Schema.Setting declared) {

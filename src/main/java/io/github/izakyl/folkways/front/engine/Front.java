@@ -17,9 +17,7 @@ import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysRecipes;
 import io.github.izakyl.folkways.front.ui.screen.ColonyShell;
-import io.github.izakyl.folkways.front.ui.screen.ItemListEditor;
 import io.github.izakyl.folkways.front.ui.screen.PageKinds;
-import io.github.izakyl.folkways.front.ui.screen.SettingsPage;
 import java.util.Optional;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
@@ -51,7 +49,6 @@ public final class Front {
         FolkwaysPlayerAttachments.register(modBus);
         FolkwaysRecipes.register(modBus);
         ColonyShell.register();
-        SettingsPage.install(ItemListEditor::open);
         modBus.addListener(RegisteringUi.class, PageKinds::registerUi);
         modBus.addListener(BuildCreativeModeTabContentsEvent.class, event -> {
             if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {

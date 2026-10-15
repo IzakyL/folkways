@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { camera, input, player, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements } from "../ldlib2";
 import { foundColonyFast, openColonyPanelViaBook, optInViaBook, setBookGesture, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
-import { boardActs, enterSitePanel, firstEmptyGridSlot } from "../shared/ui/site-panel";
+import { boardActs, enterSitePanel } from "../shared/ui/site-panel";
 import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
 import { discoverPages, capturePageWindows, clickTab } from "./ui-catalog";
 import { LayoutProbe } from "../shared/capture/layout-lint";
@@ -237,24 +237,21 @@ test("panels and item models on camera", async ({}, testInfo) => {
     await clickTab(client, "folkways.tab.settings");
     await safeAction(() => frames(client, 2));
     await clickElement(client, { id: "folkways.settings.open.tool" });
-    await softly(() => waitForElement(client, { id: "folkways.settings.back" }, { timeoutMs: 8_000 }));
+    await softly(() => waitForElement(client, { id: "folkways.selector.close" }, { timeoutMs: 8_000 }));
     await tick.sprint(server, 5);
     await safeAction(() => frames(client, 3));
     await run.shot(client, "05-7-settings-tool", {
-      subject: "Settings · tool list: the grid is the list, and whatever a slot holds is one entry",
+      subject: "Settings · tool list: the item picker, a folder for each mod and, in it, each tag; the rules held below",
       worldState: { tokens: await tokensOf(client) },
     });
-    await run.lint(probe, "window:item-list");
+    await run.lint(probe, "window:selector-tree");
 
-    const emptyGridSlot = await firstEmptyGridSlot(client);
-    await softly(() => clickSlot(client, emptyGridSlot));
-    await softly(() => waitForElement(client, { id: "folkways.selector.close" }, { timeoutMs: 8_000 }));
     await clickUnverified(client, { id: "folkways.selector.search" });
     await safeAction(() => input.key(client, { text: "bread" }));
     await safeAction(() => frames(client, 3));
     await run.shot(client, "06-item-selector", {
-      subject: "Shared item picker: search box plus result rows; every item list and the zone config slots use this same picker",
-      worldState: { query: "bread", slot: emptyGridSlot, tokens: await tokensOf(client) },
+      subject: "Shared item picker: a search over every item, and the search kept as a rule; every item setting uses it",
+      worldState: { query: "bread", tokens: await tokensOf(client) },
     });
     await run.lint(probe, "window:selector");
     await waitForElement(client, { id: BREAD_RESULT }, { timeoutMs: 8_000 });
@@ -323,7 +320,7 @@ test("panels and item models on camera", async ({}, testInfo) => {
     ]);
     run.expectLinted([
       ...tabs.map((tab) => `tab:${tab.name}`),
-      "window:citizen", "window:looks", "window:names", "window:item-list", "window:selector",
+      "window:citizen", "window:looks", "window:names", "window:selector-tree", "window:selector",
       "page:raze-confirm", "page:site",
     ]);
     run.expectWindows(expectedWindows);

@@ -11,8 +11,10 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
+import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
@@ -50,6 +52,8 @@ final class ZoneSettings {
     private static final String MIN = "min";
     private static final String MAX = "max";
     private static final String OPTIONS = "options";
+    private static final String SINGLE = "single";
+    private static final String BLOCKS = "blocks";
 
     private static final int KIND_NONE = 0;
     private static final int KIND_ITEMS = 1;
@@ -81,6 +85,7 @@ final class ZoneSettings {
     UIElement build(Player player) {
         UIElement table = Rows.table();
         ChoicePicker.Asking asking = new ChoicePicker.Asking(table, (key, option) -> choose(player, key, option));
+        ItemPicker.Sending sending = new ItemPicker.Sending(table, (key, filters) -> hold(player, key, filters));
         for (int slot = 0; slot < SLOTS; slot++) {
             int index = slot;
             Row row = new Row();
@@ -94,7 +99,7 @@ final class ZoneSettings {
             row.worn = Rows.icon(ItemStack.EMPTY);
             row.press.addChildren(row.worn, row.value);
 
-            row.press.setOnClick(event -> pick(index, asking));
+            row.press.setOnClick(event -> pick(index, asking, sending));
 
             row.number = Controls.count(0, Integer.MAX_VALUE);
             stamp(row.number, index, row.number::getValue,
@@ -201,7 +206,11 @@ final class ZoneSettings {
             }
             case Schema.Setting.Flag flag ->
                 row.putString(RAW, SettingsPage.flagOf(player, where, flag) ? "1" : "0");
-            case Schema.Setting.Items ignored -> row.putString(RAW, "");
+            case Schema.Setting.Items items -> {
+                row.putString(RAW, ItemPicker.encode(SettingsPage.itemsOf(player, where, items)));
+                row.putBoolean(SINGLE, items.single());
+                row.putBoolean(BLOCKS, items.blocks());
+            }
         }
     }
 
@@ -231,14 +240,27 @@ final class ZoneSettings {
         });
     }
 
-    private void pick(int slot, ChoicePicker.Asking asking) {
+    private void pick(int slot, ChoicePicker.Asking asking, ItemPicker.Sending sending) {
         Row row = rows.get(slot);
-        if (row.kind != KIND_CHOICE || drawn[slot] == null) {
+        String key = drawn[slot];
+        if (key == null) {
             return;
         }
-        String key = drawn[slot];
-        ChoicePicker.open(row.press, row.nameKey, row.options, ResourceLocation.tryParse(row.raw),
-            option -> asking.ask(key, option));
+        if (row.kind == KIND_CHOICE) {
+            ChoicePicker.open(row.press, row.nameKey, row.options, ResourceLocation.tryParse(row.raw),
+                option -> asking.ask(key, option));
+        } else if (row.kind == KIND_ITEMS) {
+            SettingsPage.openItems(row.press, Component.translatable(row.nameKey), row.single, row.blocks,
+                ItemPicker.decode(row.raw), filters -> sending.send(key, filters));
+        }
+    }
+
+    private void hold(Player player, String key, List<ItemFilter> filters) {
+        setting(player, sent.indexOf(key)).ifPresent(pair -> {
+            if (pair.setting() instanceof Schema.Setting.Items items) {
+                SettingsPage.setItems(player, on(pair.zone()), items, filters);
+            }
+        });
     }
 
     private void write(Player player, int slot, String key, String value) {
@@ -311,6 +333,8 @@ final class ZoneSettings {
             row.nameKey = entry.getString(NAME);
             row.kind = entry.getInt(KIND);
             row.raw = entry.getString(RAW);
+            row.single = entry.getBoolean(SINGLE);
+            row.blocks = entry.getBoolean(BLOCKS);
             row.options = entry.getList(OPTIONS, Tag.TAG_STRING).stream()
                 .map(option -> ResourceLocation.tryParse(option.getAsString()))
                 .filter(Objects::nonNull)
@@ -353,6 +377,13 @@ final class ZoneSettings {
                     row.worn.style(style -> style.background(new ItemStackTexture(icon)));
                 }
             }
+            case KIND_ITEMS -> {
+                if (!raw.equals(row.wearing)) {
+                    row.wearing = raw;
+                    ItemStack icon = SettingsPage.firstIcon(raw);
+                    row.worn.style(style -> style.background(new ItemStackTexture(icon)));
+                }
+            }
             case KIND_FLAG -> {
                 if (echoed.fresh(slot, raw)) {
                     row.flag.setOn("1".equals(raw), false);
@@ -365,7 +396,7 @@ final class ZoneSettings {
 
     private static void wear(Row row, int kind) {
         row.press.setDisplay(kind == KIND_ITEMS || kind == KIND_CHOICE);
-        row.worn.setDisplay(kind == KIND_CHOICE);
+        row.worn.setDisplay(kind == KIND_CHOICE || kind == KIND_ITEMS);
         row.range.setDisplay(kind == KIND_COUNT);
         row.number.setDisplay(kind == KIND_COUNT);
         row.flag.setDisplay(kind == KIND_FLAG);
@@ -394,6 +425,8 @@ final class ZoneSettings {
         private int kind;
         private String nameKey = "";
         private String raw = "";
+        private boolean single;
+        private boolean blocks;
         private List<ResourceLocation> options = List.of();
     }
 }
