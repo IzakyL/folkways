@@ -216,6 +216,6 @@ public final class Containers {
     }
 
     private static int capacity(Container into, ItemStack stack) {
-        return Math.min(into.getMaxStackSize(), stack.getMaxStackSize());
+        return into.getMaxStackSize(stack);
     }
 }
