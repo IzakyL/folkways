@@ -1,0 +1,96 @@
+package io.github.izakyl.folkways.plugins.cookery.teapot;
+
+import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.ITeapot;
+import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.TeapotBlockEntity;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.TeapotRecipe;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.serializer.TeapotRecipeSerializer;
+import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
+import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
+import com.github.ysbbbbbb.kaleidoscopecookery.item.TeacupItem;
+import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.Intent;
+import io.github.izakyl.folkways.core.api.work.Refinement;
+import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.api.work.WorkSite;
+import io.github.izakyl.folkways.core.api.work.Workshop;
+import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
+import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
+import io.github.izakyl.folkways.plugins.cookery.KitchenStation;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.capabilities.Capabilities;
+
+public final class TeapotStation implements KitchenStation {
+    public boolean matches(BlockState state) { return state.is(ModBlocks.TEAPOT.get()); }
+    static Optional<TeapotBlockEntity> pot(ServerLevel level, WorldPos at) {
+        return at.in(level) && level.isLoaded(at.block(level)) && level.getBlockEntity(at.block(level)) instanceof TeapotBlockEntity pot ? Optional.of(pot) : Optional.empty();
+    }
+    static boolean empty(TeapotBlockEntity pot) {
+        return pot.getStatus() == ITeapot.PUT_INGREDIENT && pot.getInput().isEmpty() && pot.getResult().isEmpty()
+            && pot.getTeaFluidId().equals(TeapotRecipeSerializer.EMPTY_TEA_FLUID);
+    }
+    static List<Job> jobs(ServerLevel level) {
+        return level.getRecipeManager().getAllRecipesFor(com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes.TEAPOT_RECIPE).stream()
+            .filter(holder -> !FolkwaysConfig.refusedRecipes().contains(holder.id()) && holder.value().ingredientCount() == 1)
+            .flatMap(holder -> java.util.Arrays.stream(holder.value().ingredient().getItems()).filter(stack -> !stack.isEmpty())
+                .map(input -> new Job(holder.id(), holder.value().teaFluid(), input.copyWithCount(1),
+                    holder.value().getResultItem(level.registryAccess()).copyWithCount(TeapotRecipe.OUTPUT_COUNT), holder.value().time())))
+            .filter(job -> job.output().getItem() instanceof TeacupItem && !job.bucket().isEmpty()).toList();
+    }
+    public Optional<Workshop> freeze(UUID key, UUID colony, ServerLevel level, WorldPos at,
+                                     Stances stances, KitchenBookings bookings, Runnable changed) {
+        if (pot(level, at).filter(TeapotStation::empty).isEmpty()) { return Optional.empty(); }
+        return Optional.of(new Bench(key, colony, at, stances, jobs(level), bookings, changed));
+    }
+    public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
+                                KitchenBookings bookings, Runnable changed) {
+        if (!bookings.free(at)) { return List.of(); }
+        return pot(level, at).flatMap(pot -> TeaBatch.read(pot, level)).filter(batch -> batch.colony().equals(colony)).map(batch -> {
+            Job job = new Job(batch.recipe(), batch.fluid(), batch.ingredient(), batch.output(), batch.time());
+            return List.of(Grown.of(new TeapotWork(colony, at, stances, job, bookings, changed, batch)));
+        }).orElse(List.of());
+    }
+    public void release(UUID colony, ServerLevel level, WorldPos at) { pot(level, at).filter(pot -> TeaBatch.ours(pot, colony)).ifPresent(TeaBatch::clear); }
+    public Component status(ServerLevel level, WorldPos at) {
+        String state = pot(level, at).map(pot -> pot.getStatus() == ITeapot.FINISHED ? "finished" : empty(pot) ? "idle"
+            : pot.hasHeatSource(level) ? "cooking" : "cold").orElse("idle");
+        return Component.translatable("folkways.page.cookery." + state);
+    }
+    record Job(ResourceLocation recipe, ResourceLocation fluid, ItemStack input, ItemStack output, int time) {
+        Job { input = input.copy(); output = output.copy(); }
+        ItemSpec ingredient() { return Goods.specOf(input); }
+        ItemStack bucket() {
+            ItemStack candidate = new ItemStack(BuiltInRegistries.FLUID.get(fluid).getBucket());
+            var cap = candidate.getCapability(Capabilities.FluidHandler.ITEM);
+            return cap != null && cap.getFluidInTank(0).getAmount() >= 1000
+                && BuiltInRegistries.FLUID.getKey(cap.getFluidInTank(0).getFluid()).equals(fluid) ? candidate : ItemStack.EMPTY;
+        }
+    }
+    private record Bench(UUID key, UUID colony, WorldPos at, Stances stances, List<Job> jobs,
+                         KitchenBookings bookings, Runnable changed) implements Workshop {
+        public ResourceLocation id() { return CookeryContent.ID; }
+        public WorkSite site() { return new WorkSite.AtBlock(at); }
+        public List<Refinement.Change> options(Intent intent, Grown graph) {
+            if (!(intent instanceof io.github.izakyl.folkways.core.api.work.Produce produce)) { return List.of(); }
+            List<Refinement.Change> options = new ArrayList<>();
+            for (Job job : jobs) {
+                if (!Goods.matches(job.output(), produce.wanted())) { continue; }
+                TeapotWork work = new TeapotWork(colony, at, stances, job, bookings, changed, null);
+                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));
+            }
+            return List.copyOf(options);
+        }
+    }
+}
