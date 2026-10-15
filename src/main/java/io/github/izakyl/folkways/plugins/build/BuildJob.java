@@ -2,16 +2,21 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.ToolUse;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
@@ -52,6 +57,8 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
 
     static final ItemSpec SCAFFOLDING = ItemSpec.of(ResourceLocation.withDefaultNamespace("scaffolding"));
 
+    static final ItemSpec BUCKET = ItemSpec.of(ResourceLocation.withDefaultNamespace("bucket"));
+
     static final ItemSpec WATER_BUCKET = ItemSpec.of(ResourceLocation.withDefaultNamespace("water_bucket"));
 
     BuildJob {
@@ -82,6 +89,29 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
             case JOIN -> cost;
             case STRIP, DRAIN, LOWER -> List.of();
         };
+    }
+
+    // What the job leaves in the pack: what it breaks, the bucket a pour empties, the scaffold it takes down.
+    List<Amount> leaves() {
+        return switch (kind) {
+            case STRIP -> Leaves.ofBlocks(before.values().stream()
+                .filter(state -> !state.isAir() && !state.liquid()).toList());
+            case LAY -> adjusts() ? List.of() : laidLeaves();
+            case POUR -> List.of(new Amount(BUCKET, 1));
+            case LOWER -> List.of(new Amount(SCAFFOLDING, after.size()));
+            case DRAIN, RAISE, JOIN -> List.of();
+        };
+    }
+
+    private List<Amount> laidLeaves() {
+        List<Amount> left = new ArrayList<>(Leaves.ofBlocks(
+            before.values().stream().filter(BuildJob::inTheWay).toList()));
+        for (Need need : feed()) {
+            if (need.spec().item().map(BuiltInRegistries.ITEM::get).filter(BucketItem.class::isInstance).isPresent()) {
+                left.add(new Amount(BUCKET, need.count()));
+            }
+        }
+        return Leaves.merged(left);
     }
 
     int laborTicks() {

@@ -1987,6 +1987,11 @@ public final class Weaver {
                 into.add(touch.into());
             }
         }
+        // What the work leaves in the pack fills it as goods carried do, though nobody is promised it.
+        Node worked = nodes.get(node);
+        if (worked != null) {
+            carrying.addAll(worked.spec().leaves());
+        }
         return new Placement(stands == null ? Set.of() : stands, carrying, List.copyOf(from), List.copyOf(into),
             drawsOf(node));
     }

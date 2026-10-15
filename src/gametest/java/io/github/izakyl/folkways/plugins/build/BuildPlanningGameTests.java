@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -21,6 +22,7 @@ import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import java.lang.reflect.Proxy;
@@ -167,6 +169,37 @@ public final class BuildPlanningGameTests {
         helper.assertTrue(rig.work(helper, west, worker(helper, at(helper, 4, 1, 6))) instanceof Outcome.Done,
             "the work takes the world as it finds it");
         helper.assertTrue(level.getBlockState(west).is(Blocks.STONE), "the dirt in the way gives way to the stone");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void whatIsBrokenIsMadeRoomForAndAFullPackLeavesToPutItAway(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        floor(helper);
+        BlockPos rock = at(helper, 5, 1, 5);
+        level.setBlock(rock, STONE, 3);
+        SiteRig rig = SiteRig.start(level, target(level, Map.of(rock, Blocks.AIR.defaultBlockState())));
+        helper.assertTrue(rig.asked.size() == 1, "one turn is asked for the stone, not " + rig.asked.size());
+        Node stay = rig.asked.getFirst().nodes().getFirst();
+        helper.assertTrue(stay.spec().leaves().equals(List.of(new Amount(ItemSpec.of(
+                ResourceLocation.withDefaultNamespace("stone")), 1))),
+            "the turn keeps room for what the stone breaks into, not " + stay.spec().leaves());
+        Workload.Within shift = (Workload.Within) stay.spec().workload();
+        BlockPos feet = at(helper, 5, 1, 7);
+
+        // Room on a stack of stone is no room for cobble.
+        SimpleContainer full = new SimpleContainer(2);
+        full.setItem(0, new ItemStack(Items.DIRT, 64));
+        full.setItem(1, new ItemStack(Items.STONE, 63));
+        helper.assertTrue(shift.next(level, worker(helper, feet, full)) == Workload.Within.LEAVE,
+            "a pack with no room for the rubble leaves to put it away");
+        helper.assertTrue(level.getEntitiesOfClass(ItemEntity.class, new AABB(rock).inflate(3.0D)).isEmpty()
+            && level.getBlockState(rock).is(Blocks.STONE), "nothing is broken for want of room, and nothing dropped");
+
+        SimpleContainer topped = new SimpleContainer(2);
+        topped.setItem(0, new ItemStack(Items.STONE, 63));
+        helper.assertTrue(shift.next(level, worker(helper, feet, topped)) instanceof Workload.Within.Turn.Piece,
+            "an empty cell is room enough");
         helper.succeed();
     }
 
@@ -803,11 +836,14 @@ public final class BuildPlanningGameTests {
     }
 
     private static Worker worker(GameTestHelper helper, BlockPos feet) {
-        Mob body = walker(helper, feet);
-        SimpleContainer pack = new SimpleContainer(new ItemStack(Items.SCAFFOLDING, 64),
+        return worker(helper, feet, new SimpleContainer(new ItemStack(Items.SCAFFOLDING, 64),
             new ItemStack(Items.STONE, 64), new ItemStack(Items.TORCH, 16), new ItemStack(Items.WATER_BUCKET),
             new ItemStack(Items.OAK_DOOR, 4), new ItemStack(Items.RED_BED, 2), new ItemStack(Items.CHEST, 2), new ItemStack(Items.STONE_STAIRS, 4),
-            new ItemStack(Items.KELP, 4), new ItemStack(Items.BIG_DRIPLEAF, 4));
+            new ItemStack(Items.KELP, 4), new ItemStack(Items.BIG_DRIPLEAF, 4)));
+    }
+
+    private static Worker worker(GameTestHelper helper, BlockPos feet, Container pack) {
+        Mob body = walker(helper, feet);
         return new Worker() {
             public Resident resident() {
                 return new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig"));

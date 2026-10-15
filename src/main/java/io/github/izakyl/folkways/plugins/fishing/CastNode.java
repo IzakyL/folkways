@@ -2,7 +2,9 @@ package io.github.izakyl.folkways.plugins.fishing;
 
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
@@ -32,6 +34,9 @@ final class CastNode implements Node {
 
     private static final ToolNeed ROD = new ToolNeed.Ability(ItemAbilities.FISHING_ROD_CAST);
 
+    // A fish, or a boot, or a book: what comes up is known only once it does.
+    private static final List<Amount> CATCH = Leaves.room(1);
+
     private final NodeSpec spec;
     private final WorldPos water;
     private final Runnable ended;
@@ -44,6 +49,7 @@ final class CastNode implements Node {
         this.spec = NodeSpec.of(id, FishingContent.ID, new WorkSite.AtBlock(water), spot.stances(),
                 Workload.Once.of(spot.biteTicks(), FishingContent::haste))
             .tools(ToolUse.of(ROD))
+            .leaves(CATCH)
             .vocation(FishingContent.trade())
             .gesture(WorkGesture.CAST)
             .doing(FishingContent.FISHING)

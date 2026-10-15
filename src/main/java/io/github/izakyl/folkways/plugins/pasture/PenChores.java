@@ -39,7 +39,7 @@ final class PenChores {
     void goals(ServerLevel level, List<Grown> into) {
         for (Quarry beast : standing) {
             if (!worked.contains(beast.subject()) && beast.at().where().in(level)) {
-                into.add(Grown.of(node(new PenNode.Chore(idOf(beast), beast,
+                into.add(Grown.of(node(level, new PenNode.Chore(idOf(beast), beast,
                     () -> {
                         worked.add(beast.subject());
                         changed.run();
@@ -48,12 +48,12 @@ final class PenChores {
         }
     }
 
-    private Node node(PenNode.Chore chore) {
+    private Node node(ServerLevel level, PenNode.Chore chore) {
         return switch (job) {
             case SHEAR -> new ShearNode(chore);
             case FEED -> new FeedNode(chore, feed);
             case CULL -> new CullNode(chore);
-            case GLEAN -> new GleanNode(chore);
+            case GLEAN -> new GleanNode(level, chore);
         };
     }
 

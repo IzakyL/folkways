@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.wares;
 
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Worker;
@@ -21,6 +22,7 @@ final class ClearNode extends CraftNode {
 
     ClearNode(UUID id, WorldPos at, Block block, Stances stances, Predicate<ItemStack> stray) {
         super(specOf(id, at, stances, Workload.Once.of(Stations.LABOR_TICKS, WaresContent::haste))
+                .leaves(Leaves.room(1))
                 .doing(WaresContent.CLEARING_STATION, block)
                 .done(),
             at, block);

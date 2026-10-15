@@ -1,5 +1,8 @@
 package io.github.izakyl.folkways.plugins.farming;
 
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.WorkNoise;
 import io.github.izakyl.folkways.core.api.work.Worker;
@@ -12,11 +15,15 @@ import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 final class FellNode extends FarmNode {
+
+    private static final int CANOPY_KINDS = 3;
+    private static final ItemSpec LOGS = ItemSpec.of(ItemTags.LOGS);
 
     private final Crop crop;
 
@@ -25,8 +32,15 @@ final class FellNode extends FarmNode {
             FarmingContent.ticksFor(FarmingContent.FELL_TICKS_PER_LOG, chore.job().cells().size()
                 + chore.job().canopy().size()
                     * (double) FarmingContent.FELL_TICKS_PER_LEAF / FarmingContent.FELL_TICKS_PER_LOG),
-            FarmingContent::haste)).doing(FarmingContent.FELLING).done(), chore);
+            FarmingContent::haste)).leaves(leaves(chore)).doing(FarmingContent.FELLING).done(), chore);
         this.crop = chore.crop();
+    }
+
+    // A log for each cell, and from the canopy a sapling, sticks and perhaps fruit, none of them told beforehand.
+    private static List<Amount> leaves(Chore chore) {
+        List<Amount> left = new ArrayList<>(List.of(new Amount(LOGS, chore.job().cells().size())));
+        left.addAll(Leaves.room(Math.min(CANOPY_KINDS, chore.job().canopy().size())));
+        return left;
     }
 
     // Every block of the tree sheds a little as it goes, and each kind of block is heard once.

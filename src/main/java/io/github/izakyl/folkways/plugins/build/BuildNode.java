@@ -44,6 +44,7 @@ abstract class BuildNode implements Node {
         this.spec = NodeSpec.of(UUID.randomUUID(), BuildContent.ID, new WorkSite.AtBlock(job.focus()),
                 job.footings(), Workload.Once.of(job.laborTicks(), BuildContent::haste))
             .needs(job.feed())
+            .leaves(job.leaves())
             .tools(job.tools())
             .vocation(BuildContent.trade())
             .gesture(WorkGesture.SWING)

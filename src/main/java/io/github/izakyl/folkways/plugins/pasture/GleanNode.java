@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.WorkNoise;
 import io.github.izakyl.folkways.core.api.work.Worker;
@@ -13,8 +15,16 @@ import net.minecraft.world.item.ItemStack;
 
 final class GleanNode extends PenNode {
 
-    GleanNode(Chore chore) {
-        super(PenNode.declare(chore, Herd.Job.GLEAN).doing(PastureContent.GLEANING).done(), chore);
+    GleanNode(ServerLevel level, Chore chore) {
+        super(PenNode.declare(chore, Herd.Job.GLEAN).leaves(leaves(level, chore)).doing(PastureContent.GLEANING)
+            .done(), chore);
+    }
+
+    // The stack as it lies now, or a cell for it when it cannot be seen.
+    private static List<Amount> leaves(ServerLevel level, Chore chore) {
+        return level.getEntity(chore.beast().subject()) instanceof ItemEntity drop
+            ? Leaves.ofStacks(List.of(drop.getItem()))
+            : Leaves.room(1);
     }
 
     @Override

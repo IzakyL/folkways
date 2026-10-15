@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.farming;
 
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.ToolUse;
@@ -11,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
@@ -20,9 +23,13 @@ final class TillNode extends FarmNode {
 
     private static final ToolUse HOE = ToolUse.of(new ToolNeed.Ability(ItemAbilities.HOE_TILL));
 
+    // A weed pulled off the ground may leave a seed.
+    private static final List<Amount> WEED_SEED = List.of(
+        new Amount(ItemSpec.of(ResourceLocation.withDefaultNamespace("wheat_seeds")), 1));
+
     TillNode(Chore chore) {
         super(FarmNode.declare(chore, Workload.Once.of(FarmingContent.CELL_TICKS,
-            FarmingContent::haste)).tools(HOE).doing(FarmingContent.TILLING).done(), chore);
+            FarmingContent::haste)).tools(HOE).leaves(WEED_SEED).doing(FarmingContent.TILLING).done(), chore);
     }
 
     @Override

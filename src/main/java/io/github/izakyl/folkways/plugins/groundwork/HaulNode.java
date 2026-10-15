@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.groundwork;
 
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.WorkNoise;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
@@ -19,11 +21,19 @@ final class HaulNode extends GroundNode {
 
     private final UUID lying;
 
-    HaulNode(Chores.Chore chore) {
+    HaulNode(ServerLevel level, Chores.Chore chore) {
         super(GroundNode.declare(chore, GroundworkContent.hauling(),
                 Workload.Once.of(GroundworkContent.CELL_TICKS, GroundworkContent::haulingHaste))
+            .leaves(leaves(level, ((WorkSite.AtEntity) chore.job().site()).entity()))
             .doing(GroundworkContent.PICKING_UP).done(), chore);
         this.lying = ((WorkSite.AtEntity) chore.job().site()).entity();
+    }
+
+    // The stack as it lies now, or a cell for it when it cannot be seen.
+    private static List<Amount> leaves(ServerLevel level, UUID lying) {
+        return level.getEntity(lying) instanceof ItemEntity drop
+            ? Leaves.ofStacks(List.of(drop.getItem()))
+            : Leaves.room(1);
     }
 
     @Override

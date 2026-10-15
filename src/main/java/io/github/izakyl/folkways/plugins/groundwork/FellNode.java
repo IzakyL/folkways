@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.groundwork;
 
+import io.github.izakyl.folkways.core.api.work.Leaves;
+import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.WorkNoise;
 import io.github.izakyl.folkways.core.api.work.Worker;
@@ -22,12 +24,27 @@ import net.minecraft.world.level.block.state.BlockState;
 // A whole tree felled as a wood lot fells it, logs and the leaves they hold up, and nothing planted back.
 final class FellNode extends GroundNode {
 
-    FellNode(Chores.Chore chore) {
+    private static final int CANOPY_KINDS = 3;
+
+    FellNode(ServerLevel level, Chores.Chore chore) {
         super(GroundNode.declare(chore, FarmingContent.trade(), Workload.Once.of(
             GroundworkContent.ticksFor(GroundworkContent.FELL_TICKS_PER_LOG, chore.job().cells().size()
                 + chore.job().canopy().size()
                     * (double) GroundworkContent.FELL_TICKS_PER_LEAF / GroundworkContent.FELL_TICKS_PER_LOG),
-            FarmingContent::haste)).doing(GroundworkContent.FELLING).done(), chore);
+            FarmingContent::haste)).leaves(leaves(level, chore.job())).doing(GroundworkContent.FELLING).done(), chore);
+    }
+
+    // The logs as they stand, and from the canopy a sapling, sticks and perhaps fruit, none of them told beforehand.
+    private static List<Amount> leaves(ServerLevel level, Job tree) {
+        List<BlockState> logs = new ArrayList<>();
+        for (BlockPos log : tree.cells()) {
+            if (level.isLoaded(log)) {
+                logs.add(level.getBlockState(log));
+            }
+        }
+        List<Amount> left = new ArrayList<>(Leaves.ofBlocks(logs));
+        left.addAll(Leaves.room(Math.min(CANOPY_KINDS, tree.canopy().size())));
+        return left;
     }
 
     @Override

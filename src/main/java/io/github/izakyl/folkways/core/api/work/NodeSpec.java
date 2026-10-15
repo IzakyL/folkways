@@ -17,6 +17,7 @@ public record NodeSpec(
     Stances stances,
     List<Need> needs,
     List<Amount> gives,
+    List<Amount> leaves,
     List<ToolUse> tools,
     Workload workload,
     WorkEffort effort,
@@ -33,6 +34,7 @@ public record NodeSpec(
     public NodeSpec {
         needs = List.copyOf(needs);
         gives = List.copyOf(gives);
+        leaves = List.copyOf(leaves);
         tools = List.copyOf(tools);
         if (effort == null || workload instanceof Workload.Once && effort instanceof WorkEffort.PerTick
                 || workload instanceof Workload.Continuous && effort instanceof WorkEffort.Total) {
@@ -75,6 +77,7 @@ public record NodeSpec(
         private WorkEffort effort;
         private List<Need> needs = List.of();
         private List<Amount> gives = List.of();
+        private List<Amount> leaves = List.of();
         private List<ToolUse> tools = List.of();
         private double pace = 1.0D;
         private Optional<Vocation> vocation = Optional.empty();
@@ -114,6 +117,12 @@ public record NodeSpec(
 
         public Builder gives(Amount... gives) {
             return gives(List.of(gives));
+        }
+
+        /** What the work is likely to leave in the pack, which the schedule keeps room for: see {@link Leaves}. */
+        public Builder leaves(List<Amount> leaves) {
+            this.leaves = leaves;
+            return this;
         }
 
         public Builder tools(List<ToolUse> tools) {
@@ -184,7 +193,7 @@ public record NodeSpec(
         }
 
         public NodeSpec done() {
-            return new NodeSpec(id, owner, site, stances, needs, gives, tools, workload, effort, pace,
+            return new NodeSpec(id, owner, site, stances, needs, gives, leaves, tools, workload, effort, pace,
                 vocation, gesture, focus, estimate, doing, about, subject);
         }
     }

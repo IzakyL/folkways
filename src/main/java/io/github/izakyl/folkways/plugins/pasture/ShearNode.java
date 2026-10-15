@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.ToolUse;
@@ -8,6 +10,7 @@ import io.github.izakyl.folkways.core.api.work.Xp;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Shearable;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.item.ItemStack;
@@ -18,8 +21,12 @@ final class ShearNode extends AnimalNode {
     private static final ToolUse SHEARS =
         new ToolUse(new ToolNeed.Ability(ItemAbilities.SHEARS_HARVEST), 1);
 
+    // A sheep gives up to three of its wool.
+    private static final List<Amount> FLEECE = List.of(new Amount(ItemSpec.of(ItemTags.WOOL), 3));
+
     ShearNode(Chore chore) {
-        super(PenNode.declare(chore, Herd.Job.SHEAR).tools(SHEARS).doing(PastureContent.SHEARING).done(), chore);
+        super(PenNode.declare(chore, Herd.Job.SHEAR).tools(SHEARS).leaves(FLEECE).doing(PastureContent.SHEARING)
+            .done(), chore);
     }
 
     @Override

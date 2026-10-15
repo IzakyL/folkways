@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Xp;
@@ -18,8 +20,11 @@ final class CullNode extends AnimalNode {
 
     private static final double SPILL = 1.0D;
 
+    // What a beast falls to is known only once it falls: meat and a hide, say, a cell each.
+    private static final List<Amount> CARCASS = Leaves.room(2);
+
     CullNode(Chore chore) {
-        super(PenNode.declare(chore, Herd.Job.CULL).doing(PastureContent.CULLING).done(), chore);
+        super(PenNode.declare(chore, Herd.Job.CULL).leaves(CARCASS).doing(PastureContent.CULLING).done(), chore);
     }
 
     @Override

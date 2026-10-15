@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.groundwork;
 
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
@@ -52,7 +53,8 @@ final class BreakNode extends GroundNode {
 
     private static NodeSpec declared(Chores.Chore chore, Way way,
             BlockState seen) {
-        var spec = GroundNode.declare(chore, way.by(), Workload.Once.of(ticksFor(way, seen), way.haste()));
+        var spec = GroundNode.declare(chore, way.by(), Workload.Once.of(ticksFor(way, seen), way.haste()))
+            .leaves(Leaves.ofBlocks(List.of(seen)));
         if (way == Way.CLEAR && seen.requiresCorrectToolForDrops()) {
             spec.tools(new ToolUse(new ToolNeed.SuitableFor(seen), 1));
         }

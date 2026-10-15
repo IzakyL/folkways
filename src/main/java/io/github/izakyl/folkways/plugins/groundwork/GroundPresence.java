@@ -76,7 +76,7 @@ final class GroundPresence implements Facing {
                     claimed.addAll(tree.cells());
                     claimed.addAll(tree.canopy());
                 });
-                settle(GroundworkContent.FELL, (at, chore) -> new FellNode(chore), trees);
+                settle(GroundworkContent.FELL, (at, chore) -> new FellNode(at, chore), trees);
             }
             if (settings.flag(GroundworkContent.WEED)) {
                 List<Job> weeds = survey.weed();
@@ -102,7 +102,7 @@ final class GroundPresence implements Facing {
             List<Job> fill = digging ? List.of() : survey.fill(claimed);
             with.ifPresent(spec -> settle(GroundworkContent.FILL, (at, chore) -> new FillNode(chore, spec), fill));
             if (settings.flag(GroundworkContent.HAUL)) {
-                settle(GroundworkContent.HAUL, (at, chore) -> new HaulNode(chore), survey.haul(view::at));
+                settle(GroundworkContent.HAUL, (at, chore) -> new HaulNode(at, chore), survey.haul(view::at));
             }
             works.keySet().removeIf(work -> !settings.flag(work) || work.equals(GroundworkContent.FILL) && with.isEmpty());
         }

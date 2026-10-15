@@ -1,12 +1,15 @@
 package io.github.izakyl.folkways.plugins.farming;
 
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.WorkNoise;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Xp;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -21,8 +24,21 @@ final class HarvestNode extends FarmNode {
     HarvestNode(Chore chore) {
         super(FarmNode.declare(chore, Workload.Once.of(FarmingContent.CELL_TICKS,
             FarmingContent::haste))
+            .leaves(leaves(chore))
             .doing(FarmingContent.HARVESTING, chore.crop().fruit()).done(), chore);
         this.crop = chore.crop();
+    }
+
+    // The fruit off each cell, and the seed of a crop cut whole: one apiece, as how many is known only once cut.
+    private static List<Amount> leaves(Chore chore) {
+        Crop crop = chore.crop();
+        int cells = chore.job().cells().size();
+        List<Amount> left = new ArrayList<>(Leaves.ofBlocks(
+            Collections.nCopies(cells, crop.fruit().defaultBlockState())));
+        if (crop.cutWhole()) {
+            left.add(new Amount(crop.seedSpec(), cells));
+        }
+        return Leaves.merged(left);
     }
 
     @Override

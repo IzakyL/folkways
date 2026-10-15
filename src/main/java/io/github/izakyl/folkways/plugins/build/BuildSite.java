@@ -8,9 +8,11 @@ import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
@@ -373,12 +375,14 @@ final class BuildSite {
         Stay(ServerLevel level, List<Piece> batch) {
             Set<UUID> ids = new LinkedHashSet<>();
             Map<ItemSpec, Long> goods = new LinkedHashMap<>();
+            List<Amount> left = new ArrayList<>();
             List<ToolUse> tools = new ArrayList<>();
             int ticks = 0;
             for (Piece piece : batch) {
                 ids.add(piece.node().id());
                 NodeSpec one = piece.node().spec();
                 one.needs().forEach(need -> goods.merge(need.spec(), need.count(), Long::sum));
+                left.addAll(one.leaves());
                 one.tools().stream().filter(use -> !tools.contains(use)).forEach(tools::add);
                 ticks += one.estimate() + WALK_TICKS;
             }
@@ -391,6 +395,7 @@ final class BuildSite {
             this.spec = NodeSpec.of(UUID.randomUUID(), BuildContent.ID,
                     new WorkSite.AtBlock(target.cell(first.work().focus())), edge(level, first), this)
                 .needs(needs)
+                .leaves(Leaves.merged(left))
                 .tools(tools)
                 .vocation(BuildContent.trade())
                 .estimate(ticks)
@@ -503,6 +508,7 @@ final class BuildSite {
             Set<UUID> ids = new HashSet<>(Set.of(seed.node().id()));
             Map<ItemSpec, Long> goods = new LinkedHashMap<>();
             seed.node().spec().needs().forEach(need -> goods.merge(need.spec(), need.count(), Long::sum));
+            List<Amount> left = new ArrayList<>(seed.node().spec().leaves());
             for (int at = 0; at < batch.size() && batch.size() < MOST_PIECES; at++) {
                 for (Piece next : after.getOrDefault(batch.get(at).node().id(), List.of())) {
                     UUID id = next.node().id();
@@ -511,11 +517,13 @@ final class BuildSite {
                     }
                     Map<ItemSpec, Long> with = new LinkedHashMap<>(goods);
                     next.node().spec().needs().forEach(need -> with.merge(need.spec(), need.count(), Long::sum));
-                    if (cells(with) > MOST_CELLS) {
+                    List<Amount> leftWith = withLeaves(left, next);
+                    if (cells(with) + Leaves.cells(leftWith) > MOST_CELLS) {
                         continue;
                     }
                     goods.clear();
                     goods.putAll(with);
+                    left = leftWith;
                     taken.add(id);
                     ids.add(id);
                     batch.add(next);
@@ -532,11 +540,14 @@ final class BuildSite {
                 }
                 Map<ItemSpec, Long> with = new LinkedHashMap<>(goods);
                 more.node().spec().needs().forEach(need -> with.merge(need.spec(), need.count(), Long::sum));
-                if (cells(with) > Math.max(1, cells(goods))) {
+                List<Amount> leftWith = withLeaves(left, more);
+                if (cells(with) > Math.max(1, cells(goods)) || cells(with) + Leaves.cells(leftWith)
+                        > Math.max(MOST_CELLS, cells(goods) + Leaves.cells(left))) {
                     continue;
                 }
                 goods.clear();
                 goods.putAll(with);
+                left = leftWith;
                 taken.add(more.node().id());
                 batch.add(more);
             }
@@ -544,6 +555,12 @@ final class BuildSite {
             stays.put(stay.id(), stay);
             asks.submit(dimension, Grown.of(stay), this::ended);
         }
+    }
+
+    private static List<Amount> withLeaves(List<Amount> left, Piece piece) {
+        List<Amount> with = new ArrayList<>(left);
+        with.addAll(piece.node().spec().leaves());
+        return Leaves.merged(with);
     }
 
     private static int cells(Map<ItemSpec, Long> goods) {
@@ -582,8 +599,13 @@ final class BuildSite {
             }
         }
         boolean coming = false;
+        boolean full = false;
         for (Piece piece : List.copyOf(live.values())) {
             if (piece.doing != null || piece.work().step().isEmpty() || !supplied(who, piece)) {
+                continue;
+            }
+            if (!roomFor(who, piece)) {
+                full = true;
                 continue;
             }
             if (!up(piece) || now < piece.restUntil) {
@@ -605,7 +627,8 @@ final class BuildSite {
         // With nothing it holds of use to any piece, the worker leaves. Holding what a piece still to come up
         // takes, it waits a while for that: its own batch comes up as it works, so a long wait is for someone
         // else's work, and the piece is batched afresh for whoever comes when it is up.
-        if (!coming) {
+        // With no room left for what the work breaks, it leaves to put that away, and is asked back after.
+        if (!coming || full) {
             return Workload.Within.LEAVE;
         }
         if (stay.waitingSince == Long.MIN_VALUE) {
@@ -874,6 +897,13 @@ final class BuildSite {
             }
         }
         return true;
+    }
+
+    // Whether the pack takes what the piece leaves. A piece that spends goods frees room in the doing, so it is let
+    // be: the worker brought those goods in for it, and turned away it would carry them off again.
+    private static boolean roomFor(Worker who, Piece piece) {
+        NodeSpec spec = piece.node().spec();
+        return spec.leaves().isEmpty() || !spec.needs().isEmpty() || Leaves.fit(who.pack(), spec.leaves());
     }
 
     // Whether the worker holds what the piece takes, in its pack.
