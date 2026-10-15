@@ -8,6 +8,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
@@ -92,12 +93,12 @@ public final class ResidentGateGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void aGateWaitsForAFollowingResidentThenCloses(GameTestHelper helper) {
+    public static void aGateWaitsForAFollowingResidentThatJoinedIt(GameTestHelper helper) {
         waitForAnotherResident(helper, false);
     }
 
     @GameTest(template = "empty")
-    public static void aGateWaitsForAnOncomingResidentThenCloses(GameTestHelper helper) {
+    public static void aGateWaitsForAnOncomingResidentThatJoinedIt(GameTestHelper helper) {
         waitForAnotherResident(helper, true);
     }
 
@@ -125,23 +126,86 @@ public final class ResidentGateGameTests {
         BlockPos gate = gateRoom(helper, Direction.EAST);
         Vec3 centre = Vec3.atBottomCenterOf(gate);
         ResidentEntity opener = residentAt(helper, centre.add(-0.9D, 0.0D, 0.0D));
-        OpenDoorwayGoal goal = openGate(helper, opener, gate);
-        opener.setPos(centre.add(1.3D, 0.0D, 0.0D));
-        ResidentEntity other = residentAt(helper, centre.add(oncoming ? 0.9D : -0.9D, 0.0D, 0.0D));
+        OpenDoorwayGoal openerGoal = openGate(helper, opener, gate);
+        ResidentEntity other = residentAt(helper, centre.add(oncoming ? 0.9D : -1.2D, 0.0D, 0.0D));
         Vec3 destination = centre.add(oncoming ? -2.0D : 2.0D, 0.0D, 0.0D);
         walkTo(helper, other, destination);
+        var otherGoal = new OpenDoorwayGoal(other);
+        helper.assertTrue(otherGoal.canUse(), "the other resident joins the gate held open on its path");
+        otherGoal.start();
+        opener.setPos(centre.add(1.3D, 0.0D, 0.0D));
+        helper.assertFalse(openerGoal.canContinueToUse(), "the opener is through");
+        openerGoal.stop();
+        helper.assertTrue(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
+            "the gate stays open while the other resident holds it");
+        other.setPos(centre);
         for (int tick = 0; tick < 25; tick++) {
-            goal.tick();
+            otherGoal.tick();
         }
-        helper.assertTrue(goal.canContinueToUse(), "the gate stays open beyond its hold time for another traveller");
+        helper.assertTrue(otherGoal.canContinueToUse(), "the gate stays open beyond its hold time for a body in it");
         other.setPos(destination);
-        other.getNavigation().stop();
-        helper.assertFalse(goal.canContinueToUse(), "neither resident needs the doorway any longer");
-        goal.stop();
+        helper.assertFalse(otherGoal.canContinueToUse(), "the other resident is through");
+        otherGoal.stop();
         helper.assertFalse(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
-            "the gate closes once both residents are clear");
+            "the last resident through closes the gate");
         opener.discard();
         other.discard();
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void anAnimalAtTheGateDoesNotHoldItOpen(GameTestHelper helper) {
+        BlockPos gate = gateRoom(helper, Direction.EAST);
+        Vec3 centre = Vec3.atBottomCenterOf(gate);
+        ResidentEntity resident = residentAt(helper, centre.add(-0.9D, 0.0D, 0.0D));
+        OpenDoorwayGoal goal = openGate(helper, resident, gate);
+        var sheep = EntityType.SHEEP.create(helper.getLevel());
+        sheep.setPos(centre.add(-0.9D, 0.0D, 0.0D));
+        helper.getLevel().addFreshEntity(sheep);
+        sheep.getNavigation().moveTo(centre.x + 2.0D, centre.y, centre.z, 1.0D);
+        resident.setPos(centre.add(1.3D, 0.0D, 0.0D));
+        goal.tick();
+        helper.assertFalse(goal.canContinueToUse(), "the resident is through");
+        goal.stop();
+        helper.assertFalse(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
+            "a sheep about to walk through does not keep the gate open");
+        resident.discard();
+        sheep.discard();
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aGateLeftOpenByAPlayerIsLeftAlone(GameTestHelper helper) {
+        BlockPos gate = gateRoom(helper, Direction.EAST);
+        helper.getLevel().setBlockAndUpdate(gate, helper.getLevel().getBlockState(gate)
+            .setValue(FenceGateBlock.OPEN, true));
+        ResidentEntity resident = residentAt(helper, Vec3.atBottomCenterOf(gate).add(-0.9D, 0.0D, 0.0D));
+        walkTo(helper, resident, Vec3.atBottomCenterOf(gate.east(2)));
+        resident.horizontalCollision = true;
+        helper.assertFalse(new OpenDoorwayGoal(resident).canUse(), "nobody holds the open gate, so there is none to join");
+        resident.discard();
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aGateHeldByAResidentThatIsGoneClosesAfterTheNext(GameTestHelper helper) {
+        BlockPos gate = gateRoom(helper, Direction.EAST);
+        Vec3 centre = Vec3.atBottomCenterOf(gate);
+        ResidentEntity gone = residentAt(helper, centre.add(-0.9D, 0.0D, 0.0D));
+        openGate(helper, gone, gate);
+        gone.discard();
+        ResidentEntity next = residentAt(helper, centre.add(-1.2D, 0.0D, 0.0D));
+        walkTo(helper, next, centre.add(2.0D, 0.0D, 0.0D));
+        var goal = new OpenDoorwayGoal(next);
+        helper.assertTrue(goal.canUse(), "the next resident joins the gate left held");
+        goal.start();
+        next.setPos(centre.add(1.3D, 0.0D, 0.0D));
+        goal.tick();
+        helper.assertFalse(goal.canContinueToUse(), "the next resident is through");
+        goal.stop();
+        helper.assertFalse(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
+            "the holder that never let go no longer keeps the gate open");
+        next.discard();
         helper.succeed();
     }
 

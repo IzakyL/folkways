@@ -5,7 +5,6 @@ import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
@@ -22,6 +21,8 @@ import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+// A resident opens a shut doorway it bumps into on its path, or joins one other residents are using ahead of
+// it: it counts itself in on start and out on stop, once its own body is through. The last one out closes it.
 public final class OpenDoorwayGoal extends Goal {
     private static final int HOLD_TICKS = 20;
     private static final double INTERACT_RANGE_SQR = 2.25D;
@@ -32,7 +33,7 @@ public final class OpenDoorwayGoal extends Goal {
     private double approachX;
     private double approachZ;
     private int holdTicks;
-    private boolean through;
+    private boolean entered;
 
     public OpenDoorwayGoal(Mob mob) {
         this.mob = mob;
@@ -40,7 +41,7 @@ public final class OpenDoorwayGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        if (!mob.horizontalCollision || !(mob.getNavigation() instanceof GroundPathNavigation navigation)) {
+        if (!(mob.getNavigation() instanceof GroundPathNavigation navigation)) {
             return false;
         }
         Path path = navigation.getPath();
@@ -50,7 +51,9 @@ public final class OpenDoorwayGoal extends Goal {
         int ahead = Math.min(path.getNextNodeIndex() + 2, path.getNodeCount());
         for (int i = 0; i < ahead; i++) {
             Node node = path.getNode(i);
-            if (adopt(new BlockPos(node.x, node.y, node.z)) || adopt(new BlockPos(node.x, node.y + 1, node.z))) {
+            boolean upcoming = i >= path.getNextNodeIndex() - 1;
+            if (adopt(new BlockPos(node.x, node.y, node.z), upcoming)
+                    || adopt(new BlockPos(node.x, node.y + 1, node.z), upcoming)) {
                 return true;
             }
         }
@@ -61,7 +64,7 @@ public final class OpenDoorwayGoal extends Goal {
     public boolean canContinueToUse() {
         return doorway != null
             && openableByHand(mob.level().getBlockState(doorway))
-            && (holdTicks > 0 && !through || inUse());
+            && (inOpening() || holdTicks > 0 && !through());
     }
 
     @Override
@@ -72,70 +75,38 @@ public final class OpenDoorwayGoal extends Goal {
     @Override
     public void start() {
         holdTicks = HOLD_TICKS;
-        through = false;
+        entered = false;
         approachX = world(doorway).x - mob.getX();
         approachZ = world(doorway).z - mob.getZ();
+        Doorways.enter(mob.level(), doorway, mob);
         setOpen(true);
     }
 
     @Override
     public void tick() {
-        holdTicks = Math.max(0, holdTicks - 1);
-        setOpen(true);
-        double dx = world(doorway).x - mob.getX();
-        double dz = world(doorway).z - mob.getZ();
-        if (approachX * dx + approachZ * dz < 0.0D) {
-            through = true;
-        }
+        holdTicks--;
+        entered |= inOpening();
     }
 
     @Override
     public void stop() {
-        if (doorway != null && !inUse()) {
+        if (doorway != null && Doorways.leave(mob.level(), doorway, mob)) {
             setOpen(false);
         }
+        doorway = null;
     }
 
-    // Crossing the centre has not cleared the body, and someone behind or coming the other way may still need
-    // the opening. Keep holding it until bodies are clear and no nearby traveller is about to use this doorway.
-    private boolean inUse() {
-        BlockPos feet = doorway;
-        BlockState state = mob.level().getBlockState(doorway);
-        if (state.getBlock() instanceof DoorBlock && state.getValue(DoorBlock.HALF) == DoubleBlockHalf.UPPER) {
-            feet = doorway.below();
-        }
-        Vec3 at = world(feet);
-        AABB opening = new AABB(at.x - 0.5D, at.y, at.z - 0.5D, at.x + 0.5D, at.y + 2.0D, at.z + 0.5D);
-        if (opening.intersects(mob.getBoundingBox())) {
-            return true;
-        }
-        for (LivingEntity other : mob.level().getEntitiesOfClass(LivingEntity.class, opening.inflate(1.0D),
-                entity -> entity.isAlive() && !entity.isSpectator())) {
-            if (other == mob) {
-                continue;
-            }
-            if (opening.intersects(other.getBoundingBox())
-                    || other instanceof Mob traveller && traveller.distanceToSqr(at) <= INTERACT_RANGE_SQR
-                        && usesDoorway(traveller)) {
-                return true;
-            }
-        }
-        return false;
+    private boolean through() {
+        double dx = world(doorway).x - mob.getX();
+        double dz = world(doorway).z - mob.getZ();
+        return entered || approachX * dx + approachZ * dz < 0.0D;
     }
 
-    private boolean usesDoorway(Mob traveller) {
-        Path path = traveller.getNavigation().getPath();
-        if (path == null || path.isDone()) {
-            return false;
-        }
-        int ahead = Math.min(path.getNextNodeIndex() + 2, path.getNodeCount());
-        for (int i = Math.max(0, path.getNextNodeIndex() - 1); i < ahead; i++) {
-            BlockPos node = path.getNode(i).asBlockPos();
-            if (node.equals(doorway) || node.above().equals(doorway)) {
-                return true;
-            }
-        }
-        return false;
+    // Crossing the doorway's centre has not cleared the body: hold it until the whole body is out.
+    private boolean inOpening() {
+        Vec3 at = world(doorway);
+        return new AABB(at.x - 0.5D, at.y, at.z - 0.5D, at.x + 0.5D, at.y + 2.0D, at.z + 0.5D)
+            .intersects(mob.getBoundingBox());
     }
 
     private Vec3 world(BlockPos storage) {
@@ -143,15 +114,24 @@ public final class OpenDoorwayGoal extends Goal {
             WorldPos.of(mob.level(), storage)).orElseThrow();
     }
 
-    private boolean adopt(BlockPos pos) {
+    // A shut doorway is opened when the body bumps into it; an open one is only joined when other residents
+    // are using it and it lies ahead, so a doorway a player left open is walked through and left alone.
+    private boolean adopt(BlockPos pos, boolean upcoming) {
         if (mob.distanceToSqr(world(pos).x, mob.getY(), world(pos).z) > INTERACT_RANGE_SQR) {
             return false;
         }
         BlockState state = mob.level().getBlockState(pos);
-        if (!openableByHand(state) || state.getValue(BlockStateProperties.OPEN)) {
+        if (!openableByHand(state)) {
             return false;
         }
-        doorway = pos.immutable();
+        BlockPos door = state.getBlock() instanceof DoorBlock
+            && state.getValue(DoorBlock.HALF) == DoubleBlockHalf.UPPER ? pos.below() : pos;
+        if (state.getValue(BlockStateProperties.OPEN)
+                ? !upcoming || !Doorways.inUse(mob.level(), door)
+                : !mob.horizontalCollision) {
+            return false;
+        }
+        doorway = door.immutable();
         return true;
     }
 
