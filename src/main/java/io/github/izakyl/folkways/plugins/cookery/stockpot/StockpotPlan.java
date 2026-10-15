@@ -3,6 +3,11 @@ package io.github.izakyl.folkways.plugins.cookery.stockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.api.recipe.soupbase.ISoupBase;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.StockpotRecipe;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.FlexStockpotRecipe;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.container.StockpotInput;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.serializer.FlexStockpotRecipeSerializer;
+import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.QualityEvaluator;
+import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.QualityUtils;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.serializer.StockpotRecipeSerializer;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.soupbase.FluidSoupBase;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.soupbase.MobSoupBase;
@@ -34,7 +39,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemStack;
 
 record StockpotPlan(ResourceLocation id, StockpotRecipe recipe, Tag definition, ItemStack result,
-                    int portions, Need soup, List<Need> ingredients, Optional<Need> carrier) {
+                    int portions, Need soup, List<Need> ingredients, Optional<Need> carrier, boolean flexible) {
 
     StockpotPlan {
         definition = definition.copy();
@@ -42,15 +47,32 @@ record StockpotPlan(ResourceLocation id, StockpotRecipe recipe, Tag definition, 
         ingredients = List.copyOf(ingredients);
     }
 
-    static Optional<RecipeHolder<StockpotRecipe>> find(ServerLevel level, ResourceLocation id) {
-        return level.getRecipeManager().getAllRecipesFor(ModRecipes.STOCKPOT_RECIPE).stream()
-            .filter(holder -> holder.id().equals(id)).findFirst();
+    static Optional<RecipeHolder<?>> find(ServerLevel level, ResourceLocation id) {
+        return level.getRecipeManager().byKey(id).filter(holder ->
+            holder.value() instanceof StockpotRecipe || holder.value() instanceof FlexStockpotRecipe);
     }
-    static Optional<StockpotPlan> of(ServerLevel level, RecipeHolder<StockpotRecipe> holder) {
+
+    static Optional<StockpotPlan> of(ServerLevel level, RecipeHolder<?> holder) {
         if (FolkwaysConfig.refusedRecipes().contains(holder.id())) {
             return Optional.empty();
         }
-        StockpotRecipe recipe = holder.value();
+        StockpotRecipe recipe;
+        Tag definition;
+        boolean flexible;
+        if (holder.value() instanceof StockpotRecipe fixed) {
+            recipe = fixed;
+            definition = StockpotRecipeSerializer.CODEC.codec()
+                .encodeStart(RegistryOps.create(NbtOps.INSTANCE, level.registryAccess()), fixed).getOrThrow();
+            flexible = false;
+        } else if (holder.value() instanceof FlexStockpotRecipe flex) {
+            // Common process fields are a snapshot only. Native matching and quality still use the real flex recipe.
+            recipe = new StockpotRecipe(flex.ingredients(), flex.soupBase(), flex.result(), flex.time(), flex.carrier(), flex.visuals());
+            definition = FlexStockpotRecipeSerializer.CODEC.codec()
+                .encodeStart(RegistryOps.create(NbtOps.INSTANCE, level.registryAccess()), flex).getOrThrow();
+            flexible = true;
+        } else {
+            return Optional.empty();
+        }
         ItemStack result = recipe.getResultItem(level.registryAccess());
         ISoupBase soup = SoupBaseManager.getSoupBase(recipe.soupBase());
         if (result.isEmpty() || soup == null) {
@@ -81,13 +103,27 @@ record StockpotPlan(ResourceLocation id, StockpotRecipe recipe, Tag definition, 
         if (!recipe.carrier().isEmpty() && carrier.isEmpty()) {
             return Optional.empty();
         }
-        Tag definition = StockpotRecipeSerializer.CODEC.codec()
-            .encodeStart(RegistryOps.create(NbtOps.INSTANCE, level.registryAccess()), recipe).getOrThrow();
         return Optional.of(new StockpotPlan(holder.id(), recipe, definition, result.copyWithCount(portions),
             portions, new Need(soupItem.get(), 1), merged(ingredients),
-            carrier.map(item -> new Need(item, portions))));
+            carrier.map(item -> new Need(item, portions)), flexible));
     }
 
+    boolean selected(ServerLevel level, StockpotInput input) {
+        var fixed = level.getRecipeManager().getRecipeFor(ModRecipes.STOCKPOT_RECIPE, input, level);
+        if (fixed.isPresent()) {
+            return !flexible && fixed.get().id().equals(id);
+        }
+        return flexible && level.getRecipeManager().getRecipeFor(ModRecipes.FLEX_STOCKPOT_RECIPE, input, level)
+            .filter(holder -> holder.id().equals(id)).isPresent();
+    }
+
+    ItemStack expectedResult(ServerLevel level, List<ItemStack> inputs) {
+        ItemStack expected = result.copy();
+        if (flexible) {
+            QualityUtils.setQuality(expected, QualityEvaluator.evaluate(inputs, recipe.ingredients(), id, level.getSeed()));
+        }
+        return expected;
+    }
     ItemSpec produces() {
         return Goods.specOf(result);
     }

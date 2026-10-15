@@ -5,6 +5,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlock
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -32,6 +33,7 @@ record StockpotBatch(UUID colony, UUID id, StockpotPlan plan, CompoundTag inputs
         tag.putUUID("colony", colony);
         tag.putUUID("batch", id);
         tag.putString("recipe", plan.id().toString());
+        tag.putBoolean("flexible", plan.flexible());
         tag.put("definition", plan.definition().copy());
         tag.put("inputs", inputs.copy());
         tag.put("lid", lid.saveOptional(level.registryAccess()));
@@ -62,7 +64,7 @@ record StockpotBatch(UUID colony, UUID id, StockpotPlan plan, CompoundTag inputs
         if (holder == null) {
             return Optional.empty();
         }
-        return StockpotPlan.of(level, holder).filter(plan -> plan.definition().equals(tag.get("definition")))
+        return StockpotPlan.of(level, holder).filter(plan -> plan.definition().equals(tag.get("definition")) && plan.flexible() == tag.getBoolean("flexible"))
             .map(plan -> new StockpotBatch(colony, tag.getUUID("batch"), plan, tag.getCompound("inputs"),
                 ItemStack.parseOptional(level.registryAccess(), tag.getCompound("lid")),
                 tag.getBoolean("replace_lid")));
@@ -86,10 +88,15 @@ record StockpotBatch(UUID colony, UUID id, StockpotPlan plan, CompoundTag inputs
         }
         CompoundTag current = pot.saveCustomOnly(level.registryAccess());
         return plan.id().toString().equals(current.getString("RecipeId"))
-            && ItemStack.isSameItemSameComponents(plan.result(), pot.getResult())
+            && ItemStack.isSameItemSameComponents(result(level), pot.getResult())
             && pot.getTakeoutCount() == plan.portions();
     }
 
+    ItemStack result(ServerLevel level) {
+        NonNullList<ItemStack> saved = NonNullList.withSize(9, ItemStack.EMPTY);
+        ContainerHelper.loadAllItems(inputs, saved, level.registryAccess());
+        return plan.expectedResult(level, saved);
+    }
     static void clear(StockpotBlockEntity pot) {
         pot.getPersistentData().remove(KEY);
         pot.setChanged();

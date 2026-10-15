@@ -4,16 +4,22 @@ import java.util.ArrayList;
 import java.util.function.Predicate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.world.item.ItemStack;
 
 // Matches all slots before anything is put in the pot. Broad tags must not consume a later slot's only choice.
 record StockpotSupplies(List<ItemStack> slots, List<ItemStack> unused) {
 
     static Optional<StockpotSupplies> draw(List<ItemStack> supplied, List<Predicate<ItemStack>> checks) {
+        return draw(supplied, checks, Set.of());
+    }
+
+    static Optional<StockpotSupplies> draw(List<ItemStack> supplied, List<Predicate<ItemStack>> checks,
+                                           Set<Integer> distinctItems) {
         List<ItemStack> pool = supplied.stream().map(ItemStack::copy).toList();
         List<ItemStack> slots = new ArrayList<>();
         checks.forEach(ignored -> slots.add(ItemStack.EMPTY));
-        if (!match(pool, checks, slots, 0)) {
+        if (!match(pool, checks, slots, distinctItems, 0)) {
             return Optional.empty();
         }
         return Optional.of(new StockpotSupplies(List.copyOf(slots),
@@ -21,7 +27,7 @@ record StockpotSupplies(List<ItemStack> slots, List<ItemStack> unused) {
     }
 
     private static boolean match(List<ItemStack> pool, List<Predicate<ItemStack>> checks,
-                                 List<ItemStack> slots, int placed) {
+                                 List<ItemStack> slots, Set<Integer> distinctItems, int placed) {
         if (placed == checks.size()) {
             return true;
         }
@@ -33,7 +39,7 @@ record StockpotSupplies(List<ItemStack> slots, List<ItemStack> unused) {
             }
             int choices = 0;
             for (ItemStack stack : pool) {
-                if (!stack.isEmpty() && checks.get(index).test(stack)) {
+                if (!stack.isEmpty() && accepts(index, stack, checks, slots, distinctItems)) {
                     choices++;
                 }
             }
@@ -46,17 +52,22 @@ record StockpotSupplies(List<ItemStack> slots, List<ItemStack> unused) {
             return false;
         }
         for (ItemStack stack : pool) {
-            if (stack.isEmpty() || !checks.get(next).test(stack)) {
+            if (stack.isEmpty() || !accepts(next, stack, checks, slots, distinctItems)) {
                 continue;
             }
             ItemStack taken = stack.split(1);
             slots.set(next, taken);
-            if (match(pool, checks, slots, placed + 1)) {
+            if (match(pool, checks, slots, distinctItems, placed + 1)) {
                 return true;
             }
             slots.set(next, ItemStack.EMPTY);
             stack.grow(1);
         }
         return false;
+    }
+    private static boolean accepts(int slot, ItemStack stack, List<Predicate<ItemStack>> checks,
+                                   List<ItemStack> slots, Set<Integer> distinctItems) {
+        return checks.get(slot).test(stack) && (!distinctItems.contains(slot) || distinctItems.stream()
+            .allMatch(other -> slots.get(other).isEmpty() || !slots.get(other).is(stack.getItem())));
     }
 }

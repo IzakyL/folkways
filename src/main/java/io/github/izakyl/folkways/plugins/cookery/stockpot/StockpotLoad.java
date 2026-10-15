@@ -120,7 +120,10 @@ final class StockpotLoad extends StockpotNode {
                 .filter(now -> now.definition().equals(plan.definition())).isEmpty()) {
             return Outcome.failed(CookeryRefusal.RECIPE_CHANGED);
         }
-        Optional<StockpotSupplies> supplied = StockpotSupplies.draw(who.supplied(), plan.loadingSlots(hasLid, lid()));
+        int ingredientCount = (int) plan.recipe().getIngredients().stream().filter(ingredient -> !ingredient.isEmpty()).count();
+        var distinct = plan.flexible() ? java.util.stream.IntStream.rangeClosed(1, ingredientCount).boxed()
+            .collect(java.util.stream.Collectors.toSet()) : java.util.Set.<Integer>of();
+        Optional<StockpotSupplies> supplied = StockpotSupplies.draw(who.supplied(), plan.loadingSlots(hasLid, lid()), distinct);
         if (supplied.isEmpty()) {
             return Outcome.failed(CookeryRefusal.NOTHING_TO_WORK_WITH);
         }
@@ -128,8 +131,6 @@ final class StockpotLoad extends StockpotNode {
         List<ItemStack> made = new ArrayList<>();
         try {
             List<ItemStack> slots = supplied.get().slots();
-            int ingredientCount = (int) plan.recipe().getIngredients().stream()
-                .filter(ingredient -> !ingredient.isEmpty()).count();
             ItemStack lid;
             if (hasLid) {
                 KitchenDelivery.Result opened = KitchenDelivery.run(level, pot.getBlockPos(), who, ItemStack.EMPTY,
@@ -152,6 +153,9 @@ final class StockpotLoad extends StockpotNode {
                         () -> pot.addIngredient(level, who.body(), ingredient), made)) {
                     return rolledBack(level, before);
                 }
+            }
+            if (!plan.selected(level, pot.getInput())) {
+                return rolledBack(level, before);
             }
             ItemStack cover = lid;
             if (!act(level, pot, who, cover, () -> pot.onLitClick(level, who.body(), cover), made)) {

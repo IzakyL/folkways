@@ -166,7 +166,7 @@ final class StockpotTake extends StockpotNode {
                 KitchenDelivery.Result taken = KitchenDelivery.run(level, pot.getBlockPos(), who, carrier,
                     () -> pot.takeOutProduct(level, who.body(), carrier));
                 long dishes = taken.outputs().stream()
-                    .filter(stack -> ItemStack.isSameItemSameComponents(stack, plan.result()))
+                    .filter(stack -> ItemStack.isSameItemSameComponents(stack, batch.get().result(level)))
                     .mapToInt(ItemStack::getCount).sum();
                 if (!taken.success() || pot.getTakeoutCount() != remaining - 1 || dishes != 1) {
                     return rolledBack(level, before);

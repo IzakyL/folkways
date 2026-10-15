@@ -51,6 +51,9 @@ public final class StockpotWorkshops {
             for (var holder : level.getRecipeManager().getAllRecipesFor(ModRecipes.STOCKPOT_RECIPE)) {
                 StockpotPlan.of(level, holder).ifPresent(recipes::add);
             }
+            for (var holder : level.getRecipeManager().getAllRecipesFor(ModRecipes.FLEX_STOCKPOT_RECIPE)) {
+                StockpotPlan.of(level, holder).ifPresent(recipes::add);
+            }
         }
         return Optional.of(new Frozen(key, colonyId, at, stances, List.copyOf(recipes), pot.hasLid(), bookings, changed));
     }

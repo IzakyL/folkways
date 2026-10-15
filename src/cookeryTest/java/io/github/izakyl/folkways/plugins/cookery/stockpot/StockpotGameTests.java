@@ -7,6 +7,9 @@ import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.StockpotVisuals;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModSoupBases;
+import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
+import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.Quality;
+import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.QualityUtils;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -777,6 +780,122 @@ public final class StockpotGameTests {
             fixture.worker.body().discard();
         }
     }
+    @GameTest(template = "empty", timeoutTicks = 450)
+    public static void flexibleUdonUsesOneOfEachIngredientAndKeepsTheNativeQuality(GameTestHelper helper) {
+        Rig rig = new Rig(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "flex_stockpot/udon_noodle"), false);
+        rig.stockUdon();
+        rig.load();
+        afterCooking(rig, ready -> {
+            helper.assertValueEqual(ready.pot.saveCustomOnly(ready.level.registryAccess()).getString("RecipeId"),
+                ready.plan.id().toString(), "the real stockpot selected the native flexible recipe");
+            ItemStack actual = ready.pot.getResult().copyWithCount(1);
+            helper.assertTrue(QualityUtils.hasQuality(actual), "native flexible cooking attaches its real quality component");
+            ready.take();
+            helper.assertValueEqual(ready.count(ModItems.UDON_NOODLE.get()), 1L, "one native flexible serving is collected");
+            helper.assertTrue(java.util.stream.IntStream.range(0, ready.pack.getContainerSize()).mapToObj(ready.pack::getItem).anyMatch(stack -> ItemStack.matches(stack, actual)),
+                "the delivered dish keeps the native result's exact quality and components");
+            helper.assertValueEqual(ready.count(ModItems.LETTUCE.get()) + ready.count(Items.EGG)
+                + ready.count(ModItems.RAW_NOODLES.get()), 0L, "the minimal three real ingredients were each consumed once");
+            helper.assertValueEqual(ready.count(Items.BUCKET), 1L, "native soup-base insertion returns its real bucket");
+            helper.assertValueEqual(ready.count(Items.BOWL), 0L, "native take-out consumes exactly one bowl");
+            helper.assertValueEqual(ready.count(ModItems.STOCKPOT_LID.get()), 1L, "the actual lid is returned for later work");
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 450)
+    public static void flexibleBatchReloadRecoversItsRealQualityWithoutReplayingInputs(GameTestHelper helper) {
+        Rig rig = new Rig(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "flex_stockpot/udon_noodle"), false);
+        rig.stockUdon();
+        rig.load();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(rig.pot.getStatus() == IStockpot.COOKING,
+            "the native flexible batch has actually started")).thenExecute(() -> {
+                rig.claim.release(Ending.DROPPED);
+                rig.reload();
+                var recovery = StockpotWorkshops.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> { });
+                helper.assertValueEqual(recovery.size(), 1, "the persisted flexible batch produces one recovery task");
+                rig.take = recovery.getFirst().nodes().getFirst();
+                helper.assertTrue(rig.take.planned(rig.level).isEmpty(), "the recovery owns a real exclusive kitchen turn");
+            }).thenWaitUntil(rig::finished).thenExecute(() -> {
+                try {
+                    ItemStack result = rig.pot.getResult().copyWithCount(1);
+                    rig.take();
+                    rig.take.ended(rig.level, Ending.DONE);
+                    helper.assertTrue(java.util.stream.IntStream.range(0, rig.pack.getContainerSize()).mapToObj(rig.pack::getItem).anyMatch(stack -> ItemStack.matches(stack, result)),
+                        "reload keeps the native flexible quality and delivers the same real serving");
+                    helper.assertValueEqual(rig.count(ModItems.UDON_NOODLE.get()), 1L, "recovery never creates a second meal");
+                    helper.assertValueEqual(rig.count(Items.BUCKET), 1L, "recovery never repeats soup-base insertion");
+                    helper.assertTrue(rig.bookings.free(rig.at), "the recovered flexible batch releases its actual turn");
+                } finally {
+                    rig.close();
+                }
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 450)
+    public static void changingAFlexibleResultComponentRelinquishesOwnershipWithoutTakingThePlayersFood(GameTestHelper helper) {
+        Rig rig = new Rig(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "flex_stockpot/udon_noodle"), false);
+        rig.stockUdon();
+        rig.load();
+        afterCooking(rig, ready -> {
+            Quality changed = QualityUtils.getQuality(ready.pot.getResult()) == Quality.POOR ? Quality.SUPERB : Quality.POOR;
+            QualityUtils.setQuality(ready.pot.getResult(), changed);
+            helper.assertTrue(StockpotWorkshops.recovery(ready.colony, ready.level, ready.at, ready.stances,
+                ready.bookings, () -> { }).isEmpty(), "a changed result is no longer the resident's saved batch");
+            helper.assertTrue(Commit.run(ready.level, ready.take, ready.worker) instanceof Outcome.Failed,
+                "the old planned take cannot extract the player's changed result");
+            helper.assertValueEqual(ready.count(ModItems.UDON_NOODLE.get()), 0L, "no changed dish was silently adopted");
+            helper.assertValueEqual(ready.count(Items.BOWL), 1L, "the planned carrier remains a real unspent bowl");
+            helper.assertTrue(ready.pot.getTakeoutCount() == 1 && QualityUtils.getQuality(ready.pot.getResult()) == changed,
+                "the player's changed dish and its native serving count remain in the real pot");
+        });
+    }
+
+    @GameTest(template = "empty")
+    public static void everyNativeFlexibleStockpotRecipeHasAPlanningSnapshot(GameTestHelper helper) {
+        var recipes = helper.getLevel().getRecipeManager().getAllRecipesFor(ModRecipes.FLEX_STOCKPOT_RECIPE);
+        helper.assertTrue(!recipes.isEmpty(), "the actual integration mod supplies flexible recipes");
+        for (var recipe : recipes) {
+            helper.assertTrue(StockpotPlan.of(helper.getLevel(), recipe).isPresent(),
+                "the actual recipe has soup, ingredients, carriers and a planning snapshot: " + recipe.id());
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void thePlannerChoosesFlexibleUdonWhenOnlyThreeIngredientsExist(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "flex_stockpot/udon_noodle"), false)) {
+            rig.claim.release(Ending.DROPPED);
+            var fixture = new PlanningFixture(helper, 36);
+            var source = new Stash(fixture.source);
+            List<ItemStack> raw = List.of(new ItemStack(ModItems.LETTUCE.get()), new ItemStack(Items.EGG),
+                new ItemStack(ModItems.RAW_NOODLES.get()), new ItemStack(Items.WATER_BUCKET),
+                new ItemStack(Items.BOWL), ModItems.STOCKPOT_LID.get().getDefaultInstance());
+            var stock = new Stock(raw.stream().map(stack -> new Stock.Holding(source, stack)).toList(), Map.of(source, 27));
+            var workshop = StockpotWorkshops.freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at,
+                rig.stances, rig.bookings, () -> { }).orElseThrow();
+            var crafting = rig.body.licences().of(WaresContent.trade()).orElseThrow();
+            var hauling = rig.body.licences().of(Vocations.required(Vocations.HAULING)).orElseThrow();
+            var hand = new Crew.Hand(rig.body.resident(), fixture.source, 36, 36, 1,
+                List.of(crafting, hauling), List.of(), Optional.empty());
+            Known known = new Known(fixture.situation(stock, List.of(workshop)), List.of(hand));
+            NodeSpec spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(fixture.target),
+                Stances.at(fixture.target), Workload.Once.of(1)).needs(new Need(Goods.specOf(ModItems.UDON_NOODLE.get().getDefaultInstance()), 1)).done();
+            Node consumer = new Node() {
+                public NodeSpec spec() { return spec; }
+                public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
+            };
+            Solving solver = new Solving();
+            try {
+                var result = solver.handle(known, List.of(new Message.Submitted(CookeryContent.ID, Grown.of(consumer))), 0);
+                helper.assertTrue(result.diagnosis().shortfalls().isEmpty() && result.diagnosis().unassigned().isEmpty(),
+                    "the real fixed+flexible catalogue finds the feasible three-ingredient native route: " + result.diagnosis());
+            } finally {
+                solver.closed();
+                fixture.worker.body().discard();
+            }
+        }
+        helper.succeed();
+    }
     private static void afterCooking(Rig rig, Consumer<Rig> assertion) {
         rig.helper.startSequence().thenWaitUntil(rig::finished).thenExecute(() -> {
             try {
@@ -807,6 +926,10 @@ public final class StockpotGameTests {
         Node take;
 
         Rig(GameTestHelper helper, String recipe, boolean originalLid) {
+            this(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "stockpot/" + recipe), originalLid);
+        }
+
+        Rig(GameTestHelper helper, ResourceLocation recipe, boolean originalLid) {
             this.helper = helper;
             level = helper.getLevel();
             cell = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -823,8 +946,7 @@ public final class StockpotGameTests {
             if (originalLid) {
                 pot.onLitClick(level, body, ModItems.STOCKPOT_LID.get().getDefaultInstance());
             }
-            var holder = StockpotPlan.find(level,
-                ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "stockpot/" + recipe)).orElse(null);
+            var holder = StockpotPlan.find(level, recipe).orElse(null);
             helper.assertTrue(holder != null, "the real integration mod supplies recipe " + recipe);
             plan = StockpotPlan.of(level, holder).orElseThrow();
             nextBatch();
@@ -847,6 +969,17 @@ public final class StockpotGameTests {
             helper.assertTrue(claim.take().isEmpty(), "the fixture obtains a real kitchen booking");
             load = new StockpotLoad(colony, batch, at, stances, plan, originalLid, bookings, () -> { });
             take = new StockpotTake(colony, batch, at, stances, plan, bookings, () -> { }, false);
+        }
+
+        void stockUdon() {
+            put(new ItemStack(ModItems.LETTUCE.get()));
+            put(new ItemStack(Items.EGG));
+            put(new ItemStack(ModItems.RAW_NOODLES.get()));
+            put(new ItemStack(Items.WATER_BUCKET));
+            put(new ItemStack(Items.BOWL));
+            if (!originalLid) {
+                put(ModItems.STOCKPOT_LID.get().getDefaultInstance());
+            }
         }
 
         void stockRice(int rice, int bowls) {
