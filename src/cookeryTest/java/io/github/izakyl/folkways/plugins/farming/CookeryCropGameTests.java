@@ -155,7 +155,7 @@ public final class CookeryCropGameTests {
                 public Mob body() { return body.mob(); }
                 public Container pack() { return pack; }
                 public List<Store> within() { return List.of(); }
-                public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
+                public ItemStack held(ToolNeed need) { return io.github.izakyl.folkways.core.api.work.Tools.from(java.util.stream.IntStream.range(0, pack.getContainerSize()).mapToObj(pack::getItem).toList(), need).orElse(ItemStack.EMPTY); }
                 public void spill(ItemStack stack) { throw new AssertionError("the eight-slot pack has room"); }
                 public int rankOf(String perk) { return FarmingContent.REPLANT.equals(perk) ? replant : 0; }
                 public List<Node> route() { return List.of(); }

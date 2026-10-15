@@ -39,6 +39,7 @@ final class Field {
 
     private Crop crop;
 
+    private final Set<BlockPos> allowed = new LinkedHashSet<>();
     private final List<Job> harvest = new ArrayList<>();
     private final List<Job> till = new ArrayList<>();
     private final List<Job> plant = new ArrayList<>();
@@ -63,6 +64,7 @@ final class Field {
         Set<BlockPos> claimed = new LinkedHashSet<>();
         List<BlockPos> ground = new ArrayList<>(zone.cells());
         ground.sort(SCAN_ORDER);
+        allowed.addAll(ground);
         Map<BlockPos, Boolean> footed = new HashMap<>();
         Plot plot = Plot.of(zone.cells());
         for (BlockPos cell : ground) {
@@ -96,9 +98,13 @@ final class Field {
 
     void settle(long stamp) {
         begin(stamp);
-        harvesting.settle(crop, harvest);
-        tilling.settle(crop, till);
-        sowing.settle(crop, plant);
+        harvesting.settle(crop, harvest, allowed);
+        tilling.settle(crop, till, allowed);
+        sowing.settle(crop, plant, allowed);
+    }
+
+    void close() {
+        chores().forEach(FieldChores::close);
     }
 
     private void begin(long stamp) {
@@ -106,6 +112,7 @@ final class Field {
             return;
         }
         sweep = stamp;
+        allowed.clear();
         harvest.clear();
         till.clear();
         plant.clear();

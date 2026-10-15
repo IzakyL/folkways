@@ -47,6 +47,7 @@ abstract class FarmNode implements Node {
 
     @Override
     public final Optional<RefusalKind> planned(ServerLevel level) {
+        if (!chore.tending().permits(chore)) return Optional.of(FarmRefusal.GROUND_TAKEN);
         chore.tending().planned(chore);
         return Optional.empty();
     }
@@ -62,7 +63,13 @@ abstract class FarmNode implements Node {
     }
 
     @Override
+    public final Optional<RefusalKind> refusal(ServerLevel level) {
+        return chore.tending().permits(chore) ? Optional.empty() : Optional.of(FarmRefusal.GROUND_TAKEN);
+    }
+
+    @Override
     public final Outcome commit(ServerLevel level, Worker who) {
+        if (!chore.tending().permits(chore)) return refuse(FarmRefusal.GROUND_TAKEN);
         List<ItemStack> supplied = who.supplied();
         Outcome done = work(level, who, chore.job());
         PastDay made = chore.tending().made();

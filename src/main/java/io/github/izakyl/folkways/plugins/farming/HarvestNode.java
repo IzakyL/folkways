@@ -24,6 +24,7 @@ final class HarvestNode extends FarmNode {
     HarvestNode(Chore chore) {
         super(FarmNode.declare(chore, Workload.Once.of(FarmingContent.CELL_TICKS,
             FarmingContent::haste))
+            .tools(chore.crop().harvestMethod().map(HarvestMethod::tools).orElseGet(List::of))
             .leaves(leaves(chore))
             .doing(FarmingContent.HARVESTING, chore.crop().fruit()).done(), chore);
         this.crop = chore.crop();
@@ -33,6 +34,7 @@ final class HarvestNode extends FarmNode {
     private static List<Amount> leaves(Chore chore) {
         Crop crop = chore.crop();
         int cells = chore.job().cells().size();
+        if (crop.harvestMethod().isPresent()) return crop.harvestMethod().get().leaves(cells);
         if (crop.behavior().isPresent()) {
             return crop.behavior().get().leaves(cells);
         }
@@ -46,6 +48,9 @@ final class HarvestNode extends FarmNode {
 
     @Override
     Outcome work(ServerLevel level, Worker who, Job job) {
+        if (crop.harvestMethod().isPresent()) {
+            return crop.harvestMethod().get().harvest(level, who, crop.block(), job.cells());
+        }
         Optional<CropBehavior.Harvest> gathered = crop.behavior().flatMap(adapted ->
             adapted.gather(level, who, job.cells()));
         if (gathered.isPresent()) {

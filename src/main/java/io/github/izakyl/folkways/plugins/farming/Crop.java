@@ -23,7 +23,7 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 
 record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, ItemSpec seedSpec,
-            Substrate substrate, Habit habit, Optional<CropBehavior> behavior) {
+            Substrate substrate, Habit habit, Optional<CropBehavior> behavior, Optional<HarvestMethod> harvestMethod) {
 
     enum Substrate {
         FARMLAND,
@@ -105,7 +105,7 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
         }
         ResourceLocation seedId = BuiltInRegistries.ITEM.getKey(seed.get());
         return Optional.of(new Crop(id, block.get(), shape.get().standing(), seed.get(),
-            ItemSpec.of(seedId), shape.get().substrate(), shape.get().habit(), behavior));
+            ItemSpec.of(seedId), shape.get().substrate(), shape.get().habit(), behavior, Optional.empty()));
     }
 
     private static Optional<Shape> shapeOf(Block block) {
@@ -135,7 +135,12 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
 
     Crop using(Item item) {
         return new Crop(id, block, standing, item, ItemSpec.of(BuiltInRegistries.ITEM.getKey(item)),
-            substrate, habit, behavior);
+            substrate, habit, behavior, harvestMethod);
+    }
+
+    Crop harvesting(ResourceLocation method) {
+        return new Crop(id, block, standing, seed, seedSpec, substrate, habit, behavior,
+            HarvestMethods.of(method).filter(selected -> selected.supports(block)));
     }
 
     boolean plant(net.minecraft.server.level.ServerLevel level,

@@ -31,6 +31,8 @@ final class FieldChores {
     }
 
     private volatile Crop crop;
+    private volatile Set<BlockPos> allowed;
+
 
     private volatile List<Job> standing = List.of();
 
@@ -48,10 +50,21 @@ final class FieldChores {
         return made;
     }
 
-    void settle(Crop crop, List<Job> jobs) {
+    void settle(Crop crop, List<Job> jobs, Set<BlockPos> allowed) {
         this.crop = crop;
+        this.allowed = Set.copyOf(allowed);
         standing = List.copyOf(jobs);
         spent.clear();
+    }
+
+    void close() {
+        allowed = Set.of();
+        standing = List.of();
+    }
+
+    boolean permits(FarmNode.Chore chore) {
+        Set<BlockPos> current = allowed;
+        return current == null || current.contains(chore.job().cell());
     }
 
     // Every cell is its own work, done from wherever in reach of it the way there is easiest.
@@ -89,7 +102,8 @@ final class FieldChores {
 
     private UUID idOf(Crop growing, Job job) {
         return UUID.nameUUIDFromBytes(("folkways:farm/" + kind + "/"
-            + growing.id() + "/" + job.ground() + "/"
+            + growing.id() + "/" + growing.harvestMethod().map(HarvestMethods::idOf).orElse(HarvestMethods.PICK)
+            + "/" + job.ground() + "/"
             + job.cell()).getBytes(StandardCharsets.UTF_8));
     }
 }

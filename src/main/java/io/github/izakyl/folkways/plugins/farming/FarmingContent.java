@@ -49,6 +49,7 @@ public final class FarmingContent {
     static final int FELL_TICKS_PER_LEAF = 2;
 
     public static final String CROP = "crop";
+    public static final String HARVEST_MODE = "harvest_mode";
 
     // Work done in one go takes longer the more of it there is, but less and less so: one unit of it takes the
     // unit's ticks, and every doubling after that as many again.
@@ -81,7 +82,7 @@ public final class FarmingContent {
         registering.facing(ID, colony -> colony.service(ID, FarmPresence.class).map(Facing.class::cast));
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(PLOT, new Shape.Volume(FolkwaysConfig.maxFarmCells()),
-                new Schema(List.of(crop())), ResourceLocation.withDefaultNamespace("wheat")))));
+                new Schema(List.of(crop(), harvestMode())), ResourceLocation.withDefaultNamespace("wheat")))));
     }
 
     public static Vocation trade() {
@@ -91,6 +92,11 @@ public final class FarmingContent {
     // What a farmer pulls up before tilling, for work that weeds ground it never tills.
     public static boolean weed(BlockState state) {
         return Tillage.weeds(state);
+    }
+
+    private static Schema.Setting harvestMode() {
+        return new Schema.Setting.Choice(HARVEST_MODE, "folkways.settings.harvest_mode",
+            ResourceLocation.withDefaultNamespace("shears"), HarvestMethods.choices(), HarvestMethods.PICK);
     }
 
     private static Schema.Setting crop() {

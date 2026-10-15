@@ -32,7 +32,7 @@ final class FarmPresence implements Facing {
 
     private static final String TAG_MADE = "made";
 
-    private record Plot(ResourceKey<Level> dimension, ResourceLocation crop) {
+    private record Plot(ResourceKey<Level> dimension, ResourceLocation crop, ResourceLocation harvest) {
     }
 
     private final Colony colony;
@@ -91,7 +91,11 @@ final class FarmPresence implements Facing {
     }
 
     private void retireAllBut(Set<Plot> chosen) {
-        fields.keySet().retainAll(chosen);
+        fields.entrySet().removeIf(entry -> {
+            if (chosen.contains(entry.getKey())) return false;
+            entry.getValue().close();
+            return true;
+        });
     }
 
     public List<Grown> goals(ColonyView view) {
@@ -119,7 +123,10 @@ final class FarmPresence implements Facing {
                 .findFirst().orElse(seeds.getFirst());
             crop = Optional.of(crop.get().using(preferred));
         }
-        Plot plot = new Plot(level.dimension(), chosen);
+        ResourceLocation harvest = zone.settings().choice(FarmingContent.HARVEST_MODE);
+        if (harvest == null) harvest = HarvestMethods.PICK;
+        crop = Optional.of(crop.get().harvesting(harvest));
+        Plot plot = new Plot(level.dimension(), chosen, harvest);
         Field field = fields.get(plot);
         if (field == null) {
             field = new Field(crop.get(), WorldPos.of(level, anywhere.get()), sweep::nudge, made);
