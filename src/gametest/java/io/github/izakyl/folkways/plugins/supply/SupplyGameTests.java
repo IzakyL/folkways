@@ -7,9 +7,12 @@ import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.colony.Release;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
@@ -18,9 +21,16 @@ import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.WorkSite;
+import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.engine.plan.Crew;
+import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
+import io.github.izakyl.folkways.core.engine.plan.Stock;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -178,6 +188,104 @@ public final class SupplyGameTests {
             java.nio.file.Files.writeString(path, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(java.util.Map.of(
                 "item_registry_size", registry, "requests", 1000, "finite_offers", offers, "generated_during_planning", 0,
                 "elapsed_nanos", nanos, "mean_request_micros", nanos / 1_000_000.0)));
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void oneCargoSlotCanProduceAndDeliverOneNativeWaterBucket(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            var level = helper.getLevel();
+            PlanningFixture fixture = new PlanningFixture(helper, 1);
+            level.setBlockAndUpdate(fixture.target.cell().below(), Blocks.STONE.defaultBlockState());
+            level.setBlockAndUpdate(fixture.target.cell(), Blocks.BARREL.defaultBlockState());
+            Container target = Containers.at(level, fixture.target.cell()).orElseThrow();
+            var shop = new SupplyWorkshop(UUID.randomUUID(), rig.colony, rig.at, rig.stances, rig.box, rig.box.revision());
+            ItemSpec water = Goods.specOf(Items.WATER_BUCKET.getDefaultInstance());
+            var delivery = new PlanningFixture.Owed(new WorkSite.AtBlock(fixture.target), Stances.at(fixture.target), water, 1);
+            var situation = fixture.situation(new Stock(List.of(), Map.of(new Stash(fixture.target), target.getContainerSize())), List.of(shop));
+            PlanningFixture.Rounds rounds = new PlanningFixture.Rounds();
+            try {
+                var solved = rounds.solve(situation, fixture.crew, delivery.goals(), List.of(), 0);
+                var tour = solved.schedule().tours().get(fixture.worker.resident().id());
+                helper.assertTrue(solved.diagnosis().shortfalls().isEmpty() && solved.schedule().unassigned().isEmpty(),
+                    "a real source's single promised bucket is not counted again as an extra output slot");
+                helper.assertTrue(tour != null && tour.nodes().size() == 2,
+                    "the only final Delivery grows one real SupplyWorkshop withdrawal and its delivery through fromMaker");
+                Node withdrawal = solved.weave().vertices().get(tour.nodes().getFirst()).node();
+                helper.assertTrue(withdrawal.spec().owner().equals(SupplyContent.ID)
+                        && withdrawal.spec().gives().equals(List.of(new io.github.izakyl.folkways.core.api.work.Amount(water, 1))),
+                    "the scheduled producer is the real finite source, not prefilled stock or a test-made output");
+                helper.assertTrue(rig.box.generated().isEmpty() && target.isEmpty() && fixture.worker.pack().isEmpty(),
+                    "planning alone creates no water buckets");
+                fixture.worker.body().moveTo(rig.cell.getX() + 1.5, rig.cell.getY(), rig.cell.getZ() + 0.5);
+                long made = 0;
+                long peak = 0;
+                for (UUID id : tour.nodes()) {
+                    Node node = solved.weave().vertices().get(id).node();
+                    helper.assertTrue(node.planned(level).isEmpty(), "the actual scheduled step is admitted");
+                    Outcome outcome = Commit.run(level, node, fixture.worker);
+                    helper.assertTrue(outcome instanceof Outcome.Done, "the native source-to-barrel delivery actually commits");
+                    for (ItemStack stack : ((Outcome.Done) outcome).made()) {
+                        helper.assertTrue(stack.is(Items.WATER_BUCKET), "only the requested native material is created");
+                        made += stack.getCount();
+                        helper.assertTrue(Containers.insert(fixture.worker.pack(), stack).isEmpty(), "the physical one-slot pack holds the actual load");
+                    }
+                    peak = Math.max(peak, Goods.countIn(fixture.worker.pack(), water));
+                    node.ended(level, Ending.DONE);
+                }
+                helper.assertTrue(made == 1 && peak == 1 && Goods.countIn(target, water) == 1
+                        && fixture.worker.pack().isEmpty() && delivery.complete(),
+                    "exactly one native bucket travels through one real pack slot into the final barrel");
+                helper.assertValueEqual(rig.box.generated().get("minecraft:water_bucket"), 1L,
+                    "the real source audit counts exactly one generated bucket");
+            } finally { rounds.closed(); }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void anIndependentWithdrawalStillBudgetsItsOutputAndCannotRunInAFullPack(GameTestHelper helper) {
+        for (boolean full : List.of(false, true)) {
+            try (Rig rig = new Rig(helper)) {
+                PlanningFixture fixture = new PlanningFixture(helper, 1);
+                Node withdrawal = rig.offer(Items.WATER_BUCKET.getDefaultInstance(), 1);
+                var hand = fixture.crew.hands().getFirst();
+                if (full) fixture.worker.pack().setItem(0, new ItemStack(Items.DIRT, 64));
+                Crew crew = full ? new Crew(List.of(new Crew.Hand(hand.who(), hand.at(), 0, 1, hand.pace(),
+                    hand.licences(), hand.tools(), Optional.empty(), List.of(fixture.worker.pack().getItem(0).copy())))) : fixture.crew;
+                PlanningFixture.Rounds rounds = new PlanningFixture.Rounds();
+                try {
+                    // There is no Delivery or external promised output to account for this standalone root.
+                    var solved = rounds.solve(fixture.situation(new Stock(List.of(), Map.of()), List.of()), crew,
+                        List.of(Grown.of(withdrawal)), List.of(), 0);
+                    var tour = solved.schedule().tours().get(fixture.worker.resident().id());
+                    helper.assertTrue(rig.box.generated().isEmpty(), "independent recovery planning does not generate items");
+                    fixture.worker.body().moveTo(rig.cell.getX() + 1.5, rig.cell.getY(), rig.cell.getZ() + 0.5);
+                    if (full) {
+                        helper.assertTrue(tour == null || tour.nodes().isEmpty(),
+                            "without an external promise the withdrawal still needs a free physical output slot");
+                        helper.assertTrue(Commit.run(helper.getLevel(), withdrawal, fixture.worker) instanceof Outcome.Failed,
+                            "an attempted native withdrawal also refuses the actually full pack");
+                        helper.assertTrue(rig.box.generated().isEmpty() && fixture.worker.pack().getItem(0).is(Items.DIRT)
+                                && fixture.worker.pack().getItem(0).getCount() == 64,
+                            "a full pack causes neither minted goods nor loss of its original contents");
+                    } else {
+                        helper.assertTrue(tour != null && tour.nodes().equals(List.of(withdrawal.id())),
+                            "a standalone withdrawal with one real free slot is scheduled normally");
+                        helper.assertTrue(withdrawal.planned(helper.getLevel()).isEmpty(), "the standalone native withdrawal is admitted");
+                        Outcome outcome = Commit.run(helper.getLevel(), withdrawal, fixture.worker);
+                        helper.assertTrue(outcome instanceof Outcome.Done, "the unpromised root performs real native generation");
+                        for (ItemStack stack : ((Outcome.Done) outcome).made()) {
+                            helper.assertTrue(Containers.insert(fixture.worker.pack(), stack).isEmpty(), "the standalone output fits its one real slot");
+                        }
+                        withdrawal.ended(helper.getLevel(), Ending.DONE);
+                        helper.assertTrue(Goods.countIn(fixture.worker.pack(), Goods.specOf(Items.WATER_BUCKET.getDefaultInstance())) == 1
+                                && rig.box.generated().get("minecraft:water_bucket") == 1L,
+                            "the standalone root keeps one actual generated bucket and no phantom second output");
+                    }
+                } finally { rounds.closed(); }
+            }
         }
         helper.succeed();
     }
