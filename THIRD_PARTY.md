@@ -20,6 +20,7 @@ Players install these separately. Folkways only compiles against them.
 | --- | --- | --- |
 | LDLib2 | see upstream | Required: the UI toolkit for every Folkways screen |
 | Create, Sable, Modular Golems, GeckoLib, JEI, EMI | see upstream | Optional integrations |
+| Kaleidoscope Cookery | code BSD-3-Clause, assets CC BY-NC-SA 4.0 | Optional: native appliances, recipes, crop and equipment behavior. Models and textures are read from the player-installed mod; Folkways bundles none of them |
 | Touhou Little Maid | code MIT, assets CC BY-NC-SA 4.0 | Optional: its maid models are drawn on residents straight from the player's own copy of that mod. Folkways ships none of them and a server sends only their ids |
 
 ## Repository assets, not shipped in the mod

@@ -63,6 +63,28 @@ book, production orders, chopping-board byproducts, carrier shortages, repeated
 stockpot batches and a board-to-stockpot recipe chain on the ground and a Sable ship.
 The default profiles and game tests omit Cookery to also verify that it remains optional.
 
+The expanded kitchen suites are `cookery-complete.spec.ts` (one final order from
+base materials), `cookery-millstone.spec.ts` (interruption and safe exit),
+`cookery-tools.spec.ts` (one borrowed tool and explicit extra stock),
+`cookery-farming.spec.ts` (rice and the compost-to-grass seed loop), and
+`cookery-ponder.spec.ts` (optional loading, real book entries and every lesson's
+keyframes). The production suites run both on the ground and aboard Sable. Set
+`FOLKWAYS_PONDER_LANGUAGE=zh_cn` (or `zh_hk`/`zh_tw`) to capture the lessons in
+that player's language. `creative-supplies.spec.ts` also runs without Cookery.
+
+The optional game tests audit all 612 pinned native recipe resources against the
+running recipe manager and execute the native production paths. They write
+`run/gametest/cookery-recipe-audit.json`. Generate the final-dish graph with:
+
+```sh
+node tests/shared/cookery/recipe-graph.mjs run/gametest/cookery-recipe-audit.json tests/out/cookery-recipe-graph.json
+```
+
+The graph includes served platters and drinks without a food component, and lists
+native unmatched/burnt results separately. Its base ingredients, containers, tools
+and fuel boundaries are explicit; it does not use reverse-packing cycles as food
+sources. A graph result complements actual final-order client tests.
+
 Each suite is a directory under `tests/` (`e2e`, `visual`, `bench`, `promo`, `fuzz`) with
 its own `playwright.config.ts` and `tsconfig.json`. Code more than one suite uses lives in
 `tests/shared/`; a suite imports from there and from `tests/ldlib2/`, never from another

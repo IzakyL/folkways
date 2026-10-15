@@ -59,6 +59,7 @@ install.
 | [Sable](https://modrinth.com/mod/sable) | Residents path onto and off Sable sub-levels, such as Create Aeronautics ships |
 | [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+ | Golems join the roster as a second kind of resident and take trades like people |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+ | Residents can wear bedrock-format models instead of player skins |
+| [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0 | Residents mill, prepare and cook native recipes, borrow shared kitchen tools, grow rice, wear farming equipment and retain seed reserves; the Kitchen page includes thirteen lessons |
 | [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib | Its built-in maid models become looks a colony can switch on, one by one or a whole pack at once. They are read from the installed mod and never copied or sent |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+ | The Colony Book aims along its third-person crosshair |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi) | Item filters in the colony panel open the recipe viewer's ingredient list |
@@ -77,6 +78,23 @@ install.
    to frame a plot, then right-click and choose **Farm**.
 
 The colony panel's **Lessons** tab walks through everything else.
+
+With Kaleidoscope Cookery installed, mark the kitchen appliances, tool racks, a
+crafting table and ingredient stores, then order the finished dish. Residents make
+its intermediate ingredients and borrow the tools their current tasks need. Keep
+walkable operating space around appliances, including the millstone's exit and the
+top of stacked steamers. Stoves use flint and steel or a fire charge for ignition.
+
+An idle shared tool returns to an accessible rack before ordinary storage. To keep
+two tools available, set both the maintain order's minimum and target to two; a tool
+currently borrowed for a promised return still counts toward that rack's stock.
+The Kitchen settings control real hat and farmer-armor slots. A supplied hat enables
+seed reserves and surplus composting; mark a seed-grass area to gather missing seeds.
+
+Creative players can place a **Creative Supply Box** from Tools & Utilities, choose
+all items or a whitelist, and register it with the Colony Book. Residents collect
+finite batches for their actual tasks. The box only supplies items; finished goods
+and returned equipment need ordinary stores or racks.
 
 Server options live in `serverconfig/folkways-server.toml` in each world.
 
