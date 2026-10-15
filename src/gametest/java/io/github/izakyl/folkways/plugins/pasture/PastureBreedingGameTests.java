@@ -210,6 +210,88 @@ public final class PastureBreedingGameTests {
         });
     }
 
+    @GameTest(template = "empty")
+    public static void aClosedFenceIsOnePenOfTheGroundInsideIt(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        Enclosure pen = rig.survey();
+        helper.assertTrue(pen.fenced(), "a closed ring of fence is one pen: " + pen.shape());
+        helper.assertTrue(pen.inside().size() == 11 * 5, "the pen is the ground inside the fence: " + pen.inside().size());
+        helper.assertFalse(pen.small(), "eleven by five is room enough to work among the animals");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aGapInTheFenceLeavesThePenOpen(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        rig.level.setBlockAndUpdate(rig.floor.offset(4, 1, 0), Blocks.AIR.defaultBlockState());
+        helper.assertTrue(rig.survey().shape() == Enclosure.Shape.OPEN, "a gap lets the ground run out of the pen");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void groundMarkedOutBeyondTheFenceIsNotFenced(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        for (int x = -1; x <= 13; x++) {
+            rig.cells.add(rig.floor.offset(x, 0, -1));
+        }
+        helper.assertTrue(rig.survey().shape() == Enclosure.Shape.OPEN,
+            "marked ground outside the fence runs off what was marked out");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aGateOpenOrShutStillClosesTheFence(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        BlockPos gate = rig.floor.offset(0, 1, 3);
+        for (boolean open : new boolean[] {false, true}) {
+            rig.level.setBlockAndUpdate(gate, Blocks.OAK_FENCE_GATE.defaultBlockState()
+                .setValue(FenceGateBlock.FACING, net.minecraft.core.Direction.EAST)
+                .setValue(FenceGateBlock.OPEN, open));
+            helper.assertTrue(rig.survey().fenced(), "a gate is part of the fence, open: " + open);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aFenceAcrossTheMarkedGroundSplitsIt(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        for (int z = 1; z < 6; z++) {
+            rig.level.setBlockAndUpdate(rig.floor.offset(6, 1, z), Blocks.OAK_FENCE.defaultBlockState());
+        }
+        helper.assertTrue(rig.survey().shape() == Enclosure.Shape.SPLIT, "two pens marked out as one are split");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aSmallPenIsWorkedFromOutsideTheFence(GameTestHelper helper) {
+        Rig rig = new Rig(helper, 5, 4);
+        rig.cow(1, 1, 0);
+        rig.cow(2, 1, 0);
+        helper.assertTrue(rig.survey().small(), "four by three is too small to work among the animals");
+        Node node = rig.nodes().getFirst();
+        for (WorldPos cell : node.spec().stances().cells()) {
+            BlockPos at = cell.cell().subtract(rig.floor);
+            helper.assertTrue(at.getX() < 0 || at.getX() > 5 || at.getZ() < 0 || at.getZ() > 4,
+                "the keeper stands outside the fence: " + at);
+        }
+        SimpleContainer pack = new SimpleContainer(new ItemStack(Items.WHEAT, 2));
+        helper.assertTrue(Commit.run(rig.level, node, rig.worker(node, pack)) instanceof Outcome.Done,
+            "the pair is fed over the fence");
+        helper.assertTrue(rig.animals.stream().allMatch(Cow::isInLove), "both animals are fed");
+        rig.clear();
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aBigPenIsWorkedFromInsideIt(GameTestHelper helper) {
+        Rig rig = pair(helper);
+        for (WorldPos cell : rig.nodes().getFirst().spec().stances().cells()) {
+            helper.assertTrue(rig.survey().inside().contains(cell.cell()), "the keeper stands inside the pen: " + cell);
+        }
+        rig.clear();
+        helper.succeed();
+    }
+
     private static Rig pair(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         rig.cow(2, 3, 0);
@@ -242,16 +324,23 @@ public final class PastureBreedingGameTests {
         final ZoneView zone;
 
         Rig(GameTestHelper helper) {
+            this(helper, 12, 6);
+        }
+
+        // A fenced pen, its fence on the edge of the ground from 0 to wide and deep, and a block of ground beyond it.
+        Rig(GameTestHelper helper, int wide, int deep) {
             level = helper.getLevel();
             floor = helper.absolutePos(new BlockPos(1, 0, 1));
             UUID zoneId = UUID.randomUUID();
-            for (int x = 0; x <= 12; x++) {
-                for (int z = 0; z <= 6; z++) {
+            for (int x = -1; x <= wide + 1; x++) {
+                for (int z = -1; z <= deep + 1; z++) {
                     BlockPos at = floor.offset(x, 0, z);
+                    boolean ring = (x == 0 || x == wide) && z >= 0 && z <= deep
+                        || (z == 0 || z == deep) && x >= 0 && x <= wide;
                     level.setBlockAndUpdate(at, Blocks.GRASS_BLOCK.defaultBlockState());
-                    level.setBlockAndUpdate(at.above(), (x == 0 || x == 12 || z == 0 || z == 6
-                        ? Blocks.OAK_FENCE : Blocks.AIR).defaultBlockState());
-                    if (x > 0 && x < 12 && z > 0 && z < 6) {
+                    level.setBlockAndUpdate(at.above(), (ring ? Blocks.OAK_FENCE : Blocks.AIR).defaultBlockState());
+                    level.setBlockAndUpdate(at.above(2), Blocks.AIR.defaultBlockState());
+                    if (x > 0 && x < wide && z > 0 && z < deep) {
                         cells.add(at);
                     }
                 }
@@ -285,19 +374,33 @@ public final class PastureBreedingGameTests {
             animals.add(cow);
         }
 
-        List<Node> nodes() {
-            ColonyView view = (ColonyView) Proxy.newProxyInstance(ColonyView.class.getClassLoader(),
+        Enclosure survey() {
+            return Enclosure.survey(level, pen());
+        }
+
+        Pen pen() {
+            return Pen.markedOut(view(), front()).getFirst();
+        }
+
+        private ColonyView view() {
+            return (ColonyView) Proxy.newProxyInstance(ColonyView.class.getClassLoader(),
                 new Class<?>[] {ColonyView.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "level" -> level;
                     default -> throw new AssertionError(method.getName());
                 });
-            FrontView front = (FrontView) Proxy.newProxyInstance(FrontView.class.getClassLoader(),
+        }
+
+        private FrontView front() {
+            return (FrontView) Proxy.newProxyInstance(FrontView.class.getClassLoader(),
                 new Class<?>[] {FrontView.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "zonesIn" -> List.of(zone);
                     default -> throw new AssertionError(method.getName());
                 });
+        }
+
+        List<Node> nodes() {
             herd.begin();
-            Herd.Tally tally = herd.reconcile(view, front, new ArrayList<>()).getFirst();
+            Herd.Tally tally = herd.reconcile(view(), front(), new ArrayList<>()).getFirst();
             PenChores chores = new PenChores(tally.pen(), Herd.Job.FEED, () -> { }, made);
             chores.settle(tally.pen(), tally.work().getOrDefault(Herd.Job.FEED, List.of()));
             List<Grown> goals = new ArrayList<>();

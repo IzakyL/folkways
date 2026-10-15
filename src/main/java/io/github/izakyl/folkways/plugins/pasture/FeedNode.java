@@ -56,7 +56,8 @@ final class FeedNode extends PenNode {
 
     private static boolean inReach(ServerLevel level, Worker who, Animal beast) {
         return who.body().distanceToSqr(beast) <= Reach.PLAYER_BLOCK_REACH * Reach.PLAYER_BLOCK_REACH
-            && Reach.inSight(level, WorldSpaces.at(who.body()).block(level), WorldSpaces.at(beast).block(level));
+            && (Reach.inSight(level, WorldSpaces.at(who.body()).block(level), WorldSpaces.at(beast).block(level))
+                || Pen.seenOver(level, who.body().getEyePosition(), beast));
     }
 
     private record Pair(Animal first, Animal second) {
