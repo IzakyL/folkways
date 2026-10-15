@@ -1,6 +1,21 @@
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 
+// Native 1.6.0 commit 4d39e36c: PlateRegistry serves food without FOOD on its BlockItems;
+// ClayPotMilkTeaItem is a drink and cold_cut_ham_slices is FoodBiteThreeByThreeBlock.
+// These are registry IDs checked against the fixed source and actual runtime audit, not filename guesses.
+const servedWithoutFood = new Set([
+  "shengjian_mantou_plate", "baozi_plate", "qingtuan_plate", "sticky_candy_plate", "sticky_rice_cake_plate", "zongzi_plate",
+  "berry_platter", "apple_platter", "tomato_platter", "watermelon_platter", "chorus_fruit_platter",
+  "clay_pot_milk_tea", "cold_cut_ham_slices",
+].map(id => "kaleidoscope_cookery:" + id));
+
+const proceduralFood = [
+  { item: "kaleidoscope_cookery:dark_cuisine", source: "PotBlockEntity.onTakeOut when BURNT", resident_use: "FoodProperties: edible when stocked", orderable: false },
+  { item: "kaleidoscope_cookery:suspicious_stir_fry", source: "PotBlockEntity.applySuspiciousRecipe for an unmatched ingredient combination", resident_use: "FoodProperties: edible when stocked", orderable: false },
+  { item: "kaleidoscope_cookery:mystery_tea", source: "TeapotBlockEntity.tick: unmatched tea input produces four cups", resident_use: "No FoodProperties; not a resident ration", orderable: false },
+];
+
 // Feed the runtime GameTest audit, never names inferred from JSON filenames.
 export function analyze(audit) {
   const support = new Set(["minecraft:bowl", "minecraft:bucket", "minecraft:glass_bottle", "minecraft:glass", "minecraft:string", "minecraft:paper", "minecraft:stick", "minecraft:bamboo", "minecraft:coal", "minecraft:charcoal"]);
@@ -79,7 +94,7 @@ export function analyze(audit) {
     }
     const result = pareto(possible); cache.set(id, result); return result;
   }
-  const targets = [...new Set(audit.recipes.filter(r => r.cookery_owned && r.result && (audit.items[r.result.id]?.food || r.type === "kaleidoscope_cookery:teapot")).map(r => r.result.id))].sort();
+  const targets = [...new Set(audit.recipes.filter(r => r.cookery_owned && r.result && (audit.items[r.result.id]?.food || r.type === "kaleidoscope_cookery:teapot" || servedWithoutFood.has(r.result.id))).map(r => r.result.id))].sort();
   const dishes = targets.map(item => {
     const choices = routes(item).sort((a, b) => a.bases.length - b.bases.length || a.steps.length - b.steps.length || a.root?.localeCompare(b.root ?? ""));
     return { item, depth: depth.get(item), base_kinds: choices[0]?.bases.length, route: choices[0], equivalent_minimal_routes: choices.length };
@@ -87,11 +102,17 @@ export function analyze(audit) {
   const reachable = dishes.filter(d => d.route);
   const maxDepth = Math.max(...reachable.map(d => d.depth));
   const maxKinds = Math.max(...reachable.map(d => d.base_kinds));
-  return { scope: { native_count: audit.native_recipe_count, food_or_drink_targets: dishes.length, method: "Each ingredient chooses its own minimum depth; shared identical slots choose one alternative; among minimum-depth routes minimize distinct required base ingredients. Containers, tools and fuels excluded. Raw harvest/animal inputs fixed above; no packing/reverse cycles." }, raw_boundary: [...raw].sort(), support_boundary: [...support].sort(), max_depth: maxDepth, deepest: reachable.filter(d => d.depth === maxDepth), max_base_kinds: maxKinds, most_base_kinds: reachable.filter(d => d.base_kinds === maxKinds), unreachable: dishes.filter(d => !d.route), dishes };
+  const nonRecipe = proceduralFood.filter(food => audit.items[food.item] && !byOutput.has(food.item));
+  const harvestOnly = ["tomato", "red_chili", "green_chili", "lettuce", "caterpillar"].map(id => "kaleidoscope_cookery:" + id)
+    .filter(id => audit.items[id] && !byOutput.has(id));
+  return { scope: { native_count: audit.native_recipe_count, food_or_drink_targets: dishes.length,
+    procedural_targets_without_recipe: nonRecipe.length, all_final_targets: dishes.length + nonRecipe.length, method: "Each ingredient chooses its own minimum depth; shared identical slots choose one alternative; among minimum-depth routes minimize distinct required base ingredients. Containers, tools and fuels excluded. Raw harvest/animal inputs fixed above; no packing/reverse cycles." }, non_food_recipe_targets: dishes.filter(d => !audit.items[d.item]?.food).map(d => d.item),
+    procedural_without_recipe: nonRecipe, harvest_only_edible_inputs: harvestOnly,
+    raw_boundary: [...raw].sort(), support_boundary: [...support].sort(), max_depth: maxDepth, deepest: reachable.filter(d => d.depth === maxDepth), max_base_kinds: maxKinds, most_base_kinds: reachable.filter(d => d.base_kinds === maxKinds), unreachable: dishes.filter(d => !d.route), dishes };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const report = analyze(JSON.parse(fs.readFileSync(process.argv[2], "utf8")));
   fs.writeFileSync(process.argv[3], JSON.stringify(report, null, 2) + "\n");
-  console.log(JSON.stringify({ max_depth: report.max_depth, deepest: report.deepest.map(d => [d.item, d.route.bases]), max_base_kinds: report.max_base_kinds, most_base_kinds: report.most_base_kinds.map(d => [d.item, d.route.bases]), unreachable: report.unreachable.map(d => d.item) }, null, 2));
+  console.log(JSON.stringify({ recipe_targets: report.scope.food_or_drink_targets, all_final_targets: report.scope.all_final_targets, procedural_without_recipe: report.procedural_without_recipe, max_depth: report.max_depth, deepest: report.deepest.map(d => [d.item, d.route.bases]), max_base_kinds: report.max_base_kinds, most_base_kinds: report.most_base_kinds.map(d => [d.item, d.route.bases]), unreachable: report.unreachable.map(d => d.item) }, null, 2));
 }
