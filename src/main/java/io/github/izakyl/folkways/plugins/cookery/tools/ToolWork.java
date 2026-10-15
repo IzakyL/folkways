@@ -38,6 +38,7 @@ final class ToolWork implements Node, Workload.Within {
     private final Map<ItemSpec, KitchenTools.Lease> loans = new LinkedHashMap<>();
     private ServerLevel level;
     private boolean started;
+    private boolean actionIssued;
     private boolean workDone;
     private boolean complete;
     private RefusalKind failure;
@@ -244,7 +245,13 @@ final class ToolWork implements Node, Workload.Within {
     }
 
     @Override
-    public void released(ServerLevel level, Worker who, Ending how) { original.released(level, who, how); }
+    public void released(ServerLevel level, Worker who, Ending how) {
+        // Once/Continuous are already released as the real inner action. A Within owner still has its
+        // own outer execution to release, separate from each original inner piece.
+        if (original.spec().workload() instanceof Within || !actionIssued) {
+            original.released(level, who, how);
+        }
+    }
 
     @Override
     public Recourse failing(ServerLevel level, RefusalKind why) { return original.failing(level, why); }
@@ -259,6 +266,9 @@ final class ToolWork implements Node, Workload.Within {
     }
 
     private Node action(Node node) {
+        if (node == original) {
+            actionIssued = true;
+        }
         return node instanceof Staged ? new StagedAction(node) : new Action(node);
     }
 

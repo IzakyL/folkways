@@ -278,6 +278,32 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
     @GameTest(template = "empty")
+    public static void cancellingAWrappedOnceReleasesTheOriginalExecutionOnlyOnce(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            AtomicInteger released = new AtomicInteger();
+            NodeSpec spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(rig.boardAt),
+                Stances.at(rig.level, rig.boardCell.south()), Workload.Once.of(20)).tools(new ToolUse(KNIFE, 0)).done();
+            Node original = new Node() {
+                public NodeSpec spec() { return spec; }
+                public Outcome commit(ServerLevel level, Worker who) { throw new AssertionError("cancelled action must not commit"); }
+                public void released(ServerLevel level, Worker who, Ending how) { released.incrementAndGet(); }
+            };
+            Node work = rig.tools.decorate(Grown.of(original)).nodes().getFirst();
+            helper.assertTrue(work.planned(rig.level).isEmpty(), "the original operation is adopted");
+            rig.step(work);
+            Workload.Within within = (Workload.Within) work.spec().workload();
+            Node action = ((Workload.Within.Turn.Piece) within.next(rig.level, rig.worker)).node();
+            action.released(rig.level, rig.worker, Ending.DROPPED);
+            within.ended(rig.level, action, Ending.DROPPED);
+            work.released(rig.level, rig.worker, Ending.REVOKED);
+            work.ended(rig.level, Ending.REVOKED);
+            helper.assertValueEqual(released.get(), 1, "the original Once execution has only one cancellation callback");
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 1L, "cancellation leaves exactly the real borrowed knife for return recovery");
+        }
+        helper.succeed();
+    }
+    @GameTest(template = "empty")
     public static void nativeBreakageReleasesTheLoanAndAllowsOneReplacement(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             ItemStack lastUse = rig.namedKnife();
@@ -418,6 +444,7 @@ public final class TaskToolsGameTests {
             var turn = within.next(level, worker);
             if (turn instanceof Workload.Within.Turn.Leave) {
                 helper.assertTrue(work.commit(level, worker) instanceof Outcome.Done, "the completed parent settles without replaying its action");
+                work.released(level, worker, Ending.DONE);
                 work.ended(level, Ending.DONE);
                 for (Hold hold : holds.getOrDefault(work.id(), List.of())) {
                     hold.release(Ending.DONE);
