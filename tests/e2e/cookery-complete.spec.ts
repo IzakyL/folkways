@@ -138,7 +138,7 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
 
 function kitchen(origin: Vec) {
   const at = (x: number, z: number, y = 0) => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
-  return { source: at(-6, 5), store: at(6, 5), target: at(6, 8), table: at(-3, 5), board: at(0, 5),
+  return { food: at(-2, 0), source: at(-6, 5), store: at(6, 5), target: at(6, 8), table: at(-3, 5), board: at(0, 5),
     stockpot: at(3, 8, 1), pot: at(3, 11, 1), steamer: at(0, 14, 1), mill: at(-3, 11), rack: at(6, 11, 1) };
 }
 
@@ -156,7 +156,7 @@ async function physical(server: MinecraftServer, stage: Stage, cells: ReturnType
   const drops = sampled.entities.filter(entity => entity.type === "minecraft:item").map(entity => ({ uuid: entity.uuid, stack: (entity.nbt as any).Item }));
   const rackTag = state.rack.nbt as any;
   const rackTools = collectStacks(rackTag).filter(stack => stack.id?.includes("kitchen_knife") || stack.id?.includes("kitchen_shovel"));
-  const tools = [...collectStacks((state.store.nbt as any)?.Items), ...collectStacks((state.target.nbt as any)?.Items), ...rackTools,
+  const tools = [...collectStacks((state.food.nbt as any)?.Items), ...collectStacks((state.store.nbt as any)?.Items), ...collectStacks((state.target.nbt as any)?.Items), ...rackTools,
     ...residents.flatMap(resident => collectStacks(resident.pack)), ...drops.map(drop => drop.stack)]
     .filter(stack => stack?.id?.includes("kitchen_knife") || stack?.id?.includes("kitchen_shovel"));
   const millTag = state.mill.nbt as any;
