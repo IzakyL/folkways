@@ -38,6 +38,13 @@ public final class NativeRecipeAuditGameTests {
         JsonObject audit = new JsonObject();
         audit.addProperty("cookery_version", "1.6.0-neoforge+mc1.21.1");
         audit.addProperty("source_commit", "4d39e36cfa749939ba5f9d6d3b715ef9a984cb9c");
+        var manifest = com.google.gson.JsonParser.parseReader(new java.io.InputStreamReader(
+            java.util.Objects.requireNonNull(NativeRecipeAuditGameTests.class.getResourceAsStream("/cookery-native-recipes.json")),
+            java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+        java.util.Set<String> owned = new java.util.LinkedHashSet<>();
+        manifest.getAsJsonArray("recipes").forEach(id -> owned.add(id.getAsString()));
+        helper.assertValueEqual(owned.size(), 612, "the pinned jar index includes 580 mod IDs and 32 Minecraft IDs");
+        audit.add("manifest", manifest);
         JsonArray recipes = new JsonArray();
         Map<String, Integer> types = new LinkedHashMap<>();
         int nativeCount = 0;
@@ -49,13 +56,14 @@ public final class NativeRecipeAuditGameTests {
             // Cookery registers its serializers but uses RecipeType.simple without a type-registry entry.
             if (type == null) type = net.minecraft.resources.ResourceLocation.tryParse(recipe.getType().toString());
             if (type == null) {
-                helper.assertFalse(holder.id().getNamespace().equals("kaleidoscope_cookery"),
+                helper.assertFalse(owned.contains(holder.id().toString()),
                     "every native Cookery recipe names its actual production type");
                 fixtures.add(holder.id().toString());
                 continue;
             }
             JsonObject row = new JsonObject();
             row.addProperty("id", holder.id().toString());
+            row.addProperty("cookery_owned", owned.contains(holder.id().toString()));
             row.addProperty("type", type.toString());
             row.add("definition", Recipe.CODEC.encodeStart(ops, recipe).getOrThrow());
             JsonArray resolved = new JsonArray();
