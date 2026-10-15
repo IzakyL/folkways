@@ -37,6 +37,7 @@ final class ToolWork implements Node, Workload.Within {
     private List<ItemSpec> families;
     private final Map<ItemSpec, KitchenTools.Lease> loans = new LinkedHashMap<>();
     private ServerLevel level;
+    private volatile UUID borrower;
     private boolean started;
     private boolean actionIssued;
     private boolean workDone;
@@ -63,7 +64,7 @@ final class ToolWork implements Node, Workload.Within {
     boolean needsTools() { return !workDone; }
 
     @Override
-    public Optional<UUID> worker() { return original.worker(); }
+    public Optional<UUID> worker() { return borrower == null ? original.worker() : Optional.of(borrower); }
 
     @Override
     public Optional<RefusalKind> planned(ServerLevel level) {
@@ -125,6 +126,13 @@ final class ToolWork implements Node, Workload.Within {
         if (complete) {
             return LEAVE;
         }
+        if (borrower != null && !borrower.equals(who.resident().id())) {
+            // Never use or return an identical-looking stack from a replacement worker. The original
+            // body retains its physical loan for the separate cancellation/reload return recovery.
+            failure = CookeryRefusal.STATION_CHANGED;
+            complete = true;
+            return LEAVE;
+        }
         if (!started) {
             for (ItemSpec family : families) {
                 if (loans.containsKey(family)) {
@@ -143,6 +151,7 @@ final class ToolWork implements Node, Workload.Within {
                     service.returned(lease);
                     return WAIT;
                 }
+                borrower = who.resident().id();
                 loans.put(family, lease);
                 return new Turn.Piece(new ToolAction.Borrow(service, lease, source));
             }

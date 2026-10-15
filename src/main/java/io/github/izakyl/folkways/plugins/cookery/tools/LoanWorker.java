@@ -33,7 +33,7 @@ record LoanWorker(Worker delegate, TaskTools service,
             return delegate.held(need);
         }
         for (var lease : loans.values()) {
-            if (!Goods.overlap(lease.request().tools(), family.get())) {
+            if (!lease.resident().equals(resident().id()) || !Goods.overlap(lease.request().tools(), family.get())) {
                 continue;
             }
             boolean active = service.pool.leases(service.colony.id()).stream().anyMatch(current ->
