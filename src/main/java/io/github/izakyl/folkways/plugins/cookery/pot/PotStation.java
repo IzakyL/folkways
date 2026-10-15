@@ -29,6 +29,24 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class PotStation implements KitchenStation {
+    // Only successfully planned autonomous recovery roots are kept here, never ordinary recipe descendants.
+    private record RecoveryKey(UUID colony, WorldPos at) { }
+    private static final java.util.Map<RecoveryKey, Grown> RECOVERING = new java.util.concurrent.ConcurrentHashMap<>();
+    static void rememberRecovery(UUID colony, WorldPos at, PotWork work) { RECOVERING.put(new RecoveryKey(colony, at), work.recoveryGoal()); }
+    static void endRecovery(UUID colony, WorldPos at, PotWork work) { RECOVERING.remove(new RecoveryKey(colony, at), work.recoveryGoal()); }
+    public List<Grown> activeRecovery(UUID colony, ServerLevel level, WorldPos at, KitchenBookings bookings) {
+        if (!at.in(level)) { return List.of(); }
+        RecoveryKey key = new RecoveryKey(colony, at);
+        Grown active = RECOVERING.get(key);
+        if (active == null) { return List.of(); }
+        if (bookings.first(at, active.nodes().getFirst().id())) { return List.of(active); }
+        RECOVERING.remove(key, active);
+        return List.of();
+    }
+    public void stop(UUID colony, io.github.izakyl.folkways.core.api.colony.Closing why) {
+        RECOVERING.keySet().removeIf(key -> key.colony().equals(colony));
+    }
+
     public boolean matches(BlockState state) { return state.is(ModBlocks.POT.get()); }
 
     static Optional<PotBlockEntity> pot(ServerLevel level, WorldPos at) {
@@ -78,6 +96,8 @@ public final class PotStation implements KitchenStation {
 
     public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
                                 KitchenBookings bookings, Runnable changed) {
+        var active = activeRecovery(colony, level, at, bookings);
+        if (!active.isEmpty()) { return active; }
         Optional<PotBlockEntity> found = pot(level, at).filter(pot -> PotBatch.ours(pot, colony));
         if (found.isEmpty()) return List.of();
         PotBlockEntity pot = found.get();
@@ -88,10 +108,11 @@ public final class PotStation implements KitchenStation {
             changed.run();
             return List.of();
         }
-        return bookings.free(at) ? List.of(Grown.of(PotWork.recover(at, stances, batch.get(), pot, level, bookings, changed))) : List.of();
+        return bookings.free(at) ? List.of(PotWork.recover(at, stances, batch.get(), pot, level, bookings, changed).recoveryGoal()) : List.of();
     }
 
     public void release(UUID colony, ServerLevel level, WorldPos at) {
+        RECOVERING.remove(new RecoveryKey(colony, at));
         pot(level, at).filter(pot -> PotBatch.ours(pot, colony)).ifPresent(PotBatch::clear);
     }
 

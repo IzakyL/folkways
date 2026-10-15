@@ -46,6 +46,7 @@ import io.github.izakyl.folkways.core.engine.plan.Stock;
 import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
+import io.github.izakyl.folkways.plugins.cookery.testing.KitchenRecoveryWanted;
 import io.github.izakyl.folkways.plugins.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
@@ -247,14 +248,15 @@ public final class StockpotGameTests {
             rig.take = recovery.getFirst().nodes().getFirst();
             helper.assertTrue(rig.take.id().equals(rig.batch), "recovery preserves the old batch identity");
             helper.assertTrue(rig.take.planned(rig.level).isEmpty(), "recovery acquires the shared kitchen booking");
-            helper.assertTrue(StockpotWorkshops.recovery(rig.colony, rig.level, rig.at, rig.stances,
-                rig.bookings, () -> { }).isEmpty(), "an active recovery is not offered twice");
+            KitchenRecoveryWanted.assertKept(helper, recovery.getFirst(), () -> StockpotWorkshops.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
         });
         afterCooking(rig, ready -> {
             ready.take();
             helper.assertValueEqual(ready.count(ModItems.COOKED_RICE.get()), 3L, "the saved batch is served once");
             helper.assertValueEqual(ready.count(ModItems.RICE_SEED.get()), 0L, "ingredients were spent only once");
+            KitchenRecoveryWanted.assertKept(helper, ((StockpotTake)ready.take).recoveryGoal(), () -> StockpotWorkshops.recovery(ready.colony, ready.level, ready.at, ready.stances, ready.bookings, () -> {}));
             ready.take.ended(ready.level, Ending.DONE);
+            helper.assertTrue(StockpotWorkshops.activeRecovery(ready.colony, ready.level, ready.at, ready.bookings).isEmpty(), "ended stockpot recovery is removed from wanted");
             helper.assertTrue(ready.bookings.free(ready.at), "finished recovery releases its booking");
         });
     }

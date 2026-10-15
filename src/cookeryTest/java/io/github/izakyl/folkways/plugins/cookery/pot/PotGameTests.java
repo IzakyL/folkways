@@ -35,6 +35,7 @@ import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.cookery.testing.NativeCookingMatrix;
+import io.github.izakyl.folkways.plugins.cookery.testing.KitchenRecoveryWanted;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
 import java.util.ArrayList;
@@ -234,9 +235,13 @@ public final class PotGameTests {
         helper.assertValueEqual(recovery.size(), 1, "the actual persisted batch supplies one exclusive recovery task");
         rig.work = (PotWork) recovery.getFirst().nodes().getFirst();
         helper.assertTrue(rig.work.planned(rig.level).isEmpty(), "recovery acquires its real kitchen turn");
+        KitchenRecoveryWanted.assertKept(helper, recovery.getFirst(), () -> rig.station.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
         afterCooking(rig, ready -> {
             ItemStack dish = ready.pot.getResult().copy();
+            ready.step();
+            KitchenRecoveryWanted.assertKept(helper, recovery.getFirst(), () -> ready.station.recovery(ready.colony, ready.level, ready.at, ready.stances, ready.bookings, () -> {}));
             ready.finish(true);
+            helper.assertTrue(ready.station.activeRecovery(ready.colony, ready.level, ready.at, ready.bookings).isEmpty(), "ended pot recovery is removed from wanted");
             helper.assertTrue(ready.stacks().stream().anyMatch(stack -> ItemStack.matches(stack, dish)), "recovery preserves the native quality");
             helper.assertValueEqual(ready.count(Items.EGG) + ready.count(ModItems.TOMATO.get()) + ready.count(ModItems.OIL.get()),
                 0L, "reload never reinvests or refunds already consumed materials");

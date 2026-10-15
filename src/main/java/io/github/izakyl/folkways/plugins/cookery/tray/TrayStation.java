@@ -31,6 +31,24 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class TrayStation implements KitchenStation {
+    // Only successfully planned autonomous recovery roots are kept here, never ordinary recipe descendants.
+    private record RecoveryKey(UUID colony, WorldPos at) { }
+    private static final java.util.Map<RecoveryKey, Grown> RECOVERING = new java.util.concurrent.ConcurrentHashMap<>();
+    static void rememberRecovery(UUID colony, WorldPos at, TrayWork work) { RECOVERING.put(new RecoveryKey(colony, at), work.recoveryGoal()); }
+    static void endRecovery(UUID colony, WorldPos at, TrayWork work) { RECOVERING.remove(new RecoveryKey(colony, at), work.recoveryGoal()); }
+    public List<Grown> activeRecovery(UUID colony, ServerLevel level, WorldPos at, KitchenBookings bookings) {
+        if (!at.in(level)) { return List.of(); }
+        RecoveryKey key = new RecoveryKey(colony, at);
+        Grown active = RECOVERING.get(key);
+        if (active == null) { return List.of(); }
+        if (bookings.first(at, active.nodes().getFirst().id())) { return List.of(active); }
+        RECOVERING.remove(key, active);
+        return List.of();
+    }
+    public void stop(UUID colony, io.github.izakyl.folkways.core.api.colony.Closing why) {
+        RECOVERING.keySet().removeIf(key -> key.colony().equals(colony));
+    }
+
     public boolean matches(BlockState state) { return state.is(ModBlocks.BAMBOO_TRAY.get()); }
     static Optional<BambooTrayBlockEntity> tray(ServerLevel level, WorldPos at) {
         return at.in(level) && level.isLoaded(at.block(level)) && level.getBlockEntity(at.block(level)) instanceof BambooTrayBlockEntity tray
@@ -53,15 +71,18 @@ public final class TrayStation implements KitchenStation {
     }
     public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
                                 KitchenBookings bookings, Runnable changed) {
+        var active = activeRecovery(colony, level, at, bookings);
+        if (!active.isEmpty()) { return active; }
         if (!bookings.free(at)) { return List.of(); }
         return tray(level, at).flatMap(tray -> TrayBatch.read(tray, level)).filter(batch -> batch.colony().equals(colony)).map(batch -> {
             int count = batch.input().getCount();
             Job job = new Job(batch.recipe(), Goods.specOf(batch.input()), batch.output().copyWithCount(batch.output().getCount() / count),
                 batch.subtype(), batch.time(), count);
-            return List.of(Grown.of(new TrayWork(colony, at, batch.slot(), stances, job, count, bookings, changed, batch)));
+            return List.of(new TrayWork(colony, at, batch.slot(), stances, job, count, bookings, changed, batch).recoveryGoal());
         }).orElse(List.of());
     }
     public void release(UUID colony, ServerLevel level, WorldPos at) {
+        RECOVERING.remove(new RecoveryKey(colony, at));
         tray(level, at).filter(tray -> TrayBatch.ours(tray, colony)).ifPresent(TrayBatch::clear);
     }
     public Component status(ServerLevel level, WorldPos at) {

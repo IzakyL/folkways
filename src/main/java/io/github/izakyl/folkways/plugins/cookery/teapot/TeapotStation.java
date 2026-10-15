@@ -34,6 +34,24 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.Capabilities;
 
 public final class TeapotStation implements KitchenStation {
+    // Only successfully planned autonomous recovery roots are kept here, never ordinary recipe descendants.
+    private record RecoveryKey(UUID colony, WorldPos at) { }
+    private static final java.util.Map<RecoveryKey, Grown> RECOVERING = new java.util.concurrent.ConcurrentHashMap<>();
+    static void rememberRecovery(UUID colony, WorldPos at, TeapotWork work) { RECOVERING.put(new RecoveryKey(colony, at), work.recoveryGoal()); }
+    static void endRecovery(UUID colony, WorldPos at, TeapotWork work) { RECOVERING.remove(new RecoveryKey(colony, at), work.recoveryGoal()); }
+    public List<Grown> activeRecovery(UUID colony, ServerLevel level, WorldPos at, KitchenBookings bookings) {
+        if (!at.in(level)) { return List.of(); }
+        RecoveryKey key = new RecoveryKey(colony, at);
+        Grown active = RECOVERING.get(key);
+        if (active == null) { return List.of(); }
+        if (bookings.first(at, active.nodes().getFirst().id())) { return List.of(active); }
+        RECOVERING.remove(key, active);
+        return List.of();
+    }
+    public void stop(UUID colony, io.github.izakyl.folkways.core.api.colony.Closing why) {
+        RECOVERING.keySet().removeIf(key -> key.colony().equals(colony));
+    }
+
     public boolean matches(BlockState state) { return state.is(ModBlocks.TEAPOT.get()); }
     static Optional<TeapotBlockEntity> pot(ServerLevel level, WorldPos at) {
         return at.in(level) && level.isLoaded(at.block(level)) && level.getBlockEntity(at.block(level)) instanceof TeapotBlockEntity pot ? Optional.of(pot) : Optional.empty();
@@ -82,15 +100,18 @@ public final class TeapotStation implements KitchenStation {
     }
     public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
                                 KitchenBookings bookings, Runnable changed) {
+        var active = activeRecovery(colony, level, at, bookings);
+        if (!active.isEmpty()) { return active; }
         if (!bookings.free(at)) { return List.of(); }
         var working = servingStances(level, at, stances);
         if (working.isEmpty()) { return List.of(); }
         return pot(level, at).flatMap(pot -> TeaBatch.read(pot, level)).filter(batch -> batch.colony().equals(colony)).map(batch -> {
             Job job = new Job(batch.recipe(), batch.fluid(), batch.ingredient(), batch.output(), batch.time(), batch.mode());
-            return List.of(Grown.of(new TeapotWork(colony, at, working.get(), job, bookings, changed, batch)));
+            return List.of(new TeapotWork(colony, at, working.get(), job, bookings, changed, batch).recoveryGoal());
         }).orElse(List.of());
     }
-    public void release(UUID colony, ServerLevel level, WorldPos at) { pot(level, at).filter(pot -> TeaBatch.ours(pot, colony)).ifPresent(TeaBatch::clear); }
+    public void release(UUID colony, ServerLevel level, WorldPos at) {
+        RECOVERING.remove(new RecoveryKey(colony, at)); pot(level, at).filter(pot -> TeaBatch.ours(pot, colony)).ifPresent(TeaBatch::clear); }
     public Component status(ServerLevel level, WorldPos at) {
         String state = pot(level, at).map(pot -> pot.getStatus() == ITeapot.FINISHED ? "finished" : empty(pot) ? "idle"
             : pot.hasHeatSource(level) ? "cooking" : "cold").orElse("idle");

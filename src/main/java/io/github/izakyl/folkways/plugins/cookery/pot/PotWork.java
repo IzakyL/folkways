@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
+import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Need;
@@ -54,6 +55,7 @@ final class PotWork implements Node, Workload.Within {
     private final long generation;
     private final Runnable changed;
     private final boolean recovering;
+    private final Grown recoveryGoal;
     private UUID batch;
     private boolean loaded;
     private int served;
@@ -90,6 +92,7 @@ final class PotWork implements Node, Workload.Within {
             .tools(shovel ? List.of(new ToolUse(SHOVEL, 0)) : List.of()).effort(WorkEffort.NONE)
             .estimate((int) Math.min(Integer.MAX_VALUE, ((long) plan.recipe().time() + (plan.mode() == PotPlan.Mode.DARK ? 800L : 0L) + 20L * (plan.recipe().stirFryCount() + 2)) * runs))
             .doing(CookeryContent.COOKING, plan.produces()).done();
+        recoveryGoal = recovering ? Grown.of(this) : null;
     }
 
     private NodeSpec.Builder declare(UUID id, Stances stances, Workload workload) {
@@ -98,14 +101,18 @@ final class PotWork implements Node, Workload.Within {
     }
 
     public NodeSpec spec() { return spec; }
+    Grown recoveryGoal() { return recoveryGoal; }
 
     public Optional<RefusalKind> planned(ServerLevel level) {
         if (!recovering) return bookings.cancelled(at, id(), generation) ? Optional.of(CookeryRefusal.STATION_CHANGED) : Optional.empty();
+        if (recoveryHold != null) return bookings.valid(at, id(), generation) ? Optional.empty() : Optional.of(CookeryRefusal.STATION_CHANGED);
         if (generation != bookings.generation(at) || !bookings.free(at) || current(level).isEmpty()) {
             return Optional.of(CookeryRefusal.STATION_BUSY);
         }
         recoveryHold = bookings.hold(at, id());
-        return recoveryHold.take();
+        var refused = recoveryHold.take();
+        if (refused.isEmpty()) PotStation.rememberRecovery(colony, at, this);
+        return refused;
     }
 
     public boolean ready(ServerLevel level) {
@@ -165,6 +172,7 @@ final class PotWork implements Node, Workload.Within {
 
     public void ended(ServerLevel level, Ending how) {
         if (recoveryHold != null) recoveryHold.release(how);
+        if (recovering) PotStation.endRecovery(colony, at, this);
         nudge();
     }
 

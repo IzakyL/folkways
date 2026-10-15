@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
+import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
@@ -45,6 +46,7 @@ final class TrayWork implements Node, Workload.Within {
     private final long generation;
     private final Runnable changed;
     private final boolean recovering;
+    private final Grown recoveryGoal;
     private final NodeSpec spec;
     private Hold hold;
     private boolean loaded;
@@ -60,12 +62,18 @@ final class TrayWork implements Node, Workload.Within {
         spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, this)
             .needs(loaded ? List.of() : List.of(new Need(job.input(), count, true))).gives(output).leaves(output).effort(WorkEffort.NONE)
             .vocation(WaresContent.trade()).estimate(40 + job.time()).doing(CookeryContent.COOKING).done();
+        recoveryGoal = recovering ? Grown.of(this) : null;
     }
     public NodeSpec spec() { return spec; }
+    Grown recoveryGoal() { return recoveryGoal; }
     public Optional<RefusalKind> planned(ServerLevel level) {
         if (!recovering) { return Optional.empty(); }
+        if (hold != null) return bookings.valid(at, id(), generation) ? Optional.empty() : Optional.of(CookeryRefusal.STATION_CHANGED);
         if (generation != bookings.generation(at) || !bookings.free(at)) { return Optional.of(CookeryRefusal.STATION_CHANGED); }
-        hold = bookings.hold(at, id()); return hold.take();
+        hold = bookings.hold(at, id());
+        var refused = hold.take();
+        if (refused.isEmpty()) TrayStation.rememberRecovery(colony, at, this);
+        return refused;
     }
     public boolean ready(ServerLevel level) {
         return bookings.cancelled(at, id(), generation) || bookings.first(at, id()) && (loaded || TrayWeather.allows(level, at.block(level), job.subtype()));
@@ -93,7 +101,7 @@ final class TrayWork implements Node, Workload.Within {
     public Outcome commit(ServerLevel level, Worker who) {
         return finished && !bookings.cancelled(at, id(), generation) ? Outcome.done() : Outcome.failed(failed == null ? CookeryRefusal.STATION_CHANGED : failed);
     }
-    public void ended(ServerLevel level, Ending how) { if (hold != null) { hold.release(how); hold = null; } changed.run(); }
+    public void ended(ServerLevel level, Ending how) { if (hold != null) { hold.release(how); hold = null; } if (recovering) TrayStation.endRecovery(colony, at, this); changed.run(); }
     private boolean reachable(ServerLevel level, Worker who) {
         var local = stances instanceof Stances.Cells ? Reach.stanceHolding(who.body(), stances)
             : WorldSpaces.relative(level, at.realm(), who.body().position()).map(net.minecraft.core.BlockPos::containing);

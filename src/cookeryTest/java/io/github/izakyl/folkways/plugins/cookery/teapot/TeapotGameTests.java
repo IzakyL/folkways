@@ -29,6 +29,7 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
+import io.github.izakyl.folkways.plugins.cookery.testing.KitchenRecoveryWanted;
 import io.github.izakyl.folkways.plugins.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
 import io.github.izakyl.folkways.plugins.cookery.tray.TrayStation;
@@ -140,7 +141,14 @@ public final class TeapotGameTests {
         loaded.loadWithComponents(saved, rig.level.registryAccess()); rig.level.setBlockEntity(loaded);
         TeapotWork work = rig.recover();
         helper.assertValueEqual(work.spec().needs().size(), 1, "fully accepted recovery needs only twelve real empty cups");
-        afterBrewing(rig, ready -> { helper.assertTrue(ready.step(work) instanceof Outcome.Done, "the saved native ticker reaches actual completion"); ready.assertServed(); });
+        KitchenRecoveryWanted.assertKept(helper, work.recoveryGoal(), () -> new TeapotStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
+        afterBrewing(rig, ready -> {
+            helper.assertTrue(ready.step(work) instanceof Outcome.Done, "the saved native ticker reaches actual completion");
+            KitchenRecoveryWanted.assertKept(helper, work.recoveryGoal(), () -> new TeapotStation().recovery(ready.colony, ready.level, ready.at, ready.stances, ready.bookings, () -> {}));
+            ready.assertServed();
+            work.ended(ready.level, Ending.DONE);
+            helper.assertTrue(new TeapotStation().activeRecovery(ready.colony, ready.level, ready.at, ready.bookings).isEmpty(), "ended tea recovery is removed from wanted");
+        });
     }
 
     @GameTest(template = "empty")
@@ -478,6 +486,18 @@ public final class TeapotGameTests {
         });
     }
 
+    @GameTest(template = "empty", timeoutTicks = 900)
+    public static void aCancelledTeaRecoveryCreatesAFreshRootAndALateOldEndCannotRemoveIt(GameTestHelper helper) {
+        Rig rig = new Rig(helper, "barley_tea"); rig.load();
+        TeapotWork old = rig.recover();
+        old.ended(rig.level, Ending.DROPPED);
+        TeapotWork fresh = rig.recover();
+        helper.assertTrue(fresh != old && fresh.id().equals(old.id()), "a canceled recovery retains native batch identity but has a fresh unfailed executable instance");
+        old.ended(rig.level, Ending.DROPPED);
+        KitchenRecoveryWanted.assertKept(helper, fresh.recoveryGoal(), () -> new TeapotStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
+        afterBrewing(rig, ready -> { helper.assertTrue(ready.step(fresh) instanceof Outcome.Done, "the fresh original batch serves once after late old cleanup"); ready.assertServed(); });
+    }
+
     private static Stances edgeGeometry(Rig rig) {
         BlockPos bad = rig.cell.offset(4, 0, 2), safe = rig.cell.west(2), cup = rig.cell.west();
         for (Direction side : Direction.Plane.HORIZONTAL) rig.level.setBlockAndUpdate(rig.cell.relative(side).below(), Blocks.AIR.defaultBlockState());
@@ -544,6 +564,7 @@ public final class TeapotGameTests {
             helper.assertTrue(step(work) instanceof Outcome.Done, "one real ingredient is accepted by native addIngredient");
             helper.assertValueEqual(pot().getTeaFluidId(), job.fluid(), "the actual teapot contains the requested native fluid");
             helper.assertTrue(ItemStack.matches(pot().getInput(), job.input()), "the actual native ingredient is present");
+            helper.assertTrue(new TeapotStation().recovery(colony, level, at, stances, bookings, () -> {}).isEmpty(), "a booked ordinary recipe descendant is not published as an autonomous recovery root");
             return work;
         }
         TeapotWork recover() { return recover(stances); }

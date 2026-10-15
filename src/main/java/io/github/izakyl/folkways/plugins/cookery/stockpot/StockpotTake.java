@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Hold;
+import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
@@ -36,6 +37,7 @@ final class StockpotTake extends StockpotNode {
     private final KitchenBookings bookings;
     private final Runnable changed;
     private final boolean recovery;
+    private final Grown recoveryGoal;
     private Hold held;
 
     StockpotTake(UUID colony, UUID batch, WorldPos at, Stances stances, StockpotPlan plan,
@@ -66,7 +68,10 @@ final class StockpotTake extends StockpotNode {
         this.bookings = bookings;
         this.changed = changed;
         this.recovery = recovery;
+        recoveryGoal = recovery ? Grown.of(this) : null;
     }
+
+    Grown recoveryGoal() { return recoveryGoal; }
 
     @Override
     public Optional<RefusalKind> planned(ServerLevel level) {
@@ -83,12 +88,14 @@ final class StockpotTake extends StockpotNode {
         Optional<RefusalKind> refused = claim.take();
         if (refused.isEmpty()) {
             held = claim;
+            StockpotWorkshops.rememberRecovery(colony, at, this);
         }
         return refused;
     }
 
     @Override
     public void ended(ServerLevel level, Ending how) {
+        if (recovery) StockpotWorkshops.endRecovery(colony, at, this);
         if (held != null) {
             held.release(how);
             held = null;

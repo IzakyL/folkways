@@ -23,6 +23,7 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
+import io.github.izakyl.folkways.plugins.cookery.testing.KitchenRecoveryWanted;
 import io.github.izakyl.folkways.plugins.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
@@ -214,11 +215,14 @@ public final class TrayGameTests {
         helper.assertValueEqual(recovered.size(), 1, "the actual saved native slot is adopted");
         TrayWork work = (TrayWork) recovered.getFirst().nodes().getFirst();
         helper.assertTrue(work.spec().needs().isEmpty() && work.planned(rig.level).isEmpty(), "recovery does not budget another pair of leaves");
+        KitchenRecoveryWanted.assertKept(helper, recovered.getFirst(), () -> new TrayStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
         afterProcessing(rig, ready -> {
             helper.assertTrue(ready.step(work) instanceof Outcome.Done, "the saved slot completes through its normal native ticker");
             helper.assertValueEqual(Goods.countIn(ready.pack, Goods.specOf(ready.input)), 0L, "canceling never refunds accepted leaves");
             helper.assertValueEqual(Goods.countIn(ready.pack, Goods.specOf(ready.output)), 2L, "exactly the saved real portions are delivered");
+            KitchenRecoveryWanted.assertKept(helper, recovered.getFirst(), () -> new TrayStation().recovery(ready.colony, ready.level, ready.at, ready.stances, ready.bookings, () -> {}));
             work.ended(ready.level, Ending.DONE);
+            helper.assertTrue(new TrayStation().activeRecovery(ready.colony, ready.level, ready.at, ready.bookings).isEmpty(), "ended tray recovery is removed from wanted");
         });
     }
 

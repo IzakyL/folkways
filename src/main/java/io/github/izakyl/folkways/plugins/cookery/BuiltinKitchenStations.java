@@ -85,6 +85,10 @@ final class BuiltinKitchenStations {
                                     KitchenBookings bookings, Runnable changed) {
             return StockpotWorkshops.recovery(colony, level, at, stances, bookings, changed);
         }
+        public List<Grown> activeRecovery(UUID colony, ServerLevel level, WorldPos at, KitchenBookings bookings) {
+            return StockpotWorkshops.activeRecovery(colony, level, at, bookings);
+        }
+        public void stop(UUID colony, Closing why) { StockpotWorkshops.stop(colony); }
         public void release(UUID colony, ServerLevel level, WorldPos at) {
             StockpotWorkshops.release(colony, level, at);
         }

@@ -25,6 +25,22 @@ import net.minecraft.server.level.ServerLevel;
 
 public final class StockpotWorkshops {
 
+    // Only successfully planned autonomous recovery roots are kept here, never ordinary recipe descendants.
+    private record RecoveryKey(UUID colony, WorldPos at) { }
+    private static final java.util.Map<RecoveryKey, Grown> RECOVERING = new java.util.concurrent.ConcurrentHashMap<>();
+    static void rememberRecovery(UUID colony, WorldPos at, StockpotTake work) { RECOVERING.put(new RecoveryKey(colony, at), work.recoveryGoal()); }
+    static void endRecovery(UUID colony, WorldPos at, StockpotTake work) { RECOVERING.remove(new RecoveryKey(colony, at), work.recoveryGoal()); }
+    public static List<Grown> activeRecovery(UUID colony, ServerLevel level, WorldPos at, KitchenBookings bookings) {
+        if (!at.in(level)) { return List.of(); }
+        RecoveryKey key = new RecoveryKey(colony, at);
+        Grown active = RECOVERING.get(key);
+        if (active == null) { return List.of(); }
+        if (bookings.first(at, active.nodes().getFirst().id())) { return List.of(active); }
+        RECOVERING.remove(key, active);
+        return List.of();
+    }
+    public static void stop(UUID colony) { RECOVERING.keySet().removeIf(key -> key.colony().equals(colony)); }
+
     private StockpotWorkshops() {
     }
 
@@ -60,6 +76,8 @@ public final class StockpotWorkshops {
 
     public static List<Grown> recovery(UUID colonyId, ServerLevel level, WorldPos at, Stances stances,
                                        KitchenBookings bookings, Runnable changed) {
+        var active = activeRecovery(colonyId, level, at, bookings);
+        if (!active.isEmpty()) { return active; }
         Optional<StockpotBlockEntity> found = pot(level, at);
         if (found.isEmpty() || !StockpotBatch.ours(found.get(), colonyId)) {
             return List.of();
@@ -77,11 +95,12 @@ public final class StockpotWorkshops {
             return List.of();
         }
         StockpotBatch current = batch.get();
-        return List.of(Grown.of(new StockpotTake(colonyId, current.id(), at, stances, current.plan(), bookings,
-            changed, true)));
+        return List.of(new StockpotTake(colonyId, current.id(), at, stances, current.plan(), bookings,
+            changed, true).recoveryGoal());
     }
 
     public static void release(UUID colonyId, ServerLevel level, WorldPos at) {
+        RECOVERING.remove(new RecoveryKey(colonyId, at));
         pot(level, at).filter(current -> StockpotBatch.ours(current, colonyId)).ifPresent(StockpotBatch::clear);
     }
     private static Optional<StockpotBlockEntity> pot(ServerLevel level, WorldPos at) {
