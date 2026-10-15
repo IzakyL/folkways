@@ -334,8 +334,8 @@ async function cookingRoles(server: MinecraftServer, client: MinecraftClient, pl
       if ((before > 0) === enabled) continue;
       const row = "folkways.resident.row." + resident.slice(0, 8);
       const cell = "folkways.resident.vocation." + vocation.replace(/[:/]/g, ".") + "." + resident.slice(0, 8);
-      await waitForElement(client, { id: cell }, { timeoutMs: 8000 });
       await scrollCellIntoView(server, client, row, cell);
+      await waitForElement(client, { id: cell }, { timeoutMs: 8000 });
       const click = await clickElement(client, { id: cell });
       await tick.sprint(server, 5); await frames(client, 3);
       const after = await vocationPriority(server, resident, vocation);
