@@ -131,6 +131,7 @@ public final class ApplianceCarryGameTests {
         var work = new MillstoneWork(UUID.randomUUID(), at, Stances.at(at), job, 1, new KitchenBookings(), () -> {}, null);
         Workshop workshop = new Workshop() {
             public ResourceLocation id() { return CookeryContent.ID; }
+            public UUID key() { return work.id(); }
             public WorkSite site() { return new WorkSite.AtBlock(at); }
             public List<Refinement.Change> options(Intent intent, Grown graph) {
                 return intent instanceof Produce produce && Goods.members(produce.wanted()).contains(ModItems.FLOUR.get())
