@@ -81,7 +81,7 @@ public final class CookeryRecoveryGoalGameTests {
         Node work = production.replacement().nodes().getFirst();
         Node load = ((Workload.Within.Turn.Piece) ((Workload.Within) work.spec().workload()).next(rig.level, rig)).node();
         helper.assertTrue(Commit.run(rig.level, load, rig) instanceof Outcome.Done, "the actual registered native spit accepts both real ingredients");
-        work.ended(rig.level, load, Ending.DONE);
+        ((Workload.Within) work.spec().workload()).ended(rig.level, load, Ending.DONE);
         helper.assertTrue(rig.presence.goals(rig.view).stream().noneMatch(goal -> goal.completions().contains(work.id())), "an ordinary recipe descendant is never mistaken for a standalone recovery root");
         rig.power(false); hold.release(Ending.DROPPED); work.ended(rig.level, Ending.DROPPED);
         // This is the actual CookeryPresence -> Sweep -> Asking path. Only Colony's publish/submit ports are recorded.
