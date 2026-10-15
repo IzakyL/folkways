@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
-import { defineTask, javaTask, screen, tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { foundColonyFast, foundingBox, optInViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
+import { defineTask, javaTask, screen, tick, world, type MinecraftServer, type MinecraftClient } from "@izakyl/blockwright-minecraft";
+import { foundColonyFast, foundingBox, optInViaBook, waitForGroundedPlayer, openColonyPanelViaBook, vocationPriority } from "../shared/colony/colony-founding";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import { deliverOrderViaSitePanel, setMaintainDemandViaUI } from "../shared/colony/membership-optin";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -12,6 +12,9 @@ import { commandPos } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { twins, type Stage, type Vec } from "../shared/harness/stage";
 import { markSouthRack } from "../shared/cookery/rack";
+import { clickElement } from "../ldlib2";
+import { scrollCellIntoView } from "../shared/ui/site-panel";
+import { frames, waitForElement } from "../shared/harness/bw-helpers";
 
 const K = "kaleidoscope_cookery:";
 const KNIFE = K + "iron_kitchen_knife";
@@ -198,7 +201,10 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     await stage.lay(server, box);
     await world.command(server, "fill " + commandPos(stage.at({ ...box.min, y: origin.y - 1 })) + " "
       + commandPos(stage.at({ ...box.max, y: origin.y - 1 })) + " minecraft:smooth_stone");
-    evidence.founding = (await foundColonyFast(server, client, playerName, { origin, residentCount: 3, stage })).evidence;
+    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: 3, stage });
+    evidence.founding = founding.evidence;
+    evidence.roles = await cookingRoles(server, client, playerName, founding.standBlock, stage);
+    await tick.sprint(server, 40);
     for (const command of ["gamerule doDaylightCycle false", "gamerule doMobSpawning false", "difficulty peaceful", "time set day"]) {
       await world.command(server, command);
     }
@@ -300,6 +306,45 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
   }
 });
 
+const ROLES = defineTask<{ player: string }, { residents: string[]; vocations: string[] }>({
+  name: "folkways.cookery-tools.roles",
+  side: "server",
+  timeoutMs: 20000,
+  source: javaTask({
+    imports: ["io.github.izakyl.folkways.core.api.colony.Books", "io.github.izakyl.folkways.core.api.vocation.Vocations"],
+    body: `
+var player = ctx.server().getPlayerList().getPlayerByName(Args.of(ctx).string("player"));
+var colony = Books.acting(player).orElseThrow();
+return Map.of("residents", colony.residents().stream().map(resident -> resident.id().toString()).toList(),
+    "vocations", Vocations.ids().stream().map(Object::toString).toList());
+`,
+  }),
+});
+
+async function cookingRoles(server: MinecraftServer, client: MinecraftClient, player: string, stand: Vec, stage: Stage) {
+  const roster = await runColonyTask(server, ROLES, { player });
+  expect(roster.residents).toHaveLength(3);
+  const changes: unknown[] = [];
+  await openColonyPanelViaBook(server, client, player, stand, stage);
+  try {
+    await clickElement(client, { id: "folkways.tab.residents" });
+    for (const resident of roster.residents) for (const vocation of roster.vocations) {
+      const enabled = vocation === "folkways:crafting" || vocation === "folkways:hauling";
+      const before = await vocationPriority(server, resident, vocation);
+      if ((before > 0) === enabled) continue;
+      const row = "folkways.resident.row." + resident.slice(0, 8);
+      const cell = "folkways.resident.vocation." + vocation.replace(/[:/]/g, ".") + "." + resident.slice(0, 8);
+      await waitForElement(client, { id: cell }, { timeoutMs: 8000 });
+      await scrollCellIntoView(server, client, row, cell);
+      const click = await clickElement(client, { id: cell });
+      await tick.sprint(server, 5); await frames(client, 3);
+      const after = await vocationPriority(server, resident, vocation);
+      expect(after > 0, "the actual Citizens UI enables only crafting and hauling: " + resident + " " + vocation).toBe(enabled);
+      changes.push({ resident, vocation, before, after, click });
+    }
+  } finally { await screen.dismiss(client); }
+  return { roster, changes };
+}
 function kitchen(origin: Vec) {
   const at = (x: number, z: number, y = 0): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
   return { supply: at(0, 6), rack: at(0, 9, 1), table: at(0, 12), boards: [at(-8, 9), at(8, 9)],
