@@ -61,7 +61,7 @@ final class SteamerWork implements Node, Workload.Within {
         batch = recovering ? previous.id() : UUID.randomUUID();
         List<Amount> output = List.of(new Amount(Goods.specOf(job.output()), (long) count * job.output().getCount()));
         spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, this)
-            .needs(loaded ? List.of() : List.of(new Need(job.input(), count))).gives(output).leaves(output)
+            .needs(loaded ? List.of() : List.of(new Need(job.input(), count, true))).gives(output).leaves(output)
             .effort(WorkEffort.NONE).vocation(WaresContent.trade()).estimate(40 + Math.max(0, job.time())).doing(CookeryContent.COOKING).done();
     }
     public NodeSpec spec() { return spec; }

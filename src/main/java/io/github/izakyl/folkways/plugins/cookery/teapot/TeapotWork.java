@@ -69,9 +69,9 @@ final class TeapotWork implements Node, Workload.Within {
         generation = bookings.generation(at); this.changed = changed; recovering = previous != null;
         fluid = recovering; ingredient = recovering && previous.loaded(); batch = recovering ? previous.id() : UUID.randomUUID();
         List<Need> needs = new ArrayList<>();
-        if (!fluid) { needs.add(new Need(Goods.specOf(job.bucket()), 1)); }
-        if (!ingredient) { needs.add(new Need(job.ingredient(), 1)); }
-        needs.add(new Need(Goods.specOf(new ItemStack(ModItems.EMPTY_CUP.get())), job.output().getCount()));
+        if (!fluid) { needs.add(new Need(Goods.specOf(job.bucket()), 1, true)); }
+        if (!ingredient) { needs.add(new Need(job.ingredient(), 1, true)); }
+        needs.add(new Need(Goods.specOf(new ItemStack(ModItems.EMPTY_CUP.get())), job.output().getCount(), true));
         List<Amount> leaves = new ArrayList<>(List.of(new Amount(Goods.specOf(job.output()), job.output().getCount())));
         if (!fluid) { leaves.add(new Amount(Goods.specOf(new ItemStack(Items.BUCKET)), 1)); }
         spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, this).needs(needs)

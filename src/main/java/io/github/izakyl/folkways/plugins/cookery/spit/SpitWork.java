@@ -64,7 +64,7 @@ final class SpitWork implements Node, Workload.Within {
         this.recovering = previous != null; this.loaded = recovering;
         batch = recovering ? previous.id() : UUID.randomUUID();
         spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, this)
-            .needs(loaded ? List.of() : List.of(new Need(job.input(), count)))
+            .needs(loaded ? List.of() : List.of(new Need(job.input(), count, true)))
             .gives(new Amount(Goods.specOf(job.output()), count)).leaves(List.of(new Amount(Goods.specOf(job.output()), count)))
             .tools(new ToolUse(KNIFE, 0)).effort(WorkEffort.NONE).vocation(WaresContent.trade())
             .estimate(40 + Math.max(0, job.time())).doing(CookeryContent.COOKING).done();

@@ -57,7 +57,7 @@ final class MillstoneWork implements Node, Workload.Within {
         this.loaded = recovering;
         this.phase = previous == null ? Phase.LOAD : Phase.DRIVE;
         this.spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, this)
-            .needs(recovering ? List.of() : List.of(new Need(job.input(), count)))
+            .needs(recovering ? List.of() : List.of(new Need(job.input(), count, true)))
             .gives(job.amounts(count, false)).leaves(job.amounts(count, true)).effort(WorkEffort.NONE)
             .vocation(WaresContent.trade()).gesture(WorkGesture.SWING).focus(at.cell()).estimate(560)
             .doing(CookeryContent.PREPARING).done();
