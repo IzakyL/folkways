@@ -235,6 +235,49 @@ public final class MillstoneGameTests {
                 }).thenSucceed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 800)
+    public static void aDeadMotorLeavesNoDepartureLeaseAndAnotherResidentCollectsTheSameNativeBatch(GameTestHelper helper) {
+        Rig rig = new Rig(helper); MillstoneWork work = rig.plan(3); rig.load(work);
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(rig.mill().getInput().isEmpty(),
+            "the original native ticker finishes before the motor dies")).thenExecute(() -> {
+                ResidentEntity dead = rig.actor;
+                try {
+                    helper.assertTrue(!rig.mill().hasEntity() && MillstoneDrive.exiting(dead), "the completed motor is unbound but still owes its real departure");
+                    var batch = MillstoneBatch.read(rig.mill(), rig.level).orElseThrow();
+                    helper.assertTrue(batch.ready() && !rig.mill().isOutputEmpty(), "the actual finished batch is still in the native mill");
+                    dead.hurt(rig.level.damageSources().genericKill(), Float.MAX_VALUE);
+                    helper.assertTrue(!dead.isAlive(), "the former native motor really died before walking away");
+                    rig.hold.release(Ending.REVOKED);
+                    for (int x = -3; x <= 3; x++) { for (int z = -3; z <= 3; z++) {
+                        if (Math.max(Math.abs(x), Math.abs(z)) == 3) { rig.level.setBlockAndUpdate(rig.cell.offset(x, -1, z), Blocks.AIR.defaultBlockState()); }
+                    } }
+                    MillstoneDrive.tick(rig.level, rig.colony);
+                    helper.assertTrue(!MillstoneDrive.exiting(dead), "a dead actor has no physical departure obligation");
+                    helper.assertTrue(!MillstoneDrive.blocked(rig.level, rig.at), "removing the old exit support cannot leave a dead actor blocking this station");
+                    helper.assertTrue(MillstoneBatch.read(rig.mill(), rig.level).orElseThrow().equals(batch), "death cleanup preserves the same native-owned output batch");
+                    helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "death never refunds any accepted raw ingredient");
+                    for (int x = -3; x <= 3; x++) { for (int z = -3; z <= 3; z++) {
+                        rig.level.setBlockAndUpdate(rig.cell.offset(x, -1, z), Blocks.STONE.defaultBlockState());
+                    } }
+                    rig.actor = PersonBody.RESIDENT.get().create(rig.level);
+                    rig.actor.setPos(Vec3.atBottomCenterOf(rig.cell.offset(3, 0, 0))); rig.actor.setOnGround(true); rig.level.addFreshEntity(rig.actor);
+                    helper.assertTrue(rig.actor.isAlive() && !rig.actor.getUUID().equals(dead.getUUID()), "recovery belongs to another actual living resident");
+                    var recovery = new MillstoneStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {});
+                    MillstoneWork resumed = (MillstoneWork) recovery.getFirst().nodes().getFirst();
+                    helper.assertTrue(resumed.spec().needs().isEmpty() && resumed.planned(rig.level).isEmpty(), "the live resident adopts the same batch without another raw budget");
+                    Node drive = ((Workload.Within.Turn.Piece) resumed.next(rig.level, rig)).node();
+                    helper.assertTrue(!((Workload.Continuous) drive.spec().workload()).holds(rig.level, rig), "the new resident has no invented duty to walk the dead actor out");
+                    helper.assertTrue(Commit.run(rig.level, drive, rig) instanceof Outcome.Done, "native finished state permits recovery");
+                    resumed.ended(rig.level, drive, Ending.DONE);
+                    helper.assertTrue(rig.step(resumed) instanceof Outcome.Done && resumed.commit(rig.level, rig) instanceof Outcome.Done, "the live resident extracts and settles the actual stored products");
+                    resumed.ended(rig.level, Ending.DONE);
+                    helper.assertValueEqual(rig.count(ModItems.FLOUR.get()), 3L, "the exact original three real flour are delivered once");
+                    helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "no raw input is recreated for either resident");
+                    helper.assertTrue(rig.mill().isOutputEmpty() && !rig.mill().hasEntity() && !MillstoneDrive.blocked(rig.level, rig.at), "all actual outputs and runtime ownership settle cleanly");
+                    helper.assertTrue(rig.level.getEntitiesOfClass(ItemEntity.class, new net.minecraft.world.phys.AABB(rig.cell).inflate(5)).isEmpty(), "death and recovery do not duplicate products as drops");
+                } finally { dead.discard(); rig.close(); }
+            }).thenSucceed();
+    }
     private static void exitWall(Rig rig, boolean closed) {
         for (int x = -3; x <= 3; x++) {
             for (int z = -3; z <= 3; z++) {
@@ -254,7 +297,7 @@ public final class MillstoneGameTests {
         final Stances stances;
         final KitchenBookings bookings = new KitchenBookings();
         final SimpleContainer pack = new SimpleContainer(12);
-        final ResidentEntity actor;
+        ResidentEntity actor;
         Hold hold;
         Rig(GameTestHelper helper) {
             this.helper = helper; this.level = helper.getLevel();

@@ -78,13 +78,14 @@ public final class MillstoneDrive {
     private static final class Exit {
         final WorldPos at;
         final UUID colony;
+        final Mob actor;
         WorldPos target;
         Conveyance path;
         float started;
         boolean awaited;
         long stepped = Long.MIN_VALUE;
-        Exit(WorldPos at, UUID colony, WorldPos target, boolean awaited) {
-            this.at = at; this.colony = colony; this.target = target; this.awaited = awaited;
+        Exit(WorldPos at, UUID colony, Mob actor, WorldPos target, boolean awaited) {
+            this.at = at; this.colony = colony; this.actor = actor; this.target = target; this.awaited = awaited;
         }
     }
 
@@ -228,7 +229,7 @@ public final class MillstoneDrive {
         installExitGoal(actor);
         Exit existing = EXITS.get(actor.getUUID());
         if (existing != null) { existing.awaited = awaited; return; }
-        EXITS.put(actor.getUUID(), new Exit(at, colony, target, awaited));
+        EXITS.put(actor.getUUID(), new Exit(at, colony, actor, target, awaited));
         CompoundTag data = new CompoundTag();
         data.put("station", at.save());
         data.putUUID("colony", colony);
@@ -245,7 +246,7 @@ public final class MillstoneDrive {
             CompoundTag data = actor.getPersistentData().getCompound(EXIT);
             Optional<WorldPos> at = WorldPos.load(Reader.of(data.getCompound("station")));
             if (at.isEmpty() || !data.hasUUID("colony")) { return false; }
-            exit = new Exit(at.get(), data.getUUID("colony"), null, false);
+            exit = new Exit(at.get(), data.getUUID("colony"), actor, null, false);
             EXITS.put(actor.getUUID(), exit);
         }
         if (!actor.isAlive() || actor.isPassenger() || !exit.at.in(level)) { return false; }
@@ -343,10 +344,28 @@ public final class MillstoneDrive {
             && (exit.target == null || !Footing.withFeetAt(level, exit.target.block(level))));
     }
 
+    private static void forget(Mob actor) {
+        Lease lease = LEASES.remove(actor.getUUID());
+        if (lease != null && lease.mill.isBoundTo(actor)) {
+            lease.mill.unbindEntity();
+            lease.mill.refresh();
+        }
+        Exit exit = EXITS.remove(actor.getUUID());
+        if (exit != null && exit.path != null && actor.level() instanceof ServerLevel level) {
+            exit.path.release(level, actor);
+        }
+        actor.getPersistentData().remove(EXIT);
+    }
+
     public static void tick(ServerLevel level, UUID colony) {
         for (Lease lease : List.copyOf(LEASES.values())) {
-            if (lease.colony.equals(colony) && lease.actor.level() == level && (!lease.valid() || !lease.mill.isBoundTo(lease.actor)) && lease.driving) {
-                detach(lease, false);
+            if (!lease.colony.equals(colony) || lease.actor.level() != level) { continue; }
+            if (!lease.actor.isAlive() || lease.actor.isRemoved()) { forget(lease.actor); }
+            else if (lease.driving && (!lease.valid() || !lease.mill.isBoundTo(lease.actor))) { detach(lease, false); }
+        }
+        for (Exit exit : List.copyOf(EXITS.values())) {
+            if (exit.colony.equals(colony) && exit.actor.level() == level && (!exit.actor.isAlive() || exit.actor.isRemoved())) {
+                forget(exit.actor);
             }
         }
     }
