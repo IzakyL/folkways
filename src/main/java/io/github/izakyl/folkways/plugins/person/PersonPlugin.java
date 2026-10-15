@@ -17,6 +17,7 @@ import io.github.izakyl.folkways.plugins.person.look.ResidentModelPackets;
 import io.github.izakyl.folkways.plugins.person.look.ResidentModels;
 import io.github.izakyl.folkways.plugins.person.name.NamesPage;
 import io.github.izakyl.folkways.plugins.person.name.ResidentNames;
+import io.github.izakyl.folkways.plugins.person.walk.Doorways;
 import io.github.izakyl.folkways.plugins.person.walk.Walking;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -60,6 +61,7 @@ public final class PersonPlugin {
         NeoForge.EVENT_BUS.addListener(ResidentModelPackets::onPlayerLoggedIn);
         NeoForge.EVENT_BUS.addListener(ServerStoppingEvent.class, event -> ResidentModels.forgetServer());
         NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> ResidentModels.forgetServer());
+        NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> Doorways.forgetServer());
         if (FMLEnvironment.dist.isClient()) {
             PersonClient.install(modBus);
         }
