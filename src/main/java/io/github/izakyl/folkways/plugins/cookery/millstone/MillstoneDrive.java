@@ -39,6 +39,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.minecraft.world.phys.Vec3;
 
@@ -60,12 +61,14 @@ public final class MillstoneDrive {
         final KitchenBookings bookings;
         final UUID turn;
         final long generation;
-        final WorldPos exit;
+        WorldPos exit;
+        long surroundings;
         boolean driving = true;
         Lease(UUID colony, UUID batch, WorldPos at, MillstoneBlockEntity mill, Mob actor,
               KitchenBookings bookings, UUID turn, long generation, WorldPos exit) {
             this.colony = colony; this.batch = batch; this.at = at; this.mill = mill; this.actor = actor;
             this.bookings = bookings; this.turn = turn; this.generation = generation; this.exit = exit;
+            surroundings = surroundings((ServerLevel) actor.level(), at);
         }
         boolean valid() {
             return driving && actor.isAlive() && !actor.isPassenger() && actor.hurtTime == 0
@@ -152,7 +155,30 @@ public final class MillstoneDrive {
                 UUID colony = Bodies.of(actor).flatMap(body -> body.colonyId()).orElse(new UUID(0, 0));
                 queueExit(actor, at, colony, exit(level, at, actor).orElse(null), false);
             }
+        } else {
+            long current = surroundings(level, lease.at);
+            if (current != lease.surroundings) {
+                lease.surroundings = current;
+                lease.exit = exit(level, lease.at, actor).orElse(null);
+                if (lease.exit == null) { detach(lease, false); }
+            }
         }
+    }
+
+    // Native movement is controlled by the mill, so rebuilding paths every rotation tick is unnecessary.
+    // Recheck a real path only when nearby support or collision blocks actually change.
+    private static long surroundings(ServerLevel level, WorldPos at) {
+        long fingerprint = 0xcbf29ce484222325L;
+        BlockPos center = at.block(level);
+        for (int x = -4; x <= 4; x++) {
+            for (int z = -4; z <= 4; z++) {
+                for (int y = -1; y <= 2; y++) {
+                    BlockPos cell = center.offset(x, y, z);
+                    fingerprint = (fingerprint ^ (level.isLoaded(cell) ? Block.getId(level.getBlockState(cell)) : -1)) * 0x100000001b3L;
+                }
+            }
+        }
+        return fingerprint;
     }
 
     public static void after(MillstoneBlockEntity mill) {

@@ -208,6 +208,43 @@ public final class MillstoneGameTests {
         }
         helper.succeed();
     }
+    @GameTest(template = "empty", timeoutTicks = 180)
+    public static void blockingAllExitsDuringGrindingUnbindsAndWaitsForARealWalkOut(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        rig.load(rig.plan(3));
+        helper.runAfterDelay(2, () -> {
+            helper.assertTrue(Math.abs(rig.actor.getX() - rig.cell.getX() - 0.5) < 2.9
+                && Math.abs(rig.actor.getZ() - rig.cell.getZ() - 0.5) < 2.9, "the native motor is safely inside the future wall");
+            exitWall(rig, true);
+        });
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(MillstoneDrive.blocked(rig.level, rig.at),
+            "a changed physical exit immediately becomes a blocked departure")).thenExecute(() -> {
+                helper.assertTrue(!rig.mill().hasEntity(), "the first native update after obstruction releases the motor");
+                helper.assertValueEqual(rig.mill().getInput().getCount(), 3, "interrupted grinding preserves all actual accepted inputs");
+                helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "blocked departure never refunds accepted goods");
+            }).thenIdle(10).thenExecute(() -> {
+                helper.assertTrue(MillstoneDrive.exiting(rig.actor) && !rig.mill().hasEntity(), "a closed wall cannot count as a successful exit or rebind");
+                exitWall(rig, false);
+            }).thenWaitUntil(() -> helper.assertTrue(!MillstoneDrive.exiting(rig.actor),
+                "opening the physical route lets the independent goal really walk clear")).thenExecute(() -> {
+                    try {
+                        helper.assertTrue(rig.actor.walkDist > 0.05F, "the reopened departure uses actual movement");
+                        helper.assertTrue(!rig.mill().hasEntity(), "the former motor does not immediately get caught again");
+                        helper.assertValueEqual(rig.mill().getInput().getCount(), 3, "the recoverable batch remains in its native slot");
+                    } finally { rig.close(); }
+                }).thenSucceed();
+    }
+
+    private static void exitWall(Rig rig, boolean closed) {
+        for (int x = -3; x <= 3; x++) {
+            for (int z = -3; z <= 3; z++) {
+                if (Math.max(Math.abs(x), Math.abs(z)) == 3) {
+                    rig.level.setBlockAndUpdate(rig.cell.offset(x, 0, z), (closed ? Blocks.STONE : Blocks.AIR).defaultBlockState());
+                    rig.level.setBlockAndUpdate(rig.cell.offset(x, 1, z), (closed ? Blocks.STONE : Blocks.AIR).defaultBlockState());
+                }
+            }
+        }
+    }
     private static final class Rig implements Worker, AutoCloseable {
         final GameTestHelper helper;
         final ServerLevel level;
