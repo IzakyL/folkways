@@ -70,19 +70,25 @@ public final class CraftRemainderPlanningGameTests {
         var workshop = new PackCraftHost(at, Blocks.CRAFTING_TABLE, Stances.at(at.above()))
             .frozen(RecipeIndex.over(level, level.getRecipeManager()), level, Optional.empty());
         var cake = Goods.specOf(new ItemStack(Items.CAKE)); var bucket = Goods.specOf(new ItemStack(Items.BUCKET));
-        boolean[] sized = { false };
+        boolean[] sizedVanilla = { false };
         Produce wanted = Produce.of(WaresContent.ID, new WorkSite.AtBlock(at), cake, 2,
             (site, perRun, perRunYield, by, limit) -> {
                 helper.assertTrue(perRun.stream().anyMatch(need -> need.carried() && need.spec().equals(cake) && need.count() == 1), "batch capacity includes the actual primary output");
-                helper.assertTrue(perRun.stream().anyMatch(need -> need.carried() && need.spec().equals(bucket) && need.count() == 3), "batch capacity includes all native leftover milk containers");
-                sized[0] = true; return 1;
+                long milk = perRun.stream().filter(need -> !need.carried()
+                    && Goods.matches(new ItemStack(Items.MILK_BUCKET), need.spec())).mapToLong(Need::count).sum();
+                helper.assertTrue(milk > 0 && perRun.stream().anyMatch(need -> need.carried() && need.spec().equals(bucket) && need.count() == milk), "each real cake candidate budgets its own actual native milk containers: " + perRun);
+                if (milk == 3) { sizedVanilla[0] = true; }
+                return 1;
             });
         try {
-            Node node = workshop.options(wanted, Grown.of(wanted)).getFirst().replacement().nodes().getFirst();
-            helper.assertTrue(sized[0], "the real workshop asks the planner for a native output capacity budget");
-            helper.assertTrue(node.spec().needs().stream().noneMatch(need -> need.spec().equals(cake) || need.spec().equals(bucket)), "capacity hints are not fabricated cake or empty bucket inputs");
-            helper.assertTrue(node.spec().gives().size() == 1 && node.spec().gives().getFirst().spec().equals(cake), "the main output is promised exactly once");
-            helper.assertTrue(node.spec().leaves().size() == 1 && node.spec().leaves().getFirst().spec().equals(bucket), "only the native extra containers are leftover room");
+            var options = workshop.options(wanted, Grown.of(wanted));
+            helper.assertTrue(sizedVanilla[0], "the real vanilla three-milk recipe is among the capacity-sized candidates");
+            for (var option : options) {
+                Node node = option.replacement().nodes().getFirst();
+                helper.assertTrue(node.spec().needs().stream().noneMatch(need -> need.spec().equals(cake) || need.spec().equals(bucket)), "capacity hints are not fabricated cake or empty bucket inputs");
+                helper.assertTrue(node.spec().gives().size() == 1 && node.spec().gives().getFirst().spec().equals(cake), "the main output is promised exactly once");
+                helper.assertTrue(node.spec().leaves().size() == 1 && node.spec().leaves().getFirst().spec().equals(bucket), "only each candidate's native extra containers are leftover room");
+            }
         } finally { fixture.worker.body().discard(); }
         helper.succeed();
     }
