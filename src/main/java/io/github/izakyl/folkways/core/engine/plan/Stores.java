@@ -59,7 +59,7 @@ public final class Stores {
     }
 
     static Optional<Container> kept(Container container, List<StoreRule> rules) {
-        if (rules.stream().allMatch(rule -> rule instanceof StoreRule.Reserve)) {
+        if (rules.stream().allMatch(rule -> rule instanceof StoreRule.Reserve || rule instanceof StoreRule.Prefer)) {
             return Optional.of(container);
         }
         int from = 0;

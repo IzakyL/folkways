@@ -77,6 +77,16 @@ public final class Stock {
             && (barred.isEmpty() || Collections.disjoint(Goods.members(spec), barred));
     }
 
+    public int preference(Stash where, ItemSpec spec) {
+        int priority = 0;
+        for (StoreRule rule : rules.getOrDefault(where, List.of())) {
+            if (rule instanceof StoreRule.Prefer prefer && Goods.overlap(prefer.goods(), spec)) {
+                priority = Math.max(priority, prefer.priority());
+            }
+        }
+        return priority;
+    }
+
     public boolean reserves(Stash where, ItemSpec spec) {
         return StoreRule.reserves(rules.getOrDefault(where, List.of()), spec);
     }

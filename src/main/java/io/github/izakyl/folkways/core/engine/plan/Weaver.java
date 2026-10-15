@@ -1619,7 +1619,8 @@ public final class Weaver {
     private List<RecoveryStore> puttingAway(List<RecoveryStore> stores, ItemSpec spec) {
         List<RecoveryStore> ordered = new ArrayList<>(stores);
         ordered.sort(Comparator.comparingInt(
-                (RecoveryStore store) -> now.stock().keepsOther(store.stash(), spec) ? 1 : 0)
+                (RecoveryStore store) -> -now.stock().preference(store.stash(), spec))
+            .thenComparingInt(store -> now.stock().keepsOther(store.stash(), spec) ? 1 : 0)
             .thenComparingInt(RecoveryStore::ticks));
         return ordered;
     }
