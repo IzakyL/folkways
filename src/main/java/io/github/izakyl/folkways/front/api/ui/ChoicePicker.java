@@ -190,7 +190,7 @@ public final class ChoicePicker {
         float right = host.getPositionX() + host.getSizeWidth() + HOST_GAP;
         float left = host.getPositionX() - HOST_GAP - wide;
         float width = screen.getSizeWidth();
-        float tall = screen.getSizeHeight();
+        float tall = Math.max(0f, screen.getSizeHeight() - Rows.FOOT);
         float x = width <= 0f || right + wide <= width ? right : Math.max(0f, left);
         float y = tall <= 0f
             ? host.getPositionY()

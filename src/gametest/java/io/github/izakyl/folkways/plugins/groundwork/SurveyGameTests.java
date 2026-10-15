@@ -119,8 +119,48 @@ public final class SurveyGameTests {
         place(level, flower, Blocks.POPPY.defaultBlockState());
         Set<BlockPos> box = box(origin, origin.offset(1, 1, 0));
 
-        Set<BlockPos> asked = cellsOf(new Survey(level, box).weed());
+        Set<BlockPos> asked = cellsOf(new Survey(level, box).weed(Survey.weeds(true, false)));
         helper.assertTrue(asked.equals(Set.of(tall)), "the grass by its foot, and not the flower, got " + asked);
+        helper.succeed();
+    }
+
+    // Flowers are pulled only when the zone says so, a tall one once by its lower half; then the grass may stay.
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void flowersArePulledOnlyWhenAsked(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
+        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.GRASS_BLOCK);
+        BlockPos grass = origin;
+        place(level, grass, Blocks.SHORT_GRASS.defaultBlockState());
+        BlockPos poppy = origin.offset(1, 0, 0);
+        place(level, poppy, Blocks.POPPY.defaultBlockState());
+        BlockPos sunflower = origin.offset(2, 0, 0);
+        place(level, sunflower, Blocks.SUNFLOWER.defaultBlockState());
+        place(level, sunflower.above(), Blocks.SUNFLOWER.defaultBlockState()
+            .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
+        Set<BlockPos> box = box(origin, origin.offset(2, 1, 0));
+
+        Set<BlockPos> asked = cellsOf(new Survey(level, box).weed(Survey.weeds(false, true)));
+        helper.assertTrue(asked.equals(Set.of(poppy, sunflower)), "the flowers by their foot and not the grass, got "
+            + asked);
+        asked = cellsOf(new Survey(level, box).weed(Survey.weeds(true, true)));
+        helper.assertTrue(asked.equals(Set.of(grass, poppy, sunflower)), "the grass and the flowers, got " + asked);
+        helper.succeed();
+    }
+
+    // A fill lays nothing over a flower, whether the zone pulls it first or keeps it.
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void aFillBuriesNoFlower(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
+        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.GRASS_BLOCK);
+        Set<BlockPos> box = box(origin, origin.offset(1, 1, 0));
+        box.forEach(cell -> place(level, cell, Blocks.AIR.defaultBlockState()));
+        BlockPos flower = origin.offset(1, 0, 0);
+        place(level, flower, Blocks.POPPY.defaultBlockState());
+
+        Set<BlockPos> asked = cellsOf(new Survey(level, box).fill());
+        helper.assertTrue(asked.equals(Set.of(origin)), "only the open cell beside the flower, got " + asked);
         helper.succeed();
     }
 

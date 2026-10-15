@@ -274,6 +274,7 @@ public final class ItemPicker {
             width = Minecraft.getInstance().getWindow().getGuiScaledWidth();
             tall = Minecraft.getInstance().getWindow().getGuiScaledHeight();
         }
+        tall = Math.max(0f, tall - Rows.FOOT);
         float height = tall <= 0f ? HEIGHT : Math.min(HEIGHT, tall - 2 * SCREEN_MARGIN);
         float x;
         float y;

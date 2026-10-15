@@ -26,6 +26,12 @@ const WRAP_READS = 3;
 
 const ROLLING = new Set(["ROLL", "HOVER_ROLL", "WRAP"]);
 
+/** Text that rolls sideways (LDLib2 TextWrap) instead of being cut, or wrapping onto more lines. */
+const SIDEWAYS = new Set(["ROLL", "HOVER_ROLL"]);
+
+/** A rolling label must still show this share of its words: a row that reads "0 /" until hovered says nothing. */
+const MIN_SHOWN = 0.5;
+
 const TEXTUAL = [".Label", ".TextElement"];
 
 /** A panel element plus its text wrap mode (LDLib2 TextWrap name), when it has a text style. */
@@ -179,6 +185,9 @@ export class LayoutProbe {
         if (rule.name === "text-clipped" && ROLLING.has(element.wrap ?? "")) {
           continue;
         }
+        if (rule.name === "text-squeezed" && !SIDEWAYS.has(element.wrap ?? "")) {
+          continue;
+        }
         const detail = await rule.check(element, elements, screen, this);
         if (detail) {
           findings.push(note(rule.name, rule.severity, element, detail));
@@ -260,6 +269,23 @@ const RULES: Rule[] = [
       }
       return `Text ${JSON.stringify(element.text)} needs ${needed}px, but the element is only ${round(element.width)}px, `
         + `so it renders truncated.`;
+    },
+  },
+  {
+    name: "text-squeezed",
+    severity: "error",
+    async check(element, _all, _screen, probe) {
+      if (!draws(element) || !element.text || element.width < ONE_GLYPH
+          || element.height > SINGLE_LINE) {
+        return null;
+      }
+      const needed = await probe.measure(element.text);
+      if (element.width >= needed * MIN_SHOWN) {
+        return null;
+      }
+      return `Rolling text ${JSON.stringify(element.text)} needs ${needed}px but is squeezed to ${round(element.width)}px, `
+        + `${Math.round((element.width / needed) * 100)}% of it: until hovered it reads as a fragment. Its neighbours `
+        + `take the room; let them give way (flexShrink) before it does.`;
     },
   },
   {

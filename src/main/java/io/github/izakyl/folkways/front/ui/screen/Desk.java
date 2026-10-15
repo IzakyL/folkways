@@ -4,6 +4,7 @@ import com.lowdragmc.lowdraglib2.LDLib2;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
+import io.github.izakyl.folkways.front.api.ui.Rows;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -56,7 +57,7 @@ public final class Desk {
 
     private void clamp() {
         float width = root.getSizeWidth();
-        float height = Math.max(0f, root.getSizeHeight() - 24f);
+        float height = Math.max(0f, root.getSizeHeight() - Rows.FOOT);
         for (Window window : windows) {
             window.clampInto(width, height);
         }

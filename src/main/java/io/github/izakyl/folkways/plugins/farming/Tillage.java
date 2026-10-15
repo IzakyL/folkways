@@ -27,22 +27,29 @@ final class Tillage {
     // What a resident pulls up before tilling, and the soil a hoe turns once it is gone. The hoe itself refuses soil
     // with anything above it, so a scan cannot ask it without changing the world; these tags stand in for that answer.
     static final TagKey<Block> WEEDS = tag("weeds");
+    static final TagKey<Block> FLOWERS = tag("flowers");
     static final TagKey<Block> TILLABLE_UNDER_WEEDS = tag("tillable_under_weeds");
+
+    // What a plot lets its residents pull up: flowers are often planted on purpose, so each is the plot's own choice.
+    record Clearing(boolean grass, boolean flowers) {
+
+        static final Clearing ALL = new Clearing(true, true);
+
+        boolean clears(BlockState state) {
+            return grass && state.is(WEEDS) || flowers && state.is(FLOWERS);
+        }
+    }
 
     private Tillage() {
     }
 
-    static boolean canTill(Level level, BlockPos ground, BlockState state, ItemStack hoe) {
+    static boolean canTill(Level level, BlockPos ground, BlockState state, ItemStack hoe, Clearing clearing) {
         if (tilled(level, ground, state, hoe).isPresent()) {
             return true;
         }
-        // The work clears the weeds and asks the hoe again before turning the soil.
-        return weeds(level.getBlockState(ground.above())) && hoe.canPerformAction(ItemAbilities.HOE_TILL)
+        // The work clears what is in the way and asks the hoe again before turning the soil.
+        return clearing.clears(level.getBlockState(ground.above())) && hoe.canPerformAction(ItemAbilities.HOE_TILL)
             && state.is(TILLABLE_UNDER_WEEDS);
-    }
-
-    static boolean weeds(BlockState state) {
-        return state.is(WEEDS);
     }
 
     static Optional<BlockState> tilled(Level level, BlockPos ground, BlockState state, ItemStack hoe) {

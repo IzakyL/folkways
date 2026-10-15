@@ -15,6 +15,7 @@ import io.github.izakyl.folkways.plugins.farming.FarmingContent;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BiPredicate;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -42,12 +43,16 @@ final class BreakNode extends GroundNode {
     }
 
     private final Way way;
+    // What the work takes out, read again when it gets there: a weed may have given way to something else.
+    private final Predicate<BlockState> taken;
     // What the zone leaves standing, read again when the block is taken: it may have joined the colony since.
     private final BiPredicate<BlockPos, BlockState> spared;
 
-    BreakNode(Chores.Chore chore, Way way, BlockState seen, BiPredicate<BlockPos, BlockState> spared) {
+    BreakNode(Chores.Chore chore, Way way, BlockState seen, Predicate<BlockState> taken,
+            BiPredicate<BlockPos, BlockState> spared) {
         super(declared(chore, way, seen), chore);
         this.way = way;
+        this.taken = taken;
         this.spared = spared;
     }
 
@@ -74,7 +79,7 @@ final class BreakNode extends GroundNode {
     Outcome work(ServerLevel level, Worker who, Job job) {
         BlockPos cell = job.cell();
         BlockState state = level.getBlockState(cell);
-        if (state.isAir() || way == Way.WEED && !Survey.weed(state)) {
+        if (state.isAir() || !taken.test(state)) {
             return Outcome.done();
         }
         if (state.getDestroySpeed(level, cell) < 0.0F || spared.test(cell, state)) {

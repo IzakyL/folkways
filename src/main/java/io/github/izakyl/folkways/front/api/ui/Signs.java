@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.front.api.ui;
 
+import com.lowdragmc.lowdraglib2.gui.LDLibFonts;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
@@ -13,6 +14,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -162,8 +164,8 @@ public final class Signs {
                 case Placed.Glyph glyph ->
                     graphics.blitSprite(glyph.sprite(), x + glyph.x(), y + glyph.y(), glyph.width(), glyph.height());
                 case Placed.Item item -> graphics.renderItem(item.stack(), x + item.x(), y + item.y());
-                case Placed.Text text ->
-                    graphics.drawString(font, text.text(), x + text.x(), y + text.y(), text.color(), true);
+                case Placed.Text text -> LDLibFonts.drawText(graphics, font, Component.literal(text.text()),
+                    x + text.x(), y + text.y(), text.color(), true);
             }
         }
     }

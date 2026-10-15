@@ -27,9 +27,12 @@ final class TillNode extends FarmNode {
     private static final List<Amount> WEED_SEED = List.of(
         new Amount(ItemSpec.of(ResourceLocation.withDefaultNamespace("wheat_seeds")), 1));
 
-    TillNode(Chore chore) {
+    private final Tillage.Clearing clearing;
+
+    TillNode(Chore chore, Tillage.Clearing clearing) {
         super(FarmNode.declare(chore, Workload.Once.of(FarmingContent.CELL_TICKS,
             FarmingContent::haste)).tools(HOE).leaves(WEED_SEED).doing(FarmingContent.TILLING).done(), chore);
+        this.clearing = clearing;
     }
 
     @Override
@@ -40,14 +43,14 @@ final class TillNode extends FarmNode {
         }
         ItemStack hoe = who.held(HOE.need());
         BlockState state = level.getBlockState(ground);
-        if (!Tillage.canTill(level, ground, state, hoe)) {
+        if (!Tillage.canTill(level, ground, state, hoe, clearing)) {
             return Outcome.done();
         }
         List<WorkNoise> heard = new ArrayList<>();
         List<ItemStack> taken = new ArrayList<>();
         BlockPos above = ground.above();
         BlockState weeds = level.getBlockState(above);
-        if (Tillage.weeds(weeds)) {
+        if (clearing.clears(weeds)) {
             taken.addAll(Yield.take(level, who.body(), above, weeds));
             heard.add(WorkNoise.broke(above, weeds));
         }

@@ -386,7 +386,7 @@ public final class FieldChoresGameTests {
             long stamp) {
         Crop growing = Crop.of(level, cells.iterator().next(), ResourceLocation.withDefaultNamespace(crop))
             .orElseThrow();
-        Field field = new Field(growing, WorldPos.of(level, cells.iterator().next()), () -> { }, new PastDay());
+        Field field = new Field(growing, Tillage.Clearing.ALL, WorldPos.of(level, cells.iterator().next()), () -> { }, new PastDay());
         field.scan(level, zone, growing, stamp);
         field.settle(stamp);
         List<Grown> goals = new ArrayList<>();

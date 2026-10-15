@@ -80,7 +80,7 @@ public final class GroundworkScene {
 
         scene.overlay().showOutline(PonderPalette.GREEN, "weed", weeds, 80);
         scene.overlay().showText(80)
-            .text("Weed pulls the grass and ferns in the box. Farmers do it.")
+            .text("Weed pulls the grass and ferns in the box. Flowers are pulled only with Pull flowers ticked, and a fill never buries one. Farmers do it.")
             .pointAt(util.vector().topOf(6, 0, 1))
             .placeNearTarget()
             .attachKeyFrame();

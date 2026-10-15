@@ -56,7 +56,7 @@ public final class FarmingScene {
 
         scene.overlay().showOutline(PonderPalette.GREEN, plot, plot, 100);
         scene.overlay().showText(90)
-            .text("With the book marking out, click two opposite corners to frame a plot. What it grows is the one setting on it: wheat here.")
+            .text("With the book marking out, click two opposite corners to frame a plot. Its settings say what it grows, wheat here, and whether residents pull up grass and flowers before hoeing; both are on to start.")
             .pointAt(util.vector().topOf(3, 0, 2))
             .placeNearTarget()
             .attachKeyFrame();

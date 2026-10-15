@@ -63,16 +63,55 @@ public final class TillageGameTests {
     public static void otherBlocksAndPlantsAreLeftAlone(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
-        for (Block obstacle : List.of(Blocks.STONE, Blocks.WHEAT, Blocks.DANDELION,
+        for (Block obstacle : List.of(Blocks.STONE, Blocks.WHEAT,
                 Blocks.OAK_SAPLING, Blocks.WATER)) {
             place(level, ground, Blocks.DIRT.defaultBlockState());
             place(level, ground.above(), obstacle.defaultBlockState());
-            helper.assertFalse(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE),
-                "a field must not plan to clear " + obstacle);
+            helper.assertFalse(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+                Tillage.Clearing.ALL), "a field must not plan to clear " + obstacle);
             till(level, ground, new ItemStack(Items.WOODEN_HOE));
             helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "blocked soil is left alone");
             helper.assertTrue(level.getBlockState(ground.above()).is(obstacle), "the obstacle is left alone");
         }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void flowersAreClearedOnlyWhenThePlotAllowsIt(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        Tillage.Clearing grassOnly = new Tillage.Clearing(true, false);
+        for (Block flower : List.of(Blocks.DANDELION, Blocks.OXEYE_DAISY, Blocks.SUNFLOWER)) {
+            place(level, ground, Blocks.DIRT.defaultBlockState());
+            placePlant(level, ground.above(), flower);
+            helper.assertFalse(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+                grassOnly), "a plot that keeps its flowers must not plan to clear " + flower);
+            till(level, ground, new ItemStack(Items.WOODEN_HOE), grassOnly);
+            helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "soil under a kept flower is left alone");
+            helper.assertTrue(level.getBlockState(ground.above()).is(flower), "the kept flower stays");
+
+            helper.assertTrue(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+                Tillage.Clearing.ALL), "a plot that clears flowers plans to clear " + flower);
+            till(level, ground, new ItemStack(Items.WOODEN_HOE), Tillage.Clearing.ALL);
+            helper.assertTrue(level.getBlockState(ground).is(Blocks.FARMLAND), "the soil is tilled");
+            helper.assertTrue(level.getBlockState(ground.above()).isAir(), "the flower is pulled up");
+            helper.assertTrue(level.getBlockState(ground.above(2)).isAir(), "no upper half is left behind");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void grassIsKeptWhenThePlotSaysSo(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        Tillage.Clearing flowersOnly = new Tillage.Clearing(false, true);
+        place(level, ground, Blocks.DIRT.defaultBlockState());
+        place(level, ground.above(), Blocks.SHORT_GRASS.defaultBlockState());
+        helper.assertFalse(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+            flowersOnly), "a plot that keeps its grass must not plan to clear it");
+        till(level, ground, new ItemStack(Items.WOODEN_HOE), flowersOnly);
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "soil under kept grass is left alone");
+        helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SHORT_GRASS), "the kept grass stays");
         helper.succeed();
     }
 
@@ -102,8 +141,8 @@ public final class TillageGameTests {
         BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
         place(level, ground, Blocks.DIRT.defaultBlockState());
         place(level, ground.above(), Blocks.SHORT_GRASS.defaultBlockState());
-        helper.assertTrue(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE),
-            "the grass-covered cell starts out tillable");
+        helper.assertTrue(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+            Tillage.Clearing.ALL), "the grass-covered cell starts out tillable");
         place(level, ground.above(), Blocks.STONE.defaultBlockState());
         till(level, ground, new ItemStack(Items.WOODEN_HOE));
         helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "work checks the soil again");
@@ -125,6 +164,10 @@ public final class TillageGameTests {
     }
 
     private static Outcome till(ServerLevel level, BlockPos ground, ItemStack hoe) {
+        return till(level, ground, hoe, Tillage.Clearing.ALL);
+    }
+
+    private static Outcome till(ServerLevel level, BlockPos ground, ItemStack hoe, Tillage.Clearing clearing) {
         var body = PersonBody.RESIDENT.get().create(level);
         Worker worker = (Worker) Proxy.newProxyInstance(Worker.class.getClassLoader(),
             new Class<?>[] {Worker.class}, (proxy, method, args) -> switch (method.getName()) {
@@ -134,8 +177,15 @@ public final class TillageGameTests {
             });
         Crop crop = Crop.of(level, ground, ResourceLocation.withDefaultNamespace("wheat")).orElseThrow();
         Job job = new Job(WorldPos.of(level, ground), List.of(ground), Stances.WHEREVER, ground);
-        TillNode node = new TillNode(new FarmNode.Chore(UUID.randomUUID(), crop, job, null));
+        TillNode node = new TillNode(new FarmNode.Chore(UUID.randomUUID(), crop, job, null), clearing);
         return node.work(level, worker, job);
+    }
+
+    private static void placePlant(ServerLevel level, BlockPos at, Block plant) {
+        place(level, at, plant.defaultBlockState());
+        if (plant instanceof DoublePlantBlock) {
+            place(level, at.above(), plant.defaultBlockState().setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
+        }
     }
 
     private static void place(ServerLevel level, BlockPos at, BlockState state) {

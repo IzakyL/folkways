@@ -37,6 +37,8 @@ final class Field {
     private final FieldChores tilling;
     private final FieldChores sowing;
 
+    private final Tillage.Clearing clearing;
+
     private Crop crop;
 
     private final List<Job> harvest = new ArrayList<>();
@@ -44,11 +46,12 @@ final class Field {
     private final List<Job> plant = new ArrayList<>();
     private long sweep = Long.MIN_VALUE;
 
-    Field(Crop crop, WorldPos anchor, Runnable changed, PastDay made) {
+    Field(Crop crop, Tillage.Clearing clearing, WorldPos anchor, Runnable changed, PastDay made) {
         this.crop = crop;
+        this.clearing = clearing;
         this.realm = anchor.realm();
         this.harvesting = new FieldChores("harvest", Field::cutOrFell, changed, made);
-        this.tilling = new FieldChores("till", TillNode::new, changed, made);
+        this.tilling = new FieldChores("till", chore -> new TillNode(chore, clearing), changed, made);
         this.sowing = new FieldChores("sow", PlantNode::new, changed, made);
     }
 
@@ -72,7 +75,7 @@ final class Field {
             BlockState state = level.getBlockState(cell);
             List<BlockPos> ripe = unclaimed(crop.harvestFrom(level, cell), claimed);
             boolean hoe = crop.needsFarmland()
-                && Tillage.canTill(level, cell, state, Tillage.PLAIN_HOE);
+                && Tillage.canTill(level, cell, state, Tillage.PLAIN_HOE, clearing);
             stake(level, plot, cell, sown, footed).ifPresent(plant::add);
             if (ripe.isEmpty() && !hoe) {
                 continue;

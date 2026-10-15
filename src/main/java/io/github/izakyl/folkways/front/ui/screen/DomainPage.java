@@ -5,6 +5,7 @@ import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.DataBindingBuilder;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.SimpleBinding;
 import com.lowdragmc.lowdraglib2.gui.texture.ItemStackTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.data.TextWrap;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
@@ -173,9 +174,12 @@ public final class DomainPage implements Draw {
         Row row = new Row();
         row.icon = Rows.icon(ItemStack.EMPTY);
         row.title = Rows.name(Component.empty());
+        row.title.setOverflowVisible(false);
         row.meter = Rows.meter();
         row.meter.setDisplay(false);
         row.detail = Rows.value(Component.empty());
+        row.detail.textStyle(style -> style.textWrap(TextWrap.HOVER_ROLL));
+        row.detail.setOverflowVisible(false);
         row.told = SignLine.of();
         row.told.setDisplay(false);
         UIElement element = Rows.row().addChildren(row.icon, row.title, row.meter, row.detail, row.told);
@@ -674,18 +678,22 @@ public final class DomainPage implements Draw {
         }
 
         // A detail told in pictures is drawn in place of its words; short of room, the pictures give way, not the title.
-        // A title that only grows starts from nothing, and pictures as wide as the room leave it none; so beside
-        // pictures it takes its own width, the pictures take what room is left, and they shrink long before it does.
+        // A title that only grows starts from nothing, and a detail or pictures as wide as the room leave it none; so
+        // beside either it takes its own width. Pictures take what room is left and shrink long before it does; a
+        // detail in words gives way alongside it, each rolling on hover what it no longer has room to show.
         private void acceptTold(Row row, CompoundTag entry, boolean heading) {
             boolean told = !heading && entry.contains(TOLD);
             row.told.setDisplay(told);
-            if (told) {
-                int width = Minecraft.getInstance().font.width(row.title.getText());
+            int width = Minecraft.getInstance().font.width(row.title.getText());
+            if (heading) {
+                row.title.layout(layout -> layout.widthAuto().flexGrow(1).flexShrink(1).minWidth(0));
+            } else if (told) {
                 row.title.layout(layout -> layout.width(width).flexGrow(0).flexShrink(1)
                     .minWidth(Math.min(width, TITLE_FLOOR)));
                 row.told.layout(layout -> layout.flexGrow(1).flexShrink(TOLD_YIELD));
             } else {
-                row.title.layout(layout -> layout.widthAuto().flexGrow(1).flexShrink(1).minWidth(0));
+                row.title.layout(layout -> layout.width(width).flexGrow(1).flexShrink(1)
+                    .minWidth(Math.min(width, TITLE_FLOOR)));
             }
             row.detail.setDisplay(!heading && !told);
             if (told) {

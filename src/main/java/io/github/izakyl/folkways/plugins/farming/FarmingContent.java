@@ -50,6 +50,13 @@ public final class FarmingContent {
 
     public static final String CROP = "crop";
 
+    // Whether residents pull up the grass and flowers standing on ground the plot wants tilled.
+    public static final Schema.Setting CLEAR_GRASS = new Schema.Setting.Flag("clear_grass",
+        "folkways.settings.farm.clear_grass", ResourceLocation.withDefaultNamespace("short_grass"), true);
+
+    public static final Schema.Setting CLEAR_FLOWERS = new Schema.Setting.Flag("clear_flowers",
+        "folkways.settings.farm.clear_flowers", ResourceLocation.withDefaultNamespace("poppy"), true);
+
     // Work done in one go takes longer the more of it there is, but less and less so: one unit of it takes the
     // unit's ticks, and every doubling after that as many again.
     static int ticksFor(int unit, double amount) {
@@ -81,16 +88,17 @@ public final class FarmingContent {
         registering.facing(ID, colony -> colony.service(ID, FarmPresence.class).map(Facing.class::cast));
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(PLOT, new Shape.Volume(FolkwaysConfig.maxFarmCells()),
-                new Schema(List.of(crop())), ResourceLocation.withDefaultNamespace("wheat")))));
+                new Schema(List.of(crop(), CLEAR_GRASS, CLEAR_FLOWERS)),
+                ResourceLocation.withDefaultNamespace("wheat")))));
     }
 
     public static Vocation trade() {
         return Vocations.required(VOCATION);
     }
 
-    // What a farmer pulls up before tilling, for work that weeds ground it never tills.
-    public static boolean weed(BlockState state) {
-        return Tillage.weeds(state);
+    // What a farmer pulls up before tilling, for work that weeds ground it never tills: the grass, the flowers, or both.
+    public static boolean weed(BlockState state, boolean grass, boolean flowers) {
+        return new Tillage.Clearing(grass, flowers).clears(state);
     }
 
     private static Schema.Setting crop() {

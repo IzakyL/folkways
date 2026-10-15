@@ -81,13 +81,15 @@ final class Survey {
     }
 
     // Every open cell is laid, the lowest first; nobody lays a block where they stand or where their head is. A cell
-    // other work of the zone has taken, a weed to pull, is laid once that is done.
+    // other work of the zone has taken, a weed to pull, is laid once that is done. Nothing is laid over a flower: one
+    // the zone pulls is laid over once it is gone, and one it keeps is not buried.
     List<Job> fill(Set<BlockPos> claimed) {
         Predicate<BlockPos> wanted = cell -> level.isLoaded(cell) && open(level.getBlockState(cell));
         List<Job> jobs = new ArrayList<>();
         for (BlockPos cell : sorted(UPWARD)) {
             if (!wanted.test(cell) || claimed.contains(cell)
-                || cells.contains(cell.below()) && wanted.test(cell.below())) {
+                || cells.contains(cell.below()) && wanted.test(cell.below())
+                || flower(level.getBlockState(cell.below()))) {
                 continue;
             }
             stances(cell, Set.of(cell, cell.below())).ifPresent(where -> jobs.add(Job.at(cell, site(cell), where)));
@@ -95,10 +97,10 @@ final class Survey {
         return jobs;
     }
 
-    List<Job> weed() {
+    List<Job> weed(Predicate<BlockState> pulled) {
         List<Job> jobs = new ArrayList<>();
         for (BlockPos cell : sorted(UPWARD)) {
-            if (level.isLoaded(cell) && weedAt(level.getBlockState(cell))) {
+            if (level.isLoaded(cell) && weedAt(level.getBlockState(cell), pulled)) {
                 stances(cell, Set.of()).ifPresent(where -> jobs.add(Job.at(cell, site(cell), where)));
             }
         }
@@ -183,13 +185,18 @@ final class Survey {
         return state.isAir() || state.canBeReplaced();
     }
 
-    static boolean weed(BlockState state) {
-        return FarmingContent.weed(state);
+    // What a zone pulls when it weeds: its grass, its flowers, or both.
+    static Predicate<BlockState> weeds(boolean grass, boolean flowers) {
+        return state -> FarmingContent.weed(state, grass, flowers);
+    }
+
+    private static boolean flower(BlockState state) {
+        return FarmingContent.weed(state, false, true);
     }
 
     // A weed two tall is pulled by its lower half, which takes the upper with it.
-    private static boolean weedAt(BlockState state) {
-        return weed(state) && !(state.hasProperty(DoublePlantBlock.HALF)
+    private static boolean weedAt(BlockState state, Predicate<BlockState> pulled) {
+        return pulled.test(state) && !(state.hasProperty(DoublePlantBlock.HALF)
             && state.getValue(DoublePlantBlock.HALF) == DoubleBlockHalf.UPPER);
     }
 

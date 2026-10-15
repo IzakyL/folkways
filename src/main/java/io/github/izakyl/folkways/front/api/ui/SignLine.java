@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.front.api.ui;
 
+import com.lowdragmc.lowdraglib2.gui.LDLibFonts;
 import com.lowdragmc.lowdraglib2.gui.texture.IGuiTexture;
 import com.lowdragmc.lowdraglib2.gui.texture.TransformTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import java.util.List;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 
@@ -30,7 +30,7 @@ public final class SignLine {
     /** Draws {@code sentence} in {@code line}, its words in {@code ink}; on the client only. */
     public static void show(UIElement line, Sentence sentence, int ink) {
         Drawn drawn = new Drawn(Signs.of(sentence, ink));
-        int width = Signs.lay(Minecraft.getInstance().font, drawn.signs).width();
+        int width = Signs.lay(LDLibFonts.font(), drawn.signs).width();
         line.layout(layout -> layout.width(width));
         line.style(style -> style.background(drawn));
     }
@@ -47,7 +47,8 @@ public final class SignLine {
         @Override
         protected void drawInternal(GuiGraphics graphics, float mouseX, float mouseY, float x, float y,
                 float width, float height, float partialTicks) {
-            Font font = Minecraft.getInstance().font;
+            // LDLib2's own font, like every other word on the panel: it stays smooth when the desk is drawn smaller.
+            Font font = LDLibFonts.font();
             if (laid == null || room != (int) width) {
                 room = (int) width;
                 laid = Signs.lay(font, signs, room);

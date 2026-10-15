@@ -225,7 +225,7 @@ public final class Window implements Pane {
     private void settle() {
         UIElement desk = frame.getParent();
         if (centring && desk != null) {
-            clampInto(desk.getSizeWidth(), Math.max(0f, desk.getSizeHeight() - 24f));
+            clampInto(desk.getSizeWidth(), Math.max(0f, desk.getSizeHeight() - Rows.FOOT));
         }
     }
 

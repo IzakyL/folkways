@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.FrontView;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.PastDay;
+import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import java.util.ArrayList;
@@ -32,7 +33,8 @@ final class FarmPresence implements Facing {
 
     private static final String TAG_MADE = "made";
 
-    private record Plot(ResourceKey<Level> dimension, ResourceLocation crop) {
+    // Plots that clear differently are worked as different fields.
+    private record Plot(ResourceKey<Level> dimension, ResourceLocation crop, Tillage.Clearing clearing) {
     }
 
     private final Colony colony;
@@ -112,10 +114,13 @@ final class FarmPresence implements Facing {
         if (crop.isEmpty()) {
             return Optional.empty();
         }
-        Plot plot = new Plot(level.dimension(), chosen);
+        Settings settings = zone.settings();
+        Tillage.Clearing clearing = new Tillage.Clearing(settings.flag(FarmingContent.CLEAR_GRASS.key()),
+            settings.flag(FarmingContent.CLEAR_FLOWERS.key()));
+        Plot plot = new Plot(level.dimension(), chosen, clearing);
         Field field = fields.get(plot);
         if (field == null) {
-            field = new Field(crop.get(), WorldPos.of(level, anywhere.get()), sweep::nudge, made);
+            field = new Field(crop.get(), clearing, WorldPos.of(level, anywhere.get()), sweep::nudge, made);
             fields.put(plot, field);
         }
         field.scan(level, zone, crop.get(), stamp);

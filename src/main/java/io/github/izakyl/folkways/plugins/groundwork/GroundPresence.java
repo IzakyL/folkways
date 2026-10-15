@@ -43,13 +43,15 @@ final class GroundPresence implements Facing {
     private static final String TAG_MADE = "made";
 
     // One zone's standing work, a list of chores for each kind of work ticked, kept from sweep to sweep while the
-    // zone asks for it. A kind unticked is dropped with what it had under way, and so is a fill whose block changed:
-    // nothing is laid with a block the zone no longer names.
+    // zone asks for it. A kind unticked is dropped with what it had under way, and so is a fill whose block changed
+    // or weeding that pulls something else now: nothing is laid with a block the zone no longer names, nor pulled
+    // that it keeps.
     private final class Site {
 
         private final UUID zone;
         private final Map<String, Chores> works = new LinkedHashMap<>();
         private Optional<ItemSpec> filling = Optional.empty();
+        private Weeding weeding = new Weeding(false, false);
 
         Site(UUID zone) {
             this.zone = zone;
@@ -63,6 +65,12 @@ final class GroundPresence implements Facing {
             if (!with.equals(filling)) {
                 works.remove(GroundworkContent.FILL);
                 filling = with;
+            }
+            boolean grass = settings.flag(GroundworkContent.WEED);
+            boolean flowers = settings.flag(GroundworkContent.FLOWERS);
+            if (!weeding.equals(new Weeding(grass, flowers))) {
+                works.remove(GroundworkContent.WEED);
+                weeding = new Weeding(grass, flowers);
             }
             Survey survey = new Survey(level, view.cells());
             Predicate<BlockPos> member = cell -> colony.holdingAt(WorldPos.of(level, cell)).isPresent();
@@ -78,15 +86,16 @@ final class GroundPresence implements Facing {
                 });
                 settle(GroundworkContent.FELL, (at, chore) -> new FellNode(at, chore), trees);
             }
-            if (settings.flag(GroundworkContent.WEED)) {
-                List<Job> weeds = survey.weed();
+            if (grass || flowers) {
+                Predicate<BlockState> pulled = Survey.weeds(grass, flowers);
+                List<Job> weeds = survey.weed(pulled);
                 weeds.forEach(weed -> {
                     claimed.add(weed.cell());
                     claimed.add(weed.cell().above());
                 });
                 settle(GroundworkContent.WEED,
                     (at, chore) -> new BreakNode(chore, BreakNode.Way.WEED, at.getBlockState(chore.job().cell()),
-                        (cell, state) -> false),
+                        pulled, (cell, state) -> false),
                     weeds);
             }
             boolean digging = false;
@@ -95,7 +104,7 @@ final class GroundPresence implements Facing {
                 digging = !clear.isEmpty();
                 settle(GroundworkContent.CLEAR,
                     (at, chore) -> new BreakNode(chore, BreakNode.Way.CLEAR, at.getBlockState(chore.job().cell()),
-                        (cell, state) -> member.test(cell) || kept.test(state)),
+                        state -> true, (cell, state) -> member.test(cell) || kept.test(state)),
                     clear);
             }
             // Cleared and filled, the box is dug out as far as anyone can get at it before anything is laid in it.
@@ -104,7 +113,8 @@ final class GroundPresence implements Facing {
             if (settings.flag(GroundworkContent.HAUL)) {
                 settle(GroundworkContent.HAUL, (at, chore) -> new HaulNode(at, chore), survey.haul(view::at));
             }
-            works.keySet().removeIf(work -> !settings.flag(work) || work.equals(GroundworkContent.FILL) && with.isEmpty());
+            works.keySet().removeIf(work -> work.equals(GroundworkContent.WEED) ? !grass && !flowers
+                : !settings.flag(work) || work.equals(GroundworkContent.FILL) && with.isEmpty());
         }
 
         private void settle(String work, Chores.Maker maker, List<Job> jobs) {
@@ -117,6 +127,10 @@ final class GroundPresence implements Facing {
         void goals(ServerLevel level, List<Grown> into) {
             works.values().forEach(chores -> chores.goals(level, into));
         }
+    }
+
+    // What a zone's weeding pulls.
+    private record Weeding(boolean grass, boolean flowers) {
     }
 
     // A fill lays a block: an item that is none is no fill at all.

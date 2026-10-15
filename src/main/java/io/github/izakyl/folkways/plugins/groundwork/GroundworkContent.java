@@ -30,6 +30,8 @@ public final class GroundworkContent {
     public static final String CLEAR = "clear";
     public static final String FILL = "fill";
     public static final String WEED = "weed";
+    // Weeding pulls the grass; the flowers, often planted on purpose, only when the zone says so.
+    public static final String FLOWERS = "flowers";
     public static final String FELL = "fell";
     public static final String HAUL = "haul";
     public static final String BLOCK = "block";
@@ -73,6 +75,7 @@ public final class GroundworkContent {
                 work(CLEAR, "iron_pickaxe", true),
                 work(FILL, "dirt", false),
                 work(WEED, "short_grass", false),
+                work(FLOWERS, "poppy", false),
                 work(FELL, "iron_axe", false),
                 work(HAUL, "chest", false),
                 Schema.Setting.Items.oneBlock(BLOCK, "folkways.settings.fill_block", icon("dirt"), icon("dirt")))),

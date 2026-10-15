@@ -12,6 +12,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
+import dev.vfyjxf.taffy.style.TaffyPosition;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
@@ -44,6 +45,7 @@ import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import org.appliedenergistics.yoga.YogaJustify;
 
 public final class ColonyShell
     implements FolkwaysUI, PlayerUIMenuType.PlayerUIHolder, ColonyAuthority.Panel {
@@ -63,6 +65,11 @@ public final class ColonyShell
     private static final int MIN_HEIGHT = 200;
 
     private static final int NAV_WIDTH = 104;
+    // The narrowest a page is given beside the list of pages; with less room the list folds away (see NavFold).
+    private static final int PAGE_MIN = 360;
+
+    private static final int MENU_SIZE = (int) Window.TITLE_HEIGHT - 4;
+    private static final int MENU_BAR = 0xFFF0EEE6;
 
     private static final int MARK_WIDTH = 2;
     private static final int MARK_ON = 0xFFE0BC76;
@@ -255,7 +262,11 @@ public final class ColonyShell
         heading.layout(layout -> layout.widthAuto().flexShrink(1).minWidth(0).height(Window.TITLE_HEIGHT - 4));
         heading.setOnClick(event -> choosing[0] = !choosing[0]);
         Tokens.name(heading, "folkways.charter.heading");
-        panel.lead(heading);
+        Button menu = menu();
+        panel.lead(new UIElement()
+            .layout(layout -> layout.flexDirection(FlexDirection.ROW).alignItems(AlignItems.CENTER)
+                .gapAll(Rows.GAP).flexShrink(1).minWidth(0))
+            .addChildren(menu, heading));
         panel.open();
         panel.onDismiss(() -> {
             if (player instanceof ServerPlayer serverPlayer) {
@@ -276,6 +287,8 @@ public final class ColonyShell
         nav.layout(layout -> layout.width(NAV_WIDTH).flexShrink(0).minHeight(0));
         nav.addScrollViewChild(groups);
         Tokens.name(nav, "folkways.navigation");
+        NavFold fold = new NavFold(nav);
+        menu.setOnClick(event -> fold.toggle());
 
         UIElement pane = new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
@@ -299,7 +312,10 @@ public final class ColonyShell
             pane.addChildren(page);
             UIElement entries = PageKinds.TRAILING.contains(kind) ? preferences
                 : PageKinds.CORE.contains(kind) ? coreNav : navList;
-            entries.addChildren(entry(kind, marks, () -> show(pages, marks, kind.id())));
+            entries.addChildren(entry(kind, marks, () -> {
+                show(pages, marks, kind.id());
+                fold.close();
+            }));
         }
         mark(marks, listed.get(0).id());
         navList.setDisplay(navList.getChildren().size() > 1);
@@ -308,6 +324,8 @@ public final class ColonyShell
             .layout(layout -> layout.flexDirection(FlexDirection.ROW)
                 .flexGrow(1).flexShrink(1).minHeight(0).gapAll(Rows.GAP))
             .addChildren(nav, pane);
+        workspace.addEventListener(com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents.LAYOUT_CHANGED,
+            event -> fold.lay(workspace.getSizeWidth()));
 
         UIElement chooser = new Chooser().build(player, () -> choosing[0] = false);
         chooser.setDisplay(false);
@@ -349,6 +367,7 @@ public final class ColonyShell
             draft.setDisplay(drawing && !editingSelection);
             chooser.setDisplay(!configuring && (!settled[0] || choosing[0]));
             workspace.setDisplay(!configuring && !chooser.isDisplayed());
+            menu.setDisplay(fold.folded && workspace.isDisplayed());
         });
 
         Map<ResourceLocation, Pane> panes = new LinkedHashMap<>();
@@ -379,6 +398,62 @@ public final class ColonyShell
                 StylesheetManager.INSTANCE.getStylesheetSafe(
                     net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways", "lss/desk.lss"))),
             screen -> screen), player);
+    }
+
+    // Three bars at the head of the title bar, shown while the list of pages is folded away.
+    private static Button menu() {
+        Button menu = new Button().noText();
+        menu.layout(layout -> layout.flexDirection(FlexDirection.COLUMN).justifyContent(YogaJustify.CENTER)
+            .alignItems(AlignItems.CENTER).gapAll(2).width(MENU_SIZE).height(MENU_SIZE).flexShrink(0));
+        for (int bar = 0; bar < 3; bar++) {
+            menu.addChildren(new UIElement()
+                .layout(layout -> layout.width(MENU_SIZE - 8).height(2).flexShrink(0))
+                .style(style -> style.background(new ColorRectTexture(MENU_BAR))));
+        }
+        menu.setDisplay(false);
+        Tokens.name(menu, "folkways.navigation.menu");
+        return menu;
+    }
+
+    // With less room than a page needs beside it, the list of pages folds away behind the menu button and opens over
+    // the page when it is pressed; choosing a page folds it again. The room is counted in the interface's own units,
+    // so a larger interface folds it on a wider screen.
+    private static final class NavFold {
+
+        private final UIElement nav;
+        private boolean folded;
+
+        private NavFold(UIElement nav) {
+            this.nav = nav;
+        }
+
+        private void lay(float width) {
+            // A workspace put away for the colony chooser has no width to go by.
+            if (width <= 0f) {
+                return;
+            }
+            boolean narrow = width < NAV_WIDTH + Rows.GAP + PAGE_MIN;
+            if (narrow == folded) {
+                return;
+            }
+            folded = narrow;
+            nav.layout(layout -> layout.positionType(folded ? TaffyPosition.ABSOLUTE : TaffyPosition.RELATIVE)
+                .left(0).top(0).bottom(0));
+            nav.style(style -> style.zIndex(folded ? 1 : 0));
+            nav.setDisplay(!folded);
+        }
+
+        private void toggle() {
+            if (folded) {
+                nav.setDisplay(!nav.isDisplayed());
+            }
+        }
+
+        private void close() {
+            if (folded) {
+                nav.setDisplay(false);
+            }
+        }
     }
 
     private static UIElement navGroup(String nameKey) {

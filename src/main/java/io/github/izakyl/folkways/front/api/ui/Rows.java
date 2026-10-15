@@ -9,6 +9,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.data.TextWrap;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import dev.vfyjxf.taffy.style.FlexWrap;
@@ -49,30 +50,67 @@ public final class Rows {
             .addClass("folkways_list");
     }
 
-    // Cards two to a line, their outer edges flush with the page's.
+    // Along its foot a screen keeps a strip for the search bar and the key hints that nothing should cover.
+    public static final float FOOT = 24f;
+
+    // A grid narrower than this lays its cards one to a line: two would leave each too narrow for a name and its
+    // buttons. Layout units are the interface's own, so a larger interface reaches it on a wider screen.
+    private static final float TWO_COLUMNS = 360f;
+
+    private static final String ONE_COLUMN = "folkways_one_column";
+
+    // Cards two to a line, their outer edges flush with the page's; one to a line once the grid grows narrow.
     public static UIElement grid() {
-        return new UIElement()
+        UIElement grid = new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.ROW).flexWrap(FlexWrap.WRAP)
                 .widthPercent(100));
+        grid.addEventListener(UIEvents.LAYOUT_CHANGED, event -> {
+            boolean narrow = grid.getSizeWidth() < TWO_COLUMNS;
+            if (narrow == grid.hasClass(ONE_COLUMN)) {
+                return;
+            }
+            if (narrow) {
+                grid.addClass(ONE_COLUMN);
+            } else {
+                grid.removeClass(ONE_COLUMN);
+            }
+            for (UIElement child : grid.getChildren()) {
+                if (child instanceof Cell cell) {
+                    place(cell, cell.span);
+                }
+            }
+        });
+        return grid;
     }
 
     public enum Span { LEFT, RIGHT, WHOLE }
+
+    // A card's place in a grid, kept so the grid can lay it again when it changes how many go to a line.
+    private static final class Cell extends UIElement {
+        private Span span = Span.LEFT;
+    }
 
     // Holds one card in a grid; place() says where on its line it sits.
     public static UIElement cell(UIElement card) {
         card.removeClass("folkways_row");
         card.addClass("folkways_card");
         card.layout(layout -> layout.paddingHorizontal(GAP));
-        UIElement cell = new UIElement().addChildren(card);
+        UIElement cell = new Cell().addChildren(card);
         cell.layout(layout -> layout.flexShrink(0).paddingBottom(GAP));
         return place(cell, Span.LEFT);
     }
 
-    // The gutter between two cards is split between them, so each half pads only its inner side.
+    // The gutter between two cards is split between them, so each half pads only its inner side. In a grid laid one
+    // to a line every card spans it whole, whatever side it was given.
     public static UIElement place(UIElement cell, Span span) {
-        cell.layout(layout -> layout.widthPercent(span == Span.WHOLE ? 100 : 50)
-            .paddingRight(span == Span.LEFT ? GAP / 2f : 0)
-            .paddingLeft(span == Span.RIGHT ? GAP / 2f : 0));
+        if (cell instanceof Cell kept) {
+            kept.span = span;
+        }
+        UIElement grid = cell.getParent();
+        Span laid = grid != null && grid.hasClass(ONE_COLUMN) ? Span.WHOLE : span;
+        cell.layout(layout -> layout.widthPercent(laid == Span.WHOLE ? 100 : 50)
+            .paddingRight(laid == Span.LEFT ? GAP / 2f : 0)
+            .paddingLeft(laid == Span.RIGHT ? GAP / 2f : 0));
         return cell;
     }
 
