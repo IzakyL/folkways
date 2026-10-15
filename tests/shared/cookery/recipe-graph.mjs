@@ -11,9 +11,9 @@ const servedWithoutFood = new Set([
 ].map(id => "kaleidoscope_cookery:" + id));
 
 const proceduralFood = [
-  { item: "kaleidoscope_cookery:dark_cuisine", source: "PotBlockEntity.onTakeOut when BURNT", resident_use: "FoodProperties: edible when stocked", orderable: false },
-  { item: "kaleidoscope_cookery:suspicious_stir_fry", source: "PotBlockEntity.applySuspiciousRecipe for an unmatched ingredient combination", resident_use: "FoodProperties: edible when stocked", orderable: false },
-  { item: "kaleidoscope_cookery:mystery_tea", source: "TeapotBlockEntity.tick: unmatched tea input produces four cups", resident_use: "No FoodProperties; not a resident ration", orderable: false },
+  { item: "kaleidoscope_cookery:dark_cuisine", source: "PotBlockEntity.onTakeOut when BURNT", resident_use: "FoodProperties: edible when stocked", orderable: true },
+  { item: "kaleidoscope_cookery:suspicious_stir_fry", source: "PotBlockEntity.applySuspiciousRecipe for an unmatched ingredient combination", resident_use: "FoodProperties: edible when stocked", orderable: true },
+  { item: "kaleidoscope_cookery:mystery_tea", source: "TeapotBlockEntity.tick: unmatched tea input produces four cups", resident_use: "No FoodProperties; not a resident ration", orderable: true },
 ];
 
 // Feed the runtime GameTest audit, never names inferred from JSON filenames.
@@ -97,7 +97,11 @@ export function analyze(audit) {
   const targets = [...new Set(audit.recipes.filter(r => r.cookery_owned && r.result && (audit.items[r.result.id]?.food || r.type === "kaleidoscope_cookery:teapot" || servedWithoutFood.has(r.result.id))).map(r => r.result.id))].sort();
   const dishes = targets.map(item => {
     const choices = routes(item).sort((a, b) => a.bases.length - b.bases.length || a.steps.length - b.steps.length || a.root?.localeCompare(b.root ?? ""));
-    return { item, depth: depth.get(item), base_kinds: choices[0]?.bases.length, route: choices[0], equivalent_minimal_routes: choices.length };
+    const root = recipes.find(recipe => recipe.id === choices[0]?.root);
+    return { item, depth: depth.get(item), base_kinds: choices[0]?.bases.length, route: choices[0],
+      process_steps: choices[0]?.steps.length, direct_ingredient_slots: root?.resolved_ingredients.filter(group => group.length).length,
+      direct_food_groups_including_native_fluid_and_oil: root?.groups.filter(group => !group.every(id => support.has(id))),
+      minimal_base_sets: choices.length };
   });
   const reachable = dishes.filter(d => d.route);
   const maxDepth = Math.max(...reachable.map(d => d.depth));
