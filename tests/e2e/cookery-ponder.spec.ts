@@ -68,10 +68,10 @@ return ctx.server().getPlayerList().getPlayers().stream().map(player->Map.of(
 ` }),
 });
 
-for (const installed of [false, true]) test("cookery lessons: " + (installed ? "all lessons, UI entries, keyframes and item links" : "optional mod absent"), async ({}, testInfo) => {
+const LOCALES = (process.env.FOLKWAYS_PONDER_LANGUAGES ?? process.env.FOLKWAYS_PONDER_LANGUAGE ?? "en_us").split(",");
+for (const locale of LOCALES) for (const installed of [false, true]) test("cookery lessons" + (LOCALES.length > 1 ? " (" + locale + ")" : "") + ": " + (installed ? "all lessons, UI entries, keyframes and item links" : "optional mod absent"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   const runId = newRunId(); let pair: E2EPair | undefined;
-  const locale = process.env.FOLKWAYS_PONDER_LANGUAGE ?? "en_us";
   expect(["en_us", "zh_cn", "zh_hk", "zh_tw"]).toContain(locale);
   const guiScale = Number(process.env.FOLKWAYS_PONDER_GUI_SCALE ?? (locale === "en_us" ? "1" : "2"));
   expect([1, 2, 3]).toContain(guiScale);
