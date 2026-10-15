@@ -148,7 +148,7 @@ public final class PastureScene {
         scene.world().modifyEntity(milker, entity -> PonderScenery.stand(entity, util.vector().topOf(3, 0, 0), 180.0F));
         scene.overlay().showOutline(PonderPalette.RED, "gap", util.select().position(gap), 80);
         scene.overlay().showText(90)
-            .text("Nothing checks the fence for you. A beast that walks off the ground you framed stops being counted, and the pen breeds back up to the target.")
+            .text("A gap in the fence shows on the pasture's card in red. A beast that walks off the ground you framed stops being counted, and the pen breeds back up to the target.")
             .colored(PonderPalette.RED)
             .pointAt(util.vector().topOf(3, 0, 1))
             .placeNearTarget()

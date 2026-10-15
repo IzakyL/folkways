@@ -2,8 +2,10 @@ package io.github.izakyl.folkways.plugins.pasture;
 
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.terms.Realm;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.front.api.FrontView;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.ZoneView;
@@ -14,15 +16,25 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 record Pen(UUID zone, Livestock keeps, int target, boolean shear, WorldPos anchor,
            Set<BlockPos> floor, int minY, int maxY) {
 
     private static final int HEADROOM = 4;
+
+    private static final int OVER_THE_FENCE = Mth.ceil(Reach.PLAYER_BLOCK_REACH);
 
     static List<Pen> markedOut(ColonyView colony, FrontView front) {
         List<Pen> found = new ArrayList<>();
@@ -46,7 +58,14 @@ record Pen(UUID zone, Livestock keeps, int target, boolean shear, WorldPos ancho
         if (local.isEmpty()) {
             return false;
         }
-        BlockPos at = BlockPos.containing(local.get());
+        return holds(new WorldPos(anchor.realm(), BlockPos.containing(local.get())));
+    }
+
+    boolean holds(WorldPos cell) {
+        if (!cell.realm().equals(anchor.realm())) {
+            return false;
+        }
+        BlockPos at = cell.cell();
         if (at.getY() < minY || at.getY() > maxY + HEADROOM) {
             return false;
         }
@@ -56,6 +75,54 @@ record Pen(UUID zone, Livestock keeps, int target, boolean shear, WorldPos ancho
             }
         }
         return false;
+    }
+
+    // A keeper works a big pen from inside it, on its own ground, and a small one from outside, over the fence. A
+    // pen whose ground is not one closed piece is worked from the ground marked out, as if it were whole.
+    Optional<Stances> workplaces(ServerLevel level, Entity subject, Enclosure enclosure) {
+        BlockPos at = WorldSpaces.at(subject).block(level);
+        if (enclosure.small()) {
+            return Stances.of(level, Reach.footingsAround(level, at, OVER_THE_FENCE, OVER_THE_FENCE).stream()
+                .filter(feet -> !enclosure.inside().contains(feet) && Enclosure.standable(level, feet)
+                    && Reach.withinReach(feet, at) && clearOfDoorway(level, feet)
+                    && seenOver(level, Vec3.atBottomCenterOf(feet).add(0.0D, Reach.EYE_HEIGHT, 0.0D), subject))
+                .toList());
+        }
+        return Stances.of(level, Reach.workableCells(level, at).stream()
+            .filter(cell -> (!enclosure.fenced() || enclosure.inside().contains(cell))
+                && holds(WorldPos.of(level, cell)) && clearOfDoorway(level, cell))
+            .toList());
+    }
+
+    // Seen as a player at a fence sees: over its rail, which stands half a block lower than it stops a body, and
+    // past grass and flowers, which stop neither.
+    static boolean seenOver(Level level, Vec3 eye, Entity subject) {
+        Vec3 target = subject.getBoundingBox().getCenter();
+        return level.clip(new OverTheFence(eye, target)).getType() == HitResult.Type.MISS;
+    }
+
+    private static final class OverTheFence extends ClipContext {
+
+        OverTheFence(Vec3 from, Vec3 to) {
+            super(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, CollisionContext.empty());
+        }
+
+        @Override
+        public VoxelShape getBlockShape(BlockState state, BlockGetter level, BlockPos pos) {
+            VoxelShape solid = super.getBlockShape(state, level, pos);
+            return solid.isEmpty() ? solid : state.getShape(level, pos);
+        }
+    }
+
+    // Arrival allows almost a block of slack. A workplace one cell from a gate can still leave the body in it,
+    // so keep the surrounding cells clear as well, whether the doorway is currently open or shut.
+    private static boolean clearOfDoorway(ServerLevel level, BlockPos feet) {
+        for (BlockPos cell : BlockPos.betweenClosed(feet.offset(-1, -1, -1), feet.offset(1, 1, 1))) {
+            if (level.isLoaded(cell) && Enclosure.doorway(level.getBlockState(cell))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     AABB reach(Level level) {

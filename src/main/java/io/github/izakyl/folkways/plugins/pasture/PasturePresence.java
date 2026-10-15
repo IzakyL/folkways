@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.PastDay;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.front.api.notice.Line;
+import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -58,7 +59,25 @@ final class PasturePresence implements Facing {
 
     @Override
     public List<Line> zoneLines(ZoneView zone, ColonyView view) {
-        return zone.delegation().equals(PastureContent.PASTURE) ? made.lines(zone, view) : List.of();
+        if (!zone.delegation().equals(PastureContent.PASTURE)) {
+            return List.of();
+        }
+        Optional<PastureNotice> warning = herd.enclosure(zone.id()).flatMap(PasturePresence::warning);
+        if (warning.isEmpty()) {
+            return made.lines(zone, view);
+        }
+        List<Line> lines = new ArrayList<>();
+        lines.add(Line.blocked(Notice.of(warning.get())));
+        lines.addAll(made.lines(zone, view));
+        return List.copyOf(lines);
+    }
+
+    private static Optional<PastureNotice> warning(Enclosure enclosure) {
+        return switch (enclosure.shape()) {
+            case OPEN -> Optional.of(PastureNotice.UNFENCED);
+            case SPLIT -> Optional.of(PastureNotice.SPLIT);
+            case BARE, FENCED -> Optional.empty();
+        };
     }
 
     public void tick(MinecraftServer server) {
@@ -99,7 +118,7 @@ final class PasturePresence implements Facing {
             }
             return chores;
         });
-        here.forEach((job, chores) -> chores.settle(tally.work().getOrDefault(job, List.of())));
+        here.forEach((job, chores) -> chores.settle(tally.pen(), tally.work().getOrDefault(job, List.of())));
     }
 
     public List<Grown> goals(ColonyView view) {
