@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.cookery.pot;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IPot;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.container.SimpleInput;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.PotRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.PotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
@@ -13,9 +14,13 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Hold;
+import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.Produce;
+import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Placement;
@@ -26,6 +31,7 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.plugins.cookery.CookeryRefusal;
+import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.cookery.testing.NativeCookingMatrix;
@@ -56,6 +62,8 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -365,6 +373,132 @@ public final class PotGameTests {
                 "native products and containers are not duplicated as loose drops: " + recipe);
         });
     }
+    @GameTest(template = "empty", timeoutTicks = 350)
+    public static void explicitSuspiciousStirFryUsesNativeNoMatchCookingAndOneActualBowl(GameTestHelper helper) {
+        Rig rig = new Rig(helper, PotPlan.Mode.SUSPICIOUS);
+        rig.stockProcedural(true); long started = rig.level.getGameTime(); rig.start();
+        helper.assertValueEqual(rig.pot.getCurrentTick(), 200, "native unmatched cooking sets its real 200-tick clock");
+        afterCooking(rig, ready -> {
+            helper.assertTrue(ready.level.getGameTime() - started >= 200, "the actual native cooking clock elapsed");
+            ready.finish(true);
+            helper.assertValueEqual(ready.count(FoodBiteRegistry.getItem(FoodBiteRegistry.SUSPICIOUS_STIR_FRY)), 1L, "exactly one native suspicious dish is collected");
+            ready.assertProceduralSpent();
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 1350)
+    public static void explicitDarkCuisineWaitsThroughTheNativeTakeoutWindowBeforeCollecting(GameTestHelper helper) {
+        Rig rig = new Rig(helper, PotPlan.Mode.DARK); rig.stockProcedural(true);
+        long started = rig.level.getGameTime(); rig.start();
+        helper.startSequence().thenWaitUntil(rig::finished).thenExecute(() -> {
+            helper.assertTrue(rig.work.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Wait,
+                "an explicit dark target does not prematurely serve the suspicious dish");
+            helper.assertValueEqual(rig.count(Items.BOWL), 1L, "the bowl remains physical while waiting to burn");
+        }).thenWaitUntil(() -> helper.assertTrue(rig.pot.getStatus() == IPot.BURNT, "the real native 800-tick serving window must expire"))
+            .thenExecute(() -> {
+                try {
+                    helper.assertTrue(rig.level.getGameTime() - started >= 1000, "both actual native windows elapsed without state acceleration");
+                    rig.finish(true);
+                    helper.assertValueEqual(rig.count(FoodBiteRegistry.getItem(FoodBiteRegistry.DARK_CUISINE)), 1L, "one native dark cuisine fulfills its explicit target");
+                    helper.assertValueEqual(rig.count(FoodBiteRegistry.getItem(FoodBiteRegistry.SUSPICIOUS_STIR_FRY)), 0L, "waiting did not also award the earlier dish");
+                    rig.assertProceduralSpent();
+                } finally { rig.close(); }
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aMissingBowlRejectsProceduralCookingBeforeOilOrSeedInvestment(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, PotPlan.Mode.SUSPICIOUS)) {
+            rig.stockProcedural(false); CompoundTag before = rig.pot.saveWithFullMetadata(rig.level.registryAccess());
+            Node load = ((Workload.Within.Turn.Piece) rig.work.next(rig.level, rig.worker)).node();
+            helper.assertTrue(Commit.run(rig.level, load, rig.worker) instanceof Outcome.Failed, "a real bowl is required before any native loading");
+            helper.assertTrue(before.equals(rig.pot.saveWithFullMetadata(rig.level.registryAccess())), "missing carriers leave the actual pot unchanged");
+            helper.assertValueEqual(rig.count(Items.WHEAT_SEEDS), 1L, "the actual seed remains available");
+            helper.assertValueEqual(rig.count(ModItems.OIL.get()), 1L, "the actual oil remains available");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void proceduralPotTargetsRequireAnExactDishWithoutInjectingManagerRecipes(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, PotPlan.Mode.DARK)) {
+            var bench = rig.station.freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}).orElseThrow();
+            ItemSpec dark = Goods.specOf(FoodBiteRegistry.getItem(FoodBiteRegistry.DARK_CUISINE).getDefaultInstance());
+            ItemSpec suspicious = Goods.specOf(FoodBiteRegistry.getItem(FoodBiteRegistry.SUSPICIOUS_STIR_FRY).getDefaultInstance());
+            Produce broad = Produce.of(CookeryContent.ID, new WorkSite.AtBlock(rig.at), ItemSpec.anyOf(List.of(dark, suspicious)), 1, Produce.UNBOUNDED);
+            helper.assertTrue(bench.options(broad, Grown.of(broad)).isEmpty(), "a broad food request never intentionally cooks a failed dish");
+            for (ItemSpec dish : List.of(dark, suspicious)) {
+                Produce exact = Produce.of(CookeryContent.ID, new WorkSite.AtBlock(rig.at), dish, 1, Produce.UNBOUNDED);
+                helper.assertTrue(!bench.options(exact, Grown.of(exact)).isEmpty(), "the explicit native special dish is genuinely plannable");
+            }
+            for (PotPlan.Mode mode : List.of(PotPlan.Mode.DARK, PotPlan.Mode.SUSPICIOUS)) {
+                helper.assertTrue(rig.level.getRecipeManager().byKey(PotPlan.proceduralId(mode)).isEmpty(), "the private native protocol is not a fake recipe registration");
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aNewMatchingRecipeRejectsAnUnspentProceduralPotLoad(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, PotPlan.Mode.SUSPICIOUS)) {
+            rig.stockProcedural(true); Node load = ((Workload.Within.Turn.Piece) rig.work.next(rig.level, rig.worker)).node();
+            withMatchingSeedRecipe(rig, () -> {
+                helper.assertTrue(PotPlan.find(rig.level, rig.plan.id()).isEmpty(), "recipe reload removes the deliberate no-match option");
+                helper.assertTrue(Commit.run(rig.level, load, rig.worker) instanceof Outcome.Failed, "the already planned load rechecks actual native recipe selection");
+                helper.assertTrue(PotStation.empty(rig.pot) && !PotBatch.claimed(rig.pot), "the actual pot never accepts stale fallback inputs");
+                helper.assertValueEqual(rig.count(Items.WHEAT_SEEDS) + rig.count(ModItems.OIL.get()) + rig.count(Items.BOWL), 3L, "all three real unspent items remain exactly once");
+            });
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aNewMatchingRecipeRejectsStartingButNeverRefundsAcceptedProceduralInputs(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, PotPlan.Mode.SUSPICIOUS)) {
+            rig.stockProcedural(true); rig.step();
+            Node start = ((Workload.Within.Turn.Piece) rig.work.next(rig.level, rig.worker)).node();
+            withMatchingSeedRecipe(rig, () -> {
+                helper.assertTrue(Commit.run(rig.level, start, rig.worker) instanceof Outcome.Failed, "the real start interaction also rechecks no-match after reload");
+                helper.assertTrue(rig.pot.getStatus() == IPot.PUT_INGREDIENT && !rig.pot.isEmpty(), "accepted raw inputs remain physically in the native pot");
+                helper.assertValueEqual(rig.count(Items.WHEAT_SEEDS) + rig.count(ModItems.OIL.get()), 0L, "already accepted seed and oil are never refunded");
+                helper.assertValueEqual(rig.count(Items.BOWL), 1L, "only the unspent bowl remains in the real pack");
+            });
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 1350)
+    public static void cancelledReloadedDarkCuisineKeepsItsNativeModeAndSpendsNoSecondInput(GameTestHelper helper) {
+        Rig rig = new Rig(helper, PotPlan.Mode.DARK); rig.stockProcedural(true); rig.start();
+        rig.work.ended(rig.level, Ending.REVOKED); rig.claim.release(Ending.REVOKED);
+        rig.replace(new PotBlockEntity(rig.cell, rig.pot.getBlockState()));
+        withMatchingSeedRecipe(rig, () -> helper.assertTrue(PotBatch.load(rig.pot, rig.level, rig.colony).isPresent(),
+            "a native batch already cooking survives later recipe reload without returning accepted inputs"));
+        var recovery = rig.station.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {});
+        helper.assertValueEqual(recovery.size(), 1, "one persisted procedural batch yields one recovery goal");
+        rig.work = (PotWork) recovery.getFirst().nodes().getFirst();
+        helper.assertTrue(rig.work.planned(rig.level).isEmpty(), "the recovered special batch acquires its kitchen turn");
+        helper.assertTrue(rig.work.spec().needs().stream().allMatch(need -> Goods.matches(Items.BOWL.getDefaultInstance(), need.spec())), "recovery budgets only the unspent real bowl");
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(rig.pot.getStatus() == IPot.BURNT, "recovery waits for the actual native burnt state"))
+            .thenExecute(() -> {
+                try {
+                    rig.finish(true);
+                    helper.assertValueEqual(rig.count(FoodBiteRegistry.getItem(FoodBiteRegistry.DARK_CUISINE)), 1L, "saved dark mode is not changed into suspicious success");
+                    rig.assertProceduralSpent();
+                    helper.assertTrue(rig.bookings.free(rig.at), "native recovery releases its real turn");
+                } finally { rig.close(); }
+            }).thenSucceed();
+    }
+
+    private static void withMatchingSeedRecipe(Rig rig, Runnable check) {
+        List<RecipeHolder<?>> saved = List.copyOf(rig.level.getRecipeManager().getRecipes());
+        List<RecipeHolder<?>> changed = new ArrayList<>(saved);
+        changed.add(new RecipeHolder<>(ResourceLocation.fromNamespaceAndPath("folkways", "test/matching_seed_pot"),
+            new PotRecipe(200, 0, Ingredient.of(Items.BOWL), List.of(Ingredient.of(Items.WHEAT_SEEDS)), Items.COOKED_BEEF.getDefaultInstance())));
+        try { rig.level.getRecipeManager().replaceRecipes(changed); check.run(); }
+        finally { rig.level.getRecipeManager().replaceRecipes(saved); }
+    }
+
     private static void afterCooking(Rig rig, Consumer<Rig> assertion) {
         rig.helper.startSequence().thenWaitUntil(rig::finished).thenExecute(() -> {
             try { assertion.accept(rig); } finally { rig.close(); }
@@ -389,6 +523,10 @@ public final class PotGameTests {
         PotWork work;
 
         Rig(GameTestHelper helper, String recipe, int runs) {
+            this(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", recipe), runs);
+        }
+        Rig(GameTestHelper helper, PotPlan.Mode mode) { this(helper, PotPlan.proceduralId(mode), 1); }
+        Rig(GameTestHelper helper, ResourceLocation recipe, int runs) {
             this.helper = helper;
             level = helper.getLevel();
             cell = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -407,7 +545,7 @@ public final class PotGameTests {
             shovel.setDamageValue(17);
             shovel.set(DataComponents.CUSTOM_NAME, Component.literal("One actual kitchen shovel"));
             put(shovel);
-            plan = PotPlan.find(level, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", recipe)).orElseThrow();
+            plan = PotPlan.find(level, recipe).orElseThrow();
             work = new PotWork(colony, at, stances, plan, runs, bookings, () -> { });
             claim = bookings.hold(at, work.id());
             helper.assertTrue(claim.take().isEmpty() && work.planned(level).isEmpty(), "the actual pot task acquires its exclusive turn");
@@ -431,6 +569,16 @@ public final class PotGameTests {
         void stockEggTomato(boolean bowl) {
             put(new ItemStack(Items.EGG)); put(new ItemStack(ModItems.TOMATO.get())); put(new ItemStack(ModItems.OIL.get()));
             if (bowl) put(new ItemStack(Items.BOWL));
+        }
+        void stockProcedural(boolean bowl) {
+            put(Items.WHEAT_SEEDS.getDefaultInstance()); put(ModItems.OIL.get().getDefaultInstance());
+            if (bowl) put(Items.BOWL.getDefaultInstance());
+        }
+        void assertProceduralSpent() {
+            helper.assertValueEqual(count(Items.WHEAT_SEEDS) + count(ModItems.OIL.get()) + count(Items.BOWL), 0L, "one actual seed, oil and bowl are consumed exactly once");
+            helper.assertValueEqual(count(ModItems.KITCHEN_SHOVEL.get()), 1L, "the actual shared shovel remains singular");
+            helper.assertTrue(level.getEntitiesOfClass(ItemEntity.class, new AABB(cell).inflate(2)).isEmpty(), "native serving creates no uncaptured duplicate or charcoal");
+            helper.assertTrue(PotStation.empty(pot) && !PotBatch.claimed(pot), "the actual emptied pot has no remaining batch claim");
         }
         void start() {
             for (int step = 0; step < 8; step++) {

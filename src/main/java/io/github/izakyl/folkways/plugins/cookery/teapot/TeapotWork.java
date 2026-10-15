@@ -185,7 +185,7 @@ final class TeapotWork implements Node, Workload.Within {
                 fluid = true;
                 if (kind == Kind.INGREDIENT) { ingredient = true; }
                 TeaBatch.remember(pot, level, new TeaBatch.Batch(colony, batch, job.recipe(), job.fluid(), input, job.output(), job.time(), ingredient, job.mode()));
-                changed.run();
+                nudge();
                 return new Outcome.Done(List.of(), result.outputs(), Optional.empty());
             }
             if (pot.getStatus() != ITeapot.FINISHED || !ItemStack.matches(pot.getResult(), job.output())) { return Outcome.failed(CookeryRefusal.STATION_BUSY); }
@@ -221,7 +221,7 @@ final class TeapotWork implements Node, Workload.Within {
                 level.setBlockAndUpdate(cup, Blocks.AIR.defaultBlockState()); restore(level, state, before);
                 return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             }
-            finished = true; changed.run();
+            finished = true; nudge();
             return new Outcome.Done(List.of(), result.outputs(), Optional.empty());
         }
     }
