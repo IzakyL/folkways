@@ -38,6 +38,11 @@ public interface Colony {
         return Optional.empty();
     }
 
+    // Current unspent input obligations; these must be reconciled with actual goods, never counted as stock.
+    default List<io.github.izakyl.folkways.core.api.work.ReservedInput> reservedInputs(ServerLevel level) {
+        return List.of();
+    }
+
     // Replaces every rule this owner set on the colony's stores in that dimension.
     void rule(ResourceLocation owner, ResourceKey<Level> dimension, Collection<StoreRule> rules);
 

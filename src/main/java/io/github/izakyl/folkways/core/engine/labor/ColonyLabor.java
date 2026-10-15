@@ -334,6 +334,25 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     // What the weave changed, applied: work that went or was grown afresh is let go of and ends as the plan says,
     // and work new to the plan, or grown afresh, enters it.
+    List<io.github.izakyl.folkways.core.api.work.ReservedInput> reservedInputs() {
+        Map<UUID, UUID> assigned = new LinkedHashMap<>();
+        for (Tour tour : schedule.tours().values()) {
+            for (UUID node : tour.nodes()) assigned.put(node, tour.resident());
+        }
+        List<io.github.izakyl.folkways.core.api.work.ReservedInput> inputs = new ArrayList<>();
+        for (Vertex vertex : graph.vertices().values()) {
+            if (phases.of(vertex.id()).terminal()) continue;
+            UUID worker = vertex.node().worker().orElse(graph.pin(vertex.id()));
+            if (worker == null) worker = assigned.get(vertex.id());
+            for (var draw : vertex.plan().draws()) {
+                if (draw.count() > 0) inputs.add(new io.github.izakyl.folkways.core.api.work.ReservedInput(
+                    vertex.id(), draw.from().map(io.github.izakyl.folkways.core.api.terms.Stash::pos),
+                    draw.from().isEmpty() ? Optional.ofNullable(worker) : Optional.empty(), draw.spec(), draw.count()));
+            }
+        }
+        return List.copyOf(inputs);
+    }
+
     private void woven(ServerLevel level, List<Message> batch, Planner.Woven woven) {
         WeaveDelta delta = woven.delta();
         Set<UUID> withdrawn = new LinkedHashSet<>();

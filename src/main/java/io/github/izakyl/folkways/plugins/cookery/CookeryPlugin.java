@@ -9,6 +9,8 @@ public final class CookeryPlugin {
     }
 
     public static void install(IEventBus modBus) {
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+            io.github.izakyl.folkways.plugins.cookery.millstone.MillstoneDrive::joined);
         modBus.addListener(Declaring.class, CookeryContent::declare);
         modBus.addListener(io.github.izakyl.folkways.core.api.Relating.class, event ->
             event.defaultParticipation(io.github.izakyl.folkways.plugins.person.PersonBody.ID,
