@@ -184,6 +184,50 @@ public final class SeedSupportGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void loadedMultiResidentWarehouseSnapshotsKeepOnePhysicalReserveAtScale(GameTestHelper helper) throws Exception {
+        var level = helper.getLevel(); var colony = Colonies.mint(level.getServer());
+        var bodies = new java.util.ArrayList<ResidentEntity>();
+        try {
+            for (int index = 0; index < 64; index++) {
+                var body = PersonBody.RESIDENT.get().create(level); body.setNoAi(true);
+                body.moveTo(helper.absolutePos(new BlockPos(2, 1, 5)).getCenter()); level.addFreshEntity(body);
+                colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+                body.joinColony(colony.id()); colony.entered(body); body.pack().setItem(0, new ItemStack(Items.WHEAT_SEEDS)); bodies.add(body);
+            }
+            var stores = new java.util.ArrayList<WorldPos>();
+            for (int index = 0; index < 24; index++) {
+                var at = helper.absolutePos(new BlockPos(index % 6 + 1, 1, index / 6 + 1));
+                level.setBlock(at, Blocks.BARREL.defaultBlockState(), Block.UPDATE_ALL);
+                Containers.at(level, at).orElseThrow().setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
+                stores.add(WorldPos.of(level, at));
+            }
+            colony.stores(CookeryContent.ID, level.dimension(), stores);
+            var support = new SeedSupport(colony, level.getServer()); var budget = support.budget(level);
+            long expected = 24L * 64 + 64;
+            for (int warm = 0; warm < 5; warm++) support.snapshot();
+            var durations = new java.util.ArrayList<Long>();
+            for (int read = 0; read < 20; read++) {
+                long began = System.nanoTime(); var snapshot = support.snapshot(); durations.add(System.nanoTime() - began);
+                helper.assertTrue(snapshot.complete(), "all registered residents and warehouses are real and loaded");
+                helper.assertValueEqual(snapshot.stock().size(), 88, "24 stores and 64 carried inventories are each observed once");
+                long actual = snapshot.stock().stream().flatMap(stock -> stock.stacks().stream())
+                    .filter(stack -> stack.is(Items.WHEAT_SEEDS)).mapToLong(ItemStack::getCount).sum();
+                helper.assertValueEqual(actual, expected, "a large snapshot preserves actual physical seed ownership");
+            }
+            long reserveBegan = System.nanoTime(); var reserves = budget.reserves(); long reserveNanos = System.nanoTime() - reserveBegan;
+            helper.assertTrue(!reserves.isEmpty(), "the real crop catalogue supplies purposes at scale");
+            helper.assertValueEqual(budget.tally(Items.WHEAT_SEEDS).physical(), expected, "budget agrees with all real inventories");
+            helper.assertValueEqual(budget.tally(Items.WHEAT_SEEDS).retained(), 64L, "resident count does not multiply the one-purpose seed reserve");
+            helper.assertValueEqual(budget.tally(Items.WHEAT_SEEDS).compostable(), expected - 64, "only true surplus is eligible at scale");
+            java.nio.file.Files.writeString(java.nio.file.Path.of("seed-scale-check.json"), new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(java.util.Map.of(
+                "residents", 64, "warehouses", 24, "physical_seeds", expected, "snapshot_samples_nanos", durations,
+                "catalogue_purposes", reserves.size(), "reserve_scan_nanos", reserveNanos,
+                "item_registry_size", BuiltInRegistries.ITEM.size(), "timing_note", "local observation only, no cross-machine performance assertion")));
+        } finally { bodies.forEach(ResidentEntity::discard); colony.raze(); }
+        helper.succeed();
+    }
+
     private static final class Fixture implements AutoCloseable {
         final ServerLevel level;
         final Colony colony;

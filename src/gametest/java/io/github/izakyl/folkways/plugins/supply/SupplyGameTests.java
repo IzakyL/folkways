@@ -152,6 +152,36 @@ public final class SupplyGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void aLargeRegistryDoesNotTurnRepeatedFiniteRequestsIntoInfinitePublishedStock(GameTestHelper helper) throws Exception {
+        try (Rig rig = new Rig(helper)) {
+            int registry = net.minecraft.core.registries.BuiltInRegistries.ITEM.size();
+            helper.assertTrue(registry > 1000, "the actual modded registry supplies the scale boundary");
+            List<net.minecraft.world.item.Item> requested = List.of(Items.STONE, Items.WHEAT, Items.WATER_BUCKET);
+            for (int warm = 0; warm < 30; warm++) rig.options(requested.get(warm % requested.size()).getDefaultInstance(), Long.MAX_VALUE);
+            long began = System.nanoTime();
+            int offers = 0;
+            for (int call = 0; call < 1000; call++) {
+                var item = requested.get(call % requested.size()).getDefaultInstance();
+                var options = rig.options(item, Long.MAX_VALUE);
+                helper.assertValueEqual(options.size(), 1, "a concrete request publishes one requested alternative");
+                var nodes = options.getFirst().replacement().nodes();
+                helper.assertValueEqual(nodes.size(), 1, "registry size never expands a finite withdrawal into registry-wide tasks");
+                var amount = nodes.getFirst().spec().gives().getFirst();
+                helper.assertValueEqual(amount.count(), (long) item.getMaxStackSize(), "even an unbounded goal offers one carryable native stack");
+                offers++;
+            }
+            long nanos = System.nanoTime() - began;
+            helper.assertTrue(rig.box.generated().isEmpty(), "planning a thousand requests has no material side effect");
+            helper.assertTrue(rig.colony.storesIn(helper.getLevel().dimension()).isEmpty(), "the all-items source never publishes invented stock");
+            java.nio.file.Path path = java.nio.file.Path.of("supply-scale-check.json");
+            java.nio.file.Files.writeString(path, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(java.util.Map.of(
+                "item_registry_size", registry, "requests", 1000, "finite_offers", offers, "generated_during_planning", 0,
+                "elapsed_nanos", nanos, "mean_request_micros", nanos / 1_000_000.0)));
+        }
+        helper.succeed();
+    }
+
     private static final class Rig implements Worker, AutoCloseable {
         final GameTestHelper helper;
         final Colony colony;
