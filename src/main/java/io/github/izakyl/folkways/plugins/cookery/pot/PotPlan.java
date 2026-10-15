@@ -34,14 +34,63 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeHolder;
 
 record PotPlan(ResourceLocation id, PotRecipe recipe, Tag definition, boolean flexible,
-               List<Need> materials, Optional<Need> carrier) {
+               List<Need> materials, Optional<Need> carrier, Mode mode) {
+    enum Mode { RECIPE, SUSPICIOUS, DARK }
+
+    PotPlan(ResourceLocation id, PotRecipe recipe, Tag definition, boolean flexible, List<Need> materials, Optional<Need> carrier) {
+        this(id, recipe, definition, flexible, materials, carrier, Mode.RECIPE);
+    }
     PotPlan {
         definition = definition.copy();
         materials = List.copyOf(materials);
     }
 
     static Optional<PotPlan> find(ServerLevel level, ResourceLocation id) {
+        Optional<Mode> mode = mode(id);
+        if (mode.isPresent()) return procedural(level, mode.get()).filter(plan -> plan.selected(level,
+            seedInput()));
         return level.getRecipeManager().byKey(id).flatMap(holder -> of(level, holder));
+    }
+
+    // A saved native batch retains its accepted protocol after recipe reload. Unspent loads use find().
+    static Optional<PotPlan> saved(ServerLevel level, ResourceLocation id) {
+        return mode(id).map(PotPlan::protocol).or(() -> find(level, id));
+    }
+
+    private static Optional<Mode> mode(ResourceLocation id) {
+        if (id.equals(proceduralId(Mode.SUSPICIOUS))) return Optional.of(Mode.SUSPICIOUS);
+        if (id.equals(proceduralId(Mode.DARK))) return Optional.of(Mode.DARK);
+        return Optional.empty();
+    }
+
+    static ResourceLocation proceduralId(Mode mode) {
+        return ResourceLocation.fromNamespaceAndPath("folkways", "cookery/procedural/" +
+            (mode == Mode.DARK ? "dark_cuisine" : "suspicious_stir_fry"));
+    }
+
+    static Optional<PotPlan> procedural(ServerLevel level, Mode mode) {
+        if (mode == Mode.RECIPE || FolkwaysConfig.refusedRecipes().contains(proceduralId(mode))) return Optional.empty();
+        var input = Items.WHEAT_SEEDS.getDefaultInstance();
+        if (input.is(TagMod.INGREDIENT_BLOCKLIST)) return Optional.empty();
+        return Optional.of(protocol(mode));
+    }
+
+    private static SimpleInput seedInput() {
+        var inputs = net.minecraft.core.NonNullList.withSize(PotRecipe.RECIPES_SIZE, ItemStack.EMPTY);
+        inputs.set(0, Items.WHEAT_SEEDS.getDefaultInstance());
+        return new SimpleInput(inputs);
+    }
+
+    private static PotPlan protocol(Mode mode) {
+        ItemStack suspicious = com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry.getItem(
+            com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry.SUSPICIOUS_STIR_FRY).getDefaultInstance();
+        // Only a private protocol descriptor: this object is never registered with RecipeManager.
+        PotRecipe protocol = new PotRecipe(200, 0, Ingredient.of(Items.BOWL), List.of(Ingredient.of(Items.WHEAT_SEEDS)), suspicious);
+        net.minecraft.nbt.CompoundTag definition = new net.minecraft.nbt.CompoundTag();
+        definition.putString("native_protocol", mode.name()); definition.putString("ingredient", "minecraft:wheat_seeds");
+        return new PotPlan(proceduralId(mode), protocol, definition, false,
+            List.of(new Need(ItemSpec.of(TagMod.OIL), 1), new Need(Goods.specOf(Items.WHEAT_SEEDS.getDefaultInstance()), 1)),
+            Optional.of(new Need(Goods.specOf(Items.BOWL.getDefaultInstance()), 1)), mode);
     }
 
     static Optional<PotPlan> of(ServerLevel level, RecipeHolder<?> holder) {
@@ -91,7 +140,10 @@ record PotPlan(ResourceLocation id, PotRecipe recipe, Tag definition, boolean fl
         return Goods.accepting(ingredient);
     }
 
-    ItemSpec produces() { return Goods.specOf(recipe.result()); }
+    ItemSpec produces() {
+        return Goods.specOf(mode == Mode.DARK ? com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry.getItem(
+            com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry.DARK_CUISINE).getDefaultInstance() : recipe.result());
+    }
     int count() { return recipe.result().getCount(); }
     int ingredientCount() { return (int) recipe.ingredients().stream().filter(ingredient -> !ingredient.isEmpty()).count(); }
 
@@ -115,6 +167,8 @@ record PotPlan(ResourceLocation id, PotRecipe recipe, Tag definition, boolean fl
 
     boolean selected(ServerLevel level, SimpleInput input) {
         var fixed = level.getRecipeManager().getRecipeFor(ModRecipes.POT_RECIPE, input, level);
+        if (mode != Mode.RECIPE) return fixed.isEmpty()
+            && level.getRecipeManager().getRecipeFor(ModRecipes.FLEX_POT_RECIPE, input, level).isEmpty();
         if (fixed.isPresent()) return !flexible && fixed.get().id().equals(id);
         return flexible && level.getRecipeManager().getRecipeFor(ModRecipes.FLEX_POT_RECIPE, input, level)
             .filter(holder -> holder.id().equals(id)).isPresent();

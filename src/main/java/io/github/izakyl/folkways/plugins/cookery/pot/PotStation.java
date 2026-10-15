@@ -60,6 +60,10 @@ public final class PotStation implements KitchenStation {
             level.getRecipeManager().getAllRecipesFor(ModRecipes.FLEX_POT_RECIPE)
                 .forEach(recipe -> PotPlan.of(level, recipe).ifPresent(recipes::add));
         }
+        if (!PotBatch.claimed(pot) && empty(pot)) {
+            for (PotPlan.Mode mode : List.of(PotPlan.Mode.SUSPICIOUS, PotPlan.Mode.DARK))
+                PotPlan.find(level, PotPlan.proceduralId(mode)).ifPresent(recipes::add);
+        }
         return Optional.of(new Bench(key, colony, at, stances, List.copyOf(recipes), bookings, changed));
     }
 
@@ -108,7 +112,8 @@ public final class PotStation implements KitchenStation {
             if (!(intent instanceof Produce produce)) return List.of();
             List<Refinement.Change> options = new ArrayList<>();
             for (PotPlan plan : recipes) {
-                if (!Goods.overlap(produce.wanted(), plan.produces())) continue;
+                if (!Goods.overlap(produce.wanted(), plan.produces())
+                        || plan.mode() != PotPlan.Mode.RECIPE && produce.wanted().item().isEmpty()) continue;
                 int runs = (int) produce.runs(site(), plan.perRun(), plan.count(), Optional.of(WaresContent.trade()), Integer.MAX_VALUE);
                 PotWork work = new PotWork(colony, at, stances, plan, runs, bookings, changed);
                 options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));

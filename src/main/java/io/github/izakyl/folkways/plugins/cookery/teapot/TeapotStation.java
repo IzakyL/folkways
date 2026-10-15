@@ -42,13 +42,26 @@ public final class TeapotStation implements KitchenStation {
             && pot.getTeaFluidId().equals(TeapotRecipeSerializer.EMPTY_TEA_FLUID);
     }
     static List<Job> jobs(ServerLevel level) {
-        return level.getRecipeManager().getAllRecipesFor(com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes.TEAPOT_RECIPE).stream()
+        List<Job> jobs = new ArrayList<>(level.getRecipeManager().getAllRecipesFor(com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes.TEAPOT_RECIPE).stream()
             .filter(holder -> !FolkwaysConfig.refusedRecipes().contains(holder.id()) && holder.value().ingredientCount() == 1)
             .flatMap(holder -> java.util.Arrays.stream(holder.value().ingredient().getItems()).filter(stack -> !stack.isEmpty())
                 .map(input -> new Job(holder.id(), holder.value().teaFluid(), input.copyWithCount(1),
                     holder.value().getResultItem(level.registryAccess()).copyWithCount(TeapotRecipe.OUTPUT_COUNT), holder.value().time())))
-            .filter(job -> job.output().getItem() instanceof TeacupItem && !job.bucket().isEmpty()).toList();
+            .filter(job -> job.output().getItem() instanceof TeacupItem && !job.bucket().isEmpty()).toList());
+        mystery(level).ifPresent(jobs::add);
+        return List.copyOf(jobs);
     }
+    static final ResourceLocation MYSTERY = ResourceLocation.fromNamespaceAndPath("folkways", "cookery/procedural/mystery_tea");
+    static Optional<Job> mystery(ServerLevel level) {
+        if (FolkwaysConfig.refusedRecipes().contains(MYSTERY)) return Optional.empty();
+        var job = new Job(MYSTERY, ResourceLocation.withDefaultNamespace("water"),
+            net.minecraft.world.item.Items.WHEAT_SEEDS.getDefaultInstance(),
+            com.github.ysbbbbbb.kaleidoscopecookery.init.registry.TeacupRegistry.getItem(
+                com.github.ysbbbbbb.kaleidoscopecookery.init.registry.TeacupRegistry.MYSTERY_TEA).getDefaultInstance().copyWithCount(4),
+            TeapotRecipeSerializer.DEFAULT_TIME, Mode.MYSTERY);
+        return job.selected(level, job.input()) ? Optional.of(job) : Optional.empty();
+    }
+
     public Optional<Workshop> freeze(UUID key, UUID colony, ServerLevel level, WorldPos at,
                                      Stances stances, KitchenBookings bookings, Runnable changed) {
         if (pot(level, at).filter(TeapotStation::empty).isEmpty()) { return Optional.empty(); }
@@ -58,7 +71,7 @@ public final class TeapotStation implements KitchenStation {
                                 KitchenBookings bookings, Runnable changed) {
         if (!bookings.free(at)) { return List.of(); }
         return pot(level, at).flatMap(pot -> TeaBatch.read(pot, level)).filter(batch -> batch.colony().equals(colony)).map(batch -> {
-            Job job = new Job(batch.recipe(), batch.fluid(), batch.ingredient(), batch.output(), batch.time());
+            Job job = new Job(batch.recipe(), batch.fluid(), batch.ingredient(), batch.output(), batch.time(), batch.mode());
             return List.of(Grown.of(new TeapotWork(colony, at, stances, job, bookings, changed, batch)));
         }).orElse(List.of());
     }
@@ -68,8 +81,20 @@ public final class TeapotStation implements KitchenStation {
             : pot.hasHeatSource(level) ? "cooking" : "cold").orElse("idle");
         return Component.translatable("folkways.page.cookery." + state);
     }
-    record Job(ResourceLocation recipe, ResourceLocation fluid, ItemStack input, ItemStack output, int time) {
+    enum Mode { RECIPE, MYSTERY }
+    record Job(ResourceLocation recipe, ResourceLocation fluid, ItemStack input, ItemStack output, int time, Mode mode) {
+        Job(ResourceLocation recipe, ResourceLocation fluid, ItemStack input, ItemStack output, int time) {
+            this(recipe, fluid, input, output, time, Mode.RECIPE);
+        }
         Job { input = input.copy(); output = output.copy(); }
+        boolean selected(ServerLevel level, ItemStack actualInput) {
+            var container = new com.github.ysbbbbbb.kaleidoscopecookery.crafting.container.TeapotInput(actualInput, fluid);
+            var actual = level.getRecipeManager().getRecipeFor(
+                com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes.TEAPOT_RECIPE, container, level);
+            if (mode == Mode.MYSTERY) return actual.isEmpty();
+            return actual.filter(holder -> holder.id().equals(recipe) && holder.value().time() == time
+                && ItemStack.matches(holder.value().assemble(container, level.registryAccess()), output)).isPresent();
+        }
         ItemSpec ingredient() { return Goods.specOf(input); }
         ItemStack bucket() {
             ItemStack candidate = new ItemStack(BuiltInRegistries.FLUID.get(fluid).getBucket());
@@ -86,7 +111,8 @@ public final class TeapotStation implements KitchenStation {
             if (!(intent instanceof io.github.izakyl.folkways.core.api.work.Produce produce)) { return List.of(); }
             List<Refinement.Change> options = new ArrayList<>();
             for (Job job : jobs) {
-                if (!Goods.matches(job.output(), produce.wanted())) { continue; }
+                if (!Goods.matches(job.output(), produce.wanted())
+                        || job.mode() != Mode.RECIPE && produce.wanted().item().isEmpty()) { continue; }
                 TeapotWork work = new TeapotWork(colony, at, stances, job, bookings, changed, null);
                 options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));
             }

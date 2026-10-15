@@ -14,7 +14,12 @@ import net.minecraft.world.item.ItemStack;
 final class TeaBatch {
     private static final String KEY = "folkways.cookery.teapot";
     record Batch(UUID colony, UUID id, ResourceLocation recipe, ResourceLocation fluid, ItemStack ingredient,
-                 ItemStack output, int time, boolean loaded) { }
+                 ItemStack output, int time, boolean loaded, TeapotStation.Mode mode) {
+        Batch(UUID colony, UUID id, ResourceLocation recipe, ResourceLocation fluid, ItemStack ingredient,
+              ItemStack output, int time, boolean loaded) {
+            this(colony, id, recipe, fluid, ingredient, output, time, loaded, TeapotStation.Mode.RECIPE);
+        }
+    }
     private TeaBatch() { }
     static void remember(TeapotBlockEntity pot, ServerLevel level, Batch batch) {
         CompoundTag tag = new CompoundTag();
@@ -22,6 +27,7 @@ final class TeaBatch {
         tag.putString("recipe", batch.recipe().toString()); tag.putString("fluid", batch.fluid().toString());
         tag.put("ingredient", batch.ingredient().saveOptional(level.registryAccess()));
         tag.put("output", batch.output().saveOptional(level.registryAccess())); tag.putInt("time", batch.time()); tag.putBoolean("loaded", batch.loaded());
+        tag.putBoolean("mystery", batch.mode() == TeapotStation.Mode.MYSTERY);
         tag.put("state", NbtUtils.writeBlockState(pot.getBlockState().setValue(TeapotBlock.VARIANT, TeapotBlock.COMMON)));
         pot.getPersistentData().put(KEY, tag); pot.setChanged();
     }
@@ -36,7 +42,8 @@ final class TeaBatch {
         boolean loaded = tag.getBoolean("loaded");
         if (ingredient.isEmpty() || output.isEmpty() || (loaded ? !ItemStack.matches(pot.getInput(), ingredient) : !pot.getInput().isEmpty())) { return Optional.empty(); }
         if (pot.getStatus() != ITeapot.PUT_INGREDIENT && (!loaded || !ItemStack.matches(pot.getResult(), output))) { return Optional.empty(); }
-        return Optional.of(new Batch(tag.getUUID("colony"), tag.getUUID("batch"), recipe, fluid, ingredient, output, tag.getInt("time"), loaded));
+        return Optional.of(new Batch(tag.getUUID("colony"), tag.getUUID("batch"), recipe, fluid, ingredient, output, tag.getInt("time"), loaded,
+            tag.getBoolean("mystery") ? TeapotStation.Mode.MYSTERY : TeapotStation.Mode.RECIPE));
     }
     static boolean ours(TeapotBlockEntity pot, UUID colony) {
         CompoundTag tag = pot.getPersistentData().getCompound(KEY);

@@ -4,6 +4,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IPot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.PotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
 import io.github.izakyl.folkways.core.api.terms.Reach;
+import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
@@ -82,12 +83,12 @@ final class PotWork implements Node, Workload.Within {
         batch = recovering ? previous.id() : UUID.randomUUID();
         UUID id = recovering ? UUID.nameUUIDFromBytes(("folkways:pot/recover/" + batch).getBytes(StandardCharsets.UTF_8)) : UUID.randomUUID();
         List<Need> needs = recovering ? previous.servingNeeds(pot, level) : plan.total(runs);
-        List<Amount> gives = recovering && pot.getStatus() >= IPot.FINISHED
+        List<Amount> gives = recovering && pot.getStatus() >= IPot.FINISHED && plan.mode() != PotPlan.Mode.DARK
             ? Leaves.ofStacks(List.of(previous.product(pot))) : List.of(new Amount(plan.produces(), (long) plan.count() * runs));
         boolean shovel = !recovering || pot.getStatus() < IPot.FINISHED || previous.carrier(pot, level).isEmpty();
         spec = declare(id, stances, this).needs(needs).gives(gives).leaves(plan.leaves(runs))
             .tools(shovel ? List.of(new ToolUse(SHOVEL, 0)) : List.of()).effort(WorkEffort.NONE)
-            .estimate((int) Math.min(Integer.MAX_VALUE, ((long) plan.recipe().time() + 20L * (plan.recipe().stirFryCount() + 2)) * runs))
+            .estimate((int) Math.min(Integer.MAX_VALUE, ((long) plan.recipe().time() + (plan.mode() == PotPlan.Mode.DARK ? 800L : 0L) + 20L * (plan.recipe().stirFryCount() + 2)) * runs))
             .doing(CookeryContent.COOKING, plan.produces()).done();
     }
 
@@ -137,6 +138,7 @@ final class PotWork implements Node, Workload.Within {
         if (pot.getStatus() == IPot.PUT_INGREDIENT || pot.getStatus() == IPot.COOKING && PotBatch.stirs(pot, level) > 0) {
             return new Turn.Piece(new Stir());
         }
+        if (plan.mode() == PotPlan.Mode.DARK && pot.getStatus() == IPot.FINISHED) return WAIT;
         return pot.getStatus() >= IPot.FINISHED ? new Turn.Piece(new Take(owner, pot, level)) : WAIT;
     }
 
@@ -249,6 +251,8 @@ final class PotWork implements Node, Workload.Within {
             ItemStack shovel = who.held(SHOVEL);
             if (shovel.isEmpty()) return Outcome.failed(CookeryRefusal.NOTHING_TO_WORK_WITH);
             if (pot.getStatus() != IPot.PUT_INGREDIENT && pot.getStatus() != IPot.COOKING) return Outcome.failed(CookeryRefusal.STATION_CHANGED);
+            if (pot.getStatus() == IPot.PUT_INGREDIENT && !plan.selected(level, pot.getContainer()))
+                return Outcome.failed(CookeryRefusal.RECIPE_CHANGED);
             PotBefore before = PotBefore.of(level, pot);
             KitchenDelivery.Result interaction;
             try {
@@ -281,7 +285,9 @@ final class PotWork implements Node, Workload.Within {
             this.owner = owner;
             carrier = owner.carrier(pot, level);
             product = owner.product(pot);
-            targetMet = pot.getStatus() == IPot.FINISHED && ItemStack.matches(product, owner.result());
+            targetMet = plan.mode() == PotPlan.Mode.DARK
+                ? pot.getStatus() == IPot.BURNT && Goods.matches(product, plan.produces())
+                : pot.getStatus() == IPot.FINISHED && ItemStack.matches(product, owner.result());
         }
         public Outcome commit(ServerLevel level, Worker who) {
             Optional<PotBlockEntity> found = PotStation.pot(level, at);

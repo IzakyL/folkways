@@ -108,7 +108,12 @@ final class TeapotWork implements Node, Workload.Within {
     public Outcome commit(ServerLevel level, Worker who) {
         return finished && !bookings.cancelled(at, id(), generation) ? Outcome.done() : Outcome.failed(failed == null ? CookeryRefusal.STATION_CHANGED : failed);
     }
-    public void ended(ServerLevel level, Ending how) { if (hold != null) { hold.release(how); hold = null; } changed.run(); }
+    public void ended(ServerLevel level, Ending how) { if (hold != null) { hold.release(how); hold = null; } nudge(); }
+    private void nudge() {
+        try { changed.run(); } catch (RuntimeException | LinkageError broken) {
+            org.slf4j.LoggerFactory.getLogger("folkways-cookery").warn("tea refresh failed after settlement", broken);
+        }
+    }
     private Optional<BlockPos> feet(ServerLevel level, Worker who) {
         return WorldSpaces.relative(level, at.realm(), who.body().position()).map(BlockPos::containing)
             .flatMap(local -> WorldSpaces.storage(level, new WorldPos(at.realm(), local)));
@@ -159,10 +164,13 @@ final class TeapotWork implements Node, Workload.Within {
                     .map(stack -> stack.copyWithCount(1)).orElse(ItemStack.EMPTY);
                 if (supplied.isEmpty()) { return Outcome.failed(CookeryRefusal.NOTHING_TO_WORK_WITH); }
                 ItemStack input = kind == Kind.INGREDIENT ? supplied.copy() : job.input();
-                var recipe = level.getRecipeManager().getRecipeFor(ModRecipes.TEAPOT_RECIPE, new TeapotInput(input, job.fluid()), level);
-                if (FolkwaysConfig.refusedRecipes().contains(job.recipe()) || recipe.isEmpty() || !recipe.get().id().equals(job.recipe())
-                        || recipe.get().value().time() != job.time() || !ItemStack.matches(recipe.get().value().assemble(new TeapotInput(input, job.fluid()), level.registryAccess()), job.output())) {
+                if (FolkwaysConfig.refusedRecipes().contains(job.recipe()) || !job.selected(level, input)) {
                     return Outcome.failed(CookeryRefusal.RECIPE_CHANGED);
+                }
+                if (kind == Kind.FLUID && job.mode() == TeapotStation.Mode.MYSTERY
+                        && (Goods.countIn(who.pack(), Goods.specOf(ModItems.EMPTY_CUP.get().getDefaultInstance())) < job.output().getCount()
+                            || Goods.countIn(who.pack(), job.ingredient()) < 1)) {
+                    return Outcome.failed(CookeryRefusal.NOTHING_TO_WORK_WITH);
                 }
                 BlockState state = pot.getBlockState(); CompoundTag before = pot.saveWithoutMetadata(level.registryAccess());
                 KitchenDelivery.Result result;
@@ -176,7 +184,7 @@ final class TeapotWork implements Node, Workload.Within {
                 if (!result.success()) { restore(level, state, before); return Outcome.failed(CookeryRefusal.STATION_CHANGED); }
                 fluid = true;
                 if (kind == Kind.INGREDIENT) { ingredient = true; }
-                TeaBatch.remember(pot, level, new TeaBatch.Batch(colony, batch, job.recipe(), job.fluid(), input, job.output(), job.time(), ingredient));
+                TeaBatch.remember(pot, level, new TeaBatch.Batch(colony, batch, job.recipe(), job.fluid(), input, job.output(), job.time(), ingredient, job.mode()));
                 changed.run();
                 return new Outcome.Done(List.of(), result.outputs(), Optional.empty());
             }

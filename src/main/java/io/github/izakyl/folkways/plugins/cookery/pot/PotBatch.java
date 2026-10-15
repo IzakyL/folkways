@@ -54,7 +54,7 @@ record PotBatch(UUID colony, UUID id, PotPlan plan, CompoundTag inputs, ItemStac
         CompoundTag saved = pot.getPersistentData().getCompound(KEY);
         ResourceLocation id = ResourceLocation.tryParse(saved.getString("recipe"));
         if (id == null || !saved.hasUUID("batch")) return Optional.empty();
-        return PotPlan.find(level, id).filter(plan -> plan.flexible() == saved.getBoolean("flexible")
+        return PotPlan.saved(level, id).filter(plan -> plan.flexible() == saved.getBoolean("flexible")
             && plan.definition().equals(saved.get("definition"))).map(plan -> new PotBatch(colony, saved.getUUID("batch"),
                 plan, saved.getCompound("inputs"), ItemStack.parseOptional(level.registryAccess(), saved.getCompound("result"))));
     }
