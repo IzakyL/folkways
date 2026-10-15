@@ -29,6 +29,22 @@ public final class KitchenToolsGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void unknownUnloadedStockIsNotProofThatTheColonyHasNoTool(GameTestHelper helper) {
+        KitchenTools pool = new KitchenTools();
+        UUID colony = UUID.randomUUID();
+        UUID task = UUID.randomUUID();
+        var unknown = new KitchenTools.Inventory(List.of(), Map.of(), false);
+        var waiting = pool.request(colony, task, family(), unknown);
+        helper.assertTrue(waiting.status() == KitchenTools.Status.UNREACHABLE && !waiting.permitsProduction(),
+            "an unloaded store or resident is never counted as an empty tool inventory");
+        var available = new KitchenTools.Inventory(List.of(available()), Map.of(), false);
+        helper.assertTrue(pool.request(colony, task, family(), available).status() == KitchenTools.Status.AVAILABLE,
+            "an actually loaded spare can still be borrowed while another store is unloaded");
+        helper.assertTrue(pool.request(colony, task, family(), EMPTY).permitsProduction(),
+            "once all sources are observed empty, true absence permits one bootstrap tool");
+        helper.succeed();
+    }
+    @GameTest(template = "empty")
     public static void concurrentEmptyRequestsMergeOneReplacementAndOnlyTheFirstMayManufacture(GameTestHelper helper) {
         KitchenTools pool = new KitchenTools();
         UUID colony = UUID.randomUUID();

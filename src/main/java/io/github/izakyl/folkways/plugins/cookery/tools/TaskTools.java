@@ -133,6 +133,7 @@ public final class TaskTools {
 
     void record(KitchenTools.Lease lease, ItemStack tool) {
         borrowed.put(lease.id(), tool.copyWithCount(1));
+        stock.remember(lease, tool);
         protect(lease.id(), lease.resident(), List.of(lease.request().tools()));
         persist();
     }
@@ -182,6 +183,13 @@ public final class TaskTools {
             return;
         }
         delay = 19;
+        // A departed member no longer owns colony work. Unloaded held residents remain in residents() and
+        // retain their loans; any nearby death drops are still observed by ToolStock as physical in-transit stock.
+        for (KitchenTools.Lease lease : pool.leases(colony.id())) {
+            if (colony.residents().stream().noneMatch(resident -> resident.id().equals(lease.resident()))) {
+                lost(lease);
+            }
+        }
         Set<UUID> needed = new LinkedHashSet<>();
         for (ToolWork work : List.copyOf(active.values())) {
             ServerLevel level = work.level();

@@ -255,6 +255,29 @@ public final class TaskToolsGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void aDroppedBorrowedToolRemainsPhysicalStockAndDoesNotTriggerManufacture(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            Node work = rig.simple(new AtomicInteger(), false);
+            rig.step(work);
+            ItemStack taken = Containers.extract(rig.body.pack(), stack -> stack.is(TagMod.KITCHEN_KNIFE), 1);
+            var drop = new net.minecraft.world.entity.item.ItemEntity(rig.level, rig.body.mob().getX(),
+                rig.body.mob().getY(), rig.body.mob().getZ(), taken);
+            rig.level.addFreshEntity(drop);
+            work.ended(rig.level, Ending.REVOKED);
+            Node recovery = rig.tools.goals(rig.colony.works().view(rig.level)).getFirst().nodes().getFirst();
+            rig.finish(recovery);
+            Node next = rig.simple(new AtomicInteger(), false);
+            var state = rig.tools.pool.request(rig.colony.colonyId(), next.id(), ((ToolWork) next).families().getFirst(),
+                rig.tools.stock.read(rig.level, KNIVES).inventory());
+            helper.assertTrue(state.status() == KitchenTools.Status.BUSY && state.replenishment().isEmpty(),
+                "the observed physical drop is unavailable stock, never proof that the tool was destroyed");
+            helper.assertValueEqual(drop.getItem().getCount(), 1, "waiting does not consume or copy the real dropped knife");
+            drop.discard();
+        }
+        helper.succeed();
+    }
+    @GameTest(template = "empty")
     public static void nativeBreakageReleasesTheLoanAndAllowsOneReplacement(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             ItemStack lastUse = rig.namedKnife();

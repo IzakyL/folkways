@@ -43,7 +43,11 @@ public final class KitchenTools {
 
     // Commitments are the real positive quantities already promised for the requested family, including
     // explicit player stock orders. Keeping their ids lets this pool exclude its own automatic request.
-    public record Inventory(List<Tool> tools, Map<UUID, Long> commitments) {
+    public record Inventory(List<Tool> tools, Map<UUID, Long> commitments, boolean complete) {
+        public Inventory(List<Tool> tools, Map<UUID, Long> commitments) {
+            this(tools, commitments, true);
+        }
+
         public Inventory {
             Map<UUID, Tool> physical = new LinkedHashMap<>();
             for (Tool tool : tools) {
@@ -231,7 +235,7 @@ public final class KitchenTools {
         if (lent || matching.stream().anyMatch(tool -> tool.whereabouts() != Whereabouts.UNREACHABLE)) {
             return answer(Status.BUSY);
         }
-        if (!matching.isEmpty()) {
+        if (!matching.isEmpty() || !inventory.complete()) {
             return answer(Status.UNREACHABLE);
         }
         UUID replenishment = replenishment(request.colony(), request.tools());

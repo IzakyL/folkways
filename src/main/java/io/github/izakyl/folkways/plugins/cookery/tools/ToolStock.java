@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.plugins.cookery.racks.KitchenRacks;
@@ -19,11 +20,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.phys.AABB;
 
 final class ToolStock {
 
@@ -44,6 +49,8 @@ final class ToolStock {
     private final KitchenTools pool;
     private final Function<KitchenTools.Lease, Optional<ItemStack>> borrowed;
     private final Map<ItemStack, UUID> physical = new WeakHashMap<>();
+    private final Map<UUID, List<ItemStack>> remembered = new LinkedHashMap<>();
+    private final Map<UUID, WorldPos> lastBody = new LinkedHashMap<>();
     private final Map<UUID, List<KitchenTools.Tool>> lastCarried = new LinkedHashMap<>();
 
     ToolStock(Colony colony, MinecraftServer server, KitchenTools pool,
@@ -62,16 +69,20 @@ final class ToolStock {
 
     Snapshot read(ServerLevel where, ItemSpec family) {
         List<KitchenTools.Tool> tools = new ArrayList<>();
+        boolean complete = true;
         Map<UUID, Source> sources = new LinkedHashMap<>();
+        Set<WorldPos> nearby = new LinkedHashSet<>();
         for (ServerLevel level : server.getAllLevels()) {
             for (WorldPos at : colony.storesIn(level.dimension())) {
                 if (!at.in(level) || !level.isLoaded(at.block(level))) {
+                    complete = false;
                     continue;
                 }
                 Optional<Container> held = colony.store(level, at);
                 if (held.isEmpty()) {
                     continue;
                 }
+                nearby.add(at);
                 Container store = held.get();
                 Optional<Stances> approach = Stances.of(level, Reach.workableCells(level, at.block(level)));
                 for (int slot = 0; slot < store.getContainerSize(); slot++) {
@@ -91,7 +102,11 @@ final class ToolStock {
         }
         for (var resident : colony.residents()) {
             Optional<Body> body = body(resident.id());
+            if (body.isEmpty()) {
+                complete = false;
+            }
             if (body.isPresent()) {
+                lastBody.put(resident.id(), WorldPos.of(body.get().mob().level(), body.get().mob().blockPosition()));
                 List<KitchenTools.Tool> carried = new ArrayList<>();
                 List<KitchenTools.Lease> loans = pool.leases(colony.id()).stream()
                     .filter(lease -> lease.resident().equals(resident.id())).toList();
@@ -118,8 +133,28 @@ final class ToolStock {
             lastCarried.getOrDefault(resident.id(), List.of()).stream()
                 .filter(tool -> Goods.matches(tool.stack(), family)).forEach(tools::add);
         }
-        lastCarried.keySet().removeIf(id -> colony.residents().stream().noneMatch(resident -> resident.id().equals(id)));
-        return new Snapshot(new KitchenTools.Inventory(tools, Orders.commitments(colony, family)), Map.copyOf(sources));
+        List<ItemStack> known = new ArrayList<>(lastCarried.values().stream().flatMap(List::stream)
+            .map(KitchenTools.Tool::stack).toList());
+        remembered.values().forEach(known::addAll);
+        nearby.addAll(lastBody.values());
+        for (WorldPos at : nearby) {
+            Optional<ServerLevel> observed = at.level(server);
+            if (observed.isEmpty() || !observed.get().isLoaded(at.block(observed.get()))) {
+                complete = false;
+                continue;
+            }
+            ServerLevel level = observed.get();
+            WorldSpaces.world(level, at).ifPresent(center -> {
+                for (ItemEntity drop : level.getEntitiesOfClass(ItemEntity.class, new AABB(center, center).inflate(8),
+                        entity -> entity.isAlive() && Goods.matches(entity.getItem(), family)
+                            && known.stream().anyMatch(stack -> ItemStack.isSameItemSameComponents(stack, entity.getItem())))) {
+                    ItemStack stack = drop.getItem();
+                    UUID id = physical.computeIfAbsent(stack, ignored -> UUID.randomUUID());
+                    tools.add(new KitchenTools.Tool(id, stack.copyWithCount(1), KitchenTools.Whereabouts.IN_TRANSIT));
+                }
+            });
+        }
+        return new Snapshot(new KitchenTools.Inventory(tools, Orders.commitments(colony, family), complete), Map.copyOf(sources));
     }
 
     List<Destination> destinations(ServerLevel level, ItemStack stack) {
@@ -139,10 +174,23 @@ final class ToolStock {
         return List.copyOf(targets);
     }
 
+    void remember(KitchenTools.Lease lease, ItemStack stack) {
+        List<ItemStack> previous = new ArrayList<>(remembered.getOrDefault(lease.resident(), List.of()));
+        previous.removeIf(held -> Goods.matches(held, lease.request().tools()));
+        previous.add(stack.copyWithCount(1));
+        remembered.put(lease.resident(), List.copyOf(previous));
+        List<KitchenTools.Tool> carried = new ArrayList<>(lastCarried.getOrDefault(lease.resident(), List.of()));
+        carried.removeIf(tool -> tool.id().equals(lease.tool()));
+        carried.add(new KitchenTools.Tool(lease.tool(), stack.copyWithCount(1), KitchenTools.Whereabouts.BORROWED));
+        lastCarried.put(lease.resident(), List.copyOf(carried));
+        body(lease.resident()).ifPresent(body ->
+            lastBody.put(lease.resident(), WorldPos.of(body.mob().level(), body.mob().blockPosition())));
+    }
+
     Optional<Body> body(UUID id) {
         for (ServerLevel level : server.getAllLevels()) {
             var entity = level.getEntity(id);
-            if (entity != null) {
+            if (entity != null && !entity.isRemoved()) {
                 return Bodies.of(entity);
             }
         }
