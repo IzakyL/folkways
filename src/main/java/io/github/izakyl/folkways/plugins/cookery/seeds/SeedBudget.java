@@ -55,13 +55,25 @@ public final class SeedBudget {
         }
     }
 
+    public record StockTarget(String identity, ItemSpec goods, long count) {
+        public StockTarget {
+            Objects.requireNonNull(identity);
+            Objects.requireNonNull(goods);
+            if (count < 0) throw new IllegalArgumentException("negative stock target");
+        }
+    }
+
     public record Snapshot(List<Stock> stock, List<Claim> claims, List<FutureNeed> future,
-                           Map<Item, Long> maintainTargets) {
+                           Map<Item, Long> maintainTargets, List<StockTarget> targets, boolean complete) {
+        public Snapshot(List<Stock> stock, List<Claim> claims, List<FutureNeed> future, Map<Item, Long> maintainTargets) {
+            this(stock, claims, future, maintainTargets, List.of(), true);
+        }
         public Snapshot {
             stock = List.copyOf(stock);
             claims = List.copyOf(claims);
             future = List.copyOf(future);
             maintainTargets = Map.copyOf(maintainTargets);
+            targets = List.copyOf(targets);
             if (maintainTargets.values().stream().anyMatch(count -> count < 0)) {
                 throw new IllegalArgumentException("negative maintain target");
             }
@@ -85,7 +97,10 @@ public final class SeedBudget {
 
     public Tally tally(Item seed) { return tally(seed, ItemStack.EMPTY, Set.of()); }
 
+    public boolean complete() { return snapshots.get().complete(); }
+
     public List<Reserve> reserves() {
+        if (!complete()) return List.of();
         return purposes(seeds.get()).stream().map(alternatives -> {
             Item first = alternatives.getFirst();
             return new Reserve(alternatives, ItemSpec.anyOf(alternatives.stream()
@@ -134,20 +149,41 @@ public final class SeedBudget {
         long free = units.stream().filter(unit -> unit.stack.is(seed)).mapToLong(unit -> unit.free).sum();
         Map<Item, Long> available = new LinkedHashMap<>();
         units.forEach(unit -> available.merge(unit.stack.getItem(), unit.free, Long::sum));
-        long baseline = 0;
+        Map<Item, Long> baseline = new LinkedHashMap<>();
         long missing = 0;
         for (List<Item> purpose : purposes(seeds.get())) {
             long left = purpose.getFirst().getDefaultInstance().getMaxStackSize();
             for (Item alternative : purpose) {
                 long kept = Math.min(left, available.getOrDefault(alternative, 0L));
-                if (alternative == seed) baseline = kept;
+                baseline.put(alternative, kept);
                 left -= kept;
             }
             if (purpose.getFirst() == seed) missing = left;
         }
-        long explicit = snapshot.maintainTargets().getOrDefault(seed, 0L);
-        long retained = Math.max(baseline, explicit);
-        return new Tally(physical, physical - free, retained, Math.max(0, free - retained),
+        Map<String, StockTarget> targets = new LinkedHashMap<>();
+        snapshot.targets().forEach(target -> targets.merge(target.identity(), target,
+            (before, next) -> before.count() >= next.count() ? before : next));
+        snapshot.maintainTargets().forEach((item, count) -> targets.put("item/" + item,
+            new StockTarget("item/" + item, Goods.specOf(item.getDefaultInstance()), count)));
+        Map<Item, Long> ordered = new LinkedHashMap<>();
+        for (StockTarget target : targets.values()) {
+            long left = target.count();
+            // Explicit stock targets first reuse the purpose reserve. Different target boxes still
+            // allocate distinct units, and a tag/anyOf target protects its total only once.
+            for (int pass = 0; pass < 2 && left > 0; pass++) {
+                for (Map.Entry<Item, Long> entry : available.entrySet()) {
+                    if (!Goods.matches(entry.getKey().getDefaultInstance(), target.goods())) continue;
+                    long limit = pass == 0 ? baseline.getOrDefault(entry.getKey(), 0L) : entry.getValue();
+                    long room = Math.max(0, limit - ordered.getOrDefault(entry.getKey(), 0L));
+                    long take = Math.min(room, left);
+                    ordered.merge(entry.getKey(), take, Long::sum);
+                    left -= take;
+                    if (left == 0) break;
+                }
+            }
+        }
+        long retained = Math.max(baseline.getOrDefault(seed, 0L), ordered.getOrDefault(seed, 0L));
+        return new Tally(physical, physical - free, retained, snapshot.complete() ? Math.max(0, free - retained) : 0,
             missing);
     }
 

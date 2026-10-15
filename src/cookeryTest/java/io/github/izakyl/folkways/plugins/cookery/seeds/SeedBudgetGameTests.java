@@ -132,6 +132,45 @@ public final class SeedBudgetGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void alternativeTargetsProtectTheirTotalOnceAndReuseThePurposeReserve(GameTestHelper helper) {
+        Item wild = ModItems.WILD_RICE_SEED.get();
+        Item rice = ModItems.RICE_SEED.get();
+        var alternatives = io.github.izakyl.folkways.core.api.terms.ItemSpec.anyOf(List.of(
+            Goods.specOf(wild.getDefaultInstance()), Goods.specOf(rice.getDefaultInstance())));
+        var snapshot = new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("nursery", SeedBudget.Location.pack(UUID.randomUUID()),
+            List.of(new ItemStack(wild, 64), new ItemStack(rice, 64)))), List.of(), List.of(), Map.of(),
+            List.of(new SeedBudget.StockTarget("rice pantry", alternatives, 96)), true);
+        var budget = new SeedBudget(() -> snapshot, () -> Set.of(wild, rice));
+        long surplus = budget.tally(wild).compostable() + budget.tally(rice).compostable();
+        helper.assertValueEqual(surplus, 32L, "96 alternatives share one target, reusing rather than adding the purpose reserve");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void distinctTargetsAddButRepeatedMetadataDoesNot(GameTestHelper helper) {
+        var goods = Goods.specOf(Items.WHEAT_SEEDS.getDefaultInstance());
+        var first = new SeedBudget.StockTarget("first pantry", goods, 80);
+        var second = new SeedBudget.StockTarget("second pantry", goods, 80);
+        var snapshot = new SeedBudget.Snapshot(List.of(stock("store", SeedBudget.Location.pack(UUID.randomUUID()), 200)),
+            List.of(), List.of(), Map.of(), List.of(first, first, second), true);
+        helper.assertValueEqual(budget(snapshot).tally(Items.WHEAT_SEEDS).compostable(), 40L,
+            "two real target boxes retain 160 seeds while one repeated view does not allocate them twice");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void unloadedPhysicalInventoryStopsDestructiveWorkAndSpeculativeRestocking(GameTestHelper helper) {
+        var snapshot = new SeedBudget.Snapshot(List.of(stock("loaded pack", SeedBudget.Location.pack(UUID.randomUUID()), 100)),
+            List.of(), List.of(), Map.of(), List.of(), false);
+        var budget = budget(snapshot);
+        helper.assertValueEqual(budget.tally(Items.WHEAT_SEEDS).physical(), 100L, "loaded physical seeds remain visible");
+        helper.assertValueEqual(budget.tally(Items.WHEAT_SEEDS).compostable(), 0L, "unloaded inventory is never assumed disposable");
+        helper.assertTrue(budget.reserves().isEmpty(), "no speculative seed request is made from an incomplete snapshot");
+        helper.assertTrue(!budget.permits(UUID.randomUUID(), new ItemStack(Items.WHEAT_SEEDS)), "escrow cannot bypass unknown stock protection");
+        helper.succeed();
+    }
+
     private static SeedBudget budget(SeedBudget.Snapshot snapshot) {
         return new SeedBudget(() -> snapshot, () -> Set.of(Items.WHEAT_SEEDS));
     }

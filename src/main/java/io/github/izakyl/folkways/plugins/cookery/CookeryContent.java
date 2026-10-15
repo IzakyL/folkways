@@ -4,7 +4,8 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
 import io.github.izakyl.folkways.core.api.Declaring;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.plugins.cookery.seeds.SeedPresence;
+import io.github.izakyl.folkways.plugins.cookery.seeds.SeedSupport;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Fronts;
@@ -39,6 +40,7 @@ public final class CookeryContent {
     public static void declare(Declaring event) {
         BuiltinKitchenStations.register();
         io.github.izakyl.folkways.plugins.cookery.racks.KitchenRacks.register();
+        io.github.izakyl.folkways.plugins.cookery.oil.PlacedOilStore.register();
         io.github.izakyl.folkways.plugins.cookery.farming.CookeryCrops.register();
         io.github.izakyl.folkways.plugins.cookery.farming.CookerySickle.register();
         io.github.izakyl.folkways.plugins.cookery.gear.CookeryGear.register(
@@ -50,6 +52,14 @@ public final class CookeryContent {
         io.github.izakyl.folkways.plugins.cookery.tools.TaskTools.register();
         io.github.izakyl.folkways.core.api.work.WorkDecorators.register(ID, (colony, work) ->
             colony.service(ID, CookeryPresence.class).map(state -> state.tools().decorate(work)).orElse(work));
+        event.colony(SeedPresence.ID, scope -> {
+            var support = new SeedSupport(scope.colony(), scope.server());
+            var seeds = new SeedPresence(scope.colony(), support::budget, support::enabled);
+            scope.share(support);
+            scope.share(seeds);
+            scope.tick(seeds::tick);
+            scope.closed(seeds::closed);
+        });
         event.colony(ID, scope -> {
             CookeryPresence state = new CookeryPresence(scope.colony(), scope.server());
             scope.share(state);
@@ -62,7 +72,12 @@ public final class CookeryContent {
     public static void enroll(Registering event) {
         event.facing(ID, colony -> colony.service(ID, CookeryPresence.class)
             .map(state -> (io.github.izakyl.folkways.front.api.Facing) state));
-        event.enrollment(ID, new Enrollment(List.of(new Delegation(STATION, new Shape.Block(CookeryContent::station, KitchenStations::anchor))),
+        event.enrollment(ID, new Enrollment(List.of(
+            new Delegation(STATION, new Shape.Block(CookeryContent::station, KitchenStations::anchor)),
+            new Delegation(SeedPresence.GRASS, new Shape.Volume(io.github.izakyl.folkways.FolkwaysConfig.maxFarmCells()),
+                new Schema(List.of(new Schema.Setting.Flag(SeedPresence.RESTORE_GRASS,
+                    "folkways.settings.restore_grass", ResourceLocation.withDefaultNamespace("bone_meal"), true))),
+                ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "wild_rice"))),
             new Schema(List.of(
                 new Schema.Setting.Flag("wear_hat", "folkways.settings.cookery.wear_hat",
                     ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "straw_hat"), true),

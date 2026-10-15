@@ -151,7 +151,8 @@ public final class SeedPresence implements Facing {
     public List<Line> zoneLines(ZoneView zone, ColonyView view) {
         if (!zone.delegation().equals(GRASS)) return List.of();
         String status = "ready";
-        if (farmers(view).isEmpty()) status = "need_hat";
+        if (!budgets.apply(view.level()).complete()) status = "unknown_inventory";
+        else if (farmers(view).isEmpty()) status = "need_hat";
         else if (budgets.apply(view.level()).reserves().stream().anyMatch(reserve -> reserve.missing() > 0
                 && reserve.alternatives().stream().anyMatch(grassSeeds()::contains))) {
             if (zone.cells().stream().noneMatch(ground -> view.level().isLoaded(ground.above())
