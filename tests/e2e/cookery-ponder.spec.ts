@@ -34,6 +34,15 @@ return Map.of("folders",Scenes.declared().stream().map(folder->folder.id().toStr
 ` }),
 });
 
+const READ_BOOK = defineTask<void, any[]>({
+  name: "folkways.cookery.ponder-read-book", side: "server", timeoutMs: 20_000,
+  source: javaTask({ imports: ["net.minecraft.core.registries.BuiltInRegistries"], body: `
+return ctx.server().getPlayerList().getPlayers().stream().map(player->Map.of(
+"held",BuiltInRegistries.ITEM.getKey(player.getMainHandItem().getItem()).toString(),
+"menu",player.containerMenu.getClass().getName(),"spectator",player.isSpectator(),"creative",player.isCreative())).toList();
+` }),
+});
+
 for (const installed of [false, true]) test("cookery lessons: " + (installed ? "all lessons, UI entries, keyframes and item links" : "optional mod absent"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   const runId = newRunId(); let pair: E2EPair | undefined;
@@ -51,15 +60,17 @@ for (const installed of [false, true]) test("cookery lessons: " + (installed ? "
     expect(evidence.folders.folders.includes("folkways:cookery")).toBe(installed);
     expect(evidence.folders.scenes.filter((id: string) => id.startsWith("folkways:cookery_"))).toEqual(installed ? SCENES.map(scene => "folkways:" + scene) : []);
     await screen.dismiss(client);
-    const stand = { x: Math.round(grounded.pos.x), y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) };
     await world.command(server, "give " + name + " folkways:colony_book");
     await world.command(server, "item replace entity " + name + " weapon.mainhand with folkways:colony_book");
     await tick.sprint(server, 5);
-    await world.command(server, "setblock " + stand.x + " " + stand.y + " " + stand.z + " minecraft:stone");
+    await world.command(server, "gamemode survival " + name);
     const openBook = async () => {
       await screen.dismiss(client);
+      evidence.serverBooks ??= []; evidence.serverBooks.push(await server.run(READ_BOOK));
       const use = await player.useItem(client);
       evidence.bookUses ??= []; evidence.bookUses.push(use);
+      await tick.sprint(server, 3); await frames(client, 4);
+      evidence.serverBooks.push(await server.run(READ_BOOK));
       await screen.waitFor(client, "ModularUIContainerScreen", { timeoutMs: 10_000 });
       return safeScreen(client);
     };
