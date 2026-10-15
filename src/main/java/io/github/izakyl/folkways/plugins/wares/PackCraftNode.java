@@ -28,6 +28,7 @@ final class PackCraftNode extends CraftNode {
                 Workload.Once.of(runs * Stations.LABOR_TICKS, WaresContent::haste))
                 .needs(needsFor(demands, runs))
                 .gives(new Amount(produces, perRun * runs))
+                .leaves(assembly.remainders().stream().map(amount -> new Amount(amount.spec(), amount.count() * runs)).toList())
                 .doing(WaresContent.CRAFTING, produces)
                 .done(),
             at, block);

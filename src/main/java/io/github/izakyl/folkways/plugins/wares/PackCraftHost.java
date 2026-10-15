@@ -66,6 +66,12 @@ final class PackCraftHost implements StationHost {
             }
             return inputs;
         }
+        List<Need> batchRoom() {
+            List<Need> room = new ArrayList<>(inputs());
+            room.add(new Need(produces, perRun, true));
+            assembly.remainders().forEach(amount -> room.add(new Need(amount.spec(), amount.count(), true)));
+            return List.copyOf(room);
+        }
     }
 
     private record Bench(UUID key, WorldPos at, Block block, Stances stances,
@@ -88,7 +94,7 @@ final class PackCraftHost implements StationHost {
             }
             List<Refinement.Change> answers = new ArrayList<>();
             for (Job job : jobs(produce.wanted())) {
-                long runs = produce.runs(site(), job.inputs(), job.perRun(),
+                long runs = produce.runs(site(), job.batchRoom(), job.perRun(),
                     Optional.of(WaresContent.trade()), Long.MAX_VALUE);
                 answers.add(Refinement.Change.of(Grown.of(new PackCraftNode(at, block, stances, job.takes(),
                     job.produces(), job.perRun(), (int) Math.min(runs, Integer.MAX_VALUE), job.assembly()))));
