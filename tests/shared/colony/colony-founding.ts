@@ -2,6 +2,8 @@ import { drainActionBar, readActionBar } from "../ui/zone-receipt";
 import { boardActs, scrollCellIntoView, wheelCell, type BoardAct } from "../ui/site-panel";
 import {
   input,
+  defineTask,
+  javaTask,
   player,
   reflect,
   screen,
@@ -724,8 +726,25 @@ export async function countResidents(server: MinecraftServer): Promise<number> {
 }
 
 export async function isColonyMember(server: MinecraftServer, target: Vec, stage: Stage = GROUND): Promise<boolean> {
-  return world.probe(server, `if data block ${commandPos(stage.at(target))} "neoforge:attachments"."folkways:colony_member"`);
+  if (await world.probe(server, `if data block ${commandPos(stage.at(target))} "neoforge:attachments"."folkways:colony_member"`)) return true;
+  // Native points have no block entity to carry NBT. Read the actual public colony ledger.
+  return (await runColonyTask(server, POINT_MEMBERSHIP, { target: stage.at(target) })).member === true;
 }
+
+const POINT_MEMBERSHIP = defineTask<{ target: Vec }, { member: boolean }>({
+  name: "folkways.shared.colony-point-membership",
+  side: "server",
+  source: javaTask({
+    imports: ["net.minecraft.core.BlockPos", "io.github.izakyl.folkways.core.api.terms.WorldPos",
+      "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.colony.Held"],
+    body: `var raw=(Map<?,?>)Args.of(ctx).value("target");
+var cell=new BlockPos(((Number)raw.get("x")).intValue(),((Number)raw.get("y")).intValue(),((Number)raw.get("z")).intValue());
+var at=WorldPos.of(ctx.server().overworld(),cell);
+boolean member=Colonies.all(ctx.server()).stream().flatMap(colony->colony.holdingAt(at).stream())
+  .anyMatch(holding->holding.what() instanceof Held.Point);
+return Map.of("member",member);`,
+  }),
+});
 
 export function entityTypeMatches(actual: string | null | undefined, expected: string) {
   if (actual === null || actual === undefined) {
