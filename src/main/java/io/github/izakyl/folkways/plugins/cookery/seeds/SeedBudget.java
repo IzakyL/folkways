@@ -68,6 +68,10 @@ public final class SeedBudget {
         }
     }
 
+    public record Reserve(List<Item> alternatives, ItemSpec goods, long count, long missing) {
+        public Reserve { alternatives = List.copyOf(alternatives); }
+    }
+
     public record Tally(long physical, long committed, long retained, long compostable, long missing) {
     }
 
@@ -80,6 +84,15 @@ public final class SeedBudget {
     }
 
     public Tally tally(Item seed) { return tally(seed, ItemStack.EMPTY, Set.of()); }
+
+    public List<Reserve> reserves() {
+        return purposes(seeds.get()).stream().map(alternatives -> {
+            Item first = alternatives.getFirst();
+            return new Reserve(alternatives, ItemSpec.anyOf(alternatives.stream()
+                .map(item -> Goods.specOf(item.getDefaultInstance())).toList()), first.getDefaultInstance().getMaxStackSize(),
+                tally(first).missing());
+        }).toList();
+    }
 
     // Core has drawn the current input before commit. Add that real escrow back to its former physical
     // total and exclude only this consuming action's claim, then settle consumption or return it unused.
@@ -119,8 +132,37 @@ public final class SeedBudget {
         }
         future.values().forEach(need -> allocate(units, Location.UNKNOWN, need.goods(), need.count()));
         long free = units.stream().filter(unit -> unit.stack.is(seed)).mapToLong(unit -> unit.free).sum();
-        long retained = Math.max(seed.getDefaultInstance().getMaxStackSize(), snapshot.maintainTargets().getOrDefault(seed, 0L));
-        return new Tally(physical, physical - free, retained, Math.max(0, free - retained), Math.max(0, retained - free));
+        Map<Item, Long> available = new LinkedHashMap<>();
+        units.forEach(unit -> available.merge(unit.stack.getItem(), unit.free, Long::sum));
+        long baseline = 0;
+        long missing = 0;
+        for (List<Item> purpose : purposes(seeds.get())) {
+            long left = purpose.getFirst().getDefaultInstance().getMaxStackSize();
+            for (Item alternative : purpose) {
+                long kept = Math.min(left, available.getOrDefault(alternative, 0L));
+                if (alternative == seed) baseline = kept;
+                left -= kept;
+            }
+            if (purpose.getFirst() == seed) missing = left;
+        }
+        long explicit = snapshot.maintainTargets().getOrDefault(seed, 0L);
+        long retained = Math.max(baseline, explicit);
+        return new Tally(physical, physical - free, retained, Math.max(0, free - retained),
+            missing);
+    }
+
+    private static List<List<Item>> purposes(Set<Item> seeds) {
+        List<List<Item>> purposes = new ArrayList<>();
+        Set<Item> remaining = new java.util.LinkedHashSet<>(seeds);
+        Item wild = com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.WILD_RICE_SEED.get();
+        Item rice = com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.RICE_SEED.get();
+        if (remaining.contains(wild) && remaining.contains(rice)) {
+            purposes.add(List.of(wild, rice));
+            remaining.remove(wild);
+            remaining.remove(rice);
+        }
+        remaining.forEach(item -> purposes.add(List.of(item)));
+        return List.copyOf(purposes);
     }
 
     private static void allocate(List<Unit> units, Location where, ItemSpec goods, long count) {

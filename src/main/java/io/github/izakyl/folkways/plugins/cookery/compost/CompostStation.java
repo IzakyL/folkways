@@ -115,10 +115,11 @@ public final class CompostStation implements KitchenStation {
         public void ended(ServerLevel level, Ending how) { hold.release(how); nudge(); }
 
         public Outcome commit(ServerLevel level, Worker who) {
-            if (bookings.cancelled(at, id(), generation) || !bookings.first(at, id())
+            if (!at.in(level) || bookings.cancelled(at, id(), generation) || !bookings.first(at, id())
                     || !Reach.stanceHolding(who.body(), spec.stances())
                         .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
-                        .filter(feet -> Reach.withinReach(feet, at.block(level))).isPresent()) {
+                        .filter(feet -> Reach.withinReach(feet, at.block(level))
+                            && Reach.inSight(level, feet, at.block(level))).isPresent()) {
                 return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             }
             BlockState before = level.getBlockState(at.block(level));
@@ -155,7 +156,11 @@ public final class CompostStation implements KitchenStation {
             if (before.getValue(ComposterBlock.LEVEL) != 8) return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             List<ItemStack> items;
             try {
-                items = ItemDrops.capture(level, new AABB(at.block(level)).inflate(1.5),
+                List<AABB> bounds = new java.util.ArrayList<>();
+                bounds.add(new AABB(at.block(level)).inflate(1.5));
+                WorldSpaces.world(level, at).ifPresent(world -> bounds.add(new AABB(world, world).inflate(1.5)));
+                bounds.add(who.body().getBoundingBox().inflate(1.5));
+                items = ItemDrops.capture(level, bounds,
                     () -> ComposterBlock.extractProduce(who.body(), before, level, at.block(level))).items();
             } catch (ItemDrops.CaptureFailure broken) {
                 // extractProduce spawns before emptying. Captured output is deliverable only once the
