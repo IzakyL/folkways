@@ -26,7 +26,7 @@ public final class Vocation {
     }
 
     public List<ItemSpec> kit() {
-        return kit;
+        return Vocations.kit(id, kit);
     }
 
     @Override

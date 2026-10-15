@@ -57,7 +57,7 @@ final class Hunger {
     }
 
     public boolean canEatWithoutWaste(FoodProperties food) {
-        return foodLevel <= MAX_FOOD_LEVEL - food.nutrition();
+        return foodLevel <= MAX_FOOD_LEVEL - Math.min(MAX_FOOD_LEVEL, food.nutrition());
     }
 
     public float stepVitals(int elapsedTicks, float health, float maxHealth, Difficulty difficulty,

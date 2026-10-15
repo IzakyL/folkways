@@ -112,3 +112,11 @@ config = "folkways-person.mixins.json"
 
 [[mixins]]
 config = "folkways-front.mixins.json"
+
+[[dependencies.${mod_id}]]
+modId = "kaleidoscope_cookery"
+type = "optional"
+reason = "Residents use marked chopping boards and stockpots to supply the colony's food orders."
+versionRange = "[1.6.0-neoforge+mc1.21.1,1.7)"
+ordering = "AFTER"
+side = "BOTH"

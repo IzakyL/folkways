@@ -27,6 +27,7 @@ java {
 
 sourceSets {
     gametest
+    cookeryTest
     // The fuzzers' in-game half (tests/fuzz): packaged with the mod into build/fuzz by fuzzJar, so it reaches
     // package-private planning, travel and build code; the blockwright#fuzz profile loads that jar instead.
     fuzz {
@@ -43,12 +44,16 @@ neoForge {
     version = project.neoforge_version
 
     addModdingDependenciesTo sourceSets.gametest
+    addModdingDependenciesTo sourceSets.cookeryTest
     addModdingDependenciesTo sourceSets.fuzz
 
     mods {
         folkways {
             sourceSet sourceSets.main
             sourceSet sourceSets.gametest
+            if (providers.gradleProperty('cookeryTests').map { it.toBoolean() }.getOrElse(false)) {
+                sourceSet sourceSets.cookeryTest
+            }
         }
     }
 
@@ -58,7 +63,8 @@ neoForge {
             gameDirectory = layout.projectDirectory.dir("run/gametest")
             programArgument "--nogui"
             systemProperty "neoforge.enabledGameTestNamespaces", "folkways,ldlib2"
-            sourceSet = sourceSets.gametest
+            sourceSet = providers.gradleProperty('cookeryTests').map { it.toBoolean() }.getOrElse(false)
+                ? sourceSets.cookeryTest : sourceSets.gametest
         }
     }
 }
@@ -69,6 +75,9 @@ configurations {
     gametestCompileOnly.extendsFrom compileOnly
     gametestImplementation.extendsFrom implementation
     gametestRuntimeOnly.extendsFrom runtimeOnly
+    cookeryTestCompileOnly.extendsFrom gametestCompileOnly
+    cookeryTestImplementation.extendsFrom gametestImplementation
+    cookeryTestRuntimeOnly.extendsFrom gametestRuntimeOnly
     fuzzCompileOnly.extendsFrom compileOnly
     fuzzImplementation.extendsFrom implementation
 
@@ -90,7 +99,11 @@ def lib = { String name ->
 
 dependencies {
     gametestImplementation sourceSets.main.output
+    cookeryTestImplementation sourceSets.gametest.output
+    cookeryTestRuntimeOnly lib('kaleidoscope_cookery')
     fuzzImplementation sourceSets.main.output
+
+    compileOnly lib('kaleidoscope_cookery')
 
     compileOnly lib("emi")
 

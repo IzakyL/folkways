@@ -41,6 +41,7 @@ downloads, as pinned in `blockwright.toml`.
 | `npm run typecheck` | Type checks every TypeScript suite |
 | `./gradlew check` | Compiles everything and lints for tabs and trailing whitespace |
 | `./gradlew runGameTestServer` | NeoForge game tests in `src/gametest` |
+| `./gradlew -PcookeryTests=true runGameTestServer` | All game tests, including the real optional Kaleidoscope Cookery mod |
 | `npm run test:e2e` | End-to-end tests against a real client and server |
 | `npm run visual:take` | Screenshot suites for screens and in-world visuals |
 | `npm run bench:take` | Performance benchmarks on a large colony |
@@ -55,6 +56,12 @@ use, for example:
 ```sh
 npm run test:e2e -- tests/e2e/founding-smoke.spec.ts --workers=1
 ```
+
+The `cookery` and `cookery-sable` Blockwright profiles install Kaleidoscope Cookery
+1.6.0 on both sides. Run `tests/e2e/cookery-blackbox.spec.ts` to exercise the colony
+book, production orders, chopping-board byproducts, carrier shortages, repeated
+stockpot batches and a board-to-stockpot recipe chain on the ground and a Sable ship.
+The default profiles and game tests omit Cookery to also verify that it remains optional.
 
 Each suite is a directory under `tests/` (`e2e`, `visual`, `bench`, `promo`, `fuzz`) with
 its own `playwright.config.ts` and `tsconfig.json`. Code more than one suite uses lives in

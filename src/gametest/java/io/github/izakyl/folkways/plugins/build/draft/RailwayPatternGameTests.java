@@ -11,8 +11,10 @@ import io.github.izakyl.folkways.plugins.build.Joints;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -20,6 +22,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.StairBlock;
@@ -333,71 +336,85 @@ public final class RailwayPatternGameTests {
     @GameTest(template = TEMPLATE, timeoutTicks = 400)
     public static void everyTurnAndClimbIsOneCreateWouldLayAndRunOver(GameTestHelper helper) {
         var level = helper.getLevel();
+        Set<Long> previousForced = Set.copyOf(level.getForcedChunks());
+        Set<Long> forced = new HashSet<>();
+        Runnable release = () -> forced.forEach(chunk ->
+            level.setChunkForced(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), false));
         List<Drawn.Ready> drawings = new ArrayList<>();
         List<BlockPos> bases = new ArrayList<>();
-        for (int index = 0; index < ROUTES.size(); index++) {
-            Drawn.Ready ready = drawn(helper, ROUTES.get(index).toArray(BlockPos[]::new));
-            helper.assertTrue(!ready.draft().joints().isEmpty(), "route " + index + " is joined somewhere");
-            BlockPos base = helper.absolutePos(new BlockPos(index * 90 - 400, 70, -40));
-            for (int cx = (base.getX() - 80) >> 4; cx <= (base.getX() + 80) >> 4; cx++) {
-                for (int cz = (base.getZ() - 80) >> 4; cz <= (base.getZ() + 80) >> 4; cz++) {
-                    level.setChunkForced(cx, cz, true);
+        try {
+            for (int index = 0; index < ROUTES.size(); index++) {
+                Drawn.Ready ready = drawn(helper, ROUTES.get(index).toArray(BlockPos[]::new));
+                helper.assertTrue(!ready.draft().joints().isEmpty(), "route " + index + " is joined somewhere");
+                BlockPos base = helper.absolutePos(new BlockPos(index * 90 - 400, 70, -40));
+                for (int cx = (base.getX() - 80) >> 4; cx <= (base.getX() + 80) >> 4; cx++) {
+                    for (int cz = (base.getZ() - 80) >> 4; cz <= (base.getZ() + 80) >> 4; cz++) {
+                        long chunk = ChunkPos.asLong(cx, cz);
+                        if (!previousForced.contains(chunk) && level.setChunkForced(cx, cz, true)) {
+                            forced.add(chunk);
+                        }
+                    }
                 }
-            }
-            for (Draft.Cell cell : ready.draft().cells()) {
-                if (track(cell.state())) {
-                    level.setBlock(base.offset(ready.corner()).offset(cell.offset()), cell.state(), 3);
+                for (Draft.Cell cell : ready.draft().cells()) {
+                    if (track(cell.state())) {
+                        level.setBlock(base.offset(ready.corner()).offset(cell.offset()), cell.state(), 3);
+                    }
                 }
+                drawings.add(ready);
+                bases.add(base.offset(ready.corner()));
             }
-            drawings.add(ready);
-            bases.add(base.offset(ready.corner()));
-        }
-        helper.runAfterDelay(5, () -> {
-            for (int index = 0; index < drawings.size(); index++) {
-                for (Joint joint : drawings.get(index).draft().joints()) {
-                    BlockPos from = bases.get(index).offset(joint.from());
-                    BlockPos to = bases.get(index).offset(joint.to());
-                    var cost = Joints.joiner().cost(level, from, to);
-                    helper.assertTrue(cost.isPresent() && !cost.get().isEmpty(),
-                        "route " + index + ": Create lays the joint " + joint);
-                    List<ItemStack> paid = new ArrayList<>(cost.get());
-                    var joined = Joints.joiner().join(level, from, to, paid);
-                    helper.assertTrue(joined.joined() && joined.left().isEmpty(),
-                        "route " + index + ": joined for exactly its cost " + joint + " left " + joined.left());
-                }
-            }
-            helper.runAfterDelay(10, () -> {
-                for (int index = 0; index < drawings.size(); index++) {
-                    BlockPos base = bases.get(index);
-                    List<BlockPos> route = ROUTES.get(index);
-                    BlockPos start = route.getFirst().offset(0, 1, 0);
-                    BlockPos end = route.getLast().offset(0, 1, 0);
-                    int holding = 0;
-                    StringBuilder seen = new StringBuilder();
-                    for (TrackGraph graph : Create.RAILWAYS.trackNetworks.values()) {
-                        boolean first = false;
-                        boolean last = false;
-                        for (TrackNodeLocation node : graph.getNodes()) {
-                            Vec3 at = node.getLocation().subtract(Vec3.atLowerCornerOf(base.subtract(drawings.get(index).corner())));
-                            if (at.lengthSqr() < 90000) {
-                                seen.append(graph.id.toString(), 0, 4).append(at).append(' ');
+            helper.runAfterDelay(5, () -> {
+                try {
+                    for (int index = 0; index < drawings.size(); index++) {
+                        for (Joint joint : drawings.get(index).draft().joints()) {
+                            BlockPos from = bases.get(index).offset(joint.from());
+                            BlockPos to = bases.get(index).offset(joint.to());
+                            var cost = Joints.joiner().cost(level, from, to);
+                            helper.assertTrue(cost.isPresent() && !cost.get().isEmpty(),
+                                "route " + index + ": Create lays the joint " + joint);
+                            List<ItemStack> paid = new ArrayList<>(cost.get());
+                            var joined = Joints.joiner().join(level, from, to, paid);
+                            helper.assertTrue(joined.joined() && joined.left().isEmpty(),
+                                "route " + index + ": joined for exactly its cost " + joint + " left " + joined.left());
+                        }
+                    }
+                    helper.runAfterDelay(10, () -> {
+                        try {
+                            for (int index = 0; index < drawings.size(); index++) {
+                                BlockPos base = bases.get(index);
+                                List<BlockPos> route = ROUTES.get(index);
+                                BlockPos start = route.getFirst().offset(0, 1, 0);
+                                BlockPos end = route.getLast().offset(0, 1, 0);
+                                int holding = 0;
+                                StringBuilder seen = new StringBuilder();
+                                for (TrackGraph graph : Create.RAILWAYS.trackNetworks.values()) {
+                                    boolean first = false;
+                                    boolean last = false;
+                                    for (TrackNodeLocation node : graph.getNodes()) {
+                                        Vec3 at = node.getLocation().subtract(Vec3.atLowerCornerOf(base.subtract(drawings.get(index).corner())));
+                                        if (at.lengthSqr() < 90000) {
+                                            seen.append(graph.id.toString(), 0, 4).append(at).append(' ');
+                                        }
+                                        first |= at.distanceTo(Vec3.atBottomCenterOf(start)) < 1.1;
+                                        last |= at.distanceTo(Vec3.atBottomCenterOf(end)) < 1.1;
+                                    }
+                                    holding += first && last ? 1 : 0;
+                                }
+                                helper.assertValueEqual(holding, 1, "route " + index + " is one graph from its first mark to its last: " + seen);
                             }
-                            first |= at.distanceTo(Vec3.atBottomCenterOf(start)) < 1.1;
-                            last |= at.distanceTo(Vec3.atBottomCenterOf(end)) < 1.1;
+                            helper.succeed();
+                        } finally {
+                            release.run();
                         }
-                        holding += first && last ? 1 : 0;
-                    }
-                    helper.assertValueEqual(holding, 1, "route " + index + " is one graph from its first mark to its last: " + seen);
+                    });
+                } catch (RuntimeException | Error failed) {
+                    release.run();
+                    throw failed;
                 }
-                for (BlockPos base : bases) {
-                    for (int cx = (base.getX() - 80) >> 4; cx <= (base.getX() + 80) >> 4; cx++) {
-                        for (int cz = (base.getZ() - 80) >> 4; cz <= (base.getZ() + 80) >> 4; cz++) {
-                            level.setChunkForced(cx, cz, false);
-                        }
-                    }
-                }
-                helper.succeed();
             });
-        });
+        } catch (RuntimeException | Error failed) {
+            release.run();
+            throw failed;
+        }
     }
 }

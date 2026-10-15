@@ -29,6 +29,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.monster.Zombie;
@@ -185,12 +186,16 @@ public final class PatrolGameTests {
         Colony colony = Colonies.mint(level.getServer());
         Body guard = PersonBody.RESIDENT.get().create(level);
         Zombie zombie = EntityType.ZOMBIE.create(level);
+        // Prevent daylight fire from starting a damage cooldown during the equipment ticks.
+        zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.CARVED_PUMPKIN));
         place(helper, guard.mob(), new BlockPos(1, 1, 1));
         place(helper, zombie, new BlockPos(2, 1, 1));
         zombie.setNoAi(true);
         guard.presentHeldItem(new ItemStack(Items.IRON_SWORD));
         helper.runAfterDelay(2, () -> {
             try {
+                helper.assertValueEqual(zombie.getHealth(), zombie.getMaxHealth(), "the target is unhurt before the strike");
+                helper.assertValueEqual(zombie.invulnerableTime, 0, "the target has no earlier damage cooldown");
                 float before = zombie.getHealth();
                 StrikeNode strike = new StrikeNode(level, zombie, Stances.WHEREVER);
                 strike.commit(level, worker(guard, guard.mob().getMainHandItem()));

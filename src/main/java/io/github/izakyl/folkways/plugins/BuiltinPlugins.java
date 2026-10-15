@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins;
 
 import io.github.izakyl.folkways.plugins.build.BuildPlugin;
+import io.github.izakyl.folkways.plugins.cookery.CookeryPlugin;
 import io.github.izakyl.folkways.plugins.wares.WaresPlugin;
 import io.github.izakyl.folkways.plugins.dispatch.DispatchPlugin;
 import io.github.izakyl.folkways.plugins.farming.FarmingPlugin;
@@ -34,6 +35,9 @@ public final class BuiltinPlugins {
         OrdersPlugin.install(modBus);
         RailPlugin.install(modBus);
         DispatchPlugin.install(modBus);
+        if (ModList.get().isLoaded("kaleidoscope_cookery")) {
+            CookeryPlugin.install(modBus);
+        }
         if (ModList.get().isLoaded("sable")) {
             SablePlugin.install(modBus);
         }
