@@ -26,7 +26,17 @@ public final class CookeryScenes {
             Scenes.scene("cookery_orders", CookeryScenes::orders, item("chopping_board"), item("stockpot")),
             Scenes.scene("cookery_heat", io.github.izakyl.folkways.plugins.cookery.stove.HeatScene::program, item("stove")),
             Scenes.scene("cookery_millstone", io.github.izakyl.folkways.plugins.cookery.millstone.MillstoneScene::program,
-                item("millstone"))));
+                item("millstone")),
+            Scenes.scene("cookery_spit", io.github.izakyl.folkways.plugins.cookery.spit.SpitScene::program,
+                item("shawarma_spit")),
+            Scenes.scene("cookery_steamer", io.github.izakyl.folkways.plugins.cookery.steamer.SteamerScene::program,
+                item("steamer")),
+            Scenes.scene("cookery_rice", io.github.izakyl.folkways.plugins.cookery.farming.RiceScene::program,
+                item("rice"), item("wild_rice"), item("rice_panicle")),
+            Scenes.scene("cookery_equipment", io.github.izakyl.folkways.plugins.cookery.gear.EquipmentScene::program,
+                item("straw_hat"), item("sickle"), item("farmer_chest_plate")),
+            Scenes.scene("cookery_seeds", io.github.izakyl.folkways.plugins.cookery.seeds.SeedScene::program,
+                item("straw_hat"), ResourceLocation.withDefaultNamespace("composter"))));
     }
 
     private static ResourceLocation item(String path) {

@@ -6,8 +6,6 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
-import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
-import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
@@ -41,8 +39,7 @@ public final class SpitScene {
         scene.world().setBlock(store, Blocks.CHEST.defaultBlockState(), false);
         scene.world().showSection(util.select().fromTo(0, 0, 0, 6, 3, 6), Direction.DOWN);
         scene.idle(15);
-        ItemStack book = new ItemStack(FolkwaysItems.COLONY_BOOK.get());
-        ColonyBookItem.setGesture(book, Shape.Gesture.POINT);
+        ItemStack book = PonderScenery.book(Shape.Gesture.POINT);
         scene.overlay().showControls(util.vector().topOf(base), Pointing.DOWN, 60).leftClick().withItem(book);
         scene.overlay().showOutline(PonderPalette.GREEN, base, util.select().fromTo(base, upper), 80);
         scene.overlay().showText(90).text("Mark either half to register one kitchen station. Each half holds its own native batch of up to eight matching campfire ingredients.")

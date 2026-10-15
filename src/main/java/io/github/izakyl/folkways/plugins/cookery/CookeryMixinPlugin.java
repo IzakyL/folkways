@@ -10,7 +10,9 @@ public final class CookeryMixinPlugin extends FolkwaysMixinPlugin {
     protected Map<String, String> modOnly() {
         return Map.of("MillstoneBlockEntityMixin", "kaleidoscope_cookery",
             "ShawarmaSpitBlockEntityMixin", "kaleidoscope_cookery",
-            "SteamerBlockEntityMixin", "kaleidoscope_cookery");
+            "SteamerBlockEntityMixin", "kaleidoscope_cookery",
+            "BambooTrayAccess", "kaleidoscope_cookery",
+            "BambooTrayBlockEntityMixin", "kaleidoscope_cookery");
     }
     protected List<Degradable> degradable() { return List.of(); }
 }
