@@ -83,8 +83,9 @@ public final class CookeryRegistrationGameTests {
                 "the published pot can expand a rice demand");
             var page = Facing.of(rig.colony, CookeryContent.ID).orElseThrow()
                 .board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow();
-            helper.assertValueEqual(page.rows().size(), 2, "the real facing provider lists both stations");
-            helper.assertTrue(page.rows().stream().allMatch(row -> row.detail().getContents() instanceof TranslatableContents),
+            helper.assertValueEqual(page.rows().stream().filter(row -> row.acts().stream().anyMatch(act -> act instanceof io.github.izakyl.folkways.front.api.panel.Board.Act.Ping)).count(), 2L, "the real facing provider lists both stations");
+            helper.assertValueEqual(page.rows().stream().flatMap(row -> row.acts().stream()).filter(act -> act instanceof io.github.izakyl.folkways.front.api.panel.Board.Act.Edit).count(), 3L, "all three clothing settings can actually be edited through the kitchen page");
+            helper.assertTrue(page.rows().stream().filter(row -> row.acts().stream().anyMatch(act -> act instanceof io.github.izakyl.folkways.front.api.panel.Board.Act.Ping)).allMatch(row -> row.detail().getContents() instanceof TranslatableContents),
                 "the page keeps translated status components until the client");
             rig.mark(rig.boardCell);
             rig.mark(rig.potCell);
@@ -103,7 +104,7 @@ public final class CookeryRegistrationGameTests {
             }
             rig.presence.refresh(rig.level.getServer());
             var page = rig.presence.board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow();
-            helper.assertValueEqual(page.rows().size(), 1, "being enclosed does not erase the marked station");
+            helper.assertValueEqual(page.rows().stream().filter(row -> row.acts().stream().anyMatch(act -> act instanceof io.github.izakyl.folkways.front.api.panel.Board.Act.Ping)).count(), 1L, "being enclosed does not erase the marked station");
             helper.assertTrue(page.rows().getFirst().detail().getContents() instanceof TranslatableContents text
                 && text.getKey().equals("folkways.page.cookery.unreachable"), "the page explains the missing work position");
             helper.assertTrue(rig.workshops().isEmpty(), "an unreachable kitchen cannot dispatch production");

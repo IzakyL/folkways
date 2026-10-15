@@ -9,6 +9,7 @@ import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { commandPos } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
+import { markSouthRack } from "../shared/cookery/rack";
 import { twins, type Stage, type Vec } from "../shared/harness/stage";
 
 const K = "kaleidoscope_cookery:";
@@ -66,9 +67,10 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
     const parts = [[-1,-1,"left_up"],[0,-1,"up"],[1,-1,"right_up"],[-1,0,"left_center"],[1,0,"right_center"],[-1,1,"left_down"],[0,1,"down"],[1,1,"right_down"]] as const;
     for (const [dx, dz, part] of parts) await world.command(server, "setblock " + block({ x: cells.mill.x + dx, y: cells.mill.y, z: cells.mill.z + dz }) + " " + K + "millstone[part=" + part + "]");
     await tick.sprint(server, 5);
-    for (const at of [cells.source, cells.store, cells.target, cells.table, cells.board, cells.stockpot, cells.pot, cells.mill, cells.rack]) {
+    for (const at of [cells.source, cells.store, cells.target, cells.table, cells.board, cells.stockpot, cells.pot, cells.mill]) {
       await optInViaBook(server, client, name, at, "worksite", stage);
     }
+    evidence.rackMark = await markSouthRack(server, client, name, cells.rack, stage);
     evidence.initial = await physical(server, stage, cells);
     expect(evidence.initial.tools, "three crafters start without a knife or spatula").toEqual([]);
     const before = await world.block(server, stage.at(cells.source), { nbt: true });

@@ -55,6 +55,7 @@ for (const installed of [false, true]) test("cookery lessons: " + (installed ? "
     await world.command(server, "give " + name + " folkways:colony_book");
     await world.command(server, "item replace entity " + name + " weapon.mainhand with folkways:colony_book");
     await tick.sprint(server, 5);
+    await world.command(server, "setblock " + stand.x + " " + stand.y + " " + stand.z + " minecraft:stone");
     await createColonyViaBook(server, client, name, stand);
     const shelf = async () => {
       await screen.dismiss(client); await openColonyPanelViaBook(server, client, name, stand);
