@@ -119,6 +119,8 @@ public final class SteamerGameTests {
                 helper.assertValueEqual(rig.steamer().getCookingProgress()[0], 0, "the native cooldown removes progress after the actual heat source disappears");
                 helper.assertTrue(work.next(rig.level, rig) instanceof Workload.Within.Turn.Wait, "cold raw food is not considered a completed product");
                 rig.level.setBlockAndUpdate(rig.cell.below(), Blocks.MAGMA_BLOCK.defaultBlockState());
+                helper.assertTrue(rig.steamer().getBlockState().getValue(SteamerBlock.HAS_BASE), "restoring magma runs the native support/base update");
+                helper.assertTrue(work.refusal(rig.level).isEmpty(), "a native cosmetic base update does not invalidate accepted food");
             });
         });
         afterCooking(rig, ready -> {
@@ -284,7 +286,16 @@ public final class SteamerGameTests {
             return work;
         }
         Outcome step(SteamerWork work) {
-            Node piece = ((Workload.Within.Turn.Piece) work.next(level, this)).node();
+            var turn = work.next(level, this);
+            if (!(turn instanceof Workload.Within.Turn.Piece)) {
+                helper.fail("expected a native steamer action, got " + turn + "; refusal=" + work.refusal(level)
+                    + "; state=" + steamer().getBlockState() + "; slots=" + steamer().getItems()
+                    + "; time=" + java.util.Arrays.toString(steamer().getCookingTime())
+                    + "; progress=" + java.util.Arrays.toString(steamer().getCookingProgress())
+                    + "; owner=" + SteamerBatch.read(steamer(), level));
+                return Outcome.failed(io.github.izakyl.folkways.plugins.cookery.CookeryRefusal.STATION_CHANGED);
+            }
+            Node piece = ((Workload.Within.Turn.Piece) turn).node();
             Outcome result = Commit.run(level, piece, this);
             if (result instanceof Outcome.Done done) {
                 done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "the native food fits"));
