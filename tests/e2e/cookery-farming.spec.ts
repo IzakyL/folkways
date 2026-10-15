@@ -66,7 +66,8 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
       await reloadServerModels(server);
       evidence.modelArrival = await waitForModelsOnClient(client, "assets/folkways/geo/resident_models/default_boy.geo.json");
     }
-    const origin = { x: Math.round(grounded.pos.x) + 4, y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) + 4 };
+    // The grass loop also needs a soil layer two below the standing floor, above the flat world's minimum height.
+    const origin = { x: Math.round(grounded.pos.x) + 4, y: Math.round(grounded.pos.y) + 2, z: Math.round(grounded.pos.z) + 4 };
     const box = foundingBox(origin);
     await stage.lay(server, box);
     const block = (at: Vec) => commandPos(stage.at(at));
