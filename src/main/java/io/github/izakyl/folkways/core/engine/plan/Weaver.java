@@ -2011,9 +2011,9 @@ public final class Weaver {
                 case Resource.Lot(Stash where, ItemSpec spec) ->
                     draws.add(new Placement.Draw(Optional.of(where), spec, claim.amount()));
                 case Resource.Cargo(UUID resident, ItemSpec spec) ->
-                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount()));
+                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount(), Optional.of(resident), Optional.empty()));
                 case Resource.Handed(UUID by, ItemSpec spec) ->
-                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount()));
+                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount(), Optional.empty(), Optional.of(by)));
                 case Resource.Space space -> {
                 }
             }

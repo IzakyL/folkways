@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.ReservedInput;
 import io.github.izakyl.folkways.plugins.farming.CropSeeds;
@@ -80,8 +81,20 @@ public final class SeedSupport {
         Map<UUID, Body> bodies = loadedBodies();
         if (bodies.size() != colony.residents().size()) complete = false;
         bodies.forEach((id, body) -> stocks.add(stock("pack/" + id, SeedBudget.Location.pack(id), body.pack())));
-        List<SeedBudget.Claim> claims = new ArrayList<>();
+        // Repeated stage/dimension observations are one promise. The core has already summed distinct
+        // draws within a placement; different producer lineages must remain distinct until that point.
+        record InputKey(UUID node, Optional<WorldPos> store, Optional<UUID> resident, ItemSpec goods,
+                        Optional<UUID> producer) { }
+        Map<InputKey, ReservedInput> distinct = new LinkedHashMap<>();
         for (ReservedInput input : reserved) {
+            distinct.merge(new InputKey(input.node(), input.store(), input.resident(), input.goods(), input.producer()), input,
+                (before, next) -> before.count() >= next.count() ? before : next);
+        }
+        record ClaimKey(UUID node, SeedBudget.Location at, ItemSpec goods) { }
+        Map<ClaimKey, Long> physical = new LinkedHashMap<>();
+        for (ReservedInput input : distinct.values()) {
+            // A future hand-off covers a planned sowing demand, but cannot consume unrelated warehouse stock.
+            if (input.pending()) continue;
             SeedBudget.Location at = SeedBudget.Location.UNKNOWN;
             if (input.store().isPresent()) {
                 WorldPos where = input.store().get();
@@ -92,13 +105,15 @@ public final class SeedSupport {
                 at = SeedBudget.Location.pack(input.resident().get());
                 if (!bodies.containsKey(input.resident().get())) complete = false;
             }
-            claims.add(new SeedBudget.Claim(input.node(), at, input.goods(), input.count()));
+            physical.merge(new ClaimKey(input.node(), at, input.goods()), input.count(), Math::addExact);
         }
+        List<SeedBudget.Claim> claims = physical.entrySet().stream().map(entry ->
+            new SeedBudget.Claim(entry.getKey().node(), entry.getKey().at(), entry.getKey().goods(), entry.getValue())).toList();
         for (ServerLevel level : server.getAllLevels()) {
             for (CropSeeds.Sowing sowing : CropSeeds.sowing(colony, level)) {
                 // One sowing's repeated stage observations are not additional demands. Clamp at this
                 // job's actual requested count, including an unknown-location plan claim only once.
-                long covered = reserved.stream().filter(input -> input.node().equals(sowing.node()) && Goods.overlap(input.goods(), sowing.seed()))
+                long covered = distinct.values().stream().filter(input -> input.node().equals(sowing.node()) && Goods.overlap(input.goods(), sowing.seed()))
                     .mapToLong(ReservedInput::count).sum();
                 long left = Math.max(0, sowing.count() - covered);
                 if (left > 0) future.add(new SeedBudget.FutureNeed("sowing/" + sowing.node(), sowing.seed(), left));
