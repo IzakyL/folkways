@@ -65,10 +65,8 @@ public final class CompostStation implements KitchenStation {
         BlockState state = level.getBlockState(at.block(level));
         if (!matches(state)) return List.of();
         Site site = new Site(colony, at);
-        Work running = active.get(site);
-        if (running != null && running.bookings == bookings && !bookings.cancelled(at, running.id(), running.generation)) {
-            return List.of(Grown.of(running));
-        }
+        List<Grown> running = activeRecovery(colony, level, at, bookings);
+        if (!running.isEmpty()) return running;
         if (!bookings.free(at)) return List.of();
         int fill = state.getValue(ComposterBlock.LEVEL);
         if (fill == 8) return List.of(Grown.of(new Work(site, stances, bookings, changed, Optional.empty(), Optional.empty())));
@@ -80,6 +78,13 @@ public final class CompostStation implements KitchenStation {
                 && budget.get().tally(item).compostable() > 0)
             .findFirst().map(item -> List.of(Grown.of(new Work(site, stances, bookings, changed,
                 Optional.of(item), budget)))).orElseGet(List::of);
+    }
+
+    @Override
+    public List<Grown> activeRecovery(UUID colony, ServerLevel level, WorldPos at, KitchenBookings bookings) {
+        Work running = active.get(new Site(colony, at));
+        return running != null && running.bookings == bookings && !bookings.cancelled(at, running.id(), running.generation)
+            ? List.of(Grown.of(running)) : List.of();
     }
 
     @Override

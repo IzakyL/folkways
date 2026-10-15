@@ -204,6 +204,8 @@ public final class CompostGameTests {
             });
             var asking = new io.github.izakyl.folkways.core.api.colony.Asking(colony,
                 io.github.izakyl.folkways.plugins.cookery.CookeryContent.ID, () -> { });
+            helper.assertTrue(fixture.station.activeRecovery(fixture.colony, fixture.level, fixture.at, fixture.bookings).isEmpty(),
+                "a blocked-stance query cannot create fresh unplanned compost work");
             asking.offer(Map.of(fixture.level.dimension(), fixture.goals()));
             helper.assertValueEqual(submitted.size(), 1, "one compost operation is submitted through the actual colony root contract");
             Node original = submitted.getFirst();
@@ -212,6 +214,9 @@ public final class CompostGameTests {
             long before = fixture.seeds();
             for (int period = 0; period < 10; period++) {
                 var wanted = fixture.goals();
+                var retained = fixture.station.activeRecovery(fixture.colony, fixture.level, fixture.at, fixture.bookings);
+                helper.assertTrue(retained.size() == 1 && retained.getFirst().nodes().getFirst() == original,
+                    "a no-stance recovery query retains only the same already adopted root");
                 helper.assertTrue(wanted.size() == 1 && wanted.getFirst().nodes().getFirst() == original,
                     "the same adopted compost root stays wanted while its resident is far away");
                 asking.offer(Map.of(fixture.level.dimension(), wanted));
