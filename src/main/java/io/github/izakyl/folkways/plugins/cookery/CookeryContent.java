@@ -40,6 +40,7 @@ public final class CookeryContent {
         BuiltinKitchenStations.register();
         io.github.izakyl.folkways.plugins.cookery.racks.KitchenRacks.register();
         io.github.izakyl.folkways.plugins.cookery.farming.CookeryCrops.register();
+        io.github.izakyl.folkways.plugins.cookery.farming.CookerySickle.register();
         io.github.izakyl.folkways.plugins.cookery.gear.CookeryGear.register(
             (colony, body) -> Fronts.of(colony).settings(ID).flag("wear_hat"),
             (colony, body) -> Fronts.of(colony).settings(ID).flag("wear_farmer_armor"),

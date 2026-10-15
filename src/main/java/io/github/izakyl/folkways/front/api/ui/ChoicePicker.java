@@ -225,7 +225,9 @@ public final class ChoicePicker {
                     "folkways.choice.variant." + option.getPath().substring(stroke + 1), whole);
             }
         }
-        return Component.literal(option.getPath());
+        String key = "folkways.choice." + option.getNamespace() + "." + option.getPath().replace('/', '.');
+        return net.minecraft.client.resources.language.I18n.exists(key)
+            ? Component.translatable(key) : Component.literal(option.getPath());
     }
 
     @Nullable

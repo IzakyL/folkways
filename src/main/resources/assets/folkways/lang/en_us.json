@@ -914,5 +914,9 @@
   "folkways.ponder.cookery_millstone.text_3": "Passing residents are not captured. Only the assigned resident may bind as the motor; the native mill then turns and processes the actual input.",
   "folkways.ponder.cookery_millstone.text_4": "Finished grinding releases the motor immediately. The task still waits until the resident really walks clear; unbinding in place is not a completed exit.",
   "folkways.ponder.cookery_millstone.text_5": "Only then are the real output slots emptied into colony logistics. The same flour is never also left as a loose duplicate.",
-  "folkways.ponder.cookery_millstone.text_6": "Cancellation and reload release the resident safely and preserve accepted ingredients for recovery. A blocked exit waits for a path; ordinary animal-driven mills keep their native behavior."
+  "folkways.ponder.cookery_millstone.text_6": "Cancellation and reload release the resident safely and preserve accepted ingredients for recovery. A blocked exit waits for a path; ordinary animal-driven mills keep their native behavior.",
+  "folkways.settings.harvest_mode": "Harvest method",
+  "folkways.choice.folkways.pick": "Pick by hand",
+  "folkways.refusal.farm.no_sickle": "The resident needs a shared sickle for this harvest.",
+  "folkways.refusal.farm.sickle_cooldown": "The sickle is cooling down."
 }

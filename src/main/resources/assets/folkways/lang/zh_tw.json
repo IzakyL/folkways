@@ -914,5 +914,9 @@
   "folkways.ponder.cookery_millstone.text_3": "路過的居民不會被石磨捕獲。只有被分配驅動任務的居民才能綁定，隨後由石磨原生機制轉動並加工實際原料。",
   "folkways.ponder.cookery_millstone.text_4": "磨粉完成後會立即解除驅動者的綁定。任務會繼續等待居民真正走出捕獲範圍，原地解除綁定還不算完成退出。",
   "folkways.ponder.cookery_millstone.text_5": "居民安全走出後，實際輸出槽中的成品才會進入聚落物流，同一份麵粉不會再作為掉落物重複出現。",
-  "folkways.ponder.cookery_millstone.text_6": "取消和重新載入會安全釋放居民，並保留已投入的原料供恢復處理。出口受阻時等待道路恢復，普通動物驅動的石磨保持原生行為。"
+  "folkways.ponder.cookery_millstone.text_6": "取消和重新載入會安全釋放居民，並保留已投入的原料供恢復處理。出口受阻時等待道路恢復，普通動物驅動的石磨保持原生行為。",
+  "folkways.settings.harvest_mode": "收穫方式",
+  "folkways.choice.folkways.pick": "手工採收",
+  "folkways.refusal.farm.no_sickle": "居民需要借用一把鐮刀才能收割。",
+  "folkways.refusal.farm.sickle_cooldown": "鐮刀正在冷卻，稍後繼續收割。"
 }

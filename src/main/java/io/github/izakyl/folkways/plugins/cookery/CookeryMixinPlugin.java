@@ -8,7 +8,8 @@ import java.util.Set;
 public final class CookeryMixinPlugin extends FolkwaysMixinPlugin {
     protected Set<String> createOnly() { return Set.of(); }
     protected Map<String, String> modOnly() {
-        return Map.of("MillstoneBlockEntityMixin", "kaleidoscope_cookery");
+        return Map.of("MillstoneBlockEntityMixin", "kaleidoscope_cookery",
+            "ShawarmaSpitBlockEntityMixin", "kaleidoscope_cookery");
     }
     protected List<Degradable> degradable() { return List.of(); }
 }
