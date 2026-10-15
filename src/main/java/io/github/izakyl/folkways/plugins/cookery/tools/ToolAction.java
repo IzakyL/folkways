@@ -126,6 +126,7 @@ abstract class ToolAction implements Node {
             moved = true;
             service.pool.carried(lease.id());
             service.record(lease, source.expected());
+            service.borrowedFrom(level, lease, source.at());
             return Outcome.done();
         }
 

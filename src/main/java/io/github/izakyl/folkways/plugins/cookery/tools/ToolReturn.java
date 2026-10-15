@@ -46,7 +46,7 @@ final class ToolReturn implements Node, Workload.Within {
             complete = true;
             return LEAVE;
         }
-        return service.stock.destinations(level, who.pack().getItem(slot)).stream().findFirst()
+        return service.destination(level, lease, who.pack().getItem(slot))
             .<Turn>map(target -> new Turn.Piece(new ToolAction.Return(service, lease, target))).orElse(WAIT);
     }
 

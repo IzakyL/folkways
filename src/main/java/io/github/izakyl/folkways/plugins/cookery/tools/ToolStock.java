@@ -201,15 +201,20 @@ final class ToolStock {
         return colony.store(level, at);
     }
 
-    static boolean room(Container into, ItemStack stack) {
+    static long roomCount(Container into, ItemStack stack) {
+        long room = 0;
         int cap = Math.min(into.getMaxStackSize(), stack.getMaxStackSize());
         for (int slot = 0; slot < into.getContainerSize(); slot++) {
             ItemStack held = into.getItem(slot);
             if (Containers.accepts(into, slot, stack) && (held.isEmpty()
                     || ItemStack.isSameItemSameComponents(held, stack) && held.getCount() < cap)) {
-                return true;
+                room += held.isEmpty() ? cap : cap - held.getCount();
             }
         }
-        return false;
+        return room;
+    }
+
+    static boolean room(Container into, ItemStack stack) {
+        return roomCount(into, stack) > 0;
     }
 }

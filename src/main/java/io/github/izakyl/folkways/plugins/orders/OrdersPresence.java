@@ -369,6 +369,7 @@ final class OrdersPresence implements Facing {
                     continue;
                 }
                 long held = Goods.countIn(target.get(), order.what());
+                if (order.standing()) held += OrderReturns.count(colony, order.into(), order.what());
                 long count = pending.getOrDefault(order.key(), order.replenishment(held));
                 if (count <= 0) {
                     if (!order.standing() && held >= order.high()) {

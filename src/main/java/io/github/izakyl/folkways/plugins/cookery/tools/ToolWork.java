@@ -191,7 +191,7 @@ final class ToolWork implements Node, Workload.Within {
                 continue;
             }
             ItemStack tool = who.pack().getItem(slot);
-            var target = service.stock.destinations(level, tool).stream().findFirst();
+            var target = service.destination(level, lease, tool);
             if (target.isEmpty()) {
                 return WAIT;
             }
