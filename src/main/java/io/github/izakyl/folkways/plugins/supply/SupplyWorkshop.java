@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Intent;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
@@ -57,6 +58,10 @@ record SupplyWorkshop(UUID key, Colony colony, WorldPos at, Stances stances, Sup
         }
 
         public NodeSpec spec() { return spec; }
+
+        public List<Amount> planningLeaves(List<Amount> promised) {
+            return Leaves.unpromised(spec.leaves(), promised);
+        }
 
         private boolean valid(ServerLevel level) {
             return !used && at.in(level) && level.isLoaded(at.block(level)) && !source.isRemoved()

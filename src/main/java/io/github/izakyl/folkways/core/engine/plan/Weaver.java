@@ -1996,7 +1996,7 @@ public final class Weaver {
         // What the work leaves in the pack fills it as goods carried do, though nobody is promised it.
         Node worked = nodes.get(node);
         if (worked != null) {
-            carrying.addAll(worked.spec().leaves());
+            carrying.addAll(worked.planningLeaves(carrying.stream().filter(amount -> amount.count() > 0).toList()));
         }
         return new Placement(stands == null ? Set.of() : stands, carrying, List.copyOf(from), List.copyOf(into),
             drawsOf(node));
