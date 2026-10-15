@@ -72,6 +72,11 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     await stage.lay(server, box);
     const block = (at: Vec) => commandPos(stage.at(at));
     await world.command(server, `fill ${block({ ...box.min, y: origin.y - 1 })} ${block({ ...box.max, y: origin.y - 1 })} minecraft:smooth_stone`);
+    // The raised ground platform otherwise traps the player at the old flat-spawn height in a crawling pose.
+    // Move only the test operator onto a clear cell before the first real book gesture, on both stages.
+    const operatorStart = stage.stand({ x: origin.x - 3.5, y: origin.y, z: origin.z + 2.5 });
+    evidence.operatorStart = await world.command(server, `tp ${player} ${commandPos(operatorStart)} 180 30`);
+    await tick.sprint(server, 5); await frames(client, 3);
     const founded = await foundColonyFast(server, client, player, { origin, residentCount: 1, stage });
     evidence.founding = founded.evidence;
     layout = farming(origin);
