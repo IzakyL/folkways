@@ -63,10 +63,13 @@ public final class DraftPanel {
     private static final int NUMBER_WIDTH = 34;
     private static final int MOST_ICONS = 6;
 
-    /** Where a locally drawn site goes: its file, the corner it stands from, and the name it was given. */
+    /**
+     * Where a locally drawn site goes: its file, the corner it stands from, the name it was given, and whether a
+     * creative player raises it at once rather than handing it to the colony.
+     */
     @FunctionalInterface
     interface HandOff {
-        void send(CompoundTag file, BlockPos corner, String siteName);
+        void send(CompoundTag file, BlockPos corner, String siteName, boolean raise);
     }
 
     /**
@@ -100,6 +103,7 @@ public final class DraftPanel {
     private final SiteNameField name = new SiteNameField();
     private Button preview;
     private Button confirm;
+    private Button raiseNow;
 
     private Pattern chosen;
     private KnobValues values;
@@ -164,9 +168,14 @@ public final class DraftPanel {
         Tokens.name(preview, TOKEN + ".preview");
         confirm = new Button()
             .setText(Component.translatable(TOKEN + ".confirm"))
-            .setOnClick(event -> raise());
+            .setOnClick(event -> raise(confirm, false));
         confirm.setDisplay(false);
         Tokens.name(confirm, TOKEN + ".confirm");
+        raiseNow = new Button()
+            .setText(Component.translatable(TOKEN + ".raise"))
+            .setOnClick(event -> raise(raiseNow, true));
+        raiseNow.setDisplay(false);
+        Tokens.name(raiseNow, TOKEN + ".raise");
 
         UIElement stack = new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
@@ -176,7 +185,7 @@ public final class DraftPanel {
         ScrollerView scroller = Rows.fills(Rows.box());
         scroller.addScrollViewChild(stack);
 
-        UIElement page = Rows.page().addChildren(scroller, name.row(), Rows.actions(preview, confirm));
+        UIElement page = Rows.page().addChildren(scroller, name.row(), Rows.actions(preview, confirm, raiseNow));
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0).minHeight(0));
         // A drawing is taken up only while the page is open; one that comes back after it has closed is let go.
         page.addEventListener(UIEvents.TICK, event -> tick());
@@ -244,15 +253,21 @@ public final class DraftPanel {
         preview.setDisplay(chosen != null);
         // Nothing is built that has not first been looked at where it would stand: its knobs may still be
         // turned once it has, but another pattern is previewed first.
-        confirm.setDisplay(chosen != null && kept != null && kept.hint().equals(hint)
-            && kept.pattern().equals(chosen.id()) && taking.previewed());
+        boolean buildable = chosen != null && kept != null && kept.hint().equals(hint)
+            && kept.pattern().equals(chosen.id()) && taking.previewed();
+        confirm.setDisplay(buildable);
+        // A creative player may also raise it at once instead of handing it to the colony.
+        raiseNow.setDisplay(buildable && creative());
         // While a drawing is under way nothing more is asked of it, and the button that asked says it is drawing.
         preview.setActive(asked == null);
         confirm.setActive(asked == null);
+        raiseNow.setActive(asked == null);
         preview.setText(Component.translatable(asked != null && asked.by() == preview ? TOKEN + ".drawing"
             : TOKEN + ".preview"));
         confirm.setText(Component.translatable(asked != null && asked.by() == confirm ? TOKEN + ".drawing"
             : TOKEN + ".confirm"));
+        raiseNow.setText(Component.translatable(asked != null && asked.by() == raiseNow ? TOKEN + ".drawing"
+            : TOKEN + ".raise"));
         name.row().setDisplay(chosen != null);
     }
 
@@ -263,17 +278,22 @@ public final class DraftPanel {
         });
     }
 
-    private void raise() {
+    private static boolean creative() {
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft.player != null && minecraft.player.isCreative();
+    }
+
+    private void raise(Button by, boolean now) {
         if (chosen == null) {
             return;
         }
         Chosen settings = Chosen.of(chosen.knobs(), values);
         String typed = name.typed();
-        draw(confirm, ready -> {
+        draw(by, ready -> {
             if (LocalPatterns.local(chosen)) {
-                handOff.send(fileOf(ready), ready.corner(), typed);
+                handOff.send(fileOf(ready), ready.corner(), typed, now);
             } else {
-                DraftOffer.commission(chosen, hint, settings, front, typed);
+                DraftOffer.commission(chosen, hint, settings, front, typed, now);
             }
             kept = null;
             taking.done();

@@ -170,6 +170,7 @@
   "folkways.draft.unknown": "The server has no pattern called %s for this mark",
   "folkways.draft.none": "No patterns installed, and none in folkways/pattern",
   "folkways.draft.preview": "Preview",
+  "folkways.draft.raise": "Build now",
   "folkways.draft.previewing": "Previewing: back to the screen to confirm",
   "folkways.keys.adjust": "Adjust",
   "folkways.keys.allow": "Allow or forbid",

@@ -48,28 +48,29 @@ public final class DraftOffer {
         });
     }
 
-    private static void send(CompoundTag file, BlockPos anchor, String siteName) {
+    private static void send(CompoundTag file, BlockPos anchor, String siteName, boolean raise) {
         Optional<UUID> colony = colonyInHand();
         if (colony.isEmpty()) {
             LOGGER.warn("no bound colony book in hand; the drawing was not sent");
             return;
         }
         bytesOf(file).ifPresent(bytes -> PacketDistributor.sendToServer(new UploadBlueprintPacket(
-            colony.get(), ID.getPath(), siteName, bytes, anchor, true, Rotation.NONE, Mirror.NONE, true)));
+            colony.get(), ID.getPath(), siteName, bytes, anchor, true, Rotation.NONE, Mirror.NONE, raise)));
     }
 
     static boolean fits(CompoundTag file) {
         return bytesOf(file).isPresent();
     }
 
-    static void commission(Pattern pattern, Hint hint, Chosen settings, Direction facing, String siteName) {
+    static void commission(Pattern pattern, Hint hint, Chosen settings, Direction facing, String siteName,
+            boolean raise) {
         Optional<UUID> colony = colonyInHand();
         if (colony.isEmpty()) {
             LOGGER.warn("no bound colony book in hand; the drawing was not sent");
             return;
         }
         PacketDistributor.sendToServer(new CommissionPacket(colony.get(), pattern.id(), hint.save(),
-            settings.save(), facing, siteName, true));
+            settings.save(), facing, siteName, raise));
     }
 
     private static Optional<UUID> colonyInHand() {

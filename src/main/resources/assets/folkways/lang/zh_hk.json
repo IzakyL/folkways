@@ -170,6 +170,7 @@
   "folkways.draft.unknown": "伺服器上沒有可用於此標記的建築樣式 %s",
   "folkways.draft.none": "沒有已安裝的建築樣式，folkways/pattern 裏也沒有",
   "folkways.draft.preview": "預覽",
+  "folkways.draft.raise": "直接建成",
   "folkways.draft.previewing": "預覽中：回到界面以確認",
   "folkways.keys.adjust": "調整",
   "folkways.keys.allow": "允許 / 禁止",

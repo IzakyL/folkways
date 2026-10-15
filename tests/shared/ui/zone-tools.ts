@@ -63,12 +63,13 @@ function round(value: number) {
 
 export async function aimAndLeftClick(server: MinecraftServer, client: MinecraftClient, playerName: string, standAt: Vec, block: Vec,
   stage: Stage = GROUND) {
-  // Looked at from where the player stands once landed; set down a little above that on a ship's deck. Every
-  // coordinate is sent with its decimals: /tp moves a whole-number x or z to the middle of its block.
-  const eye = { x: standAt.x, y: standAt.y + 1.62, z: standAt.z };
+  // Looked at from where the player is set down: on a ship's deck a little above where it stands. Aimed as if from
+  // the deck, a far block looked up at is passed over by that lift. Every coordinate is sent with its decimals:
+  // /tp moves a whole-number x or z to the middle of its block.
+  const at = stage.stand(standAt);
+  const eye = { x: at.x, y: at.y + 1.62, z: at.z };
   const target = { x: block.x + 0.5, y: block.y + 1, z: block.z + 0.5 };
   const camera = cameraLookingAt(eye, target);
-  const at = stage.stand(standAt);
   const teleport = await tryCommand(
     server,
     `tp ${playerName} ${at.x.toFixed(3)} ${at.y.toFixed(3)} ${at.z.toFixed(3)} ${camera.yaw} ${camera.pitch}`,

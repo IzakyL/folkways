@@ -532,6 +532,7 @@ const SELECTOR_CLOSE = "folkways.selector.close";
 const SELECTOR_SEARCH = "folkways.selector.search";
 const SELECTOR_RESULT = "folkways.selector.result.";
 const SELECTOR_CONFIRM = "folkways.selector.confirm";
+const SELECTOR_CHOSEN = "folkways_chosen";
 
 // Opens the item picker from the control that asks for it, then picks one item there and confirms.
 export async function pickViaSelector(
@@ -575,7 +576,19 @@ export async function chooseInSelector(
     }
   }
   evidence.pick = await clickUnverified(client, { id: resultId });
-  // Picked, or ticked as a rule, the choice stands once it is confirmed.
+  // Picked, or ticked as a rule, the choice stands once it is confirmed. Picking what the setting already holds
+  // changes nothing, so the picker leaves Confirm off: the choice already stands, and the picker is cancelled.
+  const elements = await panelElements(client);
+  const confirm = elements.find((e) => e.id === SELECTOR_CONFIRM);
+  if (confirm && !confirm.active) {
+    const picked = elements.find((e) => e.id === resultId);
+    if (!picked?.classes?.includes(SELECTOR_CHOSEN)) {
+      throw new Error(`picking ${registryId} left Confirm off, yet ${resultId} is not marked chosen: the pick did not take`);
+    }
+    evidence.already_held = true;
+    evidence.close = await clickUnverified(client, { id: SELECTOR_CLOSE });
+    return evidence;
+  }
   evidence.confirm = await clickUnverified(client, { id: SELECTOR_CONFIRM });
   return evidence;
 }
