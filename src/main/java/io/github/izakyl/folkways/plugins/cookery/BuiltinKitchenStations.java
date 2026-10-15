@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.cookery;
 
+import io.github.izakyl.folkways.core.api.colony.Closing;
+
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoardBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
