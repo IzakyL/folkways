@@ -6,6 +6,26 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.core.api.terms.Reach;
+import io.github.izakyl.folkways.core.api.terms.Stash;
+import io.github.izakyl.folkways.core.api.work.Outcome;
+import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.engine.plan.Claims;
+import io.github.izakyl.folkways.core.engine.plan.Cooldowns;
+import io.github.izakyl.folkways.core.engine.plan.Crew;
+import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
+import io.github.izakyl.folkways.core.engine.plan.Shown;
+import io.github.izakyl.folkways.core.engine.plan.Situation;
+import io.github.izakyl.folkways.core.engine.plan.Stands;
+import io.github.izakyl.folkways.core.engine.plan.Stock;
+import io.github.izakyl.folkways.core.engine.plan.Weaver;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import net.minecraft.world.item.ShieldItem;
+import net.minecraft.world.level.block.Blocks;
+import net.neoforged.neoforge.common.Tags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
@@ -149,6 +169,79 @@ public final class RackContainerGameTests {
         helper.assertTrue(Containers.insert(found, knife).isEmpty(), "ordinary storage discovery reaches the native rack slots");
         helper.assertTrue(ItemStack.matches(rack.getItemLeft(), knife), "discovery does not expose a detached shadow inventory");
         helper.assertValueEqual(found.getMaxStackSize(), 1, "ordinary hauling sees the native one-tool slot capacity");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void nativeRackClicksAcceptAnOptionallyTaggedPotLidAndPreserveItsComponents(GameTestHelper helper) {
+        KitchenwareRacksBlockEntity rack = rack(helper);
+        RackContainer view = new RackContainer(rack);
+        var body = PersonBody.RESIDENT.get().create(helper.getLevel());
+        body.setNoAi(true);
+        body.moveTo(rack.getBlockPos().getX() + 0.5, rack.getBlockPos().getY(), rack.getBlockPos().getZ() + 1.5);
+        try {
+            ItemStack lid = new ItemStack(ModItems.STOCKPOT_LID.get());
+            lid.set(DataComponents.CUSTOM_NAME, Component.literal("The physical stockpot lid"));
+            lid.setDamageValue(17);
+            helper.assertTrue(lid.getItem() instanceof ShieldItem
+                    && lid.is(Tags.Items.TOOLS),
+                "the optional shield child joins the native tools parent tag");
+            ItemStack offered = lid.copy();
+            helper.assertTrue(rack.onClick(body, offered, true) && offered.isEmpty(),
+                "the unchanged native rack interaction accepts and consumes exactly one real lid");
+            ItemStack taken = Containers.extract(view, stack -> true, 1);
+            helper.assertTrue(ItemStack.matches(taken, lid) && view.isEmpty(), "adapter extraction preserves the same named and worn lid");
+            helper.assertTrue(Containers.insert(view, taken).isEmpty(), "the same lid returns through ordinary container storage");
+            body.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            helper.assertTrue(rack.onClick(body, ItemStack.EMPTY, true)
+                    && ItemStack.matches(body.getMainHandItem(), lid) && view.isEmpty(),
+                "native retrieval sees the same adapter slot without a duplicate lid");
+        } finally { body.discard(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void ordinaryCargoPlanningPrefersTheRealRackForANamedPotLid(GameTestHelper helper) {
+        var fixture = new PlanningFixture(helper);
+        var level = helper.getLevel();
+        for (BlockPos cell : BlockPos.betweenClosed(helper.absolutePos(BlockPos.ZERO), helper.absolutePos(new BlockPos(8, 0, 4)))) {
+            level.setBlockAndUpdate(cell, Blocks.STONE.defaultBlockState());
+        }
+        level.setBlockAndUpdate(fixture.source.cell(), Blocks.BARREL.defaultBlockState());
+        level.setBlockAndUpdate(fixture.target.cell(), ModBlocks.KITCHENWARE_RACKS.get().defaultBlockState());
+        KitchenRacks.register();
+        var ordinary = Containers.at(level, fixture.source.cell()).orElseThrow();
+        var preferred = Containers.at(level, fixture.target.cell()).orElseThrow();
+        ItemStack lid = new ItemStack(ModItems.STOCKPOT_LID.get());
+        lid.set(DataComponents.CUSTOM_NAME, Component.literal("Put this lid on the rack")); lid.setDamageValue(23);
+        fixture.worker.pack().setItem(0, lid.copy());
+        var original = fixture.crew.hands().getFirst();
+        var carrying = new Crew(List.of(
+            new Crew.Hand(original.who(), original.at(), 6, 6, 1,
+                original.licences(), original.tools(), Optional.empty(), List.of(lid.copy()))));
+        var source = new Stash(fixture.source);
+        var target = new Stash(fixture.target);
+        var stances = Stances.of(level,
+            Reach.workableCells(level, fixture.target.cell())).orElseThrow();
+        var stands = Stands.building()
+            .container(source, fixture.stands.around(source)).container(target, Stands.cellsOf(stances)).done();
+        var stock = new Stock(List.of(), Map.of(source, 27, target, 2),
+            Map.of(target, KitchenRacks.rules(List.of(fixture.target))),
+            Map.of(target, Containers.refused(preferred)));
+        var planner = new Weaver(
+            new Claims(), new Cooldowns());
+        planner.stow(original.id());
+        planner.know(new Situation(fixture.ways, stock, List.of(), stands), carrying);
+        var planned = Shown.view(planner.grow(false));
+        helper.assertValueEqual(planned.vertices().size(), 1, "one carried physical lid needs one actual deposit");
+        var deposit = planned.vertices().values().iterator().next().node();
+        helper.assertTrue(deposit.spec().site().where().equals(fixture.target), "the real tools preference chooses the native rack over an empty ordinary store");
+        var feet = deposit.spec().stances().cells().iterator().next().cell();
+        fixture.worker.body().moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
+        helper.assertTrue(Commit.run(level, deposit, fixture.worker)
+                instanceof Outcome.Done, "the planned transfer writes into the actual native rack slot");
+        helper.assertTrue(ItemStack.matches(preferred.getItem(0), lid) && fixture.worker.pack().isEmpty() && ordinary.isEmpty(),
+            "only the real preferred rack owns the named and worn lid after deposit");
         helper.succeed();
     }
 
