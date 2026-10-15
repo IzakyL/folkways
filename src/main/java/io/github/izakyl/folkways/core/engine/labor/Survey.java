@@ -91,6 +91,7 @@ final class Survey {
     private final Map<Stash, Refusal> refusals = new HashMap<>();
     private final Map<UUID, Crew.Hand> hands = new LinkedHashMap<>();
     private final Map<UUID, Long> licencesRead = new HashMap<>();
+    private final Map<UUID, List<Equipment.Demand>> equipmentRead = new HashMap<>();
 
     private final Deque<BlockPos> storesDue = new ArrayDeque<>();
     private final Deque<UUID> handsDue = new ArrayDeque<>();
@@ -125,6 +126,7 @@ final class Survey {
     void forget(UUID resident) {
         hands.remove(resident);
         licencesRead.remove(resident);
+        equipmentRead.remove(resident);
         handsOf.remove(resident);
         handsDue.remove(resident);
     }
@@ -136,6 +138,11 @@ final class Survey {
             }
             Crew.Hand cached = hands.get(body.id());
             if (cached != null && !cached.at().realm().equals(WorldSpaces.at(body.mob()).realm())) {
+                handsOf.add(body.id());
+            }
+            // A setting can request missing clothing without changing the pack or native armor slots yet.
+            // Re-read that hand so Kits can publish or withdraw its real clothing delivery.
+            if (cached != null && !Equipment.wanted(colony.works(), body).equals(equipmentRead.get(body.id()))) {
                 handsOf.add(body.id());
             }
             Long read = licencesRead.get(body.id());
@@ -320,10 +327,12 @@ final class Survey {
     private boolean readHand(ColonyData colony, Body body, UUID resident, Consumer<Body> seen) {
         if (body == null) {
             licencesRead.remove(resident);
+            equipmentRead.remove(resident);
             return hands.remove(resident) != null;
         }
         Equipment.reconcile(colony.works(), body);
         licencesRead.put(resident, body.licences().revision());
+        equipmentRead.put(resident, Equipment.wanted(colony.works(), body));
         Kit kit = Kit.of(colony.works(), body);
         List<Licence> licences = new ArrayList<>();
         for (Vocation vocation : Vocations.all()) {
