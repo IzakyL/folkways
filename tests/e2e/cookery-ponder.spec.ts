@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
-import { defineTask, input, javaTask, media, screen, tick, world } from "@izakyl/blockwright-minecraft";
+import { defineTask, input, javaTask, media, player, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { clickElement, hoverElement, panelElements } from "../ldlib2";
-import { createColonyViaBook, openColonyPanelViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
+import { actsForColony, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
@@ -56,9 +56,19 @@ for (const installed of [false, true]) test("cookery lessons: " + (installed ? "
     await world.command(server, "item replace entity " + name + " weapon.mainhand with folkways:colony_book");
     await tick.sprint(server, 5);
     await world.command(server, "setblock " + stand.x + " " + stand.y + " " + stand.z + " minecraft:stone");
-    await createColonyViaBook(server, client, name, stand);
+    const openBook = async () => {
+      await screen.dismiss(client);
+      const use = await player.useItem(client);
+      evidence.bookUses ??= []; evidence.bookUses.push(use);
+      await screen.waitFor(client, "ModularUIContainerScreen", { timeoutMs: 10_000 });
+      return safeScreen(client);
+    };
+    await openBook();
+    await clickElement(client, { id: "folkways.colony.create" });
+    await tick.sprint(server, 10);
+    expect(await actsForColony(server, name)).toBe(true);
     const shelf = async () => {
-      await screen.dismiss(client); await openColonyPanelViaBook(server, client, name, stand);
+      await openBook();
       await clickElement(client, { id: "folkways.tab.lessons" }, { scrollIntoView: true });
     };
     await shelf();
@@ -82,7 +92,7 @@ for (const installed of [false, true]) test("cookery lessons: " + (installed ? "
     await shelf(); await clickElement(client, { id: "folkways.lessons.folder.folkways.cookery" }, { scrollIntoView: true });
     await clickElement(client, { id: "folkways.lessons.play.folkways.cookery" }, { scrollIntoView: true }); await frames(client, 5);
     expect((await client.run(READ_SCENE, { seek: -1 })).id).toBe("folkways:cookery_orders");
-    await screen.dismiss(client); await openColonyPanelViaBook(server, client, name, stand);
+    await openBook();
     await hoverElement(client, { id: "folkways.page.cookery" }, { scrollIntoView: true });
     await input.key(client, { keybind: "key.ponder.ponder", action: "press" });
     await new Promise(resolve => setTimeout(resolve, 2500)); await frames(client, 3);

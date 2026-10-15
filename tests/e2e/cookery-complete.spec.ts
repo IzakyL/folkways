@@ -14,6 +14,9 @@ import { twins, type Stage, type Vec } from "../shared/harness/stage";
 
 const K = "kaleidoscope_cookery:";
 const CASES = [
+  { dish: K + "baozi_plate", depth: 5, kinds: 4,
+    food: ["minecraft:wheat", "minecraft:porkchop", K + "green_chili", "minecraft:water_bucket"],
+    intermediates: [K + "flour", K + "raw_dough", K + "stuffed_dough_food", K + "baozi"], knife: false, spatula: false },
   { dish: K + "udon_noodle", depth: 4, kinds: 4,
     food: ["minecraft:wheat", K + "lettuce", "minecraft:egg", "minecraft:water_bucket"],
     intermediates: [K + "flour", K + "raw_dough", K + "raw_noodles"], knife: true, spatula: false },
@@ -57,24 +60,25 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
       + JSON.stringify([...scenario.food, ...MATERIALS].map(id => "i" + id)) + "}");
     await world.command(server, "setblock " + block(cells.table) + " minecraft:crafting_table");
     await world.command(server, "setblock " + block(cells.board) + " " + K + "chopping_board");
-    for (const at of [cells.stockpot, cells.pot]) {
+    for (const at of [cells.stockpot, cells.pot, cells.steamer]) {
       await world.command(server, "setblock " + block({ ...at, y: at.y - 1 }) + " minecraft:magma_block");
     }
     await world.command(server, "setblock " + block(cells.stockpot) + " " + K + "stockpot");
     await world.command(server, "setblock " + block(cells.pot) + " " + K + "pot");
+    await world.command(server, "setblock " + block(cells.steamer) + " " + K + "steamer");
     await world.command(server, "setblock " + block(cells.rack) + " " + K + "kitchenware_racks[facing=south]");
     await world.command(server, "setblock " + block(cells.mill) + " " + K + "millstone[part=center]");
     const parts = [[-1,-1,"left_up"],[0,-1,"up"],[1,-1,"right_up"],[-1,0,"left_center"],[1,0,"right_center"],[-1,1,"left_down"],[0,1,"down"],[1,1,"right_down"]] as const;
     for (const [dx, dz, part] of parts) await world.command(server, "setblock " + block({ x: cells.mill.x + dx, y: cells.mill.y, z: cells.mill.z + dz }) + " " + K + "millstone[part=" + part + "]");
     await tick.sprint(server, 5);
-    for (const at of [cells.source, cells.store, cells.target, cells.table, cells.board, cells.stockpot, cells.pot, cells.mill]) {
+    for (const at of [cells.source, cells.store, cells.target, cells.table, cells.board, cells.stockpot, cells.pot, cells.steamer, cells.mill]) {
       await optInViaBook(server, client, name, at, "worksite", stage);
     }
     evidence.rackMark = await markSouthRack(server, client, name, cells.rack, stage);
     evidence.initial = await physical(server, stage, cells);
     expect(evidence.initial.tools, "three crafters start without a knife or spatula").toEqual([]);
     const before = await world.block(server, stage.at(cells.source), { nbt: true });
-    expect((before.nbt as any).generated).toEqual({});
+    for (const ingredient of scenario.food) expect(Number((before.nbt as any).generated[ingredient] ?? 0), "no food ingredients were generated before the food order").toBe(0);
     await world.command(server, "gamemode survival " + name);
     evidence.order = await deliverOrderViaSitePanel(server, client, name, cells.target, scenario.dish, 1, stage);
     await screen.dismiss(client);
@@ -97,11 +101,13 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
     }
     for (const item of scenario.food) expect(Number(generated[item] ?? 0), "the final chain spends its required base input " + item).toBeGreaterThan(0);
     expect(evidence.final.drops, "all outputs and reusable tools are returned to colony logistics").toEqual([]);
-    const expectedTool = scenario.knife ? "kitchen_knife" : "kitchen_shovel";
+    const expectedTool = scenario.knife ? "kitchen_knife" : scenario.spatula ? "kitchen_shovel" : undefined;
+    if (expectedTool) {
     expect(evidence.final.tools.filter((stack: any) => stack.id.includes(expectedTool)).length,
       "one default shared tool serves the order, instead of one per resident").toBe(1);
     expect(evidence.final.rackTools.some((stack: any) => stack.id.includes(expectedTool)), "the reusable task tool returns to the preferred rack").toBe(true);
     expect(evidence.final.residents.every((resident: any) => resident.pack.every((entry: any) => !entry.Stack?.id?.includes(expectedTool))), "residents release their borrowed tool after work").toBe(true);
+    } else expect(evidence.final.tools, "a tool-free native recipe never creates kitchen tools").toEqual([]);
     expect(evidence.final.millBound, "the millstone releases its actual driver").toBe(false);
     await tick.sprint(server, 120);
     const stable = await physical(server, stage, cells);
@@ -120,7 +126,7 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
 function kitchen(origin: Vec) {
   const at = (x: number, z: number, y = 0) => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
   return { source: at(-6, 5), store: at(6, 5), target: at(6, 8), table: at(-3, 5), board: at(0, 5),
-    stockpot: at(3, 8, 1), pot: at(3, 11, 1), mill: at(-3, 11), rack: at(6, 11, 1) };
+    stockpot: at(3, 8, 1), pot: at(3, 11, 1), steamer: at(0, 14, 1), mill: at(-3, 11), rack: at(6, 11, 1) };
 }
 
 async function physical(server: MinecraftServer, stage: Stage, cells: ReturnType<typeof kitchen>) {
