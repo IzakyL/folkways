@@ -326,6 +326,12 @@ public final class ColonyWorks extends Stretch implements Colony {
     }
 
     @Override
+    public Optional<net.minecraft.world.Container> store(ServerLevel level, WorldPos at) {
+        return storesIn(level.dimension()).contains(at)
+            ? io.github.izakyl.folkways.core.engine.plan.Stores.at(level, at) : Optional.empty();
+    }
+
+    @Override
     public List<WorldPos> storesIn(ResourceKey<Level> dimension) {
         return stores.in(dimension);
     }

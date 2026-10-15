@@ -873,5 +873,10 @@
   "folkways.doing.folkways.cooking_food": "Cooking",
   "folkways.doing.folkways.cooking_food.about": "Cooking %s",
   "folkways.doing.folkways.serving_food": "Serving food",
-  "folkways.doing.folkways.serving_food.about": "Serving food %s"
+  "folkways.doing.folkways.serving_food.about": "Serving food %s",
+  "folkways.settings.cookery.wear_hat": "Farmers wear straw hats",
+  "folkways.settings.cookery.wear_farmer_armor": "Farmers wear farming clothes",
+  "folkways.settings.cookery.clothing": "Allowed farming clothes",
+  "folkways.page.cookery.exit_blocked": "Millstone exit blocked",
+  "folkways.doing.leaving_millstone": "Leaving the millstone"
 }

@@ -19,6 +19,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.Container;
 import net.minecraft.world.level.Level;
 
 public interface Colony {
@@ -31,6 +32,11 @@ public interface Colony {
     void stores(ResourceLocation owner, ResourceKey<Level> dimension, Collection<WorldPos> stores);
 
     List<WorldPos> storesIn(ResourceKey<Level> dimension);
+
+    // The resident's view of an offered store, with the player's slot and admission rules applied.
+    default Optional<Container> store(ServerLevel level, WorldPos at) {
+        return Optional.empty();
+    }
 
     // Replaces every rule this owner set on the colony's stores in that dimension.
     void rule(ResourceLocation owner, ResourceKey<Level> dimension, Collection<StoreRule> rules);

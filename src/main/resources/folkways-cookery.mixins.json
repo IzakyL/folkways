@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.plugins.cookery.millstone.mixin",
+  "plugin": "io.github.izakyl.folkways.plugins.cookery.CookeryMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "MillstoneBlockEntityMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

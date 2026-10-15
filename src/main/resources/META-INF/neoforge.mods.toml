@@ -120,3 +120,6 @@ reason = "Residents use marked chopping boards and stockpots to supply the colon
 versionRange = "[1.6.0-neoforge+mc1.21.1,1.7)"
 ordering = "AFTER"
 side = "BOTH"
+
+[[mixins]]
+config="folkways-cookery.mixins.json"

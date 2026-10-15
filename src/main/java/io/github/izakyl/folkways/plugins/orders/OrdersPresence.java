@@ -126,6 +126,16 @@ final class OrdersPresence implements Facing {
         }
     }
 
+    Map<UUID, Long> commitments(ItemSpec goods) {
+        Map<UUID, Long> found = new LinkedHashMap<>();
+        filling.forEach((key, delivery) -> {
+            if (!delivery.complete() && Goods.overlap(goods, delivery.what)) {
+                found.put(delivery.id, delivery.remaining());
+            }
+        });
+        return Map.copyOf(found);
+    }
+
     private void write() {
         settleCompleted();
         CompoundTag next = Writer.of().children(TAG_ORDERS, orders.values(), order -> {

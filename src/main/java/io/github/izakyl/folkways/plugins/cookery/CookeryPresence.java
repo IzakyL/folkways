@@ -1,15 +1,11 @@
 package io.github.izakyl.folkways.plugins.cookery;
 
-import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
-import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoardBlockEntity;
-import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Holding;
 import io.github.izakyl.folkways.core.api.colony.Release;
 import io.github.izakyl.folkways.core.api.colony.Sweep;
-import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Stances;
@@ -17,8 +13,6 @@ import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.panel.Board;
-import io.github.izakyl.folkways.plugins.cookery.board.ChoppingBoardWorkshops;
-import io.github.izakyl.folkways.plugins.cookery.stockpot.StockpotWorkshops;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -56,7 +50,7 @@ public final class CookeryPresence implements Facing, Holding.Watch {
         for (WorldPos at : holding.what().cells()) {
             bookings.admit(at);
             at.level(server).ifPresent(level -> stations.putIfAbsent(at,
-                new Station(level, UUID.randomUUID(), Optional.empty())));
+                new Station(level, UUID.randomUUID(), Optional.empty(), KitchenStations.find(level.getBlockState(at.block(level))).orElse(null))));
         }
         refreshPending = true;
     }
@@ -76,6 +70,9 @@ public final class CookeryPresence implements Facing, Holding.Watch {
     }
 
     public void tick(MinecraftServer server) {
+        for (ServerLevel level : server.getAllLevels()) {
+            KitchenStations.all().forEach(station -> station.tick(level, colony.id()));
+        }
         if (refreshPending) {
             refresh(server);
             sweep.nudge();
@@ -111,21 +108,26 @@ public final class CookeryPresence implements Facing, Holding.Watch {
                     continue;
                 }
                 bookings.admit(at);
-                Optional<Stances> stances = Stances.of(level, Reach.workableCells(level, cell));
+                KitchenStation provider = KitchenStations.find(level.getBlockState(cell)).orElseThrow();
+                Optional<Stances> stances = provider.stances(level, at);
                 UUID key = stations.containsKey(at) ? stations.get(at).key() : UUID.randomUUID();
-                stations.put(at, new Station(level, key, stances));
+                stations.put(at, new Station(level, key, stances, provider));
                 if (stances.isPresent()) {
-                    ChoppingBoardWorkshops.freeze(key, colony.id(), level, at, stances.get(), bookings, sweep::nudge)
-                        .ifPresent(workshops::add);
-                    StockpotWorkshops.freeze(key, colony.id(), level, at, stances.get(), bookings, sweep::nudge)
+                    provider.freeze(key, colony.id(), level, at, stances.get(), bookings, sweep::nudge)
                         .ifPresent(workshops::add);
                 }
             }
             colony.publish(CookeryContent.ID, level.dimension(), workshops);
+            colony.rule(CookeryContent.ID, level.dimension(),
+                io.github.izakyl.folkways.plugins.cookery.racks.KitchenRacks.rules(
+                    colony.storesIn(level.dimension()).stream().filter(at -> level.isLoaded(at.block(level))
+                        && io.github.izakyl.folkways.plugins.cookery.racks.KitchenRacks.matches(
+                            level.getBlockState(at.block(level)))).toList()));
         }
         for (ResourceKey<Level> dimension : published) {
             if (!dimensions.contains(dimension)) {
                 colony.publish(CookeryContent.ID, dimension, List.of());
+                colony.rule(CookeryContent.ID, dimension, List.of());
             }
         }
         published.clear();
@@ -138,8 +140,9 @@ public final class CookeryPresence implements Facing, Holding.Watch {
         stations.forEach((at, station) -> {
             if (at.in(level) && level.isLoaded(at.block(level)) && station.stances().isPresent()) {
                 Stances stances = station.stances().get();
-                goals.addAll(ChoppingBoardWorkshops.recovery(colony.id(), level, at, stances, bookings, sweep::nudge));
-                goals.addAll(StockpotWorkshops.recovery(colony.id(), level, at, stances, bookings, sweep::nudge));
+                if (station.provider() != null) {
+                    goals.addAll(station.provider().recovery(colony.id(), level, at, stances, bookings, sweep::nudge));
+                }
             }
         });
         return List.copyOf(goals);
@@ -147,12 +150,12 @@ public final class CookeryPresence implements Facing, Holding.Watch {
 
     private void release(ServerLevel level, WorldPos at) {
         if (at.in(level) && level.isLoaded(at.block(level))) {
-            ChoppingBoardWorkshops.release(colony.id(), level, at);
-            StockpotWorkshops.release(colony.id(), level, at);
+            KitchenStations.all().forEach(provider -> provider.release(colony.id(), level, at));
         }
     }
 
     public void closed(Closing why) {
+        KitchenStations.all().forEach(provider -> provider.stop(colony.id(), why));
         if (why != Closing.SHUTDOWN) {
             stations.forEach((at, station) -> {
                 bookings.withdraw(at);
@@ -196,23 +199,10 @@ public final class CookeryPresence implements Facing, Holding.Watch {
         if (station.stances().isEmpty()) {
             return Component.translatable("folkways.page.cookery.unreachable");
         }
-        String status = "idle";
-        if (level.getBlockEntity(cell) instanceof ChoppingBoardBlockEntity board) {
-            status = board.getCurrentCutStack().isEmpty() ? "idle" : "chopping";
-        } else if (level.getBlockEntity(cell) instanceof StockpotBlockEntity pot) {
-            status = switch (pot.getStatus()) {
-                case IStockpot.COOKING -> "cooking";
-                case IStockpot.FINISHED -> "finished";
-                case IStockpot.PUT_INGREDIENT -> "preparing";
-                default -> "idle";
-            };
-            if (pot.getStatus() != IStockpot.FINISHED && !pot.hasHeatSource(level)) {
-                status = "cold";
-            }
-        }
-        return Component.translatable("folkways.page.cookery." + status);
+        return station.provider() == null ? Component.translatable("folkways.page.cookery.idle")
+            : station.provider().status(level, WorldPos.of(level, cell));
     }
 
-    private record Station(ServerLevel level, UUID key, Optional<Stances> stances) {
+    private record Station(ServerLevel level, UUID key, Optional<Stances> stances, KitchenStation provider) {
     }
 }
