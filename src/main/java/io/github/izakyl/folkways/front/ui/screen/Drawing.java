@@ -292,6 +292,7 @@ public final class Drawing {
             case Shape.Volume volume -> volume.maxCells();
             case Shape.Path path -> path.maxPoints();
             case Shape.Block ignored -> Integer.MAX_VALUE;
+            case Shape.Point ignored -> Integer.MAX_VALUE;
             case Shape.Body ignored -> Integer.MAX_VALUE;
         };
     }
@@ -303,6 +304,7 @@ public final class Drawing {
             case Shape.Path path ->
                 Component.translatable("folkways.zoneconfig.points", path.maxPoints());
             case Shape.Block ignored -> Component.empty();
+            case Shape.Point ignored -> Component.empty();
             case Shape.Body ignored -> Component.empty();
         };
     }

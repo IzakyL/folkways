@@ -73,6 +73,9 @@ public final class Enrollments {
             throw new IllegalStateException(owner + " has already enrolled with the front");
         }
         for (Delegation delegation : enrollment.delegations()) {
+            if (delegation.shape() instanceof io.github.izakyl.folkways.front.api.Shape.Point point) {
+                io.github.izakyl.folkways.core.api.colony.PointSites.register(delegation.id(), point.accepts()::test);
+            }
             if (DELEGATIONS.putIfAbsent(delegation.id(), delegation) != null) {
                 throw new IllegalStateException(delegation.id() + " is already declared");
             }

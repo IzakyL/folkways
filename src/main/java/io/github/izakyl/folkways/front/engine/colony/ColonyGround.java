@@ -57,9 +57,7 @@ public final class ColonyGround {
             if (view.dimension().equals(level.dimension())) {
                 List<BlockPos> found = new ArrayList<>();
                 for (Holding holding : view.holdings()) {
-                    if (holding.what() instanceof Held.Block(WorldPos cell)) {
-                        WorldSpaces.storage(level, cell).ifPresent(found::add);
-                    }
+                    holding.what().singleCell().flatMap(cell -> WorldSpaces.storage(level, cell)).ifPresent(found::add);
                 }
                 return List.copyOf(found);
             }
@@ -76,7 +74,10 @@ public final class ColonyGround {
     }
 
     public static Optional<Holding> hold(ServerLevel level, Colony colony, ResourceLocation owner, BlockPos pos) {
-        return colony.hold(owner, new Held.Block(WorldPos.of(level, pos)));
+        WorldPos at = WorldPos.of(level, pos);
+        boolean point = io.github.izakyl.folkways.front.engine.Enrollments.delegation(owner)
+            .filter(delegation -> delegation.shape() instanceof io.github.izakyl.folkways.front.api.Shape.Point).isPresent();
+        return colony.hold(owner, point ? new Held.Point(at) : new Held.Block(at));
     }
 
     public static void letGo(ServerLevel level, Colony colony, BlockPos pos) {

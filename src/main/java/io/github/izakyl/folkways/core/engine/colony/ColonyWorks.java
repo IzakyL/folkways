@@ -371,6 +371,11 @@ public final class ColonyWorks extends Stretch implements Colony {
     @Override
     public Optional<Holding> hold(ResourceLocation owner, Held what) {
         MinecraftServer running = required();
+        if (what instanceof Held.Point point && io.github.izakyl.folkways.core.api.terms.WorldSpaces.resolve(running, point.cell())
+                .filter(where -> where.level().isLoaded(where.cell())
+                    && io.github.izakyl.folkways.core.api.colony.PointSites.accepts(owner, where.level(), where.cell())).isEmpty()) {
+            return Optional.empty();
+        }
         if (ColonyRegistry.get(running).taken(what)) {
             return Optional.empty();
         }

@@ -81,9 +81,7 @@ public final class ColonySnapshot implements ColonyView {
         return blocks.computeIfAbsent(owner, key -> {
             Set<BlockPos> found = new LinkedHashSet<>();
             for (Holding holding : colony.holdings().of(key)) {
-                if (holding.what() instanceof Held.Block(WorldPos cell)) {
-                    WorldSpaces.storage(level, cell).filter(level::isLoaded).ifPresent(found::add);
-                }
+                holding.what().singleCell().flatMap(cell -> WorldSpaces.storage(level, cell)).filter(level::isLoaded).ifPresent(found::add);
             }
             return Set.copyOf(found);
         });

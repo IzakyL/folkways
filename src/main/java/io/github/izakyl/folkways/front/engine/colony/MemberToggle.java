@@ -58,12 +58,12 @@ public final class MemberToggle {
         if (declaring == null) {
             return told(player, Attempt.refused(Refusal.NOT_ENROLLABLE));
         }
-        BlockPos pos = ((Shape.Block) declaring.shape()).anchor().of(level, clicked);
+        BlockPos pos = ColonySites.anchor(declaring.shape()).of(level, clicked);
         if (!enrollable(level, pos)) {
             return told(player, Attempt.refused(Refusal.NOT_ENROLLABLE));
         }
         BlockEntity blockEntity = level.getBlockEntity(pos);
-        if (blockEntity == null) {
+        if (declaring.shape() instanceof Shape.Block && blockEntity == null) {
             return told(player, Attempt.refused(Refusal.NO_BLOCK_ENTITY));
         }
         Optional<UUID> owner = ColonyGround.ofBlock(level, pos).map(Colony::id);

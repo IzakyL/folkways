@@ -18,7 +18,7 @@ public interface ColonyView {
     // What the colony holds with a cell in this level: blocks, areas and lines.
     List<Holding> holdings();
 
-    // The loaded blocks held for `owner` in this level, where the level stores them.
+    // The loaded block and point sites held for `owner` in this level, where the level stores them.
     Set<BlockPos> blocks(ResourceLocation owner);
 
     List<Resident> residents();
