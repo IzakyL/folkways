@@ -5,6 +5,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
+import net.minecraft.world.level.block.FenceGateBlock;
 
 public final class ResidentMoveControl extends MoveControl {
     private static final double AT_HEIGHT = 0.1;
@@ -25,7 +26,34 @@ public final class ResidentMoveControl extends MoveControl {
             return;
         }
         releaseSneak();
-        super.tick();
+        if (!tickGate()) {
+            super.tick();
+        }
+    }
+
+    // Vanilla jumps out of collision at the feet, except for doors and fences. A shut fence gate is neither:
+    // the body reaches its cell before the doorway goal opens it, and asks for a jump first (issue #20). Keep
+    // steering through a gate without that collision jump; a higher destination still needs its usual jump.
+    private boolean tickGate() {
+        if (operation != Operation.MOVE_TO || !(mob.getInBlockState().getBlock() instanceof FenceGateBlock)) {
+            return false;
+        }
+        operation = Operation.WAIT;
+        double dx = wantedX - mob.getX();
+        double dy = wantedY - mob.getY();
+        double dz = wantedZ - mob.getZ();
+        if (dx * dx + dy * dy + dz * dz < MIN_SPEED_SQR) {
+            mob.setZza(0.0F);
+            return true;
+        }
+        float yaw = (float)(Mth.atan2(dz, dx) * 180.0F / (float)Math.PI) - 90.0F;
+        mob.setYRot(rotlerp(mob.getYRot(), yaw, MAX_TURN));
+        mob.setSpeed((float)(speedModifier * mob.getAttributeValue(Attributes.MOVEMENT_SPEED)));
+        if (dy > mob.maxUpStep() && dx * dx + dz * dz < Math.max(1.0F, mob.getBbWidth())) {
+            mob.getJumpControl().jump();
+            operation = Operation.JUMPING;
+        }
+        return true;
     }
 
     private boolean tickColumn() {

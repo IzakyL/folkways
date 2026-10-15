@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
@@ -14,9 +15,11 @@ import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.pathfinder.Node;
 import net.minecraft.world.level.pathfinder.Path;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public final class OpenDoorwayGoal extends Goal {
@@ -57,9 +60,8 @@ public final class OpenDoorwayGoal extends Goal {
     @Override
     public boolean canContinueToUse() {
         return doorway != null
-            && holdTicks > 0
-            && !through
-            && openableByHand(mob.level().getBlockState(doorway));
+            && openableByHand(mob.level().getBlockState(doorway))
+            && (holdTicks > 0 && !through || inUse());
     }
 
     @Override
@@ -78,7 +80,8 @@ public final class OpenDoorwayGoal extends Goal {
 
     @Override
     public void tick() {
-        holdTicks--;
+        holdTicks = Math.max(0, holdTicks - 1);
+        setOpen(true);
         double dx = world(doorway).x - mob.getX();
         double dz = world(doorway).z - mob.getZ();
         if (approachX * dx + approachZ * dz < 0.0D) {
@@ -88,7 +91,51 @@ public final class OpenDoorwayGoal extends Goal {
 
     @Override
     public void stop() {
-        setOpen(false);
+        if (doorway != null && !inUse()) {
+            setOpen(false);
+        }
+    }
+
+    // Crossing the centre has not cleared the body, and someone behind or coming the other way may still need
+    // the opening. Keep holding it until bodies are clear and no nearby traveller is about to use this doorway.
+    private boolean inUse() {
+        BlockPos feet = doorway;
+        BlockState state = mob.level().getBlockState(doorway);
+        if (state.getBlock() instanceof DoorBlock && state.getValue(DoorBlock.HALF) == DoubleBlockHalf.UPPER) {
+            feet = doorway.below();
+        }
+        Vec3 at = world(feet);
+        AABB opening = new AABB(at.x - 0.5D, at.y, at.z - 0.5D, at.x + 0.5D, at.y + 2.0D, at.z + 0.5D);
+        if (opening.intersects(mob.getBoundingBox())) {
+            return true;
+        }
+        for (LivingEntity other : mob.level().getEntitiesOfClass(LivingEntity.class, opening.inflate(1.0D),
+                entity -> entity.isAlive() && !entity.isSpectator())) {
+            if (other == mob) {
+                continue;
+            }
+            if (opening.intersects(other.getBoundingBox())
+                    || other instanceof Mob traveller && traveller.distanceToSqr(at) <= INTERACT_RANGE_SQR
+                        && usesDoorway(traveller)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean usesDoorway(Mob traveller) {
+        Path path = traveller.getNavigation().getPath();
+        if (path == null || path.isDone()) {
+            return false;
+        }
+        int ahead = Math.min(path.getNextNodeIndex() + 2, path.getNodeCount());
+        for (int i = Math.max(0, path.getNextNodeIndex() - 1); i < ahead; i++) {
+            BlockPos node = path.getNode(i).asBlockPos();
+            if (node.equals(doorway) || node.above().equals(doorway)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Vec3 world(BlockPos storage) {
