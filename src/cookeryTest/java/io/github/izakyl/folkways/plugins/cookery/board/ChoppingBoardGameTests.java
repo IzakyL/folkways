@@ -504,7 +504,7 @@ public final class ChoppingBoardGameTests {
     @GameTest(template = "empty")
     public static void nativeKnifeChanceWearsOneRealPointOrNoneWithoutGenericDoubleWear(GameTestHelper helper) {
         for (boolean wears : List.of(false, true)) {
-            try (Fixture fixture = new Fixture(helper)) {
+            try (Fixture fixture = new Fixture(helper, wears ? new BlockPos(4, 1, 4) : new BlockPos(1, 1, 1))) {
                 BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
                 fixture.step(work);
                 helper.assertValueEqual(fixture.knife().getDamageValue(), 0, "putting food on the board does not use a knife");
@@ -533,7 +533,7 @@ public final class ChoppingBoardGameTests {
             helper.assertValueEqual(Goods.countIn(fixture.pack, Goods.specOf(Items.CHICKEN.getDefaultInstance())), 0L,
                 "a broken tool does not refund or duplicate the invested chicken");
         }
-        try (Fixture fixture = new Fixture(helper)) {
+        try (Fixture fixture = new Fixture(helper, new BlockPos(4, 1, 4))) {
             BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
             fixture.step(work);
             fixture.body.mob().setPos(fixture.pos.getX() + 20.0, fixture.pos.getY(), fixture.pos.getZ());
@@ -569,9 +569,13 @@ public final class ChoppingBoardGameTests {
         final Body body;
 
         Fixture(GameTestHelper helper) {
+            this(helper, new BlockPos(1, 1, 1));
+        }
+
+        Fixture(GameTestHelper helper, BlockPos relative) {
             this.helper = helper;
             this.level = helper.getLevel();
-            this.pos = helper.absolutePos(new BlockPos(1, 1, 1));
+            this.pos = helper.absolutePos(relative);
             level.setBlock(pos.below(), Blocks.STONE.defaultBlockState(), 3);
             level.setBlock(pos, ModBlocks.CHOPPING_BOARD.get().defaultBlockState(), 3);
             this.at = WorldPos.of(level, pos);
