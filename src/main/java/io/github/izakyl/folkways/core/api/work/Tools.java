@@ -9,6 +9,38 @@ import net.neoforged.neoforge.common.ItemAbility;
 
 public final class Tools {
 
+    private static volatile java.util.Map<ToolNeed, io.github.izakyl.folkways.core.api.terms.ItemSpec> suppliedTools =
+        java.util.Map.of();
+
+    public static synchronized void shared(ToolNeed need, io.github.izakyl.folkways.core.api.terms.ItemSpec goods) {
+        java.util.Map<ToolNeed, io.github.izakyl.folkways.core.api.terms.ItemSpec> next =
+            new java.util.LinkedHashMap<>(suppliedTools);
+        next.put(java.util.Objects.requireNonNull(need), java.util.Objects.requireNonNull(goods));
+        suppliedTools = java.util.Map.copyOf(next);
+    }
+
+    public static Optional<io.github.izakyl.folkways.core.api.terms.ItemSpec> shared(ToolNeed need) {
+        return Optional.ofNullable(suppliedTools.get(need));
+    }
+
+    // Planning may schedule a missing shared tool only when its physical delivery is a declared prerequisite.
+    public static boolean canPrepare(ResourceLocation kind, NodeSpec spec, List<ItemStack> held) {
+        if (ResidentKinds.barehanded(kind, spec.vocation())) {
+            return true;
+        }
+        for (ToolUse use : spec.tools()) {
+            if (from(held, use.need()).isPresent()) {
+                continue;
+            }
+            var goods = suppliedTools.get(use.need());
+            if (goods == null || spec.needs().stream().noneMatch(need ->
+                    need.carried() && need.count() > 0 && need.spec().equals(goods))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private Tools() {
     }
 

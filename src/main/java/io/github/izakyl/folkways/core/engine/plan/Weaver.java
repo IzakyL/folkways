@@ -1023,7 +1023,7 @@ public final class Weaver {
                     now.stock().available(lot.concrete()), lot.where().toString()));
             }
         }
-        if (costs.reachable(edge.spec(), near, edge.trail())) {
+        if (consumer.permitsProduction(edge.spec()) && costs.reachable(edge.spec(), near, edge.trail())) {
             for (Costs.Offer offer : costs.offers(Produce.of(OWNER, near, edge.spec(), left,
                     sizing.batching(whole)))) {
                 Grown made = offer.change().replacement();
@@ -1403,6 +1403,11 @@ public final class Weaver {
         @Override
         public Set<Stash> stores() {
             return now.stock().stashes();
+        }
+
+        @Override
+        public int preference(Stash where, ItemSpec goods) {
+            return now.stock().preference(where, goods);
         }
 
         @Override

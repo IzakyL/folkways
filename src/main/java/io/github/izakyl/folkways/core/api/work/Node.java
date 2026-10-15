@@ -22,6 +22,11 @@ public interface Node {
         return Optional.empty();
     }
 
+    // A reusable input already owned but temporarily unavailable must not trigger another manufacture.
+    default boolean permitsProduction(io.github.izakyl.folkways.core.api.terms.ItemSpec input) {
+        return true;
+    }
+
     default boolean acceptsInput(Stash from) {
         return true;
     }

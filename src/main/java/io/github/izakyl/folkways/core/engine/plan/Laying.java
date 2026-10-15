@@ -21,6 +21,10 @@ public interface Laying {
 
     Set<Stash> stores();
 
+    default int preference(Stash where, ItemSpec goods) {
+        return 0;
+    }
+
     // Where one may stand to reach into the store.
     Set<Stand> around(Stash where);
 
