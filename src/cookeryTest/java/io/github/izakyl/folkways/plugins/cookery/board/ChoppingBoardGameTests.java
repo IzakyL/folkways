@@ -501,6 +501,60 @@ public final class ChoppingBoardGameTests {
             }
         });
     }
+    @GameTest(template = "empty")
+    public static void nativeKnifeChanceWearsOneRealPointOrNoneWithoutGenericDoubleWear(GameTestHelper helper) {
+        for (boolean wears : List.of(false, true)) {
+            try (Fixture fixture = new Fixture(helper)) {
+                BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
+                fixture.step(work);
+                helper.assertValueEqual(fixture.knife().getDamageValue(), 0, "putting food on the board does not use a knife");
+                fixture.level.random.setSeed(cutWearSeed(wears));
+                helper.assertTrue(fixture.step(work) instanceof Outcome.Done, "the real native first knife hit succeeds");
+                helper.assertValueEqual(fixture.knife().getDamageValue(), wears ? 1 : 0,
+                    "the actual native one-in-four interaction costs at most one physical durability point");
+                helper.assertTrue(work.spec().tools().stream().allMatch(tool -> tool.baseWear() == 0),
+                    "the enclosing work cannot additionally apply generic Wear to the same use");
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void failedKnifeHitDoesNotWearAndLastDurabilityDoesNotRefundItsIngredient(GameTestHelper helper) {
+        try (Fixture fixture = new Fixture(helper)) {
+            BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
+            fixture.step(work);
+            ItemStack knife = fixture.knife();
+            knife.setDamageValue(knife.getMaxDamage() - 1);
+            fixture.level.random.setSeed(cutWearSeed(true));
+            helper.assertTrue(fixture.step(work) instanceof Outcome.Done, "the final real knife use still cuts");
+            helper.assertTrue(fixture.knife().isEmpty(), "the actual physical knife breaks without a spare copy");
+            helper.assertTrue(fixture.board().getCurrentCutStack().is(Items.CHICKEN), "the invested food remains on the board");
+            helper.assertValueEqual(Goods.countIn(fixture.pack, Goods.specOf(Items.CHICKEN.getDefaultInstance())), 0L,
+                "a broken tool does not refund or duplicate the invested chicken");
+        }
+        try (Fixture fixture = new Fixture(helper)) {
+            BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
+            fixture.step(work);
+            fixture.body.mob().setPos(fixture.pos.getX() + 20.0, fixture.pos.getY(), fixture.pos.getZ());
+            helper.assertTrue(fixture.step(work) instanceof Outcome.Failed, "an out-of-reach hit is refused before native use");
+            helper.assertValueEqual(fixture.knife().getDamageValue(), 0, "refusal never wears the actual tool");
+            helper.assertTrue(fixture.board().getCurrentCutStack().is(Items.CHICKEN), "refused work preserves its real food");
+        }
+        helper.succeed();
+    }
+
+    private static long cutWearSeed(boolean wears) {
+        // The pinned native first hit rolls two particle positions and one pitch before its wear check.
+        for (long seed = 0; seed < 10000; seed++) {
+            var random = net.minecraft.util.RandomSource.create(seed);
+            random.nextDouble();
+            random.nextDouble();
+            random.nextFloat();
+            if ((random.nextDouble() < 0.25) == wears) return seed;
+        }
+        throw new AssertionError("a deterministic native knife roll exists");
+    }
     private static final class Fixture implements Worker, AutoCloseable {
 
         final GameTestHelper helper;
