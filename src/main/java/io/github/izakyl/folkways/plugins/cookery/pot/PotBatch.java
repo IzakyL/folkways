@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
@@ -93,6 +94,8 @@ record PotBatch(UUID colony, UUID id, PotPlan plan, CompoundTag inputs, ItemStac
     static void clear(PotBlockEntity pot) { pot.getPersistentData().remove(KEY); pot.setChanged(); }
 
     private static CompoundTag inputs(PotBlockEntity pot, ServerLevel level) {
-        return ContainerHelper.saveAllItems(new CompoundTag(), pot.getInputs(), level.registryAccess());
+        NonNullList<ItemStack> saved = NonNullList.withSize(pot.getInputs().size(), ItemStack.EMPTY);
+        for (int slot = 0; slot < saved.size(); slot++) saved.set(slot, pot.getInputs().get(slot).copy());
+        return ContainerHelper.saveAllItems(new CompoundTag(), saved, level.registryAccess());
     }
 }
