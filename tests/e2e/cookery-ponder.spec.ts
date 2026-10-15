@@ -83,7 +83,7 @@ for (const installed of [false, true]) test("cookery lessons: " + (installed ? "
       await clickElement(client, { id: "folkways.tab.lessons" }, { scrollIntoView: true });
     };
     await shelf();
-    const folders = await panelElements(client);
+    const folders = await panelElements(client, { maxNodes: 20_000 });
     expect(folders.some(element => element.id === "folkways.lessons.folder.folkways.cookery")).toBe(installed);
     if (!installed) return;
     for (const lesson of SCENES) {

@@ -11,9 +11,9 @@ const servedWithoutFood = new Set([
 ].map(id => "kaleidoscope_cookery:" + id));
 
 const proceduralFood = [
-  { item: "kaleidoscope_cookery:dark_cuisine", source: "PotBlockEntity.onTakeOut when BURNT", resident_use: "FoodProperties: edible when stocked", orderable: true },
-  { item: "kaleidoscope_cookery:suspicious_stir_fry", source: "PotBlockEntity.applySuspiciousRecipe for an unmatched ingredient combination", resident_use: "FoodProperties: edible when stocked", orderable: true },
-  { item: "kaleidoscope_cookery:mystery_tea", source: "TeapotBlockEntity.tick: unmatched tea input produces four cups", resident_use: "No FoodProperties; not a resident ration", orderable: true },
+  { item: "kaleidoscope_cookery:dark_cuisine", source: "PotBlockEntity.onTakeOut when BURNT", native_protocol: { ingredients: { "minecraft:wheat_seeds": 1, "kaleidoscope_cookery:oil": 1 }, containers: { "minecraft:bowl": 1 }, shared_tool: "kaleidoscope_cookery:kitchen_shovel", output: 1, cooking_ticks: 200, finished_to_burnt_ticks: 800 }, resident_use: "FoodProperties: edible when stocked", orderable: true, explicit_order_only: true },
+  { item: "kaleidoscope_cookery:suspicious_stir_fry", source: "PotBlockEntity.applySuspiciousRecipe for an unmatched ingredient combination", native_protocol: { ingredients: { "minecraft:wheat_seeds": 1, "kaleidoscope_cookery:oil": 1 }, containers: { "minecraft:bowl": 1 }, shared_tool: "kaleidoscope_cookery:kitchen_shovel", output: 1, cooking_ticks: 200 }, resident_use: "FoodProperties: edible when stocked", orderable: true, explicit_order_only: true },
+  { item: "kaleidoscope_cookery:mystery_tea", source: "TeapotBlockEntity.tick: unmatched tea input produces four cups", native_protocol: { ingredients: { "minecraft:wheat_seeds": 1, "minecraft:water_bucket": 1 }, containers: { "kaleidoscope_cookery:empty_teacup": 4 }, output: 4, input_grace_ticks: 200, cooking_ticks: 2400 }, resident_use: "No FoodProperties; not a resident ration", orderable: true, explicit_order_only: true },
 ];
 
 // Feed the runtime GameTest audit, never names inferred from JSON filenames.
