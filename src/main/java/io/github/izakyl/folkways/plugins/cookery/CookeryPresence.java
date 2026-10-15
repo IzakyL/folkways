@@ -145,10 +145,11 @@ public final class CookeryPresence implements Facing, Holding.Watch {
         ServerLevel level = view.level();
         List<Grown> goals = new ArrayList<>(tools.goals(view));
         stations.forEach((at, station) -> {
-            if (at.in(level) && level.isLoaded(at.block(level)) && station.stances().isPresent()) {
-                Stances stances = station.stances().get();
-                if (station.provider() != null) {
-                    goals.addAll(station.provider().recovery(colony.id(), level, at, stances, bookings, sweep::nudge));
+            if (at.in(level) && level.isLoaded(at.block(level)) && station.provider() != null) {
+                if (station.stances().isPresent()) {
+                    goals.addAll(station.provider().recovery(colony.id(), level, at, station.stances().get(), bookings, sweep::nudge));
+                } else {
+                    goals.addAll(station.provider().activeRecovery(colony.id(), level, at, bookings));
                 }
             }
         });

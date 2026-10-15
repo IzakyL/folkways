@@ -58,6 +58,12 @@ public interface KitchenStation {
         return List.of();
     }
 
+    // A running recovery remains wanted when its approach is temporarily blocked. This must never
+    // create a new task: providers return only the original, successfully planned recovery instance.
+    default List<Grown> activeRecovery(UUID colony, ServerLevel level, WorldPos at, KitchenBookings bookings) {
+        return List.of();
+    }
+
     default void release(UUID colony, ServerLevel level, WorldPos at) {
     }
 
