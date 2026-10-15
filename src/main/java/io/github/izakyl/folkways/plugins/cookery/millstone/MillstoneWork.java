@@ -7,9 +7,11 @@ import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
@@ -67,6 +69,10 @@ final class MillstoneWork implements Node, Workload.Within {
     }
     Grown recoveryGoal() { return recoveryGoal; }
     public NodeSpec spec() { return spec; }
+    @Override
+    public List<Amount> planningLeaves(List<Amount> promised) {
+        return Leaves.unpromised(spec.leaves(), promised);
+    }
     public Optional<RefusalKind> planned(ServerLevel level) {
         if (!recovering) { return Optional.empty(); }
         if (generation != bookings.generation(at) || !bookings.free(at)) {

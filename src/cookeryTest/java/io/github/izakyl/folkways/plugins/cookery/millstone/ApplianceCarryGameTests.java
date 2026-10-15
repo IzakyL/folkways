@@ -15,19 +15,24 @@ import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.Intent;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Placement;
+import io.github.izakyl.folkways.core.api.work.Produce;
+import io.github.izakyl.folkways.core.api.work.Refinement;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.plan.Crew;
 import io.github.izakyl.folkways.core.engine.plan.Known;
@@ -110,6 +115,68 @@ public final class ApplianceCarryGameTests {
             new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "tieguanyin")), 12), 2);
     }
 
+    @GameTest(template = "empty")
+    public static void aMillKeepsUnpromisedAndChanceOutputsWithoutDuplicatingItsPromisedMain(GameTestHelper helper) {
+        var fixture = new PlanningFixture(helper, 3);
+        WorldPos at = fixture.source;
+        var flour = Goods.specOf(new ItemStack(ModItems.FLOUR.get()));
+        var bone = Goods.specOf(new ItemStack(Items.BONE));
+        var diamond = Goods.specOf(new ItemStack(Items.DIAMOND));
+        // The native recipe API allows four outputs. This declared job isolates both an unrequested guaranteed
+        // side product and a possible bonus of the same item as the requested main product.
+        var job = new MillstoneStation.Job(ResourceLocation.fromNamespaceAndPath("folkways_test", "mill_capacity"),
+            Goods.specOf(new ItemStack(Items.WHEAT)), List.of(new ItemStack(ModItems.FLOUR.get(), 63), new ItemStack(Items.BONE)),
+            List.of(new ItemStack(ModItems.FLOUR.get(), 63), new ItemStack(Items.BONE),
+                new ItemStack(ModItems.FLOUR.get()), new ItemStack(Items.DIAMOND)));
+        var work = new MillstoneWork(UUID.randomUUID(), at, Stances.at(at), job, 1, new KitchenBookings(), () -> {}, null);
+        Workshop workshop = new Workshop() {
+            public ResourceLocation id() { return CookeryContent.ID; }
+            public WorkSite site() { return new WorkSite.AtBlock(at); }
+            public List<Refinement.Change> options(Intent intent, Grown graph) {
+                return intent instanceof Produce produce && Goods.members(produce.wanted()).contains(ModItems.FLOUR.get())
+                    ? List.of(Refinement.Change.of(Grown.of(work))) : List.of();
+            }
+        };
+        var stock = new Stock(List.of(new Stock.Holding(new Stash(at), new ItemStack(Items.WHEAT))),
+            Map.of(new Stash(at), 27, new Stash(fixture.target), 27));
+        var known = new Known(fixture.situation(stock, List.of(workshop)), fixture.crew.hands());
+        // The fixture normally has hauling only. The actual native MillstoneWork also requires crafting.
+        var original = fixture.crew.hands().getFirst();
+        var actor = (ResidentEntity) fixture.worker.body();
+        var hand = new Crew.Hand(original.who(), original.at(), 3, 3, 1,
+            List.of(actor.licences().of(WaresContent.trade()).orElseThrow(),
+                actor.licences().of(Vocations.required(Vocations.HAULING)).orElseThrow()),
+            List.of(), Optional.empty());
+        known = new Known(known.world(), List.of(hand));
+        NodeSpec requested = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(fixture.target),
+            Stances.at(fixture.target), Workload.Once.of(1)).needs(new Need(flour, 63, true)).done();
+        Node consumer = new Node() {
+            public NodeSpec spec() { return requested; }
+            public Outcome commit(ServerLevel level, Worker who) { throw new AssertionError("only the real plan is read"); }
+        };
+        var solver = new Solving();
+        try {
+            var planned = solver.handle(known, List.of(new Message.Submitted(CookeryContent.ID, Grown.of(consumer))), 0);
+            helper.assertTrue(planned.diagnosis().shortfalls().isEmpty() && planned.schedule().unassigned().isEmpty(),
+                "64 possible flour plus bone and diamond fit exactly three cells without duplicating 63 promised flour: " + planned.diagnosis());
+            var placed = planned.weave().vertices().get(work.id());
+            helper.assertTrue(placed != null && planned.schedule().tours().values().stream()
+                    .anyMatch(tour -> tour.nodes().contains(work.id()) && tour.nodes().contains(consumer.id())),
+                "the complete native-work and consumer chain must be scheduled at the unchanged three-cell boundary");
+            helper.assertValueEqual(carried(placed.plan(), flour), 64L,
+                "the promised 63 plus one same-item chance bonus are budgeted exactly once");
+            helper.assertValueEqual(carried(placed.plan(), bone), 1L,
+                "an unrequested guaranteed side product still occupies its own real cell");
+            helper.assertValueEqual(carried(placed.plan(), diamond), 1L,
+                "a possible different-item bonus still occupies its own real cell");
+        } finally { solver.closed(); fixture.worker.body().discard(); }
+        helper.succeed();
+    }
+
+    private static long carried(Placement placement, io.github.izakyl.folkways.core.api.terms.ItemSpec spec) {
+        return placement.carrying().stream().filter(amount -> amount.spec().equals(spec)).mapToLong(Amount::count).sum();
+    }
+
     private static void run(GameTestHelper helper, KitchenStation station, Block block, List<ItemStack> ingredients, ItemStack result, int loads) {
         var fixture = new PlanningFixture(helper, 36); ServerLevel level = helper.getLevel(); UUID colony = UUID.randomUUID();
         BlockPos cell = helper.absolutePos(new BlockPos(3, 1, 3)); WorldPos at = WorldPos.of(level, cell);
@@ -163,6 +230,12 @@ public final class ApplianceCarryGameTests {
                 node.ended(level, Ending.DONE); fetches++;
             }
             helper.assertTrue(work != null && fetches > 0, block + ": a nearby source still needs a physical fetch before entering the native workload");
+            if (station instanceof MillstoneStation || station instanceof SpitStation || station instanceof SteamerStation) {
+                long promised = placement.carrying().stream().filter(amount -> amount.spec().equals(Goods.specOf(result)))
+                    .mapToLong(Amount::count).sum();
+                helper.assertValueEqual(promised, (long) result.getCount(),
+                    block + ": the real planner carries the native main product once, without a second leaves copy");
+            }
             helper.assertTrue(placement.draws().stream().allMatch(draw -> draw.from().isEmpty()), block + ": native child inputs are reserved in the pack");
             helper.assertTrue(store.isEmpty(), block + ": the actual source no longer retains an unspent duplicate of any batch ingredient");
             for (ItemStack input : ingredients) { helper.assertValueEqual(Goods.countIn(pack, Goods.specOf(input)), (long) input.getCount(), block + ": every actual ingredient was fetched once"); }

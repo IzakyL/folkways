@@ -21,6 +21,15 @@ import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.engine.plan.Crew;
+import io.github.izakyl.folkways.core.engine.plan.Known;
+import io.github.izakyl.folkways.core.engine.plan.Message;
+import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
+import io.github.izakyl.folkways.core.engine.plan.Situation;
+import io.github.izakyl.folkways.core.engine.plan.Solving;
+import io.github.izakyl.folkways.core.engine.plan.Stands;
+import io.github.izakyl.folkways.core.engine.plan.Stock;
+import io.github.izakyl.folkways.core.engine.plan.Unassigned;
 import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
 import io.github.izakyl.folkways.plugins.cookery.testing.RecoveryAsking;
@@ -28,6 +37,8 @@ import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -367,6 +378,52 @@ public final class MillstoneGameTests {
         }
         helper.succeed();
     }
+    @GameTest(template = "empty")
+    public static void aNativeRecoveryRootStillRequiresRoomForAllItsUnpromisedFlour(GameTestHelper helper) {
+        var fixture = new PlanningFixture(helper);
+        try (Rig rig = new Rig(helper)) {
+            MillstoneWork original = rig.plan(3);
+            rig.load(original);
+            MillstoneDrive.interrupt(rig.actor);
+            original.ended(rig.level, Ending.DROPPED);
+            rig.hold.release(Ending.DROPPED);
+            Grown recovery = new MillstoneStation().recovery(rig.colony, rig.level, rig.at, rig.stances,
+                rig.bookings, () -> {}).getFirst();
+            Node root = recovery.nodes().getFirst();
+            for (int slot = 0; slot < rig.pack.getContainerSize(); slot++) {
+                rig.pack.setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
+            }
+            int capacity = rig.pack.getContainerSize();
+            var licence = rig.actor.licences().of(WaresContent.trade()).orElseThrow();
+            var world = new Situation(fixture.ways, new Stock(List.of(), Map.of()), List.of(), Stands.building().done());
+            var solver = new Solving();
+            try {
+                var full = new Crew.Hand(rig.actor.resident(), WorldPos.of(rig.level, rig.actor.blockPosition()),
+                    0, capacity, 1, List.of(licence), List.of(), Optional.empty());
+                var blocked = solver.handle(new Known(world, List.of(full)),
+                    List.of(new Message.Submitted(CookeryContent.ID, recovery)), 0);
+                helper.assertTrue(blocked.schedule().tours().isEmpty() && blocked.schedule().unassigned().stream()
+                        .anyMatch(wait -> wait.node().equals(root.id()) && wait.why() == Unassigned.Reason.PACK_BUSY),
+                    "an independent native recovery has no promised carry and must still reserve its real flour output");
+                helper.assertValueEqual(rig.mill().getInput().getCount(), 3,
+                    "rejecting a full pack neither refunds nor repeats the accepted native ingredients");
+                rig.pack.setItem(0, ItemStack.EMPTY);
+                var room = new Crew.Hand(full.who(), full.at(), 1, capacity, 1,
+                    full.licences(), full.tools(), Optional.empty());
+                var known = solver.handle(new Known(world, List.of(room)), List.of(Message.ANSWERED), 1);
+                helper.assertTrue(known.schedule().unassigned().isEmpty() && known.schedule().tours().values().stream()
+                        .anyMatch(tour -> tour.nodes().contains(root.id())),
+                    "freeing exactly one real cell admits the unchanged recovery batch");
+                long flour = known.weave().vertices().get(root.id()).plan().carrying().stream()
+                    .filter(amount -> amount.spec().equals(Goods.specOf(new ItemStack(ModItems.FLOUR.get()))))
+                    .mapToLong(io.github.izakyl.folkways.core.api.work.Amount::count).sum();
+                helper.assertValueEqual(flour, 3L,
+                    "all three real recovered products remain in the root's capacity budget without a consumer promise");
+            } finally { solver.closed(); }
+        } finally { fixture.worker.body().discard(); }
+        helper.succeed();
+    }
+
     private static void exitWall(Rig rig, boolean closed) {
         for (int x = -3; x <= 3; x++) {
             for (int z = -3; z <= 3; z++) {
