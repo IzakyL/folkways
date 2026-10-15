@@ -11,6 +11,7 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
+import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
@@ -52,6 +53,7 @@ final class SpitWork implements Node, Workload.Within {
     private final Runnable changed;
     private final boolean recovering;
     private final NodeSpec spec;
+    private final Grown recoveryGoal;
     private Hold hold;
     private boolean loaded;
     private boolean finished;
@@ -68,13 +70,17 @@ final class SpitWork implements Node, Workload.Within {
             .gives(new Amount(Goods.specOf(job.output()), count)).leaves(List.of(new Amount(Goods.specOf(job.output()), count)))
             .tools(new ToolUse(KNIFE, 0)).effort(WorkEffort.NONE).vocation(WaresContent.trade())
             .estimate(40 + Math.max(0, job.time())).doing(CookeryContent.COOKING).done();
+        recoveryGoal = recovering ? Grown.of(this) : null;
     }
+    Grown recoveryGoal() { return recoveryGoal; }
     public NodeSpec spec() { return spec; }
     public Optional<RefusalKind> planned(ServerLevel level) {
         if (!recovering) { return Optional.empty(); }
         if (generation != bookings.generation(at) || !bookings.free(at)) { return Optional.of(CookeryRefusal.STATION_CHANGED); }
         hold = bookings.hold(at, id());
-        return hold.take();
+        Optional<RefusalKind> refused = hold.take();
+        if (refused.isEmpty()) { SpitStation.keep(colony, at, recoveryGoal, generation); }
+        return refused;
     }
     public boolean ready(ServerLevel level) { return bookings.cancelled(at, id(), generation) || bookings.first(at, id()); }
     public Optional<RefusalKind> refusal(ServerLevel level) {
@@ -107,6 +113,7 @@ final class SpitWork implements Node, Workload.Within {
             : Outcome.failed(failed == null ? CookeryRefusal.STATION_CHANGED : failed);
     }
     public void ended(ServerLevel level, Ending how) {
+        if (recovering) { SpitStation.ended(colony, at, this); }
         if (hold != null) { hold.release(how); hold = null; }
         changed.run();
     }

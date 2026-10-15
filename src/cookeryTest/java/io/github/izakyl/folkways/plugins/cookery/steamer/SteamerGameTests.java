@@ -25,6 +25,7 @@ import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
+import io.github.izakyl.folkways.plugins.cookery.testing.RecoveryAsking;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
@@ -321,6 +322,40 @@ public final class SteamerGameTests {
             rig.level.setBlockAndUpdate(floor.above(), Blocks.AIR.defaultBlockState());
         } }
         return rig.cell.offset(4, 0, 2);
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 1600)
+    public static void aBookedRecoveryStaysWantedAcrossAskingSweepsAndTheNativeSettlementWindow(GameTestHelper helper) {
+        Rig rig = new Rig(helper, true, false, 2); rig.load(2); rig.level.setBlockAndUpdate(rig.cell.below(), Blocks.STONE.defaultBlockState());
+        rig.hold.release(Ending.DROPPED); rig.hold = null;
+        var provider = new SteamerStation();
+        Grown original = provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}).getFirst();
+        SteamerWork work = (SteamerWork) original.nodes().getFirst();
+        var asking = new RecoveryAsking(helper); asking.offer(List.of(original));
+        helper.assertTrue(work.planned(rig.level).isEmpty(), "the native recovery really takes its exclusive booking");
+        asking.assertKept(original, provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
+        helper.startSequence().thenIdle(40).thenExecute(() -> {
+            asking.assertKept(original, provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
+            helper.assertTrue(rig.steamer().getItems().stream().filter(stack -> !stack.isEmpty()).count() == 2, "accepted native ingredients remain physically stored while actual heat or power is absent");
+        }).thenIdle(40).thenExecute(() -> {
+            asking.assertKept(original, provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
+            helper.assertTrue(provider.activeRecovery(rig.colony, rig.level, rig.at, rig.bookings).getFirst() == original, "blocked-approach queries expose only this already planned original root");
+            rig.level.setBlockAndUpdate(rig.cell.below(), Blocks.MAGMA_BLOCK.defaultBlockState());
+        }).thenWaitUntil(() -> helper.assertTrue(SteamerStation.ripe(rig.steamer()), "the same real native ticker finishes after physical heat or power returns"))
+            .thenExecute(() -> {
+                try {
+                    helper.assertTrue(rig.step(work) instanceof Outcome.Done, "the actual recovered native output is collected");
+                    asking.assertKept(original, provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
+                    helper.assertTrue(provider.activeRecovery(rig.colony, rig.level, rig.at, rig.bookings).getFirst() == original, "clearing real native slots does not withdraw the root before outer settlement");
+                    helper.assertTrue(work.commit(rig.level, rig) instanceof Outcome.Done, "the same original outer recovery settles successfully");
+                    work.ended(rig.level, Ending.DONE); asking.finished(original, Ending.DONE);
+                    helper.assertTrue(provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}).isEmpty()
+                        && provider.activeRecovery(rig.colony, rig.level, rig.at, rig.bookings).isEmpty(), "completion releases both the physical booking and the exact cached root");
+                    helper.assertValueEqual(rig.count(ModItems.MANTOU.get()), 2L, "all original real portions are delivered once");
+                    helper.assertValueEqual(rig.count(ModItems.RAW_DOUGH.get()), 0L, "accepted ingredients are not recreated or charged again");
+                    helper.assertTrue(rig.drops().isEmpty(), "no duplicate native result is left on the ground");
+                } finally { work.ended(rig.level, Ending.DONE); rig.close(); }
+            }).thenSucceed();
     }
 
     private static final class Rig implements Worker, AutoCloseable {

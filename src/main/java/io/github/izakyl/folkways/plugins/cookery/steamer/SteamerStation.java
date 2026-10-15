@@ -5,11 +5,13 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.SteamerBlockE
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Intent;
+import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Refinement;
@@ -22,8 +24,10 @@ import io.github.izakyl.folkways.plugins.cookery.KitchenStation;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -34,6 +38,33 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class SteamerStation implements KitchenStation {
+    private record RecoveryKey(UUID colony, WorldPos at) { }
+    private record Kept(Grown goal, long generation) { }
+    private static final Map<RecoveryKey, Kept> RECOVERIES = new ConcurrentHashMap<>();
+
+    static void keep(UUID colony, WorldPos at, Grown goal, long generation) {
+        RECOVERIES.put(new RecoveryKey(colony, at), new Kept(goal, generation));
+    }
+    static void ended(UUID colony, WorldPos at, Node node) {
+        RECOVERIES.computeIfPresent(new RecoveryKey(colony, at), (key, kept) ->
+            kept.goal().nodes().getFirst() == node ? null : kept);
+    }
+    private static List<Grown> active(UUID colony, WorldPos at, KitchenBookings bookings) {
+        RecoveryKey key = new RecoveryKey(colony, at);
+        Kept kept = RECOVERIES.get(key);
+        if (kept == null) { return List.of(); }
+        Node node = kept.goal().nodes().getFirst();
+        if (bookings.valid(at, node.id(), kept.generation()) && bookings.first(at, node.id())) {
+            return List.of(kept.goal());
+        }
+        RECOVERIES.remove(key, kept);
+        return List.of();
+    }
+
+    @Override
+    public List<Grown> activeRecovery(UUID colony, ServerLevel level, WorldPos at, KitchenBookings bookings) {
+        return at.in(level) ? active(colony, at, bookings) : List.of();
+    }
     public boolean matches(BlockState state) { return state.is(ModBlocks.STEAMER.get()); }
     public BlockPos anchor(Level level, BlockPos cell) {
         BlockPos base = cell;
@@ -103,6 +134,8 @@ public final class SteamerStation implements KitchenStation {
     }
     public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
                                 KitchenBookings bookings, Runnable changed) {
+        List<Grown> active = active(colony, at, bookings);
+        if (!active.isEmpty()) { return active; }
         if (!bookings.free(at)) { return List.of(); }
         for (WorldPos part : parts(level, at)) {
             var be = steamer(level, part).orElseThrow();
@@ -111,7 +144,7 @@ public final class SteamerStation implements KitchenStation {
             if (batch.isEmpty() || working.isEmpty()) { continue; }
             CompoundRecovery recovered = recoveryProducts(be, level);
             Job job = new Job(batch.get().recipe(), ItemSpec.of(ResourceLocation.withDefaultNamespace("air")), recovered.output(), 0);
-            return List.of(Grown.of(new SteamerWork(colony, at, part, working.orElseThrow(), job, recovered.count(), bookings, changed, batch.get())));
+            return List.of(new SteamerWork(colony, at, part, working.orElseThrow(), job, recovered.count(), bookings, changed, batch.get()).recoveryGoal());
         }
         return List.of();
     }
@@ -126,12 +159,16 @@ public final class SteamerStation implements KitchenStation {
         return new CompoundRecovery(output, count);
     }
     public void release(UUID colony, ServerLevel level, WorldPos at) {
+        RECOVERIES.remove(new RecoveryKey(colony, at));
         for (WorldPos part : parts(level, at)) {
             steamer(level, part).filter(be -> SteamerBatch.ours(be, colony)).ifPresent(be -> {
                 SteamerBatch.restoreLid(be, level);
                 SteamerBatch.clear(be);
             });
         }
+    }
+    public void stop(UUID colony, Closing why) {
+        RECOVERIES.keySet().removeIf(key -> key.colony().equals(colony));
     }
     public Component status(ServerLevel level, WorldPos at) {
         boolean any = false;

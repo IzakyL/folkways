@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Ending;
+import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
@@ -42,6 +43,7 @@ final class MillstoneWork implements Node, Workload.Within {
     private final long generation;
     private final Runnable changed;
     private final NodeSpec spec;
+    private final Grown recoveryGoal;
     private final boolean recovering;
     private Hold recoveryHold;
     private Phase phase;
@@ -61,7 +63,9 @@ final class MillstoneWork implements Node, Workload.Within {
             .gives(job.amounts(count, false)).leaves(job.amounts(count, true)).effort(WorkEffort.NONE)
             .vocation(WaresContent.trade()).gesture(WorkGesture.SWING).focus(at.cell()).estimate(560)
             .doing(CookeryContent.PREPARING).done();
+        recoveryGoal = recovering ? Grown.of(this) : null;
     }
+    Grown recoveryGoal() { return recoveryGoal; }
     public NodeSpec spec() { return spec; }
     public Optional<RefusalKind> planned(ServerLevel level) {
         if (!recovering) { return Optional.empty(); }
@@ -69,7 +73,9 @@ final class MillstoneWork implements Node, Workload.Within {
             return Optional.of(CookeryRefusal.STATION_CHANGED);
         }
         recoveryHold = bookings.hold(at, id());
-        return recoveryHold.take();
+        Optional<RefusalKind> refused = recoveryHold.take();
+        if (refused.isEmpty()) { MillstoneStation.keep(colony, at, recoveryGoal, generation); }
+        return refused;
     }
     public boolean ready(ServerLevel level) {
         return bookings.cancelled(at, id(), generation) || bookings.first(at, id()) && MillstoneStation.mill(level, at).isPresent();
@@ -105,6 +111,7 @@ final class MillstoneWork implements Node, Workload.Within {
             : Outcome.failed(failed == null ? CookeryRefusal.STATION_CHANGED : failed);
     }
     public void ended(ServerLevel level, Ending how) {
+        if (recovering) { MillstoneStation.ended(colony, at, this); }
         if (recoveryHold != null) { recoveryHold.release(how); recoveryHold = null; }
         changed.run();
     }
