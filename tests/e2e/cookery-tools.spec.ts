@@ -11,6 +11,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { commandPos } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { twins, type Stage, type Vec } from "../shared/harness/stage";
+import { markSouthRack } from "../shared/cookery/rack";
 
 const K = "kaleidoscope_cookery:";
 const KNIFE = K + "iron_kitchen_knife";
@@ -209,9 +210,10 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     const knife = { id: KNIFE, count: 1, components: { "minecraft:custom_name": '{"text":"Shared Cookery Knife"}', "minecraft:damage": INITIAL_DAMAGE } };
     await world.command(server, "setblock " + block(cells.rack) + " " + K + "kitchenware_racks[facing=south]{LeftItem:" + JSON.stringify(knife) + "}");
     await tick.sprint(server, 5);
-    for (const at of [cells.supply, cells.noodles, cells.meat, cells.table, ...cells.boards, cells.rack]) {
+    for (const at of [cells.supply, cells.noodles, cells.meat, cells.table, ...cells.boards]) {
       await optInViaBook(server, client, playerName, at, "worksite", stage);
     }
+    evidence.rackMarked = await markSouthRack(server, client, playerName, cells.rack, stage);
     await put(server, stage, cells.supply, 0, "minecraft:iron_ingot", 3);
     await put(server, stage, cells.supply, 1, "minecraft:oak_planks", 1);
     await world.command(server, "gamemode survival " + playerName);
