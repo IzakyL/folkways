@@ -98,6 +98,10 @@ final class FarmPresence implements Facing {
         });
     }
 
+    List<CropSeeds.Sowing> sowingPlans(ServerLevel level) {
+        return fields.values().stream().flatMap(field -> field.sowingPlans(level).stream()).toList();
+    }
+
     public List<Grown> goals(ColonyView view) {
         List<Grown> goals = new ArrayList<>();
         for (Field field : fields.values()) {

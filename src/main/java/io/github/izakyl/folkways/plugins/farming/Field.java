@@ -103,6 +103,13 @@ final class Field {
         sowing.settle(crop, plant, allowed);
     }
 
+    List<CropSeeds.Sowing> sowingPlans(ServerLevel level) {
+        List<io.github.izakyl.folkways.core.api.work.Grown> goals = new ArrayList<>();
+        sowing.goals(level, goals);
+        return goals.stream().flatMap(goal -> goal.nodes().stream()).flatMap(node -> node.spec().needs().stream()
+            .filter(need -> need.count() > 0).map(need -> new CropSeeds.Sowing(node.id(), need.spec(), need.count()))).toList();
+    }
+
     void close() {
         chores().forEach(FieldChores::close);
     }
