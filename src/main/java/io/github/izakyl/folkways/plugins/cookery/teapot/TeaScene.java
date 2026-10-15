@@ -5,8 +5,6 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.registry.TeacupRegistry;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
-import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
-import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
@@ -32,7 +30,7 @@ public final class TeaScene {
         scene.world().setBlock(pot, ModBlocks.TEAPOT.get().defaultBlockState(), false);
         scene.world().setBlock(store, Blocks.CHEST.defaultBlockState(), false);
         scene.world().showSection(util.select().fromTo(0, 0, 0, 6, 2, 6), Direction.DOWN); scene.idle(15);
-        ItemStack book = new ItemStack(FolkwaysItems.COLONY_BOOK.get()); ColonyBookItem.setGesture(book, Shape.Gesture.POINT);
+        ItemStack book = PonderScenery.book(Shape.Gesture.POINT);
         scene.overlay().showControls(util.vector().topOf(pot), Pointing.DOWN, 60).leftClick().withItem(book);
         scene.overlay().showOutline(PonderPalette.GREEN, pot, util.select().position(pot), 80);
         scene.overlay().showText(95).text("Mark a teapot and order the finished tea. Each native recipe brews twelve portions, so the plan also supplies twelve real empty cups and leaves an accessible place to serve them.")

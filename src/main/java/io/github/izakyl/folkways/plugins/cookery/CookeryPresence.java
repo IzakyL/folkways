@@ -190,9 +190,26 @@ public final class CookeryPresence implements Facing, Holding.Watch {
                 level.getBlockState(cell).getBlock().getName(), state(level, cell, entry.getValue()),
                 List.of(new Board.Act.Ping(cell))));
         }
+        int stationsHere = rows.size();
+        rows.add(new Board.Row(com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.STRAW_HAT.get().getDefaultInstance(),
+            Component.translatable("folkways.settings.cookery.wear_hat"), Component.empty(),
+            List.of(new Board.Act.Edit("wear_hat"))));
+        rows.add(new Board.Row(com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.FARMER_CHEST_PLATE.get().getDefaultInstance(),
+            Component.translatable("folkways.settings.cookery.wear_farmer_armor"), Component.empty(),
+            List.of(new Board.Act.Edit("wear_farmer_armor"))));
+        rows.add(new Board.Row(com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.STRAW_HAT.get().getDefaultInstance(),
+            Component.translatable("folkways.settings.cookery.clothing"), Component.empty(),
+            List.of(new Board.Act.Edit("clothing"))));
         return Optional.of(new Board(List.of(new Board.Figure("folkways.page.cookery.stations",
-            Component.literal(Integer.toString(rows.size())))), rows,
+            Component.literal(Integer.toString(stationsHere)))), rows,
             Optional.of(Component.translatable("folkways.page.cookery.empty"))));
+    }
+
+    @Override
+    public List<Line> zoneLines(io.github.izakyl.folkways.front.api.ZoneView zone, ColonyView view) {
+        return colony.service(io.github.izakyl.folkways.plugins.cookery.seeds.SeedPresence.ID,
+            io.github.izakyl.folkways.plugins.cookery.seeds.SeedPresence.class)
+            .map(seeds -> seeds.zoneLines(zone, view)).orElseGet(List::of);
     }
 
     @Override

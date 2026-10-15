@@ -24,6 +24,8 @@ public final class CookeryScenes {
     public static void declare(FMLClientSetupEvent event) {
         event.enqueueWork(() -> Scenes.folder(CookeryContent.ID, "folkways.page.cookery", item("stockpot"),
             Scenes.scene("cookery_orders", CookeryScenes::orders, item("chopping_board"), item("stockpot")),
+            Scenes.scene("cookery_tools", io.github.izakyl.folkways.plugins.cookery.tools.SharedToolsScene::program,
+                item("kitchenware_racks"), item("iron_kitchen_knife"), item("kitchen_shovel"), item("sickle")),
             Scenes.scene("cookery_heat", io.github.izakyl.folkways.plugins.cookery.stove.HeatScene::program, item("stove")),
             Scenes.scene("cookery_millstone", io.github.izakyl.folkways.plugins.cookery.millstone.MillstoneScene::program,
                 item("millstone")),
@@ -31,12 +33,18 @@ public final class CookeryScenes {
                 item("shawarma_spit")),
             Scenes.scene("cookery_steamer", io.github.izakyl.folkways.plugins.cookery.steamer.SteamerScene::program,
                 item("steamer")),
+            Scenes.scene("cookery_pots", io.github.izakyl.folkways.plugins.cookery.pot.CookingPotsScene::program,
+                item("pot"), item("stockpot"), item("stockpot_lid")),
             Scenes.scene("cookery_rice", io.github.izakyl.folkways.plugins.cookery.farming.RiceScene::program,
                 item("rice"), item("wild_rice"), item("rice_panicle")),
             Scenes.scene("cookery_equipment", io.github.izakyl.folkways.plugins.cookery.gear.EquipmentScene::program,
                 item("straw_hat"), item("sickle"), item("farmer_chest_plate")),
             Scenes.scene("cookery_seeds", io.github.izakyl.folkways.plugins.cookery.seeds.SeedScene::program,
-                item("straw_hat"), ResourceLocation.withDefaultNamespace("composter"))));
+                item("straw_hat"), ResourceLocation.withDefaultNamespace("composter")),
+            Scenes.scene("cookery_tray", io.github.izakyl.folkways.plugins.cookery.tray.TrayScene::program, item("bamboo_tray")),
+            Scenes.scene("cookery_teapot", io.github.izakyl.folkways.plugins.cookery.teapot.TeaScene::program, item("teapot"), item("empty_cup")),
+            Scenes.scene("cookery_chain", io.github.izakyl.folkways.plugins.cookery.pot.CookingChainScene::program,
+                item("flour"), item("raw_dough"), item("raw_noodles"))));
     }
 
     private static ResourceLocation item(String path) {

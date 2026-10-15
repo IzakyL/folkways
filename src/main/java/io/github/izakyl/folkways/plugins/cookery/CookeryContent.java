@@ -55,7 +55,6 @@ public final class CookeryContent {
         event.colony(SeedPresence.ID, scope -> {
             var support = new SeedSupport(scope.colony(), scope.server());
             var seeds = new SeedPresence(scope.colony(), support::budget, support::enabled);
-            scope.share(support);
             scope.share(seeds);
             scope.tick(seeds::tick);
             scope.closed(seeds::closed);

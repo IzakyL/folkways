@@ -8,8 +8,6 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
-import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
-import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
@@ -47,8 +45,8 @@ public final class CookingChainScene {
         scene.world().setBlock(store, Blocks.CHEST.defaultBlockState(), false);
         scene.world().showSection(util.select().fromTo(0, 0, 0, 8, 3, 8), Direction.DOWN);
         scene.idle(15);
-        ItemStack book = new ItemStack(FolkwaysItems.COLONY_BOOK.get());
-        ColonyBookItem.setGesture(book, Shape.Gesture.POINT);
+        ItemStack book = PonderScenery.book(Shape.Gesture.POINT);
+
         scene.overlay().showControls(util.vector().topOf(stockpot), Pointing.DOWN, 60).leftClick().withItem(book);
         scene.overlay().showText(105).text("Order the final dish, such as udon noodles, and register every station along its route. The colony plans the needed intermediate foods instead of asking you to order each one by hand.")
             .pointAt(util.vector().topOf(store)).placeNearTarget().attachKeyFrame();
@@ -108,7 +106,7 @@ public final class CookingChainScene {
         resident.hold(scene, new ItemStack(ModItems.RAW_NOODLES.get(), 2));
         scene.idle(20);
         resident.hold(scene, ItemStack.EMPTY);
-        scene.overlay().showText(105).text("Other chains obey their own native conditions too: drying needs the right exposure, steaming needs heat and fluid, and tea needs real brewing and serving. Provide the stations, safe paths and base materials; the colony carries each real intermediate between them.")
+        scene.overlay().showText(105).text("Other chains obey their own native conditions too: drying needs the right exposure, steaming needs heat and a closed lid, and tea needs real brewing and serving. Provide the stations, safe paths and base materials; the colony carries each real intermediate between them.")
             .pointAt(util.vector().topOf(table)).placeNearTarget().attachKeyFrame();
         scene.idle(115);
         scene.markAsFinished();

@@ -77,6 +77,9 @@ public final class SeedPresence implements Facing {
         sweep = new Sweep(colony, ID, 40);
     }
 
+    public SeedBudget budget(ServerLevel level) { return budgets.apply(level); }
+    public boolean enabled() { return enabled.getAsBoolean(); }
+
     public void tick(MinecraftServer server) { sweep.tick(server, this::refresh, this::goals); }
 
     void refresh(MinecraftServer server) {

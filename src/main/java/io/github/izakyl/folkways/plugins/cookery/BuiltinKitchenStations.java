@@ -13,7 +13,6 @@ import io.github.izakyl.folkways.plugins.cookery.board.ChoppingBoardWorkshops;
 import io.github.izakyl.folkways.plugins.cookery.compost.CompostStation;
 import io.github.izakyl.folkways.plugins.cookery.pot.PotStation;
 import io.github.izakyl.folkways.plugins.cookery.seeds.SeedPresence;
-import io.github.izakyl.folkways.plugins.cookery.seeds.SeedSupport;
 import io.github.izakyl.folkways.plugins.cookery.stockpot.StockpotWorkshops;
 import io.github.izakyl.folkways.plugins.cookery.teapot.TeapotStation;
 import io.github.izakyl.folkways.plugins.cookery.tray.TrayStation;
@@ -42,8 +41,8 @@ final class BuiltinKitchenStations {
             var server = ServerLifecycleHooks.getCurrentServer();
             return server == null ? Optional.empty() : Colonies.of(server, colonyId)
                 .flatMap(colony -> colony.service(SeedPresence.ID,
-                    SeedSupport.class))
-                .filter(SeedSupport::enabled)
+                    SeedPresence.class))
+                .filter(SeedPresence::enabled)
                 .map(support -> support.budget(server.overworld()));
         }, () -> {
             var server = ServerLifecycleHooks.getCurrentServer();
