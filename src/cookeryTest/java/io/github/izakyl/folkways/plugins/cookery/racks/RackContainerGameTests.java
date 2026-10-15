@@ -139,6 +139,19 @@ public final class RackContainerGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void registeredRackIsDiscoveredByTheOrdinaryContainerEntryPoint(GameTestHelper helper) {
+        KitchenwareRacksBlockEntity rack = rack(helper);
+        KitchenRacks.register();
+        KitchenRacks.register();
+        var found = Containers.at(helper.getLevel(), rack.getBlockPos()).orElseThrow();
+        ItemStack knife = new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get());
+        helper.assertTrue(Containers.insert(found, knife).isEmpty(), "ordinary storage discovery reaches the native rack slots");
+        helper.assertTrue(ItemStack.matches(rack.getItemLeft(), knife), "discovery does not expose a detached shadow inventory");
+        helper.assertValueEqual(found.getMaxStackSize(), 1, "ordinary hauling sees the native one-tool slot capacity");
+        helper.succeed();
+    }
+
     private static KitchenwareRacksBlockEntity rack(GameTestHelper helper) {
         BlockPos at = helper.absolutePos(new BlockPos(2, 1, 2));
         helper.getLevel().setBlockAndUpdate(at, ModBlocks.KITCHENWARE_RACKS.get().defaultBlockState());
