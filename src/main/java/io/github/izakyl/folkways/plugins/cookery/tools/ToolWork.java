@@ -59,6 +59,14 @@ final class ToolWork implements Node, Workload.Within {
     @Override
     public NodeSpec spec() { return spec; }
 
+    @Override
+    public List<Amount> planningLeaves(List<Amount> promised) {
+        // Preserve the wrapped node's contract; the shared tool still needs its own temporary pack cell.
+        List<Amount> leaves = new ArrayList<>(original.planningLeaves(promised));
+        leaves.addAll(Leaves.room(declared.size()));
+        return Leaves.merged(leaves);
+    }
+
     ServerLevel level() { return level; }
     List<ItemSpec> families() { return families; }
     boolean needsTools() { return !workDone; }

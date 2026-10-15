@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.plugins.cookery.stockpot;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
@@ -17,6 +18,7 @@ import io.github.izakyl.folkways.plugins.cookery.CookeryContent;
 import io.github.izakyl.folkways.plugins.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.plugins.cookery.KitchenBookings;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
@@ -73,6 +75,11 @@ final class StockpotWork implements Node, Workload.Within {
     @Override
     public NodeSpec spec() {
         return spec;
+    }
+
+    @Override
+    public List<Amount> planningLeaves(List<Amount> promised) {
+        return Leaves.unpromised(spec.leaves(), promised);
     }
 
     @Override

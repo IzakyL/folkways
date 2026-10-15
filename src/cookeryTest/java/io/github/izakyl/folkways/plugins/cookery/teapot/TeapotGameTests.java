@@ -15,6 +15,8 @@ import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
@@ -97,6 +99,11 @@ public final class TeapotGameTests {
     private static void brew(GameTestHelper helper, String recipe) {
         Rig rig = new Rig(helper, recipe);
         TeapotWork work = rig.load(); long started = rig.level.getGameTime();
+        var extras = work.planningLeaves(work.spec().gives());
+        helper.assertTrue(extras.equals(List.of(new Amount(Goods.specOf(Items.BUCKET.getDefaultInstance()), 1))),
+            "twelve promised tea portions are counted once while the actual emptied bucket retains its slot");
+        helper.assertTrue(work.planningLeaves(List.of()).equals(Leaves.merged(work.spec().leaves())),
+            "a teapot take with no consumer still reserves the full twelve-cup output");
         afterBrewing(rig, ready -> {
             helper.assertTrue(ready.level.getGameTime() - started >= 200 + ready.job.time(), "both native ingredient grace and brewing clocks really elapsed");
             ItemStack old = new ItemStack(Items.APPLE, 5); ready.actor.setItemInHand(InteractionHand.MAIN_HAND, old);

@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
@@ -69,6 +70,11 @@ final class StockpotTake extends StockpotNode {
         this.changed = changed;
         this.recovery = recovery;
         recoveryGoal = recovery ? Grown.of(this) : null;
+    }
+
+    @Override
+    public List<Amount> planningLeaves(List<Amount> promised) {
+        return Leaves.unpromised(spec().leaves(), promised);
     }
 
     Grown recoveryGoal() { return recoveryGoal; }

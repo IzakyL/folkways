@@ -10,6 +10,8 @@ import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Need;
@@ -97,6 +99,11 @@ final class BoardWork implements Node, Workload.Within {
     @Override
     public NodeSpec spec() {
         return spec;
+    }
+
+    @Override
+    public List<Amount> planningLeaves(List<Amount> promised) {
+        return Leaves.unpromised(spec.leaves(), promised);
     }
 
     @Override

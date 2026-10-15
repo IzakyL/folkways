@@ -21,6 +21,8 @@ import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
@@ -99,6 +101,25 @@ public final class StockpotGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(StockpotGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void stockpotBudgetKeepsItsRealBucketAndLidWithoutDuplicatingTheMeal(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, "rice_3", false)) {
+            StockpotWork work = new StockpotWork(rig.colony, rig.at, rig.stances, rig.plan, 1, false, rig.bookings, () -> {});
+            var extras = work.planningLeaves(List.of(new Amount(rig.plan.produces(), rig.plan.portions())));
+            helper.assertValueEqual(extras.stream().filter(amount -> amount.spec().equals(rig.plan.produces())).mapToLong(Amount::count).sum(),
+                0L, "served rice is promised once, with no phantom second result");
+            helper.assertValueEqual(extras.stream().filter(amount -> amount.spec().equals(Goods.specOf(Items.BUCKET.getDefaultInstance())))
+                .mapToLong(Amount::count).sum(), 1L, "the soup's emptied real bucket keeps its slot");
+            helper.assertValueEqual(extras.stream().filter(amount -> amount.spec().equals(StockpotLoad.lid())).mapToLong(Amount::count).sum(),
+                1L, "the actual reusable lid is still returned once");
+            StockpotTake recovery = new StockpotTake(rig.colony, UUID.randomUUID(), rig.at, rig.stances, rig.plan,
+                rig.bookings, () -> {}, true);
+            helper.assertTrue(recovery.planningLeaves(List.of()).equals(Leaves.merged(recovery.spec().leaves())),
+                "an autonomous recovered batch reserves all physical portions and its lid before it has any consumer");
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty", timeoutTicks = 450)

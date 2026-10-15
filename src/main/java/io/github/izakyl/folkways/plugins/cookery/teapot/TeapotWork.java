@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
@@ -81,6 +82,11 @@ final class TeapotWork implements Node, Workload.Within {
         recoveryGoal = recovering ? Grown.of(this) : null;
     }
     public NodeSpec spec() { return spec; }
+
+    @Override
+    public List<Amount> planningLeaves(List<Amount> promised) {
+        return Leaves.unpromised(spec.leaves(), promised);
+    }
     Grown recoveryGoal() { return recoveryGoal; }
     public Optional<RefusalKind> planned(ServerLevel level) {
         if (!recovering) { return Optional.empty(); }

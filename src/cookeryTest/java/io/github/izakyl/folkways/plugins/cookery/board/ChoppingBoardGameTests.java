@@ -12,6 +12,8 @@ import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
@@ -67,6 +69,27 @@ public final class ChoppingBoardGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(ChoppingBoardGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void plannedMeatDoesNotDoubleCountButTheUnrequestedBoneStillNeedsRoom(GameTestHelper helper) {
+        try (Fixture fixture = new Fixture(helper)) {
+            BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
+            var meat = Goods.specOf(ModItems.RAW_CUT_SMALL_MEATS.get().getDefaultInstance());
+            var bone = Goods.specOf(Items.BONE.getDefaultInstance());
+            var extras = work.planningLeaves(List.of(new Amount(meat, 3)));
+            helper.assertTrue(extras.equals(List.of(new Amount(bone, 1))),
+                "the promised three meat pieces count once, and the unrequested bone still occupies a real slot");
+            var partial = work.planningLeaves(List.of(new Amount(meat, 1)));
+            helper.assertValueEqual(partial.stream().filter(amount -> amount.spec().equals(meat)).mapToLong(Amount::count).sum(),
+                2L, "the other two real meat pieces are retained even when only one is promised");
+            helper.assertValueEqual(partial.stream().filter(amount -> amount.spec().equals(bone)).mapToLong(Amount::count).sum(),
+                1L, "a partial meat promise does not erase its native secondary product");
+            helper.assertTrue(work.planningLeaves(List.of()).equals(Leaves.merged(work.spec().leaves())),
+                "an autonomous take with no downstream promise reserves every native output");
+            fixture.finish(work); fixture.assertProducts(3, 1);
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")

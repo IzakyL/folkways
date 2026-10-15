@@ -25,6 +25,7 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Delivery;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
@@ -94,6 +95,49 @@ public final class TaskToolsGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(TaskToolsGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void wrappedNativeBoardKeepsOnlyItsUnpromisedBoneAndOneLoanCell(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            rig.body.pack().setItem(0, new ItemStack(Items.CHICKEN));
+            Node work = rig.board();
+            var meat = Goods.specOf(ModItems.RAW_CUT_SMALL_MEATS.get().getDefaultInstance());
+            var bone = Goods.specOf(Items.BONE.getDefaultInstance());
+            var extras = work.planningLeaves(List.of(new Amount(meat, 3)));
+            helper.assertValueEqual(extras.stream().filter(amount -> amount.spec().equals(meat)).mapToLong(Amount::count).sum(),
+                0L, "the decorator forwards the native node's unpromised-output contract");
+            helper.assertValueEqual(extras.stream().filter(amount -> amount.spec().equals(bone)).mapToLong(Amount::count).sum(),
+                1L, "the real secondary bone still needs its own slot");
+            helper.assertValueEqual(extras.stream().filter(amount -> amount.spec().equals(Leaves.UNSEEN)).mapToLong(Amount::count).sum(),
+                1L, "borrowing retains one temporary knife cell even when all requested meat is promised");
+            rig.finish(work);
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), bone), 1L, "budget changes preserve actual native byproducts");
+            helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "the physical knife still returns to its rack");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void wrappedAdditiveRemainderKeepsItsOriginalSameItemBudget(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            var paper = Goods.specOf(Items.PAPER.getDefaultInstance());
+            NodeSpec spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(rig.boardAt),
+                Stances.at(rig.level, rig.boardCell.south()), Workload.Once.of(1)).tools(new ToolUse(KNIFE, 0))
+                .gives(new Amount(paper, 1)).leaves(List.of(new Amount(paper, 1))).done();
+            Node original = new Node() {
+                public NodeSpec spec() { return spec; }
+                public Outcome commit(ServerLevel level, Worker who) { throw new AssertionError("budgeting executes no work"); }
+            };
+            Node decorated = new ToolWork(rig.tools, original);
+            var extras = decorated.planningLeaves(List.of(new Amount(paper, 1)));
+            helper.assertValueEqual(extras.stream().filter(amount -> amount.spec().equals(paper)).mapToLong(Amount::count).sum(),
+                1L, "an ordinary node's same-item remainder is additive, not a duplicate native total");
+            helper.assertValueEqual(extras.stream().filter(amount -> amount.spec().equals(Leaves.UNSEEN)).mapToLong(Amount::count).sum(),
+                1L, "the shared-tool wrapper also keeps its own loan-space reservation");
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")

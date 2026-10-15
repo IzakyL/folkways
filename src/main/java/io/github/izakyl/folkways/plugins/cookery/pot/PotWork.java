@@ -101,6 +101,11 @@ final class PotWork implements Node, Workload.Within {
     }
 
     public NodeSpec spec() { return spec; }
+
+    @Override
+    public List<Amount> planningLeaves(List<Amount> promised) {
+        return Leaves.unpromised(spec.leaves(), promised);
+    }
     Grown recoveryGoal() { return recoveryGoal; }
 
     public Optional<RefusalKind> planned(ServerLevel level) {

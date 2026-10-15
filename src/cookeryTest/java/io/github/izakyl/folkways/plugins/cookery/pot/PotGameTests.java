@@ -16,6 +16,8 @@ import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -80,6 +82,21 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class PotGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(PotGameTests.class); }
+
+    @GameTest(template = "empty")
+    public static void potBudgetDeduplicatesThePromisedBeefButRetainsUnexpectedResultRoom(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
+            var beef = Goods.specOf(Items.COOKED_BEEF.getDefaultInstance());
+            var extras = rig.work.planningLeaves(List.of(new Amount(beef, 3)));
+            helper.assertValueEqual(extras.stream().filter(amount -> amount.spec().equals(beef)).mapToLong(Amount::count).sum(),
+                0L, "the three promised native beef pieces are not another three leftovers");
+            helper.assertTrue(extras.stream().anyMatch(amount -> amount.spec().equals(Leaves.UNSEEN) && amount.count() > 0),
+                "native dark or uncertain outputs retain their conservative capacity");
+            helper.assertTrue(rig.work.planningLeaves(List.of()).equals(Leaves.merged(rig.work.spec().leaves())),
+                "a pot recovery without downstream promises retains the full native take-out budget");
+        }
+        helper.succeed();
+    }
 
     @GameTest(template = "empty", timeoutTicks = 350)
     public static void aRealFixedPotCooksThreeInputsAndTakesOutAllThreeWithTheActualShovel(GameTestHelper helper) {

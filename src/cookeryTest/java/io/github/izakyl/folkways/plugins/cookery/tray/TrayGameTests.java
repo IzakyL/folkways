@@ -9,6 +9,8 @@ import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
@@ -152,6 +154,10 @@ public final class TrayGameTests {
     private static void runRecipe(GameTestHelper helper, String recipe) {
         Rig rig = new Rig(helper, recipe);
         TrayWork work = rig.load();
+        helper.assertTrue(work.planningLeaves(work.spec().gives()).isEmpty(),
+            "each native tray result is budgeted once when fully promised");
+        helper.assertTrue(work.planningLeaves(List.of()).equals(Leaves.merged(work.spec().leaves())),
+            "an autonomous tray take still reserves every unpromised result");
         long started = rig.level.getGameTime();
         afterProcessing(rig, ready -> {
             helper.assertTrue(ready.level.getGameTime() - started >= ready.recipe.value().getDuration() - 19,
