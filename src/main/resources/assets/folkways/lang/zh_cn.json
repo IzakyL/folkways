@@ -1018,5 +1018,7 @@
   "folkways.page.cookery.pot_finished": "等待及时盛装，避免烧焦",
   "folkways.page.cookery.pot_burnt": "食物已烧焦，即将成为木炭",
   "folkways.page.cookery.weather": "等待合适的晾晒或润湿条件",
-  "folkways.delegation.folkways.compost": "堆肥桶"
+  "folkways.delegation.folkways.compost": "堆肥桶",
+  "folkways.ponder.cookery_pots.text_8": "普通订单使用原生匹配配方。只有明确订购谜之炒菜或黑暗料理时，居民才会使用没有匹配配方的食材。谜之炒菜在做熟后盛出；只有黑暗料理订单才会等到炒锅真正烧焦。普通菜肴意外烧焦，不会完成原来的订单。",
+  "folkways.ponder.cookery_teapot.text_7": "普通茶饮订单使用原生匹配配方。只有明确订购谜之茶时，居民才会用没有匹配配方的原料泡茶：先等待原料输入 200 游戏刻，再加热烹煮 2400 游戏刻。谜之茶实际产出 4 杯，而不是 12 杯，因此需准备 4 个空杯。"
 }

@@ -24,7 +24,7 @@ const CASES = [
     food: ["minecraft:wheat_seeds", K + "green_chili", K + "rice_panicle", "minecraft:brown_mushroom", "minecraft:porkchop", "minecraft:water_bucket"],
     intermediates: [K + "oil", K + "rice", K + "cooked_rice", K + "fish_flavored_shredded_pork"], knife: false, spatula: true },
 ] as const;
-const MATERIALS = ["minecraft:oak_planks", "minecraft:iron_ingot"];
+const MATERIALS = ["minecraft:oak_planks", "minecraft:iron_ingot", "minecraft:brick"];
 
 const READ_WORKERS = defineTask<void, any[]>({
   name: "folkways.cookery.complete-read-workers", side: "server", timeoutMs: 20_000,
@@ -112,6 +112,7 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
     for (const item of [...scenario.intermediates, scenario.dish, K + "iron_kitchen_knife", K + "kitchen_shovel", K + "stockpot_lid", "minecraft:bowl"]) {
       expect(generated[item] ?? 0, "intermediates, tools and containers are actually made: " + item).toBe(0);
     }
+    if (scenario.dish !== K + "baozi_plate") expect(Number(generated["minecraft:brick"] ?? 0), "residents actually craft the native stockpot lid from its brick ingredient").toBeGreaterThan(0);
     for (const item of scenario.food) expect(Number(generated[item] ?? 0), "the final chain spends its required base input " + item).toBeGreaterThan(0);
     expect(evidence.final.drops, "all outputs and reusable tools are returned to colony logistics").toEqual([]);
     const expectedTool = scenario.knife ? "kitchen_knife" : scenario.spatula ? "kitchen_shovel" : undefined;

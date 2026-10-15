@@ -26,9 +26,9 @@ export async function optInContainerViaUI(
 
 export async function setMaintainDemandViaUI(
   server: MinecraftServer, client: MinecraftClient, playerName: string, chest: Vec,
-  itemId: string, count = 1, stage: Stage = GROUND,
+  itemId: string, count = 1, stage: Stage = GROUND, lowWater = 1,
 ) {
-  return fileOrderViaSitePanel(server, client, playerName, chest, itemId, count, ACT_MAINTAIN, 0, stage);
+  return fileOrderViaSitePanel(server, client, playerName, chest, itemId, count, ACT_MAINTAIN, 0, stage, lowWater);
 }
 
 // The same order, filed from wherever the player stands and looks: a filmed shot keeps its camera still, and
@@ -60,7 +60,7 @@ export async function openOrderDraft(
 
 async function fileOrderViaSitePanel(
   server: MinecraftServer, client: MinecraftClient, playerName: string | null, chest: Vec,
-  itemId: string, count: number, act: number, beatMs = 0, stage: Stage = GROUND,
+  itemId: string, count: number, act: number, beatMs = 0, stage: Stage = GROUND, lowWater = 1,
 ) {
   const evidence: any = { chest, itemId, count, act };
   const beat = () => (beatMs > 0 ? new Promise((resolve) => setTimeout(resolve, beatMs)) : Promise.resolve());
@@ -100,6 +100,10 @@ async function fileOrderViaSitePanel(
   }
   await beat();
   evidence.set_count = await typeCell(server, client, howMany.id, String(count));
+  if (act === ACT_MAINTAIN && lowWater !== 1) {
+    const low = await boardAct(client, "edit", ORDERS_PAGE, countRow, 1);
+    evidence.set_low = await typeCell(server, client, low.id, String(lowWater));
+  }
   await beat();
 
   const fileRow = await fileRowIndex(client);

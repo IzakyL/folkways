@@ -260,7 +260,7 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     expect(evidence.first.totals[DOUGH] ?? 0).toBe(0); expect(evidence.first.totals["minecraft:chicken"] ?? 0).toBe(0);
 
     await read("read", "maintain");
-    evidence.maintain = await setMaintainDemandViaUI(server, client, playerName, cells.rack, KNIFE, 2, stage);
+    evidence.maintain = await setMaintainDemandViaUI(server, client, playerName, cells.rack, KNIFE, 2, stage, 2);
     evidence.twoIdle = await waitFor(server, read, "maintain", sample => sample.tools.length === 2
       && sample.tools.every(tool => tool.where === "rack") && sample.loans === 0);
     expect(evidence.twoIdle.totals["minecraft:iron_ingot"] ?? 0, "the explicit two-tool target makes exactly one additional iron knife").toBe(0);

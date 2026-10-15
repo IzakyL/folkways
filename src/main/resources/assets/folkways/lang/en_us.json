@@ -1018,5 +1018,7 @@
   "folkways.page.cookery.pot_finished": "Ready to serve before burning",
   "folkways.page.cookery.pot_burnt": "Burnt food; collect before it turns to charcoal",
   "folkways.page.cookery.weather": "Waiting for suitable drying or wetting conditions",
-  "folkways.delegation.folkways.compost": "Composter"
+  "folkways.delegation.folkways.compost": "Composter",
+  "folkways.ponder.cookery_pots.text_8": "Normal orders use matching native recipes. Only an explicit Suspicious Stir-Fry or Dark Cuisine order chooses unmatched ingredients. Suspicious Stir-Fry is served after cooking; only a Dark Cuisine order waits for the real burnt state. An accidentally burnt normal dish does not complete its original order.",
+  "folkways.ponder.cookery_teapot.text_7": "Normal tea orders use matching native recipes. Only an explicit Mystery Tea order brews an unmatched ingredient: 200 ticks of input waiting, then 2,400 ticks of native brewing with heat. It yields four real cups instead of twelve, so prepare four empty cups."
 }
