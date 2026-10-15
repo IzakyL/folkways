@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -32,6 +33,10 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class MillstoneStation implements KitchenStation {
@@ -40,7 +45,22 @@ public final class MillstoneStation implements KitchenStation {
         var part = level.getBlockState(cell).getValue(MillstoneBlock.PART);
         return cell.offset(-part.getPosX(), 0, -part.getPosY());
     }
-    static Optional<MillstoneBlockEntity> mill(ServerLevel level, WorldPos at) {
+    public Optional<Stances> stances(ServerLevel level, WorldPos at) {
+        BlockPos center = at.block(level);
+        return Stances.of(level, Reach.footingsAround(level, center, 4, 2).stream()
+            .filter(feet -> Reach.withinReach(feet, center) && inSight(level, feet, center)).toList());
+    }
+    static boolean inSight(ServerLevel level, BlockPos feet, BlockPos center) {
+        if (Reach.inSight(level, feet, center)) { return true; }
+        var hit = level.clip(new ClipContext(Vec3.atBottomCenterOf(feet).add(0, Reach.EYE_HEIGHT, 0),
+            Vec3.atCenterOf(center), ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, CollisionContext.empty()));
+        if (hit.getType() != HitResult.Type.BLOCK) { return false; }
+        BlockPos struck = hit.getBlockPos();
+        var state = level.getBlockState(struck);
+        if (!state.is(ModBlocks.MILLSTONE.get())) { return false; }
+        var part = state.getValue(MillstoneBlock.PART);
+        return struck.offset(-part.getPosX(), 0, -part.getPosY()).equals(center);
+    }    static Optional<MillstoneBlockEntity> mill(ServerLevel level, WorldPos at) {
         return at.in(level) && level.isLoaded(at.block(level))
                 && level.getBlockEntity(at.block(level)) instanceof MillstoneBlockEntity mill
             ? Optional.of(mill) : Optional.empty();

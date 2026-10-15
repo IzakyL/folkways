@@ -57,7 +57,7 @@ public final class MillstoneGameTests {
     public static void nativeGrindingUnbindsAndWalksOutBeforeDeliveringActualFlour(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         MillstoneWork work = rig.plan(3);
-        helper.assertTrue(rig.step(work) instanceof Outcome.Done, "three real ingredients enter the native mill");
+        rig.load(work);
         Node drive = ((Workload.Within.Turn.Piece) work.next(rig.level, rig)).node();
         helper.assertTrue(rig.mill().isBoundTo(rig.actor), "the assigned resident is the real motor");
         helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "the accepted input was spent exactly once");
@@ -135,7 +135,7 @@ public final class MillstoneGameTests {
     public static void cancellationUnbindsImmediatelyAndTheResidentReallyLeaves(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         MillstoneWork work = rig.plan(3);
-        helper.assertTrue(rig.step(work) instanceof Outcome.Done, "a real batch was accepted");
+        rig.load(work);
         float walked = rig.actor.walkDist;
         MillstoneDrive.interrupt(rig.actor);
         rig.hold.release(Ending.REVOKED);
@@ -157,7 +157,7 @@ public final class MillstoneGameTests {
     public static void reloadedNativeMotorCannotKeepItsOldRuntimePermission(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         MillstoneWork work = rig.plan(3);
-        helper.assertTrue(rig.step(work) instanceof Outcome.Done, "the native mill accepted a batch");
+        rig.load(work);
         var saved = rig.mill().saveWithFullMetadata(rig.level.registryAccess());
         var replacement = new MillstoneBlockEntity(rig.cell, rig.mill().getBlockState());
         replacement.loadWithComponents(saved, rig.level.registryAccess());
@@ -178,7 +178,7 @@ public final class MillstoneGameTests {
     public static void removingTheColonyStillLetsItsFormerMotorWalkOut(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         MillstoneWork work = rig.plan(3);
-        helper.assertTrue(rig.step(work) instanceof Outcome.Done, "the native mill accepted its ingredients");
+        rig.load(work);
         float walked = rig.actor.walkDist;
         new MillstoneStation().stop(rig.colony, io.github.izakyl.folkways.core.api.colony.Closing.RAZED);
         rig.hold.release(Ending.REVOKED);
@@ -191,6 +191,22 @@ public final class MillstoneGameTests {
                     helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "closure never duplicates accepted input");
                 } finally { rig.close(); }
             }).thenSucceed();
+    }
+    @GameTest(template = "empty")
+    public static void aMillstonePartIsVisibleButAnExternalWallStillBlocksLoading(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            helper.assertTrue(MillstoneStation.inSight(rig.level, rig.actor.blockPosition(), rig.cell),
+                "hitting this millstone's outer part still reaches the same real appliance");
+            MillstoneWork work = rig.plan(3);
+            rig.level.setBlockAndUpdate(rig.cell.offset(2, 0, 0), Blocks.STONE.defaultBlockState());
+            rig.level.setBlockAndUpdate(rig.cell.offset(2, 1, 0), Blocks.STONE.defaultBlockState());
+            helper.assertTrue(!MillstoneStation.inSight(rig.level, rig.actor.blockPosition(), rig.cell),
+                "the multi-block sight rule does not reach through an unrelated wall");
+            helper.assertTrue(rig.step(work) instanceof Outcome.Failed, "the blocked interaction fails before native loading");
+            helper.assertValueEqual(rig.count(Items.WHEAT), 3L, "the blocked interaction refunds all actual input");
+            helper.assertTrue(rig.mill().getInput().isEmpty() && !rig.mill().hasEntity(), "the wall leaves the native mill unchanged");
+        }
+        helper.succeed();
     }
     private static final class Rig implements Worker, AutoCloseable {
         final GameTestHelper helper;
@@ -232,6 +248,13 @@ public final class MillstoneGameTests {
             hold = option.holds().getFirst();
             helper.assertTrue(hold.take().isEmpty(), "the real kitchen turn is booked");
             return (MillstoneWork) option.replacement().nodes().getFirst();
+        }
+        void load(MillstoneWork work) {
+            long before = count(Items.WHEAT);
+            Outcome outcome = step(work);
+            helper.assertTrue(outcome instanceof Outcome.Done, "native loading: " + outcome
+                + ", supplied raw before=" + before + ", pack now=" + count(Items.WHEAT)
+                + ", real input=" + mill().getInput());
         }
         Outcome step(MillstoneWork work) {
             Node node = ((Workload.Within.Turn.Piece) work.next(level, this)).node();

@@ -112,7 +112,7 @@ final class MillstoneWork implements Node, Workload.Within {
         return WorldSpaces.relative(level, at.realm(), who.body().position())
             .map(net.minecraft.core.BlockPos::containing)
             .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
-            .filter(feet -> Reach.withinReach(feet, at.block(level)) && Reach.inSight(level, feet, at.block(level))).isPresent();
+            .filter(feet -> Reach.withinReach(feet, at.block(level)) && MillstoneStation.inSight(level, feet, at.block(level))).isPresent();
     }
     private NodeSpec actionSpec(UUID id, Workload workload, boolean load) {
         return NodeSpec.of(id, CookeryContent.ID, new WorkSite.AtBlock(at), load ? stances : Stances.WHEREVER, workload)
