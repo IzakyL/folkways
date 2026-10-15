@@ -42,6 +42,7 @@ public final class SupplyContent {
     }
 
     public static void install(IEventBus modBus) {
+        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) modBus.addListener(SupplyScene::declare);
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         ENTITIES.register(modBus);

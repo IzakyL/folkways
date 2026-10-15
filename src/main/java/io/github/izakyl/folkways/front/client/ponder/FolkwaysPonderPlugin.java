@@ -31,9 +31,12 @@ public final class FolkwaysPonderPlugin implements PonderPlugin {
     @Override
     public void registerScenes(PonderSceneRegistrationHelper<ResourceLocation> helper) {
         List<Scenes.Folder> folders = Lessons.folders();
-        MultiSceneBuilder book = helper.forComponents(FolkwaysItems.COLONY_BOOK.getId());
+
         for (Scenes.Folder folder : folders) {
             for (Scenes.Scene scene : folder.scenes()) {
+                List<ResourceLocation> components = new java.util.ArrayList<>(Scenes.itemsFor(scene));
+                components.add(FolkwaysItems.COLONY_BOOK.getId());
+                MultiSceneBuilder book = helper.forComponents(components.toArray(ResourceLocation[]::new));
                 book.addStoryBoard(folder.id().getPath() + "/" + scene.id().getPath(), scene.board(), entry -> {
                     Lessons.bind(folder.id(), entry);
                     Lessons.bind(scene.id(), entry);

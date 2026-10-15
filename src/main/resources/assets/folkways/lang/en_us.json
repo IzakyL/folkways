@@ -891,5 +891,10 @@
   "folkways.refusal.supply.source_changed": "The supply box changed; plan a fresh withdrawal.",
   "folkways.refusal.supply.no_room": "The resident needs room to carry the supplies.",
   "folkways.refusal.supply.out_of_reach": "The resident must reach the supply box.",
-  "folkways.doing.taking_supplies": "Taking supplies"
+  "folkways.doing.taking_supplies": "Taking supplies",
+  "folkways.ponder.creative_supplies.header": "Creative supplies: only what the task needs",
+  "folkways.ponder.creative_supplies.text_1": "Place and configure a creative supply box in Creative mode. Choose all items, or a whitelist of items, tags and searches.",
+  "folkways.ponder.creative_supplies.text_2": "Mark the box with the colony book. It supplies tasks; mark an ordinary chest separately to store their finished goods.",
+  "folkways.ponder.creative_supplies.text_3": "Residents walk to the box and take only the finite amount their current job needs. A full pack or an unreachable box waits.",
+  "folkways.ponder.creative_supplies.text_4": "For a full production-chain test, whitelist base ingredients only and order the final dish. Intermediate foods and finished dishes must be made by the residents."
 }

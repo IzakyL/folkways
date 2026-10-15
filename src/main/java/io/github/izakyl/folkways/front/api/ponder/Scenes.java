@@ -32,6 +32,8 @@ public final class Scenes {
         }
     }
 
+    private static final java.util.Map<ResourceLocation, List<ResourceLocation>> ITEMS = new java.util.LinkedHashMap<>();
+
     private static final Ledger<Folder> FOLDERS = Ledger.sealedOnceRead("a lesson folder", Folder::id);
 
     private Scenes() {
@@ -39,6 +41,16 @@ public final class Scenes {
 
     public static Scene scene(String title, PonderStoryBoard board) {
         return new Scene(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, title), board);
+    }
+
+    public static Scene scene(String title, PonderStoryBoard board, ResourceLocation... items) {
+        Scene scene = scene(title, board);
+        ITEMS.put(scene.id(), java.util.Arrays.stream(items).distinct().toList());
+        return scene;
+    }
+
+    public static List<ResourceLocation> itemsFor(Scene scene) {
+        return ITEMS.getOrDefault(scene.id(), List.of());
     }
 
     public static void folder(ResourceLocation id, String nameKey, ResourceLocation icon, Scene... scenes) {

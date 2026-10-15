@@ -891,5 +891,10 @@
   "folkways.refusal.supply.source_changed": "補給箱已變更，需要重新安排取物。",
   "folkways.refusal.supply.no_room": "居民背包需要有足夠空間裝下物資。",
   "folkways.refusal.supply.out_of_reach": "居民需要到達補給箱旁取物。",
-  "folkways.doing.taking_supplies": "正在領取補給"
+  "folkways.doing.taking_supplies": "正在領取補給",
+  "folkways.ponder.creative_supplies.header": "創造補給：按需取用",
+  "folkways.ponder.creative_supplies.text_1": "在創造模式下放置並設定創造補給箱。可以提供所有物品，也可以用物品、標籤和搜尋條件設定白名單。",
+  "folkways.ponder.creative_supplies.text_2": "用聚落之書登記補給箱，它為任務提供物資。再登記一個普通箱子，存放居民製作的成品。",
+  "folkways.ponder.creative_supplies.text_3": "居民會走到箱子旁，只領取當前任務需要的有限數量。背包已滿或無法到達時會等待。",
+  "folkways.ponder.creative_supplies.text_4": "測試完整製作鏈時，僅將基礎原料加入白名單，再下達最終菜餚的訂單。中間食材和成品應由居民親手製作。"
 }
