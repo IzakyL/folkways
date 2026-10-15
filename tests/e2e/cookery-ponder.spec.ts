@@ -42,11 +42,13 @@ minecraft.getLanguageManager().setSelected(locale);minecraft.options.languageCod
 minecraft.reloadResourcePacks();return locale;
 ` }),
 });
-const SET_GUI_SCALE = defineTask<{ scale: number }, number>({
+const SET_GUI_SCALE = defineTask<{ scale: number }, { scale: number; width: number; height: number; logicalWidth: number; logicalHeight: number }>({
   name: "folkways.cookery.ponder-set-gui-scale", side: "client", timeoutMs: 20_000,
   source: javaTask({ imports: ["net.minecraft.client.Minecraft"], body: `
 var minecraft=(Minecraft)ctx.client();int scale=(int)Args.of(ctx).number("scale");
-minecraft.options.guiScale().set(scale);minecraft.resizeDisplay();return scale;
+minecraft.options.guiScale().set(scale);minecraft.resizeDisplay();var window=minecraft.getWindow();
+return Map.of("scale",window.getGuiScale(),"width",window.getWidth(),"height",window.getHeight(),
+"logicalWidth",window.getGuiScaledWidth(),"logicalHeight",window.getGuiScaledHeight());
 ` }),
 });
 const READ_LANGUAGE = defineTask<void, { locale: string; title: string }>({
@@ -88,7 +90,8 @@ for (const installed of [false, true]) test("cookery lessons: " + (installed ? "
       });
       await frames(client, 5);
     }
-    await client.run(SET_GUI_SCALE, { scale: guiScale }); await frames(client, 5);
+    evidence.guiWindow = await client.run(SET_GUI_SCALE, { scale: guiScale });
+    expect(evidence.guiWindow.scale).toBe(guiScale); await frames(client, 5);
     await world.command(server, "difficulty peaceful");
     await world.command(server, "ponder folkways:colony_book " + name); await frames(client, 5);
     expect(screenName(await safeScreen(client))).toMatch(/PonderUI/);
