@@ -1,11 +1,13 @@
 package io.github.izakyl.folkways.core.api.work;
 
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -109,9 +111,39 @@ public interface WorkGesture {
 
         @Override
         public void release(LivingEntity body) {
-            if (body.isPassenger()) {
+            Entity seat = body.getVehicle();
+            if (seat != null) {
                 body.stopRiding();
+                stepOff(body, seat.blockPosition());
             }
         }
     };
+
+    // A seat sets whoever gets up on top of itself, and a seat sunk a level into the floor leaves them standing
+    // in its own cell, a jump short of the floor round it: no way starts there, and the body stood up from its
+    // post stayed on the seat for good. It steps off beside the seat instead, as off a bed or out of a boat.
+    private static void stepOff(LivingEntity body, BlockPos seat) {
+        Level level = body.level();
+        BlockPos best = null;
+        double nearest = Double.MAX_VALUE;
+        for (int dy : new int[] {0, 1, -1}) {
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                BlockPos feet = seat.relative(side).above(dy);
+                if (!level.isLoaded(feet) || !Footing.withFeetAt(level, feet)) {
+                    continue;
+                }
+                double apart = Vec3.atBottomCenterOf(feet).distanceToSqr(body.position());
+                if (apart < nearest) {
+                    nearest = apart;
+                    best = feet;
+                }
+            }
+            if (best != null) {
+                break;
+            }
+        }
+        if (best != null) {
+            body.teleportTo(best.getX() + 0.5D, best.getY(), best.getZ() + 0.5D);
+        }
+    }
 }
