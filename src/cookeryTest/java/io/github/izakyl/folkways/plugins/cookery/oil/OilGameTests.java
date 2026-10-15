@@ -45,7 +45,10 @@ public final class OilGameTests {
         helper.assertTrue(level.getBlockState(at).getValue(OilPotBlock.HAS_OIL), "native rendering state updates after insertion");
         helper.assertValueEqual(Containers.insert(store, new ItemStack(ModItems.OIL.get(), 3)).getCount(), 3, "a full native pot rejects overflow without consuming it");
         ItemStack drawn = Containers.extract(store, stack -> stack.is(ModItems.OIL.get()), 65);
-        helper.assertValueEqual(drawn.getCount(), 65, "extraction removes actual native oil rather than inventing a take result");
+        helper.assertValueEqual(drawn.getCount(), 64, "the native handler limits one actual extraction to the item's normal stack size");
+        ItemStack last = Containers.extract(store, stack -> stack.is(ModItems.OIL.get()), 1);
+        helper.assertValueEqual(last.getCount(), 1, "a second real extraction takes the remaining requested unit");
+        helper.assertValueEqual(drawn.getCount() + last.getCount(), 65, "two native calls remove exactly sixty-five real stored units");
         helper.assertValueEqual(nativePot.getOilCount(), 191, "all actual native count mutations remain in sync");
         store.clearContent(); helper.assertTrue(!level.getBlockState(at).getValue(OilPotBlock.HAS_OIL), "draining the true handler clears its native oil model"); helper.succeed();
     }
