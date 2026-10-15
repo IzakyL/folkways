@@ -221,7 +221,7 @@ public final class CompostGameTests {
         public Container pack() { return pack; }
         public List<Store> within() { return List.of(); }
         public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-        public void spill(ItemStack stack) { throw new AssertionError("test pack has room"); }
+        public void spill(ItemStack stack) { if (!stack.isEmpty()) throw new AssertionError("test pack has room"); }
         public int rankOf(String perk) { return 0; }
         public List<Node> route() { return List.of(); }
         public Placement placement() { return Placement.NOWHERE; }
