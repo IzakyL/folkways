@@ -226,8 +226,7 @@ public final class ChoicePicker {
             }
         }
         String key = "folkways.choice." + option.getNamespace() + "." + option.getPath().replace('/', '.');
-        return net.minecraft.client.resources.language.I18n.exists(key)
-            ? Component.translatable(key) : Component.literal(option.getPath());
+        return Component.translatableWithFallback(key, option.getPath());
     }
 
     @Nullable
