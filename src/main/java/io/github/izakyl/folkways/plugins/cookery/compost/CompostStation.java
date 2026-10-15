@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.cookery.compost;
 
+import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemDrops;
 import io.github.izakyl.folkways.core.api.terms.Reach;
@@ -25,6 +26,8 @@ import io.github.izakyl.folkways.plugins.cookery.seeds.SeedBudget;
 import io.github.izakyl.folkways.plugins.farming.FarmingContent;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -45,6 +48,8 @@ import net.minecraft.world.phys.AABB;
 public final class CompostStation implements KitchenStation {
     private final Function<UUID, Optional<SeedBudget>> budgets;
     private final Supplier<Set<Item>> seeds;
+    private record Site(UUID colony, WorldPos at) { }
+    private final Map<Site, Work> active = new LinkedHashMap<>();
 
     public CompostStation(Function<UUID, Optional<SeedBudget>> budgets, Supplier<Set<Item>> seeds) {
         this.budgets = budgets;
@@ -58,17 +63,39 @@ public final class CompostStation implements KitchenStation {
     public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
             KitchenBookings bookings, Runnable changed) {
         BlockState state = level.getBlockState(at.block(level));
-        if (!matches(state) || !bookings.free(at)) return List.of();
+        if (!matches(state)) return List.of();
+        Site site = new Site(colony, at);
+        Work running = active.get(site);
+        if (running != null && running.bookings == bookings && !bookings.cancelled(at, running.id(), running.generation)) {
+            return List.of(Grown.of(running));
+        }
+        if (!bookings.free(at)) return List.of();
         int fill = state.getValue(ComposterBlock.LEVEL);
-        if (fill == 8) return List.of(Grown.of(new Work(at, stances, bookings, changed, Optional.empty(), Optional.empty())));
+        if (fill == 8) return List.of(Grown.of(new Work(site, stances, bookings, changed, Optional.empty(), Optional.empty())));
         if (fill >= 7) return List.of();
         Optional<SeedBudget> budget = budgets.apply(colony);
         if (budget.isEmpty()) return List.of();
         return seeds.get().stream().sorted(Comparator.comparing(item -> BuiltInRegistries.ITEM.getKey(item).toString()))
             .filter(item -> ComposterBlock.getValue(item.getDefaultInstance()) > 0.0F
                 && budget.get().tally(item).compostable() > 0)
-            .findFirst().map(item -> List.of(Grown.of(new Work(at, stances, bookings, changed,
+            .findFirst().map(item -> List.of(Grown.of(new Work(site, stances, bookings, changed,
                 Optional.of(item), budget)))).orElseGet(List::of);
+    }
+
+    @Override
+    public void release(UUID colony, ServerLevel level, WorldPos at) {
+        Work work = active.remove(new Site(colony, at));
+        if (work != null) work.hold.release(Ending.REVOKED);
+    }
+
+    @Override
+    public void stop(UUID colony, Closing why) {
+        for (Site site : List.copyOf(active.keySet())) {
+            if (site.colony().equals(colony)) {
+                Work work = active.remove(site);
+                work.hold.release(Ending.REVOKED);
+            }
+        }
     }
 
     @Override
@@ -78,7 +105,8 @@ public final class CompostStation implements KitchenStation {
             ? "folkways.page.cookery.compost_maturing" : "folkways.page.cookery.compost");
     }
 
-    private static final class Work implements Node {
+    private final class Work implements Node {
+        private final Site site;
         private final NodeSpec spec;
         private final WorldPos at;
         private final KitchenBookings bookings;
@@ -88,9 +116,10 @@ public final class CompostStation implements KitchenStation {
         private final Optional<Item> seed;
         private final Optional<SeedBudget> budget;
 
-        Work(WorldPos at, Stances stances, KitchenBookings bookings, Runnable changed,
+        Work(Site site, Stances stances, KitchenBookings bookings, Runnable changed,
                 Optional<Item> seed, Optional<SeedBudget> budget) {
-            this.at = at;
+            this.site = site;
+            this.at = site.at();
             this.bookings = bookings;
             this.changed = changed;
             this.seed = seed;
@@ -107,12 +136,16 @@ public final class CompostStation implements KitchenStation {
         }
 
         public NodeSpec spec() { return spec; }
-        public Optional<io.github.izakyl.folkways.core.api.terms.RefusalKind> planned(ServerLevel level) { return hold.take(); }
+        public Optional<io.github.izakyl.folkways.core.api.terms.RefusalKind> planned(ServerLevel level) {
+            var refused = hold.take();
+            if (refused.isEmpty()) active.put(site, this);
+            return refused;
+        }
         public boolean ready(ServerLevel level) { return bookings.first(at, id()); }
         public Optional<io.github.izakyl.folkways.core.api.terms.RefusalKind> refusal(ServerLevel level) {
             return bookings.cancelled(at, id(), generation) ? Optional.of(CookeryRefusal.STATION_CHANGED) : Optional.empty();
         }
-        public void ended(ServerLevel level, Ending how) { hold.release(how); nudge(); }
+        public void ended(ServerLevel level, Ending how) { active.remove(site, this); hold.release(how); nudge(); }
 
         public Outcome commit(ServerLevel level, Worker who) {
             if (!at.in(level) || bookings.cancelled(at, id(), generation) || !bookings.first(at, id())
@@ -128,7 +161,7 @@ public final class CompostStation implements KitchenStation {
             if (before.getValue(ComposterBlock.LEVEL) >= 7) return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             List<ItemStack> supplied = who.supplied().stream().map(ItemStack::copy).toList();
             ItemStack single = supplied.stream().filter(stack -> stack.is(seed.get())).findFirst().orElse(ItemStack.EMPTY);
-            if (single.getCount() != 1 || budget.isEmpty() || !budget.get().permits(id(), single)
+            if (single.getCount() != 1 || budget.isEmpty() || budgets.apply(site.colony()).isEmpty() || !budget.get().permits(id(), single)
                     || ComposterBlock.getValue(single) <= 0.0F) {
                 return new Outcome.Done(List.of(), List.of(), Optional.empty(), supplied);
             }

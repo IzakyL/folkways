@@ -165,6 +165,64 @@ public final class CompostGameTests {
         });
     }
 
+    @GameTest(template = "empty")
+    public static void anAdoptedCompostFeedStaysWantedUntilTheFarResidentActuallyArrives(GameTestHelper helper) {
+        try (Fixture fixture = new Fixture(helper)) {
+            long before = fixture.seeds();
+            commitAfterRepeatedOffers(helper, fixture);
+            helper.assertValueEqual(fixture.fill(), 1, "the retained original feed performs exactly one native compost insertion");
+            helper.assertValueEqual(fixture.seeds(), before - 1, "only one actual seed is consumed after travel");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 80)
+    public static void aNativeMatureCompostCollectionStaysWantedUntilTheFarResidentArrives(GameTestHelper helper) {
+        Fixture fixture = new Fixture(helper); fixture.fillNative();
+        helper.assertValueEqual(fixture.fill(), 7, "native insertion reaches seven without a synthetic mature state");
+        helper.runAfterDelay(25, () -> {
+            try (fixture) {
+                helper.assertValueEqual(fixture.fill(), 8, "the actual native scheduled tick matures the same compost");
+                commitAfterRepeatedOffers(helper, fixture);
+                helper.assertValueEqual(fixture.fill(), 0, "the retained collection empties the actual native composter");
+                helper.assertValueEqual(Goods.countIn(fixture.pack, Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 1L,
+                    "the original collection delivers exactly one real bone meal");
+                helper.succeed();
+            }
+        });
+    }
+
+    private static void commitAfterRepeatedOffers(GameTestHelper helper, Fixture fixture) {
+        var colony = io.github.izakyl.folkways.core.api.colony.Colonies.mint(fixture.level.getServer());
+        var works = (io.github.izakyl.folkways.core.engine.colony.ColonyWorks) colony;
+        var submitted = new java.util.ArrayList<Node>(); var withdrawn = new java.util.ArrayList<UUID>();
+        try {
+            works.listen(fixture.level.dimension(), new io.github.izakyl.folkways.core.engine.colony.ColonyWorks.Listening() {
+                public void submitted(net.minecraft.resources.ResourceLocation owner, io.github.izakyl.folkways.core.api.work.Grown work) { submitted.addAll(work.nodes()); }
+                public void withdrawn(net.minecraft.resources.ResourceLocation owner, UUID node) { withdrawn.add(node); }
+                public void offered() { }
+            });
+            var asking = new io.github.izakyl.folkways.core.api.colony.Asking(colony,
+                io.github.izakyl.folkways.plugins.cookery.CookeryContent.ID, () -> { });
+            asking.offer(Map.of(fixture.level.dimension(), fixture.goals()));
+            helper.assertValueEqual(submitted.size(), 1, "one compost operation is submitted through the actual colony root contract");
+            Node original = submitted.getFirst();
+            helper.assertTrue(original.planned(fixture.level).isEmpty(), "the original native composter action takes its exclusive turn");
+            fixture.body.mob().moveTo(fixture.pos.getX() - 40.5, fixture.pos.getY(), fixture.pos.getZ() + 0.5);
+            long before = fixture.seeds();
+            for (int period = 0; period < 10; period++) {
+                var wanted = fixture.goals();
+                helper.assertTrue(wanted.size() == 1 && wanted.getFirst().nodes().getFirst() == original,
+                    "the same adopted compost root stays wanted while its resident is far away");
+                asking.offer(Map.of(fixture.level.dimension(), wanted));
+            }
+            helper.assertTrue(withdrawn.isEmpty() && submitted.size() == 1, "repeated recovery sweeps do not cancel or duplicate the real compost action");
+            helper.assertValueEqual(fixture.seeds(), before, "no seed is spent during travel");
+            fixture.body.mob().moveTo(fixture.pos.getX() + 1.5, fixture.pos.getY(), fixture.pos.getZ() + 0.5);
+            fixture.step(original); works.ended(fixture.level.dimension(), original.id(), Ending.DONE);
+        } finally { colony.raze(); }
+    }
+
     private static final class Fixture implements Worker, AutoCloseable {
         final GameTestHelper helper;
         final ServerLevel level;

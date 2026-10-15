@@ -69,6 +69,7 @@ public final class SeedPresence implements Facing {
     private final Sweep sweep;
     private final KitchenBookings bookings = new KitchenBookings();
     private final Map<UUID, WorldPos> areas = new LinkedHashMap<>();
+    private final Map<UUID, Source> active = new LinkedHashMap<>();
 
     public SeedPresence(Colony colony, Function<ServerLevel, SeedBudget> budgets, BooleanSupplier enabled) {
         this.colony = colony;
@@ -96,9 +97,10 @@ public final class SeedPresence implements Facing {
         current.values().forEach(bookings::admit);
         areas.clear();
         areas.putAll(current);
+        active.entrySet().removeIf(entry -> !entry.getValue().anchor.equals(current.get(entry.getKey())));
     }
 
-    public void closed(Closing why) { bookings.clear(); areas.clear(); }
+    public void closed(Closing why) { bookings.clear(); areas.clear(); active.clear(); }
 
     private List<Body> farmers(ColonyView view) {
         return view.residents().stream().map(resident -> view.level().getEntity(resident.id())).filter(java.util.Objects::nonNull)
@@ -125,7 +127,16 @@ public final class SeedPresence implements Facing {
         if (reserves.stream().noneMatch(reserve -> reserve.missing() > 0
                 && reserve.alternatives().stream().anyMatch(grassSeeds()::contains))) return goals;
         for (ZoneView zone : Fronts.of(colony).zonesIn(level)) {
-            if (!zone.delegation().equals(GRASS) || !areas.containsKey(zone.id()) || !bookings.free(areas.get(zone.id()))) continue;
+            if (!zone.delegation().equals(GRASS) || !areas.containsKey(zone.id())) continue;
+            Source running = active.get(zone.id());
+            if (running != null && running.ground.in(level) && running.refusal(level).isEmpty()
+                    && farmers.stream().anyMatch(farmer -> farmer.id().equals(running.worker))) {
+                // Asking withdraws omitted goals. Keep the adopted turn wanted while its resident walks,
+                // without admitting a second source through this zone's exclusive booking.
+                goals.add(Grown.of(running));
+                continue;
+            }
+            if (!bookings.free(areas.get(zone.id()))) continue;
             Optional<BlockPos> grass = zone.cells().stream().filter(level::isLoaded)
                 .filter(ground -> level.getBlockState(ground.above()).is(Blocks.SHORT_GRASS))
                 .sorted(BlockPos::compareTo).findFirst();
@@ -211,16 +222,21 @@ public final class SeedPresence implements Facing {
         }
         public NodeSpec spec() { return spec; }
         public Optional<UUID> worker() { return Optional.of(worker); }
-        public Optional<RefusalKind> planned(ServerLevel level) { return hold.take(); }
+        public Optional<RefusalKind> planned(ServerLevel level) {
+            Optional<RefusalKind> refused = hold.take();
+            if (refused.isEmpty()) active.put(zone, this);
+            return refused;
+        }
         public boolean ready(ServerLevel level) { return ground.in(level) && bookings.first(anchor, id()); }
         public Optional<RefusalKind> refusal(ServerLevel level) {
-            return bookings.cancelled(anchor, id(), generation) || zone(level, zone).isEmpty()
+            return bookings.cancelled(anchor, id(), generation) || zone(level, zone)
+                    .filter(marked -> !restore || marked.settings().flag(RESTORE_GRASS)).isEmpty()
                 ? Optional.of(SeedRefusal.AREA_CHANGED) : Optional.empty();
         }
-        public void ended(ServerLevel level, Ending how) { hold.release(how); sweep.nudge(); }
+        public void ended(ServerLevel level, Ending how) { active.remove(zone, this); hold.release(how); sweep.nudge(); }
         public Outcome commit(ServerLevel level, Worker who) {
             Optional<ZoneView> marked = zone(level, zone);
-            if (!enabled.getAsBoolean() || marked.isEmpty() || !ground.in(level)
+            if (!enabled.getAsBoolean() || marked.isEmpty() || restore && !marked.get().settings().flag(RESTORE_GRASS) || !ground.in(level)
                     || bookings.cancelled(anchor, id(), generation) || !bookings.first(anchor, id())
                     || !who.body().getUUID().equals(worker)) return Outcome.failed(SeedRefusal.AREA_CHANGED);
             if (budgets.apply(level).reserves().stream().noneMatch(reserve -> reserve.missing() > 0
