@@ -99,7 +99,7 @@ final class PasturePresence implements Facing {
             }
             return chores;
         });
-        here.forEach((job, chores) -> chores.settle(tally.work().getOrDefault(job, List.of())));
+        here.forEach((job, chores) -> chores.settle(tally.pen(), tally.work().getOrDefault(job, List.of())));
     }
 
     public List<Grown> goals(ColonyView view) {

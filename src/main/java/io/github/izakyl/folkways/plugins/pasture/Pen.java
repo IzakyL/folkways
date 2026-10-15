@@ -2,8 +2,10 @@ package io.github.izakyl.folkways.plugins.pasture;
 
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.terms.Realm;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.front.api.FrontView;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.ZoneView;
@@ -14,8 +16,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -46,7 +51,14 @@ record Pen(UUID zone, Livestock keeps, int target, boolean shear, WorldPos ancho
         if (local.isEmpty()) {
             return false;
         }
-        BlockPos at = BlockPos.containing(local.get());
+        return holds(new WorldPos(anchor.realm(), BlockPos.containing(local.get())));
+    }
+
+    boolean holds(WorldPos cell) {
+        if (!cell.realm().equals(anchor.realm())) {
+            return false;
+        }
+        BlockPos at = cell.cell();
         if (at.getY() < minY || at.getY() > maxY + HEADROOM) {
             return false;
         }
@@ -56,6 +68,25 @@ record Pen(UUID zone, Livestock keeps, int target, boolean shear, WorldPos ancho
             }
         }
         return false;
+    }
+
+    Optional<Stances> workplaces(ServerLevel level, WorldPos animal) {
+        return Stances.of(level, Reach.workableCells(level, animal.block(level)).stream()
+            .filter(cell -> holds(WorldPos.of(level, cell)) && clearOfDoorway(level, cell)).toList());
+    }
+
+    // Arrival allows almost a block of slack. A workplace one cell from a gate can still leave the body in it,
+    // so keep the surrounding cells clear as well, whether the doorway is currently open or shut.
+    private static boolean clearOfDoorway(ServerLevel level, BlockPos feet) {
+        for (BlockPos cell : BlockPos.betweenClosed(feet.offset(-1, -1, -1), feet.offset(1, 1, 1))) {
+            if (level.isLoaded(cell)) {
+                var block = level.getBlockState(cell).getBlock();
+                if (block instanceof FenceGateBlock || block instanceof DoorBlock) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     AABB reach(Level level) {

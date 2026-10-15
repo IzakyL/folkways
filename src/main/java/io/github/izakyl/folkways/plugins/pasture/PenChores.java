@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.front.api.PastDay;
@@ -15,7 +14,7 @@ final class PenChores {
 
     private final UUID zone;
     private final Herd.Job job;
-    private final ItemSpec feed;
+    private volatile Pen pen;
     private final Runnable changed;
     private final PastDay made;
 
@@ -28,10 +27,11 @@ final class PenChores {
         this.made = made;
         this.zone = pen.zone();
         this.job = job;
-        this.feed = pen.keeps().feed();
+        this.pen = pen;
     }
 
-    void settle(List<Quarry> found) {
+    void settle(Pen pen, List<Quarry> found) {
+        this.pen = pen;
         standing = List.copyOf(found);
         worked.clear();
     }
@@ -51,14 +51,15 @@ final class PenChores {
     private Node node(ServerLevel level, PenNode.Chore chore) {
         return switch (job) {
             case SHEAR -> new ShearNode(chore);
-            case FEED -> new FeedNode(chore, feed);
+            case FEED -> new FeedNode(chore, pen.keeps().feed(), pen);
             case CULL -> new CullNode(chore);
             case GLEAN -> new GleanNode(level, chore);
         };
     }
 
     private UUID idOf(Quarry beast) {
-        return UUID.nameUUIDFromBytes(("folkways:pasture/" + zone + "/" + job + "/" + beast.subject())
+        return UUID.nameUUIDFromBytes(("folkways:pasture/" + zone + "/" + job + "/" + beast.subject()
+                + beast.mate().map(mate -> "/" + mate).orElse(""))
             .getBytes(StandardCharsets.UTF_8));
     }
 }
