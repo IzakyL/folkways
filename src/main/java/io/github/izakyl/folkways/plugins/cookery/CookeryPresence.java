@@ -88,7 +88,7 @@ public final class CookeryPresence implements Facing, Holding.Watch {
     void refresh(MinecraftServer server) {
         refreshPending = false;
         Set<WorldPos> marked = new LinkedHashSet<>();
-        colony.holdings(CookeryContent.STATION).forEach(holding -> marked.addAll(holding.what().cells()));
+        CookeryContent.stations().forEach(owner -> colony.holdings(owner).forEach(holding -> marked.addAll(holding.what().cells())));
         stations.entrySet().removeIf(entry -> {
             if (!marked.contains(entry.getKey())) {
                 bookings.withdraw(entry.getKey());
@@ -102,7 +102,9 @@ public final class CookeryPresence implements Facing, Holding.Watch {
             ServerLevel level = view.level();
             dimensions.add(level.dimension());
             List<Workshop> workshops = new ArrayList<>();
-            for (BlockPos cell : view.blocks(CookeryContent.STATION)) {
+            Set<BlockPos> cells = new LinkedHashSet<>();
+            CookeryContent.stations().forEach(owner -> cells.addAll(view.blocks(owner)));
+            for (BlockPos cell : cells) {
                 if (!level.isLoaded(cell)) {
                     continue;
                 }

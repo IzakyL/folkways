@@ -1017,5 +1017,6 @@
   "folkways.page.cookery.pot_cooking": "Stir-frying",
   "folkways.page.cookery.pot_finished": "Ready to serve before burning",
   "folkways.page.cookery.pot_burnt": "Burnt food; collect before it turns to charcoal",
-  "folkways.page.cookery.weather": "Waiting for suitable drying or wetting conditions"
+  "folkways.page.cookery.weather": "Waiting for suitable drying or wetting conditions",
+  "folkways.delegation.folkways.compost": "Composter"
 }

@@ -8,6 +8,9 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.colony.Held;
+import io.github.izakyl.folkways.core.engine.colony.ColonyData;
+import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -48,6 +51,7 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ComposterBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -204,6 +208,90 @@ public final class CookeryRegistrationGameTests {
             rig.presence.refresh(rig.level.getServer());
             helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(),
                 "remarking cannot adopt the now unowned ingredient");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void theRealBookRegistersANativeComposterPointAndTheKitchenPagePublishesIt(GameTestHelper helper) {
+        try (Kitchen rig = new Kitchen(helper)) {
+            BlockPos cell = helper.absolutePos(new BlockPos(4, 1, 4)); WorldPos at = WorldPos.of(rig.level, cell);
+            rig.level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState()); rig.mark(cell);
+            helper.assertTrue(Enrollments.delegation(CookeryContent.COMPOST).orElseThrow().shape() instanceof Shape.Point,
+                "the actual front declares native composters as ledger points");
+            helper.assertTrue(rig.colony.holdingAt(at).filter(holding -> holding.owner().equals(CookeryContent.COMPOST)
+                && holding.what() instanceof Held.Point).isPresent(), "real book membership persists its distinct compost delegation");
+            helper.assertTrue(rig.level.getBlockEntity(cell) == null, "the real native composter keeps no block entity");
+            helper.assertTrue(rig.colony.view(rig.level).blocks(CookeryContent.COMPOST).contains(cell), "the actual loaded point view reaches the kitchen service");
+            rig.presence.refresh(rig.level.getServer());
+            var page = rig.presence.board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow();
+            helper.assertTrue(page.rows().stream().anyMatch(row -> row.icon().is(Blocks.COMPOSTER.asItem())), "the kitchen board lists the actual native point and its status");
+            rig.level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState().setValue(ComposterBlock.LEVEL, 8));
+            helper.assertValueEqual(rig.presence.goals(rig.colony.view(rig.level)).size(), 1, "the real marked point exposes its native ready-compost task");
+            rig.mark(cell); rig.presence.refresh(rig.level.getServer());
+            helper.assertTrue(rig.colony.holdingAt(at).isEmpty() && rig.presence.goals(rig.colony.view(rig.level)).isEmpty(), "a second real book click unmarks and withdraws the native point");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void unmarkingANativeComposterRejectsItsOldCollectionAndRemarkingRecoversOnlyOneBoneMeal(GameTestHelper helper) {
+        try (Kitchen rig = new Kitchen(helper)) {
+            BlockPos cell = helper.absolutePos(new BlockPos(4, 1, 4));
+            rig.level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState().setValue(ComposterBlock.LEVEL, 8));
+            rig.mark(cell); rig.presence.refresh(rig.level.getServer());
+            Node old = rig.presence.goals(rig.colony.view(rig.level)).getFirst().nodes().getFirst();
+            helper.assertTrue(old.planned(rig.level).isEmpty(), "the native collect action obtains the real kitchen turn");
+            rig.mark(cell);
+            helper.assertTrue(Commit.run(rig.level, old, rig.worker) instanceof Outcome.Failed, "unmarking withdraws the old point generation before any native mutation");
+            old.ended(rig.level, Ending.REVOKED);
+            helper.assertValueEqual(rig.level.getBlockState(cell).getValue(ComposterBlock.LEVEL), 8, "the original physical compost remains ready");
+            rig.mark(cell); rig.presence.refresh(rig.level.getServer());
+            Node recovered = rig.presence.goals(rig.colony.view(rig.level)).getFirst().nodes().getFirst();
+            helper.assertTrue(recovered.planned(rig.level).isEmpty(), "remarked native contents obtain one new valid generation");
+            var feet = recovered.spec().stances().cells().iterator().next().cell();
+            rig.body.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
+            Outcome result = Commit.run(rig.level, recovered, rig.worker);
+            helper.assertTrue(result instanceof Outcome.Done, "the new point executes real native compost extraction");
+            var made = ((Outcome.Done) result).made();
+            helper.assertValueEqual(made.stream().filter(stack -> stack.is(Items.BONE_MEAL)).mapToInt(ItemStack::getCount).sum(), 1,
+                "only one actual native bone meal is delivered");
+            helper.assertValueEqual(rig.level.getBlockState(cell).getValue(ComposterBlock.LEVEL), 0, "native extraction empties the same composter");
+            recovered.ended(rig.level, Ending.DONE);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void nativeComposterPointsExcludeOtherColoniesAndRazeReleasesThemWithoutChangingCompost(GameTestHelper helper) {
+        try (Kitchen rig = new Kitchen(helper)) {
+            BlockPos cell = helper.absolutePos(new BlockPos(4, 1, 4)); WorldPos at = WorldPos.of(rig.level, cell);
+            var nativeState = Blocks.COMPOSTER.defaultBlockState().setValue(ComposterBlock.LEVEL, 6);
+            rig.level.setBlockAndUpdate(cell, nativeState); rig.mark(cell);
+            Colony next = Colonies.mint(rig.level.getServer());
+            try {
+                helper.assertTrue(MemberToggle.toggleAt(rig.level, next, cell, rig.player).refusal().filter(MemberToggle.Refusal.ANOTHER_COLONY::equals).isPresent(),
+                    "a different colony's real book cannot steal an owned native point");
+                rig.colony.raze();
+                helper.assertTrue(rig.level.getBlockState(cell).equals(nativeState), "raze does not change native compost progress or contents");
+                helper.assertTrue(MemberToggle.toggleAt(rig.level, next, cell, rig.player).refusal().isEmpty(), "the released position can join another colony");
+                helper.assertTrue(next.holdingAt(at).filter(holding -> holding.what() instanceof Held.Point).isPresent(), "the next owner holds exactly one native point");
+            } finally { next.raze(); }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void removingANativeComposterReconcilesItsRealPointAndWithdrawsTheKitchenRow(GameTestHelper helper) {
+        try (Kitchen rig = new Kitchen(helper)) {
+            BlockPos cell = helper.absolutePos(new BlockPos(4, 1, 4)); WorldPos at = WorldPos.of(rig.level, cell);
+            rig.level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState()); rig.mark(cell);
+            rig.level.setBlockAndUpdate(cell, Blocks.AIR.defaultBlockState());
+            ColonyData.find(rig.level.getServer(), rig.colony.id()).orElseThrow().reconcile(rig.level.getServer());
+            rig.presence.refresh(rig.level.getServer());
+            helper.assertTrue(rig.colony.holdingAt(at).isEmpty(), "loaded native point validation releases a removed composter");
+            helper.assertTrue(rig.presence.board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow().rows().stream()
+                .noneMatch(row -> row.icon().is(Blocks.COMPOSTER.asItem())), "the actual kitchen page does not retain a ghost native point");
         }
         helper.succeed();
     }

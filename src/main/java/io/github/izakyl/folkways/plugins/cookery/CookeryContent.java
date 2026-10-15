@@ -22,6 +22,7 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class CookeryContent {
     public static final ResourceLocation ID = id("cookery");
     public static final ResourceLocation STATION = id("kitchen");
+    public static final ResourceLocation COMPOST = id("compost");
     public static final ResourceLocation PREPARING = id("preparing_food");
     public static final ResourceLocation CHOPPING = id("chopping_food");
     public static final ResourceLocation COOKING = id("cooking_food");
@@ -32,6 +33,8 @@ public final class CookeryContent {
 
     private CookeryContent() {
     }
+
+    public static List<ResourceLocation> stations() { return List.of(STATION, COMPOST); }
 
     public static boolean station(BlockState state) {
         return KitchenStations.find(state).isPresent();
@@ -63,6 +66,7 @@ public final class CookeryContent {
             CookeryPresence state = new CookeryPresence(scope.colony(), scope.server());
             scope.share(state);
             scope.watch(STATION, state);
+            scope.watch(COMPOST, state);
             scope.tick(state::tick);
             scope.closed(state::closed);
         });
@@ -72,7 +76,9 @@ public final class CookeryContent {
         event.facing(ID, colony -> colony.service(ID, CookeryPresence.class)
             .map(state -> (io.github.izakyl.folkways.front.api.Facing) state));
         event.enrollment(ID, new Enrollment(List.of(
-            new Delegation(STATION, new Shape.Block(CookeryContent::station, KitchenStations::anchor)),
+            new Delegation(STATION, new Shape.Block(state -> !state.is(net.minecraft.world.level.block.Blocks.COMPOSTER) && station(state), KitchenStations::anchor)),
+            new Delegation(COMPOST, new Shape.Point(state -> state.is(net.minecraft.world.level.block.Blocks.COMPOSTER)),
+                ResourceLocation.withDefaultNamespace("composter")),
             new Delegation(SeedPresence.GRASS, new Shape.Volume(io.github.izakyl.folkways.FolkwaysConfig.maxFarmCells()),
                 new Schema(List.of(new Schema.Setting.Flag(SeedPresence.RESTORE_GRASS,
                     "folkways.settings.restore_grass", ResourceLocation.withDefaultNamespace("bone_meal"), true))),
