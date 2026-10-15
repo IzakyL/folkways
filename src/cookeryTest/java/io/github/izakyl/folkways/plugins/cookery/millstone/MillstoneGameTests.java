@@ -278,6 +278,22 @@ public final class MillstoneGameTests {
                 } finally { dead.discard(); rig.close(); }
             }).thenSucceed();
     }
+    @GameTest(template = "empty")
+    public static void arrivingWithinTheCoreStanceToleranceStillLoadsAtTheReachBoundary(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            BlockPos footing = rig.cell.offset(-2, 0, -4);
+            rig.level.setBlockAndUpdate(footing.below(), Blocks.STONE.defaultBlockState());
+            rig.stances = Stances.at(rig.level, footing);
+            rig.actor.setPos(footing.getX() + 0.397, footing.getY(), footing.getZ() - 0.118);
+            helper.assertTrue(io.github.izakyl.folkways.core.api.terms.Reach.standingIn(rig.actor, rig.stances), "ordinary core navigation has legitimately arrived within its 0.9-block tolerance");
+            helper.assertTrue(io.github.izakyl.folkways.core.api.terms.Reach.withinReach(footing, rig.cell)
+                && !io.github.izakyl.folkways.core.api.terms.Reach.withinReach(rig.actor.blockPosition(), rig.cell), "rounding the actual body down crosses the reach boundary despite a valid reserved footing");
+            rig.load(rig.plan(3));
+            helper.assertTrue(rig.mill().isBoundTo(rig.actor) && rig.mill().getInput().getCount() == 3, "the real native mill accepts the fetched ingredients from the valid reserved stance");
+            helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "the accepted three real inputs are consumed once");
+        }
+        helper.succeed();
+    }
     private static void exitWall(Rig rig, boolean closed) {
         for (int x = -3; x <= 3; x++) {
             for (int z = -3; z <= 3; z++) {
@@ -294,7 +310,7 @@ public final class MillstoneGameTests {
         final UUID colony = UUID.randomUUID();
         final BlockPos cell;
         final WorldPos at;
-        final Stances stances;
+        Stances stances;
         final KitchenBookings bookings = new KitchenBookings();
         final SimpleContainer pack = new SimpleContainer(12);
         ResidentEntity actor;

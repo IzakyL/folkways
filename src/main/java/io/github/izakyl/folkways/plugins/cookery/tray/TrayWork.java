@@ -95,7 +95,9 @@ final class TrayWork implements Node, Workload.Within {
     }
     public void ended(ServerLevel level, Ending how) { if (hold != null) { hold.release(how); hold = null; } changed.run(); }
     private boolean reachable(ServerLevel level, Worker who) {
-        return WorldSpaces.relative(level, at.realm(), who.body().position()).map(BlockPos::containing)
+        var local = stances instanceof Stances.Cells ? Reach.stanceHolding(who.body(), stances)
+            : WorldSpaces.relative(level, at.realm(), who.body().position()).map(net.minecraft.core.BlockPos::containing);
+        return local
             .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
             .filter(feet -> Reach.withinReach(feet, at.block(level)) && Reach.inSight(level, feet, at.block(level))).isPresent();
     }

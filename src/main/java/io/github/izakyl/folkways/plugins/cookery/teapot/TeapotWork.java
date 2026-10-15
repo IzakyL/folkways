@@ -115,8 +115,10 @@ final class TeapotWork implements Node, Workload.Within {
         }
     }
     private Optional<BlockPos> feet(ServerLevel level, Worker who) {
-        return WorldSpaces.relative(level, at.realm(), who.body().position()).map(BlockPos::containing)
-            .flatMap(local -> WorldSpaces.storage(level, new WorldPos(at.realm(), local)));
+        var local = stances instanceof Stances.Cells ? Reach.stanceHolding(who.body(), stances)
+            : WorldSpaces.relative(level, at.realm(), who.body().position()).map(BlockPos::containing);
+        return local
+            .flatMap(footing -> WorldSpaces.storage(level, new WorldPos(at.realm(), footing)));
     }
     private boolean reachable(ServerLevel level, Worker who, BlockPos target) {
         return feet(level, who).filter(feet -> Reach.withinReach(feet, target) && Reach.inSight(level, feet, target)).isPresent();

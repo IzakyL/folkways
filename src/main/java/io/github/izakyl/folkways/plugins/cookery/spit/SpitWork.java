@@ -111,7 +111,9 @@ final class SpitWork implements Node, Workload.Within {
         changed.run();
     }
     private boolean reachable(ServerLevel level, Worker who) {
-        return WorldSpaces.relative(level, part.realm(), who.body().position()).map(BlockPos::containing)
+        var local = stances instanceof Stances.Cells ? Reach.stanceHolding(who.body(), stances)
+            : WorldSpaces.relative(level, part.realm(), who.body().position()).map(net.minecraft.core.BlockPos::containing);
+        return local
             .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(part.realm(), feet)))
             .filter(feet -> Reach.withinReach(feet, part.block(level)) && Reach.inSight(level, feet, part.block(level))).isPresent();
     }

@@ -108,9 +108,10 @@ final class MillstoneWork implements Node, Workload.Within {
         if (recoveryHold != null) { recoveryHold.release(how); recoveryHold = null; }
         changed.run();
     }
-    private boolean reachable(ServerLevel level, Worker who) {
-        return WorldSpaces.relative(level, at.realm(), who.body().position())
-            .map(net.minecraft.core.BlockPos::containing)
+    private boolean reachable(ServerLevel level, Worker who, Stances working) {
+        var local = working instanceof Stances.Cells ? Reach.stanceHolding(who.body(), working)
+            : WorldSpaces.relative(level, at.realm(), who.body().position()).map(net.minecraft.core.BlockPos::containing);
+        return local
             .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
             .filter(feet -> Reach.withinReach(feet, at.block(level)) && MillstoneStation.inSight(level, feet, at.block(level))).isPresent();
     }
@@ -131,7 +132,7 @@ final class MillstoneWork implements Node, Workload.Within {
         public NodeSpec spec() { return spec; }
         public Optional<RefusalKind> refusal(ServerLevel level) { return MillstoneWork.this.refusal(level); }
         public Outcome commit(ServerLevel level, Worker who) {
-            if (refusal(level).isPresent() || !bookings.first(at, MillstoneWork.this.id()) || !reachable(level, who)) {
+            if (refusal(level).isPresent() || !bookings.first(at, MillstoneWork.this.id()) || !reachable(level, who, spec.stances())) {
                 return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             }
             var mill = MillstoneStation.mill(level, at).orElseThrow();

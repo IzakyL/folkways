@@ -105,7 +105,9 @@ final class SteamerWork implements Node, Workload.Within {
         changed.run();
     }
     private boolean reachable(ServerLevel level, Worker who, BlockPos target) {
-        return WorldSpaces.relative(level, part.realm(), who.body().position()).map(BlockPos::containing)
+        var local = stances instanceof Stances.Cells ? Reach.stanceHolding(who.body(), stances)
+            : WorldSpaces.relative(level, part.realm(), who.body().position()).map(net.minecraft.core.BlockPos::containing);
+        return local
             .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(part.realm(), feet)))
             .filter(feet -> Reach.withinReach(feet, target) && Reach.inSight(level, feet, target)).isPresent();
     }
