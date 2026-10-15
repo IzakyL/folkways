@@ -247,6 +247,8 @@ public final class SupplyGameTests {
     @GameTest(template = "empty")
     public static void anIndependentWithdrawalStillBudgetsItsOutputAndCannotRunInAFullPack(GameTestHelper helper) {
         for (boolean full : List.of(false, true)) {
+            // Replacing a block with the same block preserves its native entity and generation audit.
+            helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(3, 1, 3)), Blocks.AIR.defaultBlockState());
             try (Rig rig = new Rig(helper)) {
                 PlanningFixture fixture = new PlanningFixture(helper, 1);
                 Node withdrawal = rig.offer(Items.WATER_BUCKET.getDefaultInstance(), 1);
