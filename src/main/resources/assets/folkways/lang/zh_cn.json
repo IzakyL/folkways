@@ -878,5 +878,18 @@
   "folkways.settings.cookery.wear_farmer_armor": "农民穿着农夫装备",
   "folkways.settings.cookery.clothing": "允许穿着的农夫装备",
   "folkways.page.cookery.exit_blocked": "石磨出口被阻挡",
-  "folkways.doing.leaving_millstone": "正在离开石磨"
+  "folkways.doing.leaving_millstone": "正在离开石磨",
+  "block.folkways.creative_supply_box": "创造补给箱",
+  "folkways.page.supply": "创造补给",
+  "folkways.supply.title": "创造补给箱",
+  "folkways.supply.all": "提供所有物品",
+  "folkways.supply.only": "仅提供白名单物品",
+  "folkways.supply.whitelist": "允许取用的物品",
+  "folkways.supply.filters": "白名单：%s 条规则",
+  "folkways.supply.help": "由创造模式玩家配置。居民只取用任务需要的数量。",
+  "folkways.supply.empty": "用聚落之书登记一个创造补给箱。",
+  "folkways.refusal.supply.source_changed": "补给箱已变更，需要重新安排取物。",
+  "folkways.refusal.supply.no_room": "居民背包需要有足够空间装下物资。",
+  "folkways.refusal.supply.out_of_reach": "居民需要到达补给箱旁取物。",
+  "folkways.doing.taking_supplies": "正在领取补给"
 }

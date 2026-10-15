@@ -878,5 +878,18 @@
   "folkways.settings.cookery.wear_farmer_armor": "Farmers wear farming clothes",
   "folkways.settings.cookery.clothing": "Allowed farming clothes",
   "folkways.page.cookery.exit_blocked": "Millstone exit blocked",
-  "folkways.doing.leaving_millstone": "Leaving the millstone"
+  "folkways.doing.leaving_millstone": "Leaving the millstone",
+  "block.folkways.creative_supply_box": "Creative supply box",
+  "folkways.page.supply": "Creative supplies",
+  "folkways.supply.title": "Creative supply box",
+  "folkways.supply.all": "All items",
+  "folkways.supply.only": "Whitelist only",
+  "folkways.supply.whitelist": "Allowed items",
+  "folkways.supply.filters": "Whitelist: %s rules",
+  "folkways.supply.help": "Creative players configure this source. Residents fetch only what their tasks need.",
+  "folkways.supply.empty": "Mark a creative supply box with the colony book.",
+  "folkways.refusal.supply.source_changed": "The supply box changed; plan a fresh withdrawal.",
+  "folkways.refusal.supply.no_room": "The resident needs room to carry the supplies.",
+  "folkways.refusal.supply.out_of_reach": "The resident must reach the supply box.",
+  "folkways.doing.taking_supplies": "Taking supplies"
 }

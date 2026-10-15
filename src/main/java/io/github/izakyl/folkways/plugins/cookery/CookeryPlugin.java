@@ -10,6 +10,10 @@ public final class CookeryPlugin {
 
     public static void install(IEventBus modBus) {
         modBus.addListener(Declaring.class, CookeryContent::declare);
+        modBus.addListener(io.github.izakyl.folkways.core.api.Relating.class, event ->
+            event.defaultParticipation(io.github.izakyl.folkways.plugins.person.PersonBody.ID,
+                io.github.izakyl.folkways.core.api.participation.Stake.urge(CookeryContent.ID),
+                io.github.izakyl.folkways.core.api.participation.Participation.ALWAYS));
         modBus.addListener(Registering.class, CookeryContent::enroll);
     }
 }

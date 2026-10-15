@@ -33,6 +33,7 @@ public final class BuiltinPlugins {
         GroundworkPlugin.install(modBus);
         PatrolPlugin.install(modBus);
         OrdersPlugin.install(modBus);
+        io.github.izakyl.folkways.plugins.supply.SupplyContent.install(modBus);
         RailPlugin.install(modBus);
         DispatchPlugin.install(modBus);
         if (ModList.get().isLoaded("kaleidoscope_cookery")) {
