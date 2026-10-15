@@ -76,23 +76,30 @@ public final class SteamerStation implements KitchenStation {
         }
         return any;
     }
+    public Optional<Stances> stances(ServerLevel level, WorldPos at) {
+        return KitchenStation.around(level, parts(level, at));
+    }
+    private record Approach(WorldPos part, Stances stances) { }
     public Optional<Workshop> freeze(UUID key, UUID colony, ServerLevel level, WorldPos at,
                                      Stances stances, KitchenBookings bookings, Runnable changed) {
         List<WorldPos> parts = parts(level, at);
         if (parts.isEmpty() || parts.stream().anyMatch(part -> steamer(level, part).flatMap(be -> SteamerBatch.read(be, level)).isPresent())) {
             return Optional.empty();
         }
+        WorldPos top = parts.getLast();
         var empty = parts.stream().filter(part -> accessible(level, part.block(level))
-            && steamer(level, part).orElseThrow().getItems().stream().allMatch(ItemStack::isEmpty)).findFirst();
+            && steamer(level, part).orElseThrow().getItems().stream().allMatch(ItemStack::isEmpty))
+            .flatMap(part -> KitchenStation.reaching(level, stances, List.of(part, top))
+                .map(working -> new Approach(part, working)).stream()).findFirst();
         if (empty.isEmpty()) { return Optional.empty(); }
-        WorldPos part = empty.get();
+        WorldPos part = empty.get().part();
         int capacity = level.getBlockState(part.block(level)).getValue(SteamerBlock.HALF) ? 4 : 8;
         List<Job> jobs = level.getRecipeManager().getAllRecipesFor(ModRecipes.STEAMER_RECIPE).stream()
             .filter(holder -> !FolkwaysConfig.refusedRecipes().contains(holder.id()))
             .flatMap(holder -> java.util.Arrays.stream(holder.value().getIngredient().getItems()).filter(stack -> !stack.isEmpty()).map(stack ->
                 new Job(holder.id(), Goods.specOf(stack), holder.value().getResultItem(level.registryAccess()), holder.value().getCookTick())))
             .filter(job -> !job.output().isEmpty()).toList();
-        return Optional.of(new Bench(key, colony, at, part, stances, jobs, capacity, bookings, changed));
+        return Optional.of(new Bench(key, colony, at, part, empty.get().stances(), jobs, capacity, bookings, changed));
     }
     public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
                                 KitchenBookings bookings, Runnable changed) {
@@ -100,10 +107,11 @@ public final class SteamerStation implements KitchenStation {
         for (WorldPos part : parts(level, at)) {
             var be = steamer(level, part).orElseThrow();
             var batch = SteamerBatch.read(be, level).filter(owned -> owned.colony().equals(colony));
-            if (batch.isEmpty()) { continue; }
+            var working = KitchenStation.reaching(level, stances, List.of(part, parts(level, at).getLast()));
+            if (batch.isEmpty() || working.isEmpty()) { continue; }
             CompoundRecovery recovered = recoveryProducts(be, level);
             Job job = new Job(batch.get().recipe(), ItemSpec.of(ResourceLocation.withDefaultNamespace("air")), recovered.output(), 0);
-            return List.of(Grown.of(new SteamerWork(colony, at, part, stances, job, recovered.count(), bookings, changed, batch.get())));
+            return List.of(Grown.of(new SteamerWork(colony, at, part, working.orElseThrow(), job, recovered.count(), bookings, changed, batch.get())));
         }
         return List.of();
     }

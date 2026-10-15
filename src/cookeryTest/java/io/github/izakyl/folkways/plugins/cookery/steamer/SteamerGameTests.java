@@ -7,6 +7,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -259,6 +260,69 @@ public final class SteamerGameTests {
                 try { check.accept(rig); } finally { rig.close(); }
             }).thenSucceed();
     }
+    @GameTest(template = "empty")
+    public static void aFourLayerSteamerCannotPlanWhenOnlyItsBottomFoodSlotIsReachable(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, false, false, 2)) {
+            BlockPos edge = fourLayerBoundary(rig);
+            rig.actor.setPos(Vec3.atBottomCenterOf(edge));
+            Stances offered = Stances.at(rig.level, edge);
+            helper.assertTrue(Reach.standingIn(rig.actor, offered) && Reach.withinReach(edge, rig.cell)
+                && Reach.inSight(rig.level, edge, rig.cell), "the lower food slot has a genuine supported core stance");
+            helper.assertTrue(!Reach.withinReach(edge, rig.cell.above(3)), "the actual top lid remains beyond native reach from the bottom-only footing");
+            helper.assertTrue(new SteamerStation().freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at, offered,
+                rig.bookings, () -> {}).isEmpty(), "a native batch cannot be planned without a stance reaching both food slot and top lid");
+            helper.assertTrue(rig.steamer().getItems().stream().allMatch(ItemStack::isEmpty)
+                && rig.count(ModItems.RAW_DOUGH.get()) == 2, "all original raw dough remains untouched when the lid cannot be reached");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 1500)
+    public static void fourLayerSteamerPublishesAndRecoversOnlyStancesThatReachFoodAndTopLid(GameTestHelper helper) {
+        Rig rig = new Rig(helper, false, false, 2); BlockPos edge = fourLayerBoundary(rig);
+        BlockPos near = rig.cell.south(2); var provider = new SteamerStation();
+        var published = provider.stances(rig.level, rig.at).orElseThrow();
+        helper.assertTrue(published.cells().contains(WorldPos.of(rig.level, edge))
+            && published.cells().contains(WorldPos.of(rig.level, near)), "the provider's real column approaches include the bottom edge and the common food-and-lid footing");
+        rig.stances = Stances.at(WorldPos.of(rig.level, edge), WorldPos.of(rig.level, near));
+        rig.actor.setPos(Vec3.atBottomCenterOf(near));
+        helper.assertTrue(Reach.withinReach(near, rig.cell.above(3))
+            && Reach.inSight(rig.level, near, rig.cell.above(3)), "the common candidate sees and reaches the actual four-layer top lid");
+        SteamerWork original = rig.plan();
+        helper.assertTrue(original.spec().stances().cells().equals(java.util.Set.of(WorldPos.of(rig.level, near))),
+            "the actual native batch retains only the stance that performs every required physical operation");
+        helper.assertTrue(rig.step(original) instanceof Outcome.Done, "the planned stance actually loads native lower food and closes the real top lid");
+        helper.assertTrue(rig.level.getBlockState(rig.cell.above(3)).getValue(SteamerBlock.HAS_LID), "the real top lid is closed without moving the resident or changing the native clock");
+        rig.hold.release(Ending.DROPPED); rig.hold = null;
+        SteamerWork resumed = (SteamerWork) provider.recovery(rig.colony, rig.level, rig.at, rig.stances,
+            rig.bookings, () -> {}).getFirst().nodes().getFirst();
+        helper.assertTrue(resumed.spec().needs().isEmpty()
+            && resumed.spec().stances().cells().equals(java.util.Set.of(WorldPos.of(rig.level, near)))
+            && resumed.planned(rig.level).isEmpty(), "recovery keeps the same native-owned batch and common operation stance without another dough budget");
+        afterCooking(rig, ready -> {
+            try {
+                helper.assertTrue(ready.step(resumed) instanceof Outcome.Done, "the safe published approach also performs actual native takeFood and lid restoration");
+                helper.assertValueEqual(ready.count(ModItems.MANTOU.get()), 2L, "both original real buns are collected once");
+                helper.assertValueEqual(ready.count(ModItems.RAW_DOUGH.get()), 0L, "the accepted native dough is never recharged or refunded");
+                helper.assertTrue(!ready.level.getBlockState(ready.cell.above(3)).getValue(SteamerBlock.HAS_LID), "the real top lid returns to its original open state");
+            } finally { resumed.ended(ready.level, Ending.DONE); }
+        });
+    }
+
+    private static BlockPos fourLayerBoundary(Rig rig) {
+        for (int dy = 1; dy <= 3; dy++) {
+            rig.level.setBlockAndUpdate(rig.cell.above(dy), ModBlocks.STEAMER.get().defaultBlockState().setValue(SteamerBlock.HALF, false));
+        }
+        for (int x = 0; x <= 4; x++) { for (int z = 0; z <= 2; z++) {
+            if (x == 0 && z == 0) { continue; }
+            BlockPos floor = rig.cell.offset(x, 0, z);
+            rig.level.setBlockAndUpdate(floor.below(), Blocks.STONE.defaultBlockState());
+            rig.level.setBlockAndUpdate(floor, Blocks.AIR.defaultBlockState());
+            rig.level.setBlockAndUpdate(floor.above(), Blocks.AIR.defaultBlockState());
+        } }
+        return rig.cell.offset(4, 0, 2);
+    }
+
     private static final class Rig implements Worker, AutoCloseable {
         final GameTestHelper helper;
         final ServerLevel level;
@@ -266,7 +330,7 @@ public final class SteamerGameTests {
         final BlockPos cell;
         final WorldPos at;
         final WorldPos part;
-        final Stances stances;
+        Stances stances;
         final KitchenBookings bookings = new KitchenBookings();
         final SimpleContainer pack = new SimpleContainer(12);
         final ResidentEntity actor;

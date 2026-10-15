@@ -46,14 +46,20 @@ public final class SpitStation implements KitchenStation {
                 && level.getBlockEntity(at.block(level)) instanceof ShawarmaSpitBlockEntity spit
             ? Optional.of(spit) : Optional.empty();
     }
+    public Optional<Stances> stances(ServerLevel level, WorldPos at) {
+        return KitchenStation.around(level, slots(level, at));
+    }
+    private record Approach(WorldPos part, Stances stances) { }
     public Optional<Workshop> freeze(UUID key, UUID colony, ServerLevel level, WorldPos at,
                                      Stances stances, KitchenBookings bookings, Runnable changed) {
         List<WorldPos> parts = slots(level, at);
         if (parts.stream().anyMatch(part -> spit(level, part).flatMap(spit -> SpitBatch.read(spit, level)).isPresent())) {
             return Optional.empty();
         }
-        Optional<WorldPos> available = parts.stream().filter(part -> spit(level, part)
-            .filter(spit -> spit.cookingItem.isEmpty() && spit.cookedItem.isEmpty()).isPresent()).findFirst();
+        Optional<Approach> available = parts.stream().filter(part -> spit(level, part)
+            .filter(spit -> spit.cookingItem.isEmpty() && spit.cookedItem.isEmpty()).isPresent())
+            .flatMap(part -> KitchenStation.reaching(level, stances, List.of(part))
+                .map(working -> new Approach(part, working)).stream()).findFirst();
         if (available.isEmpty()) { return Optional.empty(); }
         List<Job> jobs = level.getRecipeManager().getAllRecipesFor(RecipeType.CAMPFIRE_COOKING).stream()
             .filter(holder -> !FolkwaysConfig.refusedRecipes().contains(holder.id()))
@@ -61,7 +67,7 @@ public final class SpitStation implements KitchenStation {
                 java.util.Arrays.stream(ingredient.getItems()).filter(stack -> !stack.isEmpty()).map(stack ->
                     new Job(holder.id(), Goods.specOf(stack), holder.value().getResultItem(level.registryAccess()).copyWithCount(1),
                         holder.value().getCookingTime())))).filter(job -> !job.output().isEmpty()).toList();
-        return Optional.of(new Bench(key, colony, at, available.get(), stances, jobs, bookings, changed));
+        return Optional.of(new Bench(key, colony, at, available.get().part(), available.get().stances(), jobs, bookings, changed));
     }
     public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
                                 KitchenBookings bookings, Runnable changed) {
@@ -69,10 +75,11 @@ public final class SpitStation implements KitchenStation {
         for (WorldPos part : slots(level, at)) {
             var spit = spit(level, part).orElseThrow();
             var owned = SpitBatch.read(spit, level).filter(batch -> batch.colony().equals(colony));
-            if (owned.isPresent()) {
+            var working = KitchenStation.reaching(level, stances, List.of(part));
+            if (owned.isPresent() && working.isPresent()) {
                 Job job = new Job(owned.get().recipe(), ItemSpec.of(ResourceLocation.withDefaultNamespace("air")),
                     spit.cookedItem.copyWithCount(1), Math.max(0, spit.cookTime));
-                return List.of(Grown.of(new SpitWork(colony, at, part, stances, job, spit.cookedItem.getCount(),
+                return List.of(Grown.of(new SpitWork(colony, at, part, working.orElseThrow(), job, spit.cookedItem.getCount(),
                     bookings, changed, owned.get())));
             }
         }
