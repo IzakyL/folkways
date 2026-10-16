@@ -69,13 +69,16 @@ public final class ColonyShell
     private static final int PAGE_MIN = 360;
 
     private static final int MENU_SIZE = (int) Window.TITLE_HEIGHT - 4;
-    private static final int MENU_BAR = 0xFFF0EEE6;
+    private static final int MENU_BAR = 0xFF3B2A1A;
 
     private static final int MARK_WIDTH = 2;
-    private static final int MARK_ON = 0xFFE0BC76;
+    private static final int MARK_ON = 0xFF9A3324;
 
     private static final int WINDOW_WIDTH = 300;
     private static final int WINDOW_HEIGHT = 230;
+    // A block's own window holds its whole board, an order's words on a line of their own among them.
+    private static final int SITE_WIDTH = 400;
+    private static final int SITE_HEIGHT = 320;
 
     private final Optional<UUID> colonyId;
     private final Optional<BlockPos> site;
@@ -122,7 +125,7 @@ public final class ColonyShell
         Desk desk = new Desk();
         Window window = desk.panel(Window.of("site",
             Component.translatable("folkways.panel.title"),
-            0f, 0f, WINDOW_WIDTH, WINDOW_HEIGHT, 220, 140));
+            0f, 0f, SITE_WIDTH, SITE_HEIGHT, 220, 140));
         window.open();
         window.onDismiss(() -> {
             if (player instanceof ServerPlayer serverPlayer) {
@@ -495,7 +498,7 @@ public final class ColonyShell
             bar.setDisplay(selected);
             if (bar.getParent() instanceof Button button) {
                 button.buttonStyle(style -> style.baseTexture(
-                    new ColorRectTexture(selected ? 0xFF465950 : 0x00000000)));
+                    new ColorRectTexture(selected ? 0xFFD6C497 : 0x00000000)));
             }
             if (selected) {
                 bar.getParent().addClass("folkways_selected");

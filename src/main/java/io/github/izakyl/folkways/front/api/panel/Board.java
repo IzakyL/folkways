@@ -40,9 +40,12 @@ public record Board(List<Figure> figures, List<Row> rows, Optional<Component> wh
         }
     }
 
-    /** {@code told} is the detail in pictures, shown in its place where it is drawn; the words stay for the rest. */
+    /**
+     * {@code told} is the detail in pictures, shown in its place where it is drawn; the words stay for the rest.
+     * A {@code whole} row takes a whole line of the page, where it would otherwise share one with the next.
+     */
     public record Row(ItemStack icon, Component title, Component detail, List<Act> acts,
-                      Optional<Meter> meter, boolean heading, Optional<Sentence> told) {
+                      Optional<Meter> meter, boolean heading, Optional<Sentence> told, boolean whole) {
 
         public static final int MAX_ACTS = 4;
 
@@ -52,6 +55,11 @@ public record Board(List<Figure> figures, List<Row> rows, Optional<Component> wh
                 throw new IllegalArgumentException(
                     "a board row offers at most " + MAX_ACTS + " acts, got " + acts.size());
             }
+        }
+
+        public Row(ItemStack icon, Component title, Component detail, List<Act> acts,
+                Optional<Meter> meter, boolean heading, Optional<Sentence> told) {
+            this(icon, title, detail, acts, meter, heading, told, false);
         }
 
         public Row(ItemStack icon, Component title, Component detail, List<Act> acts,
@@ -79,7 +87,11 @@ public record Board(List<Figure> figures, List<Row> rows, Optional<Component> wh
 
         public Row told(Sentence sentence) {
             return new Row(icon, title, detail, acts, meter, heading,
-                sentence.isEmpty() ? Optional.empty() : Optional.of(sentence));
+                sentence.isEmpty() ? Optional.empty() : Optional.of(sentence), whole);
+        }
+
+        public Row wide() {
+            return new Row(icon, title, detail, acts, meter, heading, told, true);
         }
     }
 

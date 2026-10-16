@@ -8,11 +8,13 @@ import com.lowdragmc.lowdraglib2.gui.ui.data.ScrollerMode;
 import com.lowdragmc.lowdraglib2.gui.ui.data.TextWrap;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Scroller;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import dev.vfyjxf.taffy.style.FlexWrap;
+import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -33,12 +35,13 @@ public final class Rows {
 
     private static final int HEADING_HEIGHT = 18;
 
-    public static final int QUIET = 0xFF84918E;
-    private static final int SECTION = 0xFFE0BC76;
-    private static final int TITLE = 0xFFF0EEE6;
+    public static final int INK = 0xFF3B2A1A;
+    public static final int QUIET = 0xFF7D6748;
+    private static final int SECTION = 0xFF9A3324;
+    private static final int TITLE = 0xFF2B1C12;
 
     private static final int METER_HEIGHT = 6;
-    private static final int METER_BED = 0xFF2B2B2B;
+    private static final int METER_BED = 0xFFC4AD7E;
 
     private Rows() {
     }
@@ -268,7 +271,7 @@ public final class Rows {
             .widthPercent(100).alignItems(AlignItems.STRETCH)));
         view.viewContainer(container -> container.layout(layout -> layout
             .flexDirection(FlexDirection.COLUMN).widthPercent(100).heightAuto()));
-        return view;
+        return tracked(view);
     }
 
     public static ScrollerView wideBox() {
@@ -284,6 +287,29 @@ public final class Rows {
         view.addClass(WIDE_SCROLL);
         view.viewContainer(container -> container.layout(layout -> layout
             .flexDirection(FlexDirection.COLUMN).widthAuto().heightAuto()));
+        return tracked(view);
+    }
+
+    // LDLib2 gives the holder a scroll bar is sized against a Yoga "flex: 1", which its Taffy layout does not read,
+    // so the holder keeps the bar's own width and a bar sized at its share of the track shrinks to a sliver. The
+    // holder is made to grow along the track. Inside a page's window even a growing or full-width holder in the
+    // sideways track is laid at the bar's few pixels, so that one is given the track's width outright.
+    private static ScrollerView tracked(ScrollerView view) {
+        for (Scroller scroller : List.of(view.horizontalScroller, view.verticalScroller)) {
+            for (UIElement holder : scroller.scrollContainer.getChildren()) {
+                holder.layout(layout -> layout.flexGrow(1));
+            }
+        }
+        UIElement track = view.horizontalScroller.scrollContainer;
+        track.layout(layout -> layout.flexDirection(FlexDirection.ROW));
+        track.addEventListener(UIEvents.LAYOUT_CHANGED, event -> {
+            float room = track.getContentWidth();
+            for (UIElement holder : track.getChildren()) {
+                if (room > 0 && holder.getSizeWidth() != room) {
+                    holder.layout(layout -> layout.width(room));
+                }
+            }
+        });
         return view;
     }
 

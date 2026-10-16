@@ -27,7 +27,7 @@ public final class Drawing {
 
     private static final int LIST_WIDTH = 104;
     private static final int MARK_WIDTH = 2;
-    private static final int MARK_ON = 0xFFE0BC76;
+    private static final int MARK_ON = 0xFF9A3324;
 
     public interface Held {
 

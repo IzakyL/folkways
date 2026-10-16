@@ -5,6 +5,7 @@ import { clickElement, panelElements } from "../ldlib2";
 import { foundColonyFast, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import { setBookGesture } from "../shared/ui/zone-tools";
 import { LayoutProbe } from "../shared/capture/layout-lint";
+import { clickTab } from "../shared/ui/colony-pages";
 import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
 import { tracePath } from "../shared/harness/out-paths";
 import { seededOffThreadServer } from "../shared/harness/mod-settings";
@@ -96,11 +97,11 @@ test("the colony panel on LDLib2, on camera", async ({}, testInfo) => {
         worldState: { scale, frame, close }, hard: true,
       });
       expect(elements.some(element => element.id === "folkways.tab.zones")).toBe(false);
-      await clickElement(client, { id: "folkways.tab.settings" }, { scrollIntoView: true });
+      await clickTab(client, "folkways.tab.settings");
       await frames(client, 4);
       await clickElement(client, { id: "folkways.settings.reset_layout" });
       await frames(client, 4);
-      await clickElement(client, { id: "folkways.tab.metrics" }, { scrollIntoView: true });
+      await clickTab(client, "folkways.tab.metrics");
       await frames(client, 4);
       await input.move(client, { x: 0, y: 0 });
       await frames(client, 3);
@@ -108,7 +109,7 @@ test("the colony panel on LDLib2, on camera", async ({}, testInfo) => {
         subject: `Colony overview at GUI scale ${scale}`,
         worldState: { scale }, hard: true,
       });
-      await clickElement(client, { id: "folkways.tab.residents" }, { scrollIntoView: true });
+      await clickTab(client, "folkways.tab.residents");
     }
     await screen.dismiss(client);
     for (const mode of ["point", "box", "line"] as const) {

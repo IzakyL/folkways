@@ -58,7 +58,7 @@ public final class DraftPanel {
 
     private static final int LIST_WIDTH = 104;
     private static final int MARK_WIDTH = 2;
-    private static final int MARK_ON = 0xFFE0BC76;
+    private static final int MARK_ON = 0xFF9A3324;
     private static final int CONTROL_MIN = 28;
     private static final int NUMBER_WIDTH = 34;
     private static final int MOST_ICONS = 6;

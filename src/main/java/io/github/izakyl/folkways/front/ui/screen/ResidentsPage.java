@@ -10,6 +10,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvent;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
@@ -70,9 +71,9 @@ public final class ResidentsPage implements Draw {
 
     private static final int ABBREVIATION = 2;
 
-    private static final int ALLOWED_COLOR = 0xFFFFFFFF;
-    private static final int BARRED_COLOR = 0xFFB0554A;
-    private static final int HEADER_COLOR = 0xFFE0BC76;
+    private static final int ALLOWED_COLOR = 0xFF2B1C12;
+    private static final int BARRED_COLOR = 0xFF8A2416;
+    private static final int HEADER_COLOR = 0xFF9A3324;
 
     private static final String ROSTER = "roster";
     private static final String NAME = "name";
@@ -316,6 +317,8 @@ public final class ResidentsPage implements Draw {
                     event -> togglePriority(player, state, index, trade));
                 cell.addServerEventListener(UIEvents.MOUSE_WHEEL,
                     event -> rankPriority(player, state, index, trade, (int) Math.signum(event.deltaY)));
+                // The wheel ranks the cell; it must not also scroll the table beneath it.
+                cell.addEventListener(UIEvents.MOUSE_WHEEL, UIEvent::stopPropagation);
                 priorities.add(cell);
                 cells.addChildren(cell);
             }

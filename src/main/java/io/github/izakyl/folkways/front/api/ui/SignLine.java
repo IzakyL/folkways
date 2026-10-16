@@ -24,7 +24,7 @@ public final class SignLine {
     }
 
     public static void show(UIElement line, Sentence sentence) {
-        show(line, sentence, Signs.WORD_COLOR);
+        show(line, sentence, Rows.INK);
     }
 
     /** Draws {@code sentence} in {@code line}, its words in {@code ink}; on the client only. */

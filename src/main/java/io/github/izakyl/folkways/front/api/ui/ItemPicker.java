@@ -70,6 +70,8 @@ public final class ItemPicker {
     // A mod's tag folders are many lines each; Minecraft alone carries hundreds of tags.
     private static final int FOLDERS_AT_ONCE = 40;
     private static final int MOST_RULES = 64;
+    // A search that finds no more than this opens its tag folders too; one that finds more opens only its mods.
+    private static final int UNFOLDED_AT_MOST = 40;
 
     private static final List<String> HELP_KEYS = List.of(
         TOKEN + ".tooltip",
@@ -108,7 +110,6 @@ public final class ItemPicker {
     private final Button rule = new Button();
     private final Button confirm = new Button().setText(Component.translatable("folkways.action.confirm"));
     private String query = "";
-    private int shown = LAID_AT_ONCE;
 
     private ItemPicker(Mode mode, List<Item> pool, List<Offer> offers, Set<ItemFilter> held) {
         this.mode = mode;
@@ -167,7 +168,6 @@ public final class ItemPicker {
         search.textFieldStyle(style -> style.placeholder(Component.translatable(TOKEN + ".search")));
         search.setTextResponder(typed -> {
             query = typed == null ? "" : typed.trim();
-            shown = LAID_AT_ONCE;
             searched();
         });
         Tokens.name(search, TOKEN + ".search");
@@ -295,18 +295,34 @@ public final class ItemPicker {
 
     // The mods there are, each a folder of its tags and of what carries none.
     private void lay() {
-        Map<String, List<Item>> byMod = new TreeMap<>();
-        for (Item item : pool) {
-            byMod.computeIfAbsent(BuiltInRegistries.ITEM.getKey(item).getNamespace(), any -> new ArrayList<>())
-                .add(item);
-        }
+        Map<String, List<Item>> byMod = byMod(pool);
         byMod.forEach((mod, items) -> {
-            Shelf shelf = new Shelf(mod, modName(mod), filterOf("@" + mod), items, 0);
+            Shelf shelf = new Shelf(mod, modName(mod), filterOf("@" + mod), items, 0, false, false);
             tree.addChildren(shelf.element);
             if (byMod.size() == 1) {
                 shelf.open(true);
             }
         });
+    }
+
+    // What a search finds, filed as the whole tree is: a folder holds only what was found in it, so a folder that
+    // found nothing is not there at all. Its mods stand open, and a short find opens its tags as well.
+    private void layFound(List<Item> found) {
+        boolean unfolded = found.size() <= UNFOLDED_AT_MOST;
+        byMod(found).forEach((mod, items) -> {
+            Shelf shelf = new Shelf(mod, modName(mod), filterOf("@" + mod), items, 0, true, unfolded);
+            results.addChildren(shelf.element);
+            shelf.open(true);
+        });
+    }
+
+    private static Map<String, List<Item>> byMod(List<Item> items) {
+        Map<String, List<Item>> byMod = new TreeMap<>();
+        for (Item item : items) {
+            byMod.computeIfAbsent(BuiltInRegistries.ITEM.getKey(item).getNamespace(), any -> new ArrayList<>())
+                .add(item);
+        }
+        return byMod;
     }
 
     private void searched() {
@@ -323,8 +339,8 @@ public final class ItemPicker {
             }
         } else {
             results.clearAllChildren();
-            leaves.values().forEach(laid -> laid.removeIf(leaf -> leaf.getParent() == null
-                || leaf.getParent() == results));
+            shelves.removeIf(shelf -> shelf.found);
+            leaves.values().forEach(laid -> laid.removeIf(this::foundLeaf));
             if (searching) {
                 ItemQuery.parse(query).ifPresent(asked -> {
                     List<Item> found = new ArrayList<>();
@@ -333,10 +349,7 @@ public final class ItemPicker {
                             found.add(item);
                         }
                     }
-                    layItems(results, found, shown, more -> {
-                        shown += LAID_AT_ONCE;
-                        searched();
-                    });
+                    layFound(found);
                     if (found.isEmpty()) {
                         results.addChildren(Rows.note(Component.translatable(TOKEN + ".none")));
                     }
@@ -344,6 +357,16 @@ public final class ItemPicker {
             }
         }
         worn();
+    }
+
+    // A leaf laid under the last search, or one no longer laid anywhere.
+    private boolean foundLeaf(UIElement leaf) {
+        for (UIElement above = leaf.getParent(); above != null; above = above.getParent()) {
+            if (above == results) {
+                return true;
+            }
+        }
+        return leaf.getParent() == null;
     }
 
     private static boolean offers(ItemQuery asked, Offer offer) {
@@ -481,7 +504,7 @@ public final class ItemPicker {
                 box.setOn(own, false);
             } else if (part instanceof Label name) {
                 // Taken in by another rule, though not ticked of its own.
-                name.textStyle(style -> style.textColor(!own && covered.contains(item) ? Rows.QUIET : 0xFFF0EEE6));
+                name.textStyle(style -> style.textColor(!own && covered.contains(item) ? Rows.QUIET : Rows.INK));
             }
         }
     }
@@ -617,6 +640,9 @@ public final class ItemPicker {
         private final ItemFilter folder;
         private final List<Item> items;
         private final int depth;
+        // Laid under a search, not in the whole tree; it opens its own folders when it opens if it is unfolded.
+        private final boolean found;
+        private final boolean unfolded;
         private final UIElement element = column();
         private final UIElement under = column();
         private final Button head = new Button();
@@ -626,12 +652,15 @@ public final class ItemPicker {
         private boolean laid;
         private int most = LAID_AT_ONCE;
 
-        private Shelf(String key, Component name, @Nullable ItemFilter folder, List<Item> items, int depth) {
+        private Shelf(String key, Component name, @Nullable ItemFilter folder, List<Item> items, int depth,
+                boolean found, boolean unfolded) {
             this.key = key;
             this.name = name;
             this.folder = folder;
             this.items = items;
             this.depth = depth;
+            this.found = found;
+            this.unfolded = unfolded;
             shelves.add(this);
             leftward(head);
             head.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0).height(ROW));
@@ -696,28 +725,39 @@ public final class ItemPicker {
                     byTag.computeIfAbsent(tag.location(), any -> new ArrayList<>()).add(item);
                 }
             }
+            List<Shelf> laidHere = new ArrayList<>();
             if (!untagged.isEmpty()) {
-                under.addChildren(new Shelf(key + "#", Component.translatable(TOKEN + ".other"), null,
-                    untagged, 1).element);
+                laidHere.add(new Shelf(key + "#", Component.translatable(TOKEN + ".other"), null,
+                    untagged, 1, found, false));
             }
             int laid = 0;
+            Button rest = null;
             for (Map.Entry<ResourceLocation, List<Item>> tag : byTag.entrySet()) {
                 if (laid++ == most) {
-                    Button rest = new Button().setText(Component.translatable(TOKEN + ".more", byTag.size() - most));
+                    rest = new Button().setText(Component.translatable(TOKEN + ".more", byTag.size() - most));
                     leftward(rest);
                     rest.layout(layout -> layout.widthPercent(100).height(ROW).flexShrink(0));
                     rest.setOnClick(event -> {
                         most += FOLDERS_AT_ONCE;
-                        shelves.removeIf(shelf -> shelf != this && shelf.key.startsWith(key + "#"));
+                        shelves.removeIf(shelf -> shelf != this && shelf.found == found
+                            && shelf.key.startsWith(key + "#"));
                         layTags();
                         worn();
                     });
                     Tokens.name(rest, TOKEN + ".more");
-                    under.addChildren(rest);
                     break;
                 }
-                under.addChildren(new Shelf(key + "#" + tag.getKey(), tagName(tag.getKey()),
-                    filterOf("@" + key + " #" + tag.getKey()), tag.getValue(), 1).element);
+                laidHere.add(new Shelf(key + "#" + tag.getKey(), tagName(tag.getKey()),
+                    filterOf("@" + key + " #" + tag.getKey()), tag.getValue(), 1, found, false));
+            }
+            for (Shelf shelf : laidHere) {
+                under.addChildren(shelf.element);
+                if (unfolded) {
+                    shelf.open(true);
+                }
+            }
+            if (rest != null) {
+                under.addChildren(rest);
             }
         }
 

@@ -29,7 +29,7 @@ import net.minecraft.world.entity.player.Player;
 final class InvitationBanner {
 
     private static final int ROW_SLOTS = 4;
-    private static final int BACKGROUND = 0x40E0BC76;
+    private static final int BACKGROUND = 0x409A3324;
 
     private static final String ROWS = "invitations";
     private static final String TEXT = "text";

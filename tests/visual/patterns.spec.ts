@@ -235,6 +235,20 @@ const GALLERIES: Gallery[] = [
     },
     views: mineViews,
   },
+  {
+    pattern: "quarry",
+    task: galleryTask("quarry", "tests/visual/patterns/quarry/QuarryGallery.java"),
+    args: () => ({ source: star("quarry") }),
+    stand: "0 40 0",
+    forceload: "-56 -32 56 32",
+    views: () => [
+      view("overview", v(-8, 50, -58), v(-8, 0, 0), "Both quarries: one in flat ground, one cut into a hillside", 60),
+      view("flat-pit", v(-30, 22, -30), v(-30, -1, 0), "Flat-ground quarry: sides stepping down to the floor", 60),
+      view("flat-steps", v(-44, 8, 0), v(-30, 0, 0), "Flat-ground quarry: walking down its stepped side", 60),
+      view("hillside-face", v(16, 24, -40), v(16, 4, 0), "Hillside quarry: the face left where the hill stands above the edge", 60),
+      view("hillside-floor", v(0, 8, 0), v(20, 0, 0), "Hillside quarry: its floor, looking at the face", 60),
+    ],
+  },
 ];
 
 test.describe.configure({ mode: "parallel" });

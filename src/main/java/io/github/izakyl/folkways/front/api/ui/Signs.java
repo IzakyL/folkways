@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -37,6 +38,15 @@ public final class Signs {
     private static final int SUBSCRIPT_TUCK = 1;
     private static final int SUBSCRIPT_DROP = 1;
     private static final String MORE = "…";
+    // Glyphs are drawn white with a dark rim for the world's dark cards. On the ledger's paper each is drawn from its
+    // twin under ledger/, the white inked and the rim dropped; one with no twin is tinted to ink whole, and those whose
+    // own colour is what they say are left as they are.
+    private static final String LEDGER = "ledger/";
+    private static final Set<ResourceLocation> COLOURED = Set.of(ours("glyph/admits"), ours("glyph/refuses"),
+        ours("glyph/lacks"));
+    private static final float INK_RED = (Rows.INK >> 16 & 0xFF) / 255f;
+    private static final float INK_GREEN = (Rows.INK >> 8 & 0xFF) / 255f;
+    private static final float INK_BLUE = (Rows.INK & 0xFF) / 255f;
     private static final Sign PLUS = new Sign.Mark(ours("glyph/plus"), 6, 6);
     private static final Sign YIELDS = new Sign.Mark(ours("glyph/yields"), 8, 6);
 
@@ -161,11 +171,22 @@ public final class Signs {
     public static void draw(GuiGraphics graphics, Font font, Laid laid, int x, int y) {
         for (Placed placed : laid.placed()) {
             switch (placed) {
-                case Placed.Glyph glyph ->
-                    graphics.blitSprite(glyph.sprite(), x + glyph.x(), y + glyph.y(), glyph.width(), glyph.height());
+                case Placed.Glyph glyph -> {
+                    ResourceLocation twin = glyph.sprite().withPrefix(LEDGER);
+                    boolean tinted = drawn(twin).isEmpty() && !COLOURED.contains(glyph.sprite());
+                    if (tinted) {
+                        graphics.setColor(INK_RED, INK_GREEN, INK_BLUE, 1f);
+                    }
+                    graphics.blitSprite(tinted || COLOURED.contains(glyph.sprite()) ? glyph.sprite() : twin,
+                        x + glyph.x(), y + glyph.y(), glyph.width(), glyph.height());
+                    if (tinted) {
+                        graphics.setColor(1f, 1f, 1f, 1f);
+                    }
+                }
                 case Placed.Item item -> graphics.renderItem(item.stack(), x + item.x(), y + item.y());
+                // Words are inked onto the page; only a count, white over its item, keeps the shadow it needs.
                 case Placed.Text text -> LDLibFonts.drawText(graphics, font, Component.literal(text.text()),
-                    x + text.x(), y + text.y(), text.color(), true);
+                    x + text.x(), y + text.y(), text.color(), text.color() == COUNT_COLOR);
             }
         }
     }

@@ -42,6 +42,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -387,28 +388,33 @@ final class OrdersPresence implements Facing {
             .flatMap(level -> Containers.at(level, order.into().block(level)));
     }
 
+    // Every order the colony keeps, under the container it fills: the container a heading that finds it in the world,
+    // its orders the lines beneath. The draft is filed at a container, so it is not here but on the container's page.
     @Override
     public Optional<Board> board(ResourceLocation page, ColonyView view) {
         if (!page.equals(OrdersContent.PAGE.id())) {
             return Optional.empty();
         }
         MinecraftServer server = view.level().getServer();
-        List<Board.Row> rows = new ArrayList<>();
-        rows.add(draftRow());
+        Map<WorldPos, List<Order>> byContainer = new LinkedHashMap<>();
         for (Order order : orders.values()) {
-            rows.add(new Board.Row(iconOf(order.what()),
-                Component.translatable("folkways.panel.orders.row", order.high(),
-                    nameOf(order.what())),
-                progressOf(order, server),
-                WorldSpaces.storage(view.level(), order.into())
-                    .map(cell -> List.<Board.Act>of(new Board.Act.Ping(cell))).orElse(List.of()))
-                .told(toldOf(order, server)));
+            byContainer.computeIfAbsent(order.into(), any -> new ArrayList<>()).add(order);
         }
+        List<Board.Row> rows = new ArrayList<>();
+        byContainer.forEach((into, filed) -> {
+            rows.add(new Board.Row(ItemStack.EMPTY, containerName(view.level(), into), Component.empty(),
+                WorldSpaces.storage(view.level(), into)
+                    .map(cell -> List.<Board.Act>of(new Board.Act.Ping(cell))).orElse(List.of()),
+                Optional.empty(), true));
+            for (Order order : filed) {
+                rows.add(orderRow(order, server, List.of()));
+            }
+        });
         return Optional.of(new Board(
             List.of(new Board.Figure("folkways.panel.orders.open",
                 Component.literal(Integer.toString(orders.size())))),
             rows,
-            Optional.empty()));
+            Optional.of(Component.translatable("folkways.panel.orders.none"))));
     }
 
     @Override
@@ -425,18 +431,14 @@ final class OrdersPresence implements Facing {
         rows.add(draftRow());
         rows.add(new Board.Row(ItemStack.EMPTY,
             Component.translatable("folkways.panel.orders.file"),
-            Component.empty(),
+            Component.translatable("folkways.panel.orders.file.detail"),
             List.of(new Board.Act.Do(new OrderAct.Maintain().key(), "folkways.orders.maintain", icon("repeater")),
                 new Board.Act.Do(new OrderAct.Deliver().key(), "folkways.orders.deliver",
-                    icon("chest_minecart")))));
+                    icon("chest_minecart")))).wide());
+        rows.add(Board.Row.heading(Component.translatable("folkways.panel.orders.here")));
         for (Order order : here) {
-            rows.add(new Board.Row(iconOf(order.what()),
-                Component.translatable("folkways.panel.orders.row", order.high(),
-                    nameOf(order.what())),
-                progressOf(order, level.getServer()),
-                List.of(new Board.Act.Do(OrderAct.withdrawing(order.what()).key(),
-                    "folkways.action.delete", icon("barrier"))))
-                .told(toldOf(order, level.getServer())));
+            rows.add(orderRow(order, level.getServer(), List.of(new Board.Act.Do(
+                OrderAct.withdrawing(order.what()).key(), "folkways.action.delete", icon("barrier")))));
         }
         rows.addAll(shelfRows(shelfAt(into)));
         return Optional.of(new Board(
@@ -444,6 +446,38 @@ final class OrdersPresence implements Facing {
                 Component.literal(Integer.toString(here.size())))),
             rows,
             Optional.empty()));
+    }
+
+    // One order on a line of its own: what it keeps, then in words whether it stands or comes once, the counts it
+    // keeps to, how many the container holds now and how many are still on their way.
+    private Board.Row orderRow(Order order, MinecraftServer server, List<Board.Act> acts) {
+        return new Board.Row(iconOf(order.what()), nameOf(order.what()), detailOf(order, server), acts).wide();
+    }
+
+    private Component detailOf(Order order, MinecraftServer server) {
+        Optional<Container> held = containerOf(order, server);
+        if (held.isEmpty()) {
+            return Component.translatable("folkways.panel.orders.gone");
+        }
+        long present = Goods.countIn(held.get(), order.what());
+        MutableComponent detail = order.standing()
+            ? Component.translatable("folkways.panel.orders.standing", present, order.low(), order.high())
+            : Component.translatable("folkways.panel.orders.once", present, order.high());
+        Filling delivery = filling.get(order.key());
+        long left = delivery == null ? pending.getOrDefault(order.key(), 0L) : delivery.remaining();
+        if (left > 0) {
+            detail.append(Component.translatable("folkways.panel.orders.coming", left));
+        }
+        return detail;
+    }
+
+    // A container by the block it is and where it stands.
+    private static Component containerName(ServerLevel level, WorldPos into) {
+        BlockPos cell = into.block(level);
+        Component block = into.in(level) && level.isLoaded(cell)
+            ? level.getBlockState(cell).getBlock().getName()
+            : Component.translatable("folkways.panel.orders.container.away");
+        return Component.translatable("folkways.panel.orders.container", block, cell.getX(), cell.getY(), cell.getZ());
     }
 
     private static List<Board.Row> shelfRows(Shelf shelf) {
@@ -504,50 +538,10 @@ final class OrdersPresence implements Facing {
             Component.translatable("folkways.panel.orders.draft"),
             Component.translatable("folkways.panel.orders.draft.detail",
                 draft.count(OrdersContent.LOW.key()),
-                draft.count(OrdersContent.COUNT.key()),
-                what.map(OrdersPresence::nameOf).orElse(Component.empty())),
+                draft.count(OrdersContent.COUNT.key())),
             List.of(new Board.Act.Edit(OrdersContent.ITEM.key()),
                 new Board.Act.Edit(OrdersContent.LOW.key()),
-                new Board.Act.Edit(OrdersContent.COUNT.key())))
-            .told(what.flatMap(spec -> wareOf(spec, 0))
-                .map(ware -> Sentence.of(ware, span(draft.count(OrdersContent.LOW.key()),
-                    draft.count(OrdersContent.COUNT.key()))))
-                .orElse(Sentence.EMPTY));
-    }
-
-    /**
-     * An order in pictures: a standing one is the stock of its item kept against the span it keeps, a one-time one
-     * the item delivered against all it asks for, either then what is still on its way.
-     */
-    private Sentence toldOf(Order order, MinecraftServer server) {
-        Optional<Container> held = containerOf(order, server);
-        if (held.isEmpty()) {
-            return Sentence.of(Sentence.glyph("lacks"),
-                Sentence.word(new Notice("folkways.panel.orders.gone", List.of())));
-        }
-        long present = Goods.countIn(held.get(), order.what());
-        Optional<Sentence.Token.Ware> have = wareOf(order.what(), present);
-        if (have.isEmpty()) {
-            return Sentence.EMPTY;
-        }
-        List<Sentence.Token> tokens = new ArrayList<>();
-        if (order.standing()) {
-            tokens.add(Sentence.glyph("stock"));
-        }
-        tokens.add(have.get());
-        if (present <= 0) {
-            tokens.add(Sentence.glyph("lacks"));
-        }
-        tokens.add(Sentence.glyph("slash"));
-        tokens.add(order.standing() ? span(order.low(), order.high())
-            : Sentence.word(Notice.count(order.high())));
-        Filling delivery = filling.get(order.key());
-        long left = delivery == null ? pending.getOrDefault(order.key(), 0L) : delivery.remaining();
-        if (left > 0) {
-            tokens.add(Sentence.glyph("remaining"));
-            tokens.add(wareOf(order.what(), left).orElseThrow());
-        }
-        return new Sentence(tokens);
+                new Board.Act.Edit(OrdersContent.COUNT.key()))).wide();
     }
 
     private static Sentence admitsTold(boolean only, ItemSpec goods) {
@@ -560,28 +554,10 @@ final class OrdersPresence implements Facing {
         return wares.isEmpty() ? Sentence.EMPTY : Sentence.wares(Sentence.glyph(only ? "admits" : "refuses"), wares);
     }
 
-    private static Sentence.Token span(long low, long high) {
-        return Sentence.word(new Notice("folkways.panel.orders.told.span",
-            List.of(Notice.count(low), Notice.count(high))));
-    }
-
     private static Optional<Sentence.Token.Ware> wareOf(ItemSpec spec, long count) {
         ItemStack icon = iconOf(spec);
         return icon.isEmpty() ? Optional.empty()
             : Optional.of(new Sentence.Token.Ware(BuiltInRegistries.ITEM.getKey(icon.getItem()), count));
-    }
-
-    private static Component progressOf(Order order, MinecraftServer server) {
-        Optional<Container> held = containerOf(order, server);
-        if (held.isEmpty()) {
-            return Component.translatable("folkways.panel.orders.gone");
-        }
-        long present = Goods.countIn(held.get(), order.what());
-        return order.standing()
-            ? Component.translatable("folkways.panel.orders.standing", present,
-                order.low(), order.high())
-            : Component.translatable("folkways.panel.orders.once", present,
-                order.high());
     }
 
     private static ResourceLocation icon(String path) {

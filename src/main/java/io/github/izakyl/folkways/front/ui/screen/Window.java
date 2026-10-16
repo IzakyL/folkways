@@ -51,6 +51,7 @@ public final class Window implements Pane {
     private float lastDeskHeight;
     private float wantedWidth;
     private float wantedHeight;
+    private WindowGeometry.Box pressedAt;
     private Window beside;
 
     private Window(String id, Component title, WindowGeometry.Box byDefault,
@@ -111,15 +112,33 @@ public final class Window implements Pane {
     }
 
     private void draggable() {
-        WindowDragHelper.setDragMove(titleBar, frame, event -> true, event -> remember());
+        WindowDragHelper.setDragMove(titleBar, frame, event -> pressed(), event -> moved());
         WindowDragHelper.setBorderResize(frame, frame, RESIZE_BORDER,
             new Vector2f(minWidth, minHeight), new Vector2f(Float.MAX_VALUE, Float.MAX_VALUE),
-            event -> true, (event, handle) -> true, event -> remember());
+            event -> pressed(), (event, handle) -> true, event -> moved());
         titleBar.addEventListener(UIEvents.DOUBLE_CLICK, event -> {
             WindowGeometry.forget(id);
             automaticPosition = true;
             centring = true;
         });
+    }
+
+    // A press on the title bar's own controls, the menu or the colony's name, also starts a drag that ends where it
+    // began. Only a drag that moved or sized the window is remembered: remembering a click would pin a window that
+    // a small screen had squeezed at that squeezed size, and it would not grow back when the screen did.
+    private boolean pressed() {
+        pressedAt = boxNow();
+        return true;
+    }
+
+    private void moved() {
+        if (!boxNow().equals(pressedAt)) {
+            remember();
+        }
+    }
+
+    private WindowGeometry.Box boxNow() {
+        return new WindowGeometry.Box(frame.getLayoutX(), frame.getLayoutY(), frame.getSizeWidth(), frame.getSizeHeight());
     }
 
     private void remember() {

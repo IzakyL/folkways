@@ -33,6 +33,8 @@ public final class FolkwaysClientRegistry {
     @SubscribeEvent
     public static void registerTooltips(RegisterClientTooltipComponentFactoriesEvent event) {
         event.register(Cues.class, CueLines::new);
+        event.register(LedgerTooltips.Line.class, LedgerTooltips::lines);
+        event.register(LedgerTooltips.Inked.class, inked -> new CueLines(inked.cues(), true));
     }
 
     @SubscribeEvent

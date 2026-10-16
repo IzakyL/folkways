@@ -10,6 +10,9 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
+import dev.vfyjxf.taffy.style.AlignContent;
+import dev.vfyjxf.taffy.style.AlignItems;
+import dev.vfyjxf.taffy.style.FlexDirection;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Enrollment;
@@ -72,6 +75,7 @@ public final class DomainPage implements Draw {
     private static final String TOTAL = "total";
     private static final String TARGET = "target";
     private static final String HEADING = "heading";
+    private static final String WHOLE = "whole";
     private static final String METER = "meter";
     private static final String METER_MAX = "meter_max";
     private static final String MIN = "min";
@@ -94,10 +98,10 @@ public final class DomainPage implements Draw {
 
     private static final String[] VERBS = {"", "do", "edit", "open", "ping", "admit"};
 
-    private static final int HEADING_COLOR = 0xFFE0BC76;
-    private static final int TITLE_COLOR = 0xFFFFFFFF;
-    private static final int METER_FULL = 0xFF4C9A2A;
-    private static final int METER_SHORT = 0xFFB58900;
+    private static final int HEADING_COLOR = 0xFF9A3324;
+    private static final int TITLE_COLOR = 0xFF2B1C12;
+    private static final int METER_FULL = 0xFF5B7F2C;
+    private static final int METER_SHORT = 0xFFB0761C;
 
     // How narrow a title beside pictures may get before the pictures have all given way.
     private static final int TITLE_FLOOR = 40;
@@ -182,6 +186,10 @@ public final class DomainPage implements Draw {
         row.detail.setOverflowVisible(false);
         row.told = SignLine.of();
         row.told.setDisplay(false);
+        row.words = new UIElement().layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
+            .alignItems(AlignItems.STRETCH).alignSelf(AlignItems.STRETCH).justifyContent(AlignContent.CENTER)
+            .flexGrow(1).flexShrink(1).minWidth(0));
+        row.words.setOverflowVisible(false);
         UIElement element = Rows.row().addChildren(row.icon, row.title, row.meter, row.detail, row.told);
         for (int act = 0; act < ACT_SLOTS; act++) {
             int slot = act;
@@ -288,6 +296,7 @@ public final class DomainPage implements Draw {
         tag.put(DETAIL, Pages.text(registries, row.detail()));
         row.told().ifPresent(told -> tag.put(TOLD, told.save()));
         tag.putBoolean(HEADING, row.heading());
+        tag.putBoolean(WHOLE, row.whole());
         row.meter().ifPresent(meter -> {
             tag.putInt(METER, meter.value());
             tag.putInt(METER_MAX, meter.max());
@@ -492,6 +501,8 @@ public final class DomainPage implements Draw {
         private UIElement meter;
         private Label detail;
         private UIElement told;
+        // A row that takes a whole line stacks its title over its detail in here; any other lays them along itself.
+        private UIElement words;
         private final List<UIElement> acts = new ArrayList<>();
         private final List<Button> presses = new ArrayList<>();
         private final List<TextField> numbers = new ArrayList<>();
@@ -647,11 +658,12 @@ public final class DomainPage implements Draw {
                 boolean heading = entry.getBoolean(HEADING);
                 acceptHeading(row, heading);
                 acceptTold(row, entry, heading);
+                acceptStacked(row, !heading && entry.getBoolean(WHOLE));
                 acceptIcon(registries, row, entry.getCompound(ICON));
                 acceptMeter(row, entry);
                 ListTag acts = entry.getList(ACTS, Tag.TAG_COMPOUND);
                 acceptActs(registries, row, index, acts);
-                boolean wide = heading || acts.size() > 2
+                boolean wide = heading || entry.getBoolean(WHOLE) || acts.size() > 2
                     || row.numbers.stream().anyMatch(UIElement::isDisplayed);
                 Rows.Span span = wide ? Rows.Span.WHOLE : right ? Rows.Span.RIGHT : Rows.Span.LEFT;
                 Rows.place(row.cell, span);
@@ -698,6 +710,33 @@ public final class DomainPage implements Draw {
             row.detail.setDisplay(!heading && !told);
             if (told) {
                 SignLine.show(row.told, Sentence.load(entry.getList(TOLD, Tag.TAG_COMPOUND)));
+            }
+        }
+
+        // A slot is laid again for whatever row it shows next, so its words move into the stack or back out of it.
+        // Only the stack holds them a level down: a part that grows inside a box that itself grows is laid at nothing.
+        private void acceptStacked(Row row, boolean stacked) {
+            List<UIElement> parts = List.of(row.title, row.meter, row.detail, row.told);
+            boolean held = row.words.getParent() == row.element;
+            if (stacked && !held) {
+                for (UIElement part : parts) {
+                    row.element.removeChild(part);
+                }
+                row.words.addChildren(parts.toArray(UIElement[]::new));
+                row.element.addChildAt(row.words, 1);
+            } else if (!stacked && held) {
+                row.element.removeChild(row.words);
+                for (int at = 0; at < parts.size(); at++) {
+                    row.words.removeChild(parts.get(at));
+                    row.element.addChildAt(parts.get(at), 1 + at);
+                }
+            }
+            if (stacked) {
+                row.title.layout(layout -> layout.widthAuto().flexGrow(0).flexShrink(0).minWidth(0));
+                row.detail.layout(layout -> layout.flexShrink(0));
+                row.told.layout(layout -> layout.flexGrow(0).flexShrink(0));
+            } else {
+                row.detail.layout(layout -> layout.widthAuto().flexShrink(1));
             }
         }
 

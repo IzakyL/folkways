@@ -26,7 +26,7 @@ import net.minecraft.world.entity.player.Player;
 // the founder may.
 final class Razing {
 
-    private static final int WARNING_COLOR = 0xFFB0554A;
+    private static final int WARNING_COLOR = 0xFF8A2416;
 
     private boolean confirming;
     private String typed = "";
