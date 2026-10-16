@@ -35,7 +35,7 @@ public final class RiceScene {
         scene.world().showSection(util.select().fromTo(0, 0, 0, 8, 4, 8), Direction.DOWN);
         var paddy = util.select().fromTo(2, 0, 2, 4, 3, 3);
         scene.overlay().showOutline(PonderPalette.GREEN, paddy, paddy, 100);
-        scene.overlay().showText(90).text("Mark a rice plot with the colony book. Its bottom crop space must hold water, its soil must support rice, and the two spaces above it must be clear.")
+        scene.overlay().showText(90).text("Mark a flooded dirt plot with the colony book and supply a hoe. Residents till its soil before sowing; suitable existing farmland also works. Keep water in the bottom crop space and two clear spaces above.")
             .pointAt(util.vector().topOf(3, 0, 2)).placeNearTarget().attachKeyFrame();
         scene.idle(100);
 

@@ -13,6 +13,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.BonemealableBlock;
@@ -161,6 +162,16 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
 
     boolean needsFarmland() {
         return substrate == Substrate.FARMLAND;
+    }
+
+    boolean canTill(Level level, BlockPos ground, BlockState state, ItemStack hoe) {
+        return behavior.flatMap(adapted -> adapted.tilled(level, ground, hoe)).isPresent()
+            || needsFarmland() && Tillage.canTill(level, ground, state, hoe);
+    }
+
+    Optional<BlockState> tilled(Level level, BlockPos ground, BlockState state, ItemStack hoe) {
+        return behavior.flatMap(adapted -> adapted.tilled(level, ground, hoe))
+            .or(() -> needsFarmland() ? Tillage.tilled(level, ground, state, hoe) : Optional.empty());
     }
 
     boolean grows(BlockState state) {

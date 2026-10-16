@@ -36,7 +36,7 @@ const PRODUCTION_TICKS = 8_000;
 type Layout = ReturnType<typeof farming>;
 type Stack = { id?: string; count?: number; Slot?: number };
 type Inventory = { totals: Record<string, number>; chests: unknown[]; residents: unknown[]; drops: unknown[] };
-type FarmState = { compostPoint: boolean; compostHasBlockEntity: boolean; root: string; middle: string; top: string; grass: number; compost: number;
+type FarmState = { compostPoint: boolean; compostHasBlockEntity: boolean; soil: string; root: string; middle: string; top: string; grass: number; compost: number;
   wearHat: boolean; wearArmor: boolean; hatResidents: Array<{ uuid: string; x: number; y: number; z: number }>;
   complete: boolean; wheatPhysical: number; wheatCompostable: number; rareCompostable: number };
 
@@ -103,8 +103,9 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     evidence.clothingPicker = await editClothing(server, client, player, founded.standBlock, stage, 2, HAT);
     expect((await inventory(server, stage, containers)).totals[HAT] ?? 0, "the clothing selector is a sample, not a physical free hat").toBe(0);
 
-    // Mark the actual ground before adding water, so the book can address its visible surface.
-    await world.command(server, `setblock ${block(layout.riceGround)} minecraft:farmland[moisture=7]`);
+    // Start from ordinary dirt, not pre-tilled farmland. The resident must prepare the flooded soil.
+    // Mark before flooding, so the book can address its visible surface.
+    await world.command(server, `setblock ${block(layout.riceGround)} minecraft:dirt`);
     await setBookGesture(server, client, player, "box");
     await aimAndWorldLeftClick(server, client, player, layout.riceGround, stage);
     await aimAndWorldLeftClick(server, client, player, layout.riceGround, stage);
@@ -122,7 +123,11 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     expect(beforeRice.totals[PANICLE] ?? 0, "no panicles exist before the real crop harvest").toBe(0);
     expect(beforeRice.totals[WILD_RICE]).toBe(2);
     await world.command(server, `setblock ${block(layout.riceRoot)} minecraft:water[level=0]`);
+    evidence.floodedDirt = await state(server, stage, layout);
+    expect((evidence.floodedDirt as FarmState).soil).toBe("Block{minecraft:dirt}");
+    expect((evidence.floodedDirt as FarmState).root).toContain("minecraft:water");
     evidence.planted = await waitFor(server, stage, layout, "the resident must place all three real rice parts", (sample) => threeParts(sample));
+    expect((evidence.planted as FarmState).soil).toContain("minecraft:farmland");
     const plantedStock = await inventory(server, stage, containers);
     expect(plantedStock.totals[WILD_RICE] ?? 0, "one real seed is spent on one three-part plant").toBe(1);
     expect((evidence.planted as FarmState).root).toContain("age=0");
@@ -329,7 +334,7 @@ var hats=new ArrayList<Object>(); for(var resident:colony.residents()) {
 }
 long rare=0; for(var item:List.of(ModItems.TOMATO_SEED.get(),ModItems.LETTUCE_SEED.get(),ModItems.CHILI_SEED.get(),ModItems.TEA_SEED.get()))rare+=budget.tally(item).compostable();
 var wheat=budget.tally(Items.WHEAT_SEEDS); var out=new LinkedHashMap<String,Object>();
-out.put("root",level.getBlockState(root).toString());out.put("middle",level.getBlockState(root.above()).toString());out.put("top",level.getBlockState(root.above(2)).toString());
+out.put("soil",level.getBlockState(root.below()).toString());out.put("root",level.getBlockState(root).toString());out.put("middle",level.getBlockState(root.above()).toString());out.put("top",level.getBlockState(root.above(2)).toString());
 out.put("grass",grass);out.put("compost",compost.is(Blocks.COMPOSTER)?compost.getValue(ComposterBlock.LEVEL):-1);
 out.put("compostPoint",colony.holdingAt(WorldPos.of(level,pos(args.value("composter"))))
   .filter(holding->holding.owner().equals(CookeryContent.COMPOST)&&holding.what() instanceof Held.Point).isPresent());

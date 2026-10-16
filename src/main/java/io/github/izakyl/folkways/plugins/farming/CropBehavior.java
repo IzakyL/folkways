@@ -16,6 +16,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -29,6 +30,12 @@ public interface CropBehavior {
     List<Item> seeds();
 
     boolean needsFarmland();
+
+    // Native preparation that does not go through a hoe's usual tool action, such as a flooded rice paddy.
+    // Planning and work ask the same question without changing the soil or the block above it.
+    default Optional<BlockState> tilled(Level level, BlockPos ground, ItemStack hoe) {
+        return Optional.empty();
+    }
 
     default BlockState planted() {
         return block().defaultBlockState();

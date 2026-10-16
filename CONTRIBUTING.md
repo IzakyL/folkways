@@ -66,7 +66,8 @@ The default profiles and game tests omit Cookery to also verify that it remains 
 The expanded kitchen suites are `cookery-complete.spec.ts` (one final order from
 base materials), `cookery-millstone.spec.ts` (interruption and safe exit),
 `cookery-tools.spec.ts` (one borrowed tool and explicit extra stock),
-`cookery-farming.spec.ts` (rice and the compost-to-grass seed loop), and
+`cookery-farming.spec.ts` (flooded dirt through real tilling, rice harvest and replanting,
+plus the compost-to-grass seed loop), and
 `cookery-ponder.spec.ts` (optional loading, real book entries and every lesson's
 keyframes). The production suites run both on the ground and aboard Sable. Set
 `FOLKWAYS_PONDER_LANGUAGE=zh_cn` (or `zh_hk`/`zh_tw`) to capture the lessons in

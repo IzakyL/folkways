@@ -18,11 +18,15 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.HoeItem;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
+import net.neoforged.neoforge.common.ItemAbilities;
 
 public final class CookeryCrops {
     private static boolean registered;
@@ -47,6 +51,16 @@ public final class CookeryCrops {
         public BlockState planted() { return block().defaultBlockState().setValue(RiceCropBlock.WATERLOGGED, true); }
         public int reach() { return 2; }
         public List<BlockPos> placementCells(BlockPos base) { return List.of(base, base.above(), base.above(2)); }
+
+        public Optional<BlockState> tilled(Level level, BlockPos ground, ItemStack hoe) {
+            // Cookery's HoeUseEvent handles this in a Player event, outside getToolModifiedState.
+            // Keep its three native soils and real hoe requirement, without impersonating a player.
+            BlockState soil = level.getBlockState(ground);
+            return hoe.getItem() instanceof HoeItem && hoe.canPerformAction(ItemAbilities.HOE_TILL)
+                && (soil.is(Blocks.DIRT) || soil.is(Blocks.GRASS_BLOCK) || soil.is(Blocks.DIRT_PATH))
+                && level.getBlockState(ground.above()).is(Blocks.WATER)
+                ? Optional.of(Blocks.FARMLAND.defaultBlockState()) : Optional.empty();
+        }
 
         public boolean canPlant(LevelReader level, BlockPos base) {
             return base.getY() < level.getMaxBuildHeight() - 2 && level.getFluidState(base).is(FluidTags.WATER)

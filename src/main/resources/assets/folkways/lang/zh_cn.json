@@ -996,7 +996,7 @@
   "folkways.ponder.cookery_pots.text_5": "汤锅同时检查实际汤底、食物、锅盖和餐具。居民注入汤底、添加原料并盖好实际锅盖，有热源和锅盖时原生计时才会前进。",
   "folkways.ponder.cookery_seeds.text_1": "用聚落之书标记采种草地区域。实际佩戴草帽的农民只在可从草丛取得的种子不足时采集矮草；草帽不能脱离真实来源凭空变出种子。",
   "folkways.ponder.cookery_chain.header": "连续菜谱：只为最终成品下订单",
-  "folkways.ponder.cookery_rice.text_1": "用聚落之书标记稻田。底部作物空间需要有水，下方土壤必须支持水稻，上方两个空间保持畅通。",
+  "folkways.ponder.cookery_rice.text_1": "用聚落之书标记稻田，并提供锄头。居民会先开垦水底泥土，再播种；已有的适宜耕地也可使用。作物所在格要有水，上方两格留空。",
   "folkways.ponder.cookery_teapot.text_6": "唯一的实际空壶回到原来的工作站。十二只满杯和空液体桶只进入物流一次，不会复制茶壶，也不会留下额外十二只空杯。",
   "folkways.ponder.cookery_pots.text_6": "开盖后按需要用真实餐具逐份盛装。三份米饭耗三只碗，锅盖可继续用于后续批次，上一锅完全取空后才开始下一锅。",
   "folkways.ponder.cookery_teapot.text_1": "登记茶壶并为最终茶饮下订单。每个原生配方泡出十二份，计划会同时准备十二只实际空杯，并预留可到达的上茶空间。",
