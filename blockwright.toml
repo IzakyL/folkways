@@ -12,8 +12,18 @@ properties = { "online-mode" = "false", "level-seed" = "folkways-e2e", "allow-fl
 connect = "127.0.0.1:25565"
 options = { guiScale = "1", fullscreen = "false", overrideWidth = "1280", overrideHeight = "720" }
 
-[mods.folkways]
-path = "build/libs/folkways-*.jar"
+# The four Folkways mods, as gradle build gathers them.
+[mods.folkways_core]
+path = "build/libs/folkways-core-*.jar"
+
+[mods.folkways_vanilla]
+path = "build/libs/folkways-vanilla-*.jar"
+
+[mods.folkways_create]
+path = "build/libs/folkways-create-*.jar"
+
+[mods.folkways_modulargolems]
+path = "build/libs/folkways-modulargolems-*.jar"
 
 [mods.ldlib2]
 path = "build/deps/ldlib2-*.jar"
@@ -140,8 +150,8 @@ target = []
 
 # Measures folkways itself, mixins included; off unless BLOCKWRIGHT_COVERAGE=1 (npm run test:coverage).
 [coverage]
-mods = ["folkways"]
-sources = ["src/main/java"]
+mods = ["folkways_core", "folkways_vanilla", "folkways_create", "folkways_modulargolems"]
+sources = ["mods/core/src/main/java", "mods/vanilla/src/main/java", "mods/create/src/main/java", "mods/modulargolems/src/main/java"]
 
 [profile.bench.neoforge]
 jvm_args = ["-Xmx3G"]
@@ -280,18 +290,6 @@ terralith = { target = ["server", "client"] }
 tectonic = { target = ["server", "client"] }
 sodium = { target = ["client"] }
 iris = { target = ["client"] }
-
-# The fuzzers (tests/fuzz): a server alone, over an empty flat world, running the mod jar that also carries the
-# fuzzers' in-game classes (gradle fuzzJar).
-[profile.fuzz.neoforge]
-jvm_args = ["-Xmx3G"]
-
-[profile.fuzz.neoforge.server]
-world = "vanilla"
-properties = { "level-seed" = "folkways-fuzz", "generate-structures" = "false", "spawn-monsters" = "false", "spawn-animals" = "false", "spawn-npcs" = "false", "max-tick-time" = "-1", "view-distance" = "4", "level-type" = "minecraft:flat", "generator-settings" = '{"biome":"minecraft:plains","features":false,"lakes":false,"layers":[{"block":"minecraft:bedrock","height":1}],"structure_overrides":[]}' }
-
-[profile.fuzz.mods.folkways]
-path = "build/fuzz/folkways-*.jar"
 
 # The e2e pair with Touhou Little Maid on both sides, for the looks it lends.
 [profile.maids.mods]

@@ -25,7 +25,7 @@ type Gallery = {
   views: (value: any) => View[];
 };
 
-const PATTERNS = "src/main/resources/data/folkways/folkways/pattern";
+const PATTERNS = "mods/vanilla/src/main/resources/data/folkways/folkways/pattern";
 const CAMERA = "tests/visual/patterns/arch-bridge/CameraSetup.java";
 const SETTLE_MS = 5_000;
 

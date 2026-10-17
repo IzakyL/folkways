@@ -7,7 +7,7 @@ import type { TaskLimits } from "@izakyl/blockwright-client";
 import { defineTask, tick, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { REPO_ROOT } from "../harness/out-paths";
 
-const PATTERNS = path.join(REPO_ROOT, "src/main/resources/data/folkways/folkways/pattern");
+const PATTERNS = path.join(REPO_ROOT, "mods/vanilla/src/main/resources/data/folkways/folkways/pattern");
 const LIMITS: TaskLimits = { maxDepth: 10, maxNodes: 1_000_000, maxItems: 100_000, maxString: 1_000_000 };
 
 export const DRAW_PATTERNS = defineTask<Record<string, unknown>, any>({

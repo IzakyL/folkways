@@ -8,7 +8,7 @@ import {
 } from "./judgements.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-const SRC = path.join(ROOT, "src/main/java");
+const MODS = path.join(ROOT, "mods");
 
 function walk(dir: string, into: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -36,7 +36,7 @@ function constantsOf(text: string, enumName: string): string[] {
   return [...listed.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)].map((m) => m[1]);
 }
 
-const javaFiles = walk(SRC);
+const javaFiles = readdirSync(MODS).flatMap((mod) => walk(path.join(MODS, mod, "src/main/java")));
 
 // The refusal tables churn with every new RefusalKind; keep this a local check so it never holds up the nightly build.
 const skip = process.env.CI ? "local only: refusal tables change too often to gate CI" : false;

@@ -13,7 +13,8 @@ body:
     id: versions
     attributes:
       label: Versions
-      placeholder: Minecraft 1.21.1, NeoForge 21.1.233, Folkways 0.1.0, LDLib2 2.2.37
+      description: Name each Folkways jar you have installed (Core, Vanilla, × Create, × Modular Golems).
+      placeholder: Minecraft 1.21.1, NeoForge 21.1.233, Folkways Core + Vanilla + × Create 0.1.0, LDLib2 2.2.37
     validations:
       required: true
   - type: textarea

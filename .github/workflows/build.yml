@@ -29,11 +29,11 @@ jobs:
       - run: npm run test:unit
       - uses: actions/upload-artifact@v6
         with:
-          name: folkways-jar
+          name: folkways-jars
           path: build/libs/*.jar
           if-no-files-found: error
   nightly:
-    # Every push to master replaces the "nightly" prerelease with that commit's jar.
+    # Every push to master replaces the "nightly" prerelease with that commit's jars.
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: build
     runs-on: ubuntu-24.04
@@ -45,7 +45,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v6
         with:
-          name: folkways-jar
+          name: folkways-jars
           path: jars
       - name: Replace the nightly release
         env:
@@ -54,6 +54,12 @@ jobs:
         run: |
           rm -f jars/*-sources.jar
           gh release delete nightly --cleanup-tag --yes || true
+          cat > notes.md <<EOF
+          Built automatically from master at ${GITHUB_SHA::7}. Untested pre-release; back up your world before trying it.
+
+          Install **folkways-core** and **folkways-vanilla**, plus LDLib2. Add **folkways-create** only with Create,
+          and **folkways-modulargolems** only with Modular Golems. All Folkways jars must come from the same build.
+          EOF
           gh release create nightly jars/*.jar --prerelease --target "$GITHUB_SHA" \
             --title "Nightly build" \
-            --notes "Built automatically from master at ${GITHUB_SHA::7}. Untested pre-release; back up your world before trying it."
+            --notes-file notes.md

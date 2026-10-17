@@ -13,7 +13,7 @@ const CONFIG_PATH = "blockwright.toml";
 const REPORT_JSON = reportPath("e2e", "library-folder-report");
 
 const SKIN = path.join(MODEL_ASSETS, "steve", "textures", "tartaric_acid.png");
-const BLUEPRINT = path.join(REPO_ROOT, "src/gametest/resources/data/folkways/folkways/blueprint/test_hut.nbt");
+const BLUEPRINT = path.join(REPO_ROOT, "mods/vanilla/src/gametest/resources/data/folkways/folkways/blueprint/test_hut.nbt");
 const PATTERN = `accepts = ["zone"]
 
 def draw(site):
@@ -87,8 +87,8 @@ const READ_LIBRARY = defineTask<void, {
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.library.LooseFolder",
-      "io.github.izakyl.folkways.core.api.library.Shelves",
+      "io.github.izakyl.folkways.library.LooseFolder",
+      "io.github.izakyl.folkways.library.Shelves",
       "io.github.izakyl.folkways.plugins.build.draft.Patterns",
       "io.github.izakyl.folkways.plugins.build.draft.Templates",
       "io.github.izakyl.folkways.plugins.person.look.ResidentLook",

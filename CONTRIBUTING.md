@@ -14,7 +14,7 @@ Thanks for helping with Folkways. Issues and pull requests are welcome at
 ```sh
 npm install      # Blockwright, Playwright and TypeScript
 npm run setup    # downloads the integration mods and writes .blockwright/mods.json
-./gradlew build  # the mod jar, in build/libs/
+./gradlew build  # the four mod jars, in build/libs/
 ```
 
 `npm run setup` must run before the first Gradle build. The build compiles against the
@@ -23,13 +23,32 @@ downloads, as pinned in `blockwright.toml`.
 
 ## Layout
 
+Folkways is four mods, each a Gradle project under `mods/`, all registering under the `folkways` namespace.
+`./gradlew build` builds them and gathers their jars into `build/libs/`.
+
+| Mod | Project | What it is |
+| --- | --- | --- |
+| Folkways Core (`folkways_core`) | `mods/core` | The engine and the screens; on its own it gives residents no work |
+| Folkways Vanilla (`folkways_vanilla`) | `mods/vanilla` | The work residents do among vanilla blocks |
+| Folkways × Create (`folkways_create`) | `mods/create` | What Create adds: rail, dispatch, and Create's side of building (track joints, schematic hand-off) |
+| Folkways × Modular Golems (`folkways_modulargolems`) | `mods/modulargolems` | Modular Golems as a second sort of resident |
+
+An integration whose absence would leave the colony misreading a world that has that mod (Sable's sub-levels,
+Create's contraptions in the way) belongs in the core; one that only adds something when its mod is there is a mod
+of its own.
+
 | Path | What lives there |
 | --- | --- |
-| `src/main/java/.../core` | The colony engine: residents, planning, labour and travel. `core/api` is the public API |
-| `src/main/java/.../front` | Screens, the colony book, networking and lessons. `front/api` is the public API |
-| `src/main/java/.../plugins` | Each feature (farming, pasture, build, rail, …) as a plugin over the two APIs |
-| `src/main/resources/data/folkways/folkways/pattern` | Built-in building patterns (Starlark) |
-| `src/gametest` | NeoForge game tests |
+| `mods/core/.../base` | What every layer stands on: the declaration ledger, NBT persistence and the mixin plugin base |
+| `mods/core/.../effect` | Effects on residents (stats, flags, modifiers), with perks as one source of them under `effect/perk` |
+| `mods/core/.../library` | The resource library: data packs and loose files under `<gamedir>/folkways/` |
+| `mods/core/.../core` | The colony engine: residents, planning, labour and travel. `core/api` is the public API; `core/shell` fits the engine to the world, including other mods' structures (Sable, Create) |
+| `mods/core/.../front` | Screens, the colony book, networking and lessons. `front/api` is the public API |
+| `mods/vanilla/.../plugins` | Each feature (farming, pasture, build, …) as a plugin over the two APIs |
+| `mods/create/.../create` | Rail, dispatch and `create/build` |
+| `mods/modulargolems/.../modulargolems` | Golems as residents |
+| `mods/vanilla/src/main/resources/data/folkways/folkways/pattern` | Built-in building patterns (Starlark) |
+| `mods/*/src/gametest` | NeoForge game tests, run together by the root's `runGameTestServer` |
 | `tests/` | Blockwright and Playwright suites, listed below |
 
 ## Tests
@@ -40,12 +59,11 @@ downloads, as pinned in `blockwright.toml`.
 | `npm run test:i18n` | Language keys, placeholders and notice/refusal coverage; no game or dependencies |
 | `npm run typecheck` | Type checks every TypeScript suite |
 | `./gradlew check` | Compiles everything and lints for tabs and trailing whitespace |
-| `./gradlew runGameTestServer` | NeoForge game tests in `src/gametest` |
+| `./gradlew runGameTestServer` | NeoForge game tests in every `mods/*/src/gametest`, with all mods but Modular Golems loaded |
 | `npm run test:e2e` | End-to-end tests against a real client and server |
 | `npm run visual:take` | Screenshot suites for screens and in-world visuals |
 | `npm run bench:take` | Performance benchmarks on a large colony |
 | `npm run promo:take` | Films the promotional takes |
-| `npm run fuzz:run` | Planner, travel and build fuzzers on a headless server |
 
 The game suites download Minecraft, NeoForge and the fixture mods on first run, and their
 test servers accept the [Minecraft EULA](https://www.minecraft.net/eula) through
@@ -56,7 +74,7 @@ use, for example:
 npm run test:e2e -- tests/e2e/founding-smoke.spec.ts --workers=1
 ```
 
-Each suite is a directory under `tests/` (`e2e`, `visual`, `bench`, `promo`, `fuzz`) with
+Each suite is a directory under `tests/` (`e2e`, `visual`, `bench`, `promo`) with
 its own `playwright.config.ts` and `tsconfig.json`. Code more than one suite uses lives in
 `tests/shared/`; a suite imports from there and from `tests/ldlib2/`, never from another
 suite. Everything the suites write goes to `tests/out/`, which git ignores.

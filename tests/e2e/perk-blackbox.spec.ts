@@ -172,8 +172,8 @@ for (const stage of twins()) test(stage.title("perk system end-to-end: carrying 
       reasons.push(
         `the cull with herding_butcher rank ${BUTCHER_RANK} only yielded ${perked.peak_beef} ${BEEF}`
         + ` (control arm: ${control.peak_beef}), and each rank should add one, so >=${VANILLA_BEEF_MAX + 1} is expected: `
-        + `who.rankOf(PastureContent.BUTCHER) in CullNode.work read 0, `
-        + `or the perk NBT written in was not picked up by ResidentPerks.load`,
+        + `CullNode.work read no folkways:carcass_yield off the butcher's effects, `
+        + `or the perk NBT written in was not picked up by BodyPerks.load`,
       );
     }
 
@@ -266,7 +266,7 @@ for (const stage of twins()) test(stage.title("perk system end-to-end: carrying 
     expect(
       organic,
       "after the whole run no resident earned any perk XP from their own work: the organic growth path (a finished node -> "
-      + "ResidentPerks.addXp) is not running, so however well the perk effects are wired, real players can never reach them",
+      + "BodyPerks.addXp) is not running, so however well the perk effects are wired, real players can never reach them",
     ).toBe(true);
 
     expect(reasons, reasons.join(" | ")).toEqual([]);

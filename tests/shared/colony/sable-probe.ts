@@ -76,7 +76,7 @@ const HOPS = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.sable.SablePassage",
+      "io.github.izakyl.folkways.core.shell.structure.SablePassage",
     ],
     body: `
 var colony=ColonyGround.of(ctx.server(),UUID.fromString(Args.of(ctx).string("colony_id"))).orElseThrow();

@@ -21,7 +21,7 @@ const SOURCES = [
   "tests/bench/town/raise.ts", "tests/bench/town/town.ts", "tests/bench/town/town-build.ts", "tests/bench/town/network.ts", "tests/bench/town/site.ts",
   "tests/bench/town/Mason.java", "tests/bench/town/Relief.java", "tests/bench/town/Survey.java", "tests/shared/rail/DrawPatterns.java",
   "tests/shared/rail/rail-footprint.ts", "tests/shared/rail/rail-drawn.ts", "tests/bench/town/orders.ts",
-  ...["road", "grading", "terraced_field", "dock", "city_wall", "railway"].map((p) => `src/main/resources/data/folkways/folkways/pattern/${p}.star`),
+  ...["road", "grading", "terraced_field", "dock", "city_wall", "railway"].map((p) => `mods/vanilla/src/main/resources/data/folkways/folkways/pattern/${p}.star`),
 ];
 // What of the world is the player's, or the server's own lock: a run starts its player at the world spawn.
 const LEFT_OUT = new Set(["session.lock", "playerdata", "stats", "advancements"]);

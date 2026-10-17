@@ -1,0 +1,96 @@
+// What every Folkways mod project shares. A project sets modId and modName before applying this.
+
+group = project.maven_group
+version = project.mod_version
+
+base {
+    archivesName = "${project.modName}-neoforge-${project.minecraft_version}"
+}
+
+repositories {
+    mavenCentral()
+    maven { url = "https://libraries.minecraft.net/" }
+    maven { url = "https://maven.createmod.net" }
+    maven { url = "https://maven.firstdark.dev/snapshots" }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(project.java_release.toInteger())
+    }
+    withSourcesJar()
+}
+
+sourceSets {
+    gametest
+}
+
+neoForge {
+    version = project.neoforge_version
+    addModdingDependenciesTo sourceSets.gametest
+}
+
+configurations {
+    gametestCompileOnly.extendsFrom compileOnly
+    gametestImplementation.extendsFrom implementation
+    gametestRuntimeOnly.extendsFrom runtimeOnly
+}
+
+def modsManifest = rootProject.file(".blockwright/mods.json")
+def modPaths = modsManifest.isFile() ? new groovy.json.JsonSlurper().parse(modsManifest) : [:]
+ext.lib = { String name ->
+    def paths = modPaths[name]
+    if (!paths) {
+        throw new GradleException("mod ${name} is missing from ${modsManifest}; run  npm run setup  first")
+    }
+    files(paths.collect { rootProject.file(it) })
+}
+
+// The game tests of every mod run together (the root's gameTestServer), so a mod's tests may lean on the mods
+// above it and on the core's fixtures.
+dependencies {
+    gametestImplementation sourceSets.main.output
+}
+
+tasks.named("jar", Jar) {
+    from(rootProject.file("LICENSE")) {
+        into "META-INF"
+        rename { "LICENSE_folkways.txt" }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.release = project.java_release.toInteger()
+}
+
+def expanded = [
+    "mod_id": project.modId,
+    "version": project.version,
+    "loader_version_range": project.loader_version_range,
+    "minecraft_requirement": project.minecraft_requirement,
+    "neoforge_requirement": project.neoforge_requirement,
+    "ldlib_requirement": project.ldlib_requirement,
+]
+
+processResources {
+    inputs.properties expanded
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand(expanded)
+    }
+}
+
+publishing {
+    publications {
+        mod(MavenPublication) {
+            artifactId = project.modName
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            name = "local"
+            url = rootProject.layout.buildDirectory.dir("repo")
+        }
+    }
+}

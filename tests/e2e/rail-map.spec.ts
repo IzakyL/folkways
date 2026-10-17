@@ -33,7 +33,7 @@ const RESIDENT_COUNT = 1;
 
 const KEY_M = 77;
 
-const RAIL_TOOLTIP = "io.github.izakyl.folkways.plugins.rail.domain.RailTooltip";
+const RAIL_TOOLTIP = "io.github.izakyl.folkways.create.rail.domain.RailTooltip";
 const TRAIN_MAP_MANAGER = "com.simibubi.create.compat.trainmap.TrainMapManager";
 const TRAIN_CLASS = "com.simibubi.create.content.trains.entity.Train";
 const TRAIN_RELOCATOR = "com.simibubi.create.content.trains.entity.TrainRelocator";

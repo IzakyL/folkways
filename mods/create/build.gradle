@@ -1,0 +1,23 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_create"
+ext.modName = "folkways-create"
+apply from: rootProject.file("gradle/mod.gradle")
+evaluationDependsOn(":core")
+evaluationDependsOn(":vanilla")
+
+dependencies {
+    api project(":vanilla")
+
+    compileOnly lib("create")
+    compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
+        transitive = false
+    }
+
+    gametestImplementation project(":core").sourceSets.gametest.output
+    gametestImplementation project(":vanilla").sourceSets.gametest.output
+}

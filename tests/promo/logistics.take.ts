@@ -550,8 +550,8 @@ const POINT_BOOK = defineTask<Record<string, any>, Record<string, any>>({
       "io.github.izakyl.folkways.core.engine.colony.ColonyMembership",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.front.engine.colony.MemberToggle",
-      "io.github.izakyl.folkways.plugins.dispatch.DispatchContent",
-      "io.github.izakyl.folkways.plugins.dispatch.DispatchPresence",
+      "io.github.izakyl.folkways.create.dispatch.DispatchContent",
+      "io.github.izakyl.folkways.create.dispatch.DispatchPresence",
       "net.minecraft.core.BlockPos",
       "net.minecraft.server.MinecraftServer",
     ],
@@ -578,7 +578,7 @@ for(var raw:args.list("chains")){
   var chain=(com.simibubi.create.content.kinetics.base.KineticBlockEntity)level.getBlockEntity(new BlockPos(((Number)p.get("x")).intValue(),((Number)p.get("y")).intValue(),((Number)p.get("z")).intValue()));
   speeds.add(chain.getSpeed()+"/"+chain.getTheoreticalSpeed()+"/"+chain.isOverStressed());
 }
-var flaw=io.github.izakyl.folkways.plugins.dispatch.PackageNetworks.get().flawOf(level,UUID.fromString(args.string("network")));
+var flaw=io.github.izakyl.folkways.create.dispatch.PackageNetworks.get().flawOf(level,UUID.fromString(args.string("network")));
 return Map.of("ok",true,"clicks",clicks,"speeds",speeds,"flaw",String.valueOf(flaw));
 `,
   }),
