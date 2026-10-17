@@ -21,7 +21,7 @@ public final class CreateBlueprintHandoff {
     private CreateBlueprintHandoff() {
     }
 
-    public static void handOff(boolean excavate, String siteName) {
+    public static void handOff(boolean excavate, String siteName, boolean raise) {
         Minecraft minecraft = Minecraft.getInstance();
         Player player = minecraft.player;
         if (player == null) {
@@ -42,14 +42,14 @@ public final class CreateBlueprintHandoff {
         SchematicTransformation transformation = handler.getTransformation();
         StructurePlaceSettings settings = transformation.toSettings();
         BlockPos anchor = transformation.getAnchor();
-        PacketDistributor.sendToServer(new UploadBlueprintPacket(book.get(), name, siteName, file.get(),
-            anchor, excavate, settings.getRotation(), settings.getMirror(), false));
+        BlueprintUploads.send(new UploadBlueprintPacket(book.get(), name, siteName, file.get(),
+            anchor, excavate, settings.getRotation(), settings.getMirror(), raise), PacketDistributor::sendToServer);
     }
 
     private static Optional<byte[]> read(Path path) {
         try {
             byte[] bytes = Files.readAllBytes(path);
-            return bytes.length > UploadBlueprintPacket.MAX_BYTES ? Optional.empty() : Optional.of(bytes);
+            return BlueprintUploads.fits(bytes) ? Optional.of(bytes) : Optional.empty();
         } catch (IOException | RuntimeException missing) {
             return Optional.empty();
         }

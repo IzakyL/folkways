@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import io.github.izakyl.folkways.plugins.build.draft.Pattern;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.build.draft.Round;
+import io.github.izakyl.folkways.plugins.build.draft.Templates;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -24,7 +25,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -36,9 +40,21 @@ public final class BuildPackets {
     }
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
         event.registrar(FolkwaysMod.NETWORK_VERSION)
+            .playToServer(BlueprintChunkPacket.TYPE, BlueprintChunkPacket.STREAM_CODEC,
+                BuildPackets::handleChunk)
             .playToServer(UploadBlueprintPacket.TYPE, UploadBlueprintPacket.STREAM_CODEC,
                 BuildPackets::handleUpload)
+            .playToServer(PlaceBlueprintPacket.TYPE, PlaceBlueprintPacket.STREAM_CODEC,
+                BuildPackets::handlePlace)
             .playToServer(CommissionPacket.TYPE, CommissionPacket.STREAM_CODEC, BuildPackets::handleCommission);
+    }
+
+    private static void handleChunk(BlueprintChunkPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> BlueprintUploads.accept(context.player().getUUID(), packet));
+    }
+
+    public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        BlueprintUploads.forget(event.getEntity().getUUID());
     }
 
     private static void handleUpload(UploadBlueprintPacket packet, IPayloadContext context) {
@@ -46,49 +62,71 @@ public final class BuildPackets {
             if (!(context.player() instanceof ServerPlayer player)) {
                 return;
             }
-            Optional<BuildPresence> site = Books.ofHeldBook(player, packet.colonyId())
-                .flatMap(colony -> BuildContent.presenceIn(colony.service(BuildContent.ID, Object.class)));
-            if (site.isEmpty()) {
-                return;
-            }
-            boolean raise = packet.raiseInCreative() && player.isCreative();
-            ServerLevel level = player.serverLevel();
+            byte[] bytes = packet.file().length > 0 ? packet.file()
+                : BlueprintUploads.assembled(player.getUUID()).orElse(packet.file());
             Optional<String> name = LibraryPath.of(packet.name()).map(LibraryPath::name);
-            Optional<CompoundTag> file = name.flatMap(ignored -> readStructure(packet.file()));
-            if (file.isEmpty()) {
-                refuse(player, Component.translatable("folkways.blueprint.unreadable"));
-                return;
-            }
-            StructureNbt.AirMeaning airMeaning = packet.airIsEmpty()
-                ? StructureNbt.AirMeaning.EXCAVATE
-                : StructureNbt.AirMeaning.UNCONSTRAINED;
-            Optional<Blueprint> shape = read(file.get(), level, name.get(), airMeaning,
-                raise ? Integer.MAX_VALUE : BlueprintBook.maxCaptureBlocks());
-            if (shape.isEmpty()) {
-                refuse(player, whyNot(file.get(), level, name.get(), airMeaning));
-                return;
-            }
-            Optional<Blueprint> blueprint = shape.get().transformed(packet.rotation(), packet.mirror());
-            if (blueprint.isEmpty()) {
-                refuse(player, Component.translatable("folkways.blueprint.unreadable"));
-                return;
-            }
-            if (raise) {
-                raise(level, player, blueprint.get(), packet.anchor());
-                player.displayClientMessage(
-                    Component.translatable("folkways.blueprint.raised", blueprint.get().name()), true);
-                return;
-            }
-            Optional<BlueprintBuildOrder> filed = site.get().file(level, blueprint.get(), packet.anchor(),
-                packet.siteName(), Optional.of(player.getUUID()), player.getGameProfile().getName());
-            if (filed.isEmpty()) {
-                refuse(player, Component.translatable("folkways.blueprint.too_many",
-                    BlueprintBook.MAX_BUILD_ORDERS));
-                return;
-            }
-            player.displayClientMessage(
-                Component.translatable("folkways.blueprint.placed", filed.get().name()), true);
+            Optional<CompoundTag> file = name.flatMap(ignored -> readStructure(bytes));
+            setDown(player, packet.colonyId(), name.orElse(""), file, packet.siteName(), packet.anchor(),
+                packet.airIsEmpty(), packet.rotation(), packet.mirror(), packet.raiseInCreative());
         });
+    }
+
+    private static void handlePlace(PlaceBlueprintPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player)) {
+                return;
+            }
+            String path = packet.blueprint().getPath();
+            setDown(player, packet.colonyId(), path.substring(path.lastIndexOf('/') + 1),
+                Templates.blueprint(packet.blueprint()), packet.siteName(), packet.anchor(), packet.airIsEmpty(),
+                packet.rotation(), packet.mirror(), packet.raiseInCreative());
+        });
+    }
+
+    // A structure file set down whole at anchor, turned and flipped so: filed with the colony, or raised at once.
+    private static void setDown(ServerPlayer player, UUID colonyId, String name, Optional<CompoundTag> file,
+            String siteName, BlockPos anchor, boolean airIsEmpty, Rotation rotation, Mirror mirror,
+            boolean raiseInCreative) {
+        Optional<BuildPresence> site = Books.ofHeldBook(player, colonyId)
+            .flatMap(colony -> BuildContent.presenceIn(colony.service(BuildContent.ID, Object.class)));
+        if (site.isEmpty()) {
+            return;
+        }
+        boolean raise = raiseInCreative && player.isCreative();
+        ServerLevel level = player.serverLevel();
+        if (file.isEmpty()) {
+            refuse(player, Component.translatable("folkways.blueprint.unreadable"));
+            return;
+        }
+        StructureNbt.AirMeaning airMeaning = airIsEmpty
+            ? StructureNbt.AirMeaning.EXCAVATE
+            : StructureNbt.AirMeaning.UNCONSTRAINED;
+        Optional<Blueprint> shape = read(file.get(), level, name, airMeaning,
+            raise ? Integer.MAX_VALUE : BlueprintBook.maxCaptureBlocks());
+        if (shape.isEmpty()) {
+            refuse(player, whyNot(file.get(), level, name, airMeaning));
+            return;
+        }
+        Optional<Blueprint> blueprint = shape.get().transformed(rotation, mirror);
+        if (blueprint.isEmpty()) {
+            refuse(player, Component.translatable("folkways.blueprint.unreadable"));
+            return;
+        }
+        if (raise) {
+            raise(level, player, blueprint.get(), anchor);
+            player.displayClientMessage(
+                Component.translatable("folkways.blueprint.raised", blueprint.get().name()), true);
+            return;
+        }
+        Optional<BlueprintBuildOrder> filed = site.get().file(level, blueprint.get(), anchor,
+            siteName, Optional.of(player.getUUID()), player.getGameProfile().getName());
+        if (filed.isEmpty()) {
+            refuse(player, Component.translatable("folkways.blueprint.too_many",
+                BlueprintBook.MAX_BUILD_ORDERS));
+            return;
+        }
+        player.displayClientMessage(
+            Component.translatable("folkways.blueprint.placed", filed.get().name()), true);
     }
 
     private static void handleCommission(CommissionPacket packet, IPayloadContext context) {
@@ -214,7 +252,7 @@ public final class BuildPackets {
     private static Optional<CompoundTag> readStructure(byte[] bytes) {
         try (ByteArrayInputStream in = new ByteArrayInputStream(bytes)) {
             return Optional.of(NbtIo.readCompressed(in,
-                NbtAccounter.create(UploadBlueprintPacket.MAX_BYTES * 64L)));
+                NbtAccounter.create(BlueprintUploads.MOST_BYTES * 32L)));
         } catch (IOException | RuntimeException failure) {
             return Optional.empty();
         }

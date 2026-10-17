@@ -70,6 +70,7 @@ public final class FolkwaysClientGameEvents {
         Overhead.forget();
         Desk.forget();
         ShapePreview.clear();
+        HeldPlacement.clear();
         CurrentColony.forgetOnClient();
     }
 
@@ -80,6 +81,7 @@ public final class FolkwaysClientGameEvents {
         ZoneSelection.tick();
         PathSelection.tick();
         ShapePreview.tick();
+        HeldPlacement.tick();
         ColonyLookState.tick();
     }
 
@@ -101,6 +103,10 @@ public final class FolkwaysClientGameEvents {
         Optional<HeldBook> book = HeldBook.bound(minecraft.player);
         if (book.isEmpty()) {
             return false;
+        }
+        // A shape held to be set down takes the click, whatever the book's gesture.
+        if (HeldPlacement.holding()) {
+            return HeldPlacement.handleLeftClick();
         }
         return switch (book.get().gesture()) {
             case POINT -> toggleMember(minecraft, book.get());
@@ -182,6 +188,9 @@ public final class FolkwaysClientGameEvents {
         if (book.get().colonyId() == null || !(modifierDown || alternateDown)) {
             return false;
         }
+        if (HeldPlacement.holding()) {
+            return HeldPlacement.handleScroll(delta, modifierDown, alternateDown);
+        }
         return switch (book.get().gesture()) {
             case POINT -> false;
             case BOX -> ZoneSelection.handleScroll(delta);
@@ -200,6 +209,7 @@ public final class FolkwaysClientGameEvents {
         ZoneSelection.render(event);
         PathSelection.render(event);
         ShapePreview.render(event);
+        HeldPlacement.render(event);
         ColonyHighlightState.render(event);
         AimCursor.render(event);
     }

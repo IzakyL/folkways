@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.izakyl.folkways.front.api.Shape;
+import io.github.izakyl.folkways.front.api.ui.Placing;
 import io.github.izakyl.folkways.front.engine.item.BookGestures;
 import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
@@ -14,6 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -34,17 +36,18 @@ final class OverheadScreen extends Screen {
     private Laid laid;
 
     /** What the buttons were laid out for; they are laid out again when it changes. */
-    private record Laid(Shape.Gesture gesture, boolean drafting, boolean ready) {
+    private record Laid(Shape.Gesture gesture, boolean drafting, boolean ready, boolean placing) {
 
         static Laid now(Minecraft minecraft) {
             Shape.Gesture gesture = HeldBook.bound(minecraft.player).map(HeldBook::gesture).orElse(null);
+            boolean placing = HeldPlacement.holding();
             if (gesture == Shape.Gesture.BOX) {
-                return new Laid(gesture, ZoneSelection.drafting(), ZoneSelection.marked().isPresent());
+                return new Laid(gesture, ZoneSelection.drafting(), ZoneSelection.marked().isPresent(), placing);
             }
             if (gesture == Shape.Gesture.LINE) {
-                return new Laid(gesture, PathSelection.drafting(), PathSelection.drawn().isPresent());
+                return new Laid(gesture, PathSelection.drafting(), PathSelection.drawn().isPresent(), placing);
             }
-            return new Laid(gesture, false, false);
+            return new Laid(gesture, false, false, placing);
         }
     }
 
@@ -83,6 +86,18 @@ final class OverheadScreen extends Screen {
         row(gestures, (width - widthOf(gestures)) / 2, MARGIN);
 
         List<Chip> drafted = new ArrayList<>();
+        // A shape held to be set down takes the clicks, so its own buttons stand in for the gesture's.
+        if (laid.placing()) {
+            drafted.add(act("folkways.keys.place.turn", () -> HeldPlacement.turn(1)));
+            drafted.add(act("folkways.keys.place.flip", () -> HeldPlacement.flip(1)));
+            drafted.add(act("folkways.keys.discard", HeldPlacement::discard));
+            row(drafted, (width - widthOf(drafted)) / 2, MARGIN + Chip.HEIGHT + GAP + STATUS_HEIGHT + GAP);
+            return;
+        }
+        for (Placing.Shelf shelf : Placing.shelves()) {
+            drafted.add(new Chip(Component.translatable(shelf.nameKey()),
+                new ItemStack(BuiltInRegistries.ITEM.get(shelf.icon())), () -> true, shelf.open()));
+        }
         if (laid.ready()) {
             drafted.add(act("folkways.keys.setup", () -> FolkwaysClientGameEvents.use(minecraft)));
         }
@@ -206,7 +221,9 @@ final class OverheadScreen extends Screen {
                 return true;
             }
             case InputConstants.KEY_BACKSPACE, InputConstants.KEY_DELETE -> {
-                if (laid.gesture() == Shape.Gesture.LINE) {
+                if (HeldPlacement.holding()) {
+                    HeldPlacement.discard();
+                } else if (laid.gesture() == Shape.Gesture.LINE) {
                     PathSelection.discard();
                 } else if (laid.gesture() == Shape.Gesture.BOX) {
                     ZoneSelection.discard();

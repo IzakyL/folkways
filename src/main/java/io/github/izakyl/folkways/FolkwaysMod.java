@@ -6,6 +6,9 @@ import io.github.izakyl.folkways.core.api.Ledger;
 import io.github.izakyl.folkways.core.api.Relating;
 import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Contributions;
+import io.github.izakyl.folkways.core.api.library.LibraryCommand;
+import io.github.izakyl.folkways.core.api.library.LooseFolder;
+import io.github.izakyl.folkways.core.api.library.Shelves;
 import io.github.izakyl.folkways.core.api.participation.Participations;
 import io.github.izakyl.folkways.core.api.participation.Stake;
 import io.github.izakyl.folkways.core.api.passage.Passages;
@@ -67,6 +70,8 @@ public final class FolkwaysMod {
         BuiltinPlugins.install(modBus);
         modBus.addListener(FMLCommonSetupEvent.class, FolkwaysMod::openDeclarations);
         modBus.addListener(FolkwaysMod::reportDegradedMixins);
+        modBus.addListener(LooseFolder::addPackFinder);
+        NeoForge.EVENT_BUS.addListener(LibraryCommand::registerCommands);
         NeoForge.EVENT_BUS.addListener(this::onServerStarting);
         NeoForge.EVENT_BUS.addListener(labor::onServerTick);
         NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.TagsUpdatedEvent.class, event -> {
@@ -145,6 +150,7 @@ public final class FolkwaysMod {
         ColonyOverviews.forgetServer();
         Cadence.forgetServer();
         ColonyFront.forgetAll();
+        Shelves.forgetServer();
     }
 
     private static void reportDegradedMixins(FMLCommonSetupEvent event) {

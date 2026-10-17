@@ -504,7 +504,8 @@ export async function setVocationPriorityViaPanel(
     steps.open = await openColonyPanelViaBook(server, client, playerName, standBlock);
     steps.tab = await softly(() => clickElement(client, { id: "folkways.tab.residents" }));
     await waitForElement(client, { id: rowId }, { timeoutMs: 10_000 });
-    await waitForElement(client, { id: cellId }, { timeoutMs: 8_000 });
+    // A trade's column may sit past the table's right edge, so it is only on the page until it is scrolled to.
+    await waitForElementOnPage(client, cellId, 8_000);
     steps.scrolled = await scrollCellIntoView(server, client, rowId, cellId);
     if ((target === 0) !== (current === 0)) {
       steps.toggle = await softly(() => clickElement(client, { id: cellId }));
@@ -526,6 +527,19 @@ export async function setVocationPriorityViaPanel(
   }
   const after = await vocationPriority(server, residentUuid, vocation);
   return { ok: after === target, before, after, target, steps };
+}
+
+async function waitForElementOnPage(client: MinecraftClient, id: string, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if ((await panelElements(client)).some((element) => element.id === id)) {
+      return;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`panel: no ${id} on the page within ${timeoutMs}ms`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
 }
 
 const SELECTOR_CLOSE = "folkways.selector.close";

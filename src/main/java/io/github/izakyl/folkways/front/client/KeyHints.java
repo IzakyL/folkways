@@ -72,6 +72,8 @@ public final class KeyHints {
         List<Cue> cues = new ArrayList<>();
         if (book.colonyId() == null) {
             cues.add(Cue.of("folkways.keys.open", Cue.Key.USE));
+        } else if (HeldPlacement.holding()) {
+            placing(cues);
         } else {
             switch (book.gesture()) {
                 case POINT -> pointing(minecraft, cues);
@@ -103,6 +105,16 @@ public final class KeyHints {
     private static Cue discard() {
         return Overhead.on() ? Cue.of("folkways.keys.discard", Cue.Key.BACKSPACE)
             : Cue.of("folkways.keys.discard", Cue.Key.SNEAK, Cue.Key.CLICK);
+    }
+
+    private static void placing(List<Cue> cues) {
+        HeldPlacement.name().ifPresent(name -> cues.add(Cue.of(
+            Component.translatable("folkways.keys.place", name), Cue.Key.CLICK)));
+        cues.add(Cue.of(Component.translatable("folkways.keys.place.reach", HeldPlacement.reach()),
+            Cue.Key.MODIFIER, Cue.Key.WHEEL));
+        cues.add(Cue.of("folkways.keys.place.turn", Cue.Key.ALTERNATE, Cue.Key.WHEEL));
+        cues.add(Cue.of("folkways.keys.place.flip", Cue.Key.MODIFIER, Cue.Key.ALTERNATE, Cue.Key.WHEEL));
+        cues.add(discard());
     }
 
     private static void pointing(Minecraft minecraft, List<Cue> cues) {

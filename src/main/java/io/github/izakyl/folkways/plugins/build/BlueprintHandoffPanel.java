@@ -6,7 +6,7 @@ import io.github.izakyl.folkways.front.api.ui.Pane;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.LonePanel;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
-import java.util.function.BiConsumer;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -21,17 +21,23 @@ public final class BlueprintHandoffPanel {
     private static final float WIDTH = 340f;
     private static final float HEIGHT = 128f;
 
-    private final BiConsumer<Boolean, String> handOff;
+    private final Handing handOff;
     private final Button air = new Button();
     private final SiteNameField name = new SiteNameField();
 
     private boolean excavate;
 
-    private BlueprintHandoffPanel(BiConsumer<Boolean, String> handOff) {
+    private BlueprintHandoffPanel(Handing handOff) {
         this.handOff = handOff;
     }
 
-    static void open(BiConsumer<Boolean, String> handOff) {
+    // What becomes of the blueprint once the page is settled: filed with the colony, or in creative raised at once.
+    @FunctionalInterface
+    interface Handing {
+        void hand(boolean excavate, String siteName, boolean raise);
+    }
+
+    static void open(Handing handOff) {
         BlueprintHandoffPanel panel = new BlueprintHandoffPanel(handOff);
         LonePanel.open(ID, Component.translatable(TOKEN), WIDTH, HEIGHT, panel::build);
     }
@@ -47,17 +53,27 @@ public final class BlueprintHandoffPanel {
         Button confirm = new Button()
             .setText(Component.translatable(TOKEN + ".confirm"))
             .setOnClick(event -> {
-                handOff.accept(excavate, name.typed());
+                handOff.hand(excavate, name.typed(), false);
                 pane.close();
             });
         Tokens.name(confirm, TOKEN + ".confirm");
+
+        Button raise = new Button()
+            .setText(Component.translatable("folkways.draft.raise"))
+            .setOnClick(event -> {
+                handOff.hand(excavate, name.typed(), true);
+                pane.close();
+            });
+        Tokens.name(raise, TOKEN + ".raise");
+        Minecraft minecraft = Minecraft.getInstance();
+        raise.setDisplay(minecraft.player != null && minecraft.player.isCreative());
 
         refresh();
         UIElement page = Rows.page().addChildren(
             name.row(),
             Rows.row().addChildren(Rows.name(Component.translatable(TOKEN + ".air.heading")), air),
             Rows.spacer(),
-            Rows.actions(confirm));
+            Rows.actions(confirm, raise));
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
         return page;
     }

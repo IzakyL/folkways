@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Books;
 import io.github.izakyl.folkways.front.api.ui.BoxOffers;
 import io.github.izakyl.folkways.front.api.ui.PathOffers;
+import io.github.izakyl.folkways.plugins.build.BlueprintUploads;
 import io.github.izakyl.folkways.plugins.build.CommissionPacket;
 import io.github.izakyl.folkways.plugins.build.UploadBlueprintPacket;
 import io.github.izakyl.folkways.plugins.build.draft.Chosen;
@@ -54,8 +55,9 @@ public final class DraftOffer {
             LOGGER.warn("no bound colony book in hand; the drawing was not sent");
             return;
         }
-        bytesOf(file).ifPresent(bytes -> PacketDistributor.sendToServer(new UploadBlueprintPacket(
-            colony.get(), ID.getPath(), siteName, bytes, anchor, true, Rotation.NONE, Mirror.NONE, raise)));
+        bytesOf(file).ifPresent(bytes -> BlueprintUploads.send(new UploadBlueprintPacket(
+            colony.get(), ID.getPath(), siteName, bytes, anchor, true, Rotation.NONE, Mirror.NONE, raise),
+            PacketDistributor::sendToServer));
     }
 
     static boolean fits(CompoundTag file) {
@@ -82,9 +84,9 @@ public final class DraftOffer {
         try (ByteArrayOutputStream written = new ByteArrayOutputStream()) {
             NbtIo.writeCompressed(file, written);
             byte[] bytes = written.toByteArray();
-            if (bytes.length > UploadBlueprintPacket.MAX_BYTES) {
-                LOGGER.warn("the drawing came to {} bytes, over the {} one packet carries",
-                    bytes.length, UploadBlueprintPacket.MAX_BYTES);
+            if (!BlueprintUploads.fits(bytes)) {
+                LOGGER.warn("the drawing came to {} bytes, over the {} an upload carries",
+                    bytes.length, BlueprintUploads.MOST_BYTES);
                 return Optional.empty();
             }
             return Optional.of(bytes);

@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.front.api.ui.Cues;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.api.ui.ItemChoice;
 import io.github.izakyl.folkways.front.api.ui.LonePanel;
+import io.github.izakyl.folkways.front.api.ui.Placing;
 import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.front.ui.screen.LonePanels;
@@ -42,6 +43,7 @@ public final class FolkwaysClientRegistry {
         event.enqueueWork(() -> {
             PonderIntegration.install();
             LonePanel.install(LonePanels::open);
+            Placing.install(HeldPlacement.HAND);
             ChoicePicker.install(Window::aboveWindows);
             ItemChoice.install((parent, chosen) ->
                 SelectorWindow.open(parent, stack -> chosen.accept(FilterStacks.parse(stack))));

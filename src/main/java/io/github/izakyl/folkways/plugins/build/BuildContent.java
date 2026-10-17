@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.core.api.Declaring;
 import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.perk.Perk;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
@@ -36,6 +37,10 @@ public final class BuildContent {
     static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.build",
         ResourceLocation.withDefaultNamespace("bricks"));
 
+    static final PageKind BLUEPRINTS = PageKind.boarded(
+        ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "blueprints"),
+        "folkways.tab.blueprints", ResourceLocation.withDefaultNamespace("map"));
+
     private static final VocationSpec SPEC =
         new VocationSpec(VOCATION, List.of(new Perk(QUICK_HANDS, 4)),
             List.of(ItemSpec.of(ItemTags.PICKAXES), ItemSpec.of(ItemTags.AXES),
@@ -61,7 +66,7 @@ public final class BuildContent {
     public static void enroll(Registering registering) {
         registering.facing(ID, colony -> colony.service(ID, BuildPresence.class)
             .map(value -> (Facing) value));
-        registering.enrollment(ID, new Enrollment(List.of(), Schema.none(), List.of(PAGE)));
+        registering.enrollment(ID, new Enrollment(List.of(), Schema.none(), List.of(PAGE, BLUEPRINTS)));
     }
 
     public static Vocation trade() {

@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.person.look;
 
+import io.github.izakyl.folkways.core.api.library.Shelves;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.minecraft.resources.ResourceLocation;
@@ -30,11 +31,23 @@ public final class ResidentModels {
         for (String line : library.rejected()) {
             LOGGER.warn("[folkways-models] {}", line);
         }
+        for (String line : library.skinsRejected()) {
+            LOGGER.warn("[folkways-models] {}", line);
+        }
+        report(library);
         if (!library.isEmpty() || !library.rejected().isEmpty()) {
             LOGGER.info("[folkways-models] {} entries, {} files from {}",
                 library.entries().size(), library.assets().size(), ModelLibrary.FOLDER);
         }
         return library;
+    }
+
+    private static void report(ModelLibrary library) {
+        Shelves.Stock.Builder models = Shelves.Stock.builder().rejected(library.rejected());
+        Shelves.Stock.Builder skins = Shelves.Stock.builder().rejected(library.skinsRejected());
+        library.packs().forEach((id, pack) -> (id.getPath().startsWith("skin/") ? skins : models).entry(id, pack));
+        ModelLibrary.SHELF.report(models.build());
+        ModelLibrary.SKINS.report(skins.build());
     }
 
     // Every look that is not a data pack's: the models in the folder, and the maids of an installed mod.

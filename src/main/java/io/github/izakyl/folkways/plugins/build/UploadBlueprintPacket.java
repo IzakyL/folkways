@@ -24,6 +24,11 @@ public record UploadBlueprintPacket(UUID colonyId, String name, String siteName,
     public static final StreamCodec<RegistryFriendlyByteBuf, UploadBlueprintPacket> STREAM_CODEC =
         StreamCodec.ofMember(UploadBlueprintPacket::encode, UploadBlueprintPacket::decode);
 
+    public UploadBlueprintPacket withFile(byte[] other) {
+        return new UploadBlueprintPacket(colonyId, name, siteName, other, anchor, airIsEmpty, rotation, mirror,
+            raiseInCreative);
+    }
+
     @Override
     public Type<? extends CustomPacketPayload> type() {
         return TYPE;

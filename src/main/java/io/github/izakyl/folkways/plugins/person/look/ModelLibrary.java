@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import io.github.izakyl.folkways.core.api.library.Shelves;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -23,18 +24,26 @@ import net.minecraft.server.packs.resources.IoSupplier;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.ExtraCodecs;
 
+// The looks a server carries to its players: models out of folders, and plain skins out of single pngs.
 public record ModelLibrary(
         String fingerprint,
         Map<ResourceLocation, ResidentLook> entries,
         Map<String, byte[]> assets,
-        List<String> rejected) {
+        List<String> rejected,
+        List<String> skinsRejected,
+        Map<ResourceLocation, String> packs) {
 
-    public static final ModelLibrary EMPTY = new ModelLibrary("", Map.of(), Map.of(), List.of());
+    public static final ModelLibrary EMPTY =
+        new ModelLibrary("", Map.of(), Map.of(), List.of(), List.of(), Map.of());
+
+    public static final Shelves.Shelf SHELF = new Shelves.Shelf("resident_model");
+    public static final Shelves.Shelf SKINS = new Shelves.Shelf("resident_skin");
 
     static final int MAX_ASSET_BYTES = 8 * 1024 * 1024;
     static final int MAX_LIBRARY_BYTES = 32 * 1024 * 1024;
 
-    public static final String FOLDER = "folkways/resident_model";
+    public static final String FOLDER = SHELF.folder();
+    public static final String SKIN_FOLDER = SKINS.folder();
 
     private static final String GEOMETRY_FILE = "main.json";
     private static final String ANIMATION_FILE = "main.animation.json";
@@ -50,6 +59,8 @@ public record ModelLibrary(
         entries = Map.copyOf(entries);
         assets = Map.copyOf(assets);
         rejected = List.copyOf(rejected);
+        skinsRejected = List.copyOf(skinsRejected);
+        packs = Map.copyOf(packs);
     }
 
     public boolean isEmpty() {
@@ -58,14 +69,31 @@ public record ModelLibrary(
 
     public static ModelLibrary scan(ResourceManager resources) {
         Map<ResourceLocation, IoSupplier<InputStream>> files = new LinkedHashMap<>();
-        resources.listResources(FOLDER, path -> true).forEach((id, resource) -> files.put(id, resource::open));
-        return read(files);
+        Map<ResourceLocation, String> packs = new LinkedHashMap<>();
+        for (String folder : List.of(FOLDER, SKIN_FOLDER)) {
+            resources.listResources(folder, path -> true).forEach((id, resource) -> {
+                files.put(id, resource::open);
+                packs.put(id, resource.sourcePackId());
+            });
+        }
+        return read(files, packs);
     }
 
     public static ModelLibrary read(Map<ResourceLocation, IoSupplier<InputStream>> files) {
+        return read(files, Map.of());
+    }
+
+    // packs names the pack each file came from, for the shelf to say where each entry was found.
+    public static ModelLibrary read(Map<ResourceLocation, IoSupplier<InputStream>> files,
+            Map<ResourceLocation, String> packs) {
         Map<ResourceLocation, Map<String, IoSupplier<InputStream>>> byModel = new TreeMap<>();
+        Map<ResourceLocation, IoSupplier<InputStream>> skins = new TreeMap<>();
         for (Map.Entry<ResourceLocation, IoSupplier<InputStream>> file : files.entrySet()) {
             String path = file.getKey().getPath();
+            if (path.startsWith(SKIN_FOLDER + "/")) {
+                skins.put(file.getKey(), file.getValue());
+                continue;
+            }
             if (!path.startsWith(FOLDER + "/")) {
                 continue;
             }
@@ -81,8 +109,16 @@ public record ModelLibrary(
         Map<ResourceLocation, ResidentLook> entries = new LinkedHashMap<>();
         Map<String, byte[]> assets = new TreeMap<>();
         List<String> rejected = new ArrayList<>();
-        byModel.forEach((model, contents) -> readModel(model, contents, entries, assets, rejected));
-        return new ModelLibrary(fingerprintOf(assets), entries, assets, rejected);
+        Map<ResourceLocation, String> from = new LinkedHashMap<>();
+        byModel.forEach((model, contents) -> {
+            Set<ResourceLocation> before = Set.copyOf(entries.keySet());
+            readModel(model, contents, entries, assets, rejected);
+            String pack = packs.getOrDefault(model.withPath(FOLDER + "/" + model.getPath() + "/" + GEOMETRY_FILE), "");
+            entries.keySet().stream().filter(id -> !before.contains(id)).forEach(id -> from.put(id, pack));
+        });
+        List<String> skinsRejected = new ArrayList<>();
+        ResidentSkins.read(skins, packs, entries, assets, skinsRejected, from);
+        return new ModelLibrary(fingerprintOf(assets), entries, assets, rejected, skinsRejected, from);
     }
 
     private static void readModel(ResourceLocation model, Map<String, IoSupplier<InputStream>> contents,
@@ -222,7 +258,7 @@ public record ModelLibrary(
         }
     }
 
-    private static byte[] read(Map<String, IoSupplier<InputStream>> contents, String file, String model,
+    static byte[] read(Map<String, IoSupplier<InputStream>> contents, String file, String model,
             List<String> rejected) {
         IoSupplier<InputStream> opener = contents.get(file);
         if (opener == null) {

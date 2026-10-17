@@ -35,6 +35,25 @@ Saves, data pack formats and the Java API may still change between versions.
 - **In-game lessons.** Every part of Folkways ships Ponder scenes, playable from the
   colony panel's Lessons tab or by holding the ponder key over a page tab.
 
+### Adding your own content
+
+Everything below loads from data packs at `data/<namespace>/folkways/<shelf>/`, or from
+the `folkways/<shelf>/` folder in the server's game directory. The folder loads as one
+more data pack under the `local` namespace, and `/reload` picks up changes to it. Run
+`/folkways library` to see what each shelf holds, which pack each entry came from, and
+which files were turned away and why.
+
+| Shelf | Files | What it adds |
+| --- | --- | --- |
+| `pattern` | `<name>.star` | A building pattern |
+| `piece` | `<name>.nbt` | A structure file that patterns stamp with `template(...)` |
+| `blueprint` | `<name>.nbt` | A structure file set down whole: pick it on the colony panel's Blueprints page, then aim, turn and click to place it |
+| `resident_skin` | `<name>.png`, optional `<name>.json` with `arms` and `weight` | A resident look. The server sends the texture to its players, so they need no resource pack |
+| `resident_model` | `<name>/main.json`, `main.animation.json`, `textures/*.png` | A GeckoLib or unencrypted YSM model, one look per texture |
+
+On a client, `folkways/pattern/`, `piece/` and `blueprint/` also make up the player's
+own library. The player draws these on their side and sends the result to the server.
+
 ## Installation
 
 There is no tagged release yet. The

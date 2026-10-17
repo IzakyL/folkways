@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -11,8 +12,9 @@ import net.minecraft.resources.ResourceLocation;
 
 public record TemplateLibraryPacket(Map<ResourceLocation, CompoundTag> files) implements CustomPacketPayload {
 
-    static final int MOST_PIECES = 64;
-    static final long MOST_BYTES = 1L << 20;
+    // Blueprints ride along with the pieces, so a library holds a few hundred and a file runs to a few megabytes.
+    static final int MOST_PIECES = 256;
+    static final long MOST_BYTES = 8L << 20;
 
     public static final Type<TemplateLibraryPacket> TYPE = new Type<>(
         ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "piece_library"));
@@ -41,7 +43,7 @@ public record TemplateLibraryPacket(Map<ResourceLocation, CompoundTag> files) im
         Map<ResourceLocation, CompoundTag> files = new LinkedHashMap<>();
         for (int index = 0; index < count; index++) {
             ResourceLocation id = buffer.readResourceLocation();
-            CompoundTag tag = buffer.readNbt();
+            CompoundTag tag = (CompoundTag) buffer.readNbt(NbtAccounter.create(MOST_BYTES));
             if (tag != null) {
                 files.put(id, tag);
             }

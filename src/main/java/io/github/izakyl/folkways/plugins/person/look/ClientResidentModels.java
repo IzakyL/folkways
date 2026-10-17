@@ -24,7 +24,6 @@ import net.minecraft.server.packs.repository.Pack;
 import net.minecraft.server.packs.repository.PackSource;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.event.AddPackFindersEvent;
@@ -36,7 +35,9 @@ import org.slf4j.LoggerFactory;
 public final class ClientResidentModels {
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-models");
     private static final String PACK_ID = "folkways/resident_models";
-    private static final String ROOT = "folkways/resident-models";
+    // Kept apart from the folders a player fills, so a cache wiped and rewritten never touches their files.
+    private static final String ROOT = "folkways/.cache/resident_models";
+    private static final String OLD_ROOT = "folkways/resident-models";
     private static final String FINGERPRINT_FILE = "fingerprint.txt";
     private static final String ASSETS_DIR = "assets";
     private static final int MAX_LIBRARY_BYTES = ModelLibrary.MAX_LIBRARY_BYTES;
@@ -57,6 +58,7 @@ public final class ClientResidentModels {
             return;
         }
         Path root = packRoot();
+        forgetOldCache();
         if (!writeMetadata(root)) {
             return;
         }
@@ -85,9 +87,6 @@ public final class ClientResidentModels {
         ResidentLooks.installRuntime(packet.pool());
         pending = null;
         if (packet.assets().isEmpty() || packet.fingerprint().equals(fingerprintOnDisk())) {
-            return;
-        }
-        if (!ModList.get().isLoaded("geckolib")) {
             return;
         }
         Transfer transfer = Transfer.of(packet);
@@ -135,6 +134,19 @@ public final class ClientResidentModels {
         LOGGER.info("[folkways-models] wrote {} files to {}; reloading resources",
             transfer.expected.size(), root);
         Minecraft.getInstance().reloadResourcePacks();
+    }
+
+    // Where the cache once was, among a player's own folders; it goes only if it is plainly the cache.
+    private static void forgetOldCache() {
+        Path old = FMLPaths.GAMEDIR.get().resolve(OLD_ROOT);
+        if (!Files.isRegularFile(old.resolve(FINGERPRINT_FILE))) {
+            return;
+        }
+        try {
+            wipe(old);
+        } catch (IOException exception) {
+            LOGGER.warn("[folkways-models] could not clear the old model cache at {}", old, exception);
+        }
     }
 
     private static String fingerprintOnDisk() {

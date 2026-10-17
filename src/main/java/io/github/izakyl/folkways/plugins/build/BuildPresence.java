@@ -19,6 +19,7 @@ import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.plugins.build.draft.DraftRefusal;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Round;
+import io.github.izakyl.folkways.plugins.build.draft.Templates;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -33,6 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -583,18 +585,30 @@ final class BuildPresence implements Facing {
         if (!page.equals(BuildContent.PAGE.id())) {
             return Optional.empty();
         }
-        List<Board.Row> rows = new ArrayList<>();
+        List<Board.Row> standing = new ArrayList<>();
         for (BlueprintBuildOrder order : book.allBuildOrders()) {
-            rows.add(rowFor(order));
+            standing.add(rowFor(order));
         }
         for (Growing one : growing.values()) {
             if (one.order().filter(this::filed).isEmpty()) {
-                rows.add(rowFor(one));
+                standing.add(rowFor(one));
             }
         }
+        // The blueprints there are to set down lead the page, and the build orders standing follow them.
+        List<Board.Row> rows = new ArrayList<>();
+        rows.add(new Board.Row(new ItemStack(BuiltInRegistries.ITEM.get(BuildContent.BLUEPRINTS.icon())),
+            Component.translatable(BuildContent.BLUEPRINTS.nameKey()),
+            Component.translatable("folkways.blueprints.shelved", Templates.blueprints().size()),
+            List.of(new Board.Act.Open(BuildContent.BLUEPRINTS.id()))));
+        rows.add(Board.Row.heading(Component.translatable("folkways.page.build.orders")));
+        if (standing.isEmpty()) {
+            rows.add(Board.Row.of(ItemStack.EMPTY, Component.translatable("folkways.page.build.empty"),
+                Component.empty()));
+        }
+        rows.addAll(standing);
         return Optional.of(new Board(
             List.of(new Board.Figure("folkways.page.build.open",
-                Component.literal(Integer.toString(rows.size())))),
+                Component.literal(Integer.toString(standing.size())))),
             rows,
             Optional.of(Component.translatable("folkways.page.build.empty"))));
     }

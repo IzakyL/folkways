@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.person;
 
 import io.github.izakyl.folkways.core.api.Declaring;
 import io.github.izakyl.folkways.core.api.Relating;
+import io.github.izakyl.folkways.core.api.library.Shelves;
 import io.github.izakyl.folkways.core.api.resident.body.PackKeeps;
 import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.ui.Bay;
@@ -12,6 +13,7 @@ import io.github.izakyl.folkways.plugins.person.living.LivingContent;
 import io.github.izakyl.folkways.plugins.person.look.LookPool;
 import io.github.izakyl.folkways.plugins.person.look.LookSet;
 import io.github.izakyl.folkways.plugins.person.look.LooksPage;
+import io.github.izakyl.folkways.plugins.person.look.ModelLibrary;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLooks;
 import io.github.izakyl.folkways.plugins.person.look.ResidentModelPackets;
 import io.github.izakyl.folkways.plugins.person.look.ResidentModels;
@@ -51,6 +53,7 @@ public final class PersonPlugin {
             event.inlay(Bay.RESIDENT, LookPool.OWNER, PersonInlay::new);
             event.outline(Housing::pillow);
         });
+        Shelves.register(ModelLibrary.SHELF, ModelLibrary.SKINS);
         modBus.addListener(ResidentLooks::registerDataPackRegistry);
         modBus.addListener(LookSet::registerDataPackRegistry);
         modBus.addListener(ResidentNames::registerDataPackRegistry);

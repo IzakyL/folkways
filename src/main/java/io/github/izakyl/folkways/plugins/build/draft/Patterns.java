@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.core.api.library.Shelves;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -19,7 +20,9 @@ public final class Patterns {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-patterns");
 
-    public static final String FOLDER = "folkways/pattern";
+    public static final Shelves.Shelf SHELF = new Shelves.Shelf("pattern");
+
+    public static final String FOLDER = SHELF.folder();
     private static final String SUFFIX = ".star";
 
     private static volatile Map<ResourceLocation, Pattern> library = Map.of();
@@ -52,12 +55,17 @@ public final class Patterns {
     public static void reload(ResourceManager resources) {
         Templates.reload(resources);
         Map<ResourceLocation, String> read = new LinkedHashMap<>();
+        Map<ResourceLocation, String> packs = new LinkedHashMap<>();
         Map<ResourceLocation, Resource> files =
             resources.listResources(FOLDER, path -> path.getPath().endsWith(SUFFIX));
         for (Map.Entry<ResourceLocation, Resource> file : files.entrySet()) {
-            read(file.getKey(), file.getValue()).ifPresent(source -> read.put(idOf(file.getKey()), source));
+            ResourceLocation id = idOf(file.getKey());
+            packs.put(id, file.getValue().sourcePackId());
+            read(file.getKey(), file.getValue()).ifPresent(source -> read.put(id, source));
         }
-        adopt(PatternLibraryPacket.sendable(read, LOGGER));
+        Map<ResourceLocation, String> refused = new LinkedHashMap<>();
+        adopt(PatternLibraryPacket.sendable(read, LOGGER), refused);
+        report(packs, refused);
         LOGGER.info("{} pattern(s) loaded", library.size());
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         if (server != null) {
@@ -65,10 +73,25 @@ public final class Patterns {
         }
     }
 
+    // A file that defines no draw is a library the others load, and is neither an entry nor turned away.
+    private static void report(Map<ResourceLocation, String> packs, Map<ResourceLocation, String> refused) {
+        Shelves.Stock.Builder stock = Shelves.Stock.builder();
+        library.keySet().forEach(id -> stock.entry(id, packs.getOrDefault(id, "")));
+        packs.keySet().stream().filter(id -> !library.containsKey(id) && !sources.containsKey(id))
+            .forEach(id -> stock.rejected(id + ": unreadable, or past what the server sends its players"));
+        refused.forEach((id, why) -> stock.rejected(id + ": " + why));
+        SHELF.report(stock.build());
+    }
+
     private static void adopt(Map<ResourceLocation, String> read) {
+        adopt(read, new LinkedHashMap<>());
+    }
+
+    private static void adopt(Map<ResourceLocation, String> read, Map<ResourceLocation, String> refused) {
         Map<ResourceLocation, String> kept = Map.copyOf(read);
         Map<ResourceLocation, Pattern> found = new LinkedHashMap<>();
-        read.forEach((id, source) -> Pattern.parse(id, source, wanted -> Optional.ofNullable(kept.get(wanted)))
+        read.forEach((id, source) -> Pattern.parse(id, source, wanted -> Optional.ofNullable(kept.get(wanted)),
+                why -> refused.put(id, why))
             .ifPresent(pattern -> found.put(id, pattern)));
         library = Map.copyOf(found);
         sources = kept;

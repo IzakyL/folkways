@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -79,6 +80,13 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
 
     public static Optional<Pattern> parse(ResourceLocation id, String source,
             Function<ResourceLocation, Optional<String>> libraries) {
+        return parse(id, source, libraries, why -> {
+        });
+    }
+
+    // refused hears why a pattern did not load, for the shelf to show.
+    public static Optional<Pattern> parse(ResourceLocation id, String source,
+            Function<ResourceLocation, Optional<String>> libraries, Consumer<String> refused) {
         try (Mutability mutability = Mutability.create("pattern", id)) {
             Module module = execute(id, source, libraries, mutability, new HashMap<>(), new LinkedHashSet<>());
             Object drawing = module.getGlobal(DRAW);
@@ -100,6 +108,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
             return Optional.of(pattern);
         } catch (SyntaxError.Exception | EvalException | RuntimeException broken) {
             LOGGER.error("{}: {}", id, broken.getMessage());
+            refused.accept(String.valueOf(broken.getMessage()));
             return Optional.empty();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
