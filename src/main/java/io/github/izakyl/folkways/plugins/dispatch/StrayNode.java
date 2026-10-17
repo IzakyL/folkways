@@ -40,8 +40,10 @@ final class StrayNode implements Node {
             .done();
     }
 
+    // A parcel some collection waits on is spoken for wherever it is: at its pick-up point, or still in the port it was
+    // sent from by hand.
     static boolean stray(Map<UUID, CollectNode> collecting, WorldPos at, PackageNetwork.Parcel parcel) {
-        return collecting.values().stream().noneMatch(node -> node.port().equals(at) && node.owns(parcel));
+        return collecting.values().stream().noneMatch(node -> node.owns(parcel));
     }
 
     @Override

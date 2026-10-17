@@ -20,14 +20,18 @@ import io.github.izakyl.folkways.plugins.CreateMod;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 
 public final class DispatchContent {
 
     public static final ResourceLocation COLLECTING = ResourceLocation.fromNamespaceAndPath("folkways", "collecting");
 
     public static final ResourceLocation TIDYING = ResourceLocation.fromNamespaceAndPath("folkways", "tidying");
+
+    public static final ResourceLocation PACKING = ResourceLocation.fromNamespaceAndPath("folkways", "packing");
 
     public static final ResourceLocation KEEPING_POST = ResourceLocation.fromNamespaceAndPath("folkways", "keeping_post");
 
@@ -72,7 +76,7 @@ public final class DispatchContent {
         registering.facing(ID, colony -> colony.service(ID, DispatchPresence.class)
             .map(value -> (io.github.izakyl.folkways.front.api.Facing) value));
         registering.enrollment(ID, new Enrollment(
-            List.of(new Delegation(PORT, new Shape.Block(state -> PackageNetworks.get().isPort(state)))),
+            List.of(new Delegation(PORT, new Shape.Block(state -> PackageNetworks.get().isPostbox(state)))),
             Schema.none(), List.of(PAGE)));
     }
 
@@ -84,6 +88,16 @@ public final class DispatchContent {
         for (Colony colony : Colonies.all(server)) {
             Optional<DispatchPresence> dispatch = presenceIn(colony.service(ID, Object.class));
             if (dispatch.isPresent() && dispatch.get().holds(network)) {
+                return dispatch;
+            }
+        }
+        return Optional.empty();
+    }
+
+    static Optional<DispatchPresence> chainHolderOf(ServerLevel level, BlockPos chain) {
+        for (Colony colony : Colonies.all(level.getServer())) {
+            Optional<DispatchPresence> dispatch = presenceIn(colony.service(ID, Object.class));
+            if (dispatch.isPresent() && dispatch.get().holdsChain(level, chain)) {
                 return dispatch;
             }
         }

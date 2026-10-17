@@ -9,6 +9,7 @@ import com.simibubi.create.content.logistics.box.PackageItem;
 import com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorBlockEntity;
 import com.simibubi.create.content.logistics.packagePort.PackagePortBlockEntity;
 import com.simibubi.create.content.logistics.packagePort.frogport.FrogportBlock;
+import com.simibubi.create.content.logistics.packagePort.frogport.FrogportBlockEntity;
 import com.simibubi.create.content.logistics.packagePort.postbox.PostboxBlock;
 import com.simibubi.create.content.logistics.packager.InventorySummary;
 import com.simibubi.create.content.logistics.packager.PackagerBlockEntity;
@@ -17,17 +18,22 @@ import com.simibubi.create.content.logistics.packagerLink.LogisticallyLinkedBeha
 import com.simibubi.create.content.logistics.packagerLink.LogisticsManager;
 import com.simibubi.create.content.logistics.packagerLink.PackagerLinkBlockEntity;
 import com.simibubi.create.content.logistics.stockTicker.PackageOrderWithCrafts;
+import com.simibubi.create.content.logistics.stockTicker.StockTickerBlockEntity;
+import com.simibubi.create.content.trains.station.GlobalStation;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -38,6 +44,9 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
 import net.neoforged.neoforge.items.ItemStackHandler;
 
 final class CreatePackageNetwork implements PackageNetwork {
@@ -92,26 +101,248 @@ final class CreatePackageNetwork implements PackageNetwork {
     }
 
     @Override
-    public OptionalInt transitTicks(ServerLevel level, UUID network, BlockPos port) {
-        return layoutOf(level, network).transitTicks(level, port);
+    public OptionalInt transitTicks(ServerLevel level, UUID network, BlockPos port, Predicate<UUID> trains) {
+        return layoutOf(level, network).transitTicks(level, port, trains);
     }
 
     @Override
-    public boolean partOfNetwork(ServerLevel level, BlockPos pos) {
+    public Optional<UUID> linkerAt(ServerLevel level, BlockPos pos) {
         if (!level.isLoaded(pos)) {
-            return false;
+            return Optional.empty();
         }
         BlockEntity found = level.getBlockEntity(pos);
-        return BlockEntityBehaviour.get(level, pos, LogisticallyLinkedBehaviour.TYPE) != null
-            || found instanceof PackagerBlockEntity
-            || found instanceof ChainConveyorBlockEntity
-            || found instanceof PackagePortBlockEntity;
+        return found instanceof PackagerLinkBlockEntity || found instanceof StockTickerBlockEntity
+            ? linkAt(level, pos) : Optional.empty();
     }
 
     @Override
-    public List<BlockPos> portsOf(ServerLevel level, UUID network) {
+    public Optional<BlockPos> chainAt(ServerLevel level, BlockPos pos) {
+        if (!level.isLoaded(pos)) {
+            return Optional.empty();
+        }
+        BlockEntity found = level.getBlockEntity(pos);
+        if (found instanceof ChainConveyorBlockEntity) {
+            return Optional.of(pos.immutable());
+        }
+        return found instanceof FrogportBlockEntity port ? CreateLayout.chainOf(port) : Optional.empty();
+    }
+
+    @Override
+    public boolean frogport(ServerLevel level, BlockPos pos) {
+        return level.isLoaded(pos) && level.getBlockEntity(pos) instanceof FrogportBlockEntity;
+    }
+
+    @Override
+    public boolean isPostbox(BlockState state) {
+        return state.getBlock() instanceof PostboxBlock;
+    }
+
+    @Override
+    public Set<BlockPos> chainNet(ServerLevel level, BlockPos chain) {
+        return CreateLayout.net(level, chain);
+    }
+
+    @Override
+    public List<BlockPos> frogportsOn(ServerLevel level, Set<BlockPos> chains) {
+        return CreatePorts.frogportsOn(level, chains);
+    }
+
+    @Override
+    public List<BlockPos> sendersOf(ServerLevel level, UUID network) {
+        return List.copyOf(layoutOf(level, network).senders());
+    }
+
+    @Override
+    public List<BlockPos> portsOf(ServerLevel level, UUID network, Predicate<UUID> trains) {
         CreateLayout layout = layoutOf(level, network);
-        return layout.flawless() ? layout.ports(level) : List.of();
+        return layout.flawless() ? layout.ports(level, trains) : List.of();
+    }
+
+    @Override
+    public List<BlockPos> containersOf(ServerLevel level, UUID network) {
+        return layoutOf(level, network).containers();
+    }
+
+    @Override
+    public List<ItemStack> heldIn(ServerLevel level, BlockPos container) {
+        IItemHandler held = handlerAt(level, container);
+        if (held == null) {
+            return List.of();
+        }
+        List<ItemStack> found = new ArrayList<>();
+        for (int slot = 0; slot < held.getSlots(); slot++) {
+            ItemStack stack = held.getStackInSlot(slot);
+            if (!stack.isEmpty()) {
+                found.add(stack.copy());
+            }
+        }
+        return List.copyOf(found);
+    }
+
+    @Override
+    public List<ItemStack> takeOut(ServerLevel level, BlockPos container, Predicate<ItemStack> goods, long count) {
+        IItemHandler held = handlerAt(level, container);
+        if (held == null || count <= 0 || extract(held, goods, count, true).stream()
+                .mapToLong(ItemStack::getCount).sum() < count) {
+            return List.of();
+        }
+        return extract(held, goods, count, false);
+    }
+
+    private static List<ItemStack> extract(IItemHandler held, Predicate<ItemStack> goods, long count, boolean dry) {
+        List<ItemStack> taken = new ArrayList<>();
+        long left = count;
+        for (int slot = 0; slot < held.getSlots() && left > 0; slot++) {
+            ItemStack there = held.getStackInSlot(slot);
+            if (there.isEmpty() || !goods.test(there)) {
+                continue;
+            }
+            ItemStack out = held.extractItem(slot, (int) Math.min(left, there.getCount()), dry);
+            if (!out.isEmpty()) {
+                taken.add(out);
+                left -= out.getCount();
+            }
+        }
+        return List.copyOf(taken);
+    }
+
+    @Override
+    public List<BlockPos> postsOf(ServerLevel level, UUID network) {
+        CreateLayout layout = layoutOf(level, network);
+        return layout.flawless() && layout.mails() ? List.copyOf(layout.posts().values()) : List.of();
+    }
+
+    @Override
+    public void post(ServerLevel level, UUID network, IntPredicate ours) {
+        CreateLayout layout = layoutOf(level, network);
+        if (!layout.flawless() || !layout.mails()) {
+            return;
+        }
+        for (Map.Entry<BlockPos, BlockPos> post : layout.posts().entrySet()) {
+            Optional<PackagePortBlockEntity> port = portAt(level, post.getValue());
+            if (port.isPresent() && level.getBlockEntity(post.getKey()) instanceof PackagerBlockEntity packager
+                    && packager.animationTicks == 0 && PackageItem.isPackage(packager.heldBox)
+                    && PackageItem.hasOrderData(packager.heldBox) && ours.test(PackageItem.getOrderId(packager.heldBox))
+                    && ItemHandlerHelper.insertItem(port.get().inventory, packager.heldBox.copy(), true).isEmpty()) {
+                ItemHandlerHelper.insertItem(port.get().inventory, packager.heldBox.copy(), false);
+                packager.heldBox = ItemStack.EMPTY;
+                packager.notifyUpdate();
+                port.get().notifyUpdate();
+            }
+        }
+    }
+
+    @Override
+    public Optional<Route> route(ServerLevel level, BlockPos from, BlockPos to, Predicate<UUID> trains) {
+        Optional<GlobalStation> leaving = CreateMail.stationOf(level, from);
+        Optional<GlobalStation> bound = CreateMail.stationOf(level, to);
+        if (leaving.isEmpty() || bound.isEmpty() || leaving.get() == bound.get()) {
+            return Optional.empty();
+        }
+        return CreateMail.leg(level.getServer(), leaving.get(), bound.get(), trains)
+            .map(leg -> new Route(leg.train(), leaving.get().name, leg.arrives()));
+    }
+
+    @Override
+    public Optional<String> stationOf(ServerLevel level, BlockPos postbox) {
+        return CreateMail.stationOf(level, postbox).map(station -> station.name);
+    }
+
+    @Override
+    public Optional<Component> trainName(MinecraftServer server, UUID train) {
+        return CreateMail.nameOf(server, train);
+    }
+
+    @Override
+    public boolean giveBack(ServerLevel level, UUID network, BlockPos postbox, int order) {
+        Optional<PackagePortBlockEntity> port = portAt(level, postbox);
+        for (int slot = 0; port.isPresent() && slot < port.get().inventory.getSlots(); slot++) {
+            ItemStack parcel = port.get().inventory.getStackInSlot(slot);
+            if (!orderOf(parcel).equals(OptionalInt.of(order))) {
+                continue;
+            }
+            for (BlockPos at : layoutOf(level, network).packagers()) {
+                if (level.getBlockEntity(at) instanceof PackagerBlockEntity packager
+                        && packager.inventory.insertItem(0, parcel.copy(), true).isEmpty()) {
+                    packager.inventory.insertItem(0, parcel.copy(), false);
+                    port.get().inventory.setStackInSlot(slot, ItemStack.EMPTY);
+                    port.get().notifyUpdate();
+                    return true;
+                }
+            }
+            return false;
+        }
+        return false;
+    }
+
+    @Override
+    public Optional<BlockPos> packerAt(ServerLevel level, BlockPos port) {
+        Optional<PackagePortBlockEntity> found = portAt(level, port);
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        List<BlockPos> beside = CreateMail.posts(found.get()) ? CreateLayout.packagersBeside(level, port)
+            : CreateLayout.chainOf(found.get()).isPresent() ? CreateLayout.packagersBeside(level, port).stream()
+                .filter(port.below()::equals).toList()
+            : List.of();
+        return beside.stream().filter(packager -> linkBeside(level, packager).isEmpty()).findFirst();
+    }
+
+    @Override
+    public boolean mails(ServerLevel level, BlockPos port) {
+        return portAt(level, port).filter(CreateMail::posts).isPresent();
+    }
+
+    @Override
+    public List<BlockPos> reachedFrom(ServerLevel level, BlockPos port, Predicate<UUID> trains) {
+        if (!mails(level, port)) {
+            return CreateLayout.portsAlong(level, port);
+        }
+        return CreateMail.reached(level, List.of(port)).stream()
+            .filter(to -> route(level, port, to, trains).isPresent()).toList();
+    }
+
+    @Override
+    public OptionalInt handTicks(ServerLevel level, BlockPos from, BlockPos to, Predicate<UUID> trains) {
+        if (!mails(level, from)) {
+            return CreateLayout.throwTicks(level, from, to);
+        }
+        return route(level, from, to, trains).map(route -> OptionalInt.of(route.arrives()))
+            .orElse(OptionalInt.empty());
+    }
+
+    @Override
+    public Optional<ItemStack> pack(List<ItemStack> goods, String address, int order) {
+        ItemStackHandler contents = new ItemStackHandler(PackageItem.SLOTS);
+        for (ItemStack stack : goods) {
+            if (!ItemHandlerHelper.insertItemStacked(contents, stack.copy(), false).isEmpty()) {
+                return Optional.empty();
+            }
+        }
+        ItemStack parcel = PackageItem.containing(contents);
+        PackageItem.addAddress(parcel, address);
+        PackageItem.setOrder(parcel, order, 0, true, 0, true, PackageOrderWithCrafts.empty());
+        return Optional.of(parcel);
+    }
+
+    @Override
+    public boolean send(ServerLevel level, BlockPos port, ItemStack parcel) {
+        Optional<PackagePortBlockEntity> found = portAt(level, port);
+        if (found.isEmpty()) {
+            return false;
+        }
+        for (int slot = 0; slot < found.get().inventory.getSlots(); slot++) {
+            if (found.get().inventory.getStackInSlot(slot).isEmpty()) {
+                found.get().inventory.setStackInSlot(slot, parcel.copy());
+                found.get().notifyUpdate();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static IItemHandler handlerAt(ServerLevel level, BlockPos at) {
+        return level.isLoaded(at) ? level.getCapability(Capabilities.ItemHandler.BLOCK, at, null) : null;
     }
 
     private static Optional<UUID> linkAt(ServerLevel level, BlockPos pos) {

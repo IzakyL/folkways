@@ -253,13 +253,21 @@ final class Survey {
         stands = around.done();
     }
 
-    // The loaded stores the colony's owners offer here, short of any block a workshop stands on.
+    // The loaded stores the colony's owners offer here, short of any block a workshop stands on and any store an owner
+    // answers for itself.
     private static Set<BlockPos> offered(ServerLevel level, ColonyData colony) {
         Set<BlockPos> sites = colony.works().sitesIn(level.dimension());
+        Set<BlockPos> withheld = new LinkedHashSet<>();
+        for (WorldPos store : colony.works().withheldIn(level.dimension())) {
+            WorldSpaces.storage(level, store).filter(level::isLoaded)
+                .ifPresent(pos -> withheld.add(Containers.anchor(level, pos)));
+        }
         Set<BlockPos> found = new LinkedHashSet<>();
         for (WorldPos store : colony.works().storesIn(level.dimension())) {
             WorldSpaces.storage(level, store)
-                .filter(pos -> level.isLoaded(pos) && !sites.contains(pos)).ifPresent(found::add);
+                .filter(pos -> level.isLoaded(pos) && !sites.contains(pos)
+                    && !withheld.contains(Containers.anchor(level, pos)))
+                .ifPresent(found::add);
         }
         return found;
     }

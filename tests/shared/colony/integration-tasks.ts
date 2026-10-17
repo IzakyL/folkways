@@ -280,6 +280,10 @@ tickerLink.freqId = network;
 var dispatch = (DispatchPresence) colony.service(DispatchContent.ID, Object.class).orElseThrow();
 if (!dispatch.take(network)) throw new IllegalStateException("Network handover refused");
 if (!dispatch.holds(network)) throw new TaskException("refused", "dispatch took network " + network + " but does not hold it");
+// The network ships on its chain net, which is handed over on its own.
+if (!dispatch.takeChain(level, pos(chains.get(0))) && !dispatch.holdsChain(level, pos(chains.get(0)))) {
+    throw new TaskException("refused", "dispatch did not take the chain net on");
+}
 return Sync.stamp(Map.of("ok", true, "network", network.toString()));
 `,
     members: POS,

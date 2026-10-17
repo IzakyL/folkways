@@ -131,9 +131,9 @@ test("colony orders arrive through a Create logistics network", async ({}, testI
     const network = await runColonyTask(server, WIRE_NETWORK, args);
     run.note("network", network);
     run.note("ports", await runColonyTask(server, OPEN_PORTS, { chains, ports }));
-    // The book in member mode reads any piece of the network as the whole of it: a chain gives it back, a port far
-    // down the line takes it on again, and every port along the chains comes with it.
-    // With its motor gone the chains stand still, and the book will not take the network on until they turn again.
+    // The book in member mode reads a chain or a port as the whole chain net: a chain gives the net back, which leaves
+    // the network the colony's but shipping on nothing of the colony's, and a port far down the line takes it on again.
+    // With its motor gone the chains stand still, and the network orders nothing until they turn again.
     const readings: unknown[] = [];
     const point = async (cells: typeof chains) => {
       const read = await runColonyTask(server, POINT_BOOK, { player, colony_id, network: network.network, cells, chains });
@@ -142,17 +142,19 @@ test("colony orders arrive through a Create logistics network", async ({}, testI
     };
     const motorAt = { ...motor, y: origin.y - 3 };
     const handover = [...await point([chains[1]])];
+    handover.push(...await point([towerPort]));
     await world.command(server, `setblock ${commandPos(motorAt)} minecraft:air`);
     await tick.sprint(server, 10);
-    handover.push(...await point([towerPort]));
+    await point([]);
     await world.command(server, `setblock ${commandPos(motorAt)} create:creative_motor[facing=up]{ScrollValue:${MOTOR_RPM}}`);
     await tick.sprint(server, 10);
-    handover.push(...await point([towerPort]));
+    await point([]);
     run.note("handover", { clicks: handover, readings });
-    expect(handover, "the book must hand the network over, refuse it while still, and take it on turning").toEqual([
-      { refusal: "", member: false, held: false },
-      { refusal: "folkways.dispatch.flaw.still", member: false, held: false },
-      { refusal: "", member: false, held: true }]);
+    expect(handover, "the book must give the chain net back and take it on again from a port down the line").toEqual([
+      { refusal: "", member: false, held: true, chained: false },
+      { refusal: "", member: false, held: true, chained: true }]);
+    expect((readings[2] as any).flaw, "a still chain keeps the network from ordering").toContain("STILL");
+    expect((readings[3] as any).flaw, "turning again, the network orders").toBe("Optional.empty");
     const roles = await runColonyTask(server, ASSIGN_ROLES, { colony_id, roles: ROLES,
       zones: [
         ...fields.map(field => ({ kind: "folkways:farm", ...field, crop: "minecraft:wheat" })),
@@ -566,7 +568,9 @@ for(var raw:args.list("cells")){
   var be=level.getBlockEntity(at);
   boolean member=be!=null&&ColonyMembership.owner(be).isPresent();
   boolean held=dispatch.holds(UUID.fromString(args.string("network")));
-  clicks.add(Map.of("refusal",attempt.refusal().map(n->n.key()).orElse(""),"member",member,"held",held));
+  var first=(Map<?,?>)args.list("chains").get(0);
+  boolean chained=dispatch.holdsChain(level,new BlockPos(((Number)first.get("x")).intValue(),((Number)first.get("y")).intValue(),((Number)first.get("z")).intValue()));
+  clicks.add(Map.of("refusal",attempt.refusal().map(n->n.key()).orElse(""),"member",member,"held",held,"chained",chained));
 }
 var speeds=new ArrayList<Object>();
 for(var raw:args.list("chains")){

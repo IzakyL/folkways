@@ -69,7 +69,7 @@ public final class DispatchScene {
 
         scene.overlay().showOutline(PonderPalette.BLUE, "network", network, 180);
         scene.overlay().showText(180)
-            .text("A package network built with Create: stock behind a packager and a stock link, and a Stock Ticker to order from. The colony only takes on a network where every packager hands its parcels only to frogports beside it, and all those frogports hang on one chain net, turning and in one dimension. Should that stop being so, the colony orders nothing until it is put right. Let nothing else take from those packagers, or orders go astray.")
+            .text("A package network built with Create: stock behind a packager and a stock link, and a Stock Ticker to order from. The colony orders from it only by what it ships on: every packager hands its parcels to frogports beside it, all on one chain net, turning and in one dimension; or to a postbox beside it, set to a station. Should that stop being so, the colony orders nothing until it is put right, though residents still take from its containers by hand. Let nothing else take from those packagers, or orders go astray.")
             .pointAt(util.vector().topOf(link))
             .placeNearTarget()
             .attachKeyFrame();
@@ -78,7 +78,7 @@ public final class DispatchScene {
         scene.overlay().showControls(util.vector().topOf(desk), Pointing.DOWN, 50).leftClick().withItem(book);
         scene.idle(10);
         scene.overlay().showText(100)
-            .text("With the book pointing, left-click any piece of the network: a linked block, a packager, a chain conveyor or a frogport on its chains. The colony takes the whole network on; the same click gives it back.")
+            .text("With the book pointing, left-click the stock link or the Stock Ticker: the colony takes the network on. Left-click a frogport or a chain conveyor: the colony takes that whole chain net on. Left-click a postbox: the colony takes that postbox on, and sends by it only aboard trains it has taken on. The same click gives each back. The network orders only once what it ships on is the colony's too.")
             .pointAt(util.vector().blockSurface(desk, Direction.NORTH))
             .placeNearTarget()
             .attachKeyFrame();
@@ -114,7 +114,7 @@ public final class DispatchScene {
 
         scene.overlay().showOutline(PonderPalette.GREEN, "port", util.select().position(port), 90);
         scene.overlay().showText(90)
-            .text("Every Package Frogport along the network's chains is a pick-up point, except the ones beside its packagers, where parcels set out. The colony sends to whichever point is handiest. A point whose address is exactly * or contains any of { } , \\ is never used by the colony on its own.")
+            .text("Every Package Frogport on a chain net the colony holds is a pick-up point, except the ones beside the network's packagers, where parcels set out, and the ones over a container, which empty what they catch into it. So is every postbox the colony holds that one of its trains runs to. The colony sends to whichever point is handiest. A point whose address is exactly * or contains any of { } , \\ is never used by the colony on its own.")
             .pointAt(util.vector().topOf(port))
             .placeNearTarget()
             .attachKeyFrame();

@@ -18,5 +18,13 @@ public enum DispatchRefusal implements RefusalKind.Named {
 
     NOT_YOURS,
 
-    NO_NETWORK;
+    NO_NETWORK,
+
+    NOT_PACKED,
+
+    PORT_FULL,
+
+    OFF_CHAIN,
+
+    CHAIN_ELSEWHERE;
 }

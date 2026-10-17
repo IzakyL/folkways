@@ -59,6 +59,7 @@ public final class ColonyWorks extends Stretch implements Colony {
     private final Rules rules = new Rules();
 
     private final StorePlaces stores = new StorePlaces();
+    private final StorePlaces withheld = new StorePlaces();
 
     public interface Listening {
 
@@ -256,6 +257,7 @@ public final class ColonyWorks extends Stretch implements Colony {
     private void clearWork() {
         workshops.clear();
         stores.clear();
+        withheld.clear();
         rules.clear();
         Stores.ruled(id(), Map.of());
         waiting.clear();
@@ -328,6 +330,17 @@ public final class ColonyWorks extends Stretch implements Colony {
     @Override
     public List<WorldPos> storesIn(ResourceKey<Level> dimension) {
         return stores.in(dimension);
+    }
+
+    @Override
+    public void withhold(ResourceLocation owner, ResourceKey<Level> dimension, Collection<WorldPos> answered) {
+        if (withheld.publish(owner, dimension, List.copyOf(answered))) {
+            listener(dimension).ifPresent(Listening::offered);
+        }
+    }
+
+    public Set<WorldPos> withheldIn(ResourceKey<Level> dimension) {
+        return Set.copyOf(withheld.in(dimension));
     }
 
     @Override
@@ -624,6 +637,7 @@ public final class ColonyWorks extends Stretch implements Colony {
             if (scopes.stream().noneMatch(scope -> scope.owner.equals(owner))) {
                 workshops.forget(owner);
                 stores.forget(owner);
+                withheld.forget(owner);
                 rules.forget(owner);
                 Stores.ruled(id(), rules.all());
                 forgetAsked(owner);

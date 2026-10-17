@@ -5,7 +5,10 @@ import java.util.Locale;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
 
-/** What keeps a package network from the one shape the colony orders through: every packager feeding one chain net. */
+/**
+ * What keeps a package network from the shapes the colony orders through: every packager feeding one chain net, or every
+ * packager mailing by train; and that chain net, or each of those postboxes, given to the colony.
+ */
 enum NetworkFlaw implements NoticeKind {
 
     NO_PACKAGER("packager"),
@@ -20,7 +23,11 @@ enum NetworkFlaw implements NoticeKind {
 
     UNLOADED(null),
 
-    STILL(null);
+    STILL(null),
+
+    MIXED(null),
+
+    NOT_CARRIED(null);
 
     private final String lacking;
 

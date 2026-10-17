@@ -80,6 +80,10 @@ public final class Weaver {
     private static final int MOST_FILLS = 50_000;
     private static final int FILLS_PER_ASK = 24;
     private static final int MOST_JOINS_TRIED = 4;
+    // How much nearer another of a workshop's alike ways must bring the work before the one taken is given up for it:
+    // so many ticks at the least, and a quarter of what the one taken costs.
+    private static final long SWITCH_TICKS = 100;
+    private static final long SWITCH_SHARE = 4;
 
     private final Refining refining = new Refining(rules(), this::lent);
     private final Carrying carrying = Haul.CARRYING;
@@ -105,6 +109,9 @@ public final class Weaver {
     private final Set<UUID> sprouting = new LinkedHashSet<>();
     private final List<Edge> reopened = new ArrayList<>();
     private final Set<UUID> stowing = new LinkedHashSet<>();
+    // Open edges into work that carries goods elsewhere rather than making them, by edge: fed only from stock or a
+    // pack, though the goods are the very ones the work gives.
+    private final Set<UUID> stockOnly = new HashSet<>();
     private final Set<UUID> stowFresh = new LinkedHashSet<>();
     // Asked work its owner keeps off the plan, waiting on work it comes after that ended undone, until that work is
     // asked again.
@@ -270,6 +277,9 @@ public final class Weaver {
             refitting = false;
             refit();
             reask();
+        }
+        if (retry) {
+            rechoose();
         }
         repair();
         Set<UUID> retried = new LinkedHashSet<>();
@@ -636,6 +646,7 @@ public final class Weaver {
         reopened.clear();
         stowing.clear();
         stowFresh.clear();
+        stockOnly.clear();
         awaiting.clear();
         going.clear();
         gapsOf.clear();
@@ -962,12 +973,13 @@ public final class Weaver {
             lastFed.merge((consumer == null ? "?" : consumer.getClass().getSimpleName()) + "<-"
                 + edge.need().spec().describe() + "x" + edge.count() + " trail=" + edge.trail().size(), 1, Integer::sum);
         }
-        if (edge.loops() || !nodes.containsKey(edge.consumer())) {
+        boolean stocked = stockOnly.contains(edge.id());
+        if ((edge.loops() && !stocked) || !nodes.containsKey(edge.consumer())) {
             return edge.count();
         }
         long whole = edge.count();
         long left = whole - fromPack(edge, whole);
-        if (left > 0 && !restoring && joinable(edge.spec())) {
+        if (left > 0 && !restoring && !stocked && joinable(edge.spec())) {
             List<Source> ranked = sources(edge, left, whole);
             if (!ranked.isEmpty() && ranked.getFirst() instanceof Source.Offered(Costs.Offer cheapest)) {
                 left -= joined(edge, cheapest, left);
@@ -1011,35 +1023,139 @@ public final class Weaver {
 
     // Every way the edge could be fed, cheapest first: lots in stock cost the walk to the consumer, workshop offers
     // their work and inputs besides, the walk bringing those inputs to the workshop, and the walk on to the consumer. Offers are asked for again with what is left each time round.
+    // A workshop's alike offers stand together, at the cost of the cheapest of them, and among themselves the one
+    // nearest the crew as it stands comes first: the walk to it from whoever would do it counts as well.
     private List<Source> sources(Edge edge, long left, long whole) {
-        record Ranked(Source source, long cost, int kind, long plenty, String name) {
+        record Ranked(Source source, long cost, int kind, long plenty, String name, int group, long byHand) {
         }
         Node consumer = nodes.get(edge.consumer());
         WorkSite near = consumer.spec().site();
         List<Ranked> ranked = new ArrayList<>();
         for (Stock.Lot lot : now.stock().lotsOf(edge.spec())) {
             if (drawable(lot.where(), lot.concrete()) > 0 && feeds(lot.where(), edge.consumer(), lot.concrete())) {
-                ranked.add(new Ranked(new Source.Lot(lot), Transfer.walk(lot.where().pos(), near), 0,
-                    now.stock().available(lot.concrete()), lot.where().toString()));
+                long cost = Transfer.walk(lot.where().pos(), near);
+                ranked.add(new Ranked(new Source.Lot(lot), cost, 0,
+                    now.stock().available(lot.concrete()), lot.where().toString(), ranked.size(), cost));
             }
         }
-        if (costs.reachable(edge.spec(), near, edge.trail())) {
+        Map<UUID, Integer> groups = new HashMap<>();
+        Map<UUID, Long> cheapest = new HashMap<>();
+        List<WorldPos> hands = null;
+        if (!stockOnly.contains(edge.id()) && costs.reachable(edge.spec(), near, edge.trail())) {
             for (Costs.Offer offer : costs.offers(Produce.of(OWNER, near, edge.spec(), left,
                     sizing.batching(whole)))) {
                 Grown made = offer.change().replacement();
                 if (yieldOf(made, edge.spec()) <= 0) {
                     continue;
                 }
-                long cost = costs.of(made, near, edge.upstream());
-                if (cost != Costs.UNREACHABLE) {
-                    ranked.add(new Ranked(new Source.Offered(offer),
-                        Costs.plus(Costs.plus(cost, walkIn(made)), walkFrom(made, edge.spec(), near)), 1, 0, ""));
+                long cost = priced(edge, near, offer.from(), made);
+                if (cost == Costs.UNREACHABLE) {
+                    continue;
                 }
+                int group = ranked.size();
+                long byHand = cost;
+                if (offer.from().alike()) {
+                    hands = hands == null ? handsFor(edge.consumer()) : hands;
+                    group = groups.computeIfAbsent(offer.from().key(), key -> ranked.size());
+                    cheapest.merge(offer.from().key(), cost, Math::min);
+                    byHand = Costs.plus(cost, walkTo(hands, made));
+                }
+                ranked.add(new Ranked(new Source.Offered(offer), cost, 1, 0, "", group, byHand));
             }
         }
+        if (!groups.isEmpty()) {
+            ranked.replaceAll(one -> one.source() instanceof Source.Offered(Costs.Offer offer) && offer.from().alike()
+                ? new Ranked(one.source(), cheapest.get(offer.from().key()), one.kind(), one.plenty(), one.name(),
+                    one.group(), one.byHand())
+                : one);
+        }
         ranked.sort(Comparator.comparingLong(Ranked::cost).thenComparingInt(Ranked::kind)
-            .thenComparing(Comparator.comparingLong(Ranked::plenty).reversed()).thenComparing(Ranked::name));
+            .thenComparing(Comparator.comparingLong(Ranked::plenty).reversed()).thenComparing(Ranked::name)
+            .thenComparingInt(Ranked::group).thenComparingLong(Ranked::byHand));
         return ranked.stream().map(Ranked::source).toList();
+    }
+
+    // What an offer would cost the edge: its work and inputs, the walk bringing those to it, and the walk on. Work
+    // that carries the goods rather than making them costs its own work and the walk bringing them from stock, and is
+    // no way at all when no stock holds them.
+    private long priced(Edge edge, WorkSite near, Workshop from, Grown made) {
+        long cost;
+        if (from.carries()) {
+            cost = 0;
+            for (Node node : made.nodes()) {
+                cost = Costs.plus(cost, node.spec().estimate());
+                for (Need need : node.spec().needs()) {
+                    if (!drawableAnywhere(need.spec())) {
+                        return Costs.UNREACHABLE;
+                    }
+                }
+            }
+        } else {
+            cost = costs.of(made, near, edge.upstream());
+        }
+        return cost == Costs.UNREACHABLE ? cost
+            : Costs.plus(Costs.plus(cost, walkIn(made)), walkFrom(made, edge.spec(), near));
+    }
+
+    // Where whoever could do work for the consumer stands: whoever it is already bound to, or else anyone.
+    private List<WorldPos> handsFor(UUID consumer) {
+        Set<UUID> bound = pinsOf(together(consumer));
+        nodes.get(consumer).worker().ifPresent(bound::add);
+        List<WorldPos> at = new ArrayList<>();
+        for (Crew.Hand hand : crew.hands()) {
+            if (bound.isEmpty() || bound.contains(hand.id())) {
+                at.add(hand.at());
+            }
+        }
+        return at;
+    }
+
+    // The walk to where the work starts from the nearest of `hands`, by straight lines.
+    private static long walkTo(List<WorldPos> hands, Grown made) {
+        Set<UUID> follow = new HashSet<>();
+        made.links().forEach(link -> follow.add(link.to()));
+        long nearest = Long.MAX_VALUE;
+        for (Node node : made.nodes()) {
+            if (follow.contains(node.id())) {
+                continue;
+            }
+            for (WorldPos hand : hands) {
+                nearest = Math.min(nearest, Transfer.walk(hand, node.spec().site()));
+            }
+        }
+        return nearest == Long.MAX_VALUE ? 0 : nearest;
+    }
+
+    // A way to goods taken from a workshop's alike offers is weighed again against where the crew stands now, while
+    // none of it is begun and every step of it may still be swapped: when another of the workshop's ways would bring
+    // the goods clearly sooner, the one taken goes and its edge is fed afresh, which takes the nearer way.
+    private void rechoose() {
+        for (Expansion grown : List.copyOf(live)) {
+            if (!live.contains(grown) || grown.making == null || !grown.making.offer().from().alike()
+                    || grown.serves == null || !grown.also.isEmpty() || !nodes.containsKey(grown.serves.consumer())
+                    || !untouched(grown) || !grown.nodes.stream().allMatch(id -> nodes.get(id).replannable())) {
+                continue;
+            }
+            Edge edge = grown.serves;
+            Workshop from = grown.making.offer().from();
+            WorkSite near = nodes.get(edge.consumer()).spec().site();
+            List<WorldPos> hands = handsFor(edge.consumer());
+            Grown taken = grown.making.offer().change().replacement();
+            long current = Costs.plus(priced(edge, near, from, taken), walkTo(hands, taken));
+            long best = Costs.UNREACHABLE;
+            for (Costs.Offer offer : costs.offers(Produce.of(OWNER, near, edge.spec(), Math.max(1, grown.covers),
+                    sizing.batching(edge.count())))) {
+                Grown made = offer.change().replacement();
+                if (offer.from().key().equals(from.key()) && yieldOf(made, edge.spec()) > 0) {
+                    best = Math.min(best, Costs.plus(priced(edge, near, from, made), walkTo(hands, made)));
+                }
+            }
+            if (current != Costs.UNREACHABLE && best != Costs.UNREACHABLE
+                    && best + Math.max(SWITCH_TICKS, current / SWITCH_SHARE) < current) {
+                reopened.add(edge);
+                undo(grown, Ending.DROPPED);
+            }
+        }
     }
 
     // Goods already in a worker's pack: whoever carries them does the consumer's work, and nothing is moved.
@@ -1171,6 +1287,13 @@ public final class Weaver {
         grown.holds.addAll(holds);
         try {
             place(grown, work);
+            if (offer.from().carries()) {
+                for (Node node : work.nodes()) {
+                    for (int at = 0; at < node.spec().needs().size(); at++) {
+                        stockOnly.add(Edge.idOf(node.id(), at));
+                    }
+                }
+            }
             waitOn(grown, work, after);
             if (!fitsAll(work)) {
                 undo(grown, Ending.DROPPED);
@@ -1791,6 +1914,7 @@ public final class Weaver {
         Node gone = nodes.remove(node);
         if (gone != null) {
             for (int at = 0; at < gone.spec().needs().size(); at++) {
+                stockOnly.remove(Edge.idOf(node, at));
                 List<Gap> short_ = gapsOf.remove(Edge.idOf(node, at));
                 if (short_ != null && weaving) {
                     endedGaps.addAll(short_);

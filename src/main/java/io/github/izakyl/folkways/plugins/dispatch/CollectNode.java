@@ -39,6 +39,9 @@ final class CollectNode implements Node {
     private final Optional<UUID> networkId;
     private final String address;
     private final Eta eta;
+    // A parcel a resident packs and sends by hand carries the colony's own order number, not one of the network's: it
+    // is placed when it is sent, and nothing is asked of any network.
+    private final OptionalInt byHand;
     private volatile long placedAt = -1;
     private volatile OptionalInt order = OptionalInt.empty();
     private volatile boolean arrived;
@@ -51,6 +54,22 @@ final class CollectNode implements Node {
     CollectNode(WorldPos at, Stances stances, ItemSpec want, long count, int reachTicks,
             int estimate, Optional<UUID> networkId, String address, Eta eta,
             Map<UUID, CollectNode> reservations) {
+        this(at, stances, want, count, reachTicks, estimate, networkId, address, eta, reservations,
+            OptionalInt.empty());
+    }
+
+    // The collection of a parcel sent by hand along `route` under the colony's own order number.
+    static CollectNode sentByHand(WorldPos at, Stances stances, ItemSpec want, long count, int reachTicks,
+                                  int estimate, UUID route, String address, Eta eta,
+                                  Map<UUID, CollectNode> reservations, int order) {
+        return new CollectNode(at, stances, want, count, reachTicks, estimate, Optional.of(route), address, eta,
+            reservations, OptionalInt.of(order));
+    }
+
+    private CollectNode(WorldPos at, Stances stances, ItemSpec want, long count, int reachTicks,
+            int estimate, Optional<UUID> networkId, String address, Eta eta,
+            Map<UUID, CollectNode> reservations, OptionalInt byHand) {
+        this.byHand = byHand;
         this.at = at;
         this.reservations = reservations;
         this.want = want;
@@ -106,6 +125,11 @@ final class CollectNode implements Node {
         return order.isPresent();
     }
 
+    // Whether this is the order the network packed under that number, its parcels not yet all arrived.
+    boolean ordered(int id) {
+        return order.isPresent() && order.getAsInt() == id && !arrived;
+    }
+
     boolean owns(PackageNetwork.Parcel parcel) {
         return order.isPresent() && order.equals(parcel.order());
     }
@@ -141,8 +165,35 @@ final class CollectNode implements Node {
         return this;
     }
 
+    boolean byHand() {
+        return byHand.isPresent();
+    }
+
+    // A parcel still to be packed by hand may yet go some other way; an order placed or a parcel sent may not.
+    @Override
+    public boolean replannable() {
+        return byHand.isPresent() && !placed();
+    }
+
+    // The order number a parcel sent by hand for it is to carry.
+    int handOrder() {
+        return byHand.orElse(-1);
+    }
+
+    // Its parcel was sent by hand: from now it waits on it as on an order placed.
+    void sent(long tick) {
+        if (byHand.isPresent() && order.isEmpty()) {
+            order = byHand;
+            placedAt = tick;
+        }
+    }
+
     @Override
     public Optional<RefusalKind> planned(ServerLevel level) {
+        if (byHand.isPresent()) {
+            submitted = true;
+            return refused;
+        }
         if (submitted) {
             return refused;
         }
@@ -151,7 +202,7 @@ final class CollectNode implements Node {
     }
 
     void retry(ServerLevel level) {
-        if (deferred && refused.isEmpty() && !placed()) {
+        if (byHand.isEmpty() && deferred && refused.isEmpty() && !placed()) {
             refused = place(level);
         }
     }

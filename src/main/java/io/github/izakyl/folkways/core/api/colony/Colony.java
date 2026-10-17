@@ -32,6 +32,10 @@ public interface Colony {
 
     List<WorldPos> storesIn(ResourceKey<Level> dimension);
 
+    // Replaces every store this owner answers for itself in that dimension: its goods are reached only through what
+    // the owner offers, so the colony's work never counts them as a store's, whoever else offers it.
+    void withhold(ResourceLocation owner, ResourceKey<Level> dimension, Collection<WorldPos> stores);
+
     // Replaces every rule this owner set on the colony's stores in that dimension.
     void rule(ResourceLocation owner, ResourceKey<Level> dimension, Collection<StoreRule> rules);
 
