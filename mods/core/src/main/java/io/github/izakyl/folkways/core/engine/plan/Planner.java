@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.engine.plan;
 
+import io.github.izakyl.folkways.core.api.work.Stall;
 import io.github.izakyl.folkways.core.engine.travel.Ways;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,7 +30,7 @@ public final class Planner {
     // same), whether the world was answered or offered anew (so work kept waiting is worth trying again), and what
     // the plan has to say about itself.
     public record Woven(WeaveDelta delta, Crew crew, Ways ways, boolean retry, List<Shortfall> shortfalls,
-                        List<Refused> refused, Asks asks, Timing timing, int nodes) {
+                        List<Refused> refused, List<Stall> stalls, Asks asks, Timing timing, int nodes) {
     }
 
     public Planner(Claims claims, Cooldowns cooldowns) {
@@ -95,7 +96,7 @@ public final class Planner {
         long woven = System.nanoTime();
         List<Shortfall> shortfalls = weaver.shortfalls();
         return new Woven(delta, crew, known.world().ways(), retry, shortfalls, weaver.refused(),
-            asks(shortfalls, crew), new Timing(digested - started, woven - digested), weaver.size());
+            weaver.stalls(), asks(shortfalls, crew), new Timing(digested - started, woven - digested), weaver.size());
     }
 
     public void closed() {

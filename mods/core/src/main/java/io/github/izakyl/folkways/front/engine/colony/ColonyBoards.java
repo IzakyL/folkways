@@ -9,14 +9,18 @@ import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
 import io.github.izakyl.folkways.front.engine.Enrollments;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public final class ColonyBoards {
 
@@ -56,6 +60,11 @@ public final class ColonyBoards {
     // and the first to say what an empty page means says it.
     public static Optional<Board> answering(Colony colony, ResourceLocation page,
             Optional<BlockPos> at, ColonyView view) {
+        return merged(colony, page, at, view).map(board -> stalled(colony, view.level(), at, board));
+    }
+
+    private static Optional<Board> merged(Colony colony, ResourceLocation page,
+            Optional<BlockPos> at, ColonyView view) {
         List<Board> answered = new ArrayList<>();
         for (Facing facing : Facing.all(colony)) {
             answering(facing, page, at, view).ifPresent(answered::add);
@@ -74,6 +83,33 @@ public final class ColonyBoards {
             data.merge(board.data());
         }
         return Optional.of(new Board(figures, rows, whenEmpty, data));
+    }
+
+    // A board tells the work standing still at the blocks it points to: first, on a block's own board, and under each
+    // row that pings a block.
+    private static Board stalled(Colony colony, ServerLevel level, Optional<BlockPos> at, Board board) {
+        Set<BlockPos> told = new HashSet<>();
+        List<Board.Row> rows = new ArrayList<>();
+        at.ifPresent(pos -> {
+            told.add(pos);
+            rows.addAll(stallRows(colony, level, pos));
+        });
+        for (Board.Row row : board.rows()) {
+            rows.add(row);
+            for (Board.Act act : row.acts()) {
+                if (act instanceof Board.Act.Ping(BlockPos pinged) && told.add(pinged)) {
+                    rows.addAll(stallRows(colony, level, pinged));
+                }
+            }
+        }
+        return rows.size() == board.rows().size() ? board
+            : new Board(board.figures(), rows, board.whenEmpty(), board.data());
+    }
+
+    private static List<Board.Row> stallRows(Colony colony, ServerLevel level, BlockPos at) {
+        return ColonyStalls.within(colony, level, at::equals).stream()
+            .map(said -> Board.Row.of(new ItemStack(Items.BARRIER), said.component(), Component.empty()).wide())
+            .toList();
     }
 
     private static Optional<Board> answering(Facing facing, ResourceLocation page,

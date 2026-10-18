@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.Stall;
 import io.github.izakyl.folkways.core.api.work.Workshop;
 import java.util.Collection;
 import java.util.List;
@@ -31,6 +32,9 @@ public interface Colony {
     void stores(ResourceLocation owner, ResourceKey<Level> dimension, Collection<WorldPos> stores);
 
     List<WorldPos> storesIn(ResourceKey<Level> dimension);
+
+    // The colony's work standing still in that dimension, each told where it is; see Stall.
+    List<Stall> stallsIn(ResourceKey<Level> dimension);
 
     // Replaces every store this owner answers for itself in that dimension: its goods are reached only through what
     // the owner offers, so the colony's work never counts them as a store's, whoever else offers it.

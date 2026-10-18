@@ -25,4 +25,9 @@ public enum HaulRefusal implements RefusalKind {
             default -> Shortfall.NONE;
         };
     }
+
+    @Override
+    public boolean lasting() {
+        return this == NOT_A_CONTAINER || this == NO_ROOM;
+    }
 }

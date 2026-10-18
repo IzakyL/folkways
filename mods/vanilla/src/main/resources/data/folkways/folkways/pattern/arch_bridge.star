@@ -112,16 +112,17 @@ def shores(site, band, span, rise, dy, floor):
     last = min(span - 2, max(low))
     edges = [beds[first], beds[last]]
     edges = [bed for bed in edges if bed != None]
-    return first, last, (max(edges) + 1 if edges else floor + 1)
+    return first, last, (min(edges) + 1 if edges else floor + 1)
 
 def clears(first, depth, spring, rise, ring, span, arch_rise, dy):
     half = depth / 2.0
     radius = (half * half + rise * rise) / (2.0 * rise)
     centre = spring + rise - radius
+    reach = radius + ring
     for k in range(depth):
         offset = k + 0.5 - half
-        room = height_at(first + k, span, arch_rise, dy) - ring - centre + 0.001
-        if room < 0 or radius * radius - offset * offset > room * room:
+        room = height_at(first + k, span, arch_rise, dy) - centre
+        if room < 0 or reach * reach - offset * offset > room * room:
             return False
     return True
 
@@ -155,16 +156,23 @@ def draw(site):
         if lift == 1 or clears(first, depth, spring, lift, ring, span, rise, dy):
             break
         lift -= 1
-    if lift == depth // 2:
+    if clears(first, depth, spring, lift, ring, span, rise, dy):
         for _ in range(16):
             if not clears(first, depth, spring + 1, lift, ring, span, rise, dy):
                 break
             spring += 1
+    else:
+        for _ in range(depth + 16):
+            if clears(first, depth, spring - 1, lift, ring, span, rise, dy):
+                break
+            spring -= 1
     floor = min(floor, spring - 1)
     room = band.at(z = first, y = floor).sized(depth = depth, height = spring - floor + lift)
     opening = vault(room, lift)
     arch = subtract(under(deck, floor), opening)
-    voussoirs = subtract(vault(room, lift, grow = ring), opening)
+    around = band.at(z = first, y = floor).sized(depth = depth, height = spring - floor + lift + ring)
+    voussoirs = intersect(subtract(vault(room, lift, grow = ring), opening),
+        intersect(under(deck, floor), around))
     key = 1 if depth % 2 == 1 else 2
     keystone = intersect(voussoirs, band.at(z = first + (depth - key) // 2, y = spring)
         .sized(depth = key, height = lift + ring + 1))

@@ -19,6 +19,7 @@ import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Refinement;
 import io.github.izakyl.folkways.core.api.work.Refinements;
+import io.github.izakyl.folkways.core.api.work.Stall;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Unmet;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
@@ -125,6 +126,8 @@ public final class Weaver {
     private final List<Gap> endedGaps = new ArrayList<>();
     private final List<Gap> noted = new ArrayList<>();
     private final List<Refused> refused = new ArrayList<>();
+    // Asked work the last try at growing found no resident fit for.
+    private final Set<UUID> unfit = new HashSet<>();
     private final Set<Stash> looks = new LinkedHashSet<>();
 
     // This round.
@@ -435,6 +438,7 @@ public final class Weaver {
     private void forgetAsking(UUID id) {
         sprouting.remove(id);
         gapsOf.remove(id);
+        unfit.remove(id);
         awaiting.remove(id);
     }
 
@@ -629,6 +633,54 @@ public final class Weaver {
         return found;
     }
 
+    // Asked work standing still for want of something the player can see to, told at the work: asked work no resident
+    // is fit for, and asked work, or an edge into standing work, short of goods. Of an ask's gaps the first is told,
+    // the one the others went short for in turn; an ask only resting after failing is told as it last failed.
+    public List<Stall> stalls() {
+        List<Stall> found = new ArrayList<>();
+        for (UUID id : unfit) {
+            placed(id, id).ifPresent(spec -> found.add(stall(spec, LaborRefusal.NO_ONE_FIT, Optional.empty())));
+        }
+        gapsOf.forEach((key, gaps) -> {
+            for (Gap gap : gaps) {
+                Optional<RefusalKind> why = told(gap.why());
+                if (why.isPresent()) {
+                    placed(key, gap.consumer()).ifPresent(spec ->
+                        found.add(stall(spec, why.get(), Optional.of(gap.spec()))));
+                    return;
+                }
+            }
+        });
+        return List.copyOf(new LinkedHashSet<>(found));
+    }
+
+    private static Optional<RefusalKind> told(Why why) {
+        return switch (why) {
+            case Why.NoSource ignored -> Optional.of(LaborRefusal.NO_SOURCE);
+            case Why.NoRoom ignored -> Optional.of(LaborRefusal.NO_ROOM_FOR);
+            case Why.NoWay ignored -> Optional.of(LaborRefusal.NO_WAY_FOR);
+            case Why.NoHand ignored -> Optional.of(LaborRefusal.NO_ONE_MAKES);
+            case Why.Turned ignored -> Optional.empty();
+            case Why.Cooling ignored -> Optional.empty();
+        };
+    }
+
+    // Where a stall is told: the asked work itself when the key is an ask, else the standing node the edge feeds. A
+    // resident's own kit is fetched where the resident happens to stand, which is no place's work, and is not told.
+    private Optional<NodeSpec> placed(UUID key, UUID consumer) {
+        Request request = asked.get(key);
+        Optional<NodeSpec> spec = request == null
+            ? Optional.ofNullable(nodes.get(consumer)).map(Node::spec)
+            : request.work.nodes().stream().filter(node -> node.id().equals(key)).findFirst()
+                .or(() -> request.work.nodes().stream().findFirst())
+                .map(Node::spec);
+        return spec.filter(found -> !found.owner().equals(Haul.DOMAIN));
+    }
+
+    private static Stall stall(NodeSpec spec, RefusalKind why, Optional<ItemSpec> goods) {
+        return new Stall(spec.site().where(), why, goods, spec.doing(), spec.about());
+    }
+
     public void closed() {
         for (Expansion grown : List.copyOf(live)) {
             undo(grown, Ending.REVOKED);
@@ -651,6 +703,7 @@ public final class Weaver {
         awaiting.clear();
         going.clear();
         gapsOf.clear();
+        unfit.clear();
         endedGaps.clear();
         noted.clear();
         looks.clear();
@@ -834,6 +887,7 @@ public final class Weaver {
             return;
         }
         gapsOf.remove(id);
+        unfit.remove(id);
         Refining.Result result;
         try {
             result = request.pending != null ? refining.reduce(request.pending) : refining.reduce(goal);
@@ -866,6 +920,7 @@ public final class Weaver {
             askedWith(grown, request, work);
             if (!fitsAll(work)) {
                 refused.add(new Refused(Optional.empty(), LaborRefusal.NO_ONE_FIT));
+                unfit.add(id);
                 cooldowns.failed(choice);
                 undo(grown, Ending.DROPPED);
                 return;

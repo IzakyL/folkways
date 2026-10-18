@@ -212,7 +212,7 @@ public final class PlanningFixture {
     // A change to the plan made by hand, handed to the colony's labor as if the weave had made it out of `batch`.
     public static void apply(ColonyLabor labor, ServerLevel level, List<Message> batch, WeaveDelta delta) {
         woven(labor, level, batch, new Planner.Woven(delta, new Crew(List.of()), null, false, List.of(), List.of(),
-            Asks.NONE, new Planner.Timing(0, 0), delta.put().size()));
+            List.of(), Asks.NONE, new Planner.Timing(0, 0), delta.put().size()));
     }
 
     // A whole plan handed to the colony's labor, as tests once handed it one: the change from the plan it holds now.

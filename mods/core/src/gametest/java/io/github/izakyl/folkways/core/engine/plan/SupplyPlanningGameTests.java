@@ -17,11 +17,13 @@ import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Refinement;
+import io.github.izakyl.folkways.core.api.work.Stall;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Workshop;
+import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -219,6 +221,29 @@ public final class SupplyPlanningGameTests {
             helper.assertTrue(solved.weave().vertices().isEmpty() && !solved.diagnosis().refused().isEmpty()
                     && !solved.diagnosis().shortfalls().isEmpty(),
                 "without its hold the answer lands nothing, and both the refusal and the gap are reported");
+        } finally {
+            planner.closed();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void anAskShortOfGoodsStallsWhereItsWorkIs(GameTestHelper helper) {
+        var f = new PlanningFixture(helper);
+        Node eats = consumer(f, new Need(BREAD, 4));
+        var planner = new Solving(new Claims(), new Cooldowns());
+        try {
+            Planned short_ = planner.handle(known(f, List.of(), List.of()),
+                List.of(new Message.Submitted(OWNER, Grown.of(eats))), 0);
+            Stall wanting = new Stall(eats.spec().site().where(), LaborRefusal.NO_SOURCE, Optional.of(BREAD),
+                eats.spec().doing(), Optional.empty());
+            helper.assertTrue(short_.woven().stalls().equals(List.of(wanting)),
+                "with no bread anywhere, the ask stalls at its own work for want of bread: "
+                    + short_.woven().stalls());
+            var held = List.of(new Stock.Holding(new Stash(f.source), new ItemStack(Items.BREAD, 4)));
+            Planned fed = planner.handle(known(f, held, List.of()), List.of(Message.ANSWERED), 1);
+            helper.assertTrue(fed.weave().vertices().containsKey(eats.id()) && fed.woven().stalls().isEmpty(),
+                "once bread is stocked the ask grows and stalls no more: " + fed.woven().stalls());
         } finally {
             planner.closed();
         }

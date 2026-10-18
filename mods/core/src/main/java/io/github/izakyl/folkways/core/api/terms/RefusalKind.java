@@ -17,6 +17,15 @@ public interface RefusalKind {
         return Shortfall.NONE;
     }
 
+    /**
+     * Whether the refusal names a state of the world that stays until someone changes it: told where the work is, not
+     * only on the resident who met it. A refusal the next plan answers by itself, such as goods gone or the work
+     * already done, is not.
+     */
+    default boolean lasting() {
+        return false;
+    }
+
     interface Named extends RefusalKind {
 
         @Override

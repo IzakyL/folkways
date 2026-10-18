@@ -16,6 +16,7 @@ import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.Stall;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workshop;
@@ -60,6 +61,9 @@ public final class ColonyWorks extends Stretch implements Colony {
 
     private final StorePlaces stores = new StorePlaces();
     private final StorePlaces withheld = new StorePlaces();
+
+    // What the labor in each dimension last said stands still there.
+    private final Map<ResourceKey<Level>, List<Stall>> stalls = new HashMap<>();
 
     public interface Listening {
 
@@ -330,6 +334,19 @@ public final class ColonyWorks extends Stretch implements Colony {
     @Override
     public List<WorldPos> storesIn(ResourceKey<Level> dimension) {
         return stores.in(dimension);
+    }
+
+    @Override
+    public List<Stall> stallsIn(ResourceKey<Level> dimension) {
+        return stalls.getOrDefault(dimension, List.of());
+    }
+
+    public void stalled(ResourceKey<Level> dimension, List<Stall> standing) {
+        if (standing.isEmpty()) {
+            stalls.remove(dimension);
+        } else {
+            stalls.put(dimension, List.copyOf(standing));
+        }
     }
 
     @Override

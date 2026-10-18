@@ -22,6 +22,7 @@ import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
 import io.github.izakyl.folkways.front.engine.colony.ColonyLooks;
 import io.github.izakyl.folkways.front.engine.colony.ColonyPath;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.front.engine.colony.ColonyStalls;
 import io.github.izakyl.folkways.front.engine.colony.ColonyViews;
 import io.github.izakyl.folkways.front.engine.colony.ColonyZone;
 import io.github.izakyl.folkways.front.engine.colony.Endorsements;
@@ -43,6 +44,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -180,18 +182,37 @@ public final class FolkwaysUiNetworkEvents {
         List<Placards.Note> notes = new ArrayList<>();
         List<Placard> placards = new ArrayList<>();
         for (ColonyZone zone : ColonyFront.of(colony).zonesIn(level)) {
-            noted(notes, zone.id(), facings, facing -> facing.zoneLines(zone, view));
+            Set<BlockPos> cells = zone.cells();
+            noted(notes, zone.id(), facings, facing -> facing.zoneLines(zone, view),
+                ColonyStalls.lines(colony, level, cells::contains));
         }
         for (ColonyPath path : paths) {
-            noted(notes, path.id(), facings, facing -> facing.pathLines(path, view));
+            noted(notes, path.id(), facings, facing -> facing.pathLines(path, view), List.of());
         }
         for (Facing facing : facings) {
-            placards.addAll(facing.placards(view));
+            for (Placard placard : facing.placards(view)) {
+                placards.add(stalled(colony, level, placard));
+            }
         }
         // The packet carries only so many: the ones nearest the player go first.
         placards.sort(Comparator.comparingDouble(placard -> corner(placard.outline()).distSqr(near)));
         return new ColonyOverviewPacket(ColonyGround.cells(level, colony), zones, ghosts,
             paths.stream().map(ColonyPath::save).toList(), notes, placards);
+    }
+
+    // A card over a block or a site also tells the work standing still inside it, unless it tells that itself.
+    private static Placard stalled(Colony colony, ServerLevel level, Placard placard) {
+        if (!(placard.outline() instanceof Placard.Outline.Box box)) {
+            return placard;
+        }
+        BoundingBox bounds = BoundingBox.fromCorners(box.min(), box.max());
+        List<Line> lines = new ArrayList<>(placard.lines());
+        for (Line line : ColonyStalls.lines(colony, level, bounds::isInside)) {
+            if (!lines.contains(line)) {
+                lines.add(line);
+            }
+        }
+        return lines.size() == placard.lines().size() ? placard : new Placard(placard.id(), placard.outline(), lines);
     }
 
     private static BlockPos corner(Placard.Outline outline) {
@@ -202,11 +223,12 @@ public final class FolkwaysUiNetworkEvents {
     }
 
     private static void noted(List<Placards.Note> notes, UUID id, List<Facing> facings,
-            Function<Facing, List<Line>> lines) {
+            Function<Facing, List<Line>> lines, List<Line> stalled) {
         List<Line> said = new ArrayList<>();
         for (Facing facing : facings) {
             said.addAll(lines.apply(facing));
         }
+        said.addAll(stalled);
         if (!said.isEmpty()) {
             notes.add(new Placards.Note(id, said));
         }

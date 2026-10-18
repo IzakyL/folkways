@@ -166,6 +166,13 @@ public final class Rows {
         return label;
     }
 
+    // What stands in the way: work that cannot go on, and why.
+    public static Label alarm(Component text) {
+        Label label = text(text);
+        label.textStyle(style -> style.textColor(SECTION));
+        return label;
+    }
+
     // A section inside a page.
     public static UIElement heading(Component text) {
         return headed(text, SECTION, HEADING_HEIGHT);

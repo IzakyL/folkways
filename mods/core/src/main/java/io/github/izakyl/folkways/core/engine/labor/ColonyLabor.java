@@ -83,6 +83,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     private final Kits kits = new Kits();
     private final Survey survey = new Survey();
     private final Readout readout = new Readout();
+    private final Stalls stalls = new Stalls();
 
     private long wakeAt = Long.MAX_VALUE;
     private long scheduleWakeAt = Long.MAX_VALUE;
@@ -166,6 +167,8 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         personalRequests.clear();
         endings.clear();
         withdrawnGone.clear();
+        stalls.clear();
+        colony.works().stalled(dimension, List.of());
     }
 
     public void run(ServerLevel level, Lanes lanes) {
@@ -213,6 +216,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             pipeline.applyReady(level);
         }
         tellEndings();
+        stalls.changed(level.getGameTime()).ifPresent(told -> colony.works().stalled(dimension, told));
     }
 
     private void ending(UUID node, Ending how) {
@@ -404,6 +408,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         weaveAsks = woven.asks();
         shortfalls = woven.shortfalls();
         refused = woven.refused();
+        stalls.planned(woven.stalls(), level.getGameTime());
         diagnosis = new Diagnosis(shortfalls, diagnosis.unassigned(), refused);
         survey.asked(new Asks(weaveAsks.survey(), weaveAsks.looks(), weaveAsks.hands() || scheduleHands,
             weaveAsks.handsOf(), weaveAsks.wakeAt()));
@@ -669,6 +674,9 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     void finished(UUID node) {
         Vertex finished = graph.vertex(node);
+        if (finished != null) {
+            stalls.done(finished.node().spec());
+        }
         readout.finished(finished == null ? null : finished.node());
         progress(node, WorkProgress.Step.FINISHED, Optional.empty());
         kits.ended(node);
@@ -735,6 +743,11 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         }
         personalRequests.put(piece.id(), new Personal(resident, null));
         return true;
+    }
+
+    // A resident met a refusal at the colony's work, whether the work fails for it or waits to be tried again.
+    void balked(Node node, RefusalKind why, long now) {
+        stalls.met(node.spec(), why, now);
     }
 
     void urgeRefused(ResourceLocation urge, RefusalKind why, long now) {

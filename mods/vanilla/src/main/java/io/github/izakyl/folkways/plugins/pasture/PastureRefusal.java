@@ -20,4 +20,9 @@ enum PastureRefusal implements RefusalKind.Named {
     public Shortfall shortfall() {
         return this == NOTHING_TO_WORK_WITH ? Shortfall.LACKING : Shortfall.NONE;
     }
+
+    @Override
+    public boolean lasting() {
+        return this == NOT_FEEDABLE;
+    }
 }

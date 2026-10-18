@@ -17,4 +17,9 @@ public enum WaresRefusal implements RefusalKind.Named {
             default -> Shortfall.NONE;
         };
     }
+
+    @Override
+    public boolean lasting() {
+        return this == NOT_A_STATION || this == STATION_FULL;
+    }
 }

@@ -725,6 +725,9 @@ final class BodyRunner {
         NodeSpec spec = node.spec();
         body.balked(new Balk(Doing.open(spec.doing()).about(spec.about()).with(node.wares()), why,
             level.getGameTime()));
+        if (own == null) {
+            labor.balked(node, why, level.getGameTime());
+        }
         if (own == null && labor.phases().waits(node.id(), why)) {
             letGo(labor, level, body, "waits:" + why);
             return;

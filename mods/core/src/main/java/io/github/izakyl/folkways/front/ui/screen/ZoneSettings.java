@@ -18,21 +18,29 @@ import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
+import io.github.izakyl.folkways.front.api.notice.Notice;
+import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.front.engine.colony.ColonyStalls;
 import io.github.izakyl.folkways.front.engine.colony.Zone;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
@@ -54,6 +62,7 @@ final class ZoneSettings {
     private static final String OPTIONS = "options";
     private static final String SINGLE = "single";
     private static final String BLOCKS = "blocks";
+    private static final String STALLED = "stalled";
 
     private static final int KIND_NONE = 0;
     private static final int KIND_ITEMS = 1;
@@ -67,6 +76,7 @@ final class ZoneSettings {
     private final List<Row> rows = new ArrayList<>();
     private final Label title = new Label();
     private final Label noSettings = Rows.note(Component.translatable("folkways.zoneconfig.no_settings"));
+    private final Label stalled = Rows.alarm(Component.empty());
 
     private final String[] drawn = new String[SLOTS];
     private final Controls.Echo echoed = new Controls.Echo(SLOTS);
@@ -134,7 +144,8 @@ final class ZoneSettings {
         ScrollerView scroller = Rows.fills(Rows.box());
         scroller.addScrollViewChild(table);
 
-        UIElement page = Rows.page().addChildren(Rows.strip().addChildren(back, title, release), noSettings, scroller);
+        UIElement page = Rows.page().addChildren(Rows.strip().addChildren(back, title, release), stalled, noSettings,
+            scroller);
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
         return page;
     }
@@ -171,6 +182,7 @@ final class ZoneSettings {
         HolderLookup.Provider registries = player.registryAccess();
         tag.put(TITLE, Pages.text(registries,
             line(zone.get().delegation(), zone.get().position())));
+        stalls(player).ifPresent(said -> tag.put(STALLED, Pages.text(registries, said)));
         ListTag list = new ListTag();
         for (Schema.Setting setting : SettingsPage.schemaOf(zone.get().delegation()).settings()) {
             if (sent.size() >= SLOTS) {
@@ -302,6 +314,29 @@ final class ZoneSettings {
 
     private static SettingsPage.Scope on(Selected zone) { return zone.scope(); }
 
+    // The work standing still in the zone held, a line for each reason.
+    private Optional<Component> stalls(Player player) {
+        if (held == null || !(player instanceof ServerPlayer server)) {
+            return Optional.empty();
+        }
+        return Pages.colonyOf(player).flatMap(colony -> ColonyFront.of(colony).zone(held).flatMap(zone -> {
+            ServerLevel level = server.server.getLevel(zone.dimension());
+            if (level == null) {
+                return Optional.empty();
+            }
+            Set<BlockPos> cells = zone.cells();
+            List<Notice> said = ColonyStalls.within(colony, level, cells::contains);
+            if (said.isEmpty()) {
+                return Optional.empty();
+            }
+            MutableComponent lines = Component.empty();
+            for (int at = 0; at < said.size(); at++) {
+                lines.append(at == 0 ? Component.empty() : Component.literal("\n")).append(said.get(at).component());
+            }
+            return Optional.of(lines);
+        }));
+    }
+
     private static Component line(ResourceLocation delegation, net.minecraft.core.BlockPos min) {
         return Component.translatable(
                 "folkways.delegation." + delegation.getNamespace() + "." + delegation.getPath())
@@ -314,6 +349,8 @@ final class ZoneSettings {
         boolean open = reading.getBoolean(OPEN);
         HolderLookup.Provider registries = player.registryAccess();
         title.setText(Pages.readText(registries, reading.get(TITLE)));
+        stalled.setDisplay(open && reading.contains(STALLED));
+        stalled.setText(reading.contains(STALLED) ? Pages.readText(registries, reading.get(STALLED)) : Component.empty());
         ListTag list = reading.getList(SETTINGS, Tag.TAG_COMPOUND);
         noSettings.setDisplay(open && list.isEmpty());
         for (int slot = 0; slot < rows.size(); slot++) {

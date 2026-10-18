@@ -27,4 +27,12 @@ public enum DispatchRefusal implements RefusalKind.Named {
     OFF_CHAIN,
 
     CHAIN_ELSEWHERE;
+
+    @Override
+    public boolean lasting() {
+        return switch (this) {
+            case NO_PORT, NOT_PACKED, PORT_FULL -> true;
+            default -> false;
+        };
+    }
 }
