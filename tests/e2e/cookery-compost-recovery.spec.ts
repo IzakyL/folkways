@@ -23,7 +23,7 @@ type Cells = { supply: Vec; compost: Vec; withdrawn: Vec };
 for (const stage of twins()) test(stage.title("compost recovery: discover player-filled bone meal without seed stock, then fill and store a resident batch"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   const runId = newRunId(); let pair: E2EPair | undefined; let cells: Cells | undefined;
-  const evidence: Record<string, any> = { stage: stage.kind, samples: [], fixtureChanges: [] };
+  const evidence: Record<string, any> = { stage: stage.kind, samples: [], timings: [], fixtureChanges: [] };
   try {
     pair = await launchPair({
       config: "blockwright.toml#" + (stage.kind === "ground" ? "cookery" : "cookery-sable"),
@@ -123,9 +123,26 @@ async function read(server: MinecraftServer, stage: Stage, cells: Cells): Promis
 }
 async function until(server: MinecraftServer, stage: Stage, cells: Cells, evidence: Record<string, any>, phase: string, ready: (state: State) => boolean, budget: number): Promise<State> {
   let last: State | undefined;
+  const timing: { phase: string; firstMatureTick?: number; collectedTick?: number; storedTick?: number } = { phase };
+  evidence.timings.push(timing);
   for (let elapsed = 0; elapsed <= budget;) {
-    last = await read(server, stage, cells); evidence.samples.push({ phase, elapsed, state: last }); if (ready(last)) return last;
-    const step = last.fill >= 6 ? 2 : 10; await tick.sprint(server, step); elapsed += step;
+    last = await read(server, stage, cells); evidence.samples.push({ phase, elapsed, state: last });
+    if (last.fill === 8 && timing.firstMatureTick === undefined) timing.firstMatureTick = last.tick;
+    if (timing.firstMatureTick !== undefined) {
+      if (last.fill === 0 && timing.collectedTick === undefined) timing.collectedTick = last.tick;
+      expect(last.tick - timing.firstMatureTick,
+        phase + ": one free farmer in the open fixture must collect and store a mature batch within 1200 real world ticks").toBeLessThanOrEqual(1200);
+    }
+    if (ready(last)) {
+      if (timing.firstMatureTick !== undefined) timing.storedTick = last.tick;
+      return last;
+    }
+    // Once native maturity has actually been observed, run a whole forty-tick sweep without
+    // freezing between its phases. Repeated short frozen sprints can miss server-clock phases;
+    // this fixture correction does not establish a fix for a normally running player's colony.
+    // Keep the fine samples around native levels six/seven so neither seven nor eight is skipped.
+    const step = last.fill === 8 ? 40 : last.fill >= 6 ? 2 : 10;
+    await tick.sprint(server, step); elapsed += step;
   }
   throw new Error("Timed out: " + phase + "; final state=" + JSON.stringify(last));
 }
