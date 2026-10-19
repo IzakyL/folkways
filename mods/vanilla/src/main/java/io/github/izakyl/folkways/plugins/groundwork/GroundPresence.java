@@ -10,7 +10,6 @@ import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.FrontView;
 import io.github.izakyl.folkways.front.api.Fronts;
@@ -29,6 +28,12 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
+import io.github.izakyl.folkways.core.api.work.WorkSite;
+import io.github.izakyl.folkways.core.api.work.Stances;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -42,13 +47,13 @@ final class GroundPresence implements Facing {
 
     private static final String TAG_MADE = "made";
 
-    // One zone's standing work, a list of chores for each kind of work ticked, kept from sweep to sweep while the
-    // zone asks for it. A kind unticked is dropped with what it had under way, and so is a fill whose block changed
-    // or weeding that pulls something else now: nothing is laid with a block the zone no longer names, nor pulled
-    // that it keeps.
+    // Targets are discovered once; later sweeps only update access to the remaining work.
     private final class Site {
 
         private final UUID zone;
+        private final Map<String, Set<String>> targets = new LinkedHashMap<>();
+        private boolean discovering;
+        private String configuration;
         private final Map<String, Chores> works = new LinkedHashMap<>();
         private Optional<ItemSpec> filling = Optional.empty();
         private Weeding weeding = new Weeding(false, false);
@@ -73,6 +78,9 @@ final class GroundPresence implements Facing {
                 weeding = new Weeding(grass, flowers);
             }
             Survey survey = new Survey(level, view.cells());
+            if (discovering) {
+                survey.discovering();
+            }
             Predicate<BlockPos> member = cell -> colony.holdingAt(WorldPos.of(level, cell)).isPresent();
             Predicate<BlockState> kept = kept(with);
             // A cell is worked by one kind at a time: a tree is felled whole before anyone clears round it, and a weed
@@ -101,15 +109,34 @@ final class GroundPresence implements Facing {
             boolean digging = false;
             if (settings.flag(GroundworkContent.CLEAR)) {
                 List<Job> clear = survey.clear(member, kept, claimed);
-                digging = !clear.isEmpty();
+                digging = clear.stream().anyMatch(job -> !initialized.contains(zone)
+                    || targets.getOrDefault(GroundworkContent.CLEAR, Set.of()).contains(job.key()));
                 settle(GroundworkContent.CLEAR,
                     (at, chore) -> new BreakNode(chore, BreakNode.Way.CLEAR, at.getBlockState(chore.job().cell()),
                         state -> true, (cell, state) -> member.test(cell) || kept.test(state)),
                     clear);
             }
             // Cleared and filled, the box is dug out as far as anyone can get at it before anything is laid in it.
-            List<Job> fill = digging ? List.of() : survey.fill(claimed);
-            with.ifPresent(spec -> settle(GroundworkContent.FILL, (at, chore) -> new FillNode(chore, spec), fill));
+            List<Job> fill = digging && !discovering ? List.of() : survey.fill(claimed);
+            if (discovering && with.isPresent()) {
+                Map<String, Job> future = new LinkedHashMap<>();
+                fill.forEach(job -> future.put(job.key(), job));
+                if (settings.flag(GroundworkContent.CLEAR)) {
+                    survey.clear(member, kept, Set.of()).forEach(job -> future.put(job.key(), job));
+                }
+                for (BlockPos cell : claimed) {
+                    if (view.cells().contains(cell)) {
+                        future.put(Job.keyOf(cell), Job.at(cell,
+                            new WorkSite.AtBlock(WorldPos.of(level, cell)),
+                            Stances.WHEREVER));
+                    }
+                }
+                fill = List.copyOf(future.values());
+            }
+            if (with.isPresent()) {
+                ItemSpec spec = with.get();
+                settle(GroundworkContent.FILL, (at, chore) -> new FillNode(chore, spec), fill);
+            }
             if (settings.flag(GroundworkContent.HAUL)) {
                 settle(GroundworkContent.HAUL, (at, chore) -> new HaulNode(at, chore), survey.haul(view::at));
             }
@@ -118,10 +145,61 @@ final class GroundPresence implements Facing {
         }
 
         private void settle(String work, Chores.Maker maker, List<Job> jobs) {
+            if (discovering) {
+                Set<String> found = new LinkedHashSet<>(jobs.stream().map(Job::key).toList());
+                if (initialized.contains(zone)) {
+                    Set<String> wanted = targets.get(work);
+                    if (wanted != null) {
+                        wanted.retainAll(found);
+                    }
+                } else {
+                    targets.put(work, found);
+                }
+                return;
+            }
+            Set<String> wanted = targets.getOrDefault(work, Set.of());
+            jobs = jobs.stream().filter(job -> wanted.contains(job.key())).toList();
             String kind = work.equals(GroundworkContent.FILL)
                 ? work + "/" + filling.map(ItemSpec::describe).orElse("")
                 : work;
             works.computeIfAbsent(work, any -> new Chores(zone, kind, maker, sweep::nudge, made)).settle(jobs);
+        }
+
+        boolean complete() {
+            return initialized.contains(zone) && targets.values().stream().allMatch(Set::isEmpty)
+                && works.values().stream().noneMatch(Chores::busy);
+        }
+
+        void update(ServerLevel level, ZoneView zone) {
+            Settings settings = zone.settings();
+            String configured = List.of(GroundworkContent.CLEAR, GroundworkContent.FILL, GroundworkContent.WEED,
+                    GroundworkContent.FLOWERS, GroundworkContent.FELL, GroundworkContent.HAUL).stream()
+                .map(key -> key + "=" + settings.flag(key)).collect(java.util.stream.Collectors.joining(","))
+                + settings.items(GroundworkContent.BLOCK).map(ItemSpec::describe).orElse("")
+                + zone.cells().stream().map(BlockPos::asLong).sorted().toList();
+            if (configuration != null && !configuration.equals(configured)) {
+                initialized.remove(this.zone);
+                targets.clear();
+                works.clear();
+            }
+            configuration = configured;
+            discovering = true;
+            if (zone.cells().stream().anyMatch(cell -> !level.isLoaded(cell))) {
+                return;
+            }
+            scan(level, zone);
+            initialized.add(this.zone);
+            targets.keySet().removeIf(work -> work.equals(GroundworkContent.WEED)
+                ? !zone.settings().flag(GroundworkContent.WEED) && !zone.settings().flag(GroundworkContent.FLOWERS)
+                : !zone.settings().flag(work));
+            discovering = false;
+            scan(level, zone);
+            works.forEach((kind, chores) -> {
+                Set<String> wanted = targets.get(kind);
+                if (wanted != null) {
+                    wanted.removeAll(chores.spent());
+                }
+            });
         }
 
         void goals(ServerLevel level, List<Grown> into) {
@@ -152,12 +230,33 @@ final class GroundPresence implements Facing {
 
     private final Map<UUID, Site> sites = new LinkedHashMap<>();
 
+    private final Set<UUID> initialized = new HashSet<>();
+
     private final PastDay made = new PastDay();
 
     GroundPresence(Colony colony) {
         this.colony = colony;
         this.sweep = new Sweep(colony, GroundworkContent.ID, 100);
-        Reader.of(colony.kept(GroundworkContent.ID)).child(TAG_MADE).ifPresent(made::load);
+        Reader kept = Reader.of(colony.kept(GroundworkContent.ID));
+        kept.child(TAG_MADE).ifPresent(made::load);
+        for (Reader saved : kept.children("sites")) {
+            saved.uuid("zone").ifPresent(id -> {
+                Site site = new Site(id);
+                site.configuration = saved.string("configuration").orElse(null);
+                saved.blob("targets").ifPresent(targets -> {
+                    for (String kind : targets.getAllKeys()) {
+                        ListTag keys = targets.getList(kind, Tag.TAG_STRING);
+                        Set<String> pending = new LinkedHashSet<>();
+                        for (int i = 0; i < keys.size(); i++) {
+                            pending.add(keys.getString(i));
+                        }
+                        site.targets.put(kind, pending);
+                    }
+                });
+                sites.put(id, site);
+                initialized.add(id);
+            });
+        }
     }
 
     @Override
@@ -177,22 +276,42 @@ final class GroundPresence implements Facing {
                 if (!zone.delegation().equals(GroundworkContent.ZONE)) {
                     continue;
                 }
-                sites.computeIfAbsent(zone.id(), Site::new).scan(view.level(), zone);
+                Site site = sites.computeIfAbsent(zone.id(), Site::new);
+                site.update(view.level(), zone);
+                if (site.complete()) {
+                    front.erase(zone.id());
+                    continue;
+                }
                 seen.add(zone.id());
             }
         }
         sites.keySet().retainAll(seen);
+        initialized.retainAll(seen);
         keepMade();
     }
 
     public void closed(Closing why) {
-        sites.clear();
         keepMade();
+        sites.clear();
+        initialized.clear();
     }
 
     private void keepMade() {
-        if (made.changed()) {
-            colony.keep(GroundworkContent.ID, Writer.of().blob(TAG_MADE, made.save()).tag());
+        CompoundTag saved = Writer.of().blob(TAG_MADE, made.save())
+            .children("sites", sites.values().stream().filter(site -> initialized.contains(site.zone)).toList(), site -> {
+                CompoundTag targets = new CompoundTag();
+                site.targets.forEach((kind, pending) -> {
+                    ListTag keys = new ListTag();
+                    Chores chores = site.works.get(kind);
+                    pending.stream().filter(key -> chores == null || !chores.spent().contains(key))
+                        .forEach(key -> keys.add(StringTag.valueOf(key)));
+                    targets.put(kind, keys);
+                });
+                return Writer.of().uuid("zone", site.zone).string("configuration", site.configuration)
+                    .blob("targets", targets).tag();
+            }).tag();
+        if (!saved.equals(colony.kept(GroundworkContent.ID))) {
+            colony.keep(GroundworkContent.ID, saved);
         }
     }
 

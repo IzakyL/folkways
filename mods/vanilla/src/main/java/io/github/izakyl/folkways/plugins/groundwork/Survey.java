@@ -47,6 +47,13 @@ final class Survey {
             .thenComparingInt(BlockPos::getX)
             .thenComparingInt(BlockPos::getZ);
 
+    private boolean discovering;
+
+    Survey discovering() {
+        discovering = true;
+        return this;
+    }
+
     private final ServerLevel level;
     private final Set<BlockPos> cells;
     private final Map<BlockPos, Boolean> footed = new HashMap<>();
@@ -68,7 +75,7 @@ final class Survey {
         List<Job> jobs = new ArrayList<>();
         for (BlockPos cell : sorted(DOWNWARD)) {
             if (!wanted.test(cell) || claimed.contains(cell)
-                || cells.contains(cell.above()) && wanted.test(cell.above())) {
+                || !discovering && cells.contains(cell.above()) && wanted.test(cell.above())) {
                 continue;
             }
             stances(cell, Set.of(cell.above())).ifPresent(where -> jobs.add(Job.at(cell, site(cell), where)));
@@ -88,7 +95,7 @@ final class Survey {
         List<Job> jobs = new ArrayList<>();
         for (BlockPos cell : sorted(UPWARD)) {
             if (!wanted.test(cell) || claimed.contains(cell)
-                || cells.contains(cell.below()) && wanted.test(cell.below())
+                || !discovering && cells.contains(cell.below()) && wanted.test(cell.below())
                 || flower(level.getBlockState(cell.below()))) {
                 continue;
             }
@@ -159,9 +166,11 @@ final class Survey {
         for (ItemEntity drop : lying) {
             WorldPos at = WorldSpaces.at(drop);
             BlockPos cell = at.block(level);
-            Stances.of(level, Reach.workableCells(level, cell)).ifPresent(where -> jobs.add(new Job(
+            Optional<Stances> where = discovering ? Optional.of(Stances.WHEREVER)
+                : Stances.of(level, Reach.workableCells(level, cell));
+            where.ifPresent(footings -> jobs.add(new Job(
                 "item:" + drop.getUUID(), new WorkSite.AtEntity(drop.getUUID(), at), cell, List.of(cell), List.of(),
-                where)));
+                footings)));
         }
         return jobs;
     }
@@ -213,6 +222,9 @@ final class Survey {
     // Everywhere a body stands in reach of the cell, from a level below it to one above, but the cells the work
     // itself would leave nobody standing in.
     private Optional<Stances> stances(BlockPos target, Set<BlockPos> barred) {
+        if (discovering) {
+            return Optional.of(Stances.WHEREVER);
+        }
         Set<BlockPos> found = new LinkedHashSet<>();
         for (int dx = -REACH; dx <= REACH; dx++) {
             for (int dy = -2; dy <= 1; dy++) {
