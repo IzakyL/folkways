@@ -14,5 +14,6 @@ public final class PatrolPlugin {
         modBus.addListener(Declaring.class, PatrolContent::declare);
         modBus.addListener(Registering.class, PatrolContent::enroll);
         NeoForge.EVENT_BUS.register(Wards.class);
+        NeoForge.EVENT_BUS.register(PatrolCombat.class);
     }
 }

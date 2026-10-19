@@ -29,12 +29,47 @@ import net.minecraft.world.item.crafting.StonecutterRecipe;
 
 interface Assembly {
 
+    default Optional<List<ItemStack>> runOnce(ServerLevel level, Container pool,
+            io.github.izakyl.folkways.core.api.work.Worker who) {
+        return runOnce(level, pool);
+    }
+
+    static Assembly rewarded(net.minecraft.resources.ResourceLocation recipe, Assembly base) {
+        return new Assembly() {
+            @Override
+            public List<Amount> remainders() { return base.remainders(); }
+
+            @Override
+            public Optional<List<ItemStack>> runOnce(ServerLevel level, Container pool) {
+                return base.runOnce(level, pool);
+            }
+
+            @Override
+            public Optional<List<ItemStack>> runOnce(ServerLevel level, Container pool,
+                    io.github.izakyl.folkways.core.api.work.Worker who) {
+                List<ItemStack> before = new ArrayList<>();
+                for (int slot = 0; slot < pool.getContainerSize(); slot++) {
+                    before.add(pool.getItem(slot).copy());
+                }
+                return base.runOnce(level, pool).map(result -> {
+                    List<ItemStack> made = new ArrayList<>(result);
+                    CraftPerks.reward(level, recipe, before, pool, who, made);
+                    return List.copyOf(made);
+                });
+            }
+        };
+    }
+
     // One run, drawn from the goods handed over for it; what the run does not take stays in the pool.
     Optional<List<ItemStack>> runOnce(ServerLevel level, Container pool);
 
     default List<Amount> remainders() { return List.of(); }
 
     static Assembly grid(RecipeHolder<CraftingRecipe> holder, List<Ingredient> grid, int width, int height) {
+        return rewarded(holder.id(), gridBase(holder, grid, width, height));
+    }
+
+    private static Assembly gridBase(RecipeHolder<CraftingRecipe> holder, List<Ingredient> grid, int width, int height) {
         Assembly making = (level, pool) -> {
             List<Predicate<ItemStack>> slots = new ArrayList<>();
             List<Integer> slotOf = new ArrayList<>();
@@ -154,6 +189,10 @@ interface Assembly {
     }
 
     static Assembly stonecut(RecipeHolder<StonecutterRecipe> holder, ItemSpec input) {
+        return rewarded(holder.id(), stonecutBase(holder, input));
+    }
+
+    private static Assembly stonecutBase(RecipeHolder<StonecutterRecipe> holder, ItemSpec input) {
         return (level, pool) -> draw(pool, List.of(stack -> matches(stack, input)))
             .flatMap(taken -> {
                 SingleRecipeInput single = new SingleRecipeInput(taken.get(0).copy());
@@ -171,6 +210,10 @@ interface Assembly {
     }
 
     static Assembly smith(RecipeHolder<SmithingRecipe> holder) {
+        return rewarded(holder.id(), smithBase(holder));
+    }
+
+    private static Assembly smithBase(RecipeHolder<SmithingRecipe> holder) {
         SmithingRecipe recipe = holder.value();
         List<Predicate<ItemStack>> slots =
             List.of(recipe::isTemplateIngredient, recipe::isBaseIngredient, recipe::isAdditionIngredient);

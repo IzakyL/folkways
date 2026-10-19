@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Doings;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -647,6 +648,29 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         int capacity = body.pack().plannableCells(item -> kit.holds(item.getDefaultInstance())) - kit.keptCells(body);
         int used = capacity - body.pack().plannableRoom(item -> kit.holds(item.getDefaultInstance()));
         return PackLoad.fits(used, capacity, order);
+    }
+
+    // Two pending deliveries may share a destination even when their source stores differ. Only
+    // explicit graph dependencies identify their cargo: matching item names alone is ambiguous.
+    boolean sharesDelivery(UUID previous, UUID candidate, Collection<UUID> route, Body body) {
+        WorldPos destination = null;
+        WorldPos nextDestination = null;
+        for (UUID id : route) {
+            Vertex vertex = graph.vertex(id);
+            if (vertex == null || !(vertex.node() instanceof io.github.izakyl.folkways.core.engine.plan.haul.TransferNode transfer)
+                    || transfer.fetching() || !onTheGraph(id)) { continue; }
+            if (graph.before(id).contains(previous)) { destination = transfer.spec().site().where(); }
+            if (graph.before(id).contains(candidate)) { nextDestination = transfer.spec().site().where(); }
+        }
+        Vertex take = graph.vertex(candidate);
+        if (destination == null || !destination.equals(nextDestination) || take == null) { return false; }
+        WorldPos here = io.github.izakyl.folkways.core.api.terms.WorldSpaces.at(body.mob());
+        WorldPos source = take.node().spec().site().where();
+        if (!here.sameRealm(source) || !here.sameRealm(destination)) { return false; }
+        double detour = Math.sqrt(here.cell().distSqr(source.cell()))
+            + Math.sqrt(source.cell().distSqr(destination.cell()))
+            - Math.sqrt(here.cell().distSqr(destination.cell()));
+        return detour <= 8;
     }
 
     boolean onTheGraph(UUID id) {

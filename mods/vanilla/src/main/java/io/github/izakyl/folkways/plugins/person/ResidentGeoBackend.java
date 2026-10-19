@@ -116,7 +116,8 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
             }
             return modelOf(resident)
                 .map(model -> state.setAndContinue(
-                    loop(state.isMoving() ? model.walkAnimation() : model.idleAnimation())))
+                    loop(state.isMoving() ? model.walkAnimation() : model.leisureAnimations()
+                        .getOrDefault(resident.leisureMotion(), model.idleAnimation()))))
                 .orElse(PlayState.STOP);
         }
 
@@ -193,9 +194,16 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
             if (look == null) {
                 return;
             }
+            Entity entity = state.getData(DataTickets.ENTITY);
+            String motion = entity instanceof ResidentEntity resident ? resident.leisureMotion() : "";
+            boolean ownAnimation = entity instanceof ResidentEntity resident
+                && modelOf(resident).map(model -> model.leisureAnimations().containsKey(motion)).orElse(false);
+            float age = entity == null ? 0 : entity.tickCount + state.getPartialTick();
             headBone().ifPresent(head -> {
                 head.setRotX(look.headPitch() * Mth.DEG_TO_RAD);
                 head.setRotY(look.netHeadYaw() * Mth.DEG_TO_RAD);
+                if (!ownAnimation && motion.equals("chatting")) { head.setRotX(head.getRotX() + Mth.sin(age * 0.15F) * 0.08F); }
+                if (!ownAnimation && motion.equals("petting")) { head.setRotX(0.5F); }
             });
         }
 

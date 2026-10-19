@@ -22,7 +22,7 @@ final class ShearNode extends AnimalNode {
         new ToolUse(new ToolNeed.Ability(ItemAbilities.SHEARS_HARVEST), 1);
 
     // A sheep gives up to three of its wool.
-    private static final List<Amount> FLEECE = List.of(new Amount(ItemSpec.of(ItemTags.WOOL), 3));
+    private static final List<Amount> FLEECE = List.of(new Amount(ItemSpec.of(ItemTags.WOOL), 6));
 
     ShearNode(Chore chore) {
         super(PenNode.declare(chore, Herd.Job.SHEAR).tools(SHEARS).leaves(FLEECE).doing(PastureContent.SHEARING)
@@ -36,6 +36,12 @@ final class ShearNode extends AnimalNode {
         }
         ItemStack shears = who.held(SHEARS.need());
         List<ItemStack> cut = shearable.onSheared(null, shears, level, beast.blockPosition());
+        for (ItemStack stack : cut) {
+            if (stack.is(ItemTags.WOOL)) {
+                stack.grow((int) who.effects().value(PastureContent.EXTRA_WOOL));
+                break;
+            }
+        }
         return new Outcome.Done(List.of(), List.copyOf(cut),
             Optional.of(new Xp(PastureContent.trade(), 1)));
     }

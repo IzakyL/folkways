@@ -45,6 +45,12 @@ public final class Bodies {
         body.refreshEffects();
     }
 
+    public static void worked(Body body, Vocation vocation, int ticks, RandomSource random) {
+        if (!(body.kind().growth() instanceof ResidentKind.Growth.Climbs)) { return; }
+        body.mob().getData(FolkwaysAttachments.BODY_STATE).worked(vocation.id(), ticks, random);
+        body.refreshEffects();
+    }
+
     // Sets the body's attributes and pack to what its effects make them.
     public static void carry(Body body) {
         Effects effects = body.effects();

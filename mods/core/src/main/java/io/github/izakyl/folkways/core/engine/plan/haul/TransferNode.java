@@ -166,6 +166,10 @@ public final class TransferNode implements Node, Staged {
             && store().equals(other.store());
     }
 
+    public boolean fetching() {
+        return from instanceof Endpoint.Store;
+    }
+
     private Endpoint store() {
         return from instanceof Endpoint.Store ? from : to;
     }

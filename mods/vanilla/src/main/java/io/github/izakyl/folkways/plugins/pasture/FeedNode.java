@@ -49,6 +49,8 @@ final class FeedNode extends PenNode {
             return refuse(PastureRefusal.NOTHING_TO_WORK_WITH);
         }
         // One commit feeds both: a separate trip for the partner can outlast the first animal's love timer.
+        BreedingPerks.fed(level, who, pair.first(), pair.second(), pen);
+        BreedingPerks.fed(level, who, pair.second(), pair.first(), pen);
         pair.first().setInLove(null);
         pair.second().setInLove(null);
         return counted(level, new Outcome.Done(List.of(), List.of(), Optional.of(new Xp(PastureContent.trade(), 2))));

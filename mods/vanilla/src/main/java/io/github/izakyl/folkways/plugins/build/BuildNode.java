@@ -44,7 +44,10 @@ abstract class BuildNode implements Node {
         this.job = job;
         this.ends = ends;
         this.spec = NodeSpec.of(UUID.randomUUID(), BuildContent.ID, new WorkSite.AtBlock(job.focus()),
-                job.footings(), Workload.Once.of(job.laborTicks(), BuildContent::haste))
+                job.footings(), Workload.Once.of(job.laborTicks(), worker -> job.kind() == BuildJob.Kind.STRIP
+                    ? BuildContent.haste(worker) / BuildingPerks.momentum(worker,
+                        worker.body().level().getBlockState(job.focus().block(worker.body().level())))
+                    : BuildingPerks.constructionHaste(worker)))
             .needs(job.feed())
             .leaves(job.leaves())
             .tools(job.tools())

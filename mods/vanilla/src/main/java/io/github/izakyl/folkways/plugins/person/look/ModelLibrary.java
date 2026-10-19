@@ -145,6 +145,12 @@ public record ModelLibrary(
                 + ANIMATION_FILE + " does not have; it has " + animationNames);
             return;
         }
+        for (String animation : manifest.leisureAnimations().values()) {
+            if (!animationNames.contains(animation)) {
+                rejected.add(label + ": leisure animation is missing: " + animation);
+                return;
+            }
+        }
         String idle = pick(manifest.idleAnimation(), YSM_IDLE, animationNames);
         String walk = pick(manifest.walkAnimation(), YSM_WALK, animationNames);
         Optional<String> work = manifest.workAnimation().isPresent()
@@ -174,7 +180,7 @@ public record ModelLibrary(
                 model.withPath("model/" + name + "/" + stem),
                 new ResidentLook(
                     new ResidentLook.Model(geometryAt, animationsAt, textureAt, idle, walk, work,
-                        manifest.fallback().orElse(ResidentLooks.FALLBACK.appearance().skin()), 1.0F),
+                        manifest.fallback().orElse(ResidentLooks.FALLBACK.appearance().skin()), 1.0F, manifest.leisureAnimations()),
                     manifest.weight()));
         }
 
@@ -308,7 +314,13 @@ public record ModelLibrary(
             Optional<String> walkAnimation,
             Optional<String> workAnimation,
             int weight,
-            Optional<ResidentLook.Skin> fallback) {
+            Optional<ResidentLook.Skin> fallback,
+            Map<String, String> leisureAnimations) {
+
+        Manifest(Optional<String> idleAnimation, Optional<String> walkAnimation, Optional<String> workAnimation,
+                int weight, Optional<ResidentLook.Skin> fallback) {
+            this(idleAnimation, walkAnimation, workAnimation, weight, fallback, Map.of());
+        }
 
         static final Manifest DEFAULT = new Manifest(Optional.empty(), Optional.empty(), Optional.empty(), 1, Optional.empty());
 
@@ -317,7 +329,9 @@ public record ModelLibrary(
             Codec.STRING.optionalFieldOf("walk_animation").forGetter(Manifest::walkAnimation),
             Codec.STRING.optionalFieldOf("work_animation").forGetter(Manifest::workAnimation),
             ExtraCodecs.POSITIVE_INT.optionalFieldOf("weight", 1).forGetter(Manifest::weight),
-            ResidentLook.Skin.CODEC.codec().optionalFieldOf("fallback").forGetter(Manifest::fallback)
+            ResidentLook.Skin.CODEC.codec().optionalFieldOf("fallback").forGetter(Manifest::fallback),
+            Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("leisure_animations", Map.of())
+                .forGetter(Manifest::leisureAnimations)
         ).apply(instance, Manifest::new));
     }
 

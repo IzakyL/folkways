@@ -54,6 +54,7 @@ final class EatAction implements Node {
             if (!works.wouldEat(who.resident().id(), stack, food)) {
                 continue;
             }
+            ItemStack eaten = stack.copyWithCount(1);
             ItemStack remainder = food.usingConvertsTo().map(ItemStack::copy)
                 .orElseGet(stack::getCraftingRemainingItem);
             ItemStack bite = stack.split(1);
@@ -83,7 +84,7 @@ final class EatAction implements Node {
                 // Players receive food containers in Player.eat; a resident has its own pantry and belly.
                 left.add(remainder);
             }
-            works.ate(who.resident().id(), food);
+            works.ate(who.resident().id(), food, eaten, level.getGameTime());
             return new Outcome.Done(List.of(), left, Optional.empty());
         }
         return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);

@@ -39,14 +39,17 @@ final class CullNode extends AnimalNode {
         if (!fell || beast.isAlive()) {
             return refuse(PastureRefusal.STILL_STANDING);
         }
-        int extra = (int) Math.round(who.effects().value(PastureContent.CARCASS_YIELD));
+        double chance = who.effects().value(PastureContent.CARCASS_YIELD);
         List<ItemStack> taken = new ArrayList<>();
         for (ItemEntity dropped : level.getEntitiesOfClass(ItemEntity.class, where)) {
             if (alreadyLying.contains(dropped.getId())) {
                 continue;
             }
             ItemStack stack = dropped.getItem();
-            stack.setCount(Math.min(stack.getMaxStackSize(), stack.getCount() + extra));
+            if (stack.is(PastureContent.EXTRA_PRODUCTS)) {
+                double extra = stack.getCount() * chance;
+                stack.grow((int) extra + (level.random.nextDouble() < extra % 1 ? 1 : 0));
+            }
             taken.add(stack);
             dropped.discard();
         }

@@ -89,7 +89,11 @@ final class PatrolPresence implements Facing {
 
     private final Map<UUID, Long> lastWatch = new ConcurrentHashMap<>();
 
+    private final Map<UUID, Long> dutyUntil = new ConcurrentHashMap<>();
+
     private final Map<UUID, Lap> laps = new ConcurrentHashMap<>();
+
+    private final Map<UUID, Long> alerts = new ConcurrentHashMap<>();
 
     private volatile Map<UUID, List<Stop>> routes = Map.of();
 
@@ -118,7 +122,8 @@ final class PatrolPresence implements Facing {
         routes = Map.copyOf(found);
         laps.keySet().retainAll(found.keySet());
         long now = server.overworld().getGameTime();
-        lastWatch.values().removeIf(at -> now - at > FolkwaysVanillaConfig.patrolWardTicks());
+        lastWatch.keySet().removeIf(id -> dutyUntil.getOrDefault(id, Long.MIN_VALUE) < now);
+        dutyUntil.values().removeIf(until -> until < now);
     }
 
     // A lap under way is offered as it was set out; a new one sets out once any stop on the route
@@ -211,7 +216,12 @@ final class PatrolPresence implements Facing {
     }
 
     void watched(UUID resident, long at) {
+        watched(resident, at, FolkwaysVanillaConfig.patrolWardTicks());
+    }
+
+    void watched(UUID resident, long at, long duration) {
         lastWatch.put(resident, at);
+        dutyUntil.put(resident, at + duration);
     }
 
     // A patroller on duty - one who stood watch while its last ward still holds - goes for monsters near it.
@@ -221,7 +231,7 @@ final class PatrolPresence implements Facing {
                 || !armed(who)) {
             return List.of();
         }
-        Optional<Mob> foe = nearestFoe(level, body);
+        Optional<Mob> foe = nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE));
         if (foe.isEmpty()) {
             return List.of();
         }
@@ -231,13 +241,16 @@ final class PatrolPresence implements Facing {
         }
         double weight = body.getHealth() > body.getMaxHealth() * WOUNDED ? STAND_GROUND : Urge.NOW;
         Mob target = foe.get();
+        if (who.effects().value(PatrolContent.ALERT_RANGE) > 0) {
+            alerts.put(target.getUUID(), level.getGameTime() + 100);
+        }
         Stances stances = reach.get();
         return List.of(new Urge(ENGAGE, weight, true, () -> new StrikeNode(level, target, stances)));
     }
 
     private boolean onDuty(UUID resident, long now) {
         Long at = lastWatch.get(resident);
-        return at != null && now - at <= FolkwaysVanillaConfig.patrolWardTicks();
+        return at != null && now <= dutyUntil.getOrDefault(resident, Long.MIN_VALUE);
     }
 
     private static boolean armed(Worker who) {
@@ -245,12 +258,15 @@ final class PatrolPresence implements Facing {
             || !who.held(PatrolContent.WEAPON).isEmpty();
     }
 
-    private static Optional<Mob> nearestFoe(ServerLevel level, Mob body) {
-        List<Mob> near = level.getEntitiesOfClass(Mob.class, body.getBoundingBox().inflate(ENGAGE_RANGE),
-            mob -> mob instanceof Enemy && mob.isAlive() && !mob.isRemoved());
+    private Optional<Mob> nearestFoe(ServerLevel level, Mob body, double range) {
+        alerts.values().removeIf(until -> until < level.getGameTime());
+        List<Mob> near = level.getEntitiesOfClass(Mob.class, body.getBoundingBox().inflate(Math.max(range, 24)),
+            mob -> mob instanceof Enemy && mob.isAlive() && !mob.isRemoved()
+                && (body.distanceToSqr(mob) <= range * range
+                    || alerts.containsKey(mob.getUUID()) && body.distanceToSqr(mob) <= 24 * 24));
         near.sort(Comparator.comparingDouble(body::distanceToSqr));
         for (Mob mob : near) {
-            if (body.hasLineOfSight(mob)) {
+            if (body.hasLineOfSight(mob) || alerts.containsKey(mob.getUUID())) {
                 return Optional.of(mob);
             }
         }
@@ -272,5 +288,7 @@ final class PatrolPresence implements Facing {
         routes = Map.of();
         laps.clear();
         lastWatch.clear();
+        dutyUntil.clear();
+        alerts.clear();
     }
 }

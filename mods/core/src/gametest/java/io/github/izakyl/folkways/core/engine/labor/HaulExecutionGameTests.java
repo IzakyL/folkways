@@ -569,4 +569,111 @@ public final class HaulExecutionGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void batchPerksGatherRealCommonSourceLoadsWithinRankAndPackLimits(GameTestHelper helper) {
+        for (int rank = 0; rank <= 3; rank++) {
+            verifyGatheredRoute(helper, rank, 5, rank == 0 ? 1 : rank + 1);
+        }
+        verifyGatheredRoute(helper, 3, 1, 1);
+        helper.succeed();
+    }
+
+    private static void verifyGatheredRoute(GameTestHelper helper, int rank, int packCells, int batchLimit) {
+        verifyGatheredRoute(helper, rank, packCells, batchLimit, 0, 5);
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void batchPerksGatherNearbyCommonDestinationLoadsButRejectLongDetours(GameTestHelper helper) {
+        verifyGatheredRoute(helper, 1, 2, 2, 1, 2);
+        verifyGatheredRoute(helper, 1, 2, 1, -5, 2);
+        helper.succeed();
+    }
+
+    private static void verifyGatheredRoute(GameTestHelper helper, int rank, int packCells, int batchLimit,
+            int sourceStep, int taskCount) {
+        var level = helper.getLevel();
+        var sourcePos = WorldPos.of(level, helper.absolutePos(new BlockPos(1, 1, 1)));
+        var targetPos = sourcePos.at(sourcePos.cell().offset(6, 0, 0));
+        level.setBlockAndUpdate(sourcePos.cell(), Blocks.BARREL.defaultBlockState());
+        level.setBlockAndUpdate(targetPos.cell(), Blocks.BARREL.defaultBlockState());
+        var source = io.github.izakyl.folkways.core.api.terms.Containers.at(level, sourcePos.cell()).orElseThrow();
+        var target = io.github.izakyl.folkways.core.api.terms.Containers.at(level, targetPos.cell()).orElseThrow();
+        source.clearContent(); target.clearContent();
+        if (sourceStep == 0) for (int i = 0; i < taskCount; i++) source.setItem(i, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SADDLE));
+        var resident = PersonBody.RESIDENT.get().create(level);
+        resident.moveTo(sourcePos.cell().getX(), sourcePos.cell().getY(), sourcePos.cell().getZ());
+        var effects = io.github.izakyl.folkways.effect.perk.PerkPool.effects(rank == 0 ? Map.of()
+            : Map.of(io.github.izakyl.folkways.core.engine.plan.haul.Haul.BATCH, rank));
+        var pack = new io.github.izakyl.folkways.core.api.resident.body.Pack(packCells);
+        io.github.izakyl.folkways.core.api.resident.body.Body body = new io.github.izakyl.folkways.core.api.resident.body.Body() {
+            public net.minecraft.world.entity.Mob mob() { return resident; }
+            public io.github.izakyl.folkways.core.api.resident.ResidentKind kind() { return resident.kind(); }
+            public io.github.izakyl.folkways.core.api.resident.body.Pack pack() { return pack; }
+            public io.github.izakyl.folkways.effect.Effects effects() { return effects; }
+        };
+        var sourceStash = new io.github.izakyl.folkways.core.api.terms.Stash(sourcePos);
+        var targetStash = new io.github.izakyl.folkways.core.api.terms.Stash(targetPos);
+        var saddle = io.github.izakyl.folkways.core.api.terms.ItemSpec.of(ResourceLocation.withDefaultNamespace("saddle"));
+        var vertices = new java.util.LinkedHashMap<UUID, Vertex>();
+        List<Before> links = new ArrayList<>();
+        List<Node> fetches = new ArrayList<>(), deliveries = new ArrayList<>();
+        List<UUID> original = new ArrayList<>();
+        for (int i = 0; i < taskCount; i++) {
+            var fetchPos = sourcePos.at(sourcePos.cell().offset(i * sourceStep, 0, 0));
+            var fetchStash = new io.github.izakyl.folkways.core.api.terms.Stash(fetchPos);
+            if (sourceStep != 0) {
+                level.setBlockAndUpdate(fetchPos.cell(), Blocks.BARREL.defaultBlockState());
+                var separate = io.github.izakyl.folkways.core.api.terms.Containers.at(level, fetchPos.cell()).orElseThrow();
+                separate.clearContent();
+                separate.setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SADDLE));
+            }
+            var goods = List.of(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SADDLE));
+            Node fetch = new io.github.izakyl.folkways.core.engine.plan.haul.TransferNode(UUID.randomUUID(),
+                io.github.izakyl.folkways.core.engine.plan.haul.TransferNode.Endpoint.store(fetchStash),
+                io.github.izakyl.folkways.core.engine.plan.haul.TransferNode.Endpoint.pack(),
+                new io.github.izakyl.folkways.core.engine.plan.Manifest(goods, List.of()),
+                Stances.WHEREVER, new WorkSite.AtBlock(fetchPos));
+            Node deliver = new io.github.izakyl.folkways.core.engine.plan.haul.TransferNode(UUID.randomUUID(),
+                io.github.izakyl.folkways.core.engine.plan.haul.TransferNode.Endpoint.pack(),
+                io.github.izakyl.folkways.core.engine.plan.haul.TransferNode.Endpoint.store(targetStash),
+                new io.github.izakyl.folkways.core.engine.plan.Manifest(goods, List.of()),
+                Stances.WHEREVER, new WorkSite.AtBlock(targetPos));
+            vertices.put(fetch.id(), new Vertex(fetch.id(), fetch, new Placement(Set.of(),
+                List.of(new io.github.izakyl.folkways.core.api.work.Amount(saddle, 1)), List.of(fetchStash), List.of())));
+            vertices.put(deliver.id(), new Vertex(deliver.id(), deliver, new Placement(Set.of(),
+                List.of(new io.github.izakyl.folkways.core.api.work.Amount(saddle, -1)), List.of(), List.of(targetStash))));
+            links.add(new Before(fetch.id(), deliver.id()));
+            fetches.add(fetch); deliveries.add(deliver);
+            original.add(fetch.id()); original.add(deliver.id());
+        }
+        ColonyLabor labor = labor(level);
+        PlanningFixture.apply(labor, level, List.of(), Shown.delta(vertices, links, List.of()));
+        BodyRunner runner = new BodyRunner(body.id());
+        runner.follow(original);
+        List<UUID> started = new ArrayList<>();
+        int peak = 0;
+        try {
+            for (int tick = 0; tick < 2000 && vertices.keySet().stream().anyMatch(id -> labor.state(id).orElseThrow() != NodeState.DONE); tick++) {
+                runner.tick(labor, level, body);
+                runner.holding().ifPresent(id -> { if (!started.contains(id)) started.add(id); });
+                peak = Math.max(peak, pack.count(net.minecraft.world.item.Items.SADDLE));
+                vertices.values().forEach(vertex -> labor.phases().settled(vertex.node(), level));
+            }
+            List<UUID> expected = new ArrayList<>();
+            for (int first = 0; first < taskCount; first += batchLimit) {
+                int end = Math.min(taskCount, first + batchLimit);
+                for (int i = first; i < end; i++) expected.add(fetches.get(i).id());
+                for (int i = first; i < end; i++) expected.add(deliveries.get(i).id());
+            }
+            helper.assertTrue(started.equals(expected), "rank " + rank + " with " + packCells
+                + " pack cells must execute its exact bounded gather order: expected " + expected + ", got " + started);
+            helper.assertTrue(peak == batchLimit, "actual simultaneous cargo must reach, and never exceed, the allowed batch");
+            helper.assertTrue(io.github.izakyl.folkways.core.api.terms.Goods.countIn(source, saddle) == 0
+                && io.github.izakyl.folkways.core.api.terms.Goods.countIn(target, saddle) == taskCount && pack.isEmpty(),
+                "all actual transfer commits deliver every saddle without loss or leftover cargo");
+        } finally {
+            labor.close(); resident.discard();
+        }
+    }
+
 }

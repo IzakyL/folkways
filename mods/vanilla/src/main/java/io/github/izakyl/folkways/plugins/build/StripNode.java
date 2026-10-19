@@ -43,7 +43,13 @@ final class StripNode extends BuildNode {
             }
         }
         ItemStack tool = who.held(new ToolNeed.SuitableFor(standing));
-        List<ItemStack> spoil = Rubble.clear(level, who.body(), before, remaining(level, job().after(), false), tool);
+        List<ItemStack> spoil = new ArrayList<>(Rubble.clear(level, who.body(), before, remaining(level, job().after(), false), tool));
+        before.forEach((pos, stone) -> {
+            if (level.getBlockState(pos).isAir()) {
+                spoil.addAll(BuildingPerks.discoveries(level, who, pos, stone));
+                BuildingPerks.mined(who, stone);
+            }
+        });
         return new Outcome.Done(List.copyOf(heard), spoil, Optional.of(new Xp(BuildContent.trade(), 1)));
     }
 }

@@ -11,6 +11,7 @@ public final class PasturePlugin {
     }
 
     public static void install(IEventBus modBus) {
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(BreedingPerks::born);
         modBus.addListener(Declaring.class, PastureContent::declare);
         modBus.addListener(Registering.class, PastureContent::enroll);
         if (FMLEnvironment.dist.isClient()) {

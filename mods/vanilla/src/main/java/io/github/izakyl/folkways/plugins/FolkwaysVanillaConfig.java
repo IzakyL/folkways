@@ -1,11 +1,13 @@
 package io.github.izakyl.folkways.plugins;
 
 import io.github.izakyl.folkways.FolkwaysConfig;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.function.Predicate;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.DyeColor;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 // The settings of the work residents do: zones, blueprints, crafting, settlers and the trades' quick hands.
@@ -132,23 +134,23 @@ public final class FolkwaysVanillaConfig {
                 "as a multiplier on the base wind-up: the first entry is rank 1, the second rank 2, and so",
                 "on. Below 1 is faster, above 1 slower, and a rank past the end of the list counts as no",
                 "change at all. Shorten the list to cap how far the perk carries.")
-            .<Number>defineList("buildingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("buildingHaste", List.of(0.8D, 1.0D / 1.5D, 1.0D / 1.8D), () -> 1.0D, HASTE_STEP);
         CRAFTING_HASTE = BUILDER
             .comment("The crafter's quick hands, as a multiplier on the wind-up of a craft, a furnace load",
                 "or a fetch from an output slot. One entry per rank, below 1 for faster.")
-            .<Number>defineList("craftingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("craftingHaste", List.of(1.0D / 1.3D, 1.0D / 1.6D, 0.5D), () -> 1.0D, HASTE_STEP);
         HERDING_HASTE = BUILDER
             .comment("The herder's quick hands, as a multiplier on the wind-up of shearing, milking,",
                 "feeding and culling. One entry per rank, below 1 for faster.")
-            .<Number>defineList("herdingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("herdingHaste", List.of(0.8D, 1.0D / 1.5D, 1.0D / 1.8D), () -> 1.0D, HASTE_STEP);
         FARMING_HASTE = BUILDER
             .comment("The farmer's quick hands, as a multiplier on the wind-up of tilling, sowing, reaping",
                 "and felling. One entry per rank, below 1 for faster.")
-            .<Number>defineList("farmingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("farmingHaste", List.of(0.8D, 1.0D / 1.5D, 1.0D / 1.8D), () -> 1.0D, HASTE_STEP);
         FISHING_HASTE = BUILDER
             .comment("The fisher's quick hands, as a multiplier on how long a cast waits for a bite. One",
                 "entry per rank, below 1 for faster.")
-            .<Number>defineList("fishingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("fishingHaste", List.of(0.8D, 0.65D, 0.5D), () -> 1.0D, HASTE_STEP);
         BUILDER.pop();
 
         BUILDER.push("navigation");
@@ -258,7 +260,7 @@ public final class FolkwaysVanillaConfig {
 
     // The wasteful recipes refused unless a server says otherwise.
     private static List<String> refusedByDefault() {
-        List<String> refused = new java.util.ArrayList<>(List.of(
+        List<String> refused = new ArrayList<>(List.of(
             "minecraft:bamboo_planks",
             "minecraft:stick_from_bamboo_item",
             "minecraft:iron_nugget_from_smelting",
@@ -266,7 +268,7 @@ public final class FolkwaysVanillaConfig {
             "minecraft:gold_nugget_from_smelting",
             "minecraft:gold_nugget_from_blasting",
             "minecraft:copper_ingot_from_waxed_copper_block"));
-        for (net.minecraft.world.item.DyeColor colour : net.minecraft.world.item.DyeColor.values()) {
+        for (DyeColor colour : DyeColor.values()) {
             for (String dyed : List.of("wool", "bed", "carpet")) {
                 refused.add("minecraft:dye_" + colour.getName() + "_" + dyed);
             }

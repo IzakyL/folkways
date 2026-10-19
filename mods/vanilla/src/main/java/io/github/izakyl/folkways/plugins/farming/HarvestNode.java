@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.farming;
 
+import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Leaves;
@@ -20,6 +21,7 @@ import net.minecraft.world.level.block.state.BlockState;
 final class HarvestNode extends FarmNode {
 
     private final Crop crop;
+    private final FieldChores tending;
 
     HarvestNode(Chore chore) {
         super(FarmNode.declare(chore, Workload.Once.of(FarmingContent.CELL_TICKS,
@@ -28,6 +30,7 @@ final class HarvestNode extends FarmNode {
             .leaves(leaves(chore))
             .doing(FarmingContent.HARVESTING, chore.crop().fruit()).done(), chore);
         this.crop = chore.crop();
+        this.tending = chore.tending();
     }
 
     // The fruit off each cell, and the seed of a crop cut whole: one apiece, as how many is known only once cut.
@@ -64,16 +67,26 @@ final class HarvestNode extends FarmNode {
         boolean replants = who.effects().has(FarmingContent.REPLANTS);
         boolean cut = false;
         int broken = 0;
-        for (BlockPos cell : job.cells()) {
+        for (BlockPos cell : tending.neighbors(job, (int) who.effects().value(FarmingContent.CHAIN))) {
             if (!level.isLoaded(cell)) {
                 continue;
             }
             BlockState state = level.getBlockState(cell);
-            if (!crop.cuts(state)) {
+            if (!crop.cuts(state) || crop.cutWhole() && !crop.ripe(level, cell)) {
                 cut = true;
                 continue;
             }
-            taken.addAll(Yield.take(level, who.body(), cell, state));
+            List<ItemStack> drops = Yield.take(level, who.body(), cell, state);
+            double bonus = who.effects().value(FarmingContent.HARVEST_BONUS);
+            for (ItemStack stack : drops) {
+                // Separate seeds are propagation materials; carrots/potatoes remain primary food products.
+                if (!stack.is(crop.seed()) || stack.has(net.minecraft.core.component.DataComponents.FOOD)) {
+                    double extra = stack.getCount() * bonus;
+                    stack.grow((int) extra + (level.random.nextDouble() < extra % 1 ? 1 : 0));
+                }
+            }
+            CropCare.of(level).forget(cell);
+            taken.addAll(drops);
             heard.add(WorkNoise.broke(cell, state));
             broken++;
             cut = true;
@@ -102,7 +115,12 @@ final class HarvestNode extends FarmNode {
             .orElseGet(() -> List.of(crop.seed()));
         for (var seed : seeds) {
             for (ItemStack stack : taken) {
+                int before = stack.getCount();
                 if (!stack.isEmpty() && stack.is(seed) && crop.plant(level, who, cell, stack)) {
+                    if (level.random.nextDouble() < who.effects().value(FarmingContent.SEED_SAVING)) {
+                        stack.grow(Math.max(0, before - stack.getCount()));
+                    }
+                    CropCare.of(level).tend(cell, level.getBlockState(cell), who.effects().value(FarmingContent.GROWTH));
                     return Optional.of(WorkNoise.placed(cell, level.getBlockState(cell)));
                 }
             }

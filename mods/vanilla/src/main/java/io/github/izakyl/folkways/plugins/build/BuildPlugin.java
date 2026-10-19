@@ -29,6 +29,8 @@ public final class BuildPlugin {
         modBus.addListener(PatternPackets::registerPayloads);
         NeoForge.EVENT_BUS.addListener(AddReloadListenerEvent.class, event ->
             event.addListener((ResourceManagerReloadListener) Patterns::reload));
+        NeoForge.EVENT_BUS.addListener(AddReloadListenerEvent.class, event ->
+            event.addListener((ResourceManagerReloadListener) resources -> LocalMinerals.clearProfiles()));
         NeoForge.EVENT_BUS.addListener(PatternPackets::onPlayerLoggedIn);
         NeoForge.EVENT_BUS.addListener(BuildPackets::onPlayerLoggedOut);
         if (FMLEnvironment.dist.isClient()) {

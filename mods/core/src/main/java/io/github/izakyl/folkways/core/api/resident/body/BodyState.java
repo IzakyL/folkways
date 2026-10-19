@@ -37,6 +37,10 @@ final class BodyState implements INBTSerializable<CompoundTag> {
         perks.addXp(vocation, amount, random);
     }
 
+    public void worked(ResourceLocation vocation, int ticks, RandomSource random) {
+        perks.worked(vocation, ticks, random);
+    }
+
     public Optional<UUID> colony() {
         return Optional.ofNullable(colony);
     }

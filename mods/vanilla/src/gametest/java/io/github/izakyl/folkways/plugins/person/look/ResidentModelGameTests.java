@@ -178,6 +178,21 @@ public final class ResidentModelGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void leisureClipsAreOptionalAndValidatedAgainstTheModel(GameTestHelper helper) {
+        DataPack files = new DataPack();
+        files.model("friend", YSM_ANIMATIONS, "main");
+        helper.assertTrue(onlyModel(helper, ModelLibrary.read(files.held)).leisureAnimations().isEmpty(),
+            "existing models need no new clips");
+        files.put("friend", "folkways.json", "{\"leisure_animations\":{\"petting\":\"sneak\"}}");
+        helper.assertValueEqual(onlyModel(helper, ModelLibrary.read(files.held)).leisureAnimations().get("petting"),
+            "sneak", "the optional clip mapping reaches the renderer");
+        files.put("friend", "folkways.json", "{\"leisure_animations\":{\"petting\":\"missing\"}}");
+        ModelLibrary invalid = ModelLibrary.read(files.held);
+        helper.assertTrue(!invalid.rejected().isEmpty() && invalid.entries().isEmpty(), "missing declared clips are rejected");
+        helper.succeed();
+    }
+
     private static ResidentLook.Model onlyModel(GameTestHelper helper, ModelLibrary library) {
         helper.assertValueEqual(library.rejected(), List.of(), "nothing should have been refused");
         helper.assertValueEqual(library.entries().size(), 1, "one texture, one entry");

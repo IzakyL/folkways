@@ -55,6 +55,7 @@ final class PlantNode extends FarmNode {
                 barren = true;
                 continue;
             }
+            CropCare.of(level).tend(base, level.getBlockState(base), who.effects().value(FarmingContent.GROWTH));
             heard.add(WorkNoise.placed(base, sown));
         }
         if (heard.isEmpty()) {

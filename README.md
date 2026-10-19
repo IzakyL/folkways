@@ -38,6 +38,107 @@ versions. Back up your world before trying a nightly build.
   and travel, learn trades, gain perks and flee danger. Data packs can replace
   colony name and appearance pools.
 
+### Resident growth and everyday life
+
+Residents learn automatically. Each completed second of active work earns one experience point;
+walking on hauling and patrol duties also counts while the resident actually moves. A trade has ten
+levels, at 3, 8, 15, 25, 40, 55, 75, 100, 130 and 160 minutes of cumulative effective work. Every
+level draws a rank from that trade's five independent, three-rank specialities. By level five a resident
+has discovered at least three different specialities. Levels 3, 6 and 10 additionally draw from the shared
+perk pool; these shared ranks carry between trades. Fully ranked perks leave their draw pool; once all shared ranks are held, further shared milestones grant nothing. There are
+fifteen occupational ranks but only ten draws, so residents develop different combinations automatically.
+
+| Trade | Independent specialities (rank I / II / III defaults) |
+| --- | --- |
+| Building and excavation | Skilled Builder: work speed +25% / 50% / 80%; Prospector: 8% / 14% / 22% mineral finds; Thrifty Builder: 10% / 20% / 30% material refunds; Quarry Momentum: up to +30% / 60% / 100% consecutive stone mining speed; Tool Expert: 25% / 50% / 75% less wear |
+| Farming | Skilled Farmer: speed +25% / 50% / 80%; Chain Harvest: 1 / 3 / 7 additional adjacent mature crops; Bountiful: +20% / 40% / 70% food yield; Replant: automatic replanting with 0% / 25% / 50% seed saving; Care: +20% / 40% / 60% growth for tended age-bearing crops |
+| Husbandry | Skilled Herder: speed +25% / 50% / 80%; Butcher: +25% / 50% / 100% ordinary carcass yield; Fleece: +1 / 2 / 3 wool; Breeder: 10% / 20% / 35% twin births within the pasture target; Nurture: once per baby, feeding additionally shortens remaining growth by 15% / 30% / 50% |
+| Fishing | Skilled Angler: 20% / 35% / 50% shorter waits; School: 25% / 45% / 70% chance of 1 / 1 / 2 extra fish; Treasure: 3% / 6% / 10% extra discoveries; Water Sense: increasingly favors less common local fish; Rod Care: 25% / 50% / 75% less wear |
+| Hauling | Heavy Hauler: capacity +50% / 100% / 200%; Fleet Courier: hauling movement +15% / 30% / 50%; Quick Exchange: 25% / 45% / 65% shorter transfer actions; Along the Way: gather 2 / 3 / 4 compatible loads sharing a source or destination; Long Haul: 30% / 55% / 80% less walking fatigue |
+| Crafting | Quick Hands: manual speed +30% / 60% / 100%; Batch: 2 / 4 / 8 crafts per operation; Frugal: 8% / 15% / 25% ingredient refunds on eligible recipes; Byproducts: 15% / 30% / 50% extra configured byproducts; Furnace Experience: +15% / 30% / 50% cooking speed for the batch loaded by that resident |
+| Patrol | Deterrence: ward radius +3 / 6 / 10 blocks and duration +25% / 50% / 100%; Martial: +20% / 40% / 70% damage against hostiles; Stalwart: 10% / 20% / 35% less damage from hostiles; Alert: detection +4 / 8 / 12 blocks and shared threats; Reassuring: +3 / 6 / 10 ward safety mood and faster recovery from attacks |
+
+Prospector selects minerals from the mined position's actual biome ore features. Relative weights account
+for placement count, rarity, configured vein size, height distribution and replacement targets; vanilla
+uniform and trapezoid height probabilities are calculated exactly. Custom height/count providers use
+cached deterministic sampling. Nonstandard placement modifiers are not simulated. Discoveries use ordinary
+ore loot, without Fortune or Silk Touch; rank III has a 25% chance of a second portion. Placed stone
+and repeated mining at the same position are eligible; no placement or prospecting history is stored.
+Ordinary stone and eligible minerals use `folkways:prospecting_stone`
+and `folkways:prospectable_minerals` block tags; the latter includes `c:ores` for modded minerals.
+
+Material refunds use the `folkways:returnable_building_materials` block tag, excluding block entities.
+Chain harvesting stays inside the field and respects other active crop jobs. Crop care persists for a
+plant's lifetime without stacking; it supports age-bearing crops that publish growth events, not saplings.
+Along the Way reorders only ready work whose remaining route still fits the pack, keeping individual
+reservations and deliveries intact. Shared-destination pickups permit at most eight additional blocks of estimated travel, using straight-line distances; obstacles can increase the actual walk. Furnace Experience tracks loaded input batches in FIFO order across
+saves; removing or replacing inputs removes the corresponding training, and manual additions remain ordinary.
+
+Crafting refund and byproduct rules live at `data/<recipe namespace>/crafting_perks/<recipe path>.json`.
+For example, `{"refund": true, "byproduct": "minecraft:stick", "count": 1}` opts one recipe into both
+abilities. Defaults cover selected ordinary recipes; reversible storage and packing recipes are excluded.
+Fishing discoveries use the `folkways:gameplay/fishing_discoveries` loot table with the actual fishing origin,
+so data packs can condition discoveries on biome and dimension.
+
+Shared perks grant reach +1 / 2 / 3 blocks, movement +10% / 20% / 30%, hunger and fatigue consumption
+reductions of 15% / 30% / 50%, food/housing/weather penalties reduced by 20% / 40% / 60%, and chatting
+recovery increased by 30% / 60% / 100% for both partners. Focused is a single-rank patience perk. Legacy
+Packmule remains effective for existing residents but leaves the draw pool. Older saves retain their
+levels and independent perks, with excess ranks capped and experience moved to the new level threshold;
+version-two shared ranks are moved back into shared storage. Work-time ladders remain configurable.
+
+Human residents have a persistent mood from 0 to 100. Food, housing, rest, recreation, company,
+safety and surroundings determine its target; mood moves gradually toward it. Work speed ranges
+from 75% at mood 0, through 100% at 60, to 115% at 100. The resident's detail window shows every
+contribution, recreation, housing grade and the next housing improvement. Their overhead card
+keeps the summary beside fullness and rest.
+
+Idle residents stroll, look around, chat in pairs, relax, or pet a colony member's tame cat or wolf.
+Mark a **Recreation area** for a garden or square they can visit. Activities restore recreation as
+they happen; repeated activities give diminishing returns. Work interrupts ordinary recreation,
+while a resident deprived of recreation may take a short break between jobs. Petting preserves
+the owner's sit command and never takes control of the pet's navigation. Residents can also interact
+with parrots and the colony's visiting animals. Player skins have dedicated
+leisure motions; custom model manifests and look entries may map `chatting`, `petting`, `relaxing`
+and `strolling` through a `leisure_animations` object. Missing clips fall back to basic idle/head motions.
+
+Registered beds automatically survey their room. Doors separate rooms even while open, and need
+usable approaches on both sides. Floors, roof coverage, lighting, beds and different furnishing
+categories determine housing quality:
+
+| Housing | Floor area per bed | Beds per room | Furnishing categories | Mood |
+| --- | --- | --- | --- | --- |
+| Basic bed | Requirements unmet | Any | Any | −6 |
+| Suitable dormitory | 4+ | Any | Any | +2 |
+| Comfortable housing | 6+ | Up to 4 | 2+ | +6 |
+| Excellent bedroom | 9+ | Up to 2 | 3+, without production stations | +10 |
+
+As a colony grows, cats, wolves (Minecraft's dogs) and parrots can settle nearby. Development counts
+human residents with suitable beds in each dimension: three unlock cats, six unlock wolves and ten
+unlock parrots. The colony supports one visitor per three housed residents across all dimensions, with no fixed
+colony-wide maximum. Every half Minecraft day there is a 50% chance to attempt one arrival near suitable
+housing, while residents are loaded and mob spawning is enabled. Arrivals require loaded, lit, dry,
+unobstructed ground away from nearby hostiles. These animals remain untamed and can be adopted
+normally; they persist like named animals. Saved arrival times and animal identities prevent reloading
+or unloading chunks from producing extra visitors. Death or removal frees a place; population decline
+pauses new arrivals without removing existing animals.
+
+All suitable rooms need enclosure, a roof, an entrance and brightness of at least 8 in usable spaces.
+A highest-grade bedroom must include decoration among its furnishing categories.
+A resident without a bed receives −12. Sleeping records the room's housing experience. Room surveys
+are shared, incremental and bounded to 1,024 floor cells, 32 blocks from the bed and a roof within
+12 blocks above; unloaded or oversized rooms remain awaiting inspection. Block edits invalidate
+nearby surveys; periodic inspection also catches command and machine changes.
+
+Data packs can extend `folkways:food_groups/*`, `folkways:fine_meals`,
+`folkways:husbandry_products` item tags and `folkways:housing/*` block tags. Furnishing categories
+are storage, textiles, decoration and tables; duplicate furniture of one category does not increase
+the category count. Defaults include chests and barrels, wool carpets, bookshelves and potted flowers;
+the table tag starts empty for data packs to extend. Container and block-name fallbacks also recognize
+common storage, carpet, potted-plant and table blocks. Crafting tables, furnaces and similar stations
+count as production equipment rather than furnishing categories.
+
+
 ## Installation
 
 Get pre-release jars from the upstream

@@ -40,7 +40,7 @@ final class SleepAction implements Node {
 
     @Override
     public Outcome commit(ServerLevel level, Worker who) {
-        if (!works.slept(who.resident().id(), ticks)) {
+        if (!works.slept(who.resident().id(), ticks, level)) {
             return Outcome.failed(LivingRefusal.NOT_ON_THE_BOOKS);
         }
         return Outcome.done();

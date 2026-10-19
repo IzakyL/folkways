@@ -3,6 +3,8 @@ package io.github.izakyl.folkways.plugins.person.look;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import java.util.Map;
+import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.ExtraCodecs;
 import net.minecraft.util.StringRepresentable;
@@ -49,9 +51,18 @@ public record ResidentLook(Appearance appearance, int weight) {
             ResourceLocation texture,
             String idleAnimation,
             String walkAnimation,
-            java.util.Optional<String> workAnimation,
+            Optional<String> workAnimation,
             Skin fallback,
-            float scale) implements Appearance {
+            float scale,
+            Map<String, String> leisureAnimations) implements Appearance {
+
+        public Model(ResourceLocation geometry, ResourceLocation animations, ResourceLocation texture,
+                String idleAnimation, String walkAnimation, Optional<String> workAnimation,
+                Skin fallback, float scale) {
+            this(geometry, animations, texture, idleAnimation, walkAnimation, workAnimation, fallback, scale, Map.of());
+        }
+
+        public Model { leisureAnimations = Map.copyOf(leisureAnimations); }
 
         public static final MapCodec<Model> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             ResourceLocation.CODEC.fieldOf("geometry").forGetter(Model::geometry),
@@ -61,7 +72,9 @@ public record ResidentLook(Appearance appearance, int weight) {
             Codec.STRING.optionalFieldOf("walk_animation", "animation.resident.walk").forGetter(Model::walkAnimation),
             Codec.STRING.optionalFieldOf("work_animation").forGetter(Model::workAnimation),
             Skin.CODEC.fieldOf("fallback").forGetter(Model::fallback),
-            ExtraCodecs.POSITIVE_FLOAT.optionalFieldOf("scale", 1.0F).forGetter(Model::scale)
+            ExtraCodecs.POSITIVE_FLOAT.optionalFieldOf("scale", 1.0F).forGetter(Model::scale),
+            Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("leisure_animations", Map.of())
+                .forGetter(Model::leisureAnimations)
         ).apply(instance, Model::new));
 
         @Override

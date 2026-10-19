@@ -61,6 +61,103 @@ public final class PatrolGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void martialAndStalwartChangeActualHostileDamage(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Body guard = PersonBody.RESIDENT.get().create(level);
+        Zombie zombie = EntityType.ZOMBIE.create(level);
+        place(helper, guard.mob(), new BlockPos(1, 1, 1));
+        place(helper, zombie, new BlockPos(2, 1, 1));
+        guard.mob().setNoAi(true);
+        zombie.setNoAi(true);
+        zombie.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR).setBaseValue(0);
+        try {
+            grant(guard, "patrolling_martial", "patrolling_stalwart");
+            float before = zombie.getHealth();
+            zombie.hurt(level.damageSources().mobAttack(guard.mob()), 4);
+            helper.assertTrue(Math.abs(before - zombie.getHealth() - 6.8) < .01,
+                "martial rank three increases a real hostile hit by seventy percent");
+            before = guard.mob().getHealth();
+            guard.mob().hurt(level.damageSources().mobAttack(zombie), 4);
+            helper.assertTrue(Math.abs(before - guard.mob().getHealth() - 2.6) < .01,
+                "stalwart rank three reduces a real hostile hit by thirty-five percent");
+        } finally { guard.mob().discard(); zombie.discard(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large")
+    public static void vigilanceFindsDistantThreatsAndSharesThemWithNearbyPatrollers(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 22; x++) {
+            for (int z = 0; z < 4; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE); }
+        }
+        Colony colony = Colonies.mint(level.getServer());
+        Body scout = PersonBody.RESIDENT.get().create(level);
+        Body peer = PersonBody.RESIDENT.get().create(level);
+        Zombie zombie = EntityType.ZOMBIE.create(level);
+        place(helper, scout.mob(), new BlockPos(1, 1, 1));
+        place(helper, peer.mob(), new BlockPos(1, 1, 2));
+        place(helper, zombie, new BlockPos(19, 1, 1));
+        scout.mob().setNoAi(true); peer.mob().setNoAi(true); zombie.setNoAi(true);
+        try {
+            grant(scout, "patrolling_alert");
+            helper.assertValueEqual((int) scout.effects().value(PatrolContent.ALERT_RANGE), 12,
+                "the scout has all three vigilance ranks");
+            helper.assertTrue(scout.mob().hasLineOfSight(zombie),
+                "the eighteen-block sight line lies entirely inside the reserved test arena");
+            PatrolPresence patrol = new PatrolPresence(colony);
+            patrol.watched(scout.id(), level.getGameTime());
+            patrol.watched(peer.id(), level.getGameTime());
+            ItemStack sword = new ItemStack(Items.IRON_SWORD);
+            helper.assertTrue(patrol.urges(worker(peer, sword), colony.view(level)).isEmpty(),
+                "ordinary patroller cannot independently discover a threat eighteen blocks away");
+            helper.assertFalse(patrol.urges(worker(scout, sword), colony.view(level)).isEmpty(),
+                "vigilance expands actual discovery range");
+            helper.assertFalse(patrol.urges(worker(peer, sword), colony.view(level)).isEmpty(),
+                "nearby colleague receives the discovered target");
+        } finally {
+            scout.mob().discard(); peer.mob().discard(); zombie.discard(); colony.raze();
+        }
+        helper.succeed();
+    }
+
+    private static void grant(Body body, String... ids) {
+        net.minecraft.nbt.CompoundTag saved = body.mob().saveWithoutId(new net.minecraft.nbt.CompoundTag());
+        var attachments = saved.getCompound("neoforge:attachments");
+        var state = attachments.getCompound("folkways:body_state");
+        var perks = state.getCompound("Perks");
+        var vocations = perks.getCompound("vocations");
+        var trade = new net.minecraft.nbt.CompoundTag();
+        var owned = new net.minecraft.nbt.ListTag();
+        for (String id : ids) {
+            var entry = new net.minecraft.nbt.CompoundTag();
+            entry.putString("id", id); entry.putInt("rank", 3); owned.add(entry);
+        }
+        trade.put("owned", owned); trade.putInt("level", 6); trade.putInt("xp", 2400);
+        vocations.put(PatrolContent.VOCATION.toString(), trade);
+        perks.put("vocations", vocations); state.put("Perks", perks);
+        attachments.put("folkways:body_state", state); saved.put("neoforge:attachments", attachments);
+        body.mob().load(saved);
+    }
+
+    @GameTest(template = "empty")
+    public static void reassuringWardsUseTheStrongestLivingCoverage(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos stop = helper.absolutePos(new BlockPos(1, 1, 1));
+        long now = level.getGameTime();
+        try {
+            Wards.ward(level, stop, now + 100, 6, 3);
+            Wards.ward(level, stop, now + 50, 3, 10);
+            helper.assertValueEqual(Wards.comfort(level, stop), 10,
+                "overlapping reassurance uses strongest bonus, not sum");
+            helper.assertValueEqual(Wards.comfort(level, stop.offset(5, 0, 0)), 3,
+                "the stronger but smaller ward cannot reassure outside its own range");
+            helper.assertValueEqual(Wards.comfort(level, stop.offset(7, 0, 0)), 0,
+                "reassurance cannot reach beyond protection");
+        } finally { Wards.stopped(null); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void aWardedStopKeepsNaturalMonstersFromSpawningRoundIt(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos stop = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -231,6 +328,23 @@ public final class PatrolGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void aLowerRankCannotRenewAHigherRanksRadius(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos stop = helper.absolutePos(new BlockPos(1, 100, 1));
+        int radius = FolkwaysVanillaConfig.patrolWardRadius();
+        long now = level.getGameTime();
+        Wards.ward(level, stop, now + 5, radius + 3);
+        Wards.ward(level, stop, now + 100, radius);
+        helper.assertTrue(Wards.warded(level, stop.east(radius + 1)), "higher rank's original ward still applies");
+        helper.runAfterDelay(6, () -> {
+            Wards.ward(level, stop, level.getGameTime() + 100, radius);
+            helper.assertFalse(Wards.warded(level, stop.east(radius + 1)), "low-rank renewal cannot inherit the expired larger radius");
+            helper.assertTrue(Wards.warded(level, stop.east(radius - 1)), "ordinary coverage remains");
+            helper.succeed();
+        });
+    }
+
     private static void place(GameTestHelper helper, Mob mob, BlockPos relative) {
         BlockPos at = helper.absolutePos(relative);
         mob.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
@@ -247,7 +361,7 @@ public final class PatrolGameTests {
             public List<Store> within() { return List.of(); }
             public ItemStack held(ToolNeed need) { return Tools.answers(weapon, need) ? weapon : ItemStack.EMPTY; }
             public void spill(ItemStack stack) { throw new AssertionError("patrolling must not spill items"); }
-            public Effects effects() { return Effects.NONE; }
+            public Effects effects() { return body.effects(); }
             public List<Node> route() { return List.of(); }
             public Placement placement() { return Placement.NOWHERE; }
         };
