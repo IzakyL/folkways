@@ -58,7 +58,8 @@ for (var entity : level.getAllEntities()) {
         "occupiedSlots", java.util.stream.IntStream.range(0, body.pack().getContainerSize())
             .filter(slot -> !body.pack().getItem(slot).isEmpty()).count(),
         "doing", body.doing().map(Object::toString).orElse(""),
-        "balk", body.balk().map(Object::toString).orElse("")));
+        "balk", body.balk().map(Object::toString).orElse(""),
+        "effects", body.effects().parts().stream().map(Object::toString).toList()));
 }
 var snapshot = new LinkedHashMap<String,Object>();
 if (colony != null) {

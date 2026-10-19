@@ -1,5 +1,7 @@
 /.gradle/
+/mods/*/.gradle/
 /build/
+/mods/*/build/
 /out/
 /classes/
 

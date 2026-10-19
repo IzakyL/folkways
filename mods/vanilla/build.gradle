@@ -1,0 +1,44 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_vanilla"
+ext.modName = "folkways-vanilla"
+apply from: rootProject.file("gradle/mod.gradle")
+evaluationDependsOn(":core")
+
+dependencies {
+    api project(":core")
+
+    compileOnly lib("geckolib")
+    compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
+        transitive = false
+    }
+    // Patterns are Starlark; the interpreter ships inside this mod's jar.
+    implementation("com.eed3si9n.starlark:starlark:${project.starlark_version}") {
+        transitive = false
+    }
+    jarJar("com.eed3si9n.starlark:starlark") {
+        version {
+            strictly "[${project.starlark_version},5.0)"
+            prefer project.starlark_version
+        }
+        transitive = false
+    }
+
+    gametestImplementation project(":core").sourceSets.gametest.output
+    // Patterns that lay Create's track are tested here, against the draft's own package, with Folkways × Create
+    // loaded beside them in the game tests' run.
+    gametestCompileOnly lib("create")
+}
+
+// Native optional-integration tests share this mod's package and module, without linking its main source to Cookery.
+dependencies {
+    cookeryTestImplementation project(":cookery")
+    cookeryTestCompileOnly lib("kaleidoscope_cookery")
+}
+
+// The recipe audit is one fixture shared by native kitchen and vanilla crafting tests in their own modules.
+sourceSets.cookeryTest.resources.srcDir(rootProject.file("mods/cookery/src/gametest/resources"))

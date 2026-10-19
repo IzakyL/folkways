@@ -54,8 +54,8 @@ const OBSERVE = defineTask<{ mode: string; player: string; rack: Vec; boards: Ve
       "io.github.izakyl.folkways.core.engine.plan.WeaveView",
       "io.github.izakyl.folkways.core.engine.plan.Schedule",
       "io.github.izakyl.folkways.core.engine.plan.Diagnosis",
-      "io.github.izakyl.folkways.plugins.cookery.tools.TaskTools",
-      "io.github.izakyl.folkways.plugins.cookery.CookeryPresence",
+      "io.github.izakyl.folkways.cookery.tools.TaskTools",
+      "io.github.izakyl.folkways.cookery.CookeryPresence",
       "net.minecraft.core.BlockPos",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.server.level.ServerLevel",
@@ -119,7 +119,7 @@ private static String stances(Collection<WorldPos> cells) {
     return id;
 }
 private static String workGraph() throws Exception {
-    // The same read-only reflection used by FuzzLabor. No readiness, pathfinding or draining readout calls.
+    // Read the actual core Labor site and its published server-thread snapshot. No readiness, pathfinding or draining.
     var site = Labor.class.getDeclaredMethod("site", UUID.class, net.minecraft.resources.ResourceKey.class);
     site.setAccessible(true);
     var found = (Optional<?>)site.invoke(null, colony.id(), level.dimension());
@@ -190,6 +190,7 @@ private static Map<String,Object> sample() throws Exception {
         position.put("onGround", entity.onGround());
         position.put("doing", body.doing().map(Object::toString).orElse("idle"));
         position.put("balk", body.balk().map(Object::toString).orElse("none"));
+        position.put("effects", body.effects().parts().stream().map(Object::toString).toList());
         residentPositions.put(resident.id().toString(), position);
         for (int slot = 0; slot < body.pack().getContainerSize(); slot++) {
             add(body.pack().getItem(slot), "resident", resident.id().toString(), totals, tools, seen);
@@ -216,7 +217,7 @@ private static Map<String,Object> sample() throws Exception {
         }
         targetCounts.add(count);
     }
-    var service = colony.service(io.github.izakyl.folkways.plugins.cookery.CookeryContent.ID, Object.class).orElseThrow();
+    var service = colony.service(io.github.izakyl.folkways.cookery.CookeryContent.ID, Object.class).orElseThrow();
     var taskTools = ((CookeryPresence)service).tools();
     var pool = field(taskTools, "pool");
     var queues = (Map<?,?>)field(pool, "queues");

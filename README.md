@@ -28,12 +28,31 @@ Saves, data pack formats and the Java API may still change between versions.
   [Starlark](https://github.com/bazelbuild/starlark) scripts. Data packs add their own
   under `data/<namespace>/folkways/pattern/`, and players under `folkways/pattern/` in
   the game directory; the
-  [built-in patterns](src/main/resources/data/folkways/folkways/pattern/) are the reference.
+  [built-in patterns](mods/vanilla/src/main/resources/data/folkways/folkways/pattern/) are the reference.
 - **Residents are people.** They sleep in their own beds, carry a couple of meals, tire
   from walking and working, level up in their trades and draw perks, and run from danger.
   Names and looks come from per-colony pools that data packs can replace.
 - **In-game lessons.** Every part of Folkways ships Ponder scenes, playable from the
   colony panel's Lessons tab or by holding the ponder key over a page tab.
+
+### Adding your own content
+
+Everything below loads from data packs at `data/<namespace>/folkways/<shelf>/`, or from
+the `folkways/<shelf>/` folder in the server's game directory. The folder loads as one
+more data pack under the `local` namespace, and `/reload` picks up changes to it. Run
+`/folkways library` to see what each shelf holds, which pack each entry came from, and
+which files were turned away and why.
+
+| Shelf | Files | What it adds |
+| --- | --- | --- |
+| `pattern` | `<name>.star` | A building pattern |
+| `piece` | `<name>.nbt` | A structure file that patterns stamp with `template(...)` |
+| `blueprint` | `<name>.nbt` | A structure file set down whole: pick it on the colony panel's Blueprints page, then aim, turn and click to place it |
+| `resident_skin` | `<name>.png`, optional `<name>.json` with `arms` and `weight` | A resident look. The server sends the texture to its players, so they need no resource pack |
+| `resident_model` | `<name>/main.json`, `main.animation.json`, `textures/*.png` | A GeckoLib or unencrypted YSM model, one look per texture |
+
+On a client, `folkways/pattern/`, `piece/` and `blueprint/` also make up the player's
+own library. The player draws these on their side and sends the result to the server.
 
 ## Installation
 
@@ -41,25 +60,38 @@ There is no tagged release yet. The
 [Nightly build](https://github.com/IzakyL/folkways/releases/tag/nightly) is rebuilt from
 every push to `master`; back up your world before trying it.
 
-Folkways needs these mods installed alongside it:
+Folkways comes as four jars. Install the first two; add the others only with the mod they pair with:
+
+| Jar | When |
+| --- | --- |
+| Folkways Core (`folkways-core-*.jar`) | Always: the colony engine, the Colony Book and its panel |
+| Folkways Vanilla (`folkways-vanilla-*.jar`) | Always: the work residents do (farming, herding, fishing, hauling, crafting, building, patrol) |
+| Folkways × Create (`folkways-create-*.jar`) | With Create: trains, parcels, track and schematics |
+| Folkways × Modular Golems (`folkways-modulargolems-*.jar`) | With Modular Golems: golems as residents |
+
+The local Cookery-enabled build adds `folkways-cookery-*.jar` beside Kaleidoscope Cookery 1.6.0.
+This extension supplies native appliance production, flooded-rice farming, shared tools,
+kitchen racks, seed reserves and thirteen lessons. The creative supply box belongs to
+Folkways Vanilla and also works without Cookery.
+
+All installed Folkways jars must be the same version. Folkways also needs these mods installed alongside it:
 
 | Mod | Version |
 | --- | --- |
 | [NeoForge](https://neoforged.net/) | 21.1.233 or newer |
 | [LDLib2](https://modrinth.com/mod/ldlib) | 2.2.37 or newer |
 
-Ponder (the lesson engine) and Flywheel ship inside the Folkways jar and need no separate
-install.
+Ponder (the lesson engine) and Flywheel ship inside the Folkways Core jar, and the
+Starlark interpreter inside the Folkways Vanilla jar; none needs a separate install.
 
 ### Optional integrations
 
 | Mod | What it adds |
 | --- | --- |
-| [Create](https://modrinth.com/mod/create) 6.0+ | Hand a schematic to the colony to build; hand over an assembled train for residents to drive; order from a stock keeper's package network |
+| [Create](https://modrinth.com/mod/create) 6.0+, with Folkways × Create | Hand a schematic to the colony to build; hand over an assembled train for residents to drive; order from a stock keeper's package network. Without Folkways × Create, residents still walk round Create's contraptions |
 | [Sable](https://modrinth.com/mod/sable) | Residents path onto and off Sable sub-levels, such as Create Aeronautics ships |
-| [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+ | Golems join the roster as a second kind of resident and take trades like people |
+| [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems | Golems join the roster as a second kind of resident and take trades like people |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+ | Residents can wear bedrock-format models instead of player skins |
-| [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0 | Residents mill, prepare and cook native recipes, borrow shared kitchen tools, grow rice, wear farming equipment and retain seed reserves; the Kitchen page includes thirteen lessons |
 | [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib | Its built-in maid models become looks a colony can switch on, one by one or a whole pack at once. They are read from the installed mod and never copied or sent |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+ | The Colony Book aims along its third-person crosshair |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi) | Item filters in the colony panel open the recipe viewer's ingredient list |
@@ -79,24 +111,7 @@ install.
 
 The colony panel's **Lessons** tab walks through everything else.
 
-With Kaleidoscope Cookery installed, mark the kitchen appliances, tool racks, a
-crafting table and ingredient stores, then order the finished dish. Residents make
-its intermediate ingredients and borrow the tools their current tasks need. Keep
-walkable operating space around appliances, including the millstone's exit and the
-top of stacked steamers. Stoves use flint and steel or a fire charge for ignition.
-
-An idle shared tool returns to an accessible rack before ordinary storage. To keep
-two tools available, set both the maintain order's minimum and target to two; a tool
-currently borrowed for a promised return still counts toward that rack's stock.
-The Kitchen settings control real hat and farmer-armor slots. A supplied hat enables
-seed reserves and surplus composting; mark a seed-grass area to gather missing seeds.
-
-Creative players can place a **Creative Supply Box** from Tools & Utilities, choose
-all items or a whitelist, and register it with the Colony Book. Residents collect
-finite batches for their actual tasks. The box only supplies items; finished goods
-and returned equipment need ordinary stores or racks.
-
-Server options live in `serverconfig/folkways-server.toml` in each world.
+Server options live in each world's `serverconfig/`: `folkways_core-server.toml` for the engine, `folkways_vanilla-server.toml` for the work among vanilla blocks, and `folkways_create-server.toml` for rail and dispatch.
 
 ## Building from source
 
@@ -110,7 +125,7 @@ npm run setup
 ./gradlew build
 ```
 
-The mod jar lands in `build/libs/`. To work on Folkways, see
+The four mod jars land in `build/libs/`. To work on Folkways, see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

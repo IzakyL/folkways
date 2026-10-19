@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.cookery.spit.mixin",
+  "plugin": "io.github.izakyl.folkways.cookery.CookeryMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ShawarmaSpitBlockEntityMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

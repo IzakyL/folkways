@@ -4,7 +4,7 @@ import path from "node:path";
 export const REPO_ROOT = process.cwd();
 export const OUT_ROOT = "tests/out";
 
-export type Suite = "e2e" | "visual" | "promo" | "bench" | "fuzz";
+export type Suite = "e2e" | "visual" | "promo" | "bench";
 export type Bucket = "traces" | "shots" | "reports" | "takes" | "film" | "keep" | "playwright";
 
 const BUCKETS: Record<Suite, Bucket[]> = {
@@ -12,7 +12,6 @@ const BUCKETS: Record<Suite, Bucket[]> = {
   visual: ["traces", "takes"],
   promo: ["traces", "takes", "film"],
   bench: ["traces", "reports"],
-  fuzz: ["traces", "reports"],
 };
 
 export function outPath(suite: Suite, bucket: Bucket, ...rest: string[]): string {

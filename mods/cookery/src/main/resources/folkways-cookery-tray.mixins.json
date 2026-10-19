@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.cookery.tray.mixin",
+  "plugin": "io.github.izakyl.folkways.cookery.CookeryMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BambooTrayAccess",
+    "BambooTrayBlockEntityMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

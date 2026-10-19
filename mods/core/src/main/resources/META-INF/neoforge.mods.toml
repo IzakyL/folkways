@@ -1,0 +1,86 @@
+modLoader = "javafml"
+loaderVersion = "${loader_version_range}"
+license = "MIT"
+issueTrackerURL = "https://github.com/IzakyL/folkways/issues"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${version}"
+displayName = "Folkways Core"
+displayURL = "https://github.com/IzakyL/folkways"
+description = "The colony engine the Folkways mods stand on: residents who plan their own work, the paths they walk, and the colony book and panel. On its own it adds no work for them to do; install Folkways Vanilla for that."
+authors = "IzakyL"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neoforge_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "ldlib2"
+type = "required"
+reason = "Folkways' player-facing screens are LDLib2 UI. Unlike Ponder, LDLib2 has a standalone release, so it is installed alongside Folkways rather than shipped inside its jar."
+versionRange = "${ldlib_requirement}"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "create"
+type = "optional"
+reason = "On a world with Create, residents walk round what Create builds instead of through it. What Create adds to a colony comes with Folkways × Create."
+versionRange = "[6.0.0,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "ponder"
+type = "required"
+reason = "Folkways' in-game tutorial scenes are Ponder scenes. Folkways ships Ponder inside its own jar, so installing Folkways satisfies this."
+versionRange = "[1.0.82,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.${mod_id}]]
+modId = "shouldersurfing"
+type = "optional"
+reason = "Under its third-person camera the Colony Book aims along the crosshair it draws rather than out of the player's eyes. Nothing else changes."
+versionRange = "[1.21.1-5.2.0,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.${mod_id}]]
+modId = "jei"
+type = "optional"
+reason = "The colony book's item filters open JEI's ingredient list, and JEI is told which parts of a Folkways screen it may draw over. Without it the filters fall back to Folkways' own picker."
+versionRange = "[19.39.0,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.${mod_id}]]
+modId = "emi"
+type = "optional"
+reason = "Same as JEI, through EMI's own exclusion hook. Folkways works with either, both, or neither installed."
+versionRange = "[1.1.24,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[mixins]]
+config = "folkways.mixins.json"
+
+[[mixins]]
+config = "folkways-optional.mixins.json"
+
+[[mixins]]
+config = "folkways-front.mixins.json"
+
+[[mixins]]
+config = "folkways-desk.mixins.json"

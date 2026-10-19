@@ -26,6 +26,14 @@ for(int i=0;i<scene.getKeyframeCount();i++)keyframes.add(scene.getKeyframeTime(i
 return Map.of("id",scene.getId().toString(),"title",scene.getTitle(),"time",scene.getCurrentTime(),"total",scene.getTotalTime(),"keyframes",keyframes);
 ` }),
 });
+const READ_MODS = defineTask<void, { native: boolean; extension: boolean; nativePot: boolean }>({
+  name: "folkways.cookery.ponder-read-mods", side: "any", timeoutMs: 20_000,
+  source: javaTask({ imports: ["net.neoforged.fml.ModList", "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.resources.ResourceLocation"], body: `
+return Map.of("native",ModList.get().isLoaded("kaleidoscope_cookery"),
+"extension",ModList.get().isLoaded("folkways_cookery"),
+"nativePot",BuiltInRegistries.BLOCK.containsKey(ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery","pot")));
+` }),
+});
 const READ_FOLDERS = defineTask<void, { folders: string[]; scenes: string[] }>({
   name: "folkways.cookery.ponder-read-folders", side: "client", timeoutMs: 20_000,
   source: javaTask({ imports: ["io.github.izakyl.folkways.front.api.ponder.Scenes"], body: `
@@ -69,22 +77,34 @@ return ctx.server().getPlayerList().getPlayers().stream().map(player->Map.of(
 });
 
 const LOCALES = (process.env.FOLKWAYS_PONDER_LANGUAGES ?? process.env.FOLKWAYS_PONDER_LANGUAGE ?? "en_us").split(",");
-for (const locale of LOCALES) for (const installed of [false, true]) test("cookery lessons" + (LOCALES.length > 1 ? " (" + locale + ")" : "") + ": " + (installed ? "all lessons, UI entries, keyframes and item links" : "optional mod absent"), async ({}, testInfo) => {
+const INSTALLATIONS = [
+  { kind: "absent", installed: false, native: false, config: "blockwright.toml", title: "optional extension and native mod absent" },
+  { kind: "native-only", installed: false, native: true, config: "blockwright.toml#cookery-native", title: "native Cookery remains independent without the optional extension" },
+  { kind: "complete", installed: true, native: true, config: "blockwright.toml#cookery", title: "all lessons, UI entries, keyframes and item links" },
+] as const;
+for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("cookery lessons" + (LOCALES.length > 1 ? " (" + locale + ")" : "") + ": " + installation.title, async ({}, testInfo) => {
+  const { installed } = installation;
   test.setTimeout(BUDGET.heavy);
   const runId = newRunId(); let pair: E2EPair | undefined;
   expect(["en_us", "zh_cn", "zh_hk", "zh_tw"]).toContain(locale);
   const guiScale = Number(process.env.FOLKWAYS_PONDER_GUI_SCALE ?? (locale === "en_us" ? "1" : "2"));
   expect([1, 2, 3]).toContain(guiScale);
-  const evidence: Record<string, any> = { installed, locale, guiScale, scenes: [], shots: [] };
+  const evidence: Record<string, any> = { installed, native: installation.native, installation: installation.kind, profile: installation.config, locale, guiScale, scenes: [], shots: [] };
   try {
-    pair = await launchPair({ config: installed ? "blockwright.toml#cookery" : "blockwright.toml",
+    pair = await launchPair({ config: installation.config,
       server: { trace: tracePath("e2e", "cookery-ponder-server-" + runId), instance: seededServer("cookery-ponder-server-" + runId) },
       client: { trace: tracePath("e2e", "cookery-ponder-client-" + runId), instance: "cookery-ponder-client-" + runId } });
     const { server, client } = pair;
+    evidence.serverMods = await server.run(READ_MODS); evidence.clientMods = await client.run(READ_MODS);
+    for (const loaded of [evidence.serverMods, evidence.clientMods]) {
+      expect(loaded.extension, "optional behavior follows the Folkways extension mod id on both sides").toBe(installed);
+      expect(loaded.native, "the native kitchen mod has its own independent installation state").toBe(installation.native);
+      expect(loaded.nativePot, "native cookware remains registered with or without the extension").toBe(installation.native);
+    }
     const grounded = await waitForGroundedPlayer(server); const name = grounded.name;
     if (locale !== "en_us") {
       await client.run(SET_LANGUAGE, { locale });
-      const catalog = JSON.parse(readFileSync("src/main/resources/assets/folkways/lang/" + locale + ".json", "utf8"));
+      const catalog = JSON.parse(readFileSync("mods/core/src/main/resources/assets/folkways/lang/" + locale + ".json", "utf8"));
       await expect.poll(async () => client.run(READ_LANGUAGE), { timeout: 30_000 }).toEqual({
         locale, title: catalog["folkways.ponder.cookery_orders.header"],
       });
@@ -124,6 +144,7 @@ for (const locale of LOCALES) for (const installed of [false, true]) test("cooke
     await shelf();
     const folders = await panelElements(client, { maxNodes: 20_000 });
     expect(folders.some(element => element.id === "folkways.lessons.folder.folkways.cookery")).toBe(installed);
+    expect(folders.some(element => element.id === "folkways.page.cookery"), "the kitchen page belongs to the optional Folkways extension").toBe(installed);
     if (!installed) return;
     for (const lesson of SCENES) {
       await shelf(); await clickElement(client, { id: "folkways.lessons.folder.folkways.cookery" }, { scrollIntoView: true });

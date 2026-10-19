@@ -1,0 +1,56 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_core"
+ext.modName = "folkways-core"
+apply from: rootProject.file("gradle/mod.gradle")
+
+dependencies {
+    compileOnly lib("emi")
+    compileOnly lib("jei")
+    compileOnly lib("shouldersurfing")
+    compileOnly lib("create")
+    compileOnly lib("sable"), lib("sable-companion")
+    compileOnly lib("ftbteams"), lib("architectury")
+
+    compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
+        transitive = false
+    }
+    jarJar("net.createmod.ponder:ponder-neoforge") {
+        version {
+            strictly "[${project.ponder_version},)"
+            prefer project.ponder_version
+        }
+        transitive = false
+    }
+    jarJar("dev.engine-room.flywheel:flywheel-neoforge-${project.minecraft_version}") {
+        version {
+            strictly "[${project.flywheel_version},2.0)"
+            prefer project.flywheel_version
+        }
+        transitive = false
+    }
+    api("com.lowdragmc.ldlib2:ldlib2-neoforge-${project.minecraft_version}:${project.ldlib_version}:all")
+
+    // The core's game tests stand residents up as the plugins' people, and one checks Create's extensions.
+    gametestImplementation project(":vanilla")
+    gametestCompileOnly project(":create")
+}
+
+def apiJar = tasks.register("apiJar", Jar) {
+    archiveClassifier = "api"
+    from sourceSets.main.output
+    include "io/github/izakyl/folkways/core/api/**", "io/github/izakyl/folkways/front/api/**"
+    includeEmptyDirs = false
+}
+
+publishing.publications.mod.artifact apiJar
+
+// Native optional-integration tests share this mod's package and module, without linking its main source to Cookery.
+dependencies {
+    cookeryTestImplementation project(":cookery")
+    cookeryTestCompileOnly lib("kaleidoscope_cookery")
+}

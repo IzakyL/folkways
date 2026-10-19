@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.create.build.mixin",
+  "plugin": "io.github.izakyl.folkways.create.build.mixin.CreateBuildMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [],
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "client": [
+    "ToolTypeMixin"
+  ]
+}

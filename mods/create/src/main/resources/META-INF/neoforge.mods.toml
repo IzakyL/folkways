@@ -1,0 +1,59 @@
+modLoader = "javafml"
+loaderVersion = "${loader_version_range}"
+license = "MIT"
+issueTrackerURL = "https://github.com/IzakyL/folkways/issues"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${version}"
+displayName = "Folkways × Create"
+displayURL = "https://github.com/IzakyL/folkways"
+description = "What Create brings to a Folkways colony: residents drive its trains, send and collect parcels through its packaging and postboxes, lay its track, and take a schematic as a build order."
+authors = "IzakyL"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neoforge_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "folkways_core"
+type = "required"
+reason = "Folkways × Create adds to the colony Folkways Core runs."
+versionRange = "[${version}]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "folkways_vanilla"
+type = "required"
+reason = "Rail and parcels are carried out by Folkways Vanilla's residents, and a schematic is built as Folkways Vanilla builds."
+versionRange = "[${version}]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "create"
+type = "required"
+reason = "Everything this mod adds is Create's."
+versionRange = "[6.0.0,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[mixins]]
+config = "folkways-rail.mixins.json"
+
+[[mixins]]
+config = "folkways-dispatch.mixins.json"
+
+[[mixins]]
+config = "folkways-create-build.mixins.json"

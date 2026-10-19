@@ -1,16 +1,18 @@
 # Third-party components
 
-## Bundled in the mod jar
+## Bundled in the mod jars
 
-These libraries are nested in the Folkways jar through NeoForge's Jar-in-Jar. Their
-license texts ship in the jar under `META-INF/licenses/` and in this repository under
-[`src/main/resources/META-INF/licenses/`](src/main/resources/META-INF/licenses/).
+These libraries are nested in a Folkways jar through NeoForge's Jar-in-Jar. Each one's
+license text ships in that jar under `META-INF/licenses/`, and in this repository under
+that mod's `src/main/resources/META-INF/licenses/`
+([core](mods/core/src/main/resources/META-INF/licenses/),
+[vanilla](mods/vanilla/src/main/resources/META-INF/licenses/)).
 
-| Component | Version | License | Copyright | Source |
-| --- | --- | --- | --- | --- |
-| Starlark (Java) | 4.2.1 | Apache-2.0 | The Bazel Authors | [bazelbuild/bazel](https://github.com/bazelbuild/bazel), packaged as `com.eed3si9n.starlark:starlark` |
-| Ponder | 1.0.82+mc1.21.1 | MIT | The Create Team | [Creators-of-Create/Ponder](https://github.com/Creators-of-Create/Ponder) |
-| Flywheel | 1.0.6 | MIT | Jozufozu | [Engine-Room/Flywheel](https://github.com/Engine-Room/Flywheel) |
+| Component | Version | In | License | Copyright | Source |
+| --- | --- | --- | --- | --- | --- |
+| Starlark (Java) | 4.2.1 | Folkways Vanilla | Apache-2.0 | The Bazel Authors | [bazelbuild/bazel](https://github.com/bazelbuild/bazel), packaged as `com.eed3si9n.starlark:starlark` |
+| Ponder | 1.0.82+mc1.21.1 | Folkways Core | MIT | The Create Team | [Creators-of-Create/Ponder](https://github.com/Creators-of-Create/Ponder) |
+| Flywheel | 1.0.6 | Folkways Core | MIT | Jozufozu | [Engine-Room/Flywheel](https://github.com/Engine-Room/Flywheel) |
 
 ## Required or optional at runtime, not bundled
 
@@ -19,8 +21,8 @@ Players install these separately. Folkways only compiles against them.
 | Component | License | Use |
 | --- | --- | --- |
 | LDLib2 | see upstream | Required: the UI toolkit for every Folkways screen |
-| Create, Sable, Modular Golems, GeckoLib, JEI, EMI | see upstream | Optional integrations |
-| Kaleidoscope Cookery | code BSD-3-Clause, assets CC BY-NC-SA 4.0 | Optional: native appliances, recipes, crop and equipment behavior. Models and textures are read from the player-installed mod; Folkways bundles none of them |
+| Create, Sable, Modular Golems, GeckoLib, JEI, EMI | see upstream | Optional integrations; Create is required by Folkways × Create, and Modular Golems by Folkways × Modular Golems |
+| Kaleidoscope Cookery | code BSD-3-Clause, assets CC BY-NC-SA 4.0 | Required by Folkways × Kaleidoscope Cookery: native appliances, crops and equipment. Models and textures stay in the player-installed mod; none are bundled |
 | Touhou Little Maid | code MIT, assets CC BY-NC-SA 4.0 | Optional: its maid models are drawn on residents straight from the player's own copy of that mod. Folkways ships none of them and a server sends only their ids |
 
 ## Repository assets, not shipped in the mod

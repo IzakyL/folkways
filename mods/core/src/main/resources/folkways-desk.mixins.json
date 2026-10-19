@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.front.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "LDLibFontsMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

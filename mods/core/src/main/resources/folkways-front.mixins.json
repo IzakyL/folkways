@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.front.client.ponder.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "PonderUIMixin",
+    "TextWindowElementMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

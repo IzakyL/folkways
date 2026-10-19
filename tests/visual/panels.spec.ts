@@ -98,7 +98,8 @@ test("panels and item models on camera", async ({}, testInfo) => {
     const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: TARGET_RESIDENTS });
     run.note("colony", { origin: founding.origin, residents: founding.residents, stand: founding.standBlock });
     const colonyId = String(founding.evidence.colonyId);
-    run.note("stocked", await stockColony(server, playerName, colonyId, founding.origin));
+    const stocked = await stockColony(server, playerName, colonyId, founding.origin);
+    run.note("stocked", stocked);
     run.note("dispatch", await stockDispatch(server, playerName, colonyId, founding.origin));
     const rail = await stockRail(server, client, playerName, founding.origin, founding.standBlock);
     run.note("rail", { carriage: rail.carriageUuid, stations: rail.stations, steps: rail.steps });
@@ -304,6 +305,24 @@ test("panels and item models on camera", async ({}, testInfo) => {
     await run.lint(probe, "page:site");
     await screen.dismiss(client);
 
+    // The first store holds three orders: its window lists them all.
+    const store = stocked.stores[0];
+    await tryCommand(server, `tp ${playerName} ${store.x + 0.5} ${store.y} ${store.z + 1.5} 180 30`);
+    await tick.sprint(server, 5);
+    await safeAction(() =>
+      player.useBlock(client, { x: store.x, y: store.y, z: store.z }, { face: "up" }),
+    );
+    await waitForAnyScreen(client, 8_000);
+    await enterSitePanel(server, client);
+    await safeAction(() => frames(client, 3));
+    await run.shot(client, "08c-store-site-panel-orders", {
+      subject: "A store with three orders: its window lists each order on its board",
+      worldState: { store, screen: screenName(await safeScreen(client)), tokens: await tokensOf(client) },
+      hard: true,
+    });
+    await run.lint(probe, "page:site-orders");
+    await screen.dismiss(client);
+
     await tryCommand(server, `give ${playerName} ${BOOK_ITEM}`);
     await tick.sprint(server, 3);
     await openInventory(client);
@@ -316,7 +335,7 @@ test("panels and item models on camera", async ({}, testInfo) => {
       ...tabs.map((tab, index) => `page-${tab.name}`),
       "05-1c-citizen-window", "05-5b-metrics-raze-confirm", "05-6-person-looks",
       "05-7-settings-tool", "06-item-selector", "06a-item-selector-hover",
-      "08b-container-site-panel",
+      "08b-container-site-panel", "08c-store-site-panel-orders",
     ]);
     run.expectLinted([
       ...tabs.map((tab) => `tab:${tab.name}`),

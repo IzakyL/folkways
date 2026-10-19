@@ -4,9 +4,9 @@ import test from "node:test";
 import { calls, patternWords } from "./patterns.ts";
 
 const ROOT = new URL("../../", import.meta.url);
-const LANG = new URL("src/main/resources/assets/folkways/lang/", ROOT);
-const JAVA = new URL("src/main/java/", ROOT);
-const PATTERNS = new URL("src/main/resources/data/folkways/folkways/pattern/", ROOT);
+const LANG = new URL("mods/core/src/main/resources/assets/folkways/lang/", ROOT);
+const MODS = new URL("mods/", ROOT);
+const PATTERNS = new URL("mods/vanilla/src/main/resources/data/folkways/folkways/pattern/", ROOT);
 const LOCALES = ["en_us", "zh_cn", "zh_hk", "zh_tw"];
 
 function read(url: URL): string {
@@ -43,8 +43,12 @@ function argumentsOf(text: string): number[] {
 const catalogs = new Map(readdirSync(LANG).filter(name => name.endsWith(".json"))
   .map(name => [name, catalog(read(new URL(name, LANG)))]));
 const english = catalogs.get("en_us.json")!;
-const sources = readdirSync(JAVA, { recursive: true, encoding: "utf8" }).filter(name => name.endsWith(".java"))
-  .map(name => ({ name, text: read(new URL(name.replaceAll("\\", "/"), JAVA)) }));
+// Every mod's sources, each named from its own src/main/java.
+const sources = readdirSync(MODS, { encoding: "utf8" }).flatMap(mod => {
+  const java = new URL(`${mod}/src/main/java/`, MODS);
+  return readdirSync(java, { recursive: true, encoding: "utf8" }).filter(name => name.endsWith(".java"))
+    .map(name => ({ name, text: read(new URL(name.replaceAll("\\", "/"), java)) }));
+});
 
 test("language catalogs have matching keys and interpolation arguments", () => {
   assert.ok(english, "en_us is required for fallback");

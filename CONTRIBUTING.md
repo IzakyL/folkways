@@ -14,7 +14,7 @@ Thanks for helping with Folkways. Issues and pull requests are welcome at
 ```sh
 npm install      # Blockwright, Playwright and TypeScript
 npm run setup    # downloads the integration mods and writes .blockwright/mods.json
-./gradlew build  # the mod jar, in build/libs/
+./gradlew build  # the four mod jars, in build/libs/
 ```
 
 `npm run setup` must run before the first Gradle build. The build compiles against the
@@ -23,13 +23,34 @@ downloads, as pinned in `blockwright.toml`.
 
 ## Layout
 
+Folkways has four base mods and a Cookery extension, each a Gradle project under `mods/`, all registering under the `folkways` namespace.
+`./gradlew build` builds them and gathers their jars into `build/libs/`.
+
+| Mod | Project | What it is |
+| --- | --- | --- |
+| Folkways Core (`folkways_core`) | `mods/core` | The engine and the screens; on its own it gives residents no work |
+| Folkways Vanilla (`folkways_vanilla`) | `mods/vanilla` | The work residents do among vanilla blocks |
+| Folkways × Create (`folkways_create`) | `mods/create` | What Create adds: rail, dispatch, and Create's side of building (track joints, schematic hand-off) |
+| Folkways × Modular Golems (`folkways_modulargolems`) | `mods/modulargolems` | Modular Golems as a second sort of resident |
+| Folkways × Kaleidoscope Cookery (`folkways_cookery`) | `mods/cookery` | Native Cookery farming, appliances and shared kitchen tools |
+
+An integration whose absence would leave the colony misreading a world that has that mod (Sable's sub-levels,
+Create's contraptions in the way) belongs in the core; one that only adds something when its mod is there is a mod
+of its own.
+
 | Path | What lives there |
 | --- | --- |
-| `src/main/java/.../core` | The colony engine: residents, planning, labour and travel. `core/api` is the public API |
-| `src/main/java/.../front` | Screens, the colony book, networking and lessons. `front/api` is the public API |
-| `src/main/java/.../plugins` | Each feature (farming, pasture, build, rail, …) as a plugin over the two APIs |
-| `src/main/resources/data/folkways/folkways/pattern` | Built-in building patterns (Starlark) |
-| `src/gametest` | NeoForge game tests |
+| `mods/core/.../base` | What every layer stands on: the declaration ledger, NBT persistence and the mixin plugin base |
+| `mods/core/.../effect` | Effects on residents (stats, flags, modifiers), with perks as one source of them under `effect/perk` |
+| `mods/core/.../library` | The resource library: data packs and loose files under `<gamedir>/folkways/` |
+| `mods/core/.../core` | The colony engine: residents, planning, labour and travel. `core/api` is the public API; `core/shell` fits the engine to the world, including other mods' structures (Sable, Create) |
+| `mods/core/.../front` | Screens, the colony book, networking and lessons. `front/api` is the public API |
+| `mods/vanilla/.../plugins` | Each feature (farming, pasture, build, …) as a plugin over the two APIs |
+| `mods/create/.../create` | Rail, dispatch and `create/build` |
+| `mods/modulargolems/.../modulargolems` | Golems as residents |
+| `mods/cookery/.../cookery` | Cookery appliances, farming adapters, tools and lessons |
+| `mods/vanilla/src/main/resources/data/folkways/folkways/pattern` | Built-in building patterns (Starlark) |
+| `mods/*/src/gametest` | NeoForge game tests, run together by the root's `runGameTestServer` |
 | `tests/` | Blockwright and Playwright suites, listed below |
 
 ## Tests
@@ -40,13 +61,12 @@ downloads, as pinned in `blockwright.toml`.
 | `npm run test:i18n` | Language keys, placeholders and notice/refusal coverage; no game or dependencies |
 | `npm run typecheck` | Type checks every TypeScript suite |
 | `./gradlew check` | Compiles everything and lints for tabs and trailing whitespace |
-| `./gradlew runGameTestServer` | NeoForge game tests in `src/gametest` |
-| `./gradlew -PcookeryTests=true runGameTestServer` | All game tests, including the real optional Kaleidoscope Cookery mod |
+| `./gradlew runGameTestServer` | NeoForge game tests in every `mods/*/src/gametest`, with the base mods but not Modular Golems or Cookery loaded |
+| `./gradlew -PcookeryTests=true runGameTestServer` | Also loads Cookery and runs its native recipe and lifecycle fixtures |
 | `npm run test:e2e` | End-to-end tests against a real client and server |
 | `npm run visual:take` | Screenshot suites for screens and in-world visuals |
 | `npm run bench:take` | Performance benchmarks on a large colony |
 | `npm run promo:take` | Films the promotional takes |
-| `npm run fuzz:run` | Planner, travel and build fuzzers on a headless server |
 
 The game suites download Minecraft, NeoForge and the fixture mods on first run, and their
 test servers accept the [Minecraft EULA](https://www.minecraft.net/eula) through
@@ -57,36 +77,7 @@ use, for example:
 npm run test:e2e -- tests/e2e/founding-smoke.spec.ts --workers=1
 ```
 
-The `cookery` and `cookery-sable` Blockwright profiles install Kaleidoscope Cookery
-1.6.0 on both sides. Run `tests/e2e/cookery-blackbox.spec.ts` to exercise the colony
-book, production orders, chopping-board byproducts, carrier shortages, repeated
-stockpot batches and a board-to-stockpot recipe chain on the ground and a Sable ship.
-The default profiles and game tests omit Cookery to also verify that it remains optional.
-
-The expanded kitchen suites are `cookery-complete.spec.ts` (one final order from
-base materials), `cookery-millstone.spec.ts` (interruption and safe exit),
-`cookery-tools.spec.ts` (one borrowed tool and explicit extra stock),
-`cookery-farming.spec.ts` (flooded dirt through real tilling, rice harvest and replanting,
-plus the compost-to-grass seed loop), and
-`cookery-ponder.spec.ts` (optional loading, real book entries and every lesson's
-keyframes). The production suites run both on the ground and aboard Sable. Set
-`FOLKWAYS_PONDER_LANGUAGE=zh_cn` (or `zh_hk`/`zh_tw`) to capture the lessons in
-that player's language. `creative-supplies.spec.ts` also runs without Cookery.
-
-The optional game tests audit all 612 pinned native recipe resources against the
-running recipe manager and execute the native production paths. They write
-`run/gametest/cookery-recipe-audit.json`. Generate the final-dish graph with:
-
-```sh
-node tests/shared/cookery/recipe-graph.mjs run/gametest/cookery-recipe-audit.json tests/out/cookery-recipe-graph.json
-```
-
-The graph includes served platters and drinks without a food component, and lists
-native unmatched/burnt results separately. Its base ingredients, containers, tools
-and fuel boundaries are explicit; it does not use reverse-packing cycles as food
-sources. A graph result complements actual final-order client tests.
-
-Each suite is a directory under `tests/` (`e2e`, `visual`, `bench`, `promo`, `fuzz`) with
+Each suite is a directory under `tests/` (`e2e`, `visual`, `bench`, `promo`) with
 its own `playwright.config.ts` and `tsconfig.json`. Code more than one suite uses lives in
 `tests/shared/`; a suite imports from there and from `tests/ldlib2/`, never from another
 suite. Everything the suites write goes to `tests/out/`, which git ignores.
@@ -131,3 +122,15 @@ the LDLib2 UI adapter in `tests/ldlib2/`.
 
 Include the Minecraft, NeoForge and Folkways versions, your mod list, and `latest.log`
 (and the crash report, if there is one).
+
+The Cookery profiles load both `folkways_cookery` and Kaleidoscope Cookery 1.6.0.
+`cookery-native` loads only the native mod to verify that the extension stays optional.
+The complete, millstone, tools, farming, blackbox and Ponder e2e suites run native
+production, interruptions, shared tool stock, flooded dirt through harvest/replanting,
+and all thirteen lessons. `creative-supplies.spec.ts` also runs without Cookery.
+
+Cookery game tests live in `mods/cookery/src/gametest`. The core and vanilla tests that
+need their own package internals live in `mods/{core,vanilla}/src/cookeryTest` and join
+the same run only with `-PcookeryTests=true`. The native audit covers all 612 pinned
+recipe resources and writes `run/gametest/cookery-recipe-audit.json`. Generate its graph
+with `node tests/shared/cookery/recipe-graph.mjs run/gametest/cookery-recipe-audit.json tests/out/cookery-recipe-graph.json`.

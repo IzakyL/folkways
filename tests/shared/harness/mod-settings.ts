@@ -9,7 +9,7 @@ export type ModSettings = {
   zones?: Record<string, number>;
   /** Recipe ids residents never use (crafting.refusedRecipes). */
   refusedRecipes?: string[];
-  /** Settings of the labor section, by key (planHorizonTicks, planHorizonDepth...). */
+  /** Settings of the core's labor section, by key (planHorizonTicks, planHorizonDepth...). */
   labor?: Record<string, number>;
 };
 
@@ -35,7 +35,9 @@ export function seedModSettings(instance: string, settings: ModSettings): string
   const refused = settings.refusedRecipes?.length
     ? `[crafting]\n\trefusedRecipes = [${settings.refusedRecipes.map((id) => `"${id}"`).join(", ")}]\n` : "";
   const labor = Object.entries(settings.labor ?? {}).map(([key, value]) => `\t${key} = ${value}\n`).join("");
-  return seed.write("config/folkways-server.toml", `[planning]\n\tmode = "${settings.mode}"\n` + (zones ? `[zones]\n${zones}` : "") + refused
+  // Planning and labour are the core's settings; zones and crafting are Folkways Vanilla's.
+  seed.write("config/folkways_vanilla-server.toml", (zones ? `[zones]\n${zones}` : "") + refused);
+  return seed.write("config/folkways_core-server.toml", `[planning]\n\tmode = "${settings.mode}"\n`
     + (labor ? `[labor]\n${labor}` : ""));
 }
 

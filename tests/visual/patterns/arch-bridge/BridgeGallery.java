@@ -45,6 +45,24 @@ public final class Task {
             public OptionalInt top(int x, int z) { return OptionalInt.of(ground(x,z)+1); }
         };
     }
+    // Banks at both ends with the ground falling away between them: the shores of a bridge whose ends differ in height.
+    static World valley(BlockPos a, BlockPos b, int dip) {
+        return new World() {
+            int ground(int x, int z) {
+                double dx = b.getX() - a.getX();
+                double dz = b.getZ() - a.getZ();
+                double run = Math.hypot(dx, dz);
+                double t = ((x - a.getX()) * dx + (z - a.getZ()) * dz) / (run * run);
+                if (t < 0) return a.getY() - 1;
+                if (t > 1) return b.getY() - 1;
+                return (int) Math.floor(a.getY() + (b.getY() - a.getY()) * t - 1 - dip * 4 * t * (1 - t));
+            }
+            public Optional<net.minecraft.world.level.block.state.BlockState> block(BlockPos at) {
+                return Optional.of((at.getY() <= ground(at.getX(), at.getZ()) ? Blocks.STONE : Blocks.AIR).defaultBlockState());
+            }
+            public OptionalInt top(int x, int z) { return OptionalInt.of(ground(x,z)+1); }
+        };
+    }
     static Drawn draw(Pattern pattern, BlockPos a, BlockPos b, Materials materials, World world) {
         return pattern.drawOn(new Commission(new Hint.Path(List.of(a, b)), materials, world, Direction.NORTH, 0L));
     }
@@ -252,6 +270,16 @@ public final class Task {
             if (result.draft().cells().stream().noneMatch(c -> result.corner().offset(c.offset()).equals(new BlockPos(24,dy,0))))
                 throw new AssertionError("wrong endpoint height " + dy);
             verified++;
+        }
+        // A sloped valley makes the two shores different heights: the arch must stay below the deck and keep a
+        // whole section all the way to the low bank.
+        for (int dy : new int[] {-8, -6, 6, 8}) {
+            for (int width : new int[] {3, 5, 15}) {
+                var a = new BlockPos(0, 40, 0);
+                var b = new BlockPos(32, 40 + dy, 0);
+                verify(ready(draw(pattern, a, b, new Materials(width, stone.blocks), valley(a, b, 10))));
+                verified++;
+            }
         }
         for (int[] delta : new int[][] {{24,1}, {24,23}, {1,24}, {-24,1}, {24,-23}, {-1,-24}}) {
             for (int width : new int[] {3,4,5,10,15}) {

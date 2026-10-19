@@ -1,0 +1,18 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_modulargolems"
+ext.modName = "folkways-modulargolems"
+apply from: rootProject.file("gradle/mod.gradle")
+
+dependencies {
+    api project(":vanilla")
+
+    compileOnly lib("modulargolems"), lib("l2library"), lib("l2core"), lib("l2serial")
+    compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
+        transitive = false
+    }
+}

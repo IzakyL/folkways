@@ -1,0 +1,183 @@
+package io.github.izakyl.folkways.plugins.person.walk;
+
+import io.github.izakyl.folkways.core.api.resident.Searches;
+import io.github.izakyl.folkways.core.api.terms.ClimbableBlocks;
+import io.github.izakyl.folkways.core.api.terms.Keepouts;
+import javax.annotation.Nullable;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.level.PathNavigationRegion;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.pathfinder.Node;
+import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.pathfinder.PathfindingContext;
+import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
+import net.minecraft.world.phys.shapes.VoxelShape;
+
+public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
+    // How high a body steps without a jump.
+    private static final double STEP = 0.6D;
+
+    private final BlockPos.MutableBlockPos probePos = new BlockPos.MutableBlockPos();
+    @Nullable
+    private BlockPos start;
+    private boolean outOfBounds;
+
+    public ResidentNodeEvaluator(@Nullable BlockPos start) {
+        this.start = start;
+    }
+
+    void startingAt(@Nullable BlockPos cell) {
+        start = cell;
+    }
+
+    // Someone already standing where nobody should may still walk out of it.
+    @Override
+    public void prepare(PathNavigationRegion region, Mob mob) {
+        super.prepare(region, mob);
+        outOfBounds = Keepouts.forbidden(mob.level(), start != null ? start : mob.blockPosition());
+    }
+
+    // Off the ground, vanilla starts a path on the floor under the mob, through anything it could walk through: for
+    // a resident on a ladder, or just over its top, that is the foot of the shaft, and it would walk away from there
+    // while it hung at the top. One in a climbable, or over one, starts where its feet are.
+    @Override
+    public Node getStart() {
+        if (start != null) {
+            return getStartNode(start);
+        }
+        BlockPos feet = mob.blockPosition();
+        if (!mob.onGround() && (isClimbable(currentContext, feet.getX(), feet.getY(), feet.getZ())
+                || isClimbable(currentContext, feet.getX(), feet.getY() - 1, feet.getZ()))) {
+            return getStartNode(feet);
+        }
+        return super.getStart();
+    }
+
+    // Vanilla only weighs a burning cell (a lit campfire, fire, the top of magma): with no other way, or a way
+    // round some thirty blocks longer, a resident walked through the campfire and burned. One that fire does not
+    // hurt still may.
+    @Override
+    public PathType getPathType(PathfindingContext context, int x, int y, int z) {
+        if (context.getBlockState(probePos.set(x, y, z)).is(Blocks.BARRIER)
+                || context.getBlockState(probePos.set(x, y - 1, z)).is(Blocks.BARRIER)) {
+            return PathType.BLOCKED;
+        }
+        if (!outOfBounds && mob != null && Keepouts.forbidden(mob.level(), x, y, z)) {
+            return PathType.BLOCKED;
+        }
+        PathType type = super.getPathType(context, x, y, z);
+        if (type == PathType.DAMAGE_FIRE && mob != null && !mob.fireImmune()) {
+            return PathType.BLOCKED;
+        }
+        if (type == PathType.FENCE && isShutGate(context.getBlockState(probePos.set(x, y, z)))) {
+            return PathType.DOOR_WOOD_CLOSED;
+        }
+        if (type == PathType.TRAPDOOR && isShutOverhead(context.getBlockState(probePos.set(x, y, z)))) {
+            return PathType.BLOCKED;
+        }
+        if ((type == PathType.WALKABLE || type == PathType.OPEN) && isPortalMouth(context, x, y, z)) {
+            return PathType.DANGER_OTHER;
+        }
+        if (type == PathType.OPEN && (isClimbable(context, x, y, z) || restsOnAScaffold(context, x, y, z))) {
+            return PathType.WALKABLE;
+        }
+        if ((type == PathType.OPEN || type == PathType.WALKABLE) && isSolidInside(context, x, y, z)) {
+            return PathType.BLOCKED;
+        }
+        if (type == PathType.OPEN && isSolidInside(context, x, y - 1, z)) {
+            return PathType.WALKABLE;
+        }
+        return type;
+    }
+
+    // Vanilla walks through any block that is not a full cube unless the block says otherwise, and every vanilla
+    // block that matters says so. A modded machine a pixel short of the cube on each side does not: a resident
+    // pathed into it and stood against it for good, and nobody pathed onto it. A cell too tall to step into is
+    // shut, and stands as a floor under the cell above, as the ways (Footing) always had it.
+    private boolean isSolidInside(PathfindingContext context, int x, int y, int z) {
+        BlockState state = context.getBlockState(probePos.set(x, y, z));
+        if (state.isAir() || ClimbableBlocks.isClimbable(state) || ClimbableBlocks.offersFloor(state)) {
+            return false;
+        }
+        VoxelShape shape = state.getCollisionShape(context.level(), probePos);
+        return !shape.isEmpty() && shape.max(Direction.Axis.Y) > STEP;
+    }
+
+    // A body holding a climbable block stands on it as on a ladder's rung. Vanilla reads the floor off collision
+    // shapes, so a ladder's thin plate is a floor but a vine is none, and stepping off the top of a vine onto the
+    // ledge it hangs from looked like a jump of two.
+    @Override
+    protected double getFloorLevel(BlockPos pos) {
+        double floor = super.getFloorLevel(pos);
+        boolean held = isClimbable(currentContext, pos.getX(), pos.getY() - 1, pos.getZ());
+        return held ? Math.max(floor, pos.getY()) : floor;
+    }
+
+    private boolean isPortalMouth(PathfindingContext context, int x, int y, int z) {
+        return context.getBlockState(probePos.set(x, y, z)).is(Blocks.NETHER_PORTAL);
+    }
+
+    // Vanilla walks through any trapdoor's cell, as it would over a shut one laid low; one shut in the top half of
+    // the cell is a lid at head height that nobody walks under, and a resident pathing through it stood against it
+    // for good. The ways (Footing) never counted the cell passable.
+    private static boolean isShutOverhead(BlockState state) {
+        return state.getBlock() instanceof TrapDoorBlock && !state.getValue(TrapDoorBlock.OPEN)
+            && state.getValue(TrapDoorBlock.HALF) == Half.TOP;
+    }
+
+    private static boolean isShutGate(BlockState state) {
+        return state.getBlock() instanceof FenceGateBlock && !state.getValue(FenceGateBlock.OPEN);
+    }
+
+    @Override
+    public int getNeighbors(Node[] neighbors, Node node) {
+        Searches.expanded();
+        int count = super.getNeighbors(neighbors, node);
+        if (!inColumn(node)) {
+            return count;
+        }
+        count = append(neighbors, count, climbNode(node.x, node.y + 1, node.z), node);
+        count = append(neighbors, count, climbNode(node.x, node.y - 1, node.z), node);
+        return count;
+    }
+
+    private int append(Node[] neighbors, int count, @Nullable Node candidate, Node from) {
+        if (count >= neighbors.length || !isNeighborValid(candidate, from)) {
+            return count;
+        }
+        neighbors[count] = candidate;
+        return count + 1;
+    }
+
+    @Nullable
+    private Node climbNode(int x, int y, int z) {
+        PathType type = getCachedPathType(x, y, z);
+        if (type != PathType.WALKABLE || mob.getPathfindingMalus(type) < 0.0F) {
+            return null;
+        }
+        Node node = getNode(x, y, z);
+        node.type = type;
+        node.costMalus = Math.max(node.costMalus, mob.getPathfindingMalus(type));
+        return node;
+    }
+
+    private boolean inColumn(Node node) {
+        return isClimbable(currentContext, node.x, node.y, node.z)
+            || isClimbable(currentContext, node.x, node.y - 1, node.z)
+            || isClimbable(currentContext, node.x, node.y + 1, node.z);
+    }
+
+    private boolean isClimbable(PathfindingContext context, int x, int y, int z) {
+        return ClimbableBlocks.isClimbable(context.getBlockState(probePos.set(x, y, z)));
+    }
+
+    private boolean restsOnAScaffold(PathfindingContext context, int x, int y, int z) {
+        return ClimbableBlocks.offersFloor(context.getBlockState(probePos.set(x, y - 1, z)));
+    }
+}

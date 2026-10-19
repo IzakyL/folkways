@@ -86,7 +86,7 @@ export async function readServerLibrary(server: MinecraftServer) {
 }
 
 export function clientModelFile(client: MinecraftClient, packPath: string) {
-  return path.join(client.instance.instanceDir, "folkways", "resident-models", packPath);
+  return path.join(client.instance.instanceDir, "folkways", ".cache", "resident_models", packPath);
 }
 
 export function clientHasModelFile(client: MinecraftClient, packPath: string) {

@@ -12,7 +12,7 @@ import { digSites, planOrders, type Dig } from "./orders.ts";
 // Raises the bench city on real ground: reads the lie of the land, picks the flattest site with a mountain in reach,
 // reads the ground, levels the city and lays its grid of streets, builds the halls, draws the field, runs docks out into
 // the nearest water, and beds the railway out to the mine at the mountain's foot.
-const PATTERNS = "src/main/resources/data/folkways/folkways/pattern";
+const PATTERNS = "mods/vanilla/src/main/resources/data/folkways/folkways/pattern";
 const star = (name: string) => readFileSync(`${PATTERNS}/${name}.star`, "utf8");
 const SOURCES = ["road", "grading", "materials", "terraced_field", "dock"];
 

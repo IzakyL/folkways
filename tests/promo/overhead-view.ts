@@ -16,7 +16,7 @@ export type Cell = [number, number];
 
 // The game is in Chinese (blockwright.toml#promo-land): its buttons are found by what they say there.
 export const SAYS: Record<string, string> = JSON.parse(
-  readFileSync(path.join(REPO_ROOT, "src/main/resources/assets/folkways/lang/zh_cn.json"), "utf8"));
+  readFileSync(path.join(REPO_ROOT, "mods/core/src/main/resources/assets/folkways/lang/zh_cn.json"), "utf8"));
 
 // The view's own numbers (Overhead.java): how fast the walking keys fly it, how far a wheel notch moves it along its
 // line of sight, and how far a dragged pixel turns it.

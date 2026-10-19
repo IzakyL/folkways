@@ -1,0 +1,125 @@
+// The desk is a village ledger: paper in a wooden frame, oak tags for buttons, ink for words and red ink for
+// what is marked. Frames are nine-slice sprites under textures/gui/desk: sprite(path, x, y, w, h, left, top,
+// right, bottom), the last four the edge kept unstretched.
+
+.folkways_desk .panel_bg {
+  background: sprite(folkways:textures/gui/desk/panel.png, 0, 0, 24, 24, 7, 7, 7, 7);
+  padding-all: 8;
+  gap-all: 6;
+}
+.folkways_desk .__dialog_title__ {
+  background: sprite(folkways:textures/gui/desk/title.png, 0, 0, 16, 16, 2, 2, 2, 2);
+}
+.folkways_desk .__dialog_title__ label {
+  text-color: #2b1c12;
+}
+.folkways_desk text, .folkways_desk label {
+  text-color: #3b2a1a;
+  text-shadow: false;
+}
+.folkways_desk .preview_bg {
+  background: sprite(folkways:textures/gui/desk/card.png, 0, 0, 16, 16, 3, 3, 3, 3);
+  padding-all: 4;
+}
+
+// Buttons: oak tags
+.folkways_desk button:host {
+  base-background: sprite(folkways:textures/gui/desk/button.png, 0, 0, 16, 16, 4, 4, 4, 4);
+  hover-background: sprite(folkways:textures/gui/desk/button_hover.png, 0, 0, 16, 16, 4, 4, 4, 4);
+  pressed-background: sprite(folkways:textures/gui/desk/button_pressed.png, 0, 0, 16, 16, 4, 4, 4, 4);
+  height: 20;
+  padding-all: 3;
+}
+.folkways_desk button .__button_text__ {
+  text-color: #2b1c12;
+}
+.folkways_desk button.__disabled__ {
+  base-background: sprite(folkways:textures/gui/desk/button_disabled.png, 0, 0, 16, 16, 4, 4, 4, 4);
+}
+.folkways_desk button.__disabled__ .__button_text__ {
+  text-color: #8f7f62;
+}
+
+// The list of pages: bare lines, a pencilled wash under the pointer, the open page shaded with a red ribbon
+.folkways_desk button.folkways_nav {
+  base-background: empty;
+  hover-background: color(#2a3b2a1a);
+  pressed-background: color(#403b2a1a);
+}
+.folkways_desk button.folkways_selected {
+  base-background: color(#d6c497);
+}
+.folkways_desk button.folkways_chosen {
+  base-background: sprite(folkways:textures/gui/desk/button_hover.png, 0, 0, 16, 16, 4, 4, 4, 4);
+}
+.folkways_desk button.folkways_chosen .__button_text__ {
+  text-color: #9a3324;
+}
+
+// Ledger lines: rows of paper parted by faded rules
+.folkways_desk .folkways_list {
+  background: color(#c4ad7e);
+}
+.folkways_desk .folkways_row {
+  background: color(#eadcb6);
+}
+.folkways_desk .folkways_card {
+  background: sprite(folkways:textures/gui/desk/card.png, 0, 0, 16, 16, 3, 3, 3, 3);
+}
+.folkways_desk .folkways_priority {
+  background: sprite(folkways:textures/gui/desk/field.png, 0, 0, 16, 16, 3, 3, 3, 3);
+}
+.folkways_desk .folkways_link {
+  text-color: #9a3324;
+}
+.folkways_desk button.folkways_danger .__button_text__ {
+  text-color: #8a2416;
+}
+
+// Fields and ticks: slips of fresh paper
+.folkways_desk text-field:host, .folkways_desk .__search-component_text-field__ {
+  background: sprite(folkways:textures/gui/desk/field.png, 0, 0, 16, 16, 3, 3, 3, 3);
+  focus-overlay: sdf(#00000000, 1, 1, #9a3324);
+  text-color: #3b2a1a;
+  text-shadow: false;
+  cursor-color: #9a3324;
+  // A field stands 14 tall; three above and below would leave its words 8 of the font's 9 and crop their tops.
+  padding-all: 3;
+  padding-top: 2;
+  padding-bottom: 2;
+}
+.folkways_desk .__toggle_button__ {
+  base-background: sprite(folkways:textures/gui/desk/field.png, 0, 0, 16, 16, 3, 3, 3, 3);
+  pressed-background: sprite(folkways:textures/gui/desk/field.png, 0, 0, 16, 16, 3, 3, 3, 3);
+  hover-background: group(sprite(folkways:textures/gui/desk/field.png, 0, 0, 16, 16, 3, 3, 3, 3), sdf(#00000000, 1, 1, #9a3324));
+}
+.folkways_desk .__toggle_mark-icon__ {
+  background: sprite(folkways:textures/gui/desk/check.png);
+}
+
+// Scrolling: a wooden rod in a groove
+.folkways_desk .__scroller_view_view-port__ {
+  background: empty;
+  padding-all: 0;
+}
+.folkways_desk .__scroller_scroll_container__ {
+  background: sprite(folkways:textures/gui/desk/track.png, 0, 0, 8, 8, 2, 2, 2, 2);
+  padding-all: 1;
+}
+.folkways_desk scroller-vertical .__scroller_scroll_bar__, .folkways_desk scroller-horizontal .__scroller_scroll_bar__ {
+  base-background: sprite(folkways:textures/gui/desk/rod.png, 0, 0, 8, 8, 3, 3, 3, 3);
+  hover-background: sprite(folkways:textures/gui/desk/rod_hover.png, 0, 0, 8, 8, 3, 3, 3, 3);
+  pressed-background: sprite(folkways:textures/gui/desk/rod_hover.png, 0, 0, 8, 8, 3, 3, 3, 3);
+}
+
+// Pickers and menus that open over the page
+.folkways_desk .__selector_dialog__, .folkways_desk .__search-component_dialog__, .folkways_desk menu {
+  background: sprite(folkways:textures/gui/desk/popup.png, 0, 0, 16, 16, 4, 4, 4, 4);
+}
+.folkways_desk .__dialog_content-container__, .folkways_desk .__dialog_button-container__ {
+  background: sprite(folkways:textures/gui/desk/popup.png, 0, 0, 16, 16, 4, 4, 4, 4);
+}
+
+.folkways_desk label, .folkways_desk .__button_text__ {
+  min-height: 12;
+}

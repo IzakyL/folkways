@@ -1,0 +1,62 @@
+modLoader = "javafml"
+loaderVersion = "${loader_version_range}"
+license = "MIT"
+issueTrackerURL = "https://github.com/IzakyL/folkways/issues"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${version}"
+displayName = "Folkways × Kaleidoscope Cookery"
+displayURL = "https://github.com/IzakyL/folkways"
+description = "Residents prepare, grow, cook and store Kaleidoscope Cookery food with its native appliances."
+authors = "IzakyL"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neoforge_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "folkways_core"
+type = "required"
+reason = "The colony engine and screens used by this extension are provided by Folkways Core."
+versionRange = "[${version}]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "folkways_vanilla"
+type = "required"
+reason = "Cookery extends the farming, residents and production work provided by Folkways Vanilla."
+versionRange = "[${version}]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "kaleidoscope_cookery"
+type = "required"
+reason = "This extension uses Kaleidoscope Cookery's native crops, tools and appliance recipes."
+versionRange = "[1.6.0-neoforge+mc1.21.1,1.7)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[mixins]]
+config = "folkways-cookery.mixins.json"
+
+[[mixins]]
+config = "folkways-cookery-spit.mixins.json"
+
+[[mixins]]
+config = "folkways-cookery-steamer.mixins.json"
+
+[[mixins]]
+config = "folkways-cookery-tray.mixins.json"

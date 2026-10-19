@@ -314,7 +314,7 @@ const READ_FARM = defineTask<{ rice: Vec; composter: Vec; min: Vec; max: Vec }, 
       "net.minecraft.world.entity.EquipmentSlot", "net.minecraft.world.item.Items", "io.github.izakyl.folkways.core.api.colony.Colonies",
       "io.github.izakyl.folkways.core.api.resident.body.Bodies", "io.github.izakyl.folkways.front.api.Fronts",
       "io.github.izakyl.folkways.core.api.colony.Held", "io.github.izakyl.folkways.core.api.terms.WorldPos",
-      "io.github.izakyl.folkways.plugins.cookery.CookeryContent", "io.github.izakyl.folkways.plugins.cookery.seeds.SeedPresence",
+      "io.github.izakyl.folkways.cookery.CookeryContent", "io.github.izakyl.folkways.cookery.seeds.SeedPresence",
       "com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems", "com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod"],
     members: `private static BlockPos pos(Object raw) {
       var at = (Map<?, ?>) raw;

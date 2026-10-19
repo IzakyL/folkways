@@ -38,6 +38,8 @@ const DEMANDS: Array<{ store: number; item: string; count: number; low: number }
   { store: 1, item: "minecraft:oak_planks", count: 192, low: 64 },
   { store: 2, item: "minecraft:iron_ingot", count: 32, low: 8 },
   { store: 0, item: "minecraft:cooked_mutton", count: 32, low: 8 },
+  // A third on the first store, so its own window has a list of orders to draw, not one or two.
+  { store: 0, item: "minecraft:baked_potato", count: 48, low: 12 },
 ];
 
 export async function stockColony(

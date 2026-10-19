@@ -1,0 +1,204 @@
+package io.github.izakyl.folkways.front.client;
+
+import com.mojang.blaze3d.platform.Window;
+import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.front.engine.item.HeldBook;
+import java.util.Set;
+import net.minecraft.client.Camera;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Marker;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
+import net.neoforged.neoforge.client.event.RenderHandEvent;
+import net.neoforged.neoforge.client.event.RenderHighlightEvent;
+import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
+import org.joml.Vector3f;
+import org.lwjgl.glfw.GLFW;
+
+/**
+ * The view from above: the camera let go of the player's eyes to fly where it is steered, and the book worked
+ * with the mouse from there. The player stands where they were, and still has to hold the book.
+ */
+@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.GAME, value = Dist.CLIENT)
+public final class Overhead {
+    public static final KeyMapping KEY = new KeyMapping("key.folkways.overhead", GLFW.GLFW_KEY_V,
+        "key.categories.folkways");
+
+    private static final double RISE = 12.0D;
+    private static final float TILT = 45.0F;
+    private static final double BLOCKS_A_SECOND = 24.0D;
+    private static final double CLIMB_A_SECOND = 8.0D;
+    private static final double BLOCKS_A_NOTCH = 4.0D;
+    private static final float DEGREES_A_PIXEL = 0.3F;
+    private static final double STAND_OFF = 20.0D;
+
+    /** The game's own HUD of a body that is not being played from here. */
+    private static final Set<ResourceLocation> BODY_HUD = Set.of(VanillaGuiLayers.CROSSHAIR, VanillaGuiLayers.HOTBAR,
+        VanillaGuiLayers.EXPERIENCE_BAR, VanillaGuiLayers.EXPERIENCE_LEVEL, VanillaGuiLayers.PLAYER_HEALTH,
+        VanillaGuiLayers.ARMOR_LEVEL, VanillaGuiLayers.FOOD_LEVEL, VanillaGuiLayers.AIR_LEVEL,
+        VanillaGuiLayers.VEHICLE_HEALTH, VanillaGuiLayers.JUMP_METER, VanillaGuiLayers.SELECTED_ITEM_NAME);
+
+    /** What the camera rides: an entity of this client alone, in no level's lists. */
+    private static Entity eye;
+
+    private Overhead() {
+    }
+
+    static boolean on() {
+        return eye != null;
+    }
+
+    /** Whether a screen stands between the player and the world: any but the one this view is worked through. */
+    static boolean screened(Minecraft minecraft) {
+        return minecraft.screen != null && !(minecraft.screen instanceof OverheadScreen);
+    }
+
+    static void toggle(Minecraft minecraft) {
+        if (on()) {
+            leave(minecraft);
+            return;
+        }
+        LocalPlayer player = minecraft.player;
+        if (player == null || minecraft.level == null || minecraft.screen != null
+            || HeldBook.bound(player).isEmpty()) {
+            return;
+        }
+        // It starts up behind the player, looking down at where they stand.
+        Vec3 back = Vec3.directionFromRotation(0.0F, player.getYRot()).scale(-RISE);
+        eye = new Marker(EntityType.MARKER, minecraft.level);
+        place(player.getEyePosition().add(back.x, RISE, back.z), player.getYRot(), TILT);
+        minecraft.setCameraEntity(eye);
+        minecraft.setScreen(new OverheadScreen());
+    }
+
+    static void leave(Minecraft minecraft) {
+        Entity left = eye;
+        forget();
+        if (left != null && minecraft.getCameraEntity() == left && minecraft.player != null) {
+            minecraft.setCameraEntity(minecraft.player);
+        }
+        if (minecraft.screen instanceof OverheadScreen) {
+            minecraft.setScreen(null);
+        }
+    }
+
+    static void forget() {
+        eye = null;
+    }
+
+    static void tick(Minecraft minecraft) {
+        if (!on()) {
+            return;
+        }
+        if (minecraft.player == null || minecraft.level != eye.level() || minecraft.getCameraEntity() != eye
+            || HeldBook.bound(minecraft.player).isEmpty()) {
+            leave(minecraft);
+            return;
+        }
+        // A panel opened from here takes the screen's place, and gives it back when it closes.
+        if (minecraft.screen == null) {
+            minecraft.setScreen(new OverheadScreen());
+        }
+    }
+
+    /** The ray under the mouse, out of the camera through the pixel the pointer is on. */
+    static Aim aim(Minecraft minecraft) {
+        Camera camera = minecraft.gameRenderer.getMainCamera();
+        Window window = minecraft.getWindow();
+        double across = 2.0D * minecraft.mouseHandler.xpos() / window.getScreenWidth() - 1.0D;
+        double up = 1.0D - 2.0D * minecraft.mouseHandler.ypos() / window.getScreenHeight();
+        double half = Math.tan(Math.toRadians(minecraft.options.fov().get()) / 2.0D);
+        double wide = half * window.getScreenWidth() / window.getScreenHeight();
+        Vector3f look = new Vector3f(camera.getLookVector())
+            .add(new Vector3f(camera.getLeftVector()).mul((float) (-across * wide)))
+            .add(new Vector3f(camera.getUpVector()).mul((float) (up * half)));
+        return new Aim(camera.getPosition(), new Vec3(look).normalize());
+    }
+
+    /**
+     * Flies the camera over the ground with the walking keys, and up and down with jump and sneak, for the time
+     * one frame took.
+     */
+    static void fly(Minecraft minecraft, double seconds) {
+        if (!on()) {
+            return;
+        }
+        // Told from the keys' own events as well as asked of the window: a screen has the keyboard here.
+        double ahead = (Pressed.held(minecraft.options.keyUp) ? 1.0D : 0.0D)
+            - (Pressed.held(minecraft.options.keyDown) ? 1.0D : 0.0D);
+        double aside = (Pressed.held(minecraft.options.keyRight) ? 1.0D : 0.0D)
+            - (Pressed.held(minecraft.options.keyLeft) ? 1.0D : 0.0D);
+        double climb = (Pressed.held(minecraft.options.keyJump) ? 1.0D : 0.0D)
+            - (Pressed.held(minecraft.options.keyShift) ? 1.0D : 0.0D);
+        if (ahead == 0.0D && aside == 0.0D && climb == 0.0D) {
+            return;
+        }
+        Vec3 moved = new Vec3(0.0D, climb * CLIMB_A_SECOND * seconds, 0.0D);
+        if (ahead != 0.0D || aside != 0.0D) {
+            Vec3 forward = Vec3.directionFromRotation(0.0F, eye.getYRot());
+            Vec3 right = new Vec3(-forward.z, 0.0D, forward.x);
+            moved = moved.add(forward.scale(ahead).add(right.scale(aside)).normalize()
+                .scale(BLOCKS_A_SECOND * seconds));
+        }
+        place(eye.position().add(moved), eye.getYRot(), eye.getXRot());
+    }
+
+    /** Moves the camera along its own line of sight, nearer what it looks at or farther off. */
+    static void dolly(double notches) {
+        if (on()) {
+            place(eye.position().add(eye.getLookAngle().scale(notches * BLOCKS_A_NOTCH)), eye.getYRot(), eye.getXRot());
+        }
+    }
+
+    /** Brings the camera, turned as it is, to where the spot is in the middle of its view. */
+    static void lookAt(Vec3 spot) {
+        if (on()) {
+            place(spot.subtract(eye.getLookAngle().scale(STAND_OFF)), eye.getYRot(), eye.getXRot());
+        }
+    }
+
+    static void turn(double dragX, double dragY) {
+        if (on()) {
+            place(eye.position(), eye.getYRot() + (float) dragX * DEGREES_A_PIXEL,
+                Mth.clamp(eye.getXRot() + (float) dragY * DEGREES_A_PIXEL, -90.0F, 90.0F));
+        }
+    }
+
+    // Set down whole, with nothing left to ease in from: it is moved by the frame, not by the tick.
+    private static void place(Vec3 at, float yaw, float pitch) {
+        eye.moveTo(at.x, at.y, at.z, yaw, pitch);
+        eye.setOldPosAndRot();
+    }
+
+    // The game still draws for a player looking out of their own eyes: the hand, their HUD, the block in reach.
+
+    @SubscribeEvent
+    public static void onHand(RenderHandEvent event) {
+        if (on()) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onLayer(RenderGuiLayerEvent.Pre event) {
+        if (on() && BODY_HUD.contains(event.getName())) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onOutline(RenderHighlightEvent.Block event) {
+        if (on()) {
+            event.setCanceled(true);
+        }
+    }
+}
