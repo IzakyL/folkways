@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.front.api.ui.Tokens;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import net.minecraft.nbt.CompoundTag;
@@ -33,6 +34,8 @@ public final class PoolSets {
     public record Offered(ResourceLocation id, String detailKey, int... counts) {
     }
 
+    private Function<ResourceLocation, Optional<Component>> disabledReason = id -> Optional.empty();
+
     private final String kind;
     private final Function<Player, List<Offered>> offered;
     private final BiConsumer<Player, ResourceLocation> replace;
@@ -44,6 +47,11 @@ public final class PoolSets {
         this.kind = kind;
         this.offered = offered;
         this.replace = replace;
+    }
+
+    public PoolSets disabledReason(Function<ResourceLocation, Optional<Component>> reason) {
+        disabledReason = reason;
+        return this;
     }
 
     public UIElement build(Player player) {
@@ -84,6 +92,9 @@ public final class PoolSets {
                     press.style(style -> style.tooltips(
                         Component.translatable("folkways.pool.replace"),
                         Component.translatable(row.getString(DETAIL), counts)));
+                    Optional<Component> disabled = disabledReason.apply(id);
+                    press.setActive(disabled.isEmpty());
+                    disabled.ifPresent(reason -> press.style(style -> style.tooltips(reason)));
                     Tokens.name(press, "folkways.pool." + kind + ".replace." + Tokens.of(id));
                 }
             })

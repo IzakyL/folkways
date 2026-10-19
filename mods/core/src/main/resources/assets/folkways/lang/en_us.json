@@ -817,6 +817,7 @@
   "folkways.resident.look": "Look",
   "folkways.resident.look.change": "Change…",
   "folkways.looks.pick": "Pick a look",
+  "folkways.looks.requires_geckolib": "Requires GeckoLib. Install GeckoLib to use this model.",
   "folkways.looks.folder.folkways": "Built-in",
   "folkways.looks.folder.touhou_little_maid.maid": "Touhou Little Maid",
   "folkways.looks.folder.touhou_little_maid.maid.touhou_little_maid": "Touhou",

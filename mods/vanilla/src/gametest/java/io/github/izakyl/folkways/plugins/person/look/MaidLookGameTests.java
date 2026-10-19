@@ -1,10 +1,13 @@
 package io.github.izakyl.folkways.plugins.person.look;
 
+import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.front.api.ui.FolderPicker;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,6 +19,7 @@ import java.util.OptionalDouble;
 import java.util.Set;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -191,6 +195,46 @@ public final class MaidLookGameTests {
         helper.assertValueEqual(((ResidentLook.Model) wine.asLook().appearance()).walkAnimation(), "maid.fox.wine.walk",
             "a GeckoLib maid plays its own");
         helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void unavailableModelsCannotBeSelected(GameTestHelper helper) {
+        Component reason = Component.translatable("folkways.looks.requires_geckolib");
+        for (boolean ticked : List.of(false, true)) {
+            List<String> said = new ArrayList<>();
+            FolderPicker picker = new FolderPicker("test", ticked, (word, key) -> said.add(word + ":" + key));
+            picker.fill(List.of(
+                new FolderPicker.Leaf("model", "test:model", Component.literal("Model"), "model",
+                    Optional.of(reason)),
+                new FolderPicker.Leaf("skin", "test:skin", Component.literal("Skin"), "skin")));
+            UIElement model = element(picker.tree(), "model");
+            UIElement skin = element(picker.tree(), "skin");
+            helper.assertTrue(!model.isActive() && skin.isActive(),
+                "only the model requiring a missing dependency is disabled");
+            if (ticked) {
+                Toggle folder = (Toggle) element(picker.tree(), "test.tick.test");
+                helper.assertTrue(!folder.isActive(), "bulk selection cannot bypass a disabled model");
+                ((Toggle) model).setOn(true, true);
+                folder.setOn(true, true);
+                helper.assertTrue(said.isEmpty(), "disabled individual and bulk toggles send no choice");
+                ((Toggle) skin).setOn(true, true);
+                helper.assertValueEqual(said, List.of("on:skin"), "a skin remains selectable");
+            }
+        }
+        helper.succeed();
+    }
+
+    private static UIElement element(UIElement root, String id) {
+        if (id.equals(root.getId())) {
+            return root;
+        }
+        for (UIElement child : root.getChildren()) {
+            UIElement found = element(child, id);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
     }
 
     private static JsonObject geometryOf(JsonObject model, List<String> scripts, List<String> bones) {

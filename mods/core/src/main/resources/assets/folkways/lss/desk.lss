@@ -56,6 +56,14 @@
   text-color: #9a3324;
 }
 
+// A missing model dependency keeps a chosen look visibly disabled too.
+.folkways_desk button.__disabled__.folkways_chosen {
+  base-background: sprite(folkways:textures/gui/desk/button_disabled.png, 0, 0, 16, 16, 4, 4, 4, 4);
+}
+.folkways_desk button.__disabled__.folkways_chosen .__button_text__ {
+  text-color: #8f7f62;
+}
+
 // Ledger lines: rows of paper parted by faded rules
 .folkways_desk .folkways_list {
   background: color(#c4ad7e);

@@ -87,10 +87,17 @@ Starlark interpreter inside the Folkways Vanilla jar; none needs a separate inst
 | [Sable](https://modrinth.com/mod/sable) | Residents path onto and off Sable sub-levels, such as Create Aeronautics ships |
 | [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems | Golems join the roster as a second kind of resident and take trades like people |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+ | Residents can wear bedrock-format models instead of player skins |
-| [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib | Its built-in maid models become looks a colony can switch on, one by one or a whole pack at once. They are read from the installed mod and never copied or sent |
+| [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib | Its built-in and installed add-on maid models become looks a colony can switch on, one by one or a whole pack at once. Each client reads its own installed packs; pack assets are not sent over the network |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+ | The Colony Book aims along its third-person crosshair |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi) | Item filters in the colony panel open the recipe viewer's ingredient list |
 | [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+ | A colony's founder can hand it to their party: from then on the party's members keep the colony and its owner holds the founder's rights |
+
+Touhou Little Maid add-ons load from ZIP files or pack folders directly under
+`<gamedir>/tlm_custom_pack/`; ZIP files do not need extracting. Install the same packs
+on the server and each client. After changing packs, run `/reload` on the server and
+reload client resources with F3+T, or restart the game. Files in
+`config/touhou_little_maid/file/` are download caches and do not count as installed packs.
+Model looks still require GeckoLib; without it they are disabled with a dependency tooltip.
 
 ## Getting started
 

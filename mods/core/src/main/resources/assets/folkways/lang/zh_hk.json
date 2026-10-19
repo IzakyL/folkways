@@ -817,6 +817,7 @@
   "folkways.resident.look": "模型",
   "folkways.resident.look.change": "更換…",
   "folkways.looks.pick": "選擇模型",
+  "folkways.looks.requires_geckolib": "需要 GeckoLib。安裝 GeckoLib 後即可使用此模型。",
   "folkways.looks.folder.folkways": "內置",
   "folkways.looks.folder.touhou_little_maid.maid": "車萬女僕",
   "folkways.looks.folder.touhou_little_maid.maid.touhou_little_maid": "東方",

@@ -17,6 +17,7 @@ import io.github.izakyl.folkways.front.api.ui.Tokens;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -81,6 +82,10 @@ public final class LookPicker {
         side.addChildren(box, named, filed);
     }
 
+    public static Optional<Component> disabledReason(List<ResourceLocation> looks) {
+        return looks.stream().flatMap(look -> LookPreview.disabledReason(look).stream()).findFirst();
+    }
+
     public UIElement tree() {
         return picker.tree();
     }
@@ -112,7 +117,7 @@ public final class LookPicker {
     public void fill() {
         List<ResourceLocation> sorted = LookPreview.known().stream().sorted().toList();
         picker.fill(sorted.stream().map(look -> new FolderPicker.Leaf(look.toString(), look.toString(),
-            nameOf(look), token + ".look." + Tokens.of(look))).toList());
+            nameOf(look), token + ".look." + Tokens.of(look), LookPreview.disabledReason(look))).toList());
         if (previewed == null || !sorted.contains(previewed)) {
             show(sorted.isEmpty() ? null : sorted.getFirst());
         }
