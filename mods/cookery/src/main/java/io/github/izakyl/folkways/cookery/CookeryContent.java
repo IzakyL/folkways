@@ -23,6 +23,7 @@ public final class CookeryContent {
     public static final ResourceLocation ID = id("cookery");
     public static final ResourceLocation STATION = id("kitchen");
     public static final ResourceLocation COMPOST = id("compost");
+    public static final ResourceLocation STOVE = id("stove");
     public static final ResourceLocation PREPARING = id("preparing_food");
     public static final ResourceLocation CHOPPING = id("chopping_food");
     public static final ResourceLocation COOKING = id("cooking_food");
@@ -34,7 +35,7 @@ public final class CookeryContent {
     private CookeryContent() {
     }
 
-    public static List<ResourceLocation> stations() { return List.of(STATION, COMPOST); }
+    public static List<ResourceLocation> stations() { return List.of(STATION, COMPOST, STOVE); }
 
     public static boolean station(BlockState state) {
         return KitchenStations.find(state).isPresent();
@@ -47,8 +48,8 @@ public final class CookeryContent {
         io.github.izakyl.folkways.cookery.farming.CookeryCrops.register();
         io.github.izakyl.folkways.cookery.farming.CookerySickle.register();
         io.github.izakyl.folkways.cookery.gear.CookeryGear.register(
-            (colony, body) -> Fronts.of(colony).settings(ID).flag("wear_hat"),
-            (colony, body) -> Fronts.of(colony).settings(ID).flag("wear_farmer_armor"),
+            colony -> Fronts.of(colony).settings(ID).flag("wear_hat"),
+            colony -> Fronts.of(colony).settings(ID).flag("wear_farmer_armor"),
             (colony, item) -> Fronts.of(colony).settings(ID).items("clothing")
                 .filter(items -> Goods.matches(item.getDefaultInstance(), items)).isPresent());
         event.urges(ID, io.github.izakyl.folkways.cookery.millstone.MillstoneDrive::urges);
@@ -67,6 +68,7 @@ public final class CookeryContent {
             scope.share(state);
             scope.watch(STATION, state);
             scope.watch(COMPOST, state);
+            scope.watch(STOVE, state);
             scope.tick(state::tick);
             scope.closed(state::closed);
         });
@@ -76,9 +78,12 @@ public final class CookeryContent {
         event.facing(ID, colony -> colony.service(ID, CookeryPresence.class)
             .map(state -> (io.github.izakyl.folkways.front.api.Facing) state));
         event.enrollment(ID, new Enrollment(List.of(
-            new Delegation(STATION, new Shape.Block(state -> !state.is(net.minecraft.world.level.block.Blocks.COMPOSTER) && station(state), KitchenStations::anchor)),
+            new Delegation(STATION, new Shape.Block(state -> !state.is(net.minecraft.world.level.block.Blocks.COMPOSTER)
+                && !state.is(com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks.STOVE.get()) && station(state), KitchenStations::anchor)),
             new Delegation(COMPOST, new Shape.Point(state -> state.is(net.minecraft.world.level.block.Blocks.COMPOSTER)),
                 ResourceLocation.withDefaultNamespace("composter")),
+            new Delegation(STOVE, new Shape.Point(state -> state.is(com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks.STOVE.get())),
+                ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "stove")),
             new Delegation(SeedPresence.GRASS, new Shape.Volume(io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig.maxFarmCells()),
                 new Schema(List.of(new Schema.Setting.Flag(SeedPresence.RESTORE_GRASS,
                     "folkways.settings.restore_grass", ResourceLocation.withDefaultNamespace("bone_meal"), true))),

@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.cookery.stove;
 
+import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Stances;
@@ -17,6 +18,13 @@ public final class StoveStation implements KitchenStation {
                                 KitchenBookings bookings, Runnable changed) {
         return StoveWorkshops.recovery(colony, level, at, stances, bookings, changed);
     }
+    public List<Grown> activeRecovery(UUID colony, ServerLevel level, WorldPos at, KitchenBookings bookings) {
+        return StoveWorkshops.active(colony, level, at, bookings);
+    }
+    public void release(UUID colony, ServerLevel level, WorldPos at) {
+        StoveWorkshops.release(colony, level, at);
+    }
+    public void stop(UUID colony, Closing why) { StoveWorkshops.stop(colony, why); }
     public Component status(ServerLevel level, WorldPos at) {
         return Component.translatable("folkways.page.cookery." +
             (level.getBlockState(at.block(level)).getValue(com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock.LIT)

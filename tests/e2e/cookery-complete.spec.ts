@@ -127,6 +127,7 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
   test.setTimeout(BUDGET.heavy);
   const runId = newRunId();
   const evidence: Record<string, any> = { scenario, stage: stage.kind, whitelist: [...scenario.food, ...MATERIALS], samples: [], workGraphs: {} };
+  const manufactured = [...scenario.intermediates, scenario.dish, K + "iron_kitchen_knife", K + "kitchen_shovel", K + "stockpot_lid", "minecraft:bowl"];
   const knownGraphs = new Map<string, string>();
   const samplePhysical = async (server: MinecraftServer, layout: ReturnType<typeof kitchen>) => {
     const sample = await physical(server, stage, layout);
@@ -184,8 +185,19 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
     evidence.rackMark = await markSouthRack(server, client, name, cells.rack, stage);
     evidence.initial = await samplePhysical(server, cells);
     expect(evidence.initial.tools, "three crafters start without a knife or spatula").toEqual([]);
-    const before = await world.block(server, stage.at(cells.source), { nbt: true });
-    for (const ingredient of scenario.food) expect(Number((before.nbt as any).generated[ingredient] ?? 0), "no food ingredients were generated before the food order").toBe(0);
+    // Autonomous seed reserves may already draw wheat seeds or turn green chili into chili seeds.
+    // Only base inputs may come from the supply box; the ordered chain must start without its products.
+    evidence.generatedBefore = (evidence.initial.state.source.nbt as any).generated as Record<string, number | string>;
+    for (const item of Object.keys(evidence.generatedBefore)) expect(evidence.whitelist, "every initial supply draw is a declared base input").toContain(item);
+    const initialStacks = collectStacks([
+      ...Object.values(evidence.initial.state).map((block: any) => block.nbt),
+      ...evidence.initial.residents.map((resident: any) => resident.pack),
+      ...evidence.initial.drops.map((drop: any) => drop.stack),
+    ]);
+    for (const item of manufactured) {
+      expect(Number(evidence.generatedBefore[item] ?? 0), "no intermediate, dish, tool or container was supplied before the order: " + item).toBe(0);
+      expect(initialStacks.filter(stack => stack.id === item), "the order starts without a ready-made intermediate, dish, tool or container: " + item).toEqual([]);
+    }
     await world.command(server, "gamemode survival " + name);
     evidence.order = await deliverOrderViaSitePanel(server, client, name, cells.target, scenario.dish, 1, stage);
     await screen.dismiss(client);
@@ -202,12 +214,13 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
     const source = await world.block(server, stage.at(cells.source), { nbt: true });
     const generated = (source.nbt as any).generated as Record<string, number | string>;
     evidence.generated = generated;
+    evidence.generatedDuringOrder = Object.fromEntries(Object.entries(generated).map(([item, count]) => [item, Number(count) - Number(evidence.generatedBefore[item] ?? 0)]));
     for (const item of Object.keys(generated)) expect(evidence.whitelist, "every generated item is a declared base input").toContain(item);
-    for (const item of [...scenario.intermediates, scenario.dish, K + "iron_kitchen_knife", K + "kitchen_shovel", K + "stockpot_lid", "minecraft:bowl"]) {
-      expect(generated[item] ?? 0, "intermediates, tools and containers are actually made: " + item).toBe(0);
+    for (const item of manufactured) {
+      expect(Number(generated[item] ?? 0), "intermediates, tools and containers are actually made: " + item).toBe(0);
     }
     if (scenario.dish !== K + "baozi_plate") expect(Number(generated["minecraft:brick"] ?? 0), "residents actually craft the native stockpot lid from its brick ingredient").toBeGreaterThan(0);
-    for (const item of scenario.food) expect(Number(generated[item] ?? 0), "the final chain spends its required base input " + item).toBeGreaterThan(0);
+    for (const item of scenario.food) expect(Number(generated[item] ?? 0), "the supply box provides the required base input " + item).toBeGreaterThan(0);
     expect(evidence.final.drops, "all outputs and reusable tools are returned to colony logistics").toEqual([]);
     const expectedTool = scenario.knife ? "kitchen_knife" : scenario.spatula ? "kitchen_shovel" : undefined;
     if (expectedTool) {

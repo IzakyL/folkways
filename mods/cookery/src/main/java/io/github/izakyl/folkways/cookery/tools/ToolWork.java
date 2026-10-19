@@ -96,6 +96,8 @@ final class ToolWork implements Node, Workload.Within {
 
     @Override
     public boolean ready(ServerLevel level) {
+        // Completed native work only has its physical returns and settlement left.
+        if (workDone) return true;
         if (!original.ready(level)) {
             return false;
         }

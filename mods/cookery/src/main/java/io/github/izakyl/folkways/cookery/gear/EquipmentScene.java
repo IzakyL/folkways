@@ -55,6 +55,7 @@ public final class EquipmentScene {
         scene.idle(110);
 
         farmer.walkTo(scene, util.vector().topOf(2, 0, 1));
+        farmer.lookAt(scene, util.vector().centerOf(1, 2, 1));
         scene.overlay().showText(100).text("Knives, spatulas and sickles are shared colony tools. One missing tool may be made from raw materials; a tool already borrowed makes other work wait. Return it to an available rack or warehouse after the task. Maintain orders can provide more.")
             .pointAt(util.vector().topOf(1, 2, 1)).placeNearTarget().attachKeyFrame();
         scene.idle(50);

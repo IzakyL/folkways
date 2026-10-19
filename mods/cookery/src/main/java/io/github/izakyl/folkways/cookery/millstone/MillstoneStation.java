@@ -97,7 +97,7 @@ public final class MillstoneStation implements KitchenStation {
     }
     public Optional<Workshop> freeze(UUID key, UUID colony, ServerLevel level, WorldPos at,
                                      Stances stances, KitchenBookings bookings, Runnable changed) {
-        if (mill(level, at).filter(mill -> !mill.hasEntity() && mill.getInput().isEmpty()
+        if (mill(level, at).filter(mill -> (!mill.hasEntity() || MillstoneDrive.external(level, mill)) && mill.getInput().isEmpty()
                 && mill.isOutputEmpty() && MillstoneBatch.read(mill, level).isEmpty()).isEmpty()) {
             return Optional.empty();
         }

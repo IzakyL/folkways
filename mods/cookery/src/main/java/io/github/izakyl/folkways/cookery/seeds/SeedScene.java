@@ -46,6 +46,7 @@ public final class SeedScene {
         scene.idle(50);
         scene.world().setBlock(util.grid().at(7, 0, 11), Blocks.FARMLAND.defaultBlockState(), false);
         scene.world().setBlock(util.grid().at(7, 1, 11), ModBlocks.TOMATO_CROP.get().defaultBlockState(), false);
+        farmer.lookAt(scene, util.vector().centerOf(7, 1, 11));
         farmer.hold(scene, ItemStack.EMPTY);
         scene.idle(60);
 
@@ -55,6 +56,7 @@ public final class SeedScene {
             .pointAt(util.vector().topOf(chest)).placeNearTarget().attachKeyFrame();
         scene.idle(120);
         farmer.walkTo(scene, util.vector().topOf(11, 0, 12));
+        farmer.lookAt(scene, util.vector().centerOf(compost));
         scene.world().setBlock(compost, Blocks.COMPOSTER.defaultBlockState().setValue(ComposterBlock.LEVEL, 1), false);
         farmer.hold(scene, new ItemStack(ModItems.TOMATO_SEED.get(), 3));
         scene.overlay().showText(100).text("Mark a composter as a kitchen station. Before every input the seed allowance is checked again. Native composting can spend a seed without raising its level; a failed roll does not return that seed.")

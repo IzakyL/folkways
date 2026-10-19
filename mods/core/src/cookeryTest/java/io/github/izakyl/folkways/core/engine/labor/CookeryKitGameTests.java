@@ -90,25 +90,32 @@ public final class CookeryKitGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void wornClothingSatisfiesDeliveryWithoutBecomingHandEquipmentOrASpare(GameTestHelper helper) {
+    public static void unusedClothingIsCargoAndOnlyAnActiveTaskProtectsItsPhysicalLoan(GameTestHelper helper) {
         var colony = Colonies.mint(helper.getLevel().getServer());
         var body = PersonBody.RESIDENT.get().create(helper.getLevel());
         var kits = new Kits();
-        body.pack().setItem(0, new ItemStack(ModItems.STRAW_HAT.get()));
+        UUID loan = UUID.randomUUID();
+        ItemStack hat = new ItemStack(ModItems.STRAW_HAT.get());
+        hat.set(DataComponents.CUSTOM_NAME, Component.literal("temporary physical loan"));
+        body.pack().setItem(0, hat);
         try {
-            Kit waiting = Kit.of(colony, body);
-            helper.assertTrue(waiting.cargoIn(body).isEmpty(), "an arrived hat is kept until it can move into its real slot");
-            helper.assertTrue(waiting.inPack(body).isEmpty(), "clothing is not represented as a hand tool");
+            helper.assertTrue(ItemStack.matches(Kit.of(colony, body).cargoIn(body).getFirst(), hat),
+                "unused clothing stays real cargo for shared storage, not a standing career kit");
+            helper.assertTrue(Kit.of(colony, body).inPack(body).isEmpty(), "an ordinary idle hat is not a hand tool");
+            TaskTools.keep(loan, body.id(), stack -> ItemStack.isSameItemSameComponents(stack, hat));
+            helper.assertTrue(Kit.of(colony, body).cargoIn(body).isEmpty(), "only an active physical task loan is protected from ordinary unloading");
+            helper.assertTrue(ItemStack.matches(Kit.of(colony, body).inPack(body).getFirst(), hat), "the protected loan keeps its exact components");
             Equipment.reconcile(colony, body);
-            helper.assertTrue(body.getItemBySlot(EquipmentSlot.HEAD).is(TagMod.STRAW_HAT), "the physical hat is actually worn");
-            List<Message> requests = new ArrayList<>();
-            kits.read(colony, body, requests::add);
+            helper.assertTrue(body.getItemBySlot(EquipmentSlot.HEAD).isEmpty(), "the career kit does not turn a cargo hat into permanent native equipment");
+            TaskTools.release(loan);
+            helper.assertTrue(ItemStack.matches(Kit.of(colony, body).cargoIn(body).getFirst(), hat), "after task release the one hat is cargo again");
+            List<Message> requests = new ArrayList<>(); kits.read(colony, body, requests::add);
             helper.assertFalse(requests.stream().filter(message -> message instanceof Message.Submitted)
                 .map(message -> (Message.Submitted) message).flatMap(message -> message.work().nodes().stream())
                 .filter(node -> node instanceof Delivery).map(node -> (Delivery) node)
                 .anyMatch(delivery -> Goods.overlap(delivery.goods().spec(), ItemSpec.of(TagMod.STRAW_HAT))),
-                "the worn hat prevents a duplicate spare-hat delivery");
-        } finally { Equipment.release(body); body.discard(); colony.raze(); }
+                "the career survey never requests a permanent spare hat");
+        } finally { TaskTools.release(loan); body.discard(); colony.raze(); }
         helper.succeed();
     }
 }

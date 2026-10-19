@@ -94,7 +94,7 @@ final class MillstoneWork implements Node, Workload.Within {
                 .filter(found -> found.id().equals(batch) && found.colony().equals(colony)).isEmpty()) {
             return Optional.of(CookeryRefusal.STATION_CHANGED);
         }
-        if (!loaded && phase == Phase.LOAD && bookings.first(at, id()) && (mill.get().hasEntity()
+        if (!loaded && phase == Phase.LOAD && bookings.first(at, id()) && (mill.get().hasEntity() && !MillstoneDrive.external(level, mill.get())
                 || !mill.get().getInput().isEmpty() || !mill.get().isOutputEmpty())) {
             return Optional.of(CookeryRefusal.STATION_BUSY);
         }
@@ -104,7 +104,7 @@ final class MillstoneWork implements Node, Workload.Within {
         refusal(level).ifPresent(why -> failed = why);
         if (failed != null || phase == Phase.DONE) { return LEAVE; }
         if (!bookings.first(at, id())) { return WAIT; }
-        return new Turn.Piece(phase == Phase.DRIVE ? new Drive() : new Action(phase));
+        return new Turn.Piece(phase == Phase.DRIVE ? new Drive() : new Action(level, phase));
     }
     public void ended(ServerLevel level, Node piece, Ending how) {
         if (how instanceof Ending.Failed failure) { failed = failure.why(); }
@@ -128,8 +128,9 @@ final class MillstoneWork implements Node, Workload.Within {
             .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
             .filter(feet -> Reach.withinReach(feet, at.block(level)) && MillstoneStation.inSight(level, feet, at.block(level))).isPresent();
     }
-    private NodeSpec actionSpec(UUID id, Workload workload, boolean load) {
-        return NodeSpec.of(id, CookeryContent.ID, new WorkSite.AtBlock(at), load ? stances : Stances.WHEREVER, workload)
+    private NodeSpec actionSpec(ServerLevel level, UUID id, Workload workload, boolean load) {
+        Stances working = load ? stances : new MillstoneStation().stances(level, at).orElse(stances);
+        return NodeSpec.of(id, CookeryContent.ID, new WorkSite.AtBlock(at), working, workload)
             .needs(load ? List.of(new Need(job.input(), count, true)) : List.of())
             .gives(load ? List.of() : job.amounts(count, false)).leaves(load ? List.of() : job.amounts(count, true))
             .vocation(WaresContent.trade()).gesture(WorkGesture.SWING).focus(at.cell())
@@ -138,9 +139,9 @@ final class MillstoneWork implements Node, Workload.Within {
     private class Action implements Node {
         final Phase kind;
         private final NodeSpec spec;
-        Action(Phase kind) {
+        Action(ServerLevel level, Phase kind) {
             this.kind = kind;
-            spec = actionSpec(UUID.randomUUID(), Workload.Once.of(20), kind == Phase.LOAD);
+            spec = actionSpec(level, UUID.randomUUID(), Workload.Once.of(20), kind == Phase.LOAD);
         }
         public NodeSpec spec() { return spec; }
         public Optional<RefusalKind> refusal(ServerLevel level) { return MillstoneWork.this.refusal(level); }
@@ -162,7 +163,8 @@ final class MillstoneWork implements Node, Workload.Within {
                         || !recipe.get().id().equals(job.recipe())) {
                     return Outcome.failed(CookeryRefusal.RECIPE_CHANGED);
                 }
-                if (!MillstoneDrive.bind(colony, batch, level, at, who.body(), bookings, MillstoneWork.this.id(), generation)) {
+                if (!MillstoneDrive.external(level, mill)
+                        && !MillstoneDrive.bind(colony, batch, level, at, who.body(), bookings, MillstoneWork.this.id(), generation)) {
                     return Outcome.failed(CookeryRefusal.STATION_BUSY);
                 }
                 try {
@@ -185,7 +187,7 @@ final class MillstoneWork implements Node, Workload.Within {
                 return Outcome.done();
             }
             var owned = MillstoneBatch.read(mill, level).orElseThrow();
-            if (!owned.ready() || mill.hasEntity() || MillstoneDrive.exiting(who.body())) {
+            if (!owned.ready() || mill.hasEntity() && !MillstoneDrive.external(level, mill) || MillstoneDrive.exiting(who.body())) {
                 return Outcome.failed(CookeryRefusal.STATION_BUSY);
             }
             var before = mill.saveWithoutMetadata(level.registryAccess());

@@ -79,6 +79,10 @@ final class SupplyPresence implements Facing, Holding.Watch {
         published.clear();
     }
 
+    public boolean shows(ResourceLocation page) {
+        return !page.equals(SupplyContent.ID) || !colony.holdings(SupplyContent.SOURCE).isEmpty();
+    }
+
     public Optional<Board> board(ResourceLocation page, ColonyView view) {
         if (!page.equals(SupplyContent.ID)) return Optional.empty();
         List<Board.Row> rows = new ArrayList<>();

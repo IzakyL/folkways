@@ -45,8 +45,8 @@ public final class SeedSupport {
     public Set<Item> catalogue() { return CropSeeds.catalogue(server.overworld(), BlockPos.ZERO); }
 
     public boolean enabled() {
-        return loadedBodies().values().stream().anyMatch(body -> body.licences().of(FarmingContent.trade()).isPresent()
-            && body.mob().getItemBySlot(EquipmentSlot.HEAD).is(TagMod.STRAW_HAT));
+        return loadedBodies().values().stream().anyMatch(body ->
+            io.github.izakyl.folkways.cookery.gear.CookeryGear.permitsSeeds(colony, body));
     }
 
     private Map<UUID, Body> loadedBodies() {

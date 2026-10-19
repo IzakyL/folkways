@@ -108,6 +108,75 @@ for (const stage of twins()) test(stage.title("millstone interruption: release, 
   }
 });
 
+for (const stage of twins()) test(stage.title("animal millstone cooperation: native motor survives task cancellation and delivers the owned batch"), async ({}, testInfo) => {
+  test.setTimeout(BUDGET.heavy);
+  const runId = newRunId(); const evidence: Record<string, any> = { stage: stage.kind, samples: [], motor: "existing native cow" };
+  let pair: E2EPair | undefined; let cells: ReturnType<typeof layout> | undefined;
+  try {
+    pair = await launchPair({
+      config: "blockwright.toml#" + (stage.kind === "ground" ? "cookery" : "cookery-sable"),
+      server: { trace: tracePath("e2e", stage.name("animal-mill-server-" + runId)), instance: seededServer(stage.name("animal-mill-server-" + runId)) },
+      client: { trace: tracePath("e2e", stage.name("animal-mill-client-" + runId)), instance: stage.name("animal-mill-client-" + runId) },
+      snapshot: () => ({ containers: cells ? [stage.at(cells.supply), stage.at(cells.flour), stage.at(cells.mill)] : [], entityTypes: ["folkways:resident", "minecraft:cow", "minecraft:item"] }),
+    });
+    const { server, client } = pair; const player = await waitForGroundedPlayer(server);
+    const origin = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };
+    const box = foundingBox(origin); await stage.lay(server, box);
+    await world.command(server, "fill " + commandPos(stage.at({ ...box.min, y: origin.y - 1 })) + " " + commandPos(stage.at({ ...box.max, y: origin.y - 1 })) + " minecraft:smooth_stone");
+    evidence.founding = (await foundColonyFast(server, client, player.name, { origin, residentCount: 1, stage })).evidence;
+    for (const command of ["gamerule doDaylightCycle false", "gamerule doMobSpawning false", "difficulty peaceful", "time set day"]) await world.command(server, command);
+    cells = layout(origin); const block = (cell: Vec) => commandPos(stage.at(cell));
+    for (const chest of [cells.supply, cells.flour, cells.next]) await world.command(server, "setblock " + block(chest) + " minecraft:chest{Items:[]}");
+    const parts = [[-1,-1,"left_up"],[0,-1,"up"],[1,-1,"right_up"],[-1,0,"left_center"],[0,0,"center"],[1,0,"right_center"],[-1,1,"left_down"],[0,1,"down"],[1,1,"right_down"]] as const;
+    for (const [x, z, part] of parts) await world.command(server, "setblock " + block({ x: cells.mill.x + x, y: cells.mill.y, z: cells.mill.z + z }) + " " + K + "millstone[part=" + part + ",facing=north]");
+    await world.command(server, "item replace block " + block(cells.supply) + " container.0 with " + WHEAT + " 3");
+    evidence.cow = await runColonyTask(server, MILL_COW, { mill: stage.at(cells.mill) });
+    for (const at of [cells.supply, cells.flour, cells.mill]) await optInViaBook(server, client, player.name, at, "worksite", stage);
+    await world.command(server, "gamemode survival " + player.name);
+    evidence.initial = await read(server, stage, cells); expect(evidence.initial.boundUuid).toBe(evidence.cow.uuid);
+    expect(evidence.initial.residents).toHaveLength(1); const worker = evidence.initial.residents[0].uuid as string;
+    const priority = await vocationPriority(server, worker, CRAFTING); expect(priority).toBeGreaterThan(0);
+    evidence.order = await deliverOrderViaSitePanel(server, client, player.name, cells.flour, FLOUR, 3, stage); await screen.dismiss(client);
+    const grinding = await until(server, stage, cells, evidence, "animal accepted the actual colony input", state => state.boundUuid === evidence.cow.uuid && state.input?.id === WHEAT && state.input.count === 3, 4000, 5);
+    expect(grinding.progress, "the cancellation starts with a genuinely unfinished native batch").toBeGreaterThan(0);
+    expect(grinding.residents.every((resident: any) => !resident.bound), "a resident never replaces the native animal").toBe(true);
+    expect(total(grinding, WHEAT)).toBe(3); expect(total(grinding, FLOUR)).toBe(0);
+    evidence.disabled = await crafting(server, client, player.name, cells.mill, stage, worker, 0);
+    const ready = await until(server, stage, cells, evidence, "animal finishes while resident crafting is disabled", state => !state.input?.id && count(state.outputs, FLOUR) === 3, 2000, 10);
+    expect(ready.boundUuid).toBe(evidence.cow.uuid); expect(count(ready.chests.flour, FLOUR)).toBe(0);
+    await tick.sprint(server, 65); const held = await read(server, stage, cells); evidence.held = held;
+    expect(held.boundUuid).toBe(evidence.cow.uuid); expect(count(held.outputs, FLOUR)).toBe(3);
+    expect(held.drops, "owned output survives multiple native auto-ejection periods during cancellation").toEqual([]);
+    expect(total(held, WHEAT)).toBe(0); expect(total(held, FLOUR)).toBe(3);
+    evidence.restored = await crafting(server, client, player.name, cells.mill, stage, worker, priority);
+    const delivered = await until(server, stage, cells, evidence, "resident approaches and recovers the animal's owned native output", state => count(state.chests.flour, FLOUR) === 3, 4000, 10);
+    expect(delivered.boundUuid).toBe(evidence.cow.uuid); expect(delivered.residents.every((resident: any) => !resident.bound)).toBe(true);
+    expect(delivered.outputs).toEqual([]); expect(delivered.drops).toEqual([]); expect(total(delivered, WHEAT)).toBe(0); expect(total(delivered, FLOUR)).toBe(3);
+    // Deliver orders fill to a target: the first three flour remain in this chest, so ask for six.
+    await world.command(server, "item replace block " + block(cells.supply) + " container.0 with " + WHEAT + " 3");
+    const restocked = await read(server, stage, cells); evidence.restocked = restocked;
+    expect(total(restocked, WHEAT)).toBe(3); expect(total(restocked, FLOUR)).toBe(3);
+    evidence.secondOrder = await deliverOrderViaSitePanel(server, client, player.name, cells.flour, FLOUR, 6, stage); await screen.dismiss(client);
+    const secondGrinding = await until(server, stage, cells, evidence, "original animal accepts the next three wheat", state => state.boundUuid === evidence.cow.uuid
+      && state.input?.id === WHEAT && state.input.count === 3, 4000, 5);
+    evidence.secondGrinding = secondGrinding;
+    expect(secondGrinding.progress, "the second order starts another real native countdown").toBeGreaterThan(0);
+    expect(secondGrinding.residents.every((resident: any) => !resident.bound)).toBe(true);
+    expect(total(secondGrinding, WHEAT)).toBe(3); expect(total(secondGrinding, FLOUR)).toBe(3); expect(secondGrinding.drops).toEqual([]);
+    const second = await until(server, stage, cells, evidence, "second order through the original animal motor", state => count(state.chests.flour, FLOUR) === 6, 5000, 10);
+    evidence.second = second;
+    expect(second.boundUuid).toBe(evidence.cow.uuid); expect(second.residents.every((resident: any) => !resident.bound && !resident.exiting && resident.outside)).toBe(true);
+    expect(second.outputs).toEqual([]); expect(total(second, WHEAT)).toBe(0); expect(total(second, FLOUR)).toBe(6); expect(second.drops).toEqual([]);
+    await tick.sprint(server, 65); const stable = await read(server, stage, cells); evidence.stable = stable;
+    expect(stable.boundUuid).toBe(evidence.cow.uuid); expect(stable.outputs).toEqual([]); expect(stable.drops).toEqual([]);
+    expect(total(stable, WHEAT)).toBe(0); expect(total(stable, FLOUR)).toBe(6);
+  } catch (error) { pair?.failing(error); evidence.failure = String(error); throw error; }
+  finally {
+    if (pair && cells) evidence.atEnd = await read(pair.server, stage, cells).catch(error => ({ error: String(error) }));
+    const file = testInfo.outputPath("animal-millstone-cooperation-evidence.json"); writeFileSync(file, JSON.stringify(evidence, null, 2));
+    await testInfo.attach("animal-millstone-cooperation-evidence", { path: file, contentType: "application/json" }); await pair?.teardown(testInfo);
+  }
+});
 function layout(origin: Vec) {
   const at = (x: number, z: number) => ({ x: origin.x + x, y: origin.y, z: origin.z + z });
   return { supply: at(-7, 5), mill: at(-2, 9), flour: at(6, 6), next: at(8, -6) };
@@ -197,5 +266,24 @@ for(var entity:level.getAllEntities()){
 }
 var input=mill.getInput();return Map.of("bound",!bound.equals(Util.NIL_UUID),"boundUuid",bound.toString(),"progress",nbt.getInt("Progress"),
   "input",input.isEmpty()?Map.of():Map.of("id",BuiltInRegistries.ITEM.getKey(input.getItem()).toString(),"count",input.getCount()),"outputs",outputs,"residents",residents,"drops",drops);
+` }),
+});
+
+// Fixture setup only: one existing native animal motor. Actual loading, grinding, recovery and
+// delivery above are driven by the colony book and the real production scheduler.
+const MILL_COW = defineTask<Record<string, any>, Record<string, any>>({
+  name: "folkways.e2e.bind-native-millstone-cow", side: "server", timeoutMs: 20000,
+  source: javaTask({ imports: [
+    "com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.MillstoneBlockEntity",
+    "io.github.izakyl.folkways.core.api.terms.WorldPos", "io.github.izakyl.folkways.core.api.terms.WorldSpaces",
+    "net.minecraft.core.BlockPos", "net.minecraft.world.entity.EntityType",
+  ], body: `
+var level=ctx.server().overworld();var point=(Map<?,?>)Args.of(ctx).value("mill");
+var cell=new BlockPos(((Number)point.get("x")).intValue(),((Number)point.get("y")).intValue(),((Number)point.get("z")).intValue());
+if(!(level.getBlockEntity(cell) instanceof MillstoneBlockEntity mill))throw new IllegalStateException("missing native mill");
+var at=WorldPos.of(level,cell);var where=WorldSpaces.world(level,at.at(at.cell().south(2))).orElseThrow();
+var cow=EntityType.COW.create(level);cow.setNoAi(true);cow.setPersistenceRequired();cow.setPos(where);level.addFreshEntity(cow);mill.bindEntity(cow);
+if(!mill.isBoundTo(cow))throw new IllegalStateException("the native mill did not accept its fixture animal");
+return Map.of("uuid",cow.getUUID().toString(),"x",cow.getX(),"y",cow.getY(),"z",cow.getZ());
 ` }),
 });

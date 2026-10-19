@@ -7,6 +7,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.cookery.stove.HeatScene;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
@@ -31,8 +32,8 @@ public final class CookingPotsScene {
         BlockPos pot = util.grid().at(2, 2, 2);
         BlockPos stockpot = util.grid().at(6, 2, 2);
         BlockPos store = util.grid().at(4, 1, 6);
-        scene.world().setBlock(pot.below(), Blocks.CAMPFIRE.defaultBlockState(), false);
-        scene.world().setBlock(stockpot.below(), Blocks.CAMPFIRE.defaultBlockState(), false);
+        scene.world().setBlock(pot.below(), HeatScene.litStove(), false);
+        scene.world().setBlock(stockpot.below(), HeatScene.litStove(), false);
         scene.world().setBlock(pot, ModBlocks.POT.get().defaultBlockState(), false);
         scene.world().setBlock(stockpot, ModBlocks.STOCKPOT.get().defaultBlockState(), false);
         scene.world().setBlock(store, Blocks.CHEST.defaultBlockState(), false);
@@ -46,6 +47,7 @@ public final class CookingPotsScene {
         scene.idle(105);
         var resident = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(4, 0, 4), 180);
         resident.walkTo(scene, util.vector().topOf(2, 0, 3));
+        resident.lookAt(scene, util.vector().centerOf(pot));
         resident.hold(scene, new ItemStack(ModItems.OIL.get()));
         scene.world().modifyBlock(pot, state -> state.setValue(PotBlock.HAS_OIL, true).setValue(PotBlock.SHOW_OIL, true), false);
         scene.idle(20);
@@ -68,6 +70,7 @@ public final class CookingPotsScene {
         scene.idle(120);
         resident.hold(scene, ItemStack.EMPTY);
         resident.walkTo(scene, util.vector().topOf(6, 0, 3));
+        resident.lookAt(scene, util.vector().centerOf(stockpot));
         resident.hold(scene, new ItemStack(Items.WATER_BUCKET));
         scene.idle(20);
         resident.hold(scene, new ItemStack(ModItems.RICE_SEED.get(), 3));
@@ -90,6 +93,7 @@ public final class CookingPotsScene {
             .pointAt(util.vector().topOf(store)).placeNearTarget().attachKeyFrame();
         scene.idle(110);
         resident.walkTo(scene, util.vector().topOf(2, 0, 3));
+        resident.lookAt(scene, util.vector().centerOf(pot));
         resident.hold(scene, FoodBiteRegistry.getItem(FoodBiteRegistry.SUSPICIOUS_STIR_FRY).getDefaultInstance());
         scene.overlay().showOutline(PonderPalette.RED, pot, util.select().position(pot), 150);
         scene.overlay().showText(150).text("Normal orders use matching native recipes. Only an explicit Suspicious Stir-Fry or Dark Cuisine order chooses unmatched ingredients. Suspicious Stir-Fry is served after cooking; only a Dark Cuisine order waits for the real burnt state. An accidentally burnt normal dish does not complete its original order.")

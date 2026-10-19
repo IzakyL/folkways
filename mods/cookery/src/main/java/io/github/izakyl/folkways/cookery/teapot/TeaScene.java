@@ -5,6 +5,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.registry.TeacupRegistry;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.cookery.stove.HeatScene;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
@@ -25,23 +26,26 @@ public final class TeaScene {
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
         scene.title("cookery_teapot", "Brewing tea: a real bucket, a tea bag and twelve cups");
         PonderScenery.openWorld(scene, util, 7); PonderScenery.grassGround(scene, util, 7);
-        BlockPos pot = util.grid().at(3, 1, 3); BlockPos cup = pot.east(); BlockPos store = util.grid().at(1, 1, 1);
-        scene.world().setBlock(pot.below(), Blocks.MAGMA_BLOCK.defaultBlockState(), false);
+        BlockPos pot = util.grid().at(3, 2, 3); BlockPos cup = pot.east(); BlockPos store = util.grid().at(1, 1, 1);
+        scene.world().setBlock(pot.below(), HeatScene.litStove(), false);
         scene.world().setBlock(pot, ModBlocks.TEAPOT.get().defaultBlockState(), false);
+        scene.world().setBlock(cup.below(), Blocks.SMOOTH_STONE.defaultBlockState(), false);
         scene.world().setBlock(store, Blocks.CHEST.defaultBlockState(), false);
-        scene.world().showSection(util.select().fromTo(0, 0, 0, 6, 2, 6), Direction.DOWN); scene.idle(15);
+        scene.world().showSection(util.select().fromTo(0, 0, 0, 6, 3, 6), Direction.DOWN); scene.idle(15);
         ItemStack book = PonderScenery.book(Shape.Gesture.POINT);
         scene.overlay().showControls(util.vector().topOf(pot), Pointing.DOWN, 60).leftClick().withItem(book);
         scene.overlay().showOutline(PonderPalette.GREEN, pot, util.select().position(pot), 80);
         scene.overlay().showText(95).text("Mark a teapot and order the finished tea. Each native recipe brews twelve portions, so the plan also supplies twelve real empty cups and leaves an accessible place to serve them.")
             .pointAt(util.vector().topOf(pot)).placeNearTarget().attachKeyFrame(); scene.idle(105);
-        var resident = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(3, 0, 5), 90);
+        var resident = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(3, 0, 5), 180);
+        resident.lookAt(scene, util.vector().centerOf(pot));
         resident.hold(scene, new ItemStack(Items.WATER_BUCKET));
         scene.overlay().showText(95).text("Native filling transfers a real bucket of the recipe's fluid and returns its empty container. Water teas and milk tea use their actual different fluids; the pot is not filled by changing a display value.")
             .pointAt(util.vector().topOf(pot)).placeNearTarget().attachKeyFrame(); scene.idle(105);
         resident.hold(scene, new ItemStack(ModItems.BARLEY_TEA_BAG.get()));
         scene.overlay().showText(100).text("The actual ingredient then enters the pot. Its native grace period and brewing timer both require real heat. Removing heat pauses the same accepted batch, and reload does not charge another bag or bucket.")
             .pointAt(util.vector().centerOf(pot.below())).placeNearTarget().attachKeyFrame(); scene.idle(110);
+        resident.lookAt(scene, util.vector().centerOf(cup));
         resident.hold(scene, new ItemStack(ModItems.TEAPOT.get()));
         scene.world().setBlock(pot, Blocks.AIR.defaultBlockState(), false);
         scene.world().setBlock(cup, ModBlocks.EMPTY_CUP.get().defaultBlockState(), false);
@@ -59,6 +63,7 @@ public final class TeaScene {
         scene.overlay().showText(95).text("The one real, now-empty pot returns to its original station. The twelve filled cups and the empty fluid bucket enter logistics once; neither a duplicate pot nor twelve leftover empty cups are created.")
             .pointAt(util.vector().topOf(store)).placeNearTarget().attachKeyFrame(); scene.idle(105);
         resident.walkTo(scene, util.vector().topOf(3, 0, 5));
+        resident.lookAt(scene, util.vector().centerOf(pot));
         resident.hold(scene, TeacupRegistry.getItem(TeacupRegistry.MYSTERY_TEA).getDefaultInstance().copyWithCount(4));
         scene.overlay().showOutline(PonderPalette.RED, pot, util.select().position(pot), 145);
         scene.overlay().showText(145).text("Normal tea orders use matching native recipes. Only an explicit Mystery Tea order brews an unmatched ingredient: 200 ticks of input waiting, then 2,400 ticks of native brewing with heat. It yields four real cups instead of twelve, so prepare four empty cups.")

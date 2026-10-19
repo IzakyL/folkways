@@ -14,12 +14,18 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
 @OnlyIn(Dist.CLIENT)
 public final class HeatScene {
     private HeatScene() { }
+    public static BlockState litStove() {
+        return ModBlocks.STOVE.get().defaultBlockState().setValue(StoveBlock.FACING, Direction.SOUTH)
+            .setValue(StoveBlock.LIT, true);
+    }
+
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
         scene.title("cookery_heat", "Kitchen heat: light, shelter and relight");
         PonderScenery.openWorld(scene, util, 7);
@@ -41,6 +47,7 @@ public final class HeatScene {
         var resident = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(1, 0, 5), 180);
         resident.hold(scene, new ItemStack(Items.FLINT_AND_STEEL));
         resident.walkTo(scene, util.vector().topOf(2, 0, 4));
+        resident.lookAt(scene, util.vector().centerOf(stove));
         scene.overlay().showControls(util.vector().centerOf(stove), Pointing.UP, 50).rightClick().withItem(new ItemStack(Items.FLINT_AND_STEEL));
         scene.world().modifyBlock(stove, state -> state.setValue(StoveBlock.LIT, true), false);
         scene.overlay().showText(90).text("Lighting spends one flint-and-steel durability, or one fire charge. A native stove keeps burning without a coal slot or repeated fuel deliveries.")
@@ -52,6 +59,7 @@ public final class HeatScene {
         scene.idle(100);
         scene.world().modifyBlock(stove, state -> state.setValue(StoveBlock.LIT, false), false);
         scene.world().setBlock(util.grid().at(2, 4, 3), Blocks.WATER.defaultBlockState(), false);
+        scene.world().showSection(util.select().position(util.grid().at(2, 4, 3)), Direction.DOWN);
         scene.overlay().showText(90).text("Rain or water can put the stove out. Residents wait for a dry, reachable stove instead of wasting ignition items repeatedly.")
             .pointAt(util.vector().topOf(stove)).placeNearTarget().attachKeyFrame();
         scene.idle(100);

@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.front.ui.screen;
 
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
 import io.github.izakyl.folkways.front.api.ui.RegisteringUi;
@@ -45,6 +47,15 @@ public final class PageKinds {
             pages.addAll(enrolled.pages());
         }
         return List.copyOf(pages);
+    }
+
+    public static boolean shows(Colony colony, ResourceLocation page) {
+        for (var enrolled : Enrollments.all().entrySet()) {
+            if (enrolled.getValue().pages().stream().anyMatch(kind -> kind.id().equals(page))) {
+                return Facing.of(colony, enrolled.getKey()).map(facing -> facing.shows(page)).orElse(true);
+            }
+        }
+        return true;
     }
 
     public static void verify() {

@@ -305,6 +305,7 @@ public final class ColonyShell
             return window;
         };
 
+        Map<ResourceLocation, UIElement> entriesByPage = new LinkedHashMap<>();
         List<PageKind> listed = new java.util.ArrayList<>(PageKinds.all());
         listed.removeAll(PageKinds.TRAILING);
         listed.addAll(PageKinds.TRAILING);
@@ -315,10 +316,13 @@ public final class ColonyShell
             pane.addChildren(page);
             UIElement entries = PageKinds.TRAILING.contains(kind) ? preferences
                 : PageKinds.CORE.contains(kind) ? coreNav : navList;
-            entries.addChildren(entry(kind, marks, () -> {
+            UIElement navigation = entry(kind, marks, () -> {
                 show(pages, marks, kind.id());
                 fold.close();
-            }));
+            });
+            navigation.setDisplay(PageKinds.CORE.contains(kind));
+            entriesByPage.put(kind.id(), navigation);
+            entries.addChildren(navigation);
         }
         mark(marks, listed.get(0).id());
         navList.setDisplay(navList.getChildren().size() > 1);
@@ -384,6 +388,19 @@ public final class ColonyShell
         opened = Map.copyOf(panes);
 
         UIElement root = desk.root();
+        root.addSyncValue(DataBindingBuilder.stringS2C(() -> Pages.colonyOf(player)
+            .map(colony -> listed.stream().filter(kind -> PageKinds.shows(colony, kind.id()))
+                .map(kind -> kind.id().toString()).collect(java.util.stream.Collectors.joining("|")))
+            .orElse(""))
+            .onSyncReceived(value -> {
+                var visible = java.util.Arrays.asList(value.split("\\|"));
+                entriesByPage.forEach((id, navigation) -> navigation.setDisplay(visible.contains(id.toString())));
+                boolean hidden = pages.entrySet().stream()
+                    .anyMatch(entry -> entry.getValue().isDisplayed() && !visible.contains(entry.getKey().toString()));
+                if (hidden) show(pages, marks, PageKinds.CITIZENS.id());
+                navList.setDisplay(listed.stream().filter(kind -> !PageKinds.CORE.contains(kind)
+                    && !PageKinds.TRAILING.contains(kind) && visible.contains(kind.id().toString())).count() > 0);
+            }).build().getSyncValue());
         root.addSyncValue(DataBindingBuilder.boolS2C(() -> Pages.colonyOf(player).isPresent())
             .onSyncReceived(kept -> {
                 settled[0] = kept;

@@ -128,6 +128,14 @@ final class ToolStock {
                         && loan.get().phase() == KitchenTools.Phase.BORROWED
                         ? KitchenTools.Whereabouts.BORROWED : KitchenTools.Whereabouts.IN_TRANSIT));
                 }
+                // A borrowed garment occupies its real native armor slot, not an invisible pack copy.
+                for (KitchenTools.Lease lease : loans) {
+                    ItemStack worn = LoanClothing.held(borrowed.apply(lease).orElse(ItemStack.EMPTY), body.get().mob(), lease);
+                    if (!worn.isEmpty() && !seenLoans.contains(lease.id())) {
+                        carried.add(new KitchenTools.Tool(lease.tool(), worn.copyWithCount(1), lease.phase() == KitchenTools.Phase.BORROWED
+                            ? KitchenTools.Whereabouts.BORROWED : KitchenTools.Whereabouts.IN_TRANSIT));
+                    }
+                }
                 lastCarried.put(resident.id(), List.copyOf(carried));
             }
             lastCarried.getOrDefault(resident.id(), List.of()).stream()

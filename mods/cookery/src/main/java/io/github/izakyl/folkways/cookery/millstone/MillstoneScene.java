@@ -17,6 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -24,6 +25,19 @@ import net.neoforged.api.distmarker.OnlyIn;
 @OnlyIn(Dist.CLIENT)
 public final class MillstoneScene {
     private MillstoneScene() { }
+    // The native motor follows (0, 0, 2).yRot(angle) and faces -angle - 90 degrees.
+    // The unbound scene renderer reads cacheRot directly, so advance both by the same angle each frame.
+    public static void drive(SceneBuilder scene, BlockPos mill, PonderScenery.Body resident, float start, int ticks) {
+        Vec3 center = Vec3.atBottomCenterOf(mill);
+        for (int tick = 1; tick <= ticks; tick++) {
+            float angle = start + 360.0F * tick / ticks;
+            double radians = Math.toRadians(angle);
+            scene.world().modifyBlockEntity(mill, MillstoneBlockEntity.class, tile -> tile.setCacheRot(angle));
+            resident.moveTo(scene, center.add(2 * Math.sin(radians), 0, 2 * Math.cos(radians)), -angle - 90);
+            scene.idle(1);
+        }
+    }
+
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
         scene.title("cookery_millstone", "The millstone: drive it, release it, walk clear");
         PonderScenery.openWorld(scene, util, 9);
@@ -55,17 +69,10 @@ public final class MillstoneScene {
             if (level != null) { mill.onPutItem(level, new ItemStack(Items.WHEAT, 3)); }
         });
         resident.hold(scene, ItemStack.EMPTY);
-        scene.overlay().showText(95).text("Passing residents are not captured. Only the assigned resident may bind as the motor; the native mill then turns and processes the actual input.")
+        scene.overlay().showText(215).text("Passing residents are not captured. Only the assigned resident may bind as the motor; the native mill then turns and processes the actual input.")
             .pointAt(util.vector().topOf(center)).placeNearTarget().attachKeyFrame();
-        scene.idle(25);
-        for (int quarter = 0; quarter < 4; quarter++) {
-            final int angle = quarter * 90;
-            scene.world().modifyBlockEntity(center, MillstoneBlockEntity.class, mill -> mill.setCacheRot(angle));
-            int x = quarter == 0 ? 6 : quarter == 2 ? 2 : 4;
-            int z = quarter == 1 ? 6 : quarter == 3 ? 2 : 4;
-            resident.walkTo(scene, util.vector().topOf(x, 0, z));
-        }
-        scene.idle(80);
+        resident.walkTo(scene, util.vector().topOf(6, 0, 4));
+        drive(scene, center, resident, 90, 200);
         scene.world().modifyBlockEntity(center, MillstoneBlockEntity.class, mill -> {
             mill.unbindEntity();
             mill.getInput().copyAndClear();

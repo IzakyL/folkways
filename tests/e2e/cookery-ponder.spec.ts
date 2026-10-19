@@ -14,16 +14,37 @@ const SCENES = ["cookery_orders", "cookery_tools", "cookery_heat", "cookery_mill
   "cookery_pots", "cookery_rice", "cookery_equipment", "cookery_seeds", "cookery_tray", "cookery_teapot", "cookery_chain"];
 
 // Presentation seeking replays Ponder's own schedule only. Real production is tested separately.
-const READ_SCENE = defineTask<{ seek: number }, { id: string; title: string; time: number; total: number; keyframes: number[] }>({
+const READ_SCENE = defineTask<{ seek: number }, { id: string; title: string; time: number; total: number; keyframes: number[]; scenes: string[]; devices: any[]; residents: any[]; mills: any[] }>({
   name: "folkways.cookery.ponder-read-scene", side: "client", timeoutMs: 20_000,
-  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.createmod.ponder.foundation.ui.PonderUI"], body: `
+  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.createmod.ponder.foundation.ui.PonderUI", "net.createmod.ponder.foundation.PonderScene",
+    "net.minecraft.core.BlockPos", "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.world.entity.LivingEntity"], body: `
 var minecraft=(Minecraft)ctx.client();
 if(!(minecraft.screen instanceof PonderUI ui))throw new IllegalStateException("not a Ponder screen");
 var seek=Args.of(ctx).value("seek");
 if(seek instanceof Number number && number.intValue()>=0)ui.seekToTime(number.intValue());
 var scene=ui.getActiveScene();var keyframes=new ArrayList<Object>();
 for(int i=0;i<scene.getKeyframeCount();i++)keyframes.add(scene.getKeyframeTime(i));
-return Map.of("id",scene.getId().toString(),"title",scene.getTitle(),"time",scene.getCurrentTime(),"total",scene.getTotalTime(),"keyframes",keyframes);
+var visibleField=PonderUI.class.getDeclaredField("scenes");visibleField.setAccessible(true);
+var visible=(List<PonderScene>)visibleField.get(ui);
+var devices=new ArrayList<Object>();var mills=new ArrayList<Object>();var level=scene.getWorld();
+for(int x=0;x<16;x++)for(int y=0;y<16;y++)for(int z=0;z<16;z++){
+ var pos=new BlockPos(x,y,z);var state=level.getBlockState(pos);var id=BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+ if(id.startsWith("kaleidoscope_cookery:")||Set.of("minecraft:redstone_block","minecraft:magma_block","minecraft:campfire").contains(id))
+  devices.add(Map.of("id",id,"at",List.of(x,y,z),"state",state.toString()));
+ if(id.equals("kaleidoscope_cookery:millstone")&&level.getBlockEntity(pos)!=null){
+  var tile=level.getBlockEntity(pos);if(tile.getClass().getSimpleName().equals("MillstoneBlockEntity")){
+   var rotation=tile.getClass().getMethod("getCacheRot").invoke(tile);
+   mills.add(Map.of("at",List.of(x,y,z),"angle",rotation));
+  }
+ }
+}
+var residents=new ArrayList<Object>();
+scene.forEachWorldEntity(LivingEntity.class,entity->{
+ if(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString().equals("folkways:resident"))
+  residents.add(Map.of("at",List.of(entity.getX(),entity.getY(),entity.getZ()),"yaw",entity.getYRot(),"head",entity.getYHeadRot(),"body",entity.yBodyRot));
+});
+return Map.of("id",scene.getId().toString(),"title",scene.getTitle(),"time",scene.getCurrentTime(),"total",scene.getTotalTime(),"keyframes",keyframes,
+ "scenes",visible.stream().map(value->value.getId().toString()).toList(),"devices",devices,"residents",residents,"mills",mills);
 ` }),
 });
 const READ_MODS = defineTask<void, { native: boolean; extension: boolean; nativePot: boolean }>({
@@ -42,6 +63,45 @@ return Map.of("folders",Scenes.declared().stream().map(folder->folder.id().toStr
 ` }),
 });
 
+const READ_REGISTRATION = defineTask<void, any>({
+  name: "folkways.cookery.ponder-read-registration", side: "client", timeoutMs: 20_000,
+  source: javaTask({ imports: ["io.github.izakyl.folkways.front.api.ponder.Scenes", "io.github.izakyl.folkways.front.client.Lessons",
+    "net.createmod.ponder.foundation.PonderIndex", "net.createmod.ponder.api.registration.StoryBoardEntry", "net.minecraft.resources.ResourceLocation"], body: `
+var rows=new ArrayList<Object>();var access=PonderIndex.getSceneAccess();
+for(var folder:Scenes.declared())if(folder.id().toString().equals("folkways:cookery"))for(var scene:folder.scenes()){
+ var schematic=ResourceLocation.fromNamespaceAndPath("folkways",folder.id().getPath()+"/"+scene.id().getPath());
+ var registered=new ArrayList<Object>();
+ for(var pair:access.getRegisteredEntries())if(pair.getValue().getSchematicLocation().equals(schematic)){
+  var entry=pair.getValue();registered.add(Map.of("component",pair.getKey().toString(),"entryComponent",entry.getComponent().toString(),
+   "schematic",entry.getSchematicLocation().toString(),"sameBoard",entry.getBoard()==scene.board()));
+ }
+ rows.add(Map.of("id",scene.id().toString(),"schematic",schematic.toString(),"items",Scenes.itemsFor(scene).stream().map(Object::toString).toList(),
+  "registered",registered,"bound",Lessons.scenesFor(scene.id()).stream().map(entry->Map.of("component",entry.getComponent().toString(),
+   "schematic",entry.getSchematicLocation().toString(),"sameBoard",entry.getBoard()==scene.board())).toList()));
+}
+return Map.of("scenes",rows,"folder",Lessons.scenesFor(ResourceLocation.fromNamespaceAndPath("folkways","cookery")).stream()
+ .map(entry->Map.of("component",entry.getComponent().toString(),"schematic",entry.getSchematicLocation().toString())).toList());
+` }),
+});
+const RELOAD_PONDER = defineTask<void, boolean>({
+  name: "folkways.cookery.ponder-reload-registration", side: "client", timeoutMs: 20_000,
+  source: javaTask({ imports: ["net.createmod.ponder.foundation.PonderIndex"], body: "PonderIndex.reload(); return true;" }),
+});
+
+function assertRegistration(registry: any, installed: boolean) {
+  expect(registry.scenes.map((scene: any) => scene.id)).toEqual(installed ? SCENES.map(scene => "folkways:" + scene) : []);
+  expect(registry.folder.map((entry: any) => entry.schematic)).toEqual(installed ? SCENES.map(scene => "folkways:cookery/" + scene) : []);
+  expect(registry.folder.every((entry: any) => entry.component === "folkways:colony_book")).toBe(true);
+  for (const scene of registry.scenes) {
+    const components = [...new Set([...scene.items, "folkways:colony_book"])].sort();
+    expect(scene.registered.map((entry: any) => entry.component).sort(), scene.id + " has one true Ponder entry per item").toEqual(components);
+    expect(scene.registered.every((entry: any) => entry.component === entry.entryComponent && entry.sameBoard && entry.schematic === scene.schematic)).toBe(true);
+    expect(scene.bound, scene.id + " has exactly one canonical playback entry").toEqual([
+      { component: "folkways:colony_book", schematic: scene.schematic, sameBoard: true },
+    ]);
+  }
+}
+
 const SET_LANGUAGE = defineTask<{ locale: string }, string>({
   name: "folkways.cookery.ponder-set-language", side: "client", timeoutMs: 20_000,
   source: javaTask({ imports: ["net.minecraft.client.Minecraft"], body: `
@@ -54,6 +114,7 @@ const SET_GUI_SCALE = defineTask<{ scale: number }, { scale: number; width: numb
   name: "folkways.cookery.ponder-set-gui-scale", side: "client", timeoutMs: 20_000,
   source: javaTask({ imports: ["net.minecraft.client.Minecraft"], body: `
 var minecraft=(Minecraft)ctx.client();int scale=(int)Args.of(ctx).number("scale");
+minecraft.getTutorial().setStep(net.minecraft.client.tutorial.TutorialSteps.NONE);
 minecraft.options.guiScale().set(scale);minecraft.resizeDisplay();var window=minecraft.getWindow();
 return Map.of("scale",window.getGuiScale(),"width",window.getWidth(),"height",window.getHeight(),
 "logicalWidth",window.getGuiScaledWidth(),"logicalHeight",window.getGuiScaledHeight());
@@ -110,11 +171,16 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
       });
       await frames(client, 5);
     }
+    evidence.registration = await client.run(READ_REGISTRATION); assertRegistration(evidence.registration, installed);
+    await client.run(RELOAD_PONDER);
+    evidence.reloadedRegistration = await client.run(READ_REGISTRATION); assertRegistration(evidence.reloadedRegistration, installed);
     evidence.guiWindow = await client.run(SET_GUI_SCALE, { scale: guiScale });
     expect(evidence.guiWindow.scale).toBe(guiScale); await frames(client, 5);
     await world.command(server, "difficulty peaceful");
     await world.command(server, "ponder folkways:colony_book " + name); await frames(client, 5);
     expect(screenName(await safeScreen(client))).toMatch(/PonderUI/);
+    evidence.bookQueue = await client.run(READ_SCENE, { seek: -1 });
+    expect(evidence.bookQueue.scenes.filter((id: string) => id.startsWith("folkways:cookery_"))).toEqual(installed ? SCENES.map(scene => "folkways:" + scene) : []);
     evidence.folders = await client.run(READ_FOLDERS);
     expect(evidence.folders.folders.includes("folkways:cookery")).toBe(installed);
     expect(evidence.folders.scenes.filter((id: string) => id.startsWith("folkways:cookery_"))).toEqual(installed ? SCENES.map(scene => "folkways:" + scene) : []);
@@ -151,10 +217,39 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
       await clickElement(client, { id: "folkways.lessons.scene.folkways." + lesson }, { scrollIntoView: true });
       await frames(client, 5); expect(screenName(await safeScreen(client))).toMatch(/LessonScreen/);
       const scene = await client.run(READ_SCENE, { seek: -1 });
-      expect(scene.id).toBe("folkways:" + lesson); expect(scene.keyframes.length).toBeGreaterThanOrEqual(4); expect(scene.total).toBeGreaterThan(300);
+      expect(scene.id).toBe("folkways:" + lesson); expect(scene.scenes, "the visible lesson list contains the chosen scene once").toEqual(["folkways:" + lesson]); expect(scene.keyframes.length).toBeGreaterThanOrEqual(4); expect(scene.total).toBeGreaterThan(300);
       evidence.scenes.push(scene);
       for (const [index, time] of scene.keyframes.entries()) {
-        await client.run(READ_SCENE, { seek: Math.min(Number(time) + 35, Number(scene.total) - 1) }); await frames(client, 4);
+        const frame = await client.run(READ_SCENE, { seek: Math.min(Number(time) + 35, Number(scene.total) - 1) }); await frames(client, 4);
+        evidence.frameWorlds ??= []; evidence.frameWorlds.push({ scene: lesson, index, ...frame });
+        if (lesson === "cookery_spit") {
+          const powered = index !== 2;
+          expect(frame.devices.filter(device => device.id === "minecraft:redstone_block").map(device => device.at), "one lower-half power source drives both native halves").toEqual(powered ? [[2, 1, 3]] : []);
+          const halves = frame.devices.filter(device => device.id === "kaleidoscope_cookery:shawarma_spit");
+          expect(halves).toHaveLength(2); expect(halves.every(device => device.state.includes("powered=" + powered))).toBe(true);
+        }
+        if ((lesson === "cookery_chain" && index === 1) || (lesson === "cookery_millstone" && index === 2)) {
+          expect(frame.residents, "the mill demonstration has one actual animated resident").toHaveLength(1);
+          const mill = frame.mills.find(tile => tile.at[0] === (lesson === "cookery_chain" ? 2 : 4) && tile.at[2] === (lesson === "cookery_chain" ? 2 : 4));
+          expect(mill, "the visible native mill has a recorded rotation").toBeDefined();
+          const actor = frame.residents[0]; const radians = mill.angle * Math.PI / 180;
+          expect(actor.at[0]).toBeCloseTo(mill.at[0] + 0.5 + 2 * Math.sin(radians), 3);
+          expect(actor.at[2]).toBeCloseTo(mill.at[2] + 0.5 + 2 * Math.cos(radians), 3);
+          const turn = (yaw: number) => ((yaw + mill.angle + 90) % 360 + 540) % 360 - 180;
+          expect(Math.abs(turn(actor.yaw)), "the actor faces the same tangent as the native motor").toBeLessThan(0.1);
+          expect(Math.abs(turn(actor.body))).toBeLessThan(0.1);
+          expect(Math.abs(turn(actor.head))).toBeLessThan(0.1);
+        }
+        if (lesson === "cookery_chain" && index === 3) {
+          expect(frame.residents).toHaveLength(1);
+          expect(frame.residents[0].yaw, "the chopping resident stands west and faces east toward the board").toBeCloseTo(-90, 3);
+        }
+        if (["cookery_orders", "cookery_pots", "cookery_chain", "cookery_rice", "cookery_steamer", "cookery_teapot"].includes(lesson)) {
+          const stoves = frame.devices.filter(device => device.id === "kaleidoscope_cookery:stove");
+          expect(stoves, "ordinary heated demonstrations use one native stove per appliance").toHaveLength(lesson === "cookery_pots" ? 2 : 1);
+          expect(stoves.every(device => device.at[1] >= 1), "stoves are above the ground plane").toBe(true);
+          expect(frame.devices.filter(device => ["minecraft:magma_block", "minecraft:campfire"].includes(device.id))).toHaveLength(0);
+        }
         const file = testInfo.outputPath(lesson + "-keyframe-" + index + ".png");
         const shot = await media.screenshot(client, { path: file }); evidence.shots.push({ scene: lesson, index, time, file, sha256: shot.sha256 });
       }
@@ -162,18 +257,24 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
     }
     await shelf(); await clickElement(client, { id: "folkways.lessons.folder.folkways.cookery" }, { scrollIntoView: true });
     await clickElement(client, { id: "folkways.lessons.play.folkways.cookery" }, { scrollIntoView: true }); await frames(client, 5);
-    expect((await client.run(READ_SCENE, { seek: -1 })).id).toBe("folkways:cookery_orders");
+    const folderQueue = await client.run(READ_SCENE, { seek: -1 });
+    expect(folderQueue.id).toBe("folkways:cookery_orders"); expect(folderQueue.scenes).toEqual(SCENES.map(scene => "folkways:" + scene));
     await openBook();
     await hoverElement(client, { id: "folkways.page.cookery" }, { scrollIntoView: true });
     await input.key(client, { keybind: "key.ponder.ponder", action: "press" });
     await new Promise(resolve => setTimeout(resolve, 2500)); await frames(client, 3);
     await input.key(client, { keybind: "key.ponder.ponder", action: "release" });
     expect(screenName(await safeScreen(client))).toMatch(/LessonScreen/);
-    expect((await client.run(READ_SCENE, { seek: -1 })).id).toBe("folkways:cookery_orders");
-    for (const item of ["millstone", "pot", "teapot", "straw_hat", "kitchenware_racks"]) {
-      await screen.dismiss(client); await world.command(server, "ponder kaleidoscope_cookery:" + item + " " + name); await frames(client, 5);
+    const hoverQueue = await client.run(READ_SCENE, { seek: -1 });
+    expect(hoverQueue.id).toBe("folkways:cookery_orders"); expect(hoverQueue.scenes).toEqual(SCENES.map(scene => "folkways:" + scene));
+    const linkedItems = [...new Set<string>(evidence.registration.scenes.flatMap((scene: any) => scene.items))];
+    for (const item of linkedItems) {
+      await screen.dismiss(client); await world.command(server, "ponder " + item + " " + name); await frames(client, 5);
       expect(screenName(await safeScreen(client))).toMatch(/PonderUI/);
-      evidence.itemLinks ??= []; evidence.itemLinks.push({ item, firstScene: await client.run(READ_SCENE, { seek: -1 }) });
+      const linked = await client.run(READ_SCENE, { seek: -1 });
+      const expected = evidence.registration.scenes.filter((scene: any) => scene.items.includes(item)).map((scene: any) => scene.id);
+      expect(linked.scenes.filter(id => id.startsWith("folkways:cookery_")), "actual item UI keeps every distinct linked lesson once: " + item).toEqual(expected);
+      evidence.itemLinks ??= []; evidence.itemLinks.push({ item, expected, firstScene: linked });
     }
   } catch (error) { pair?.failing(error); evidence.failure = String(error); throw error; }
   finally {

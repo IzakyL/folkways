@@ -213,6 +213,47 @@ public final class CookeryRegistrationGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void theRealBookRegistersANativeStovePointAndItsPresenceLightsItWithoutABlockEntity(GameTestHelper helper) {
+        try (Kitchen rig = new Kitchen(helper)) {
+            BlockPos cell = helper.absolutePos(new BlockPos(4, 1, 4)); WorldPos at = WorldPos.of(rig.level, cell);
+            rig.level.setBlockAndUpdate(cell, ModBlocks.STOVE.get().defaultBlockState());
+            helper.assertTrue(rig.level.getBlockEntity(cell) == null, "the native stove has no block entity before membership");
+            rig.mark(cell);
+            helper.assertTrue(Enrollments.delegation(CookeryContent.STOVE).orElseThrow().shape() instanceof Shape.Point,
+                "native stoves use their own ledger-point delegation");
+            helper.assertTrue(rig.colony.holdingAt(at).filter(holding -> holding.owner().equals(CookeryContent.STOVE)
+                && holding.what() instanceof Held.Point).isPresent(), "the actual book membership operation holds a real stove point");
+            helper.assertTrue(rig.level.getBlockEntity(cell) == null, "book marking never fabricates a block entity");
+            helper.assertTrue(rig.colony.view(rig.level).blocks(CookeryContent.STOVE).contains(cell), "the loaded point enters the real colony view");
+            rig.presence.refresh(rig.level.getServer());
+            helper.assertTrue(rig.presence.board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow().rows().stream()
+                .anyMatch(row -> row.icon().is(ModBlocks.STOVE.get().asItem())), "the kitchen board lists the marked native stove");
+            var goals = rig.presence.goals(rig.colony.view(rig.level));
+            helper.assertValueEqual(goals.size(), 1, "the actual marked stove exposes one cold-stove recovery task");
+            Node light = goals.getFirst().nodes().getFirst();
+            helper.assertTrue(light.planned(rig.level).isEmpty(), "the real recovery obtains its stove booking");
+            rig.pack.setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
+            var feet = light.spec().stances().cells().iterator().next().cell();
+            rig.body.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
+            helper.assertTrue(Commit.run(rig.level, light, rig.worker) instanceof Outcome.Done, "the actual registered point can light its native stove");
+            helper.assertTrue(rig.level.getBlockState(cell).getValue(com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock.LIT),
+                "the real recovery changes the native stove's LIT state");
+            helper.assertValueEqual(rig.pack.getItem(0).getDamageValue(), 1, "the actual ignition costs one native durability use");
+            light.ended(rig.level, Ending.DONE);
+            ColonyData.find(rig.level.getServer(), rig.colony.id()).orElseThrow().reconcile(rig.level.getServer());
+            helper.assertTrue(rig.colony.holdingAt(at).isPresent(), "the lit-state change preserves native point membership");
+            helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(), "a lit registered stove needs no second ignition");
+            rig.level.setBlockAndUpdate(cell, Blocks.AIR.defaultBlockState());
+            ColonyData.find(rig.level.getServer(), rig.colony.id()).orElseThrow().reconcile(rig.level.getServer());
+            rig.presence.refresh(rig.level.getServer());
+            helper.assertTrue(rig.colony.holdingAt(at).isEmpty(), "removing the actual stove releases its ledger point");
+            helper.assertTrue(rig.presence.board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow().rows().stream()
+                .noneMatch(row -> row.icon().is(ModBlocks.STOVE.get().asItem())), "removal leaves no ghost stove row");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void theRealBookRegistersANativeComposterPointAndTheKitchenPagePublishesIt(GameTestHelper helper) {
         try (Kitchen rig = new Kitchen(helper)) {
             BlockPos cell = helper.absolutePos(new BlockPos(4, 1, 4)); WorldPos at = WorldPos.of(rig.level, cell);
@@ -358,7 +399,7 @@ public final class CookeryRegistrationGameTests {
                 public ItemStack held(ToolNeed need) {
                     for (int slot = 0; slot < pack.getContainerSize(); slot++) {
                         ItemStack stack = pack.getItem(slot);
-                        if (stack.is(ModItems.IRON_KITCHEN_KNIFE.get())) return stack;
+                        if (io.github.izakyl.folkways.core.api.work.Tools.answers(stack, need)) return stack;
                     }
                     return ItemStack.EMPTY;
                 }

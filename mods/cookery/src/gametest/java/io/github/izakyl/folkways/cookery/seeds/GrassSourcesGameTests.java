@@ -122,13 +122,17 @@ public final class GrassSourcesGameTests {
     }
 
     @GameTest(template = "empty_large")
-    public static void realColonyGrassZonePublishesOnlyHatBoundNativeCollection(GameTestHelper helper) {
+    public static void realColonyGrassZonePublishesDemandBeforeBorrowingAndStillRequiresANativeHatAtCommit(GameTestHelper helper) {
         try (Fixture rig = new Fixture(helper)) {
             rig.mark(false);
             rig.level.setBlock(rig.center.above(), Blocks.SHORT_GRASS.defaultBlockState(), Block.UPDATE_ALL);
             rig.body.pack().setItem(0, new ItemStack(ModItems.STRAW_HAT.get()));
             rig.presence.refresh(rig.level.getServer());
-            helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(), "pack-only hats do not activate collection");
+            Node waiting = rig.source();
+            helper.assertTrue(waiting.planned(rig.level).isEmpty(), "a real grass task can request its first shared hat before one is worn");
+            helper.assertTrue(Commit.run(rig.level, waiting, rig) instanceof Outcome.Failed,
+                "publishing demand does not bypass the native HEAD requirement at execution");
+            waiting.ended(rig.level, Ending.REVOKED);
             rig.wearHat();
             Node gather = rig.source();
             helper.assertTrue(gather.worker().orElseThrow().equals(rig.body.id()), "only the real hat-wearing farmer is assigned");
@@ -209,7 +213,9 @@ public final class GrassSourcesGameTests {
                             public void offered() { }
                         });
                         var asking = new io.github.izakyl.folkways.core.api.colony.Asking(rig.colony, SeedPresence.ID, () -> { });
-                        asking.offer(Map.of(rig.level.dimension(), rig.presence.goals(rig.colony.view(rig.level))));
+                        var offered = rig.presence.goals(rig.colony.view(rig.level));
+                        Node source = offered.getFirst().nodes().getFirst();
+                        asking.offer(Map.of(rig.level.dimension(), offered));
                         helper.assertValueEqual(submitted.size(), 1, "one grass operation is submitted through the real colony root contract");
                         Node original = submitted.getFirst();
                         helper.assertTrue(original.planned(rig.level).isEmpty(), "the original source takes its exclusive turn");
@@ -219,17 +225,20 @@ public final class GrassSourcesGameTests {
                         for (int period = 0; period < 10; period++) {
                             rig.presence.refresh(rig.level.getServer());
                             var wanted = rig.presence.goals(rig.colony.view(rig.level));
-                            helper.assertTrue(wanted.size() == 1 && wanted.getFirst().nodes().getFirst() == original,
-                                "a booked source stays the same wanted root while its resident is still far away");
+                            helper.assertTrue(wanted.size() == 1 && wanted.getFirst().nodes().getFirst() == source
+                                    && source.id().equals(original.id()),
+                                "the same adopted source stays wanted under its decorated root's id while its resident is still far away");
                             asking.offer(Map.of(rig.level.dimension(), wanted));
                         }
                         helper.assertTrue(withdrawn.isEmpty() && submitted.size() == 1, "repeated sweeps neither withdraw nor resubmit the active source");
                         helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), restore ? 1L : 0L,
                             "travelling never consumes a future restoration's real bone meal");
-                        var feet = original.spec().stances().cells().iterator().next().cell();
+                        // Clothing borrowing wraps the source in a WHEREVER root; the native action
+                        // still executes at the original source's real offered work stance.
+                        var feet = source.spec().stances().cells().iterator().next().cell();
                         rig.body.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
-                        helper.assertTrue(Commit.run(rig.level, original, rig) instanceof Outcome.Done, "the original adopted root commits after arrival");
-                        original.ended(rig.level, Ending.DONE); colony.ended(rig.level.dimension(), original.id(), Ending.DONE);
+                        rig.finish(original);
+                        colony.ended(rig.level.dimension(), original.id(), Ending.DONE);
                         if (restore) {
                             helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 0L,
                                 "one actual bone meal is spent only after arrival");
@@ -265,7 +274,7 @@ public final class GrassSourcesGameTests {
     }
 
     @GameTest(template = "empty_large")
-    public static void aBookedSourceLosingItsOwnHatOrFarmingLicenceCannotSpendBoneMeal(GameTestHelper helper) {
+    public static void aBookedSourceLosingTaskBorrowingPermissionOrFarmingLicenceCannotSpendBoneMeal(GameTestHelper helper) {
         for (boolean revokeLicence : List.of(false, true)) {
             try (Fixture rig = new Fixture(helper)) {
                 rig.mark(true); rig.wearHat(); rig.body.pack().setItem(1, new ItemStack(Items.BONE_MEAL));
@@ -275,16 +284,16 @@ public final class GrassSourcesGameTests {
                     var trade = rig.body.licences().trade(io.github.izakyl.folkways.plugins.farming.FarmingContent.trade()).orElseThrow();
                     rig.body.licences().allow(trade, false);
                 } else {
-                    ItemStack hat = rig.body.getItemBySlot(EquipmentSlot.HEAD);
-                    rig.body.setItemSlot(EquipmentSlot.HEAD, ItemStack.EMPTY); rig.body.pack().setItem(0, hat);
+                    ColonyFront.of(rig.colony).setSetting(io.github.izakyl.folkways.cookery.CookeryContent.ID, "wear_hat", new ColonySettings.Value.Flag(false));
+
                 }
-                // This fixture's global enabled supplier deliberately stays true, like a second hat-wearing farmer.
+                // The global supplier stays true: execution must still recheck its own task permission.
                 helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(), "the ineligible worker's root is no longer wanted");
                 helper.assertTrue(Commit.run(rig.level, old, rig) instanceof Outcome.Failed, "the already adopted action rechecks its own actual worker");
                 helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 1L,
                     "cancelling the worker leaves its one real bone meal unspent");
                 helper.assertTrue(rig.allowed.stream().noneMatch(cell -> rig.level.getBlockState(cell.above()).is(Blocks.SHORT_GRASS)),
-                    "no terrain is changed after hat or farming permission is withdrawn");
+                    "no terrain changes after task borrowing or farming permission is withdrawn");
                 old.ended(rig.level, Ending.REVOKED);
             }
         }
@@ -341,6 +350,30 @@ public final class GrassSourcesGameTests {
                 public NodeSpec spec() { return spec; }
                 public Outcome commit(ServerLevel world, Worker who) { return GrassSources.restore(world, who, center, allowed); }
             };
+        }
+        void finish(Node node) {
+            if (node.spec().workload() instanceof Workload.Within within) {
+                boolean complete = false;
+                for (int step = 0; step < 16; step++) {
+                    var turn = within.next(level, this);
+                    if (turn instanceof Workload.Within.Turn.Leave) {
+                        complete = true;
+                        break;
+                    }
+                    if (!(turn instanceof Workload.Within.Turn.Piece piece)) throw new AssertionError("the arrived real source makes progress: " + turn);
+                    if (piece.node().planned(level).isPresent()) throw new AssertionError("the retained action can be planned");
+                    finish(piece.node());
+                    within.ended(level, piece.node(), Ending.DONE);
+                }
+                if (!complete) throw new AssertionError("the retained decorated source must finish its native action and returns");
+            }
+            Outcome result = Commit.run(level, node, this);
+            if (!(result instanceof Outcome.Done done)) throw new AssertionError("the original adopted source commits after arrival: " + result);
+            for (ItemStack made : done.made()) {
+                if (!io.github.izakyl.folkways.core.api.terms.Containers.insert(body.pack(), made).isEmpty()) throw new AssertionError("native seed output fits real cargo");
+            }
+            node.released(level, this, Ending.DONE);
+            node.ended(level, Ending.DONE);
         }
         public Resident resident() { return body.resident(); }
         public Mob body() { return body; }

@@ -35,7 +35,6 @@ public final class SpitScene {
         scene.world().setBlock(base, lowerState, false);
         scene.world().setBlock(upper, lowerState.setValue(ShawarmaSpitBlock.HALF, DoubleBlockHalf.UPPER), false);
         scene.world().setBlock(power, Blocks.REDSTONE_BLOCK.defaultBlockState(), false);
-        scene.world().setBlock(power.above(), Blocks.REDSTONE_BLOCK.defaultBlockState(), false);
         scene.world().setBlock(store, Blocks.CHEST.defaultBlockState(), false);
         scene.world().showSection(util.select().fromTo(0, 0, 0, 6, 3, 6), Direction.DOWN);
         scene.idle(15);
@@ -61,14 +60,12 @@ public final class SpitScene {
             .pointAt(util.vector().centerOf(upper)).placeNearTarget().attachKeyFrame();
         scene.idle(105);
         scene.world().setBlock(power, Blocks.AIR.defaultBlockState(), false);
-        scene.world().setBlock(power.above(), Blocks.AIR.defaultBlockState(), false);
         scene.world().modifyBlock(base, state -> state.setValue(ShawarmaSpitBlock.POWERED, false), false);
         scene.world().modifyBlock(upper, state -> state.setValue(ShawarmaSpitBlock.POWERED, false), false);
         scene.overlay().showText(90).text("The real redstone signal drives the native cooking clock. Removing power pauses the same batch; it does not turn raw food into a finished meal.")
             .pointAt(util.vector().centerOf(power)).placeNearTarget().attachKeyFrame();
         scene.idle(100);
         scene.world().setBlock(power, Blocks.REDSTONE_BLOCK.defaultBlockState(), false);
-        scene.world().setBlock(power.above(), Blocks.REDSTONE_BLOCK.defaultBlockState(), false);
         scene.world().modifyBlock(base, state -> state.setValue(ShawarmaSpitBlock.POWERED, true), false);
         scene.world().modifyBlock(upper, state -> state.setValue(ShawarmaSpitBlock.POWERED, true), false);
         scene.world().modifyBlockEntity(upper, ShawarmaSpitBlockEntity.class, spit -> {

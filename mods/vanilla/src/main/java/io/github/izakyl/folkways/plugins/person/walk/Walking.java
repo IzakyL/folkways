@@ -36,6 +36,8 @@ public final class Walking implements Locomotion {
             new ResidentNodeEvaluator(search.from().orElse(null));
         evaluator.setCanPassDoors(true);
         evaluator.setCanOpenDoors(true);
+        // FloatGoal enables this on the live navigation too. Planning must share that water rule.
+        evaluator.setCanFloat(true);
         return evaluator;
     }
 

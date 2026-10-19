@@ -34,10 +34,12 @@ public final class TrayScene {
         scene.overlay().showText(95).text("Register a bamboo tray and order its real drying or wetting product. A task reserves one empty slot; food placed by a player in the other slots stays in place.")
             .pointAt(util.vector().topOf(dry)).placeNearTarget().attachKeyFrame(); scene.idle(105);
         var resident = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(2, 0, 5), 90);
+        resident.lookAt(scene, util.vector().centerOf(dry));
         resident.hold(scene, new ItemStack(ModItems.FRESH_TEA_LEAVES.get(), 8));
         scene.world().modifyBlockEntity(dry, com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.BambooTrayBlockEntity.class,
             tray -> tray.setItem(0, new ItemStack(ModItems.FRESH_TEA_LEAVES.get(), 8))); resident.hold(scene, ItemStack.EMPTY);
         scene.world().setBlock(dry.above(2), Blocks.STONE.defaultBlockState(), false);
+        scene.world().showSection(util.select().position(dry.above(2)), Direction.DOWN);
         scene.overlay().showText(95).text("Drying needs the native clear exposure and dry weather. An opaque roof pauses progress; an open column or suitable clear glass allows the same real batch to continue.")
             .pointAt(util.vector().centerOf(dry.above(2))).placeNearTarget().attachKeyFrame(); scene.idle(105);
         scene.world().setBlock(dry.above(2), Blocks.GLASS.defaultBlockState(), false);

@@ -40,6 +40,8 @@ final class ToolReturn implements Node, Workload.Within {
         if (complete) {
             return LEAVE;
         }
+        var body = service.stock.body(lease.resident());
+        if (body.isPresent() && !LoanClothing.recover(service, lease, body.get())) return WAIT;
         int slot = service.carriedSlot(who.pack(), lease, service.tool(lease).orElse(ItemStack.EMPTY));
         if (slot < 0) {
             service.lost(lease);

@@ -101,6 +101,48 @@ public final class TaskToolsGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void completedNativeIgnitionCanResumeReturnsWhenTheStoveGetsWetOrTheLastChargeWasSpent(GameTestHelper helper) {
+        for (var item : List.of(Items.FLINT_AND_STEEL, Items.FIRE_CHARGE)) {
+            try (Rig rig = new Rig(helper)) {
+                rig.level.setBlockAndUpdate(rig.boardCell,
+                    com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks.STOVE.get().defaultBlockState());
+                rig.level.setBlockAndUpdate(rig.boardCell.above(), Blocks.AIR.defaultBlockState());
+                rig.bookings.admit(rig.boardAt);
+                rig.chest.setItem(0, new ItemStack(item));
+                var station = new io.github.izakyl.folkways.cookery.stove.StoveStation();
+                Grown ignition = station.recovery(rig.colony.colonyId(), rig.level, rig.boardAt,
+                    Stances.at(rig.level, rig.boardCell.south()), rig.bookings, () -> { }).getFirst();
+                Node work = rig.tools.decorate(ignition).nodes().getFirst();
+                helper.assertTrue(work.planned(rig.level).isEmpty() && work.ready(rig.level), "a real stove borrows its sole actual ignition tool");
+                helper.assertFalse(rig.step(work), "the first physical step borrows the ignition item from storage");
+                helper.assertFalse(rig.step(work), "the next physical step performs native stove ignition once");
+                helper.assertTrue(rig.level.getBlockState(rig.boardCell).getValue(
+                    com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock.LIT), "the actual stove was lit before the interruption");
+                work.released(rig.level, rig.worker, Ending.REVOKED);
+                rig.level.setBlockAndUpdate(rig.boardCell, rig.level.getBlockState(rig.boardCell).setValue(
+                    com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock.LIT, false));
+                rig.level.setBlockAndUpdate(rig.boardCell.above(), Blocks.WATER.defaultBlockState());
+                helper.assertFalse(ignition.nodes().getFirst().ready(rig.level), "the cold wet native stove cannot be ignited again yet");
+                helper.assertTrue(work.ready(rig.level), "pending completed work may resume physical returns even when original ignition is no longer ready");
+                rig.finish(work);
+                helper.assertFalse(rig.level.getBlockState(rig.boardCell).getValue(
+                    com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock.LIT), "finishing returns never replays native ignition");
+                long left = Goods.countIn(rig.chest, Goods.specOf(item.getDefaultInstance()))
+                    + Goods.countIn(rig.rack, Goods.specOf(item.getDefaultInstance()))
+                    + Goods.countIn(rig.body.pack(), Goods.specOf(item.getDefaultInstance()));
+                helper.assertValueEqual(left, item == Items.FIRE_CHARGE ? 0L : 1L,
+                    "the consumed last charge is not requested again and the reusable flint returns exactly once");
+                if (item == Items.FLINT_AND_STEEL) helper.assertValueEqual(
+                    java.util.stream.Stream.of(rig.chest, rig.rack, rig.body.pack()).flatMap(container ->
+                        java.util.stream.IntStream.range(0, container.getContainerSize()).mapToObj(container::getItem))
+                        .filter(stack -> stack.is(Items.FLINT_AND_STEEL)).mapToInt(ItemStack::getDamageValue).sum(), 1,
+                    "the returned real flint retains exactly one native use");
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void borrowedWorkerKeepsTheRealCraftingPerksGrantedSpeed(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             var perks = Perks.fixed(Map.of(WaresContent.QUICK_HANDS, 2));

@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.front.ui.screen;
 
+import com.lowdragmc.lowdraglib2.gui.sync.bindings.IDataSource;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.DataBindingBuilder;
 import com.lowdragmc.lowdraglib2.gui.texture.ItemStackTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
@@ -9,6 +10,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.data.Vertical;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import dev.vfyjxf.taffy.style.FlexWrap;
 import dev.vfyjxf.taffy.style.TaffyPosition;
@@ -20,6 +22,9 @@ import io.github.izakyl.folkways.front.api.ui.Signs;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
 import io.github.izakyl.folkways.front.engine.colony.ColonyMetrics;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.BitSet;
+import java.util.Locale;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.ChatFormatting;
@@ -51,6 +56,13 @@ public final class MetricsPage implements Draw {
     private ColonyMetrics reading;
     private int offset;
     private Button refresh;
+    private Label empty;
+    private ColonyMetrics matchedReading;
+    private List<ColonyMetrics.Held> matched = List.of();
+    private BitSet matchingItems = new BitSet();
+    private boolean filtering;
+    private String filterRequest = "";
+    private int searchSequence;
 
     private final List<UIElement> slots = new ArrayList<>();
     private final List<Label> counts = new ArrayList<>();
@@ -92,17 +104,30 @@ public final class MetricsPage implements Draw {
         refresh = named("folkways.metrics.refresh", new Button()
             .setText(Component.translatable("folkways.metrics.refresh"))
             .setOnServerClick(event -> reading = null));
+        TextField search = new TextField();
+        search.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
+        search.textFieldStyle(style -> style.placeholder(Component.translatable("folkways.metrics.search")));
+        search.setTextResponder(this::search);
+        Tokens.name(search, "folkways.metrics.search");
+        empty = Rows.text(Component.translatable("folkways.metrics.empty"));
+        empty.setDisplay(false);
+        Tokens.name(empty, "folkways.metrics.empty");
         UIElement page = Rows.page().addChildren(
-            scroller,
-            Rows.strip().addChildren(
-                new Button()
+            empty, scroller,
+            Rows.strip().addChildren(search,
+                named("folkways.metrics.previous", new Button()
                     .setText(Component.literal("<"))
-                    .setOnServerClick(event -> movePage(-1)),
-                new Button()
+                    .setOnServerClick(event -> movePage(-1))),
+                named("folkways.metrics.next", new Button()
                     .setText(Component.literal(">"))
-                    .setOnServerClick(event -> movePage(1))));
+                    .setOnServerClick(event -> movePage(1)))));
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
 
+        // Names are read in the client's language. Send a compact registry-id mask, so the server can
+        // keep the stock pages bounded instead of sending the whole inventory or resolving English names.
+        var filter = DataBindingBuilder.stringC2S(this::filter).build();
+        filter.setRemoteDataSource(IDataSource.of(ignored -> { }, () -> filterRequest));
+        page.addSyncValue(filter.getSyncValue());
         page.addSyncValue(DataBindingBuilder.tagS2C(() -> stockTag(player))
             .onSyncReceived(this::fill)
             .build()
@@ -135,17 +160,19 @@ public final class MetricsPage implements Draw {
 
     private Tag stockTag(Player player) {
         ColonyMetrics held = reading(player);
-        offset = clamp(offset, held.stock().size());
+        List<ColonyMetrics.Held> stock = matching(held);
+        offset = clamp(offset, stock.size());
         CompoundTag tag = new CompoundTag();
         ListTag rows = new ListTag();
-        for (int index = offset; index < Math.min(held.stock().size(), offset + ROW_SLOTS); index++) {
-            ColonyMetrics.Held line = held.stock().get(index);
+        for (int index = offset; index < Math.min(stock.size(), offset + ROW_SLOTS); index++) {
+            ColonyMetrics.Held line = stock.get(index);
             CompoundTag row = new CompoundTag();
             row.putString(ITEM, line.item().toString());
             row.putInt(COUNT, line.count());
             rows.add(row);
         }
         tag.put(STOCK, rows);
+        tag.putBoolean("filtered", filtering);
         return tag;
     }
 
@@ -155,14 +182,71 @@ public final class MetricsPage implements Draw {
     }
 
     private void movePage(int direction) {
-        int total = reading == null ? 0 : reading.stock().size();
+        int total = reading == null ? 0 : matching(reading).size();
         offset = clamp(offset + direction * ROW_SLOTS, total);
+    }
+
+    private List<ColonyMetrics.Held> matching(ColonyMetrics held) {
+        if (matchedReading != held) {
+            matched = filtering ? held.stock().stream()
+                .filter(line -> matchingItems.get(BuiltInRegistries.ITEM.getId(
+                    BuiltInRegistries.ITEM.get(line.item())))).toList() : held.stock();
+            matchedReading = held;
+        }
+        return matched;
+    }
+
+    // Called by the client's text input; the dedicated server never resolves a translated item name.
+    private void search(String typed) {
+        String query = typed == null ? "" : typed.strip().toLowerCase(Locale.ROOT);
+        if (query.isEmpty()) {
+            filterRequest = ++searchSequence + "|0";
+            return;
+        }
+        String[] words = query.split("\\s+");
+        BitSet found = new BitSet();
+        for (var item : BuiltInRegistries.ITEM) {
+            String text = (BuiltInRegistries.ITEM.getKey(item) + " " + item.getDescription().getString())
+                .toLowerCase(Locale.ROOT);
+            if (java.util.Arrays.stream(words).allMatch(text::contains)) {
+                found.set(BuiltInRegistries.ITEM.getId(item));
+            }
+        }
+        filterRequest = ++searchSequence + "|1|" + Base64.getEncoder().encodeToString(found.toByteArray());
+    }
+
+    private void filter(String sealed) {
+        int bytes = (BuiltInRegistries.ITEM.size() + 7) / 8;
+        if (sealed == null || sealed.length() > (bytes + 2) / 3 * 4 + 32) return;
+        String[] parts = sealed.split("\\|", 3);
+        if (parts.length == 2 && parts[1].equals("0")) {
+            filtering = false;
+            matchingItems.clear();
+        } else if (parts.length == 3 && parts[1].equals("1")) {
+            try {
+                byte[] decoded = Base64.getDecoder().decode(parts[2]);
+                if (decoded.length > bytes) return;
+                BitSet found = BitSet.valueOf(decoded);
+                if (found.length() > BuiltInRegistries.ITEM.size()) return;
+                matchingItems = found;
+                filtering = true;
+            } catch (IllegalArgumentException malformed) {
+                return;
+            }
+        } else {
+            return;
+        }
+        offset = 0;
+        matchedReading = null;
     }
 
     private void fill(Tag tag) {
         ListTag rows = tag instanceof CompoundTag compound
             ? compound.getList(STOCK, Tag.TAG_COMPOUND)
             : new ListTag();
+        empty.setDisplay(rows.isEmpty());
+        empty.setText(Component.translatable(tag instanceof CompoundTag data && data.getBoolean("filtered")
+            ? "folkways.metrics.unmatched" : "folkways.metrics.empty"));
         for (int slot = 0; slot < ROW_SLOTS; slot++) {
             boolean shown = slot < rows.size();
             UIElement cell = slots.get(slot);

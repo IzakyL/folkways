@@ -12,6 +12,8 @@ import net.createmod.ponder.api.scene.SceneBuilder;
 import net.createmod.ponder.api.scene.SceneBuildingUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -53,34 +55,65 @@ public final class SharedToolsScene {
             .pointAt(first.at().add(0, 1, 0)).placeNearTarget().attachKeyFrame();
         scene.idle(105);
         first.walkTo(scene, util.vector().topOf(2, 0, 3));
+        first.lookAt(scene, util.vector().centerOf(rack));
         scene.world().modifyBlockEntity(rack, KitchenwareRacksBlockEntity.class, holder -> holder.setItemLeft(ItemStack.EMPTY));
         first.hold(scene, new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get()));
         first.walkTo(scene, util.vector().topOf(6, 0, 3));
+        first.lookAt(scene, util.vector().centerOf(firstBoard));
         scene.overlay().showOutline(PonderPalette.GREEN, firstBoard, util.select().position(firstBoard), 90);
         scene.overlay().showText(95).text("One knife means one active borrower. Another task waits while it is busy or being carried; waiting never creates a second knife.")
             .pointAt(util.vector().topOf(secondBoard)).placeNearTarget().attachKeyFrame();
         scene.idle(105);
         first.walkTo(scene, util.vector().topOf(2, 0, 3));
+        first.lookAt(scene, util.vector().centerOf(rack));
         first.hold(scene, ItemStack.EMPTY);
         scene.world().modifyBlockEntity(rack, KitchenwareRacksBlockEntity.class,
             holder -> holder.setItemLeft(new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get())));
+        first.walkTo(scene, util.vector().topOf(3, 0, 3));
         second.walkTo(scene, util.vector().topOf(2, 0, 3));
+        second.lookAt(scene, util.vector().centerOf(rack));
         scene.world().modifyBlockEntity(rack, KitchenwareRacksBlockEntity.class, holder -> holder.setItemLeft(ItemStack.EMPTY));
         second.hold(scene, new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get()));
         second.walkTo(scene, util.vector().topOf(6, 0, 5));
+        second.lookAt(scene, util.vector().centerOf(secondBoard));
         scene.overlay().showText(90).text("The returned tool goes to an allowed rack first, then to an ordinary store. Its name, enchantments and native wear stay with it when the next resident borrows it.")
             .pointAt(util.vector().topOf(rack)).placeNearTarget().attachKeyFrame();
         scene.idle(100);
         second.walkTo(scene, util.vector().topOf(2, 0, 3));
+        second.lookAt(scene, util.vector().centerOf(rack));
         second.hold(scene, ItemStack.EMPTY);
+        scene.world().modifyBlockEntity(rack, KitchenwareRacksBlockEntity.class,
+            holder -> holder.setItemLeft(new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get())));
+        second.walkTo(scene, util.vector().topOf(3, 0, 5));
+
+        // A later use wears out the returned knife before the missing-tool example starts.
+        first.walkTo(scene, util.vector().topOf(2, 0, 3));
+        first.lookAt(scene, util.vector().centerOf(rack));
+        scene.world().modifyBlockEntity(rack, KitchenwareRacksBlockEntity.class, holder -> holder.setItemLeft(ItemStack.EMPTY));
+        ItemStack wornKnife = new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get());
+        wornKnife.setDamageValue(wornKnife.getMaxDamage() - 1);
+        first.hold(scene, wornKnife);
+        first.walkTo(scene, util.vector().topOf(6, 0, 3));
+        first.lookAt(scene, util.vector().centerOf(firstBoard));
+        scene.overlay().showOutline(PonderPalette.RED, firstBoard, util.select().position(firstBoard), 35);
+        scene.idle(25);
+        scene.world().modifyEntities(LivingEntity.class, resident -> {
+            if (resident.getMainHandItem().is(ModItems.IRON_KITCHEN_KNIFE.get())) {
+                resident.handleEntityEvent((byte) 47);
+                resident.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            }
+        });
+        scene.idle(10);
         scene.overlay().showOutline(PonderPalette.BLUE, table, util.select().position(table), 100);
         first.walkTo(scene, util.vector().topOf(4, 0, 3));
+        first.lookAt(scene, util.vector().centerOf(table));
         first.hold(scene, new ItemStack(Items.IRON_INGOT));
         scene.overlay().showText(105).text("Only when the colony truly has no suitable tool and no real supply already underway does it ask for one replacement. Tool crafting happens before the food task, so the first crafting resident can make the first knife.")
             .pointAt(util.vector().topOf(table)).placeNearTarget().attachKeyFrame();
         scene.idle(115);
         first.hold(scene, new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get()));
         first.walkTo(scene, util.vector().topOf(2, 0, 3));
+        first.lookAt(scene, util.vector().centerOf(rack));
         first.hold(scene, ItemStack.EMPTY);
         scene.world().modifyBlockEntity(rack, KitchenwareRacksBlockEntity.class,
             holder -> holder.setItemLeft(new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get())));

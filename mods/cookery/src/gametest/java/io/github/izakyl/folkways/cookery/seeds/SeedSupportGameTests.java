@@ -55,7 +55,7 @@ public final class SeedSupportGameTests {
     public static void register(RegisterGameTestsEvent event) { event.register(SeedSupportGameTests.class); }
 
     @GameTest(template = "empty")
-    public static void mintingAColonyRegistersOneSeedServiceAndCompostNeedsARealWornHat(GameTestHelper helper) {
+    public static void mintingAColonyRegistersOneSeedServiceAndTaskPermissionEnablesSeedBudgets(GameTestHelper helper) {
         try (var rig = new Fixture(helper)) {
             var delegation = Enrollments.of(CookeryContent.ID).delegations().stream()
                 .filter(choice -> choice.id().equals(SeedPresence.GRASS)).findFirst().orElseThrow();
@@ -73,15 +73,16 @@ public final class SeedSupportGameTests {
             rig.level.setBlock(at, Blocks.COMPOSTER.defaultBlockState(), Block.UPDATE_ALL);
             var station = KitchenStations.find(rig.level.getBlockState(at)).orElseThrow();
             var bookings = new KitchenBookings();
-            helper.assertTrue(!seeds.enabled(), "a hat only carried in the pack does not activate seed work");
+            ColonyFront.of(rig.colony).setSetting(CookeryContent.ID, "wear_hat", new ColonySettings.Value.Flag(false));
+            helper.assertTrue(!seeds.enabled(), "disabling task hat borrowing disables autonomous seed support");
             helper.assertTrue(station.recovery(rig.colony.id(), rig.level, WorldPos.of(rig.level, at), Stances.WHEREVER,
-                bookings, () -> {}).isEmpty(), "the registered composter does not feed without worn farming equipment");
-            rig.body.setItemSlot(EquipmentSlot.HEAD, rig.body.pack().removeItem(3, 1));
-            helper.assertTrue(seeds.enabled(), "the actual head slot activates farming seed support");
+                bookings, () -> {}).isEmpty(), "the registered composter does not feed while seed task support is disabled");
+            ColonyFront.of(rig.colony).setSetting(CookeryContent.ID, "wear_hat", new ColonySettings.Value.Flag(true));
+            helper.assertTrue(seeds.enabled(), "task permission enables the demand before a first shared hat is borrowed");
             helper.assertValueEqual(seeds.budget(rig.level).tally(Items.WHEAT_SEEDS).physical(), 130L,
                 "the single registered seed service exposes its actual physical stock budget");
             helper.assertTrue(!station.recovery(rig.colony.id(), rig.level, WorldPos.of(rig.level, at), Stances.WHEREVER,
-                bookings, () -> {}).isEmpty(), "the real registered provider sees actual surplus after equipment is worn");
+                bookings, () -> {}).isEmpty(), "the real provider sees surplus without requiring ineffective permanent armor for composting");
         }
         helper.succeed();
     }

@@ -56,6 +56,33 @@ public final class SupplyGameTests {
     public static void register(RegisterGameTestsEvent event) { event.register(SupplyGameTests.class); }
 
     @GameTest(template = "empty")
+    public static void theBookShowsSuppliesOnlyAfterThisColonyClaimsARealSource(GameTestHelper helper) {
+        var level = helper.getLevel();
+        Colony colony = Colonies.mint(level.getServer());
+        Colony other = Colonies.mint(level.getServer());
+        BlockPos cell = helper.absolutePos(new BlockPos(3, 1, 3));
+        WorldPos at = WorldPos.of(level, cell);
+        try {
+            helper.assertFalse(io.github.izakyl.folkways.front.ui.screen.PageKinds.shows(colony, SupplyContent.ID),
+                "a colony without a source does not expose the creative-supplies page");
+            level.setBlockAndUpdate(cell, SupplyContent.BLOCK.get().defaultBlockState());
+            helper.assertFalse(io.github.izakyl.folkways.front.ui.screen.PageKinds.shows(colony, SupplyContent.ID),
+                "placing a real source alone does not admit it into the colony");
+            var held = colony.hold(SupplyContent.SOURCE, new Held.Block(at)).orElseThrow();
+            helper.assertTrue(io.github.izakyl.folkways.front.ui.screen.PageKinds.shows(colony, SupplyContent.ID),
+                "the actual enrollment's facing exposes its page after the source is admitted");
+            helper.assertFalse(io.github.izakyl.folkways.front.ui.screen.PageKinds.shows(other, SupplyContent.ID),
+                "one colony's source does not expose the page to another colony");
+            helper.assertTrue(io.github.izakyl.folkways.front.ui.screen.PageKinds.shows(colony,
+                io.github.izakyl.folkways.front.ui.screen.PageKinds.METRICS.id()), "core inventory remains visible");
+            colony.release(held.id(), Release.LET_GO);
+            helper.assertFalse(io.github.izakyl.folkways.front.ui.screen.PageKinds.shows(colony, SupplyContent.ID),
+                "releasing the last source hides its page again");
+        } finally { colony.raze(); other.raze(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void allItemsSupplyOnlyFiniteRequestedGoodsAndNeverActsAsOutputStorage(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             Node node = rig.offer(Items.STONE.getDefaultInstance(), 130);

@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.cookery;
 
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.cookery.stove.HeatScene;
 import io.github.izakyl.folkways.front.api.ponder.Scenes;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
@@ -62,7 +63,7 @@ public final class CookeryScenes {
         var table = util.grid().at(1, 1, 5);
         scene.world().setBlock(store, Blocks.CHEST.defaultBlockState(), false);
         scene.world().setBlock(board, com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks.CHOPPING_BOARD.get().defaultBlockState(), false);
-        scene.world().setBlock(stove, com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks.STOVE.get().defaultBlockState(), false);
+        scene.world().setBlock(stove, HeatScene.litStove(), false);
         scene.world().setBlock(pot, com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks.STOCKPOT.get().defaultBlockState(), false);
         scene.world().setBlock(table, Blocks.CRAFTING_TABLE.defaultBlockState(), false);
         scene.world().showSection(util.select().fromTo(0, 0, 0, 6, 3, 6), Direction.DOWN);
@@ -81,6 +82,7 @@ public final class CookeryScenes {
         resident.walkTo(scene, util.vector().topOf(1, 0, 2));
         resident.hold(scene, new ItemStack(Items.WHEAT));
         resident.walkTo(scene, util.vector().topOf(3, 0, 2));
+        resident.lookAt(scene, util.vector().centerOf(board));
         scene.overlay().showOutline(PonderPalette.INPUT, board, util.select().position(board), 95);
         scene.overlay().showText(95)
             .text("Keep base ingredients, containers and reusable kitchen tools in accessible stores. A missing ingredient or blocked appliance leaves the task waiting without spending its inputs.")

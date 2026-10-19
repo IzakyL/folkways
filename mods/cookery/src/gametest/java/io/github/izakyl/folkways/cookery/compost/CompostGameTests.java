@@ -193,6 +193,68 @@ public final class CompostGameTests {
         });
     }
 
+    @GameTest(template = "empty", timeoutTicks = 80)
+    public static void nativeMatureOutputDoesNotNeedAnyRemainingSeedOrEnabledSeedBudget(GameTestHelper helper) {
+        Fixture fixture = new Fixture(helper);
+        fixture.fillNative();
+        fixture.pack.clearContent();
+        CompostStation collectionOnly = new CompostStation(ignored -> Optional.empty(), Set::of);
+        helper.runAfterDelay(25, () -> {
+            try (fixture) {
+                helper.assertValueEqual(fixture.fill(), 8, "the accepted native input matures even after every source seed is gone");
+                List<io.github.izakyl.folkways.core.api.work.Grown> wanted = collectionOnly.recovery(fixture.colony,
+                    fixture.level, fixture.at, Stances.WHEREVER, fixture.bookings, () -> { });
+                helper.assertValueEqual(wanted.size(), 1, "mature recovery is available without a seed service or catalogue");
+                Node collect = wanted.getFirst().nodes().getFirst();
+                helper.assertTrue(collect.spec().needs().isEmpty(), "collecting accepted compost cannot ask logistics for another seed");
+                fixture.step(collect);
+                helper.assertValueEqual(fixture.fill(), 0, "the native mature batch is extracted");
+                helper.assertValueEqual(Goods.countIn(fixture.pack, Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 1L,
+                    "only the actual one-bone-meal native drop enters the pack");
+                helper.assertTrue(collectionOnly.recovery(fixture.colony, fixture.level, fixture.at,
+                    Stances.WHEREVER, fixture.bookings, () -> { }).isEmpty(), "no empty or exhausted source produces a second output");
+                helper.succeed();
+            }
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 80)
+    public static void cancelledMatureCollectionAndShutdownCanOnlyRecoverTheAcceptedBatchOnce(GameTestHelper helper) {
+        Fixture fixture = new Fixture(helper);
+        fixture.fillNative();
+        helper.runAfterDelay(25, () -> {
+            try (fixture) {
+                Node abandoned = fixture.node();
+                helper.assertTrue(abandoned.planned(fixture.level).isEmpty(), "the first real mature collection owns its turn");
+                fixture.bookings.withdraw(fixture.at);
+                fixture.station.release(fixture.colony, fixture.level, fixture.at);
+                helper.assertValueEqual(fixture.fill(), 8, "unmarking releases only the turn, not the native batch");
+                helper.assertTrue(Commit.run(fixture.level, abandoned, fixture) instanceof Outcome.Failed,
+                    "a cancelled extraction cannot take the still-present native output");
+                abandoned.ended(fixture.level, Ending.REVOKED);
+                fixture.station.stop(fixture.colony, io.github.izakyl.folkways.core.api.colony.Closing.SHUTDOWN);
+                fixture.bookings.clear();
+                fixture.pack.clearContent();
+                KitchenBookings restoredBookings = new KitchenBookings();
+                restoredBookings.admit(fixture.at);
+                CompostStation restored = new CompostStation(ignored -> Optional.empty(), Set::of);
+                Node resumed = restored.recovery(fixture.colony, fixture.level, fixture.at, Stances.WHEREVER,
+                    restoredBookings, () -> { }).getFirst().nodes().getFirst();
+                fixture.step(resumed);
+                helper.assertValueEqual(fixture.fill(), 0, "a reconstructed provider recovers the physical batch left at shutdown");
+                helper.assertValueEqual(Goods.countIn(fixture.pack, Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 1L,
+                    "cancel, release and provider reconstruction create no second copy");
+                helper.assertTrue(Commit.run(fixture.level, abandoned, fixture) instanceof Outcome.Failed,
+                    "the old generation remains invalid even after a replacement recovered the batch");
+                helper.assertTrue(restored.recovery(fixture.colony, fixture.level, fixture.at, Stances.WHEREVER,
+                    restoredBookings, () -> { }).isEmpty(), "the reconstructed empty station has no phantom recovery");
+                helper.assertTrue(fixture.level.getEntitiesOfClass(ItemEntity.class, new AABB(fixture.pos).inflate(2)).isEmpty(),
+                    "there is no duplicate physical drop beside the recovered batch");
+                helper.succeed();
+            }
+        });
+    }
+
     private static void commitAfterRepeatedOffers(GameTestHelper helper, Fixture fixture) {
         var colony = io.github.izakyl.folkways.core.api.colony.Colonies.mint(fixture.level.getServer());
         var works = (io.github.izakyl.folkways.core.engine.colony.ColonyWorks) colony;

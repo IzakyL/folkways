@@ -51,7 +51,27 @@ public final class MillstoneDrive {
     private static final Map<UUID, Lease> LEASES = new HashMap<>();
     private static final Map<UUID, Exit> EXITS = new HashMap<>();
 
+    // The native driver identity is read without serializing the appliance inventory each tick.
+    public interface Driver { UUID folkways$driverId(); }
+    public record NativeBatch(UUID colony, UUID batch, ResourceLocation recipe) { }
+
     private MillstoneDrive() { }
+
+    static boolean external(ServerLevel level, MillstoneBlockEntity mill) {
+        return mill.hasEntity() && level.getEntity(((Driver) mill).folkways$driverId()) instanceof LivingEntity driver
+            && Bodies.of(driver).isEmpty() && mill.isBoundTo(driver);
+    }
+
+    public static NativeBatch capture(MillstoneBlockEntity mill) {
+        if (!(mill.getLevel() instanceof ServerLevel level) || !mill.hasEntity()) { return null; }
+        return MillstoneBatch.read(mill, level)
+            .map(batch -> new NativeBatch(batch.colony(), batch.id(), batch.recipe())).orElse(null);
+    }
+
+    public static boolean keepOutputs(MillstoneBlockEntity mill) {
+        return mill.getLevel() instanceof ServerLevel level
+            && MillstoneBatch.read(mill, level).filter(MillstoneBatch.Batch::ready).isPresent();
+    }
 
     private static final class Lease {
         final UUID colony;
@@ -187,8 +207,17 @@ public final class MillstoneDrive {
         return fingerprint;
     }
 
-    public static void after(MillstoneBlockEntity mill) {
+    public static void after(MillstoneBlockEntity mill, NativeBatch before) {
         if (!(mill.getLevel() instanceof ServerLevel level)) { return; }
+        // Only a batch whose exact input/output fingerprint matched before this native tick may
+        // adopt its result. An animal never grants ownership of a player's unrelated ingredients.
+        CompoundTag owned = mill.getPersistentData().getCompound(MillstoneBatch.KEY);
+        if (before != null && owned.hasUUID("colony") && owned.getUUID("colony").equals(before.colony())
+                && owned.hasUUID("batch") && owned.getUUID("batch").equals(before.batch())
+                && before.recipe().toString().equals(owned.getString("recipe"))) {
+            MillstoneBatch.remember(mill, level, new MillstoneBatch.Batch(before.colony(), before.batch(),
+                before.recipe(), mill.getInput().isEmpty()));
+        }
         for (Lease lease : List.copyOf(LEASES.values())) {
             if (lease.mill != mill || !lease.driving) { continue; }
 
@@ -199,10 +228,6 @@ public final class MillstoneDrive {
                 continue;
             }
             boolean ready = mill.getInput().isEmpty();
-            ResourceLocation recipe = ResourceLocation.tryParse(tag.getString("recipe"));
-            if (recipe != null) {
-                MillstoneBatch.remember(mill, level, new MillstoneBatch.Batch(lease.colony, lease.batch, recipe, ready));
-            }
             if (ready || !mill.isBoundTo(lease.actor)) { detach(lease, ready); }
         }
     }
@@ -387,7 +412,7 @@ public final class MillstoneDrive {
     }
 
     public static Vec3 project(MillstoneBlockEntity mill, LivingEntity actor, Vec3 stored) {
-        if (!permitted(mill, actor)) { return stored; }
+        if (!permitted(mill, actor) && !(mill.isBoundTo(actor) && Bodies.of(actor).isEmpty())) { return stored; }
         return WorldSpaces.containing(actor.level(), mill.getBlockPos())
             .map(frame -> frame.toWorld(stored.subtract(Vec3.atLowerCornerOf(frame.storageOrigin())))).orElse(stored);
     }

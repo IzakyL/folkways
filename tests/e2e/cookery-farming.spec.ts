@@ -37,7 +37,7 @@ type Layout = ReturnType<typeof farming>;
 type Stack = { id?: string; count?: number; Slot?: number };
 type Inventory = { totals: Record<string, number>; chests: unknown[]; residents: unknown[]; drops: unknown[] };
 type FarmState = { compostPoint: boolean; compostHasBlockEntity: boolean; soil: string; root: string; middle: string; top: string; grass: number; compost: number;
-  wearHat: boolean; wearArmor: boolean; hatResidents: Array<{ uuid: string; x: number; y: number; z: number }>;
+  wearHat: boolean; wearArmor: boolean; hatShared: number; hatResidents: Array<{ uuid: string; x: number; y: number; z: number }>;
   complete: boolean; wheatPhysical: number; wheatCompostable: number; rareCompostable: number };
 
 for (const stage of twins()) test(stage.title("cookery farming: native rice, owned hats, protected seeds and a compost-to-grass loop"), async ({}, testInfo) => {
@@ -98,7 +98,7 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     expect(compostRegistration.compostHasBlockEntity, "registration preserves the native composter without a fabricated block entity").toBe(false);
 
     evidence.hatOff = await editClothing(server, client, player, founded.standBlock, stage, 0);
-    expect((await state(server, stage, layout)).wearHat, "the real book action disables automatic hats").toBe(false);
+    expect((await state(server, stage, layout)).wearHat, "the real book action disables task hat borrowing").toBe(false);
     expect((await state(server, stage, layout)).wearArmor, "a full farmer outfit is opt-in").toBe(false);
     evidence.clothingPicker = await editClothing(server, client, player, founded.standBlock, stage, 2, HAT);
     expect((await inventory(server, stage, containers)).totals[HAT] ?? 0, "the clothing selector is a sample, not a physical free hat").toBe(0);
@@ -172,24 +172,15 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     for (const seed of GRASS_SEEDS) expect(initial.totals[seed] ?? 0, "there are no unstated rare seeds").toBe(0);
     await tick.sprint(server, 200);
     expect((await state(server, stage, layout)).hatResidents).toHaveLength(0);
-    expect((await inventory(server, stage, containers)).totals[WHEAT_SEED], "without a worn hat the composter must not consume even surplus seeds").toBe(256);
+    expect((await inventory(server, stage, containers)).totals[WHEAT_SEED], "with seed task support disabled the composter consumes no surplus").toBe(256);
     expect((await state(server, stage, layout)).compost).toBe(0);
 
     evidence.hatOn = await editClothing(server, client, player, founded.standBlock, stage, 0);
-    const wearing = await waitFor(server, stage, layout, "one actual supplied hat must move from logistics into HEAD", (sample) => sample.hatResidents.length === 1);
-    expect(wearing.wearHat).toBe(true);
-    expect((await inventory(server, stage, containers)).totals[HAT], "the worn hat remains the same single physical item").toBe(1);
+    expect((await state(server, stage, layout)).wearHat).toBe(true);
     const looks = await readResidentLooks(server);
     evidence.looks = looks;
     if (stage.kind === "aboard") expect(looks[0], "the aboard hat screenshot exercises the existing user Geo model").toMatch(/^model\/default_boy\//);
-    const resident = wearing.hatResidents[0]!;
-    const eye = { x: resident.x + 3.5, y: resident.y + 2.2, z: resident.z + 3.5 };
-    const shot = outAbs("e2e", "shots", stage.name("cookery-real-head-hat") + ".png");
-    await frames(client, 8);
-    await media.screenshot(client, { path: shot, camera: { position: eye,
-      ...cameraLookingAt(eye, { x: resident.x, y: resident.y + 1.5, z: resident.z }) } });
-    await testInfo.attach(stage.kind === "ground" ? "native-skin-head-hat" : "user-geo-head-hat", { path: shot, contentType: "image/png" });
-
+    let hatSeen = false, hatReturnedToStore = false, hatScreenshot = false;
     let level7Seen = false, level8Seen = false, collectedSeen = false, grewGrass = false, harvestedGrass = false, newSeedSeen = false;
     let previousGrass = 0;
     const observations: unknown[] = [];
@@ -201,6 +192,33 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
       expect(stock.totals[WHEAT_SEED] ?? 0, "physical chest, pack and drop accounting also retains the protected wheat").toBeGreaterThanOrEqual(PROTECTED_WHEAT);
       expect(sample.rareCompostable, "first-batch rare grass seeds remain protected for expansion").toBe(0);
       expect(stock.totals[HAT], "equipment is never copied while grass and compost tasks run").toBe(1);
+      if (sample.hatResidents.length > 0) {
+        hatSeen = true;
+        expect(sample.hatResidents, "only the single shared hat can occupy a native HEAD").toHaveLength(1);
+        if (!hatScreenshot) {
+          const resident = sample.hatResidents[0]!;
+            // Server sprinting can leave the rendered resident behind its last packet. Observe the
+            // actual client equipment and position before framing that same borrowed physical hat.
+            let rendered: RenderedHat | undefined;
+            await expect.poll(async () => {
+              await frames(client, 3);
+              rendered = await client.run(READ_RENDERED_HAT, { uuid: resident.uuid });
+              return rendered.hat;
+            }, { timeout: 8_000 }).toBe(true);
+            const eye = { x: rendered!.x + 2.4, y: rendered!.y + 2.2, z: rendered!.z + 2.4 };
+          const shot = outAbs("e2e", "shots", stage.name(`cookery-task-head-hat-${runId}`) + ".png");
+          await frames(client, 2);
+          await media.screenshot(client, { path: shot, settleTerrain: false, camera: { position: eye,
+              ...cameraLookingAt(eye, { x: rendered!.x, y: rendered!.y + 1.5, z: rendered!.z }) } });
+          const afterShot = await state(server, stage, layout);
+          if (afterShot.hatResidents.length === 1) {
+            await testInfo.attach(stage.kind === "ground" ? "native-skin-task-head-hat" : "user-geo-task-head-hat", { path: shot, contentType: "image/png" });
+              evidence.hatScreenshotState = { before: sample, rendered, after: afterShot, path: shot };
+            hatScreenshot = true;
+          }
+        }
+      }
+      hatReturnedToStore ||= hatSeen && sample.hatResidents.length === 0 && sample.hatShared === 1;
       level7Seen ||= sample.compost === 7;
       level8Seen ||= sample.compost === 8;
       collectedSeen ||= level8Seen && sample.compost < 7;
@@ -209,18 +227,21 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
       newSeedSeen ||= GRASS_SEEDS.some((seed) => (stock.totals[seed] ?? 0) > 0);
       observations.push({ elapsed, ...sample, totals: stock.totals });
       previousGrass = sample.grass;
-      if (level7Seen && level8Seen && collectedSeen && grewGrass && harvestedGrass && newSeedSeen) break;
-      const step = sample.compost >= 6 ? 5 : 10;
+      if (level7Seen && level8Seen && collectedSeen && grewGrass && harvestedGrass && newSeedSeen && hatSeen && hatReturnedToStore && hatScreenshot) break;
+      const step = hatSeen && !hatReturnedToStore ? 2 : sample.compost >= 6 ? 5 : 10;
       await tick.sprint(server, step);
       elapsed += step;
     }
-    evidence.seedLoop = { level7Seen, level8Seen, collectedSeen, grewGrass, harvestedGrass, newSeedSeen, observations };
+    evidence.seedLoop = { level7Seen, level8Seen, collectedSeen, grewGrass, harvestedGrass, newSeedSeen, hatSeen, hatReturnedToStore, hatScreenshot, observations };
     expect(level7Seen, "native compost reaches the scheduled maturing stage").toBe(true);
     expect(level8Seen, "the native scheduled tick reaches collectable compost").toBe(true);
     expect(collectedSeen, "a resident extracts the real bone meal and empties the composter").toBe(true);
     expect(grewGrass, "that physical bone meal restores native short grass inside the marked area").toBe(true);
     expect(harvestedGrass, "the hatted farmer harvests the newly grown real grass").toBe(true);
     expect(newSeedSeen, "native grass loot supplies actual previously missing Cookery seeds").toBe(true);
+    expect(hatSeen, "the actual native grass task borrows the supplied hat into HEAD").toBe(true);
+    expect(hatReturnedToStore, "a completed task returns its one real hat to shared storage before another use").toBe(true);
+    expect(hatScreenshot, "the real borrowed hat is captured while it is still equipped").toBe(true);
     evidence.final = await inventory(server, stage, containers);
   } catch (error) {
     pair?.failing(error);
@@ -339,9 +360,28 @@ out.put("grass",grass);out.put("compost",compost.is(Blocks.COMPOSTER)?compost.ge
 out.put("compostPoint",colony.holdingAt(WorldPos.of(level,pos(args.value("composter"))))
   .filter(holding->holding.owner().equals(CookeryContent.COMPOST)&&holding.what() instanceof Held.Point).isPresent());
 out.put("compostHasBlockEntity",level.getBlockEntity(pos(args.value("composter")))!=null);
-out.put("wearHat",settings.flag("wear_hat"));out.put("wearArmor",settings.flag("wear_farmer_armor"));out.put("hatResidents",hats);
+long sharedHats=0;for(var at:colony.storesIn(level.dimension())){
+  var store=colony.store(level,at);if(store.isPresent())sharedHats+=io.github.izakyl.folkways.core.api.terms.Goods.countIn(store.get(),
+    io.github.izakyl.folkways.core.api.terms.ItemSpec.of(TagMod.STRAW_HAT));
+}
+out.put("wearHat",settings.flag("wear_hat"));out.put("wearArmor",settings.flag("wear_farmer_armor"));out.put("hatResidents",hats);out.put("hatShared",sharedHats);
 out.put("complete",budget.complete());out.put("wheatPhysical",wheat.physical());out.put("wheatCompostable",wheat.compostable());out.put("rareCompostable",rare);
 return out;`,
+  }),
+});
+
+type RenderedHat = { hat: boolean; x: number; y: number; z: number };
+const READ_RENDERED_HAT = defineTask<{ uuid: string }, RenderedHat>({
+  name: "folkways.cookery.farming-rendered-hat", side: "client", timeoutMs: 20_000,
+  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.world.entity.LivingEntity",
+    "net.minecraft.world.entity.EquipmentSlot", "com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod"], body: `
+var level=((Minecraft)ctx.client()).level;
+if(level!=null)for(var entity:level.entitiesForRendering()){
+  if(!entity.getUUID().toString().equals(Args.of(ctx).value("uuid")))continue;
+  return Map.of("hat",entity instanceof LivingEntity body&&body.getItemBySlot(EquipmentSlot.HEAD).is(TagMod.STRAW_HAT),
+    "x",entity.getX(),"y",entity.getY(),"z",entity.getZ());
+}
+return Map.of("hat",false,"x",0,"y",0,"z",0);`,
   }),
 });
 

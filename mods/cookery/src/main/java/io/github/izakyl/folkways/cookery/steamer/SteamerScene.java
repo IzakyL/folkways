@@ -6,15 +6,16 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.cookery.stove.HeatScene;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
 import net.createmod.ponder.api.scene.SceneBuilder;
 import net.createmod.ponder.api.scene.SceneBuildingUtil;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Blocks;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
@@ -25,14 +26,14 @@ public final class SteamerScene {
         scene.title("cookery_steamer", "The steamer: layers, a top lid and real heat");
         PonderScenery.openWorld(scene, util, 7);
         PonderScenery.grassGround(scene, util, 7);
-        BlockPos base = util.grid().at(3, 1, 3);
+        BlockPos base = util.grid().at(3, 2, 3);
         BlockPos top = base.above();
         BlockPos store = util.grid().at(1, 1, 1);
-        scene.world().setBlock(base.below(), Blocks.MAGMA_BLOCK.defaultBlockState(), false);
+        scene.world().setBlock(base.below(), HeatScene.litStove(), false);
         scene.world().setBlock(base, ModBlocks.STEAMER.get().defaultBlockState().setValue(SteamerBlock.HALF, false), false);
         scene.world().setBlock(top, ModBlocks.STEAMER.get().defaultBlockState(), false);
         scene.world().setBlock(store, Blocks.CHEST.defaultBlockState(), false);
-        scene.world().showSection(util.select().fromTo(0, 0, 0, 6, 3, 6), Direction.DOWN);
+        scene.world().showSection(util.select().fromTo(0, 0, 0, 6, 4, 6), Direction.DOWN);
         scene.idle(15);
         ItemStack book = PonderScenery.book(Shape.Gesture.POINT);
         scene.overlay().showControls(util.vector().topOf(top), Pointing.DOWN, 60).leftClick().withItem(book);
@@ -41,6 +42,7 @@ public final class SteamerScene {
             .pointAt(util.vector().centerOf(base)).placeNearTarget().attachKeyFrame();
         scene.idle(105);
         var resident = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(5, 0, 3), 90);
+        resident.lookAt(scene, util.vector().centerOf(top));
         resident.hold(scene, new ItemStack(ModItems.RAW_DOUGH.get(), 3));
         scene.world().modifyBlockEntity(top, SteamerBlockEntity.class, steamer -> {
             for (int slot = 0; slot < 3; slot++) { steamer.getItems().set(slot, new ItemStack(ModItems.RAW_DOUGH.get())); }
@@ -54,11 +56,11 @@ public final class SteamerScene {
         scene.overlay().showText(95).text("The reachable top lid closes using the native lid rule. Lower blocks are covered by the stack above them; a half block below another steamer cannot pass its heat upward.")
             .pointAt(util.vector().topOf(top)).placeNearTarget().attachKeyFrame();
         scene.idle(105);
-        scene.world().setBlock(base.below(), Blocks.STONE.defaultBlockState(), false);
+        scene.world().setBlock(base.below(), HeatScene.litStove().setValue(com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock.LIT, false), false);
         scene.overlay().showText(90).text("A real heat source is still required. When it disappears, an owned batch cools down through the native ticker and waits for heat to return.")
             .pointAt(util.vector().centerOf(base.below())).placeNearTarget().attachKeyFrame();
         scene.idle(100);
-        scene.world().setBlock(base.below(), Blocks.MAGMA_BLOCK.defaultBlockState(), false);
+        scene.world().setBlock(base.below(), HeatScene.litStove(), false);
         scene.world().modifyBlockEntity(top, SteamerBlockEntity.class, steamer -> {
             for (int slot = 0; slot < 3; slot++) {
                 steamer.getItems().set(slot, new ItemStack(ModItems.MANTOU.get()));

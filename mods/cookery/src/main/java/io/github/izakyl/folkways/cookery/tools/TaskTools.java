@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.cookery.tools;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
+import io.github.izakyl.folkways.cookery.gear.CookeryGear;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.core.api.colony.Colony;
@@ -51,6 +52,9 @@ public final class TaskTools {
     final KitchenTools pool = new KitchenTools();
     final ToolStock stock;
     private final Map<UUID, ToolWork> active = new LinkedHashMap<>();
+    private final Map<UUID, ClothingWork> clothing = new LinkedHashMap<>();
+    private record Demand(ServerLevel level, List<ItemSpec> families, boolean needsTools) {
+    }
     private final Map<UUID, ItemStack> borrowed = new LinkedHashMap<>();
     private final Map<UUID, WorldPos> returningTo = new LinkedHashMap<>();
     private final OrderReturns.Registration returnObserver;
@@ -80,8 +84,10 @@ public final class TaskTools {
     }
 
     public static void register() {
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(LoanClothing::joined);
         Tools.shared(new ToolNeed.Tagged(TagMod.KITCHEN_KNIFE), ItemSpec.of(TagMod.KITCHEN_KNIFE));
         Tools.shared(new ToolNeed.Tagged(TagMod.KITCHEN_SHOVEL), ItemSpec.of(TagMod.KITCHEN_SHOVEL));
+        Tools.shared(io.github.izakyl.folkways.cookery.stove.StoveWorkshops.IGNITION, ItemSpec.of(TagMod.LIT_STOVE));
     }
 
     public Workshop decorate(Workshop original) {
@@ -104,7 +110,10 @@ public final class TaskTools {
     public Grown decorate(Grown original) {
         List<Node> wrapped = original.nodes().stream().map(node -> {
             boolean shared = node.spec().tools().stream().anyMatch(use -> Tools.shared(use.need()).isPresent());
-            return shared && !(node instanceof ToolWork) ? (Node) new ToolWork(this, node) : node;
+            var clothing = node.spec().site().where().level(server).map(level -> CookeryGear.request(colony, node, level)).orElse(CookeryGear.Request.NONE);
+            if (node instanceof ToolWork || node instanceof ClothingWork) return node;
+            if (!clothing.empty()) return (Node) new ClothingWork(this, node, clothing);
+            return shared ? (Node) new ToolWork(this, node) : node;
         }).toList();
         return new Grown(wrapped, original.links(), original.workerGroups(), original.follows());
     }
@@ -119,12 +128,30 @@ public final class TaskTools {
         io.github.izakyl.folkways.core.api.resident.body.TaskTools.release(work.id());
         for (KitchenTools.Lease lease : pool.leases(colony.id())) {
             if (lease.request().node().equals(work.id())) {
+                stock.body(lease.resident()).ifPresent(body -> LoanClothing.recover(this, lease, body));
                 if (tool(lease).isEmpty()) {
                     returned(lease);
                     continue;
                 }
                 protect(lease.id(), lease.resident(), List.of(lease.request().tools()));
             }
+        }
+        persist();
+    }
+
+    synchronized void started(ClothingWork work) {
+        clothing.put(work.id(), work);
+    }
+
+    synchronized void ended(ClothingWork work) {
+        clothing.remove(work.id(), work);
+        pool.cancel(colony.id(), work.id());
+        io.github.izakyl.folkways.core.api.resident.body.TaskTools.release(work.id());
+        for (KitchenTools.Lease lease : pool.leases(colony.id())) {
+            if (!lease.request().node().equals(work.id())) continue;
+            stock.body(lease.resident()).ifPresent(body -> LoanClothing.recover(this, lease, body));
+            if (tool(lease).isEmpty()) returned(lease);
+            else protect(lease.id(), lease.resident(), List.of(lease.request().tools()));
         }
         persist();
     }
@@ -215,7 +242,8 @@ public final class TaskTools {
             var body = stock.body(lease.resident());
             if (body.isPresent()) {
                 int slot = carriedSlot(body.get().pack(), lease, expected);
-                if (slot >= 0) promises.add(new OrderReturns.Promise(lease.tool(), target, body.get().pack().getItem(slot).copyWithCount(1)));
+                ItemStack actual = slot >= 0 ? body.get().pack().getItem(slot) : LoanClothing.held(this, body.get().mob(), lease);
+                if (!actual.isEmpty()) promises.add(new OrderReturns.Promise(lease.tool(), target, actual.copyWithCount(1)));
             } else if (colony.residents().stream().anyMatch(resident -> resident.id().equals(lease.resident()))) {
                 // A held unloaded body's persisted physical loan is not a destroyed tool.
                 promises.add(new OrderReturns.Promise(lease.tool(), target, expected.copyWithCount(1)));
@@ -255,7 +283,10 @@ public final class TaskTools {
             }
         }
         Set<UUID> needed = new LinkedHashSet<>();
-        for (ToolWork work : List.copyOf(active.values())) {
+        List<Demand> demands = new ArrayList<>();
+        active.values().forEach(work -> demands.add(new Demand(work.level(), work.families(), work.needsTools())));
+        clothing.values().forEach(work -> demands.add(new Demand(work.level(), work.families(), work.needsTools())));
+        for (Demand work : demands) {
             ServerLevel level = work.level();
             if (level == null || !work.needsTools()) {
                 continue;
@@ -313,6 +344,13 @@ public final class TaskTools {
 
     public synchronized void closed(Closing why) {
         returnObserver.close();
+        for (KitchenTools.Lease lease : pool.leases(colony.id())) {
+            pool.returning(lease.id());
+            stock.body(lease.resident()).ifPresent(body -> {
+                if (why == Closing.RAZED) LoanClothing.release(this, lease, body);
+                else LoanClothing.recover(this, lease, body);
+            });
+        }
         if (why == Closing.SHUTDOWN) {
             persist();
         } else {
@@ -324,6 +362,8 @@ public final class TaskTools {
         active.keySet().forEach(io.github.izakyl.folkways.core.api.resident.body.TaskTools::release);
         pool.leases(colony.id()).forEach(lease ->
             io.github.izakyl.folkways.core.api.resident.body.TaskTools.release(lease.id()));
+        clothing.keySet().forEach(io.github.izakyl.folkways.core.api.resident.body.TaskTools::release);
+        clothing.clear();
         active.clear();
         supplying.clear();
     }

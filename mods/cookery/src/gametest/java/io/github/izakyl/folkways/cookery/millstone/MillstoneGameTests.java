@@ -435,7 +435,7 @@ public final class MillstoneGameTests {
             }
         }
     }
-    private static final class Rig implements Worker, AutoCloseable {
+    static final class Rig implements Worker, AutoCloseable {
         final GameTestHelper helper;
         final ServerLevel level;
         final UUID colony = UUID.randomUUID();

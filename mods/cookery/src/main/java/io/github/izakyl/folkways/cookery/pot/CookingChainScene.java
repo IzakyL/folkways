@@ -3,11 +3,12 @@ package io.github.izakyl.folkways.cookery.pot;
 import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.MillstoneBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.NinePart;
 import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StockpotBlock;
-import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.MillstoneBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.cookery.millstone.MillstoneScene;
+import io.github.izakyl.folkways.cookery.stove.HeatScene;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
@@ -40,7 +41,7 @@ public final class CookingChainScene {
         }
         scene.world().setBlock(table, Blocks.CRAFTING_TABLE.defaultBlockState(), false);
         scene.world().setBlock(board, ModBlocks.CHOPPING_BOARD.get().defaultBlockState(), false);
-        scene.world().setBlock(stockpot.below(), Blocks.CAMPFIRE.defaultBlockState(), false);
+        scene.world().setBlock(stockpot.below(), HeatScene.litStove(), false);
         scene.world().setBlock(stockpot, ModBlocks.STOCKPOT.get().defaultBlockState(), false);
         scene.world().setBlock(store, Blocks.CHEST.defaultBlockState(), false);
         scene.world().showSection(util.select().fromTo(0, 0, 0, 8, 3, 8), Direction.DOWN);
@@ -54,22 +55,16 @@ public final class CookingChainScene {
         var resident = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(4, 0, 2), 90);
         resident.hold(scene, new ItemStack(Items.WHEAT));
         scene.overlay().showOutline(PonderPalette.GREEN, mill, util.select().fromTo(0, 0, 0, 4, 1, 4), 100);
-        scene.overlay().showText(95).text("Wheat becomes flour in the real millstone. Keep the turning path and a clear exit open: the resident must finish driving the mill and walk free before another step can use the output.")
+        scene.overlay().showText(220).text("Wheat becomes flour in the real millstone. Keep the turning path and a clear exit open: the resident must finish driving the mill and walk free before another step can use the output.")
             .pointAt(util.vector().topOf(mill)).placeNearTarget().attachKeyFrame();
-        scene.idle(105);
+        scene.idle(15);
         resident.hold(scene, ItemStack.EMPTY);
-        int[][] around = {{4, 4}, {2, 4}, {0, 4}, {0, 2}, {0, 0}, {2, 0}, {4, 0}, {4, 2}};
-        for (int lap = 0; lap < 4; lap++) {
-            for (int point = 0; point < around.length; point++) {
-                final int angle = (lap * around.length + point + 1) * 45;
-                scene.world().modifyBlockEntity(mill, MillstoneBlockEntity.class, tile -> tile.setCacheRot(angle));
-                resident.walkTo(scene, util.vector().topOf(around[point][0], 0, around[point][1]));
-            }
-        }
+        MillstoneScene.drive(scene, mill, resident, 90, 200);
         resident.walkTo(scene, util.vector().topOf(5, 0, 2));
         resident.hold(scene, new ItemStack(ModItems.FLOUR.get()));
         scene.idle(20);
         resident.walkTo(scene, util.vector().topOf(6, 0, 2));
+        resident.lookAt(scene, util.vector().centerOf(table));
         resident.hold(scene, new ItemStack(Items.WATER_BUCKET));
         scene.idle(20);
         resident.hold(scene, new ItemStack(ModItems.RAW_DOUGH.get()));
@@ -78,6 +73,7 @@ public final class CookingChainScene {
             .pointAt(util.vector().topOf(table)).placeNearTarget().attachKeyFrame();
         scene.idle(105);
         resident.walkTo(scene, util.vector().topOf(6, 0, 4));
+        resident.lookAt(scene, util.vector().centerOf(board));
         resident.hold(scene, new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get()));
         scene.idle(40);
         resident.hold(scene, new ItemStack(ModItems.RAW_NOODLES.get(), 3));
@@ -86,6 +82,7 @@ public final class CookingChainScene {
             .pointAt(util.vector().topOf(board)).placeNearTarget().attachKeyFrame();
         scene.idle(105);
         resident.walkTo(scene, util.vector().topOf(6, 0, 6));
+        resident.lookAt(scene, util.vector().centerOf(stockpot));
         resident.hold(scene, new ItemStack(ModItems.LETTUCE.get()));
         scene.idle(15);
         resident.hold(scene, new ItemStack(Items.EGG));
