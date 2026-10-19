@@ -68,6 +68,7 @@ public final class FolkwaysMod {
 
     public FolkwaysMod(IEventBus modBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.SERVER, FolkwaysConfig.SPEC);
+        container.registerConfig(ModConfig.Type.CLIENT, FolkwaysClientConfig.SPEC);
         fitTheShell(modBus);
         FolkwaysAttachments.register(modBus);
         Front.install(modBus);

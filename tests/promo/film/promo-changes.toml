@@ -1,0 +1,23 @@
+# 本次更新宣传片的文字。改完在仓库根目录运行：python3 tests/promo/film/changes.py
+#
+# 镜头顺序：UI → 车万女仆模型 → .nbt 蓝图 → 整地 → 范围纳入 → 手动打包（蛙港）→ 远端居民收包使用 → 邮箱与火车。
+
+[scenes.ui]
+captions = ["优化的 UI 风格以及细节修复"]
+
+[scenes.maids]
+captions = ["当已安装车万女仆时，其中自带的模型将自动可用"]
+
+[scenes.blueprint]
+captions = ["已支持：内置的 .nbt 蓝图放置"]
+
+[scenes.groundwork]
+captions = ["整地功能：快捷平整一块区域"]
+
+[scenes.sweep]
+captions = ["快捷纳入工作方块：通过框选区域批量纳入"]
+
+[scenes.packing]
+captions = ["现在，居民可以手动将物资打包发送"]
+
+# 远端居民拿到包开始用，不配字。

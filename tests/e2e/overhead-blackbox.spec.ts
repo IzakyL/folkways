@@ -108,10 +108,10 @@ for (const stage of twins()) test(stage.title("view from above: the book's box g
     await media.screenshot(client, { path: outAbs("e2e", "shots", `${stage.name("overhead-marked")}.png`) });
 
     await input.move(client, { x: centre.x + 30, y: centre.y - 15 });
-    evidence.push = await heldScroll(server, client, [KEY_LEFT_CONTROL], 2);
+    evidence.push = await heldScroll(server, client, [KEY_LEFT_CONTROL], -2);
     const pushed = MARKED_SIZE.exec(evidence.push.bar?.text ?? "");
     expect(pushed, `Ctrl+scroll over the box pushes the face under the mouse: ${evidence.push.bar?.text}`).not.toBeNull();
-    expect(Number(pushed![2]), "the face under the mouse is the top, pulled two blocks up").toBe(Number(marked![2]) + 2);
+    expect(Number(pushed![2]), "the face under the mouse is the top, drawn two blocks up towards the camera by scrolling down").toBe(Number(marked![2]) + 2);
     await media.screenshot(client, { path: outAbs("e2e", "shots", `${stage.name("overhead-pushed")}.png`) });
 
     await input.click(client, centre, { button: "right" });

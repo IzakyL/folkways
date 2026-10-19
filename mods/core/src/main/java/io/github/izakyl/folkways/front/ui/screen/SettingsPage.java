@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.front.ui.screen;
 
+import com.lowdragmc.lowdraglib2.LDLib2;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.DataBindingBuilder;
 import com.lowdragmc.lowdraglib2.gui.texture.ItemStackTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
@@ -8,6 +9,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
+import io.github.izakyl.folkways.FolkwaysClientConfig;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.CoreSettings;
@@ -79,6 +81,18 @@ public final class SettingsPage implements Draw {
             Rows.icon(ItemStack.EMPTY),
             Rows.name(Component.translatable("folkways.settings.layout")),
             resetLayout));
+
+        // The wheel is the player's own, kept in their client config: the server side of the page leaves it alone.
+        Toggle invertWheel = Controls.tick();
+        if (LDLib2.isRemote()) {
+            invertWheel.setOn(FolkwaysClientConfig.invertWheel(), false);
+            invertWheel.setOnToggleChanged(FolkwaysClientConfig::invertWheel);
+        }
+        Tokens.name(invertWheel, "folkways.settings.invert_wheel");
+        table.addChildren(Rows.row().addChildren(
+            Rows.icon(ItemStack.EMPTY),
+            Rows.name(Component.translatable("folkways.settings.invert_wheel")),
+            invertWheel));
 
         Razing razing = new Razing();
         table.addChildren(Rows.row().addChildren(

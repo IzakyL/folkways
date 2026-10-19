@@ -13,7 +13,6 @@ import io.github.izakyl.folkways.front.engine.charter.CharterRefusal;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
-import io.github.izakyl.folkways.front.engine.colony.ColonyMetrics;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,7 +29,6 @@ final class Razing {
 
     private boolean confirming;
     private String typed = "";
-    private Integer leaving;
 
     // The button that asks; it lives wherever the page puts it.
     Button asker(Player player) {
@@ -42,7 +40,6 @@ final class Razing {
                         Component.translatable(CharterRefusal.FOUNDER_ONLY.translationKey()), true);
                     return;
                 }
-                leaving = null;
                 confirming = true;
             })));
     }
@@ -56,9 +53,7 @@ final class Razing {
 
     // Shows the asking page in place of the given one while the player is deciding.
     UIElement confirmation(Player player, UIElement instead) {
-        Label cost = Rows.text(Component.empty());
-        cost.bind(DataBindingBuilder.componentS2C(() -> Component.translatable(
-            "folkways.metrics.raze.warning", residents(player))).build());
+        Label cost = Rows.text(Component.translatable("folkways.metrics.raze.warning"));
         Label prompt = Rows.text(Component.empty());
         prompt.bind(DataBindingBuilder.componentS2C(() ->
             Component.translatable("folkways.metrics.raze.prompt", phrase())).build());
@@ -66,6 +61,7 @@ final class Razing {
         TextField field = new TextField();
         field.layout(layout -> layout.widthPercent(100).flexShrink(1).minWidth(0));
         field.bind(DataBindingBuilder.stringC2S(text -> typed = text).build());
+        field.textFieldStyle(style -> style.placeholder(Component.empty()));
         Tokens.name(field, "folkways.metrics.raze.field");
 
         UIElement asking = Rows.page().addChildren(cost, prompt, field,
@@ -85,20 +81,6 @@ final class Razing {
             .build()
             .getSyncValue());
         return asking;
-    }
-
-    // Counted once per asking, not on every sync.
-    private int residents(Player player) {
-        if (!confirming) {
-            return 0;
-        }
-        if (leaving == null) {
-            Optional<Colony> colony = Pages.colonyOf(player);
-            Optional<ServerLevel> level = Pages.levelOf(player);
-            leaving = colony.isEmpty() || level.isEmpty() ? 0
-                : ColonyMetrics.of(level.get().getServer(), colony.get()).residents();
-        }
-        return leaving;
     }
 
     private static Button named(String token, Button press) {

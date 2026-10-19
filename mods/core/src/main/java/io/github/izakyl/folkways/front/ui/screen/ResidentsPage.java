@@ -137,6 +137,7 @@ public final class ResidentsPage implements Draw {
 
         TextField search = new TextField();
         search.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
+        search.textFieldStyle(style -> style.placeholder(Component.translatable("folkways.picker.search")));
         search.style(style -> style.tooltips(
             Component.translatable("folkways.ui.residents.search"),
             Component.translatable("folkways.ui.residents.search.field"),
@@ -174,6 +175,7 @@ public final class ResidentsPage implements Draw {
         TextField nameField = new TextField();
         nameField.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
         nameField.bind(DataBindingBuilder.stringC2S(text -> state.typed = text).build());
+        nameField.textFieldStyle(style -> style.placeholder(Component.translatable("folkways.resident.rename.hint")));
         this.nameField = nameField;
 
         Button back = new Button()

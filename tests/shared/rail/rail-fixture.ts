@@ -300,6 +300,8 @@ async function playerCell(server: MinecraftServer, playerName: string): Promise<
 }
 
 export const TAKEN_ON = "The colony has taken this train on";
+// The same receipt as a client set to Chinese shows it: the promo films run in Chinese.
+const TAKEN_ON_ZH = "殖民地已接管这列列车";
 
 export const GIVEN_BACK = "The train is no longer this colony's";
 
@@ -328,7 +330,7 @@ export async function handOverAtConductorSeat(
       return out;
     }
     out.scheduled = await trainHasSchedule(server, carriageUuid);
-    out.roster = out.roster || click.actionBar.text.includes(TAKEN_ON);
+    out.roster = out.roster || (click.actionBar.text.includes(TAKEN_ON) || click.actionBar.text.includes(TAKEN_ON_ZH));
     out.attempts.push({ attempt, action_bar: click.actionBar, scheduled: out.scheduled, roster: out.roster });
   }
   return out;

@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import io.github.izakyl.folkways.FolkwaysClientConfig;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
 import io.github.izakyl.folkways.front.engine.net.CreateZonePacket;
@@ -183,7 +184,7 @@ public final class ZoneSelection {
         if (minecraft.player == null || verticalDelta == 0.0D) {
             return false;
         }
-        int step = verticalDelta > 0.0D ? Mth.ceil(verticalDelta) : Mth.floor(verticalDelta);
+        int step = FolkwaysClientConfig.away(verticalDelta > 0.0D ? Mth.ceil(verticalDelta) : Mth.floor(verticalDelta));
         if (min == null) {
             if (!FolkwaysClientGameEvents.modifierDown()) {
                 return false;
@@ -195,10 +196,11 @@ public final class ZoneSelection {
         if (aimedFace == null) {
             return true;
         }
-        // The wheel draws towards the player whatever it has hold of, so a box entered is pulled the other way.
-        Direction towards = boxOfMarked().contains(Aim.of(minecraft.player).in(minecraft.player.level(), min).from())
-            ? aimedFace.getOpposite() : aimedFace;
-        int by = towards.getAxisDirection().getStep() * step;
+        // The wheel pushes away from the player whatever it has hold of, as Create's quill does, so a box entered is
+        // pushed the other way.
+        Direction away = boxOfMarked().contains(Aim.of(minecraft.player).in(minecraft.player.level(), min).from())
+            ? aimedFace : aimedFace.getOpposite();
+        int by = away.getAxisDirection().getStep() * step;
         Direction.Axis axis = aimedFace.getAxis();
         if (gripped().size() > 1) {
             min = min.relative(axis, by);

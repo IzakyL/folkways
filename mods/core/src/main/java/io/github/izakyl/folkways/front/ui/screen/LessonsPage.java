@@ -49,8 +49,7 @@ public final class LessonsPage implements Draw {
     @Override
     public UIElement build(Player viewer) {
         folders = Rows.table();
-        UIElement body = Rows.page().addChildren(
-            Rows.text(Component.translatable("folkways.lessons.intro")), folders);
+        UIElement body = Rows.page().addChildren(folders);
         for (Shelf shelf : shelves.get()) {
             folders.addChildren(folderRow(shelf));
             UIElement lessons = lessons(shelf);

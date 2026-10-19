@@ -162,7 +162,10 @@ final class WaresPresence implements Facing {
             if (!cell.in(level) || !level.isLoaded(cell.block(level))) {
                 continue;
             }
-            here++;
+            // The fuel is said for every station at once: the stations follow under a heading of their own.
+            if (here++ == 0) {
+                rows.add(Board.Row.heading(Component.translatable("folkways.page.wares.stations")));
+            }
             BlockState state = level.getBlockState(cell.block(level));
             rows.add(new Board.Row(new ItemStack(state.getBlock()),
                 state.getBlock().getName(),

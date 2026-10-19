@@ -243,6 +243,32 @@ iris = { target = ["client"] }
 sable = { target = ["server", "client"] }
 create-aeronautics = { target = ["server", "client"] }
 
+# The promo profile with Touhou Little Maid installed on both sides, for the shot that shows its models lent to
+# residents as looks. Nothing else of it is used, and every other promo take stays without it. The game is in
+# Chinese, as the film's viewers read it.
+[profile.promo-maids.neoforge]
+jvm_args = ["-Xmx3G"]
+
+[profile.promo-maids.neoforge.server]
+world = "vanilla"
+properties = { "level-seed" = "folkways-promo", "view-distance" = "12", "level-type" = "minecraft:flat", "generator-settings" = '{"biome":"minecraft:plains","features":false,"lakes":false,"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":3},{"block":"minecraft:grass_block","height":1}],"structure_overrides":[]}' }
+
+[profile.promo-maids.neoforge.client]
+game_args = ["--width", "1920", "--height", "1080"]
+options = { lang = "zh_cn", guiScale = "2", overrideWidth = "1920", overrideHeight = "1080", maxFps = "260", renderDistance = "12", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "4.0", biomeBlendRadius = "3", ao = "true", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", fovEffectScale = "0.0", soundCategory_music = "0.0", soundCategory_record = "0.0", soundCategory_ambient = "0.0" }
+
+[profile.promo-maids.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+[profile.promo-maids.mods]
+sodium = { target = ["client"] }
+iris = { target = ["client"] }
+sable = { target = ["server", "client"] }
+create-aeronautics = { target = ["server", "client"] }
+touhou_little_maid = { target = ["server", "client"] }
+
 # The promo profile over generated terrain, for shots that fly above the landscape.
 [profile.promo-sky.neoforge]
 jvm_args = ["-Xmx3G"]

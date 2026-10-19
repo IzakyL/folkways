@@ -30,6 +30,7 @@ final class Controls {
 
     static TextField ranged(TextField field, int min, int max) {
         field.setNumbersOnlyInt(min, max);
+        field.textFieldStyle(style -> style.placeholder(Component.empty()));
 
         int room = widthFor(max);
         field.layout(layout -> layout.width(room).flexShrink(1).minWidth(0));
@@ -44,7 +45,6 @@ final class Controls {
     static Toggle tick() {
         Toggle box = new Toggle().noText();
         box.layout(layout -> layout.flexShrink(0));
-        Cues.on(box, Cue.of("folkways.keys.toggle", Cue.Key.CLICK));
         return box;
     }
 

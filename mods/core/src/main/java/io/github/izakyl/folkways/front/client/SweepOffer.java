@@ -84,7 +84,7 @@ final class SweepOffer {
         list.addEventListener(UIEvents.TICK, event -> take.setDisplay(!chosen.isEmpty()));
         ScrollerView kinds = Rows.fills(Rows.box());
         kinds.addScrollViewChild(list);
-        return page.addChildren(Rows.note(Component.translatable(TOKEN + ".hint")), kinds, Rows.actions(take));
+        return page.addChildren(kinds, Rows.actions(take));
     }
 
     private static UIElement row(Level level, Delegation kind, List<BlockPos> fresh, Set<ResourceLocation> chosen) {

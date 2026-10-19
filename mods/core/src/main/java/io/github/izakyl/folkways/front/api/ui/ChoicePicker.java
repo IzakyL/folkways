@@ -11,6 +11,9 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvent;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEventDispatcher;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.ui.Rows;
@@ -179,6 +182,15 @@ public final class ChoicePicker {
         place(dialog, host, width, height);
         int depth = aboveWindows.getAsInt();
         dialog.style(style -> style.zIndex(depth));
+        // A button presses on the way down and lets go on the way up or out, but the dialog it opened takes both:
+        // without being told the pointer has left, it stays pressed after the dialog is gone.
+        if (host instanceof Button) {
+            dialog.addEventListener(UIEvents.REMOVED, event -> {
+                UIEvent left = UIEvent.create(UIEvents.MOUSE_LEAVE);
+                left.target = host;
+                UIEventDispatcher.dispatchDirectEvent(left);
+            });
+        }
         return dialog.show(host.getModularUI());
     }
 

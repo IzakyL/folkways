@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.core.engine.travel.graph;
 import io.github.izakyl.folkways.core.api.passage.Hop;
 import io.github.izakyl.folkways.core.api.passage.Passage;
 import io.github.izakyl.folkways.core.api.terms.Closures;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
@@ -17,9 +18,11 @@ import io.github.izakyl.folkways.core.engine.travel.Ways;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.Iterator;
@@ -73,6 +76,10 @@ public final class Roaming {
     private static final int MOST_FOOTINGS = 4;
 
     private static final int FOOTING_VISITS = 64;
+
+    // The work sites new to the colony whose footings are reckoned in one advance, each a reach and sight test round
+    // the block: a colony loaded with hundreds of them joins them over some ticks rather than in one.
+    private static final int MOST_SITES_RECKONED = 16;
 
     // While the colony runs on a budget, the ways are straightened and frozen for the planner at most this often;
     // what changed in between is seen at the next freeze.
@@ -156,8 +163,15 @@ public final class Roaming {
     private long nextFreeze;
     private long nextIdleRamble;
 
-    // Platforms new to a net, by a footing to sweep round from, waiting for their sweep.
+    // Platforms new to a net, by a footing to sweep round from, waiting for their sweep. A work site new to a net
+    // waits here too.
     private final Set<Fresh> platforms = new LinkedHashSet<>();
+
+    // Where a body stands to work each of the colony's work sites, by the site's block, reckoned once.
+    private final Long2ObjectOpenHashMap<long[]> footingsOf = new Long2ObjectOpenHashMap<>();
+
+    // The work sites each net has pinned the footings of.
+    private final Map<Tract, LongOpenHashSet> sited = new LinkedHashMap<>();
 
     private final Pending pending = new Pending();
 
@@ -201,14 +215,20 @@ public final class Roaming {
         return published;
     }
 
-    public boolean advance(List<Roamer> roamers, List<Hop> hops, long now) {
-        return advance(roamers, hops, now, Slice.forWindow(), true);
+    // Whether any kind's ways hold the cell as a point of their own.
+    boolean holds(long cell) {
+        return nets.values().stream().anyMatch(net -> net.knows(cell));
     }
 
-    public Faring answered(Function<Ways, Faring> asking, List<Roamer> roamers, List<Hop> hops, long now) {
+    public boolean advance(List<Roamer> roamers, List<Hop> hops, Collection<WorldPos> sites, long now) {
+        return advance(roamers, hops, sites, now, Slice.forWindow(), true);
+    }
+
+    public Faring answered(Function<Ways, Faring> asking, List<Roamer> roamers, List<Hop> hops,
+                           Collection<WorldPos> sites, long now) {
         Faring said = asking.apply(published);
         for (int round = 0; said instanceof Faring.Later && round < MOST_ANSWERING_ROUNDS; round++) {
-            if (!answer(roamers, hops, now)) {
+            if (!answer(roamers, hops, sites, now)) {
                 break;
             }
             said = asking.apply(published);
@@ -216,20 +236,21 @@ public final class Roaming {
         return said instanceof Faring.Later ? Faring.NO : said;
     }
 
-    private boolean answer(List<Roamer> roamers, List<Hop> hops, long now) {
+    private boolean answer(List<Roamer> roamers, List<Hop> hops, Collection<WorldPos> sites, long now) {
         Set<ResourceLocation> knew = published.kinds();
-        boolean asking = advance(roamers, hops, now, Slice.UNTIL_ANSWERED, false);
+        boolean asking = advance(roamers, hops, sites, now, Slice.UNTIL_ANSWERED, false);
         return asking || !published.kinds().equals(knew);
     }
 
-    private boolean advance(List<Roamer> roamers, List<Hop> hops, long now, Slice slice,
-                            boolean wandering) {
+    private boolean advance(List<Roamer> roamers, List<Hop> hops, Collection<WorldPos> sites, long now,
+                            Slice slice, boolean wandering) {
         Map<ResourceLocation, Sort> sorts = sortsOf(roamers);
         List<Crossing> crossings = crossingsOf(hops);
         forget(sorts, crossings);
         close();
         extents.values().forEach(extent -> extent.roll(now));
         wire(sorts, roamers, crossings, now);
+        site(sorts, sites, now);
         reconsider(sorts, now);
         List<Ask> fresh = new ArrayList<>();
         for (Ask ask : asked.drain()) {
@@ -821,6 +842,51 @@ public final class Roaming {
         // Swept from a footing, where a body stands: the anchor may be on the track.
         if (fresh && first != Long.MIN_VALUE) {
             platforms.add(new Fresh(tract, first));
+        }
+    }
+
+    // A work site the colony holds joins the ways as a platform does: the footings a body works it from are pinned,
+    // and swept round from once if the ways do not know them, so a body sent to work there is routed even from
+    // ground no one has walked. Sites in the level's own frame only: a footing is reckoned by the level's blocks.
+    private void site(Map<ResourceLocation, Sort> sorts, Collection<WorldPos> sites, long now) {
+        LongOpenHashSet held = new LongOpenHashSet();
+        for (WorldPos site : sites) {
+            if (site.realm().equals(home)) {
+                held.add(site.cell().asLong());
+            }
+        }
+        footingsOf.keySet().removeIf((long site) -> !held.contains(site));
+        sited.keySet().removeIf(tract -> !nets.containsKey(tract) || !sorts.containsValue(tract.sort()));
+        sited.values().forEach(pinned -> pinned.removeIf((long site) -> !held.contains(site)));
+        int reckoned = 0;
+        for (Sort sort : sorts.values()) {
+            Tract tract = new Tract(sort, home);
+            Waypoints net = net(sort, home);
+            LongOpenHashSet pinned = sited.computeIfAbsent(tract, key -> new LongOpenHashSet());
+            for (long site : held) {
+                if (pinned.contains(site)) {
+                    continue;
+                }
+                long[] footings = footingsOf.get(site);
+                if (footings == null) {
+                    if (reckoned >= MOST_SITES_RECKONED || !level.isLoaded(BlockPos.of(site))) {
+                        continue;
+                    }
+                    reckoned++;
+                    footings = Reach.workableCells(level, BlockPos.of(site)).stream()
+                        .mapToLong(BlockPos::asLong).toArray();
+                    footingsOf.put(site, footings);
+                }
+                pinned.add(site);
+                boolean fresh = false;
+                for (long footing : footings) {
+                    fresh |= !net.knows(footing);
+                    net.pin(footing, now);
+                }
+                if (fresh) {
+                    platforms.add(new Fresh(tract, footings[0]));
+                }
+            }
         }
     }
 

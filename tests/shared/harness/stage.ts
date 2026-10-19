@@ -6,6 +6,7 @@
 // with its physics paused, so both are plain shifts of the plan.
 import { defineTask, javaTask, player, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { runColonyTask } from "../colony/colony-tasks";
+import { ABOARD_TITLE } from "./aboard";
 import { commandPos, tryCommand } from "./bw-helpers";
 
 export type Vec = { x: number; y: number; z: number };
@@ -30,7 +31,6 @@ export function around(cells: Vec[], pad = 0, up = 0): Box {
 const GROUND_CONFIG = "blockwright.toml";
 export const SABLE_CONFIG = "blockwright.toml#sable";
 const DECK_BLOCK = "minecraft:oak_planks";
-const ABOARD_TITLE = " · aboard a Sable ship";
 // A player set down exactly on a deck's surface can come out a hair inside the ship and fall through it; set down
 // this much above, they drop onto it.
 const DECK_LIFT = 0.2;

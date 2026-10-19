@@ -56,14 +56,20 @@ def px(v):
 def declared(shot, lead=0.5, ui=1.0, work=2.0):
     """A declaration shot cut by the moments its take stamped: the player's gesture at near speed, the colony's work
     sped up, and whatever follows it (the finished result, the chest opened on it) at speed again."""
-    marks = json.load(open(os.path.join(T, "declare", "index.json")))["context"]["shots"][shot]["marks"]
+    index = os.path.join(T, "declare", "index.json")
+    if not os.path.exists(index):
+        return []  # a short that imports this file cuts its own shots, without the declare take
+    marks = json.load(open(index))["context"]["shots"][shot]["marks"]
     said, done, end = marks["declared"], marks["done"], marks["end"]
     return [(lead, said, ui), (said, done, work), (done, end, 1.0)]
 
 def household(lead=0.5, work=2.0):
     """The workforce page browsed at its own pace, then the homestead at work, sped up until everything it shows has
     happened, and at its own pace again after: two sections, so the words stay off the panel."""
-    marks = json.load(open(os.path.join(T, "household", "index.json")))["context"]["shot"]["marks"]
+    index = os.path.join(T, "household", "index.json")
+    if not os.path.exists(index):
+        return []  # a short that imports this file cuts its own shots, without the household take
+    marks = json.load(open(index))["context"]["shot"]["marks"]
     closed, done, end = marks["closed"], marks["done"], marks["end"]
     return [("workforce", [(lead, closed, 1.0)]), ("household", [(closed, done, work), (done, end, 1.0)])]
 

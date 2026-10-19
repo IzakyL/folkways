@@ -4,7 +4,7 @@ import { camera, defineTask, screen, type TaskTemplate } from "@izakyl/blockwrig
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { readdirSync, readFileSync } from "node:fs";
 import { VisualRun } from "../shared/capture/visual-kit";
-import { tracePath } from "../shared/harness/out-paths";
+import { outPath, tracePath } from "../shared/harness/out-paths";
 import { seededOffThreadServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { frames, tryCommand } from "../shared/harness/bw-helpers";
@@ -26,7 +26,7 @@ type Gallery = {
 };
 
 const PATTERNS = "mods/vanilla/src/main/resources/data/folkways/folkways/pattern";
-const CAMERA = "tests/visual/patterns/arch-bridge/CameraSetup.java";
+const CAMERA = "tests/pattern/galleries/arch-bridge/CameraSetup.java";
 const SETTLE_MS = 5_000;
 
 // Pins the render distance and pushes the fog out, so every shot sees the whole gallery.
@@ -87,7 +87,7 @@ function mineViews(value: any): View[] {
 const GALLERIES: Gallery[] = [
   {
     pattern: "arcade",
-    task: galleryTask("arcade", "tests/visual/patterns/arcade/ArcadeGallery.java"),
+    task: galleryTask("arcade", "tests/pattern/galleries/arcade/ArcadeGallery.java"),
     args: () => ({ arcade: star("arcade") }),
     stand: "0 40 0",
     forceload: "-80 -80 80 80",
@@ -114,7 +114,7 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "arch_bridge",
-    task: galleryTask("arch_bridge", "tests/visual/patterns/arch-bridge/BridgeGallery.java"),
+    task: galleryTask("arch_bridge", "tests/pattern/galleries/arch-bridge/BridgeGallery.java"),
     args: () => ({ source: star("arch_bridge") }),
     stand: "0 25 8",
     forceload: "-64 -64 64 64",
@@ -124,7 +124,7 @@ const GALLERIES: Gallery[] = [
       ...[1, 4, 7, 10, 13, 16].map((y) => `fill -48 ${y} -38 48 ${y + 2} 54 minecraft:air`),
     ],
     views: () => {
-      const { position, target } = json("tests/visual/patterns/arch-bridge/camera.json");
+      const { position, target } = json("tests/pattern/galleries/arch-bridge/camera.json");
       return [
         view("gallery", position, target, "Arch bridge overview: samples of each span, material and abutment laid out over water", 55),
         view("sandstone-detail", v(26, 13, 18), v(20, 6, -4), "Sandstone arch bridge close-up: where arch, deck and railing meet", 50),
@@ -135,21 +135,21 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "city_wall",
-    task: galleryTask("city_wall", "tests/visual/patterns/city-wall/WallGallery.java"),
+    task: galleryTask("city_wall", "tests/pattern/galleries/city-wall/WallGallery.java"),
     args: () => ({ source: star("city_wall") }),
     stand: "0 40 0",
     forceload: "-80 -80 80 80",
-    views: () => (json("tests/visual/patterns/city-wall/cameras.json") as any[]).map((c) =>
+    views: () => (json("tests/pattern/galleries/city-wall/cameras.json") as any[]).map((c) =>
       view(c.name, c.position, c.target, `City wall · ${c.name}`, c.fov ?? 60)),
   },
   {
     pattern: "dock",
-    task: galleryTask("dock", "tests/visual/patterns/dock/DockGallery.java"),
-    args: () => ({ source: star("dock"), ...json("tests/visual/patterns/dock/scenes.json") }),
+    task: galleryTask("dock", "tests/pattern/galleries/dock/DockGallery.java"),
+    args: () => ({ source: star("dock"), ...json("tests/pattern/galleries/dock/scenes.json") }),
     stand: "0 25 40",
     forceload: "-64 -32 64 48",
     views: () => {
-      const { scenes } = json("tests/visual/patterns/dock/scenes.json");
+      const { scenes } = json("tests/pattern/galleries/dock/scenes.json");
       return [
         view("overview", v(0, 36, 62), v(0, 0, 8), "Dock overview: five shore types and the dock heads side by side", 60),
         ...(scenes as any[]).flatMap((s) => [
@@ -162,7 +162,7 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "railway",
-    task: galleryTask("railway", "tests/visual/patterns/railway/RailwayGallery.java"),
+    task: galleryTask("railway", "tests/pattern/galleries/railway/RailwayGallery.java"),
     args: () => ({ source: star("railway") }),
     stand: "0 40 20",
     forceload: "-64 -32 64 250",
@@ -187,7 +187,7 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "road",
-    task: galleryTask("road", "tests/visual/patterns/road/RoadGallery.java"),
+    task: galleryTask("road", "tests/pattern/galleries/road/RoadGallery.java"),
     args: () => ({ road: star("road"), grading: star("grading") }),
     stand: "0 40 0",
     forceload: "-80 -80 80 80",
@@ -203,7 +203,7 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "terraced_field",
-    task: galleryTask("terraced_field", "tests/visual/patterns/terraced-field/FieldGallery.java"),
+    task: galleryTask("terraced_field", "tests/pattern/galleries/terraced-field/FieldGallery.java"),
     args: () => ({ source: star("terraced_field") }),
     stand: "10 40 20",
     forceload: "-80 -48 112 80",
@@ -225,7 +225,7 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "mine",
-    task: galleryTask("mine", "tests/visual/patterns/mine/MineGallery.java"),
+    task: galleryTask("mine", "tests/pattern/galleries/mine/MineGallery.java"),
     args: () => ({ source: star("mine") }),
     stand: "0 110 0",
     forceload: "-80 -44 80 44",
@@ -237,7 +237,7 @@ const GALLERIES: Gallery[] = [
   },
   {
     pattern: "quarry",
-    task: galleryTask("quarry", "tests/visual/patterns/quarry/QuarryGallery.java"),
+    task: galleryTask("quarry", "tests/pattern/galleries/quarry/QuarryGallery.java"),
     args: () => ({ source: star("quarry") }),
     stand: "0 40 0",
     forceload: "-56 -32 56 32",
@@ -266,18 +266,18 @@ for (const gallery of GALLERIES) {
   test(`pattern gallery: ${gallery.pattern}`, async ({}, testInfo) => {
     test.setTimeout(BUDGET.heavy);
     const scope = `pattern-${gallery.pattern.replace(/_/g, "-")}`;
-    const run = new VisualRun(scope);
+    const run = new VisualRun(scope, outPath("pattern", "takes"));
     const runId = newRunId();
     let pair: E2EPair | undefined;
     try {
       pair = await launchPair({
         config: "blockwright.toml#promo",
         server: {
-          trace: tracePath("visual", `${scope}-server`),
-          instance: seededOffThreadServer(`visual-${scope}-server-${runId}`),
+          trace: tracePath("pattern", `${scope}-server`),
+          instance: seededOffThreadServer(`${scope}-server-${runId}`),
           startFrozen: false,
         },
-        client: { trace: tracePath("visual", `${scope}-client`), instance: `visual-${scope}-client-${runId}` },
+        client: { trace: tracePath("pattern", `${scope}-client`), instance: `${scope}-client-${runId}` },
       });
       const { server, client } = pair;
       for (const command of [

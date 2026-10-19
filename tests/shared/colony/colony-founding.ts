@@ -319,10 +319,11 @@ export async function createColonyViaBook(server: MinecraftServer, client: Minec
 
 export type BookGesture = "point" | "box" | "line";
 
+// In English or in Chinese, as the client is set: the promo films run in Chinese.
 const GESTURE_RECEIPT: Record<BookGesture, RegExp> = {
-  point: /^Book: taking blocks and bodies in$/,
-  box: /^Book: marking out ground$/,
-  line: /^Book: drawing a line$/,
+  point: /^(Book: taking blocks and bodies in|书：点选)$/,
+  box: /^(Book: marking out ground|书：圈地)$/,
+  line: /^(Book: drawing a line|书：画线)$/,
 };
 
 const STANDING_EYE_HEIGHT = 1.5;

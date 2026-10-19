@@ -80,28 +80,28 @@ for (const stage of twins()) test(stage.title("zone gesture: mark, push a face, 
     expect(markedBefore, "after marking both corners the action bar must report the box size; if it does not, neither corner landed").not.toBeNull();
     expect(markedBefore, "both corners on the same block = 1x1x1").toEqual([1, 1, 1]);
 
-    evidence.push_face = await ctrlScroll(server, client, 1);
+    evidence.push_face = await ctrlScroll(server, client, -1);
     const markedAfter = sizeOf(evidence.push_face.bar?.text);
     expect(
       markedAfter,
       "after pushing a face the action bar should report the size again; if not, this Ctrl+scroll was never consumed",
     ).not.toBeNull();
-    expect(markedAfter, "pushing the top face out one block turns the box from 1x1x1 into 1x2x1").toEqual([1, 2, 1]);
+    expect(markedAfter, "scrolling down draws the top face towards the player, one block out: 1x1x1 into 1x2x1").toEqual([1, 2, 1]);
 
-    evidence.push_far = await heldScroll(server, client, [KEY_LEFT_ALT], -1);
+    evidence.push_far = await heldScroll(server, client, [KEY_LEFT_ALT], 1);
     expect(
       sizeOf(evidence.push_far.bar?.text),
-      "Alt+scroll moves the face behind the one aimed at: the bottom, one block away from the player, 1x2x1 into 1x3x1",
+      "Alt+scroll up pushes the face behind the one aimed at away from the player: the bottom, one block down, 1x2x1 into 1x3x1",
     ).toEqual([1, 3, 1]);
-    evidence.push_far_back = await heldScroll(server, client, [KEY_LEFT_ALT], 1);
+    evidence.push_far_back = await heldScroll(server, client, [KEY_LEFT_ALT], -1);
     expect(sizeOf(evidence.push_far_back.bar?.text), "and back towards the player again").toEqual([1, 2, 1]);
 
-    evidence.shift = await heldScroll(server, client, [KEY_LEFT_CONTROL, KEY_LEFT_ALT], 1);
+    evidence.shift = await heldScroll(server, client, [KEY_LEFT_CONTROL, KEY_LEFT_ALT], -1);
     expect(
       evidence.shift.bar?.text,
-      "with both keys the wheel moves the whole box towards the player, one block up, and says where it now starts",
+      "with both keys a turn down moves the whole box towards the player, one block up, and says where it now starts",
     ).toBe(`Moved to ${farmGround.x}, ${farmGround.y + 1}, ${farmGround.z}`);
-    evidence.shift_back = await heldScroll(server, client, [KEY_LEFT_CONTROL, KEY_LEFT_ALT], -1);
+    evidence.shift_back = await heldScroll(server, client, [KEY_LEFT_CONTROL, KEY_LEFT_ALT], 1);
     expect(evidence.shift_back.bar?.text).toBe(`Moved to ${farmGround.x}, ${farmGround.y}, ${farmGround.z}`);
 
     evidence.configure = await createMarkedZone(server, client, playerName, standBlock, "farm", stage);

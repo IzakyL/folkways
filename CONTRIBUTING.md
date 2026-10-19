@@ -60,8 +60,11 @@ of its own.
 | `npm run typecheck` | Type checks every TypeScript suite |
 | `./gradlew check` | Compiles everything and lints for tabs and trailing whitespace |
 | `./gradlew runGameTestServer` | NeoForge game tests in every `mods/*/src/gametest`, with all mods but Modular Golems loaded |
-| `npm run test:e2e` | End-to-end tests against a real client and server |
-| `npm run visual:take` | Screenshot suites for screens and in-world visuals |
+| `npm run test:e2e` | End-to-end tests against a real client and server, on the ground |
+| `npm run test:sable` | The same against a [Sable](https://modrinth.com/mod/sable) ship: each twin spec's aboard test, and the ship-only specs |
+| `npm run visual:take` | Screenshots of screens, panels, looks and in-world visuals |
+| `npm run ponder:take` | Films every ponder scene in the colony book |
+| `npm run pattern:take` | Lays out each work pattern's gallery and shoots it |
 | `npm run bench:take` | Performance benchmarks on a large colony |
 | `npm run promo:take` | Films the promotional takes |
 
@@ -74,17 +77,17 @@ use, for example:
 npm run test:e2e -- tests/e2e/founding-smoke.spec.ts --workers=1
 ```
 
-Each suite is a directory under `tests/` (`e2e`, `visual`, `bench`, `promo`) with
+Each suite is a directory under `tests/` (`e2e`, `sable`, `visual`, `ponder`, `pattern`, `bench`, `promo`) with
 its own `playwright.config.ts` and `tsconfig.json`. Code more than one suite uses lives in
 `tests/shared/`; a suite imports from there and from `tests/ldlib2/`, never from another
 suite. Everything the suites write goes to `tests/out/`, which git ignores.
 
-An e2e spec about a colony's blocks runs twice, on the ground and on the deck of a
-[Sable](https://modrinth.com/mod/sable) ship (`for (const stage of twins()) test(stage.title(...), ...)`,
+An e2e spec about a colony's blocks runs twice, on the ground in `test:e2e` and on the deck of a
+Sable ship in `test:sable` (`for (const stage of twins()) test(stage.title(...), ...)`,
 from `tests/shared/harness/stage.ts`). Write it in plan coordinates, lay the floor with
 `stage.lay`, and cross into the game through the stage: `stage.at(cell)` for a block a command or
 read addresses, `stage.world(cell)` for where it shows, `stage.stand(at)` to set the player down. The
-`sable-*` specs cover what only a ship has.
+specs in `tests/sable/` cover what only a ship has.
 
 The repository's `.mcp.json` exposes the same harness to MCP-capable assistants, with
 the LDLib2 UI adapter in `tests/ldlib2/`.

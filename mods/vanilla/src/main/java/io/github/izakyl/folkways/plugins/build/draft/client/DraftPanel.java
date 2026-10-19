@@ -1,24 +1,26 @@
 package io.github.izakyl.folkways.plugins.build.draft.client;
 
-import com.lowdragmc.lowdraglib2.gui.texture.ColorRectTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
-import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.api.Schema;
+import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
+import io.github.izakyl.folkways.front.api.ui.FolderPicker;
 import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
 import io.github.izakyl.folkways.front.api.ui.Taking;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
+import io.github.izakyl.folkways.library.Shelves;
 import io.github.izakyl.folkways.plugins.build.SiteNameField;
 import io.github.izakyl.folkways.plugins.build.draft.Chosen;
 import io.github.izakyl.folkways.plugins.build.draft.Commission;
@@ -32,10 +34,12 @@ import io.github.izakyl.folkways.plugins.build.draft.Pattern;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.build.draft.World;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import net.minecraft.SharedConstants;
@@ -56,9 +60,8 @@ public final class DraftPanel {
 
     public static final String TOKEN = "folkways.draft";
 
-    private static final int LIST_WIDTH = 104;
-    private static final int MARK_WIDTH = 2;
-    private static final int MARK_ON = 0xFF9A3324;
+    private static final float PICKER_WIDTH = 180f;
+    private static final float PICKER_HEIGHT = 220f;
     private static final int CONTROL_MIN = 28;
     private static final int NUMBER_WIDTH = 34;
     private static final int MOST_ICONS = 6;
@@ -95,8 +98,8 @@ public final class DraftPanel {
     private final Optional<Kept> resumed;
     private final Direction front;
 
-    private final List<Button> patternRows = new ArrayList<>();
-    private final List<UIElement> patternMarks = new ArrayList<>();
+    private final Button patternPress = new Button();
+    private final UIElement patternRow = Rows.row();
     private final UIElement knobTable = Rows.table();
     private final Label refusal = Rows.text(Component.empty());
     private final Label empty = Rows.text(Component.empty());
@@ -113,7 +116,9 @@ public final class DraftPanel {
         this.hint = hint;
         this.handOff = handOff;
         this.taking = taking;
-        this.patterns = LocalPatterns.available().stream().filter(pattern -> pattern.accepts(hint)).toList();
+        this.patterns = LocalPatterns.available().stream().filter(pattern -> pattern.accepts(hint))
+            .sorted(Comparator.comparing(LocalPatterns::local).thenComparing(pattern -> pattern.id().toString()))
+            .toList();
         this.resumed = Optional.ofNullable(kept).filter(held -> held.hint().equals(hint) && taking.previewed());
         // The way the player faced when the page first opened stands until it is built, wherever they have
         // walked off to look at the preview.
@@ -123,7 +128,7 @@ public final class DraftPanel {
     }
 
     /**
-     * The patterns that fit what was drawn and the chosen one's knobs. One is previewed out in the world before it
+     * A button for the pattern, which opens the ones that fit what was drawn, and the chosen one's knobs under it. One is previewed out in the world before it
      * can be built, and the page opens on what was previewed when it is come back to.
      */
     static UIElement body(Hint hint, HandOff handOff, Taking taking) {
@@ -131,31 +136,12 @@ public final class DraftPanel {
     }
 
     private UIElement build() {
-        // The patterns stand in a column of their own, and the chosen one's knobs beside it.
-        UIElement table = new UIElement()
-            .layout(layout -> layout.flexDirection(FlexDirection.COLUMN).widthPercent(100).gapAll(1));
-        for (Pattern pattern : patterns) {
-            UIElement mark = new UIElement()
-                .layout(layout -> layout.width(MARK_WIDTH).heightPercent(100).flexShrink(0))
-                .style(style -> style.background(new ColorRectTexture(MARK_ON)));
-            mark.setDisplay(false);
-            Button row = new Button().noText();
-            row.layout(layout -> layout.flexDirection(FlexDirection.ROW)
-                .widthPercent(100).height(Rows.ROW_HEIGHT).flexShrink(0)
-                .alignItems(AlignItems.CENTER).gapAll(Rows.GAP - 1).paddingAll(1));
-            row.addClass("folkways_nav");
-            row.setOverflowVisible(false);
-            row.addChildren(mark, Rows.name(nameOf(pattern)));
-            row.setOnClick(event -> choose(pattern));
-            Tokens.name(row, TOKEN + ".pattern." + Tokens.of(pattern.id()));
-            patternRows.add(row);
-            patternMarks.add(mark);
-            table.addChildren(row);
-        }
-        ScrollerView list = Rows.box();
-        list.layout(layout -> layout.width(LIST_WIDTH).flexShrink(0).minHeight(0));
-        list.addScrollViewChild(table);
-        list.setDisplay(!patterns.isEmpty());
+        // The pattern is picked in a window of its own, opened from the first row; its knobs stand under it.
+        patternPress.layout(layout -> layout.widthAuto().minWidth(CONTROL_MIN).flexShrink(1));
+        patternPress.setOnClick(event -> pickPattern());
+        Tokens.name(patternPress, TOKEN + ".choose");
+        patternRow.addChildren(Rows.name(Component.translatable(TOKEN)), patternPress);
+        patternRow.setDisplay(!patterns.isEmpty());
         empty.setText(Component.translatable(TOKEN + ".none"));
         empty.setDisplay(patterns.isEmpty());
 
@@ -180,7 +166,7 @@ public final class DraftPanel {
         UIElement stack = new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
                 .widthPercent(100).gapAll(5))
-            .addChildren(empty, knobTable, refusal);
+            .addChildren(empty, patternRow, knobTable, refusal);
 
         ScrollerView scroller = Rows.fills(Rows.box());
         scroller.addScrollViewChild(stack);
@@ -194,16 +180,48 @@ public final class DraftPanel {
         if (previewed.isPresent()) {
             choose(previewed.get(), resumed.get().values());
             name.retype(resumed.get().name());
-        } else if (patterns.isEmpty()) {
-            refresh();
         } else {
-            // The first is chosen to begin with, so the knobs' half never opens empty.
-            choose(patterns.get(0));
+            // Nothing is chosen to begin with: the knobs come once a pattern has been picked.
+            refresh();
         }
-        return new UIElement()
-            .layout(layout -> layout.flexDirection(FlexDirection.ROW)
-                .widthPercent(100).flexGrow(1).flexShrink(1).minHeight(0).gapAll(Rows.GAP))
-            .addChildren(list, page);
+        return page;
+    }
+
+    // The patterns stand in folders with a search over them; a click on one takes it and comes back to the page.
+    private void pickPattern() {
+        Dialog dialog = new Dialog();
+        FolderPicker picker = new FolderPicker(TOKEN, false, (word, key) -> {
+            dialog.close();
+            patterns.stream().filter(pattern -> pattern.id().toString().equals(key)).findFirst()
+                .filter(pattern -> pattern != chosen).ifPresent(this::choose);
+        }).openRoots();
+        picker.fill(patterns.stream().map(pattern -> new FolderPicker.Leaf(pattern.id().toString(),
+            filedOf(pattern), nameOf(pattern), TOKEN + ".pattern." + Tokens.of(pattern.id()))).toList());
+        if (chosen != null) {
+            picker.mark(Set.of(chosen.id().toString()));
+            picker.reveal(chosen.id().toString());
+        }
+        Button close = new Button()
+            .setText(Component.translatable("folkways.selector.close"))
+            .setOnClick(event -> dialog.close());
+        close.addClass("__cancel-button__");
+        Tokens.name(close, TOKEN + ".close");
+        dialog.setTitle(TOKEN + ".choose");
+        dialog.addContent(new UIElement()
+            .layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
+                .widthPercent(100).heightPercent(100).gapAll(3))
+            .addChildren(picker.list()));
+        dialog.addButton(close);
+        Tokens.name(dialog, TOKEN + ".picker");
+        ChoicePicker.show(dialog, patternPress, PICKER_WIDTH, PICKER_HEIGHT);
+    }
+
+    // Kept under the server's or the player's own; a pack's patterns stand in a folder of their namespace.
+    private static String filedOf(Pattern pattern) {
+        ResourceLocation id = pattern.id();
+        boolean ours = id.getNamespace().equals(FolkwaysMod.MOD_ID) || id.getNamespace().equals(Shelves.NAMESPACE);
+        return (LocalPatterns.local(pattern) ? "own:" : "shared:") + (ours ? "" : id.getNamespace() + "/")
+            + id.getPath();
     }
 
     // A pattern's own words come first; the game's language files name the ones that bring none.
@@ -240,16 +258,7 @@ public final class DraftPanel {
     }
 
     private void refresh() {
-        for (int index = 0; index < patternRows.size(); index++) {
-            Pattern pattern = patterns.get(index);
-            Button row = patternRows.get(index);
-            patternMarks.get(index).setDisplay(pattern.equals(chosen));
-            if (pattern.equals(chosen)) {
-                row.addClass("folkways_selected");
-            } else {
-                row.removeClass("folkways_selected");
-            }
-        }
+        patternPress.setText(chosen == null ? Component.translatable(TOKEN + ".choose") : nameOf(chosen));
         preview.setDisplay(chosen != null);
         // Nothing is built that has not first been looked at where it would stand: its knobs may still be
         // turned once it has, but another pattern is previewed first.
@@ -420,6 +429,7 @@ public final class DraftPanel {
         private UIElement number(Schema.Setting.Count count) {
             TextField field = new TextField();
             field.setNumbersOnlyInt(count.min(), count.max());
+            field.textFieldStyle(style -> style.placeholder(Component.empty()));
             field.setValue(Integer.toString(values.count(count.key())), false);
             field.setTextResponder(typed -> {
                 try {
