@@ -197,23 +197,27 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
         expect(sample.hatResidents, "only the single shared hat can occupy a native HEAD").toHaveLength(1);
         if (!hatScreenshot) {
           const resident = sample.hatResidents[0]!;
-            // Server sprinting can leave the rendered resident behind its last packet. Observe the
-            // actual client equipment and position before framing that same borrowed physical hat.
-            let rendered: RenderedHat | undefined;
-            await expect.poll(async () => {
-              await frames(client, 3);
-              rendered = await client.run(READ_RENDERED_HAT, { uuid: resident.uuid });
-              return rendered.hat;
-            }, { timeout: 8_000 }).toBe(true);
-            const eye = { x: rendered!.x + 2.4, y: rendered!.y + 2.2, z: rendered!.z + 2.4 };
+          // Server sprinting can leave the rendered resident behind its last packet. Observe the
+          // actual client equipment and position before framing that same borrowed physical hat.
+          let rendered: RenderedHat | undefined;
+          await expect.poll(async () => {
+            // Equipment is sent by the native entity tracker on a server tick, not by rendering
+            // more frozen client frames after a sprint stopped on the equip action itself.
+            await tick.sprint(server, 1);
+            await frames(client, 3);
+            rendered = await client.run(READ_RENDERED_HAT, { uuid: resident.uuid });
+            evidence.hatRenderAttempt = { resident, rendered };
+            return rendered.hat;
+          }, { timeout: 8_000 }).toBe(true);
+          const eye = { x: rendered!.x + 2.4, y: rendered!.y + 2.2, z: rendered!.z + 2.4 };
           const shot = outAbs("e2e", "shots", stage.name(`cookery-task-head-hat-${runId}`) + ".png");
           await frames(client, 2);
           await media.screenshot(client, { path: shot, settleTerrain: false, camera: { position: eye,
-              ...cameraLookingAt(eye, { x: rendered!.x, y: rendered!.y + 1.5, z: rendered!.z }) } });
+            ...cameraLookingAt(eye, { x: rendered!.x, y: rendered!.y + 1.5, z: rendered!.z }) } });
           const afterShot = await state(server, stage, layout);
           if (afterShot.hatResidents.length === 1) {
             await testInfo.attach(stage.kind === "ground" ? "native-skin-task-head-hat" : "user-geo-task-head-hat", { path: shot, contentType: "image/png" });
-              evidence.hatScreenshotState = { before: sample, rendered, after: afterShot, path: shot };
+            evidence.hatScreenshotState = { before: sample, rendered, after: afterShot, path: shot };
             hatScreenshot = true;
           }
         }
@@ -370,18 +374,19 @@ return out;`,
   }),
 });
 
-type RenderedHat = { hat: boolean; x: number; y: number; z: number };
+type RenderedHat = { found: boolean; hat: boolean; head: string; x: number; y: number; z: number };
 const READ_RENDERED_HAT = defineTask<{ uuid: string }, RenderedHat>({
   name: "folkways.cookery.farming-rendered-hat", side: "client", timeoutMs: 20_000,
-  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.world.entity.LivingEntity",
+  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.world.entity.LivingEntity", "net.minecraft.core.registries.BuiltInRegistries",
     "net.minecraft.world.entity.EquipmentSlot", "com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod"], body: `
 var level=((Minecraft)ctx.client()).level;
 if(level!=null)for(var entity:level.entitiesForRendering()){
   if(!entity.getUUID().toString().equals(Args.of(ctx).value("uuid")))continue;
-  return Map.of("hat",entity instanceof LivingEntity body&&body.getItemBySlot(EquipmentSlot.HEAD).is(TagMod.STRAW_HAT),
+  var head=entity instanceof LivingEntity body?body.getItemBySlot(EquipmentSlot.HEAD):net.minecraft.world.item.ItemStack.EMPTY;
+  return Map.of("found",true,"hat",head.is(TagMod.STRAW_HAT),"head",BuiltInRegistries.ITEM.getKey(head.getItem()).toString(),
     "x",entity.getX(),"y",entity.getY(),"z",entity.getZ());
 }
-return Map.of("hat",false,"x",0,"y",0,"z",0);`,
+return Map.of("found",false,"hat",false,"head","missing-entity","x",0,"y",0,"z",0);`,
   }),
 });
 
