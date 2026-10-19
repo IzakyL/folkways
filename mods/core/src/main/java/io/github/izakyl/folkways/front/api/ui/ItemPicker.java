@@ -75,11 +75,11 @@ public final class ItemPicker {
     private static final int UNFOLDED_AT_MOST = 40;
 
     private static final List<String> HELP_KEYS = List.of(
-        TOKEN + ".tooltip",
         TOKEN + ".tooltip.mod",
         TOKEN + ".tooltip.tag",
         TOKEN + ".tooltip.id",
-        TOKEN + ".tooltip.whole");
+        TOKEN + ".tooltip.and",
+        TOKEN + ".tooltip.or");
 
     /** One thing a picker of offers holds out: the rule ticked, the words it reads as, the icon it wears. */
     public record Offer(ItemFilter filter, Component label, ItemStack icon) {
@@ -683,8 +683,6 @@ public final class ItemPicker {
                         remove(folder);
                     }
                 });
-                box.style(style -> style.tooltips(Component.translatable(TOKEN + ".folder.toggle",
-                    folder.describe())));
                 Tokens.name(box, TOKEN + ".folder_rule." + named);
                 line.addChildren(box);
             } else {

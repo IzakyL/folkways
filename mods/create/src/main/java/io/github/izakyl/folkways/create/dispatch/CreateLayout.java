@@ -42,8 +42,9 @@ record CreateLayout(List<BlockPos> packagers, List<BlockPos> containers, Set<Blo
     private static final int MOST_CHAINS = 1024;
     // A parcel rounds half of each conveyor it passes, on Create's loop of radius 1.5.
     private static final double HALF_LOOP = Math.PI * 1.5D;
-    // Create moves a chain's parcels |rpm| / 360 blocks a tick.
+    // Create moves a chain's parcels |rpm| / 360 * 4 blocks a tick (ChainConveyorBlockEntity.tick).
     private static final double DEGREES = 360.0D;
+    private static final double PARCEL_SPEED = 4.0D;
     // A frogport's throw onto the chain, and the catch at the far end.
     private static final int FROG_TICKS = 20;
 
@@ -326,9 +327,11 @@ record CreateLayout(List<BlockPos> packagers, List<BlockPos> containers, Set<Blo
     }
 
     // Blocks a tick a chain carries its parcels at. Create's own getSpeed reads nought while ticks are frozen, so the
-    // speed the chain is driven at is read instead, and an overstressed chain counts as standing.
+    // speed the chain is driven at is read instead, and an overstressed chain counts as standing. A parcel's
+    // chainPosition advances by four times that rate each tick (ChainConveyorBlockEntity.tick), so the ride is
+    // reckoned at the rate the parcels actually move, not the rate the chain turns.
     private static double speedOf(ChainConveyorBlockEntity chain) {
-        return chain.isOverStressed() ? 0.0D : Math.abs(chain.getTheoreticalSpeed()) / DEGREES;
+        return chain.isOverStressed() ? 0.0D : Math.abs(chain.getTheoreticalSpeed()) / DEGREES * PARCEL_SPEED;
     }
 
     // Every chain conveyor joined to this one by chains, as far as the ground is loaded.

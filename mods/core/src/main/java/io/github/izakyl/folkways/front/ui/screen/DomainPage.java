@@ -501,7 +501,8 @@ public final class DomainPage implements Draw {
         private UIElement meter;
         private Label detail;
         private UIElement told;
-        // A row that takes a whole line stacks its title over its detail in here; any other lays them along itself.
+        // A row that takes a whole line stacks its title over its detail in words in here; any other, and one told in
+        // pictures, which stand taller than a line of words, lays them along itself.
         private UIElement words;
         private final List<UIElement> acts = new ArrayList<>();
         private final List<Button> presses = new ArrayList<>();
@@ -658,7 +659,7 @@ public final class DomainPage implements Draw {
                 boolean heading = entry.getBoolean(HEADING);
                 acceptHeading(row, heading);
                 acceptTold(row, entry, heading);
-                acceptStacked(row, !heading && entry.getBoolean(WHOLE));
+                acceptStacked(row, !heading && entry.getBoolean(WHOLE) && !entry.contains(TOLD));
                 acceptIcon(registries, row, entry.getCompound(ICON));
                 acceptMeter(row, entry);
                 ListTag acts = entry.getList(ACTS, Tag.TAG_COMPOUND);

@@ -3,7 +3,7 @@ import { expect, test, type TestInfo } from "@playwright/test";
 import { input, reflect, screen, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
-import { tracePath } from "../shared/harness/out-paths";
+import { outPath, tracePath } from "../shared/harness/out-paths";
 import { seededOffThreadServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { frames, safeScreen, screenName, tryCommand } from "../shared/harness/bw-helpers";
@@ -52,7 +52,7 @@ test("ponder scene on a short screen: farming", async ({}, testInfo) => {
 async function ponderClip(index: number, name: string, testInfo: TestInfo, guiScale?: number) {
   test.setTimeout(BUDGET.heavy);
   const scope = `ponder-${index}-${name.replace(/_/g, "-")}${guiScale ? `-scale-${guiScale}` : ""}`;
-  const run = new VisualRun(scope);
+  const run = new VisualRun(scope, outPath("ponder", "takes"));
   const runId = newRunId();
   let pair: E2EPair | undefined;
   let server: MinecraftServer;
@@ -60,8 +60,8 @@ async function ponderClip(index: number, name: string, testInfo: TestInfo, guiSc
   try {
     pair = await launchPair({
       config: CONFIG_PATH,
-      server: { trace: tracePath("visual", `${scope}-server`), instance: seededOffThreadServer(`visual-${scope}-server-${runId}`) },
-      client: { trace: tracePath("visual", `${scope}-client`), instance: `visual-${scope}-client-${runId}` },
+      server: { trace: tracePath("ponder", `${scope}-server`), instance: seededOffThreadServer(`${scope}-server-${runId}`) },
+      client: { trace: tracePath("ponder", `${scope}-client`), instance: `${scope}-client-${runId}` },
     });
     ({ server, client } = pair);
 

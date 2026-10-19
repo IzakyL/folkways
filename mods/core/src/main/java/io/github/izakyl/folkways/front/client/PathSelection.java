@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import io.github.izakyl.folkways.FolkwaysClientConfig;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
 import io.github.izakyl.folkways.front.engine.net.CreatePathPacket;
@@ -158,7 +159,8 @@ public final class PathSelection {
             return false;
         }
         int step = verticalDelta > 0.0D ? Mth.ceil(verticalDelta) : Mth.floor(verticalDelta);
-        BlockPos moved = POINTS.get(held).relative(pull(player), step);
+        boolean along = !FolkwaysClientGameEvents.alternateDown();
+        BlockPos moved = POINTS.get(held).relative(push(player), along ? FolkwaysClientConfig.away(step) : step);
         POINTS.set(held, moved);
         // The player is told where the point shows, not the cell a ship keeps it in.
         BlockPos shown = Placed.shown(player.level(), moved);
@@ -166,8 +168,8 @@ public final class PathSelection {
         return true;
     }
 
-    /** Where a turn of the wheel draws the held point: towards the player, to their right with the other key, or up with both. */
-    private static Direction pull(Player player) {
+    /** Where a turn up of the wheel moves the held point: away from the player, to their right with the other key, or up with both. */
+    private static Direction push(Player player) {
         boolean along = FolkwaysClientGameEvents.modifierDown();
         boolean across = FolkwaysClientGameEvents.alternateDown();
         if (along && across) {
@@ -176,7 +178,7 @@ public final class PathSelection {
         Vec3 look = Aim.of(player).look();
         Direction ahead = look.horizontalDistanceSqr() < 1.0E-6D
             ? player.getDirection() : Direction.getNearest(look.x, 0.0D, look.z);
-        return across ? ahead.getClockWise() : ahead.getOpposite();
+        return across ? ahead.getClockWise() : ahead;
     }
 
     /** The point of the draft whose post is under the crosshair, when it is not the one held already. */

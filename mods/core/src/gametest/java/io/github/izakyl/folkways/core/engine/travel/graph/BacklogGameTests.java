@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.plugins.person.walk.Walking;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -234,9 +235,9 @@ public final class BacklogGameTests {
         ((Deque<Trod>) field(roaming, "walked")).add(
             new Trod(KIND, feet.realm(), LongArrayList.of(feet.cell().asLong())));
         Method advance = Roaming.class.getDeclaredMethod("advance",
-            List.class, List.class, long.class, Slice.class, boolean.class);
+            List.class, List.class, Collection.class, long.class, Slice.class, boolean.class);
         advance.setAccessible(true);
-        advance.invoke(roaming, List.of(roamer), List.of(), 100L, (Slice) spent -> true, true);
+        advance.invoke(roaming, List.of(roamer), List.of(), List.of(), 100L, (Slice) spent -> true, true);
         helper.assertTrue(field(roaming, "quest") == active && !(boolean) field(active, "opened"),
             "reserved exploration replaces search when the time budget is consumed");
         helper.assertTrue(net.reaching(feet.cell().east().asLong()) >= 0,

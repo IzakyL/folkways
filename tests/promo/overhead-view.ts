@@ -264,6 +264,7 @@ export class View {
     await this.click(spot, "right");
     const offer = await this.element(id => id.startsWith("folkways.zoneconfig.") && id.includes("draft"));
     await this.pick(offer);
+    await this.pick(await this.element(id => id === "folkways.draft.choose"));
     const picked = await this.element(id => id.startsWith("folkways.draft.pattern.") && id.endsWith(`.${pattern}`));
     await wait(400);
     await this.pick(picked);

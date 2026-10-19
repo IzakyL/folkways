@@ -53,8 +53,8 @@ import net.minecraft.client.Minecraft;
  * ({@link Tree#json}), which the agent's JSON output budget does not walk, so it never cuts into them.
  */
 public final class Panel {
-    public static final int DEFAULT_MAX_DEPTH = 24;
-    public static final int DEFAULT_MAX_NODES = 20_000;
+    public static final int DEFAULT_MAX_DEPTH = 64;
+    public static final int DEFAULT_MAX_NODES = 32_000;
 
     private Panel() {
     }

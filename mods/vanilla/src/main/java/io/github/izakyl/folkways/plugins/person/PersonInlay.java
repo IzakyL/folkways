@@ -109,6 +109,8 @@ public final class PersonInlay implements Inlay {
         TextField field = new TextField();
         field.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
         field.bind(DataBindingBuilder.stringC2S(typed::accept).build());
+        // The caption beside it already says what goes in.
+        field.textFieldStyle(style -> style.placeholder(Component.empty()));
         Tokens.name(field, token);
         return field;
     }

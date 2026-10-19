@@ -186,6 +186,6 @@ async function markedBoxOnScreen(server: MinecraftServer, client: MinecraftClien
   await tick.sprint(server, 3);
   evidence.corner_2 = await aimAndWorldLeftClick(server, client, playerName, max);
   await tick.sprint(server, 5);
-  evidence.push_face = await ctrlScroll(server, client, 1);
+  evidence.push_face = await ctrlScroll(server, client, -1);
   return evidence;
 }

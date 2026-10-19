@@ -65,6 +65,7 @@ final class Chooser {
         TextField field = new TextField();
         field.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
         field.bind(DataBindingBuilder.stringC2S(text -> typed = text).build());
+        field.textFieldStyle(style -> style.placeholder(Component.translatable("folkways.charter.name.hint")));
         Tokens.name(field, "folkways.charter.name.field");
         Button rename = named("folkways.charter.rename", new Button()
             .setText(Component.translatable("folkways.charter.rename"))

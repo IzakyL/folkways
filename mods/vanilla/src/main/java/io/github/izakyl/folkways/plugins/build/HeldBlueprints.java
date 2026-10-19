@@ -39,8 +39,6 @@ public final class HeldBlueprints {
 
     private static final String STRUCTURE = ".nbt";
 
-    private static volatile Map<ResourceLocation, CompoundTag> own = Map.of();
-
     private HeldBlueprints() {
     }
 
@@ -70,11 +68,10 @@ public final class HeldBlueprints {
         LocalPatterns.walk(Templates.BLUEPRINTS, STRUCTURE, Templates.BLUEPRINT, (id, file) ->
             LocalPatterns.readStructure(file).filter(tag -> !Objects.equals(tag, offered.get(id)))
                 .ifPresent(tag -> mine.put(id, tag)));
-        own = Map.copyOf(mine);
         List<BlueprintsPage.Entry> entries = new ArrayList<>();
-        offered.keySet().stream().filter(Templates::isBlueprint).sorted()
-            .forEach(id -> entries.add(new BlueprintsPage.Entry(id, Component.literal(nameOf(id)), false)));
-        mine.keySet().forEach(id -> entries.add(new BlueprintsPage.Entry(id, Component.literal(nameOf(id)), true)));
+        offered.keySet().stream().filter(Templates::isBlueprint).sorted().forEach(id ->
+            entries.add(new BlueprintsPage.Entry(id, Component.literal(nameOf(id)), false, offered.get(id))));
+        mine.forEach((id, tag) -> entries.add(new BlueprintsPage.Entry(id, Component.literal(nameOf(id)), true, tag)));
         return entries;
     }
 
@@ -86,9 +83,7 @@ public final class HeldBlueprints {
         if (player == null || level == null) {
             return;
         }
-        Optional<CompoundTag> file = entry.own()
-            ? Optional.ofNullable(own.get(entry.id()))
-            : Templates.blueprint(entry.id());
+        Optional<CompoundTag> file = Optional.ofNullable(entry.file());
         int most = player.isCreative() ? Integer.MAX_VALUE : FolkwaysVanillaConfig.maxBuildCells();
         Optional<Blueprint> blueprint = file.flatMap(tag -> StructureNbt.toBlueprint(tag, level.registryAccess(),
             UUID.randomUUID(), nameOf(entry.id()), 0L, StructureNbt.AirMeaning.UNCONSTRAINED, most));

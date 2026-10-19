@@ -31,7 +31,8 @@ export async function admitPromoSettlersFast(
 export async function setMaintainDemandsFast(
   server: MinecraftServer,
   player: string,
-  demands: Array<{ at: Vec; item: string; count: number; low?: number }>,
+  // `once` files a one-off delivery rather than a standing order: met, it lets go of the goods it brought.
+  demands: Array<{ at: Vec; item: string; count: number; low?: number; once?: boolean }>,
 ) {
   return runColonyTask(server, MAINTAIN_DEMANDS, { player, demands });
 }
@@ -82,8 +83,9 @@ for (var raw : args.list("demands")) {
             || !draft.items("item").flatMap(spec -> spec.item()).filter(item::equals).isPresent()) {
         throw new IllegalStateException("Demand draft did not retain " + demand);
     }
-    var attempt = ColonyBoards.act(level, colony, OrdersContent.ID, Optional.of(at), "maintain")
-        .orElseThrow(() -> new IllegalStateException("No maintain action at " + at));
+    var act = Boolean.TRUE.equals(demand.get("once")) ? "deliver" : "maintain";
+    var attempt = ColonyBoards.act(level, colony, OrdersContent.ID, Optional.of(at), act)
+        .orElseThrow(() -> new IllegalStateException("No " + act + " action at " + at));
     if (attempt.refusal().isPresent()) {
         throw new IllegalStateException("Maintain refused: " + attempt.refusal().get().key());
     }

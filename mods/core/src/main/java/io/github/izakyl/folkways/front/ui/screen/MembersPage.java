@@ -86,6 +86,7 @@ public final class MembersPage implements Draw {
         TextField field = new TextField();
         field.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
         field.bind(DataBindingBuilder.stringC2S(text -> typed = text).build());
+        field.textFieldStyle(style -> style.placeholder(Component.translatable("folkways.charter.admit.hint")));
         Tokens.name(field, "folkways.charter.admit.field");
         Button admit = named("folkways.charter.admit", new Button()
             .setText(Component.translatable("folkways.charter.admit"))
@@ -136,10 +137,11 @@ public final class MembersPage implements Draw {
                 CompoundTag read = tag instanceof CompoundTag compound ? compound : new CompoundTag();
                 boolean founding = read.getBoolean(FOUNDING);
                 boolean kept = read.contains(TEAM);
-                mode.setText(kept
-                    ? Component.translatable("folkways.charter.mode.team",
-                        Pages.readText(player.registryAccess(), read.get(TEAM)))
-                    : Component.translatable("folkways.charter.mode.own"));
+                mode.setDisplay(kept);
+                if (kept) {
+                    mode.setText(Component.translatable("folkways.charter.mode.team",
+                        Pages.readText(player.registryAccess(), read.get(TEAM))));
+                }
                 admitting.setDisplay(!kept);
                 leave.setDisplay(!kept);
                 entrust.setDisplay(!kept && founding && read.getBoolean(TEAMS));

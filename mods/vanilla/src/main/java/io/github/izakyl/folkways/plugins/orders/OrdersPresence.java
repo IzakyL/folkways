@@ -459,27 +459,53 @@ final class OrdersPresence implements Facing {
             Optional.empty()));
     }
 
-    // One order on a line of its own: what it keeps, then in words whether it stands or comes once, the counts it
-    // keeps to, how many the container holds now and how many are still on their way.
+    // One order on a line of its own: what it keeps, then whether it stands or comes once, the counts it keeps to, how
+    // many the container holds now and how many are still on their way; in pictures, with the words for the rest.
     private Board.Row orderRow(Order order, MinecraftServer server, List<Board.Act> acts) {
-        return new Board.Row(iconOf(order.what()), nameOf(order.what()), detailOf(order, server), acts).wide();
+        Optional<Long> present = containerOf(order, server).map(held -> Goods.countIn(held, order.what()));
+        long left = onTheWay(order);
+        return new Board.Row(iconOf(order.what()), nameOf(order.what()), detailOf(order, present, left), acts)
+            .told(present.map(here -> toldOf(order, here, left)).orElse(Sentence.EMPTY))
+            .wide();
     }
 
-    private Component detailOf(Order order, MinecraftServer server) {
-        Optional<Container> held = containerOf(order, server);
-        if (held.isEmpty()) {
+    private long onTheWay(Order order) {
+        Filling delivery = filling.get(order.key());
+        return delivery == null ? pending.getOrDefault(order.key(), 0L) : delivery.remaining();
+    }
+
+    private static Component detailOf(Order order, Optional<Long> present, long left) {
+        if (present.isEmpty()) {
             return Component.translatable("folkways.panel.orders.gone");
         }
-        long present = Goods.countIn(held.get(), order.what());
         MutableComponent detail = order.standing()
-            ? Component.translatable("folkways.panel.orders.standing", present, order.low(), order.high())
-            : Component.translatable("folkways.panel.orders.once", present, order.high());
-        Filling delivery = filling.get(order.key());
-        long left = delivery == null ? pending.getOrDefault(order.key(), 0L) : delivery.remaining();
+            ? Component.translatable("folkways.panel.orders.standing", present.get(), order.low(), order.high())
+            : Component.translatable("folkways.panel.orders.once", present.get(), order.high());
         if (left > 0) {
             detail.append(Component.translatable("folkways.panel.orders.coming", left));
         }
         return detail;
+    }
+
+    // "✗ [repeater] [stock]40 + 32 / 16–64": standing or once, by the button that files it, then what the container
+    // holds, plus what is on its way, against the counts it keeps to; marked short while it lacks and nothing comes.
+    private static Sentence toldOf(Order order, long present, long left) {
+        List<Sentence.Token> tokens = new ArrayList<>();
+        if (left == 0 && present < (order.standing() ? order.low() : order.high())) {
+            tokens.add(Sentence.glyph("lacks"));
+        }
+        tokens.add(Sentence.ware(icon(order.standing() ? "repeater" : "chest_minecart"), 0));
+        tokens.add(Sentence.glyph("stock"));
+        tokens.add(Sentence.word(Notice.count(present)));
+        if (left > 0) {
+            tokens.add(Sentence.PLUS);
+            tokens.add(Sentence.word(Notice.count(left)));
+        }
+        tokens.add(Sentence.glyph("slash"));
+        tokens.add(Sentence.word(order.standing()
+            ? Notice.text(order.low() + "–" + order.high())
+            : Notice.count(order.high())));
+        return new Sentence(tokens);
     }
 
     // A container by the block it is and where it stands.

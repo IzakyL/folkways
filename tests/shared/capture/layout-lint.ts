@@ -160,7 +160,7 @@ export class LayoutProbe {
       root: { kind: "static", className: MINECRAFT, path: symbolPath(PANEL_ROUTES[holder]) },
       select: { wrap: "getTextStyle().textWrap().name()", id: ELEMENT_ID },
       expand: { path: CHILDREN },
-      limits: { maxDepth: 24, maxNodes: 8_000, maxItems: 500 },
+      limits: { maxDepth: 64, maxNodes: 32_000, maxItems: 500 },
     });
     const nodes: reflect.QueryNode[] = [];
     if (result.found !== false && result.tree) {

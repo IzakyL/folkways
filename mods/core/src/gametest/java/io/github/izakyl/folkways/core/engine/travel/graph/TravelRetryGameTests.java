@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.engine.travel.graph;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.engine.travel.Faring;
 import io.github.izakyl.folkways.plugins.person.walk.Walking;
@@ -213,6 +214,31 @@ public final class TravelRetryGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
+    public static void aWorkSiteJoinsTheWaysWhereItIsWorkedFrom(GameTestHelper helper) {
+        for (int x = 0; x <= 8; x++) {
+            for (int z = 0; z <= 2; z++) {
+                helper.setBlock(x, 1, z, Blocks.STONE);
+            }
+        }
+        BlockPos chest = helper.absolutePos(new BlockPos(7, 2, 1));
+        helper.setBlock(new BlockPos(7, 2, 1), Blocks.CHEST);
+        Mob body = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new BlockPos(1, 2, 1));
+        ResourceLocation kind = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
+        List<Roamer> roamers = List.of(new Roamer(kind, Walking.INSTANCE, body));
+        long footing = Reach.workableCells(helper.getLevel(), chest).iterator().next().asLong();
+        long now = helper.getLevel().getGameTime();
+
+        Roaming unheld = new Roaming(helper.getLevel());
+        unheld.advance(roamers, List.of(), List.of(), now);
+        helper.assertTrue(!unheld.holds(footing), "ground no one has walked or worked is not in the ways");
+        Roaming held = new Roaming(helper.getLevel());
+        held.advance(roamers, List.of(), List.of(WorldPos.of(helper.getLevel(), chest)), now);
+        helper.assertTrue(held.holds(footing),
+            "a site the colony works joins the ways where a body stands to work it, as a platform does");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
     public static void answeringWorksAWayOutOrDeniesItWithoutLater(GameTestHelper helper) {
         for (int x = 0; x <= 8; x++) {
             for (int z = 0; z <= 2; z++) {
@@ -238,14 +264,14 @@ public final class TravelRetryGameTests {
         helper.assertTrue(roaming.ways().journey(who, from, Set.of(open)) instanceof Faring.Later,
             "unexplored ways cannot be known without working them out");
         Faring reached = roaming.answered(ways -> ways.journey(who, from, Set.of(open)), roamers,
-            List.of(), now);
+            List.of(), List.of(), now);
         helper.assertTrue(reached instanceof Faring.Yes, "an open floor must be worked out to a yes, not " + reached);
         Faring denied = roaming.answered(ways -> ways.journey(who, from, Set.of(walled)), roamers,
-            List.of(), now);
+            List.of(), List.of(), now);
         helper.assertTrue(denied instanceof Faring.No, "a walled-in cell must be answered no, not " + denied);
         helper.assertTrue(roaming.answered(ways -> ways.journey(new Resident(UUID.randomUUID(),
                 ResourceLocation.fromNamespaceAndPath("folkways", "nobody")), from, Set.of(open)),
-            roamers, List.of(), now) instanceof Faring.No,
+            roamers, List.of(), List.of(), now) instanceof Faring.No,
             "a kind nobody here can walk for is a no");
         helper.succeed();
     }

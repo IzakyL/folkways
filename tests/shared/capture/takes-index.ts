@@ -1,16 +1,16 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { gallery } from "./gallery";
-import { outAbs } from "../shared/harness/out-paths";
+import { outAbs, type Suite } from "../harness/out-paths";
 
-const VISUAL_DIR = outAbs("visual", "takes");
-
-export default function globalTeardown() {
-  if (!existsSync(VISUAL_DIR)) return;
+/** Gathers a suite's takes (each set's index.json) into one gallery page and one INDEX.md beside them. */
+export function writeTakesIndex(suite: Suite) {
+  const dir = outAbs(suite, "takes");
+  if (!existsSync(dir)) return;
   const docs: any[] = [];
-  for (const name of readdirSync(VISUAL_DIR)) {
-    const file = path.join(VISUAL_DIR, name, "index.json");
-    if (!existsSync(file) || !statSync(path.join(VISUAL_DIR, name)).isDirectory()) continue;
+  for (const name of readdirSync(dir)) {
+    const file = path.join(dir, name, "index.json");
+    if (!existsSync(file) || !statSync(path.join(dir, name)).isDirectory()) continue;
     try {
       docs.push(JSON.parse(readFileSync(file, "utf8")));
     } catch {
@@ -18,10 +18,10 @@ export default function globalTeardown() {
   }
   docs.sort((a, b) => String(a.scope).localeCompare(String(b.scope)));
 
-  writeFileSync(path.join(VISUAL_DIR, "index.html"), gallery(docs));
+  writeFileSync(path.join(dir, "index.html"), gallery(docs));
 
   const L: string[] = [];
-  L.push("# Visual output index");
+  L.push(`# ${suite[0].toUpperCase()}${suite.slice(1)} output index`);
   L.push("");
   L.push(`Generated ${new Date().toISOString()} · ${docs.length} sets`);
   L.push("");
@@ -62,7 +62,7 @@ export default function globalTeardown() {
       L.push("");
     }
   }
-  writeFileSync(path.join(VISUAL_DIR, "INDEX.md"), L.join("\n") + "\n");
+  writeFileSync(path.join(dir, "INDEX.md"), L.join("\n") + "\n");
 }
 
 function format(value: unknown): string {

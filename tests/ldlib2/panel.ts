@@ -35,10 +35,10 @@ export interface PanelRead {
 export interface PanelReadOptions extends CallOptions {
   /**
    * The deepest depth read, the root being depth 0 (as `reflect.query`'s maxDepth): the children of an
-   * element at this depth are not read, and the read is marked truncated. Default 24.
+   * element at this depth are not read, and the read is marked truncated. Default 64.
    */
   maxDepth?: number;
-  /** The most elements read; more marks the read truncated. Default 20000. */
+  /** The most elements read; more marks the read truncated. Default 32,000. */
   maxNodes?: number;
 }
 
@@ -136,6 +136,10 @@ export async function panelElements(client: MinecraftClient, options: PanelReadO
 export interface WaitForElementOptions extends CallOptions {
   /** Default `actionable`. */
   state?: UiWaitState;
+  /** The deepest depth read, the root being depth 0 (as `reflect.query`'s maxDepth). */
+  maxDepth?: number;
+  /** Elements read before the tree is cut short; default 32,000. */
+  maxNodes?: number;
 }
 
 /** What a click needs, answered by the wait that found the element actionable. */
@@ -154,13 +158,13 @@ interface ElementTarget {
 
 const CHECK = "return Ldlib2.check(ctx, args);";
 
-function waitSpec(selector: ElementSelector, state: UiWaitState, options: CallOptions, target: boolean) {
+function waitSpec(selector: ElementSelector, state: UiWaitState, options: CallOptions & PanelLimits, target: boolean) {
   return {
     name: "ldlib2.waitForElement",
     clock: "frame" as const,
     modules: [LDLIB2],
     imports: IMPORTS,
-    args: { ...panelArgs(), selector, state, ...(target ? { target: true } : {}) },
+    args: { ...panelArgs(options), selector, state, ...(target ? { target: true } : {}) },
     check: CHECK,
     ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
@@ -184,7 +188,7 @@ export async function waitForElement(
   return state === "absent" ? undefined : done.value.element;
 }
 
-async function waitForTarget(client: MinecraftClient, selector: ElementSelector, options: CallOptions): Promise<ElementTarget> {
+async function waitForTarget(client: MinecraftClient, selector: ElementSelector, options: CallOptions & PanelLimits): Promise<ElementTarget> {
   return (await client.waitUntil<ElementTarget>(waitSpec(selector, "actionable", options, true))).value;
 }
 
@@ -276,6 +280,10 @@ export interface ScrollIntoViewOptions extends CallOptions {
   turns?: number;
   /** Frames drawn after each wheel turn before re-reading; default 2. */
   hoverFrames?: number;
+  /** The deepest depth read, the root being depth 0 (as `reflect.query`'s maxDepth). */
+  maxDepth?: number;
+  /** Elements read before the tree is cut short; default 32,000. */
+  maxNodes?: number;
 }
 
 /**
@@ -307,7 +315,7 @@ export async function scrollElementIntoView(
   for (let turn = 0; turn <= turns; turn++) {
     let at: Located;
     try {
-      at = last = await client.run(LOCATE, { ...panelArgs(), selector, ...(turn === 0 ? {} : { afterFrames: frames, settleMs }) }, run);
+      at = last = await client.run(LOCATE, { ...panelArgs(options), selector, ...(turn === 0 ? {} : { afterFrames: frames, settleMs }) }, run);
     } catch (error) {
       if (!isMinecraftError(error, "wait-timeout")) {
         throw error;
@@ -382,6 +390,10 @@ export interface ElementActionOptions extends CallOptions {
   turns?: number;
   /** Frames drawn with the cursor in place before the hover is trusted; default 2. */
   hoverFrames?: number;
+  /** The deepest depth read, the root being depth 0 (as `reflect.query`'s maxDepth). */
+  maxDepth?: number;
+  /** Elements read before the tree is cut short; default 32,000. */
+  maxNodes?: number;
 }
 
 export interface HoverElementOptions extends ElementActionOptions {
@@ -545,8 +557,9 @@ export async function typeIntoElement(
 }
 
 /** What a hover or click passes on to the scroll before it: the in-game budget is the action's, not each turn's. */
-function scrollOptions({ turns, hoverFrames, signal }: ElementActionOptions): ScrollIntoViewOptions {
-  return { ...(turns !== undefined ? { turns } : {}), ...(hoverFrames !== undefined ? { hoverFrames } : {}), ...(signal ? { signal } : {}) };
+function scrollOptions({ turns, hoverFrames, signal, maxDepth, maxNodes }: ElementActionOptions): ScrollIntoViewOptions {
+  return { ...(turns !== undefined ? { turns } : {}), ...(hoverFrames !== undefined ? { hoverFrames } : {}),
+    ...(signal ? { signal } : {}), ...(maxDepth !== undefined ? { maxDepth } : {}), ...(maxNodes !== undefined ? { maxNodes } : {}) };
 }
 
 function describe(element: { class: string; id?: string; handle?: string }): string {

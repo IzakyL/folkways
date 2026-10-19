@@ -19,7 +19,7 @@ const SETTLE_TICKS = 200;
 
 test("a colony assembled into a Sable ship keeps every block it held, at the ship's own addresses", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
-  ensureOut("e2e");
+  ensureOut("sable");
 
   const runId = newRunId();
   let pair: E2EPair | undefined;
@@ -29,8 +29,8 @@ test("a colony assembled into a Sable ship keeps every block it held, at the shi
   try {
     pair = await launchPair({
       config: SABLE_CONFIG,
-      server: { trace: tracePath("e2e", "sable-relocate-server"), instance: seededServer(`sable-relocate-server-${runId}`) },
-      client: { trace: tracePath("e2e", "sable-relocate-client"), instance: `sable-relocate-client-${runId}` },
+      server: { trace: tracePath("sable", "sable-relocate-server"), instance: seededServer(`sable-relocate-server-${runId}`) },
+      client: { trace: tracePath("sable", "sable-relocate-client"), instance: `sable-relocate-client-${runId}` },
       snapshot: () => ({ containers: [store && offset ? shifted(store, offset) : store], entityTypes: ["folkways:resident"] }),
     });
     const { server, client } = pair;

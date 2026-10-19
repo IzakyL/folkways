@@ -12,7 +12,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -28,26 +27,16 @@ public final class ColonyStalls {
     private ColonyStalls() {
     }
 
-    // In words, for a page.
-    public static List<Notice> within(Colony colony, ServerLevel level, Predicate<BlockPos> inside) {
-        return told(colony, level, inside, ColonyStalls::notice);
-    }
-
     // On a card, goods that were missing or had nowhere to go are told in pictures, as a resident's balk is: "Missing:
     // [sowing] ✗ wheat seeds"; any other stall in its own words.
     public static List<Line> lines(Colony colony, ServerLevel level, Predicate<BlockPos> inside) {
-        return told(colony, level, inside, stall -> pictured(stall).orElseGet(() -> Line.blocked(notice(stall))));
-    }
-
-    private static <T> List<T> told(Colony colony, ServerLevel level, Predicate<BlockPos> inside,
-            Function<Stall, T> saying) {
-        Set<T> said = new LinkedHashSet<>();
+        Set<Line> said = new LinkedHashSet<>();
         for (Stall stall : colony.stallsIn(level.dimension())) {
             if (said.size() >= MOST) {
                 break;
             }
             if (stall.where().in(level) && inside.test(stall.where().block(level))) {
-                said.add(saying.apply(stall));
+                said.add(pictured(stall).orElseGet(() -> Line.blocked(notice(stall))));
             }
         }
         return new ArrayList<>(said);

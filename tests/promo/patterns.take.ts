@@ -275,6 +275,8 @@ async function commissionRoad(client: any) {
   await sleepMs(700);
   await clickElement(client, { id: offer });
   await sleepMs(500);
+  await clickElement(client, { id: await waitForToken(client, id => id === "folkways.draft.choose") });
+  await sleepMs(500);
   const road = await waitForToken(client, id => id.startsWith("folkways.draft.pattern.") && id.endsWith("road"));
   await sleepMs(600);
   await clickElement(client, { id: road });

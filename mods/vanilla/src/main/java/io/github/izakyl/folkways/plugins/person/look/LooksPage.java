@@ -7,6 +7,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import io.github.izakyl.folkways.core.api.colony.Books;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.front.api.ui.Draw;
+import io.github.izakyl.folkways.front.api.ui.IdTree;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
@@ -44,12 +45,10 @@ public final class LooksPage implements Draw {
         picker.side().addChildAt(counter, 0);
 
         ScrollerView scroller = Rows.box();
-        scroller.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0).minHeight(0));
         scroller.addScrollViewChild(Rows.page().addChildren(
-            Rows.note(Component.translatable("folkways.pool.looks.help")),
             new PoolSets("looks", LooksPage::offered, LooksPage::replace).build(player),
             picker.tree()));
-        UIElement page = Rows.page().addChildren(picker.beside(scroller));
+        UIElement page = Rows.page().addChildren(picker.beside(picker.searching(scroller)));
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
 
         line[0] = new LookPicker.Line(page, (word, what) -> heard(player, word, what));
@@ -94,7 +93,7 @@ public final class LooksPage implements Draw {
             case LookPicker.FOLDER_ON, LookPicker.FOLDER_OFF -> {
                 if (what.indexOf(':') > 0) {
                     LookPool.setAll(colony.get(),
-                        looks.stream().filter(look -> LookTree.under(what, look)).toList(),
+                        looks.stream().filter(look -> IdTree.under(what, look.toString())).toList(),
                         word.equals(LookPicker.FOLDER_ON));
                 }
             }

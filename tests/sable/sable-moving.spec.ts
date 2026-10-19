@@ -21,7 +21,7 @@ const DELIVERY_TICKS = 2_400;
 
 test("a colony aboard a Sable ship keeps everyone aboard and its work going while the ship rises and sails", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
-  ensureOut("e2e");
+  ensureOut("sable");
 
   const runId = newRunId();
   let pair: E2EPair | undefined;
@@ -32,8 +32,8 @@ test("a colony aboard a Sable ship keeps everyone aboard and its work going whil
   try {
     pair = await launchPair({
       config: SABLE_CONFIG,
-      server: { trace: tracePath("e2e", "sable-moving-server"), instance: seededServer(`sable-moving-server-${runId}`) },
-      client: { trace: tracePath("e2e", "sable-moving-client"), instance: `sable-moving-client-${runId}` },
+      server: { trace: tracePath("sable", "sable-moving-server"), instance: seededServer(`sable-moving-server-${runId}`) },
+      client: { trace: tracePath("sable", "sable-moving-client"), instance: `sable-moving-client-${runId}` },
       snapshot: () => ({
         containers: stage.structure ? [source, target].map((chest) => chest && stage.at(chest)) : [],
         entityTypes: ["folkways:resident"],

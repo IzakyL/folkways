@@ -67,6 +67,7 @@ public final class NamesPage implements Draw {
         TextField field = new TextField();
         field.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
         field.bind(DataBindingBuilder.stringC2S(text -> typed = text).build());
+        field.textFieldStyle(style -> style.placeholder(Component.translatable("folkways.pool.names.hint")));
         Tokens.name(field, "folkways.pool.names.field");
         Button add = named("folkways.pool.names.add", new Button()
             .setText(Component.translatable("folkways.pool.add"))
@@ -75,7 +76,6 @@ public final class NamesPage implements Draw {
 
         ScrollerView scroller = Rows.fills(Rows.box());
         scroller.addScrollViewChild(Rows.page().addChildren(
-            Rows.note(Component.translatable("folkways.pool.names.help")),
             new PoolSets("names", NamesPage::offered, NamesPage::replace).build(player),
             table));
         UIElement page = Rows.page().addChildren(

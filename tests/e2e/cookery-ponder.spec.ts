@@ -142,7 +142,7 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
       await clickElement(client, { id: "folkways.tab.lessons" }, { scrollIntoView: true });
     };
     await shelf();
-    const folders = await panelElements(client, { maxNodes: 20_000 });
+    const folders = await panelElements(client);
     expect(folders.some(element => element.id === "folkways.lessons.folder.folkways.cookery")).toBe(installed);
     expect(folders.some(element => element.id === "folkways.page.cookery"), "the kitchen page belongs to the optional Folkways extension").toBe(installed);
     if (!installed) return;

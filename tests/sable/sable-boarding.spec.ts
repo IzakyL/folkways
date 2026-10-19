@@ -21,7 +21,7 @@ const TILT_DEGREES = 25;
 
 test("residents step between the ground and a docked Sable ship, and only while it lies level and flush", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
-  ensureOut("e2e");
+  ensureOut("sable");
 
   const runId = newRunId();
   let pair: E2EPair | undefined;
@@ -32,8 +32,8 @@ test("residents step between the ground and a docked Sable ship, and only while 
   try {
     pair = await launchPair({
       config: SABLE_CONFIG,
-      server: { trace: tracePath("e2e", "sable-boarding-server"), instance: seededServer(`sable-boarding-server-${runId}`) },
-      client: { trace: tracePath("e2e", "sable-boarding-client"), instance: `sable-boarding-client-${runId}` },
+      server: { trace: tracePath("sable", "sable-boarding-server"), instance: seededServer(`sable-boarding-server-${runId}`) },
+      client: { trace: tracePath("sable", "sable-boarding-client"), instance: `sable-boarding-client-${runId}` },
       snapshot: () => ({
         containers: [shipChest && ship.structure ? ship.at(shipChest) : undefined, groundChest],
         entityTypes: ["folkways:resident"],

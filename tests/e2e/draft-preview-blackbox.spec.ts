@@ -16,6 +16,7 @@ import { around, twins, type Stage } from "../shared/harness/stage";
 
 const BOOK_ITEM = "folkways:colony_book";
 const OFFER = "folkways.zoneconfig.offer.folkways.draft";
+const CHOOSE = "folkways.draft.choose";
 const PATTERN = "folkways.draft.pattern.folkways.terraced_field";
 const PREVIEW = "folkways.draft.preview";
 const BUILD = "folkways.draft.confirm";
@@ -169,6 +170,9 @@ async function openOffer(server: MinecraftServer, client: MinecraftClient, playe
   await openBookPage(server, client, playerName, standBlock, stage);
   await waitForElement(client, { id: OFFER }, { timeoutMs: 8_000 });
   await clickElement(client, { id: OFFER });
+  await settlePanel(server, client);
+  await waitForElement(client, { id: CHOOSE }, { timeoutMs: 8_000 });
+  await clickElement(client, { id: CHOOSE });
   await settlePanel(server, client);
   await waitForElement(client, { id: PATTERN }, { timeoutMs: 8_000 });
 }

@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.front.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import io.github.izakyl.folkways.FolkwaysClientConfig;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.api.ui.Placing;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
@@ -168,7 +169,7 @@ final class HeldPlacement {
             return false;
         }
         if (modifier && !alternate) {
-            reach = Mth.clamp(reach + (delta > 0 ? 1 : -1), MIN_REACH, MAX_REACH);
+            reach = Mth.clamp(reach + FolkwaysClientConfig.away(delta > 0 ? 1 : -1), MIN_REACH, MAX_REACH);
             Draft.say(Component.translatable("folkways.zone.reach", reach));
             return true;
         }

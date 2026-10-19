@@ -1,10 +1,13 @@
 package io.github.izakyl.folkways.core.engine.colony;
 
+import io.github.izakyl.folkways.core.api.colony.Held;
+import io.github.izakyl.folkways.core.api.colony.Holding;
 import io.github.izakyl.folkways.core.api.passage.Hop;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Closures;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.core.engine.EngineMode;
 import io.github.izakyl.folkways.core.engine.travel.Faring;
 import io.github.izakyl.folkways.core.engine.travel.Hops;
@@ -13,6 +16,7 @@ import io.github.izakyl.folkways.core.engine.travel.Ways;
 import io.github.izakyl.folkways.core.engine.travel.graph.Roamer;
 import io.github.izakyl.folkways.core.engine.travel.graph.Roaming;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,13 +61,13 @@ public final class ColonyWays {
 
         private Faring answered(Function<Ways, Faring> asking) {
             return graph(colony, level).answered(asking, roamers(colony, level), hopsIn(colony),
-                level.getGameTime());
+                sitesIn(colony, level), level.getGameTime());
         }
     }
 
     public static boolean advance(ColonyData colony, ServerLevel level) {
         return graph(colony, level).advance(roamers(colony, level), hopsIn(colony),
-            level.getGameTime());
+            sitesIn(colony, level), level.getGameTime());
     }
 
     public static boolean answered(ColonyData colony, ServerLevel level) {
@@ -129,5 +133,23 @@ public final class ColonyWays {
 
     private static List<Hop> hopsIn(ColonyData colony) {
         return Hops.in(colony.works());
+    }
+
+    // Where the colony works in this level: every block or point it holds, every store it was offered, and every
+    // workshop's site. Each joins the ways, as a station's platform does.
+    private static Set<WorldPos> sitesIn(ColonyData colony, ServerLevel level) {
+        Set<WorldPos> found = new LinkedHashSet<>();
+        for (Holding holding : colony.works().holdings()) {
+            if (holding.what() instanceof Held.Block(WorldPos cell) && cell.in(level)) {
+                found.add(cell);
+            } else if (holding.what() instanceof Held.Point(WorldPos cell) && cell.in(level)) {
+                found.add(cell);
+            }
+        }
+        found.addAll(colony.works().storesIn(level.dimension()));
+        for (Workshop workshop : colony.works().workshopsIn(level.dimension())) {
+            found.add(workshop.site().where());
+        }
+        return found;
     }
 }

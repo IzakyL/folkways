@@ -15,7 +15,7 @@ const STOCK = 32;
 
 test("a store assembled off a Sable ship into a ship of its own stays the colony's, at the new ship's addresses", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
-  ensureOut("e2e");
+  ensureOut("sable");
 
   const runId = newRunId();
   let pair: E2EPair | undefined;
@@ -25,8 +25,8 @@ test("a store assembled off a Sable ship into a ship of its own stays the colony
   try {
     pair = await launchPair({
       config: SABLE_CONFIG,
-      server: { trace: tracePath("e2e", "sable-split-server"), instance: seededServer(`sable-split-server-${runId}`) },
-      client: { trace: tracePath("e2e", "sable-split-client"), instance: `sable-split-client-${runId}` },
+      server: { trace: tracePath("sable", "sable-split-server"), instance: seededServer(`sable-split-server-${runId}`) },
+      client: { trace: tracePath("sable", "sable-split-client"), instance: `sable-split-client-${runId}` },
       snapshot: () => ({ containers: [store && stage.structure ? stage.at(store) : undefined], entityTypes: ["folkways:resident"] }),
     });
     const { server, client } = pair;
