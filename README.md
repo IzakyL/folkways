@@ -60,7 +60,7 @@ There is no tagged release yet. The
 [Nightly build](https://github.com/IzakyL/folkways/releases/tag/nightly) is rebuilt from
 every push to `master`; back up your world before trying it.
 
-Folkways comes as four jars. Install the first two; add the others only with the mod they pair with:
+Folkways has four base jars and a Cookery extension. Install the first two; add the others only with the mod they pair with:
 
 | Jar | When |
 | --- | --- |
@@ -125,7 +125,7 @@ npm run setup
 ./gradlew build
 ```
 
-The four mod jars land in `build/libs/`. To work on Folkways, see
+The five mod jars land in `build/libs/`. To work on Folkways, see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
