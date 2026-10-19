@@ -2,8 +2,10 @@ package io.github.izakyl.folkways.core.engine.labor;
 
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Stash;
+import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.engine.plan.Stores;
 import java.util.List;
 import net.minecraft.world.item.ItemStack;
 
@@ -21,7 +23,9 @@ final class Stowing {
                 }
                 for (Worker.Store store : who.within()) {
                     if (store.at().equals(into.pos())) {
+                        if (StoreRule.stores(Stores.rulesAt(store.at()))) {
                         left = Containers.insert(store.contents(), left);
+                    }
                         break;
                     }
                 }

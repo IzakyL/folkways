@@ -1,10 +1,9 @@
 import { screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { clickElement } from "../../ldlib2";
+import { clickElement, scrollElementIntoView } from "../../ldlib2";
 import { chooseInSelector, optInViaBook } from "./colony-founding";
 import {
   boardAct,
   boardActs,
-  boardRows,
   openSite,
   typeCell,
 } from "../ui/site-panel";
@@ -52,9 +51,10 @@ export async function openOrderDraft(
 ) {
   const evidence: any = { chest };
   evidence.open = await openSite(server, client, chest);
-  evidence.row = await firstOrdersRow(client);
+  evidence.row = await orderDraftRow(client);
   evidence.edit_item = (await boardAct(client, "edit", ORDERS_PAGE, evidence.row, 0)).id;
   evidence.row_id = `folkways.board.row.${ORDERS_PAGE}.${evidence.row}`;
+  await scrollElementIntoView(client, { id: evidence.edit_item });
   return evidence;
 }
 
@@ -76,10 +76,10 @@ async function fileOrderViaSitePanel(
   const before = await ordersRowCount(client);
   evidence.rows_before = before;
 
-  const draftRow = await firstOrdersRow(client);
+  const draftRow = await orderDraftRow(client);
   const wanted = await boardAct(client, "edit", ORDERS_PAGE, draftRow, 0);
   evidence.edit_item = wanted.id;
-  await softly(() => clickElement(client, { id: wanted.id }));
+  await softly(() => clickElement(client, { id: wanted.id }, { scrollIntoView: true }));
   await tick.sprint(server, 5);
   await safeAction(() => frames(client, 3));
   await beat();
@@ -91,21 +91,23 @@ async function fileOrderViaSitePanel(
   await safeAction(() => frames(client, 3));
   await beat();
 
-  const countRow = await firstOrdersRow(client);
+  const countRow = await orderDraftRow(client);
   const howMany = await boardAct(client, "edit", ORDERS_PAGE, countRow, 2);
   evidence.edit_count = howMany.id;
   if (act === ACT_MAINTAIN) {
     const low = await boardAct(client, "edit", ORDERS_PAGE, countRow, 1);
+    await scrollElementIntoView(client, { id: low.id });
     evidence.set_low = await typeCell(server, client, low.id, "1");
   }
   await beat();
+  await scrollElementIntoView(client, { id: howMany.id });
   evidence.set_count = await typeCell(server, client, howMany.id, String(count));
   await beat();
 
   const fileRow = await fileRowIndex(client);
   const pressed = await boardAct(client, "do", ORDERS_PAGE, fileRow, act);
   evidence.act_id = pressed.id;
-  evidence.press = await softly(() => clickElement(client, { id: pressed.id }));
+  evidence.press = await softly(() => clickElement(client, { id: pressed.id }, { scrollIntoView: true }));
 
   for (let poll = 0; poll < FILED_POLLS; poll++) {
     await tick.sprint(server, 10);
@@ -128,19 +130,23 @@ async function fileOrderViaSitePanel(
 }
 
 async function ordersRowCount(client: MinecraftClient): Promise<number> {
-  return (await boardRows(client)).filter((row) => row.page === ORDERS_PAGE).length;
+  const submit = await fileRowIndex(client);
+  return new Set((await boardActs(client, "do", ORDERS_PAGE))
+    .filter((act) => act.row > submit).map((act) => act.row)).size;
 }
 
-async function firstOrdersRow(client: MinecraftClient): Promise<number> {
-  const rows = (await boardRows(client)).filter((row) => row.page === ORDERS_PAGE);
-  if (rows.length === 0) {
-    throw new Error("order: this site's panel has no Orders rows");
-  }
-  return rows[0].row;
+async function orderDraftRow(client: MinecraftClient): Promise<number> {
+  const edits = await boardActs(client, "edit", ORDERS_PAGE);
+  const rows = new Map<number, number>();
+  for (const edit of edits) rows.set(edit.row, (rows.get(edit.row) ?? 0) + 1);
+  const draft = [...rows].find(([, count]) => count === 3);
+  if (!draft) throw new Error(`order: no item/threshold/target draft on this page (${JSON.stringify(edits)})`);
+  return draft[0];
 }
 
 async function fileRowIndex(client: MinecraftClient): Promise<number> {
-  const acts = await boardActs(client, "do", ORDERS_PAGE);
+  const draft = await orderDraftRow(client);
+  const acts = (await boardActs(client, "do", ORDERS_PAGE)).filter((act) => act.row > draft);
   const byRow = new Map<number, number>();
   for (const act of acts) {
     byRow.set(act.row, (byRow.get(act.row) ?? 0) + 1);

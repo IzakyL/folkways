@@ -22,6 +22,12 @@ Saves, data pack formats and the Java API may still change between versions.
   how many head to keep. Frame a riverbank as a fishery, or draw a patrol route.
 - **Orders keep things stocked.** Name an item and an amount for a chest, and the colony
   crafts, smelts, harvests or hauls until it holds that much.
+- **Containers have their own rules.** Choose whether residents may take goods or use a
+  container for ordinary storage. Orders still deliver to containers that refuse ordinary
+  storage.
+  Blacklists and whitelists use the shared item picker, including item, tag and search
+  rules. Container rules apply to residents; players and external automation keep their
+  normal access.
 - **Buildings from drawings.** Frame ground or draw a line, pick a pattern (roads, arch
   bridges, walls, docks, mines, railways, arcades, terraced fields), and builders clear
   the site and lay it from the colony's stores. Patterns are small

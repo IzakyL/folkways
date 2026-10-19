@@ -1651,7 +1651,7 @@ public final class Weaver {
 
         @Override
         public long roomFor(Stash where, ItemSpec concrete) {
-            return Weaver.this.roomFor(where, concrete);
+            return now.stock().stores(where) ? Weaver.this.roomFor(where, concrete) : 0;
         }
 
         @Override
@@ -1774,6 +1774,7 @@ public final class Weaver {
             gapsOf.remove(hand.id());
             List<RecoveryStore> stores = new ArrayList<>();
             for (Stash stash : now.stock().stashes()) {
+                if (!now.stock().stores(stash)) continue;
                 Set<Stand> at = now.stands().around(stash);
                 if (at.isEmpty()) {
                     continue;
@@ -2369,9 +2370,12 @@ public final class Weaver {
 
     // ---- stock, room and reach ----
 
-    // Only goods a store holds now are there for anyone to draw. Goods on their way in belong to the growth that
+    // Only goods a store holds now and permits taking are there to draw. Goods on their way in belong to the growth that
     // brings them, which orders its own draws after them.
     private long drawable(Stash where, ItemSpec concrete) {
+        if (!now.stock().takes(where)) {
+            return 0;
+        }
         return Math.max(0, now.stock().heldAt(where, concrete) - claims.taken(new Resource.Lot(where, concrete)));
     }
 
@@ -2396,7 +2400,7 @@ public final class Weaver {
     // A reserve is never filled from another reserve of the same goods: the two would only empty into each other.
     private boolean feeds(Stash from, UUID consumer, ItemSpec concrete) {
         Node eats = nodes.get(consumer);
-        if (!eats.acceptsInput(from)) {
+        if (!now.stock().takes(from) || !eats.acceptsInput(from)) {
             return false;
         }
         return !now.stock().reserves(from, concrete) || !(eats instanceof TransferNode put)

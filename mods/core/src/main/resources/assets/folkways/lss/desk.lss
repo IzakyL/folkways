@@ -131,3 +131,17 @@
 .folkways_desk label, .folkways_desk .__button_text__ {
   min-height: 12;
 }
+
+// Container forms group settings by purpose instead of giving every entry a ledger row.
+.folkways_desk .folkways_form_section {
+  background: sprite(folkways:textures/gui/desk/card.png, 0, 0, 16, 16, 3, 3, 3, 3);
+}
+.folkways_desk .folkways_form_toggle {
+  background: color(#e0cda4);
+}
+.folkways_desk .folkways_form_on button .__button_text__ {
+  text-color: #3d6429;
+}
+.folkways_desk .folkways_form_off button .__button_text__ {
+  text-color: #7d7466;
+}

@@ -49,6 +49,8 @@ public final class Window implements Pane {
     private boolean automaticPosition = true;
     private float lastDeskWidth;
     private float lastDeskHeight;
+    private float preferredWidth;
+    private float preferredHeight;
     private float wantedWidth;
     private float wantedHeight;
     private WindowGeometry.Box pressedAt;
@@ -60,8 +62,10 @@ public final class Window implements Pane {
         this.byDefault = byDefault;
         this.minWidth = minWidth;
         this.minHeight = minHeight;
-        wantedWidth = byDefault.width();
-        wantedHeight = byDefault.height();
+        preferredWidth = byDefault.width();
+        preferredHeight = byDefault.height();
+        wantedWidth = preferredWidth;
+        wantedHeight = preferredHeight;
 
         caption.setText(title);
         caption.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
@@ -172,8 +176,8 @@ public final class Window implements Pane {
         if (centring) {
             centring = false;
             apply(spotIn(deskWidth, deskHeight));
-            wantedWidth = byDefault.width();
-            wantedHeight = byDefault.height();
+            wantedWidth = preferredWidth;
+            wantedHeight = preferredHeight;
             return;
         }
         if (frame.getSizeWidth() <= 0f || frame.getSizeHeight() <= 0f) {
@@ -190,11 +194,22 @@ public final class Window implements Pane {
         frame.layout(layout -> layout.left(x).top(y).width(width).height(height));
     }
 
+    // A page may need more room than a compact list. Keep a user's remembered size and position.
+    void preferSize(float width, float height) {
+        if (preferredWidth == width && preferredHeight == height) return;
+        preferredWidth = Math.max(minWidth, width);
+        preferredHeight = Math.max(minHeight, height);
+        if (automaticPosition) {
+            centring = true;
+            settle();
+        }
+    }
+
     void resetLayout() {
         automaticPosition = true;
         centring = true;
-        wantedWidth = byDefault.width();
-        wantedHeight = byDefault.height();
+        wantedWidth = preferredWidth;
+        wantedHeight = preferredHeight;
         settle();
     }
 
@@ -203,8 +218,8 @@ public final class Window implements Pane {
     }
 
     private WindowGeometry.Box spotIn(float deskWidth, float deskHeight) {
-        float width = Math.min(byDefault.width(), deskWidth);
-        float height = Math.min(byDefault.height(), deskHeight);
+        float width = Math.min(preferredWidth, deskWidth);
+        float height = Math.min(preferredHeight, deskHeight);
         WindowGeometry.Box middle = new WindowGeometry.Box(
             Math.max(0f, (deskWidth - width) / 2f),
             Math.max(0f, (deskHeight - height) / 2f), width, height);

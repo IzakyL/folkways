@@ -8,10 +8,18 @@ import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.api.work.Node;
+import io.github.izakyl.folkways.core.api.work.NodeSpec;
+import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
+import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture.Owed;
 import io.github.izakyl.folkways.core.engine.plan.haul.Haul;
+import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,6 +30,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -117,7 +126,7 @@ public final class StoreRuleGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
-    public static void aStoreIsWorkedOnlyThroughItsSlotsAndAdmission(GameTestHelper helper) {
+    public static void aStoreUsesAllSlotsAndHonorsAdmission(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos cell = helper.absolutePos(new BlockPos(1, 1, 1));
         level.setBlockAndUpdate(cell, Blocks.BARREL.defaultBlockState());
@@ -126,24 +135,20 @@ public final class StoreRuleGameTests {
         UUID colony = UUID.randomUUID();
         long before = Stores.revision();
         try {
-            Stores.ruled(colony, Map.of(where, List.of(new StoreRule.Slots(where, 2, 5),
-                new StoreRule.Admit(where, true, List.of(IRON)))));
+            Stores.ruled(colony, Map.of(where, List.of(new StoreRule.Admit(where, true, List.of(IRON)))));
             helper.assertTrue(Stores.revision() != before, "new rules move the revision so stores are read again");
             var kept = Stores.at(level, where).orElseThrow();
-            helper.assertTrue(kept.getContainerSize() == 3, "only slots 2 to 4 are the colony's");
+            helper.assertTrue(kept.getContainerSize() == 27, "all slots are accessible");
             helper.assertTrue(Containers.insert(kept, new ItemStack(Items.BREAD, 5)).getCount() == 5,
                 "bread is not put where only iron is taken");
             ItemStack left = Containers.insert(kept, new ItemStack(Items.IRON_INGOT, 200));
-            helper.assertTrue(left.getCount() == 200 - 3 * 64, "iron fills the three open slots and no more");
-            helper.assertTrue(barrel.getItem(0).isEmpty() && barrel.getItem(1).isEmpty()
-                    && barrel.getItem(5).isEmpty() && Goods.countIn(barrel, IRON) == 3 * 64,
-                "the slots outside the rule are left alone");
+            helper.assertTrue(left.isEmpty() && Goods.countIn(barrel, IRON) == 200,
+                "admitted goods can use the full container");
             barrel.setItem(0, new ItemStack(Items.BREAD, 7));
-            helper.assertTrue(Goods.countIn(kept, BREAD) == 0,
-                "what sits outside the colony's slots is not the colony's to take");
+            helper.assertTrue(Goods.countIn(kept, BREAD) == 7,
+                "admission filters do not hide existing stock");
             long moved = Stores.revision();
-            Stores.ruled(colony, Map.of(where, List.of(new StoreRule.Slots(where, 2, 5),
-                new StoreRule.Admit(where, true, List.of(IRON)))));
+            Stores.ruled(colony, Map.of(where, List.of(new StoreRule.Admit(where, true, List.of(IRON)))));
             helper.assertTrue(Stores.revision() == moved, "the same rules again change nothing");
         } finally {
             Stores.ruled(colony, Map.of());
@@ -189,6 +194,95 @@ public final class StoreRuleGameTests {
                 "nobody carries a shulker box to a shulker box only to fail putting it in");
         } finally {
             rounds.closed();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void takingAndGeneralStorageAreIndependentOfOrders(GameTestHelper helper) {
+        PlanningFixture f = new PlanningFixture(helper);
+        Stash source = new Stash(f.source);
+        Stash target = new Stash(f.target);
+        List<Stock.Holding> held = List.of(new Stock.Holding(source, new ItemStack(Items.BREAD, 10)));
+        Map<Stash, Integer> empty = Map.of(source, 26, target, 27);
+        Stock closedSource = new Stock(held, empty, Map.of(source,
+            List.of(new StoreRule.Access(source.pos(), false, true))));
+        helper.assertTrue(drawnFrom(solve(f, f.stands, closedSource, target)).isEmpty(),
+            "a closed source cannot supply other work");
+        helper.assertTrue(closedSource.heldAt(source, BREAD) == 10,
+            "closed source inventory is still counted for its own orders");
+        Stock orderedOnly = new Stock(held, empty, Map.of(target,
+            List.of(new StoreRule.Access(target.pos(), false, false))));
+        helper.assertTrue(drawnFrom(solve(f, f.stands, orderedOnly, target)).equals(Set.of(source)),
+            "directed delivery works even when general storage is disabled");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void aRelayMustAllowItsConsumerToTakeTheGoods(GameTestHelper helper) {
+        PlanningFixture f = new PlanningFixture(helper);
+        Stash source = new Stash(f.source);
+        Stash nearby = new Stash(f.target);
+        Node consumer = new Node() {
+            private final NodeSpec spec = NodeSpec.of(UUID.randomUUID(), Haul.DOMAIN,
+                new WorkSite.AtBlock(f.target), Stances.at(f.target), Workload.Once.of(1))
+                .needs(new Need(BREAD, 4)).done();
+            public NodeSpec spec() { return spec; }
+            public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
+        };
+        for (boolean take : new boolean[] {true, false}) {
+            Stock stock = new Stock(List.of(new Stock.Holding(source, new ItemStack(Items.BREAD, 4))),
+                Map.of(source, 26, nearby, 27),
+                Map.of(nearby, List.of(new StoreRule.Access(nearby.pos(), take, true))));
+            PlanningFixture.Rounds rounds = new PlanningFixture.Rounds();
+            try {
+                Planned solved = rounds.solve(f.situation(stock, List.of()), f.crew,
+                    List.of(Grown.of(consumer)), List.of(), 0);
+                var vertices = solved.weave().vertices();
+                helper.assertTrue(solved.diagnosis().shortfalls().isEmpty() && vertices.containsKey(consumer.id()),
+                    "the consumer is fully supplied whether the nearby store permits taking or not");
+                if (take) {
+                    helper.assertTrue(vertices.size() == 3
+                            && vertices.values().stream().anyMatch(vertex -> vertex.plan().into().contains(nearby))
+                            && vertices.get(consumer.id()).plan().from().contains(nearby),
+                        "an open nearby store relays the bread through a take and a put before consumption");
+                } else {
+                    helper.assertTrue(vertices.size() == 2 && vertices.values().stream().noneMatch(vertex ->
+                            vertex.plan().into().contains(nearby) || vertex.plan().from().contains(nearby)),
+                        "a store that forbids taking is never used as a relay; bread is fetched into the pack");
+                    helper.assertTrue(vertices.get(consumer.id()).plan().draws().stream().anyMatch(draw ->
+                            draw.from().isEmpty() && draw.count() == 4 && draw.spec().equals(BREAD)),
+                        "the consumer draws its bread from the carrier's pack instead of the closed relay");
+                }
+            } finally {
+                rounds.closed();
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void inFlightTakingRechecksPermission(GameTestHelper helper) {
+        PlanningFixture f = new PlanningFixture(helper);
+        var level = helper.getLevel();
+        level.setBlockAndUpdate(f.source.cell(), Blocks.BARREL.defaultBlockState());
+        var barrel = Containers.at(level, f.source.cell()).orElseThrow();
+        barrel.setItem(0, new ItemStack(Items.BREAD, 10));
+        UUID colony = UUID.randomUUID();
+        TransferNode take = TransferNode.at(TransferNode.Endpoint.store(new Stash(f.source)),
+            TransferNode.Endpoint.pack(), new Manifest(List.of(new ItemStack(Items.BREAD, 4)), List.of()),
+            Set.of(new Stand(f.source))).orElseThrow();
+        try {
+            Stores.ruled(colony, Map.of(f.source, List.of(new StoreRule.Access(f.source, false, true))));
+            helper.assertTrue(take.draw(level, f.worker) instanceof Staged.Short,
+                "taking permission is checked again when work executes");
+            helper.assertTrue(Goods.countIn(barrel, BREAD) == 10, "refused taking leaves all stock in place");
+            Stores.ruled(colony, Map.of(f.source, List.of(new StoreRule.Access(f.source, true, true))));
+            helper.assertTrue(take.draw(level, f.worker) instanceof Staged.Taken,
+                "taking can proceed after permission is restored");
+            helper.assertTrue(Goods.countIn(barrel, BREAD) == 6, "the requested stock leaves");
+        } finally {
+            Stores.ruled(colony, Map.of());
         }
         helper.succeed();
     }

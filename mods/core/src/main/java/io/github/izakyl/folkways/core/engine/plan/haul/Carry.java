@@ -374,7 +374,8 @@ final class Carry implements Carrying {
     private static Stash landing(Laying plan, Stash out, Set<Stash> ins, UUID eater, ItemSpec concrete, long count) {
         for (Stash in : ins) {
             if (!in.equals(out) && plan.roomFor(in, concrete) >= count
-                && (eater == null || !plan.reaching(eater, in).isEmpty()) && passable(plan, out, in)) {
+                && (eater == null || plan.feeds(in, eater, concrete) && !plan.reaching(eater, in).isEmpty())
+                && passable(plan, out, in)) {
                 return in;
             }
         }

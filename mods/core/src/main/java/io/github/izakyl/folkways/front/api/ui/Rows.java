@@ -64,11 +64,15 @@ public final class Rows {
 
     // Cards two to a line, their outer edges flush with the page's; one to a line once the grid grows narrow.
     public static UIElement grid() {
+        return grid(TWO_COLUMNS);
+    }
+
+    public static UIElement grid(float twoColumns) {
         UIElement grid = new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.ROW).flexWrap(FlexWrap.WRAP)
                 .widthPercent(100));
         grid.addEventListener(UIEvents.LAYOUT_CHANGED, event -> {
-            boolean narrow = grid.getSizeWidth() < TWO_COLUMNS;
+            boolean narrow = grid.getSizeWidth() < twoColumns;
             if (narrow == grid.hasClass(ONE_COLUMN)) {
                 return;
             }
@@ -86,7 +90,7 @@ public final class Rows {
         return grid;
     }
 
-    public enum Span { LEFT, RIGHT, WHOLE }
+    public enum Span { LEFT, RIGHT, WHOLE, CONTENT }
 
     // A card's place in a grid, kept so the grid can lay it again when it changes how many go to a line.
     private static final class Cell extends UIElement {
@@ -108,6 +112,10 @@ public final class Rows {
     public static UIElement place(UIElement cell, Span span) {
         if (cell instanceof Cell kept) {
             kept.span = span;
+        }
+        if (span == Span.CONTENT) {
+            cell.layout(layout -> layout.widthAuto().paddingLeft(0).paddingRight(GAP));
+            return cell;
         }
         UIElement grid = cell.getParent();
         Span laid = grid != null && grid.hasClass(ONE_COLUMN) ? Span.WHOLE : span;

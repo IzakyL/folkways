@@ -43,15 +43,17 @@ public sealed interface StoreRule {
         }
     }
 
-    // The slots residents may reach into, counted from zero, `to` exclusive.
-    record Slots(WorldPos where, int from, int to) implements StoreRule {
+    // General storage is independent of directed orders.
+    record Access(WorldPos where, boolean take, boolean store) implements StoreRule {
+        public Access { Objects.requireNonNull(where, "where"); }
+    }
 
-        public Slots {
-            Objects.requireNonNull(where, "where");
-            if (from < 0 || to <= from) {
-                throw new IllegalArgumentException("slots " + from + ".." + to + " hold nothing");
-            }
-        }
+    static boolean takes(List<StoreRule> rules) {
+        return rules.stream().noneMatch(rule -> rule instanceof Access access && !access.take());
+    }
+
+    static boolean stores(List<StoreRule> rules) {
+        return rules.stream().noneMatch(rule -> rule instanceof Access access && !access.store());
     }
 
     static boolean admits(List<StoreRule> rules, ItemStack stack) {

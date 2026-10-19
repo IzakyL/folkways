@@ -16,6 +16,7 @@ import dev.vfyjxf.taffy.style.TaffyPosition;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
+import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.front.api.ui.Draw;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Pane;
@@ -76,9 +77,11 @@ public final class ColonyShell
 
     private static final int WINDOW_WIDTH = 300;
     private static final int WINDOW_HEIGHT = 230;
-    // A block's own window holds its whole board, an order's words on a line of their own among them.
+    // Compact site lists and grouped forms each get enough room; smaller screens keep scrolling.
     private static final int SITE_WIDTH = 400;
     private static final int SITE_HEIGHT = 320;
+    private static final int FORM_WIDTH = 380;
+    private static final int FORM_HEIGHT = 340;
 
     private final Optional<UUID> colonyId;
     private final Optional<BlockPos> site;
@@ -101,15 +104,18 @@ public final class ColonyShell
         colonyId = CurrentColony.id(player).or(() -> siteColonyId(player, at));
     }
 
-    private static Optional<ResourceLocation> answeringPage(Player player, Optional<BlockPos> at) {
+    private static Optional<SiteBoard> answeringSite(Player player, Optional<BlockPos> at) {
         if (!(player instanceof ServerPlayer serverPlayer) || at.isEmpty()) {
             return Optional.empty();
         }
         BlockPos pos = at.get();
         ServerLevel level = serverPlayer.serverLevel();
         return ColonyAuthority.of(serverPlayer, Optional.of(pos))
-            .flatMap(authority -> ColonyBoards.firstAt(level, authority.colony(), pos))
-            .map(SiteBoard::page);
+            .flatMap(authority -> ColonyBoards.firstAt(level, authority.colony(), pos));
+    }
+
+    private static Optional<ResourceLocation> answeringPage(Player player, Optional<BlockPos> at) {
+        return answeringSite(player, at).map(SiteBoard::page);
     }
 
     private static Optional<UUID> siteColonyId(Player player, Optional<BlockPos> at) {
@@ -173,6 +179,10 @@ public final class ColonyShell
                 panel.setDisplay(target != null && pages.containsKey(target));
                 pages.forEach((key, value) -> value.setDisplay(key.equals(target)));
             }).build().getSyncValue());
+        desk.root().addSyncValue(DataBindingBuilder.boolS2C(() -> answeringSite(player, site)
+            .map(answer -> answer.board().layout() == Board.Layout.FORM).orElse(false))
+            .onSyncReceived(form -> window.preferSize(form ? FORM_WIDTH : SITE_WIDTH,
+                form ? FORM_HEIGHT : SITE_HEIGHT)).build().getSyncValue());
         desk.root().addSyncValue(DataBindingBuilder.boolS2C(() -> member(player, site))
             .onSyncReceived(held -> toggle.setText(Component.translatable(
                 held ? "folkways.member.leave" : "folkways.member.join")))

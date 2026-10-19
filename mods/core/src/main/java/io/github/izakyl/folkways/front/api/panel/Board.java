@@ -10,12 +10,22 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 public record Board(List<Figure> figures, List<Row> rows, Optional<Component> whenEmpty,
-                   CompoundTag data) {
+                   CompoundTag data, Layout layout) {
+
+    public enum Layout { LIST, FORM }
 
     public Board {
         figures = List.copyOf(figures);
         rows = List.copyOf(rows);
         data = data.copy();
+    }
+
+    public Board(List<Figure> figures, List<Row> rows, Optional<Component> whenEmpty, CompoundTag data) {
+        this(figures, rows, whenEmpty, data, Layout.LIST);
+    }
+
+    public Board form() {
+        return new Board(figures, rows, whenEmpty, data, Layout.FORM);
     }
 
     public Board(List<Figure> figures, List<Row> rows, Optional<Component> whenEmpty) {
@@ -45,7 +55,9 @@ public record Board(List<Figure> figures, List<Row> rows, Optional<Component> wh
      * A {@code whole} row takes a whole line of the page, where it would otherwise share one with the next.
      */
     public record Row(ItemStack icon, Component title, Component detail, List<Act> acts,
-                      Optional<Meter> meter, boolean heading, Optional<Sentence> told, boolean whole) {
+                      Optional<Meter> meter, boolean heading, Optional<Sentence> told, boolean whole, Style style) {
+
+        public enum Style { DEFAULT, FIELD, ACTIONS, ON, OFF, NOTE }
 
         public static final int MAX_ACTS = 4;
 
@@ -55,6 +67,11 @@ public record Board(List<Figure> figures, List<Row> rows, Optional<Component> wh
                 throw new IllegalArgumentException(
                     "a board row offers at most " + MAX_ACTS + " acts, got " + acts.size());
             }
+        }
+
+        public Row(ItemStack icon, Component title, Component detail, List<Act> acts,
+                Optional<Meter> meter, boolean heading, Optional<Sentence> told, boolean whole) {
+            this(icon, title, detail, acts, meter, heading, told, whole, Style.DEFAULT);
         }
 
         public Row(ItemStack icon, Component title, Component detail, List<Act> acts,
@@ -87,11 +104,23 @@ public record Board(List<Figure> figures, List<Row> rows, Optional<Component> wh
 
         public Row told(Sentence sentence) {
             return new Row(icon, title, detail, acts, meter, heading,
-                sentence.isEmpty() ? Optional.empty() : Optional.of(sentence), whole);
+                sentence.isEmpty() ? Optional.empty() : Optional.of(sentence), whole, style);
         }
 
+        private Row styled(Style selected) {
+            return new Row(icon, title, detail, acts, meter, heading, told, whole, selected);
+        }
+
+        public Row field() { return styled(Style.FIELD); }
+
+        public Row actions() { return styled(Style.ACTIONS); }
+
+        public Row toggle(boolean enabled) { return styled(enabled ? Style.ON : Style.OFF); }
+
+        public Row note() { return styled(Style.NOTE); }
+
         public Row wide() {
-            return new Row(icon, title, detail, acts, meter, heading, told, true);
+            return new Row(icon, title, detail, acts, meter, heading, told, true, style);
         }
     }
 
