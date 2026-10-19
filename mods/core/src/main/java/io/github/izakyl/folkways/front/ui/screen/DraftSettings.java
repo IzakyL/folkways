@@ -15,13 +15,15 @@ import net.minecraft.resources.ResourceLocation;
 
 final class DraftSettings {
     private final Schema schema;
+    private final ResourceLocation delegation;
     private ColonySettings values;
     private final UIElement root = Rows.table();
     private final List<Runnable> collect = new ArrayList<>();
 
-    DraftSettings(Schema schema) {
+    DraftSettings(ResourceLocation delegation, Schema schema) {
+        this.delegation = delegation;
         this.schema = schema;
-        values = ColonySettings.byDefault(schema);
+        values = RememberedSettings.of(delegation, schema);
     }
 
     UIElement build() {
@@ -30,7 +32,7 @@ final class DraftSettings {
             switch (setting) {
                 case Schema.Setting.Count count -> {
                     var number = Controls.count(count.min(), count.max());
-                    number.setValue(Integer.toString(count.byDefault()), false);
+                    number.setValue(Integer.toString(values.count(count.key())), false);
                     collect.add(() -> {
                         try {
                             values = values.with(count.key(), new ColonySettings.Value.Count(
@@ -41,14 +43,14 @@ final class DraftSettings {
                 }
                 case Schema.Setting.Flag flag -> {
                     Toggle box = Controls.tick();
-                    box.setOn(flag.byDefault(), false);
+                    box.setOn(values.flag(flag.key()), false);
                     box.setOnToggleChanged(on ->
                         values = values.with(flag.key(), new ColonySettings.Value.Flag(on)));
                     control = box;
                 }
                 case Schema.Setting.Choice choice -> {
                     Button button = new Button().noText();
-                    wear(button, choice.byDefault());
+                    wear(button, values.choice(choice.key()));
                     button.setOnClick(event -> ChoicePicker.open(button, choice, values.choice(choice.key()),
                         option -> {
                             values = values.with(choice.key(), new ColonySettings.Value.Choice(option));
@@ -57,7 +59,7 @@ final class DraftSettings {
                     control = button;
                 }
                 case Schema.Setting.Items items -> control = Rows.value(Component.translatable(
-                    "folkways.settings.entries", items.byDefault().size()));
+                    "folkways.settings.entries", values.entries(items.key()).size()));
             }
             control.layout(layout -> layout.flexShrink(0));
             Tokens.name(control, "folkways.draft.value." + setting.key());
@@ -76,7 +78,9 @@ final class DraftSettings {
 
     ColonySettings settings() {
         collect.forEach(Runnable::run);
-        return values.conformedTo(schema);
+        values = values.conformedTo(schema);
+        RememberedSettings.put(delegation, values);
+        return values;
     }
 
     private static void wear(Button button, ResourceLocation option) {

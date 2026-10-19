@@ -680,6 +680,7 @@
   "folkways.settings.fuel": "Fuel",
   "folkways.settings.layout": "Window layout",
   "folkways.settings.invert_wheel": "Invert wheel push and pull",
+  "folkways.settings.forget_drawing_settings": "Do not save previous zone, path and pattern options",
   "folkways.settings.looks.count": "%s of %s",
   "folkways.settings.looks.empty": "There are no looks yet",
   "folkways.settings.orders.count": "Fill to",

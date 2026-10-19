@@ -4,6 +4,8 @@ import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
+import io.github.izakyl.folkways.plugins.build.draft.Chosen;
+import net.minecraft.nbt.CompoundTag;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,6 +37,25 @@ public final class KnobValues implements Settings {
                 case Schema.Setting.Choice choice -> values.choices.put(choice.key(), choice.byDefault());
                 case Schema.Setting.Items items -> specOf(items.byDefault())
                     .ifPresent(spec -> values.lists.put(items.key(), spec));
+            }
+        }
+        return values;
+    }
+
+    static KnobValues load(Schema schema, CompoundTag saved) {
+        KnobValues values = of(schema);
+        var chosen = Chosen.load(schema, saved);
+        for (Schema.Setting setting : schema.settings()) {
+            String key = setting.key();
+            if (!saved.contains(key)) continue;
+            switch (setting) {
+                case Schema.Setting.Flag flag -> values.flags.put(key, chosen.flag(key));
+                case Schema.Setting.Count count -> values.counts.put(key, chosen.count(key));
+                case Schema.Setting.Choice choice -> values.choices.put(key, chosen.choice(key));
+                case Schema.Setting.Items items -> {
+                    values.lists.remove(key);
+                    chosen.items(key).ifPresent(spec -> values.lists.put(key, spec));
+                }
             }
         }
         return values;

@@ -171,7 +171,7 @@ public final class Drawing {
     }
 
     private UIElement settingsOf(Delegation declared) {
-        DraftSettings form = new DraftSettings(declared.schema());
+        DraftSettings form = new DraftSettings(declared.id(), declared.schema());
         parameters.put(declared.id(), form);
         ScrollerView scroller = Rows.fills(Rows.box());
         scroller.addScrollViewChild(form.build());

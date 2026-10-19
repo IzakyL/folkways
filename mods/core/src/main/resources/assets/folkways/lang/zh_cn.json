@@ -680,6 +680,7 @@
   "folkways.settings.fuel": "燃料",
   "folkways.settings.layout": "窗口布局",
   "folkways.settings.invert_wheel": "滚轮推拉反转",
+  "folkways.settings.forget_drawing_settings": "不保存上次的区域、路径和建筑图样选项",
   "folkways.settings.looks.count": "%s / %s",
   "folkways.settings.looks.empty": "还没有任何模型",
   "folkways.settings.orders.count": "上界",

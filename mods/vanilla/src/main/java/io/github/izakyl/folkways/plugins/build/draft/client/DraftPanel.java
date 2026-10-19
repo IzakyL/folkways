@@ -23,6 +23,7 @@ import io.github.izakyl.folkways.front.api.ui.Tokens;
 import io.github.izakyl.folkways.library.Shelves;
 import io.github.izakyl.folkways.plugins.build.SiteNameField;
 import io.github.izakyl.folkways.plugins.build.draft.Chosen;
+import io.github.izakyl.folkways.front.ui.screen.RememberedSettings;
 import io.github.izakyl.folkways.plugins.build.draft.Commission;
 import io.github.izakyl.folkways.plugins.build.draft.Drafting;
 import io.github.izakyl.folkways.plugins.build.draft.DraftTemplate;
@@ -241,7 +242,12 @@ public final class DraftPanel {
     }
 
     private void choose(Pattern pattern) {
-        choose(pattern, KnobValues.of(pattern.knobs()));
+        KnobValues restored = KnobValues.of(pattern.knobs());
+        try {
+            restored = RememberedSettings.load("pattern/" + pattern.id())
+                .map(saved -> KnobValues.load(pattern.knobs(), saved)).orElse(restored);
+        } catch (RuntimeException ignored) { }
+        choose(pattern, restored);
     }
 
     private void choose(Pattern pattern, KnobValues held) {
@@ -304,6 +310,14 @@ public final class DraftPanel {
             } else {
                 DraftOffer.commission(chosen, hint, settings, front, typed, now);
             }
+            CompoundTag saved = settings.save();
+            // An explicitly empty material selection must not restore the pattern's defaults.
+            for (Schema.Setting setting : chosen.knobs().settings()) {
+                if (setting instanceof Schema.Setting.Items && !saved.contains(setting.key())) {
+                    saved.put(setting.key(), new CompoundTag());
+                }
+            }
+            RememberedSettings.save("pattern/" + chosen.id(), saved);
             kept = null;
             taking.done();
         });

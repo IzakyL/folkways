@@ -94,6 +94,17 @@ public final class SettingsPage implements Draw {
             Rows.name(Component.translatable("folkways.settings.invert_wheel")),
             invertWheel));
 
+        Toggle forgetDrawingSettings = Controls.tick();
+        if (LDLib2.isRemote()) {
+            forgetDrawingSettings.setOn(!FolkwaysClientConfig.rememberDrawingSettings(), false);
+            forgetDrawingSettings.setOnToggleChanged(on -> FolkwaysClientConfig.rememberDrawingSettings(!on));
+        }
+        Tokens.name(forgetDrawingSettings, "folkways.settings.forget_drawing_settings");
+        table.addChildren(Rows.row().addChildren(
+            Rows.icon(ItemStack.EMPTY),
+            Rows.name(Component.translatable("folkways.settings.forget_drawing_settings")),
+            forgetDrawingSettings));
+
         Razing razing = new Razing();
         table.addChildren(Rows.row().addChildren(
             Rows.icon(ItemStack.EMPTY),
