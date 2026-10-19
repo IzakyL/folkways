@@ -1,0 +1,11 @@
+# Keep this server in sync with .mcp.json (used by Claude Code).
+# Inherit the current project/worktree directory; do not pin the main checkout.
+[mcp_servers.blockwright]
+command = "node"
+args = [
+  "node_modules/@izakyl/blockwright-mcp/dist/main.js",
+  "--config",
+  "blockwright.toml",
+  "--ui-adapter",
+  "tests/ldlib2/index.ts",
+]
