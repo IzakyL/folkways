@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.core.engine.labor;
 import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.core.engine.EngineMode;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
+import io.github.izakyl.folkways.core.engine.colony.ColonyMemberWrites;
 import io.github.izakyl.folkways.core.engine.colony.ColonyRegistry;
 import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
 import io.github.izakyl.folkways.core.engine.travel.PathfindingLoad;
@@ -68,6 +69,7 @@ public final class Labor {
             return;
         }
         simulationTicks++;
+        ColonyMemberWrites.reconcile(server);
         if (!(server instanceof GameTestServer)) {
             work(server);
         }
@@ -173,6 +175,7 @@ public final class Labor {
     }
 
     public void shutdown() {
+        ColonyMemberWrites.forgetServer();
         sites.values().forEach(ColonyLabor::close);
         sites.clear();
         simulationTicks = 0;

@@ -232,18 +232,26 @@ public final class Holdings implements ColonyChangeSource {
     // Loaded blocks keep their entity mark; native points keep satisfying their declared predicate.
     void reconcile(MinecraftServer server) {
         for (Holding holding : List.copyOf(held.values())) {
-            WorldPos cell = holding.what().singleCell().orElse(null);
-            if (cell == null) continue;
-            WorldSpaces.Block where = WorldSpaces.resolve(server, cell).orElse(null);
-            if (where == null || !where.level().isLoaded(where.cell())) {
-                continue;
-            }
-            BlockEntity entity = where.level().getBlockEntity(where.cell());
-            boolean valid = holding.what() instanceof Held.Point
-                ? PointSites.accepts(holding.owner(), where.level(), where.cell()) : entity != null && marked(entity);
-            if (!valid) {
-                release(server, holding.id(), Release.GONE);
-            }
+            reconcile(server, holding);
+        }
+    }
+
+    void reconcile(MinecraftServer server, WorldPos cell) {
+        at(cell).ifPresent(holding -> reconcile(server, holding));
+    }
+
+    private void reconcile(MinecraftServer server, Holding holding) {
+        WorldPos cell = holding.what().singleCell().orElse(null);
+        if (cell == null) return;
+        WorldSpaces.Block where = WorldSpaces.resolve(server, cell).orElse(null);
+        if (where == null || !where.level().isLoaded(where.cell())) {
+            return;
+        }
+        BlockEntity entity = where.level().getBlockEntity(where.cell());
+        boolean valid = holding.what() instanceof Held.Point
+            ? PointSites.accepts(holding.owner(), where.level(), where.cell()) : entity != null && marked(entity);
+        if (!valid) {
+            release(server, holding.id(), Release.GONE);
         }
     }
 
