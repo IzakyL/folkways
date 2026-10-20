@@ -292,8 +292,7 @@ public final class SchedulingRecoveryGameTests {
         }
     }
 
-    // Also used by the real batch-runner fixture: it keeps its existing execution and inventory while this
-    // independent route projection fails and rebuilds. No production fault hook or fake scheduler is needed.
+    // Fail and rebuild the real route projection without a production fault hook or fake scheduler.
     static final class Fixture {
         final GameTestHelper helper;
         final Scheduler scheduler;
