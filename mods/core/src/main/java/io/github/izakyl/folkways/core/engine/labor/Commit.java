@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Staged;
+import io.github.izakyl.folkways.core.api.work.StockCheck;
 import io.github.izakyl.folkways.core.api.work.batch.BatchAction;
 import io.github.izakyl.folkways.core.api.work.batch.BatchCommit;
 import io.github.izakyl.folkways.core.engine.batch.BatchExecution;
@@ -54,6 +55,31 @@ public final class Commit {
     public static Outcome run(ServerLevel level, Node node, Worker who, BatchExecution batch) {
         if (batch != null && !batch.active(node)) return Outcome.failed(LaborRefusal.WORK_BROKE);
         if (batch == null && node instanceof BatchAction) return Outcome.failed(LaborRefusal.WORK_BROKE);
+        if (node instanceof StockCheck check) {
+            if (batch != null || !StockCheck.valid(node)) return Outcome.failed(LaborRefusal.WORK_BROKE);
+            return switch (check.draw(level, who)) {
+                case Staged.Short(var why) -> Outcome.failed(why);
+                case Staged.Taken(List<ItemStack> goods) -> {
+                    if (!goods.isEmpty()) {
+                        check.restore(level, who, goods);
+                        yield Outcome.failed(LaborRefusal.WORK_BROKE);
+                    }
+                    Outcome outcome;
+                    try {
+                        outcome = node.commit(level, new Supplied(who, List.of()));
+                    } catch (RuntimeException | LinkageError broken) {
+                        check.restore(level, who, List.of());
+                        throw broken;
+                    }
+                    if (outcome instanceof Outcome.Failed) check.restore(level, who, List.of());
+                    if (outcome instanceof Outcome.Done done
+                            && (!done.made().isEmpty() || !done.unused().isEmpty() || done.xp().isPresent())) {
+                        yield Outcome.failed(LaborRefusal.WORK_BROKE);
+                    }
+                    yield outcome;
+                }
+            };
+        }
         if (node instanceof Staged staged) {
             return switch (staged.draw(level, who)) {
                 case Staged.Short(var why) -> Outcome.failed(why);

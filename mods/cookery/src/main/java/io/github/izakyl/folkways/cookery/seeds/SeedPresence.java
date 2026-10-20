@@ -22,6 +22,7 @@ import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Staged;
+import io.github.izakyl.folkways.core.api.work.StockCheck;
 import io.github.izakyl.folkways.core.api.work.WorkGesture;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
@@ -113,19 +114,6 @@ public final class SeedPresence implements Facing {
                             body.mob().getItemBySlot(EquipmentSlot.HEAD)))).toList();
     }
 
-    private List<io.github.izakyl.folkways.plugins.compost.SeedBudget.Reserve> reserves(ServerLevel level) {
-        var observed = budgets.apply(level).frozen();
-        Set<UUID> checks = new java.util.LinkedHashSet<>();
-        for (var reserve : observed.reserves()) {
-            for (ServerLevel dimension : level.getServer().getAllLevels()) {
-                for (WorldPos store : colony.storesIn(dimension.dimension())) {
-                    checks.add(keepId(store, reserve.alternatives().getFirst()));
-                }
-            }
-        }
-        return observed.reservesExcluding(checks);
-    }
-
     private UUID keepId(WorldPos at, Item seed) {
         return named("keep/" + colony.id() + "/" + at.realm() + "/" + BuiltInRegistries.ITEM.getKey(seed));
     }
@@ -135,7 +123,7 @@ public final class SeedPresence implements Facing {
         List<Body> farmers = farmers(view);
         if (farmers.isEmpty()) return List.of();
         ServerLevel level = view.level();
-        List<io.github.izakyl.folkways.plugins.compost.SeedBudget.Reserve> reserves = reserves(level);
+        List<io.github.izakyl.folkways.plugins.compost.SeedBudget.Reserve> reserves = budgets.apply(level).reserves();
         List<Grown> goals = new ArrayList<>();
         List<WorldPos> stores = colony.storesIn(level.dimension());
         if (!stores.isEmpty()) {
@@ -189,7 +177,7 @@ public final class SeedPresence implements Facing {
         String status = "ready";
         if (!budgets.apply(view.level()).complete()) status = "unknown_inventory";
         else if (farmers(view).isEmpty()) status = "need_hat";
-        else if (reserves(view.level()).stream().anyMatch(reserve -> reserve.missing() > 0
+        else if (budgets.apply(view.level()).reserves().stream().anyMatch(reserve -> reserve.missing() > 0
                 && reserve.alternatives().stream().anyMatch(grassSeeds()::contains))) {
             if (zone.cells().stream().noneMatch(ground -> view.level().isLoaded(ground.above())
                     && view.level().getBlockState(ground.above()).is(Blocks.SHORT_GRASS))) {
@@ -204,7 +192,7 @@ public final class SeedPresence implements Facing {
     }
 
     // A planner demand for bootstrap production, not a request to pick up the reserve stack.
-    private final class Keep implements Node, Staged {
+    private final class Keep implements Node, StockCheck {
         private final NodeSpec spec;
         private final Item seed;
         Keep(WorldPos at, Stances stances, io.github.izakyl.folkways.plugins.compost.SeedBudget.Reserve reserve) {
@@ -217,7 +205,7 @@ public final class SeedPresence implements Facing {
         private boolean present(ServerLevel level) {
             var observed = budgets.apply(level).frozen();
             return enabled.getAsBoolean() && observed.complete()
-                && observed.tally(seed, ItemStack.EMPTY, Set.of(id())).missing() == 0;
+                && observed.tally(seed).missing() == 0;
         }
         public Staged.Drawn draw(ServerLevel level, Worker who) {
             return present(level) ? new Staged.Taken(List.of()) : new Staged.Short(SeedRefusal.RESERVE_UNAVAILABLE);
@@ -277,7 +265,7 @@ public final class SeedPresence implements Facing {
                     || Bodies.of(who.body()).filter(body -> io.github.izakyl.folkways.cookery.gear.CookeryGear.permitsSeeds(colony, body)).isEmpty()) {
                 return Outcome.failed(SeedRefusal.AREA_CHANGED);
             }
-            if (reserves(level).stream().noneMatch(reserve -> reserve.missing() > 0
+            if (budgets.apply(level).reserves().stream().noneMatch(reserve -> reserve.missing() > 0
                     && reserve.alternatives().stream().anyMatch(grassSeeds()::contains))) {
                 return new Outcome.Done(List.of(), List.of(), Optional.empty(), who.supplied());
             }

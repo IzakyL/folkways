@@ -13,6 +13,7 @@ import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.api.work.StockCheck;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Placement;
@@ -1088,8 +1089,8 @@ public final class Weaver {
         WorkSite near = consumer.spec().site();
         List<Ranked> ranked = new ArrayList<>();
         for (Stock.Lot lot : now.stock().lotsOf(edge.spec())) {
-            if (drawable(lot.where(), lot.concrete()) > 0 && feeds(lot.where(), edge.consumer(), lot.concrete())) {
-                long cost = Transfer.walk(lot.where().pos(), near);
+            if (availableTo(edge, lot) > 0 && feeds(lot.where(), edge.consumer(), lot.concrete())) {
+                long cost = consumer instanceof StockCheck ? 0 : Transfer.walk(lot.where().pos(), near);
                 ranked.add(new Ranked(new Source.Lot(lot), cost, 0,
                     now.stock().available(lot.concrete()), lot.where().toString(), ranked.size(), cost));
             }
@@ -1217,6 +1218,7 @@ public final class Weaver {
     // Goods already in a worker's pack: whoever carries them does the consumer's work, and nothing is moved.
     private long fromPack(Edge edge, long count) {
         Node consumer = nodes.get(edge.consumer());
+        if (consumer instanceof StockCheck) return stockInPacks(edge, count);
         if (consumer instanceof Receipt) {
             return 0;
         }
@@ -1262,9 +1264,56 @@ public final class Weaver {
         return 0;
     }
 
+    // A global inventory observation may reserve several residents' existing cargo without assigning any
+    // of those residents to the check. Occupation and fitness do not change what is physically present.
+    private long stockInPacks(Edge edge, long count) {
+        long total = 0;
+        for (Crew.Hand hand : crew.hands()) {
+            Map<ItemSpec, Long> skipped = new LinkedHashMap<>();
+            List<ItemStack> taken = new ArrayList<>();
+            long served = 0;
+            for (ItemStack stack : hand.cargo()) {
+                if (!Goods.matches(stack, edge.spec()) || total + served >= count) continue;
+                ItemSpec concrete = Goods.specOf(stack);
+                long used = skipped.computeIfAbsent(concrete,
+                    spec -> cargoObservedAsClaimed(hand, spec));
+                long skip = Math.min(used, stack.getCount());
+                skipped.put(concrete, used - skip);
+                int take = (int) Math.min(count - total - served, stack.getCount() - skip);
+                if (take > 0) {
+                    taken.add(stack.copyWithCount(take));
+                    served += take;
+                }
+            }
+            if (served > 0) {
+                Expansion grown = begin(new Expansion(edge));
+                grown.covers = transfer(grown, new Transfer(new From.Carried(hand.id(), taken),
+                    new To.Feeding(edge), edge.spec(), served));
+                total += grown.covers;
+            }
+            if (total >= count) break;
+        }
+        return total;
+    }
+
+    // Legacy piece work may already have put part of its output in its current worker's pack while its
+    // downstream reservation is still Handed, not Cargo. Match InputReservations' WORKING/Within alias,
+    // without charging not-yet-started promises or batch output already withheld from this snapshot.
+    private long cargoObservedAsClaimed(Crew.Hand hand, ItemSpec concrete) {
+        long reserved = claims.taken(new Resource.Cargo(hand.id(), concrete));
+        for (Node producer : nodes.values()) {
+            if (!(producer.spec().workload() instanceof Workload.Within)
+                    || producer.spec().workload() instanceof io.github.izakyl.folkways.core.api.work.batch.BatchSession) continue;
+            boolean working = hand.id().equals(holding.get(producer.id()))
+                || hand.holding().filter(producer.id()::equals).isPresent();
+            if (working) reserved += claims.taken(new Resource.Handed(producer.id(), concrete));
+        }
+        return reserved;
+    }
+
     // A lot in a store: each carry of it is its own growth, so a failed fetch takes back only what it was bringing.
     private long fromStore(Edge edge, Stock.Lot lot, long left) {
-        long can = Math.min(left, drawable(lot.where(), lot.concrete()));
+        long can = Math.min(left, availableTo(edge, lot));
         if (can <= 0) {
             return 0;
         }
@@ -1899,6 +1948,9 @@ public final class Weaver {
     }
 
     private void add(Expansion grown, Node node) {
+        if (node instanceof StockCheck && !StockCheck.valid(node)) {
+            throw new IllegalArgumentException("a stock check cannot carry, consume or produce goods");
+        }
         UUID id = node.id();
         nodes.put(id, node);
         grownBy.put(id, grown);
@@ -2385,6 +2437,15 @@ public final class Weaver {
         return Math.max(0, now.stock().heldAt(where, concrete) - claims.taken(new Resource.Lot(where, concrete)));
     }
 
+    // A stock target observes known contents without exercising permission to withdraw them. Other
+    // reservations still own their units, and absent/unknown inventories contribute no holdings.
+    private long availableTo(Edge edge, Stock.Lot lot) {
+        return nodes.get(edge.consumer()) instanceof StockCheck
+            ? Math.max(0, now.stock().heldAt(lot.where(), lot.concrete())
+                - claims.taken(new Resource.Lot(lot.where(), lot.concrete())))
+            : drawable(lot.where(), lot.concrete());
+    }
+
     private boolean drawableAnywhere(ItemSpec spec) {
         for (Stock.Lot lot : now.stock().lotsOf(spec)) {
             if (drawable(lot.where(), lot.concrete()) > 0) {
@@ -2399,13 +2460,16 @@ public final class Weaver {
             return 0;
         }
         return Math.max(0, now.stock().roomAt(where, concrete)
-            + claims.taken(new Resource.Lot(where, concrete))
+            + claims.on(new Resource.Lot(where, concrete)).stream()
+                .filter(claim -> !(nodes.get(claim.owner()) instanceof StockCheck))
+                .mapToLong(Claim::amount).sum()
             - claims.taken(new Resource.Space(where, concrete)));
     }
 
     // A reserve is never filled from another reserve of the same goods: the two would only empty into each other.
     private boolean feeds(Stash from, UUID consumer, ItemSpec concrete) {
         Node eats = nodes.get(consumer);
+        if (eats instanceof StockCheck) return now.stock().holds(from) && eats.acceptsInput(from);
         if (!now.stock().takes(from) || !eats.acceptsInput(from)) {
             return false;
         }

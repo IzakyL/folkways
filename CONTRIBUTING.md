@@ -61,6 +61,12 @@ actually did. Pausing keeps the worker assigned; it does not release the worker 
 reassignment. Recovery checks the real device and inventory before continuing. Vanilla
 composting and the Cookery stockpot are the first integrations.
 
+`StockCheck` describes a non-consuming inventory target. Known stock stays in its warehouse or
+resident pack; only missing stock grows production, which must be put away before the check runs.
+These claims neither promise free storage space nor appear as consumable `ReservedInput`s. The
+implementation rechecks its inventory scope on the server thread. Checks use `Workload.Once`
+without tool or clothing wrappers.
+
 Compost discovery shares one inventory observation across its registered stations. Each native input still
 rechecks current inventories and reservations; a full sixteen-seed batch can take sixteen fresh inventory scans.
 There is no reliable inventory revision for every container provider, so execution does not cache that check.

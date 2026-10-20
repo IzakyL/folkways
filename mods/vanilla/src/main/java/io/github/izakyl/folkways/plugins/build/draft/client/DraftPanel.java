@@ -82,7 +82,7 @@ public final class DraftPanel {
      * What the page held when its last preview went out: the pattern, its knobs and the name, and the way it
      * faced, so the page opens on them again and builds what was looked at.
      */
-    private record Kept(Hint hint, ResourceLocation pattern, KnobValues values, String name, Direction front) {
+    private record Kept(Hint hint, Pattern pattern, KnobValues values, String name, Direction front) {
     }
 
     private static Kept kept;
@@ -208,7 +208,7 @@ public final class DraftPanel {
         empty.setText(Component.translatable(TOKEN + ".none"));
         empty.setDisplay(patterns.isEmpty());
         Optional<Pattern> previewed = resumed.flatMap(held -> patterns.stream()
-            .filter(pattern -> pattern.id().equals(held.pattern())).findFirst());
+            .filter(pattern -> LocalPatterns.sameContent(held.pattern(), pattern)).findFirst());
         if (previewed.isPresent()) {
             choose(previewed.get(), resumed.get().values());
             name.retype(resumed.get().name());
@@ -296,8 +296,7 @@ public final class DraftPanel {
         preview.setDisplay(chosen != null);
         // Nothing is built that has not first been looked at where it would stand: its knobs may still be
         // turned once it has, but another pattern is previewed first.
-        boolean buildable = chosen != null && kept != null && kept.hint().equals(hint)
-            && kept.pattern().equals(chosen.id()) && taking.previewed();
+        boolean buildable = previewMatches();
         confirm.setDisplay(buildable);
         // A creative player may also raise it at once instead of handing it to the colony.
         raiseNow.setDisplay(buildable && creative());
@@ -316,9 +315,14 @@ public final class DraftPanel {
 
     private void preview() {
         draw(preview, ready -> {
-            kept = new Kept(hint, chosen.id(), values, name.typed(), front);
+            kept = new Kept(hint, chosen, values, name.typed(), front);
             taking.preview(ghostsOf(ready));
         });
+    }
+
+    private boolean previewMatches() {
+        return chosen != null && kept != null && kept.hint().equals(hint)
+            && LocalPatterns.sameContent(kept.pattern(), chosen) && taking.previewed();
     }
 
     private static boolean creative() {
@@ -327,7 +331,8 @@ public final class DraftPanel {
     }
 
     private void raise(Button by, boolean now) {
-        if (chosen == null) {
+        if (!previewMatches()) {
+            refresh();
             return;
         }
         Chosen settings = Chosen.of(chosen.knobs(), values);

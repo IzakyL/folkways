@@ -232,37 +232,43 @@ public final class SeedSupportGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty_large")
     public static void aPendingKeepChecksIncomingStockWithoutMovingItsProtectedStack(GameTestHelper helper) {
         try (Fixture rig = new Fixture(helper)) {
-            BlockPos cell = helper.absolutePos(new BlockPos(2, 1, 2));
+            BlockPos cell = helper.absolutePos(new BlockPos(12, 1, 12));
             rig.level.setBlock(cell.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
             rig.level.setBlock(cell, Blocks.BARREL.defaultBlockState(), Block.UPDATE_ALL);
             WorldPos at = WorldPos.of(rig.level, cell);
             var store = Containers.at(rig.level, cell).orElseThrow();
-            rig.colony.stores(CookeryContent.ID, rig.level.dimension(), List.of(at));
+            BlockPos foodCell = helper.absolutePos(new BlockPos(2, 1, 2));
+            rig.level.setBlock(foodCell.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+            rig.level.setBlock(foodCell, Blocks.BARREL.defaultBlockState(), Block.UPDATE_ALL);
+            WorldPos foodAt = WorldPos.of(rig.level, foodCell);
+            var foodStore = Containers.at(rig.level, foodCell).orElseThrow();
+            rig.colony.stores(CookeryContent.ID, rig.level.dimension(), List.of(foodAt, at));
             rig.body.setItemSlot(EquipmentSlot.HEAD, new ItemStack(ModItems.STRAW_HAT.get()));
             var claims = new java.util.concurrent.atomic.AtomicReference<List<SeedBudget.Claim>>(List.of());
             var complete = new java.util.concurrent.atomic.AtomicBoolean(true);
-            var budget = new SeedBudget(() -> new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("real warehouse",
+            var budget = new SeedBudget(() -> new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("first empty food warehouse", SeedBudget.Location.store(foodAt),
+                java.util.stream.IntStream.range(0, foodStore.getContainerSize()).mapToObj(foodStore::getItem).toList()), new SeedBudget.Stock("distant actual seed warehouse",
                 SeedBudget.Location.store(at), java.util.stream.IntStream.range(0, store.getContainerSize()).mapToObj(store::getItem).toList()),
                 new SeedBudget.Stock("real pack", SeedBudget.Location.pack(rig.body.id()), rig.body.pack().contents())),
                 claims.get(), List.of(), java.util.Map.of(), List.of(), complete.get()), () -> java.util.Set.of(Items.WHEAT_SEEDS));
             var presence = new SeedPresence(rig.colony, ignored -> budget, () -> true);
             var keep = presence.goals(rig.colony.view(rig.level)).getFirst().nodes().getFirst();
-            helper.assertTrue(keep instanceof io.github.izakyl.folkways.core.api.work.Staged
+            helper.assertTrue(keep instanceof io.github.izakyl.folkways.core.api.work.StockCheck
                 && !keep.spec().needs().getFirst().carried() && keep.spec().leaves().isEmpty(),
-                "the bootstrap demand declares no reserve-stack pickup or output cargo");
+                "the bootstrap demand declares the planner stock-check protocol with no carried inputs or output cargo");
             store.setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
             store.setItem(1, new ItemStack(Items.WHEAT_SEEDS, 16));
             var goods = io.github.izakyl.folkways.core.api.terms.Goods.specOf(Items.WHEAT_SEEDS.getDefaultInstance());
             var compost = new SeedBudget.Claim(UUID.randomUUID(), SeedBudget.Location.store(at), goods, 16);
-            claims.set(List.of(new SeedBudget.Claim(keep.id(), SeedBudget.Location.store(at), goods, 64), compost));
+            claims.set(List.of(compost));
             var worker = new io.github.izakyl.folkways.core.api.work.Worker() {
                 public io.github.izakyl.folkways.core.api.resident.Resident resident() { return rig.body.resident(); }
                 public net.minecraft.world.entity.Mob body() { return rig.body; }
                 public net.minecraft.world.Container pack() { return rig.body.pack(); }
-                public List<Store> within() { return List.of(new Store(at, store)); }
+                public List<Store> within() { return List.of(new Store(foodAt, foodStore)); }
                 public ItemStack held(io.github.izakyl.folkways.core.api.work.ToolNeed need) { return ItemStack.EMPTY; }
                 public void spill(ItemStack stack) { if (!stack.isEmpty()) throw new AssertionError("stock checks cannot spill"); }
                 public io.github.izakyl.folkways.effect.Effects effects() { return io.github.izakyl.folkways.effect.Effects.NONE; }
@@ -273,13 +279,17 @@ public final class SeedSupportGameTests {
                 instanceof io.github.izakyl.folkways.core.api.work.Outcome.Done, "the real Core settlement accepts present stock without extracting it");
             helper.assertValueEqual(io.github.izakyl.folkways.core.api.terms.Goods.countIn(store, goods), 80L, "incoming stock remains in its physical warehouse");
             helper.assertValueEqual(io.github.izakyl.folkways.core.api.terms.Goods.countIn(rig.body.pack(), goods), 0L, "the protected sixty-four seeds never become carried cargo");
+            helper.assertValueEqual(io.github.izakyl.folkways.core.api.terms.Goods.countIn(foodStore, goods), 0L,
+                "the initial food warehouse is still empty rather than being filled by a reserve relay");
+            helper.assertValueEqual(budget.tally(Items.WHEAT_SEEDS).compostable(), 0L,
+                "the ordinary destructive tally still protects every declared consumer and the implicit reserve");
             for (int sweep = 0; sweep < 10; sweep++) helper.assertTrue(presence.goals(rig.colony.view(rig.level)).isEmpty(),
-                "the Keep's own outstanding reservation cannot create another source deficit");
-            claims.set(List.of(new SeedBudget.Claim(keep.id(), SeedBudget.Location.store(at), goods, 64), compost,
+                "the observational Keep does not add a destructive claim or create another source deficit");
+            claims.set(List.of(compost,
                 new SeedBudget.Claim(UUID.randomUUID(), SeedBudget.Location.store(at), goods, 1)));
             helper.assertTrue(!presence.goals(rig.colony.view(rig.level)).isEmpty(), "another sowing claim is still protected before the reserve check");
             helper.assertTrue(io.github.izakyl.folkways.core.engine.labor.Commit.run(rig.level, keep, worker)
-                instanceof io.github.izakyl.folkways.core.api.work.Outcome.Failed, "fresh checks never exclude another consumer's reservation");
+                instanceof io.github.izakyl.folkways.core.api.work.Outcome.Failed, "fresh checks protect every real consumer reservation");
             complete.set(false);
             helper.assertTrue(presence.goals(rig.colony.view(rig.level)).isEmpty(), "unknown physical inventory cannot create speculative source demands");
             helper.assertTrue(io.github.izakyl.folkways.core.engine.labor.Commit.run(rig.level, keep, worker)

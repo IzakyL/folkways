@@ -306,7 +306,7 @@ public final class GrassSourcesGameTests {
     }
 
     @GameTest(template = "empty_large")
-    public static void aKeepReservationStillLetsNativeGrassFillAnActualSeedDeficit(GameTestHelper helper) {
+    public static void anObservationalKeepStillLetsNativeGrassFillAnActualSeedDeficit(GameTestHelper helper) {
         try (Fixture rig = new Fixture(helper)) {
             rig.mark(false); rig.wearHat();
             rig.body.pack().setItem(0, new ItemStack(ModItems.TOMATO_SEED.get(), 63));
@@ -317,8 +317,8 @@ public final class GrassSourcesGameTests {
             rig.presence.refresh(rig.level.getServer());
             Node keep = rig.presence.goals(rig.colony.view(rig.level)).stream().flatMap(goal -> goal.nodes().stream())
                 .filter(node -> node.worker().isEmpty()).findFirst().orElseThrow();
-            rig.claims = List.of(new SeedBudget.Claim(keep.id(), SeedBudget.Location.pack(rig.body.id()),
-                Goods.specOf(ModItems.TOMATO_SEED.get().getDefaultInstance()), 64));
+            helper.assertTrue(keep instanceof io.github.izakyl.folkways.core.api.work.StockCheck,
+                "the concurrent bootstrap request observes inventory rather than consuming the retained seeds");
             rig.level.random.setSeed(0L);
             long count = 63;
             for (int attempt = 0; attempt < rig.allowed.size() && count < 64; attempt++) {
@@ -333,7 +333,7 @@ public final class GrassSourcesGameTests {
             }
             helper.assertTrue(count >= 64, "real native grass loot supplies the missing planting seed");
             helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(),
-                "the fulfilled reserve stops both grass gathering and Keep despite its old outstanding self claim");
+                "the fulfilled physical reserve stops both grass gathering and the observational Keep");
         }
         helper.succeed();
     }
@@ -345,7 +345,6 @@ public final class GrassSourcesGameTests {
         final Colony colony;
         final ResidentEntity body;
         final SeedPresence presence;
-        List<SeedBudget.Claim> claims = List.of();
         Fixture(GameTestHelper helper) {
             level = helper.getLevel();
             center = helper.absolutePos(new BlockPos(10, 1, 10));
@@ -367,7 +366,7 @@ public final class GrassSourcesGameTests {
             colony.entered(body);
             SeedBudget budget = new SeedBudget(() -> new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("real source pack",
                 SeedBudget.Location.pack(body.id()), IntStream.range(0, body.pack().getContainerSize()).mapToObj(body.pack()::getItem).toList())),
-                claims, List.of(), Map.of()), () -> Set.of(ModItems.TOMATO_SEED.get()));
+                List.of(), List.of(), Map.of()), () -> Set.of(ModItems.TOMATO_SEED.get()));
             presence = new SeedPresence(colony, ignored -> budget, () -> true);
         }
         UUID mark(boolean restore) {

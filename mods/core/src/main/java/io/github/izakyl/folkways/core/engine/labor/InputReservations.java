@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.NodeState;
 import io.github.izakyl.folkways.core.api.work.ReservedInput;
+import io.github.izakyl.folkways.core.api.work.StockCheck;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.batch.BatchSession;
@@ -47,6 +48,9 @@ final class InputReservations {
         Map<Key, Long> inputs = new LinkedHashMap<>();
         Map<UUID, List<Produced>> produced = new LinkedHashMap<>();
         for (Vertex vertex : graph.vertices().values()) {
+            // A target protects existing stock in the planner; it never spends those goods. Exporting it
+            // as a consumable obligation would charge domain reserve budgets twice.
+            if (vertex.node() instanceof StockCheck) continue;
             NodeState state = phases.apply(vertex.id());
             // SETTLING follows commit: these inputs are already spent, while the real products await hand-off.
             if (state.terminal() || state == NodeState.SETTLING) continue;

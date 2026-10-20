@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
-import { defineTask, javaTask, media, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, media, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { clickElement, panelElements } from "../ldlib2";
 import { commandPos, createColonyViaBook, tryCommand, waitForGroundedPlayer } from "../shared/colony/colony-founding";
@@ -21,6 +21,13 @@ const CHOOSE = "folkways.draft.choose";
 const PATTERN = "folkways.draft.pattern.folkways.terraced_field";
 const PREVIEW = "folkways.draft.preview";
 const BUILD = "folkways.draft.confirm";
+
+const CLIENT_TICKS = defineTask<undefined, number>({
+  name: "folkways.draft-preview.client-ticks",
+  side: "client",
+  timeoutMs: 20_000,
+  source: javaTask({ body: "return net.minecraft.client.Minecraft.getInstance().gui.getGuiTicks();" }),
+});
 
 // Setup only: put an unparsed source file on this client's shelf. The book UI must load it itself.
 const SETUP_LOCAL_PATTERN = defineTask<{ stem: string }, { path: string; id: string; ui: string }>({
@@ -59,6 +66,26 @@ const CLEANUP_LOCAL_PATTERN = defineTask<{ stem: string }, boolean>({
 String stem = Args.of(ctx).string("stem");
 if (!stem.matches("draft_preview_[a-z0-9_-]+")) throw new IllegalArgumentException("invalid fixture name");
 return Files.deleteIfExists(Patterns.SHELF.path().resolve(stem + ".star"));
+`,
+  }),
+});
+
+// Fixture edit only: a player changes the file while the book is closed; the UI must reread it.
+const EDIT_LOCAL_PATTERN = defineTask<{ stem: string }, { path: string; title: string }>({
+  name: "folkways.draft-preview.edit-local-file",
+  side: "client",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: ["io.github.izakyl.folkways.plugins.build.draft.Patterns", "java.nio.file.Files"],
+    body: `
+String stem = Args.of(ctx).string("stem");
+if (!stem.matches("draft_preview_[a-z0-9_-]+")) throw new IllegalArgumentException("invalid fixture name");
+var file = Patterns.SHELF.path().resolve(stem + ".star");
+String source = Files.readString(file);
+String edited = source.replace("Terraced Field", "Edited Local Field");
+if (source.equals(edited)) throw new IllegalStateException("fixture title was not changed");
+Files.writeString(file, edited);
+return Map.of("path", file.toAbsolutePath().toString(), "title", "Edited Local Field");
 `,
   }),
 });
@@ -159,7 +186,7 @@ for (const stage of twins()) test(stage.title("a local file pattern is previewed
     localFileCreated = true;
 
     // Both shelves appear through the normal book UI; preview the actual client file.
-    await openOffer(server, client, playerName, origin, stage);
+    evidence.first_open = await openOffer(server, client, playerName, origin, stage, 120);
     await waitForElement(client, { id: evidence.local_file.ui }, { timeoutMs: 8_000 });
     evidence.offered = await tokensOf(client);
     expect(evidence.offered, "the picker keeps the built-in pattern beside the local file")
@@ -200,6 +227,29 @@ for (const stage of twins()) test(stage.title("a local file pattern is previewed
     evidence.again = await tokensOf(client);
     expect(evidence.again, "the window opens on the previewed pattern again").toEqual(expect.arrayContaining([PREVIEW, BUILD]));
 
+    await screen.dismiss(client);
+    evidence.local_edit = await client.run(EDIT_LOCAL_PATTERN, { stem: localStem });
+    await openOffer(server, client, playerName, origin, stage);
+    await waitForElement(client, { id: evidence.local_file.ui }, { timeoutMs: 8_000 });
+    evidence.edited_titles = (await panelElements(client)).map(one => one.text).filter(Boolean);
+    expect(evidence.edited_titles.join("\n"), "the picker rereads the edited file rather than reusing its old pattern")
+      .toContain(evidence.local_edit.title);
+    await clickElement(client, { id: evidence.local_file.ui });
+    await settlePanel(server, client);
+    evidence.after_edit = await tokensOf(client);
+    expect(evidence.after_edit, "the edited pattern still offers a preview").toContain(PREVIEW);
+    expect(evidence.after_edit, "an edited file cannot inherit its old preview's build permission").not.toContain(BUILD);
+
+    await clickUnverified(client, { id: PREVIEW });
+    await expect.poll(async () => {
+      await settlePanel(server, client);
+      return screenOpen(await safeScreen(client));
+    }, { timeout: 8_000, message: "the edited pattern's new preview closes the window" }).toBe(false);
+    evidence.edited_preview = await client.run(PREVIEWED, undefined);
+    expect(evidence.edited_preview.ghosts, "the edited pattern is previewed again before building").toBeGreaterThan(0);
+    await openBookPage(server, client, playerName, origin, stage);
+    await waitForElement(client, { id: BUILD }, { timeoutMs: 8_000 });
+
     await clickUnverified(client, { id: BUILD });
     await expect.poll(async () => {
       await tick.sprint(server, 3);
@@ -225,15 +275,27 @@ for (const stage of twins()) test(stage.title("a local file pattern is previewed
   }
 });
 
-async function openOffer(server: MinecraftServer, client: MinecraftClient, playerName: string, standBlock: any, stage: Stage) {
+async function openOffer(server: MinecraftServer, client: MinecraftClient, playerName: string, standBlock: any,
+  stage: Stage, readingTicks = 0) {
   await openBookPage(server, client, playerName, standBlock, stage);
   await waitForElement(client, { id: OFFER }, { timeoutMs: 8_000 });
+  let waited = 0;
+  if (readingTicks > 0) {
+    // A player may read the book before first opening Draft; use real client ticks, not frozen server time.
+    const before = await client.run(CLIENT_TICKS, undefined);
+    await expect.poll(async () => {
+      waited = await client.run(CLIENT_TICKS, undefined) - before;
+      return waited;
+    }, { timeout: 10_000, message: "the open book survives more than the unmounted-page grace period" })
+      .toBeGreaterThanOrEqual(readingTicks);
+  }
   await clickElement(client, { id: OFFER });
   await settlePanel(server, client);
   await waitForElement(client, { id: CHOOSE }, { timeoutMs: 8_000 });
   await clickElement(client, { id: CHOOSE });
   await settlePanel(server, client);
   await waitForElement(client, { id: PATTERN }, { timeoutMs: 8_000 });
+  return { reading_client_ticks: waited };
 }
 
 async function sites(server: MinecraftServer, playerName: string) {

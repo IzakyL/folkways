@@ -12,7 +12,8 @@ import { newRunId } from "../shared/harness/run-id";
 import { twins, type Stage, type Vec } from "../shared/harness/stage";
 
 type State = { tick: number; fill: number; seeds: number; carriedSeeds: number; bone: number;
-  storedBone: number; dropped: number; walked: number; cookery: boolean; claims: Array<{ node: string; count: number }> };
+  storedBone: number; dropped: number; walked: number; cookery: boolean; claims: Array<{ node: string; count: number }>;
+  residents: Array<{ id: string; doing: string; balk: string; seeds: number }> };
 const SEED = "minecraft:wheat_seeds";
 
 for (const cookery of [false, true]) for (const stage of twins()) {
@@ -125,14 +126,15 @@ const READ = defineTask<{ compost: Vec }, State>({
 var level=ctx.server().overworld();var colony=Colonies.all(ctx.server()).getFirst();int seeds=0,carried=0,bone=0,storedBone=0,dropped=0;float walked=0;
 for(var at:colony.storesIn(level.dimension())){var store=colony.store(level,at).orElseThrow();for(int slot=0;slot<store.getContainerSize();slot++){
  var stack=store.getItem(slot);if(stack.is(Items.WHEAT_SEEDS))seeds+=stack.getCount();if(stack.is(Items.BONE_MEAL))storedBone+=stack.getCount();}}
-bone=storedBone;
+bone=storedBone;var residents=new ArrayList<Object>();
 for(var resident:colony.residents()){var entity=level.getEntity(resident.id());var body=Bodies.of(entity).orElseThrow();walked+=entity.walkDist;
- for(var stack:body.pack().contents()){if(stack.is(Items.WHEAT_SEEDS))carried+=stack.getCount();if(stack.is(Items.BONE_MEAL))bone+=stack.getCount();}}
+ int held=0;for(var stack:body.pack().contents()){if(stack.is(Items.WHEAT_SEEDS)){carried+=stack.getCount();held+=stack.getCount();}if(stack.is(Items.BONE_MEAL))bone+=stack.getCount();}
+ residents.add(Map.of("id",body.id().toString(),"doing",body.doing().map(Object::toString).orElse(""),"balk",body.balk().map(Object::toString).orElse(""),"seeds",held));}
 seeds+=carried;
 for(var entity:level.getAllEntities())if(entity instanceof ItemEntity drop){var stack=drop.getItem();if(stack.is(Items.WHEAT_SEEDS)){seeds+=stack.getCount();dropped+=stack.getCount();}if(stack.is(Items.BONE_MEAL)){bone+=stack.getCount();dropped+=stack.getCount();}}
 var raw=(Map<?,?>)Args.of(ctx).value("compost");var cell=new BlockPos(((Number)raw.get("x")).intValue(),((Number)raw.get("y")).intValue(),((Number)raw.get("z")).intValue());
 var claims=new ArrayList<Object>();for(var claim:colony.reservedInputs(level))if(Goods.matches(Items.WHEAT_SEEDS.getDefaultInstance(),claim.goods()))claims.add(Map.of("node",claim.node().toString(),"count",claim.count()));
 var out=new LinkedHashMap<String,Object>();out.put("tick",level.getGameTime());out.put("fill",level.getBlockState(cell).getValue(ComposterBlock.LEVEL));
-out.put("seeds",seeds);out.put("carriedSeeds",carried);out.put("bone",bone);out.put("storedBone",storedBone);out.put("dropped",dropped);out.put("walked",walked);out.put("claims",claims);out.put("cookery",ModList.get().isLoaded("folkways_cookery"));return out;
+out.put("seeds",seeds);out.put("carriedSeeds",carried);out.put("bone",bone);out.put("storedBone",storedBone);out.put("dropped",dropped);out.put("walked",walked);out.put("claims",claims);out.put("residents",residents);out.put("cookery",ModList.get().isLoaded("folkways_cookery"));return out;
 ` }),
 });

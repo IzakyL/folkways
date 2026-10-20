@@ -111,22 +111,16 @@ public class SeedBudget {
     public boolean complete() { return snapshots.get().complete(); }
 
     public List<Reserve> reserves() {
-        return reservesExcluding(Set.of());
+        return frozen().observedReserves();
     }
 
-    // Source requests may ignore only their own non-consuming stock-check claims.
-    // Destructive allowances always use the ordinary complete claim set.
-    public List<Reserve> reservesExcluding(Set<UUID> stockChecks) {
-        return frozen().observedReserves(Set.copyOf(stockChecks));
-    }
-
-    private List<Reserve> observedReserves(Set<UUID> stockChecks) {
+    private List<Reserve> observedReserves() {
         if (!complete()) return List.of();
         return purposes().stream().map(alternatives -> {
             Item first = alternatives.getFirst();
             return new Reserve(alternatives, ItemSpec.anyOf(alternatives.stream()
                 .map(item -> Goods.specOf(item.getDefaultInstance())).toList()), first.getDefaultInstance().getMaxStackSize(),
-                tally(first, ItemStack.EMPTY, stockChecks).missing());
+                tally(first).missing());
         }).toList();
     }
 
