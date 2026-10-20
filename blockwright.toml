@@ -271,7 +271,7 @@ jvm_args = ["-Xmx3G"]
 
 [profile.promo-cookery.neoforge.server]
 world = "vanilla"
-properties = { "level-seed" = "folkways-promo", "view-distance" = "12", "level-type" = "minecraft:flat", "generator-settings" = '{"biome":"minecraft:plains","features":false,"lakes":false,"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":3},{"block":"minecraft:grass_block","height":1}],"structure_overrides":[]}' }
+properties = { "level-seed" = "folkways-promo", "view-distance" = "12", "spawn-monsters" = "false", "level-type" = "minecraft:flat", "generator-settings" = '{"biome":"minecraft:plains","features":false,"lakes":false,"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":3},{"block":"minecraft:grass_block","height":1}],"structure_overrides":[]}' }
 
 [profile.promo-cookery.neoforge.client]
 game_args = ["--width", "1920", "--height", "1080"]
