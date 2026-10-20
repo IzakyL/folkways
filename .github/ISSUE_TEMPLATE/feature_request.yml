@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest a new capability or improvement for Folkways
+labels: [enhancement]
+body:
+  - type: textarea
+    id: feature
+    attributes:
+      label: Feature description
+      description: Describe what you would like Folkways to do and the expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Use case / motivation
+      description: If useful, explain the situation this would help with and why.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional alternatives, workarounds, or other approaches you have considered.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Optional examples, screenshots, or other context that helps explain the idea.
