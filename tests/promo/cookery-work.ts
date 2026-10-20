@@ -4,12 +4,32 @@ import type { Vec } from "../shared/colony/colony-founding";
 import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
 import { licenseCrewFast } from "./fast-setup";
 
+const K = "kaleidoscope_cookery:";
+
 function layout(origin: Vec) {
   const at = (x: number, y: number, z: number): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
   const fields = [
-    { crop: "minecraft:carrots", seed: "minecraft:carrot", min: at(6, -1, -6), max: at(11, -1, -3) },
-    { crop: "minecraft:potatoes", seed: "minecraft:potato", min: at(6, -1, 1), max: at(11, -1, 4) },
-  ];
+    { crop: K + "tomato_crop", seed: K + "tomato_seed", maxAge: 7, soil: "farmland[moisture=7]", min: at(6, -1, -6), max: at(7, -1, -3) },
+    { crop: K + "chili_crop", seed: K + "chili_seed", maxAge: 7, soil: "farmland[moisture=7]", min: at(8, -1, -6), max: at(9, -1, -3) },
+    { crop: K + "lettuce_crop", seed: K + "lettuce_seed", maxAge: 7, soil: "farmland[moisture=7]", min: at(10, -1, -6), max: at(11, -1, -3) },
+    { crop: "minecraft:wheat", seed: "minecraft:wheat_seeds", maxAge: 7, soil: "farmland[moisture=7]", min: at(6, -1, 1), max: at(7, -1, 4) },
+    { crop: "minecraft:carrots", seed: "minecraft:carrot", maxAge: 7, soil: "farmland[moisture=7]", min: at(8, -1, 1), max: at(9, -1, 4) },
+    { crop: K + "tea_tree", seed: K + "tea_seed", maxAge: 5, soil: "dirt", min: at(10, -1, 1), max: at(11, -1, 4) },
+  ].map((field, index) => {
+    // A repeatable shuffled planting makes different takes comparable, with half the plants
+    // ready to pick and the rest at varied native ages. Growth proceeds normally afterwards.
+    let random = 0xc00cfeed ^ (index * 0x9e3779b9);
+    const next = () => {
+      random ^= random << 13; random ^= random >>> 17; random ^= random << 5;
+      return (random >>> 0) / 0x100000000;
+    };
+    const ages = Array.from({ length: 8 }, (_, i) => i < 4 ? field.maxAge : Math.floor(next() * field.maxAge));
+    for (let i = ages.length - 1; i > 0; i--) {
+      const j = Math.floor(next() * (i + 1));
+      [ages[i], ages[j]] = [ages[j], ages[i]];
+    }
+    return { ...field, ages };
+  });
   const members = [at(5, 0, -5), at(5, 0, 3)];
   const workcells = fields.flatMap(field => {
     const cells: Vec[] = [];
@@ -22,28 +42,30 @@ function layout(origin: Vec) {
 }
 
 /** Stage once, after kitchen/dining warm-up and before the frozen camera composition.
- * One new farmer performs all 48 real harvests and replants, plus walking and storage work.
- * Nothing regrows, teleports, or issues manual work commits during the recording. */
+ * One new farmer picks or harvests the mixed plants, replants and carries the produce.
+ * No crops are reset or force-grown, and no actors teleport or receive manual work commits during recording. */
 export async function stageCookerySideWork(
   server: MinecraftServer, player: string, colony_id: string, origin: Vec, workersUUIDs: string[],
 ) {
   if (workersUUIDs.length !== 1) throw new Error("Cookery side work requires exactly one new farmer for its 50-second workload");
   const plan = layout(origin);
   for (const field of plan.fields) {
-    await tryCommand(server, `fill ${commandPos(field.min)} ${commandPos(field.max)} minecraft:farmland[moisture=7]`);
+    await tryCommand(server, `fill ${commandPos(field.min)} ${commandPos(field.max)} minecraft:${field.soil}`);
     const cropMin = { ...field.min, y: origin.y };
     const cropMax = { ...field.max, y: origin.y };
     await tryCommand(server, `fill ${commandPos(cropMin)} ${commandPos({ ...cropMax, y: origin.y + 2 })} minecraft:air`);
-    await world.command(server, `fill ${commandPos(cropMin)} ${commandPos(cropMax)} ${field.crop}[age=7]`);
+    let index = 0;
+    for (let x = cropMin.x; x <= cropMax.x; x++) for (let z = cropMin.z; z <= cropMax.z; z++) {
+      await world.command(server, `setblock ${commandPos({ x, y: origin.y, z })} ${field.crop}[age=${field.ages[index++]}]`);
+    }
   }
   // These service barrels are outside the plots. The pool between the two fields stays intact.
   for (let i = 0; i < plan.members.length; i++) {
-    const seed = plan.fields[i].seed;
+    const seeds = plan.fields.slice(i * 3, i * 3 + 3).map(field => field.seed);
     const items = [
       `{Slot:0b,id:"minecraft:iron_hoe",count:1}`,
-      `{Slot:1b,id:"${seed}",count:64}`,
-      `{Slot:2b,id:"${seed}",count:64}`,
-      `{Slot:3b,id:"minecraft:cooked_beef",count:32}`,
+      ...seeds.map((seed, slot) => `{Slot:${slot + 1}b,id:"${seed}",count:64}`),
+      `{Slot:4b,id:"minecraft:cooked_beef",count:32}`,
     ];
     await world.command(server, `setblock ${commandPos(plan.members[i])} minecraft:barrel[facing=up]{Items:[${items.join(",")}]}`);
   }
@@ -54,7 +76,13 @@ export async function stageCookerySideWork(
   const rigged = await runColonyTask(server, STAGE, {
     colony_id, fields: plan.fields, workers: workersUUIDs, post: plan.post,
   });
-  return { ...plan, workers: workersUUIDs, marked, licensed, rigged, initialMature: 48, via: "native-farming" };
+  const initial = await readCookerySideWork(server, colony_id, origin, workersUUIDs);
+  if (initial.mature !== 24 || initial.growing !== 24 || initial.crops.length !== 6) {
+    throw new Error(`Mixed native crops did not retain their staged growth: ${JSON.stringify(initial)}`);
+  }
+  return { ...plan, workers: workersUUIDs, marked, licensed, rigged,
+    initialMature: plan.fields.reduce((total, field) => total + field.ages.filter(age => age === field.maxAge).length, 0),
+    initial, via: "native-farming" };
 }
 
 export async function readCookerySideWork(
@@ -98,8 +126,11 @@ for (var id : args.strings("workers")) {
     });
     body.pack().clearContent();
     body.pack().insert(new ItemStack(Items.IRON_HOE));
-    body.pack().insert(new ItemStack(Items.CARROT, 64));
-    body.pack().insert(new ItemStack(Items.POTATO, 64));
+    for (var raw : args.list("fields")) {
+        var field = (Map<?, ?>) raw;
+        var seed = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ResourceLocation.parse(String.valueOf(field.get("seed"))));
+        body.pack().insert(new ItemStack(seed, 32));
+    }
     body.pack().insert(new ItemStack(Items.COOKED_BEEF, 24));
     // Initial actor placement only. From here the ordinary scheduler owns every movement and action.
     entity.teleportTo(((Number) post.get("x")).doubleValue() + 0.5, ((Number) post.get("y")).doubleValue(), ((Number) post.get("z")).doubleValue() + 0.5);
@@ -115,19 +146,38 @@ const READ = defineTask<Record<string, any>, Record<string, any>>({
     "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
     "io.github.izakyl.folkways.core.api.resident.body.Bodies",
     "net.minecraft.core.BlockPos", "net.minecraft.core.registries.BuiltInRegistries",
-    "net.minecraft.world.level.block.CropBlock", "net.minecraft.world.Container",
+    "net.minecraft.world.level.block.state.properties.IntegerProperty", "net.minecraft.world.Container",
   ], body: `
 var args = Args.of(ctx);
 var level = ctx.server().overworld();
 var colony = ColonyGround.of(ctx.server(), UUID.fromString(args.string("colony_id"))).orElseThrow();
-int mature = 0, growing = 0, empty = 0;
-for (var raw : args.list("workcells")) {
-    var cell = (Map<?, ?>) raw;
-    var at = new BlockPos(((Number) cell.get("x")).intValue(), ((Number) cell.get("y")).intValue(), ((Number) cell.get("z")).intValue());
-    var state = level.getBlockState(at);
-    if (state.getBlock() instanceof CropBlock crop) {
-        if (crop.isMaxAge(state)) mature++; else growing++;
-    } else if (state.isAir()) empty++;
+int mature = 0, growing = 0, empty = 0, harvested = 0;
+var crops = new ArrayList<Object>();
+for (var raw : args.list("fields")) {
+    var field = (Map<?, ?>) raw;
+    var min = (Map<?, ?>) field.get("min");
+    var max = (Map<?, ?>) field.get("max");
+    var initialAges = (List<?>) field.get("ages");
+    int maxAge = ((Number) field.get("maxAge")).intValue();
+    int ripe = 0, young = 0, bare = 0, picked = 0, index = 0;
+    var ages = new ArrayList<Integer>();
+    for (int x = ((Number) min.get("x")).intValue(); x <= ((Number) max.get("x")).intValue(); x++) {
+        for (int z = ((Number) min.get("z")).intValue(); z <= ((Number) max.get("z")).intValue(); z++) {
+            var at = new BlockPos(x, ((Number) min.get("y")).intValue() + 1, z);
+            var state = level.getBlockState(at);
+            boolean wasRipe = ((Number) initialAges.get(index++)).intValue() == maxAge;
+            if (BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString().equals(field.get("crop"))) {
+                var age = state.getProperties().stream().filter(p -> p instanceof IntegerProperty && p.getName().equals("age"))
+                    .map(p -> (IntegerProperty) p).findFirst().orElseThrow();
+                int value = state.getValue(age);
+                ages.add(value);
+                if (value == maxAge) ripe++; else { young++; if (wasRipe) picked++; }
+            } else if (state.isAir()) { bare++; ages.add(-1); if (wasRipe) picked++; }
+            else throw new IllegalStateException("Unexpected crop at " + at + ": " + state);
+        }
+    }
+    mature += ripe; growing += young; empty += bare; harvested += picked;
+    crops.add(Map.of("crop", field.get("crop"), "mature", ripe, "growing", young, "empty", bare, "ages", ages));
 }
 var workers = new ArrayList<Object>();
 var ids = args.strings("workers");
@@ -154,6 +204,8 @@ for (var raw : args.list("members")) {
     stores.add(Map.of("position", List.of(at.getX(), at.getY(), at.getZ()), "items", items));
 }
 return Sync.stamp(Map.of("time", level.getGameTime(), "mature", mature, "growing", growing, "empty", empty,
-    "harvested", 48 - mature, "workers", workers, "stores", stores));
+    // A conservative count: only initially ripe plants that have visibly been picked or cut.
+    // Growing plants never count as work merely because they were staged below maximum age.
+    "harvested", harvested, "crops", crops, "workers", workers, "stores", stores));
 ` }),
 });

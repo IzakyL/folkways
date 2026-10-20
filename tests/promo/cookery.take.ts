@@ -182,7 +182,7 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     });
     run.note("activity", evidence);
     run.note("farmProgress", evidence.at(-1)?.sideWork);
-    expect(evidence.at(-1)?.sideWork.mature, "the filmed farmer actually harvests the staged field").toBeLessThan(48);
+    expect(evidence.at(-1)?.sideWork.harvested, "the filmed farmer actually picks or harvests initially mature crops").toBeGreaterThan(0);
     const simultaneous = evidence.filter(state => state.people.some((one: any) => diners.includes(one.uuid) && one.dining && one.seatedAtTable)
       && state.people.some((one: any) => cooks.includes(one.uuid) && KITCHEN_WORK.has(one.doing)));
     run.note("simultaneous", { samples: simultaneous.length, total: evidence.length });
