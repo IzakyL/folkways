@@ -27,20 +27,19 @@ public final class ColonyRegistry extends SavedData {
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-persist");
 
     private final boolean writable;
+    private final CompoundTag protectedSave;
 
     private final Map<UUID, ColonyData> colonies = new LinkedHashMap<>();
     private final Set<UUID> razed = new LinkedHashSet<>();
 
     private ColonyRegistry() {
-        this(true);
+        this.protectedSave = null;
+        this.writable = true;
     }
 
-    private ColonyRegistry(boolean writable) {
-        this.writable = writable;
-    }
-
-    private static ColonyRegistry sealed() {
-        return new ColonyRegistry(false);
+    private ColonyRegistry(CompoundTag protectedSave) {
+        this.protectedSave = protectedSave.copy();
+        this.writable = false;
     }
 
     @Override
@@ -64,6 +63,7 @@ public final class ColonyRegistry extends SavedData {
     }
 
     public ColonyData mint(MinecraftServer server) {
+        requireWritable();
         ColonyData created = new ColonyData(UUID.randomUUID());
         created.setDirtyCallback(this::setDirty);
         created.on(server);
@@ -78,6 +78,7 @@ public final class ColonyRegistry extends SavedData {
     }
 
     public void raze(MinecraftServer server, UUID colonyId) {
+        requireWritable();
         ColonyData colony = colonies.remove(colonyId);
         if (colony != null) {
             colony.holdings().forgetAll(server);
@@ -99,6 +100,9 @@ public final class ColonyRegistry extends SavedData {
 
     @Override
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
+        if (!writable) {
+            return protectedSave.copy();
+        }
         SaveVersion.write(tag);
         return Writer.of(tag)
             .children("colonies", colonies.values(), colony -> colony.save(new CompoundTag()))
@@ -111,8 +115,8 @@ public final class ColonyRegistry extends SavedData {
         if (!SaveVersion.isReadable(reader)) {
             LOGGER.error("The colony save carries schema version {}, which this build does not read; this"
                 + " world's colonies are left unread, and nothing will be written over them.",
-                SaveVersion.of(reader).orElseThrow());
-            return sealed();
+                SaveVersion.of(reader).map(Object::toString).orElse("invalid"));
+            return new ColonyRegistry(tag);
         }
         ColonyRegistry registry = new ColonyRegistry();
         registry.razed.addAll(reader.uuids("razed"));
@@ -125,5 +129,11 @@ public final class ColonyRegistry extends SavedData {
     private void adopt(ColonyData colony) {
         colony.setDirtyCallback(this::setDirty);
         colonies.put(colony.colonyId(), colony);
+    }
+
+    private void requireWritable() {
+        if (!writable) {
+            throw new IllegalStateException("the colony save schema is protected; colony changes are refused");
+        }
     }
 }

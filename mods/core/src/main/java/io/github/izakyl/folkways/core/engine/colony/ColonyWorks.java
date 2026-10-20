@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Contributions;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.colony.Holding;
+import io.github.izakyl.folkways.core.api.colony.OwnerSave;
 import io.github.izakyl.folkways.core.api.colony.Release;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
@@ -288,6 +289,9 @@ public final class ColonyWorks extends Stretch implements Colony {
         settled = true;
         server = run.server();
         for (Contributions.Entry entry : Contributions.all()) {
+            if (!colony.keeps().allowed(entry.owner())) {
+                continue;
+            }
             Scope scope = opened(new Scope(entry.owner()));
             scopes.add(scope);
             try {
@@ -401,6 +405,16 @@ public final class ColonyWorks extends Stretch implements Colony {
     @Override
     public CompoundTag kept(ResourceLocation owner) {
         return colony.keeps().kept(owner);
+    }
+
+    @Override
+    public Optional<CompoundTag> kept(OwnerSave save) {
+        return colony.keeps().kept(save);
+    }
+
+    @Override
+    public void keep(OwnerSave save, CompoundTag payload) {
+        colony.keeps().keep(save, payload);
     }
 
     @Override

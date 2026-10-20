@@ -58,6 +58,10 @@ public final class ColonyData {
 
     public void relocate(MinecraftServer server,
             Map<WorldPos, WorldPos> moved) {
+        if (moved.isEmpty()) {
+            return;
+        }
+        keeps.requireRelocatable();
         if (!holdings.references(moved.keySet()) && !keeps.references(moved.keySet())) {
             return;
         }

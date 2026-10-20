@@ -2,6 +2,8 @@ package io.github.izakyl.folkways.core.api;
 
 import io.github.izakyl.folkways.core.api.colony.ColonyContext;
 import io.github.izakyl.folkways.core.api.colony.Contributions;
+import io.github.izakyl.folkways.core.api.colony.OwnerSave;
+import io.github.izakyl.folkways.core.api.colony.OwnerSaves;
 import io.github.izakyl.folkways.core.api.passage.Passage;
 import io.github.izakyl.folkways.core.api.passage.Passages;
 import io.github.izakyl.folkways.core.api.resident.Locomotion;
@@ -34,6 +36,10 @@ public final class Declaring extends Event implements IModBusEvent {
 
     public void colony(ResourceLocation owner, Consumer<ColonyContext> setup) {
         Contributions.colony(owner, setup);
+    }
+
+    public void save(OwnerSave save) {
+        OwnerSaves.register(save);
     }
 
     public void vocation(VocationSpec spec) {

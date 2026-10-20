@@ -54,6 +54,7 @@ public final class RailContent {
     }
 
     public static void declare(Declaring declaring) {
+        declaring.save(Roster.SAVE);
         CreateTransitNetwork network = new CreateTransitNetwork();
         TransitNetworks.install(network);
         NeoForge.EVENT_BUS.addListener(network::tick);

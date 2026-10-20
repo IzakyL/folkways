@@ -4,7 +4,6 @@ import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Sweep;
-import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -59,8 +58,9 @@ public final class RailPresence implements Facing {
 
     RailPresence(Colony colony) {
         this.colony = colony;
+        roster.load(colony.kept(Roster.SAVE).orElseThrow(
+            () -> new IllegalStateException("rail roster is protected; rail cannot run")));
         this.sweep = new Sweep(colony, RailContent.ID, 40);
-        roster.load(Reader.of(colony.kept(RailContent.ID)));
     }
 
     public boolean take(UUID train) {
@@ -182,7 +182,7 @@ public final class RailPresence implements Facing {
     }
 
     private void remember() {
-        colony.keep(RailContent.ID, roster.save());
+        colony.keep(Roster.SAVE, roster.save());
     }
 
     @Override

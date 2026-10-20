@@ -68,6 +68,16 @@ public interface Colony {
 
     CompoundTag kept(ResourceLocation owner);
 
+    // Empty means this owner cannot run with its saved data. Never substitute an empty payload in that case.
+    default Optional<CompoundTag> kept(OwnerSave save) {
+        return Optional.empty();
+    }
+
+    // Versioned owners must write through this overload; the raw overload cannot replace their envelope.
+    default void keep(OwnerSave save, CompoundTag payload) {
+        throw new UnsupportedOperationException("versioned owner saves are not supported by this colony");
+    }
+
     // Takes it up for `owner`; empty when a block or entity is already held, by this colony or another.
     Optional<Holding> hold(ResourceLocation owner, Held what);
 

@@ -24,6 +24,7 @@ final class SaveVersion {
     }
 
     static boolean isReadable(Reader reader) {
-        return of(reader).orElse(FIRST) <= CURRENT;
+        return !reader.keys().contains(KEY) || of(reader)
+            .filter(version -> version >= FIRST && version <= CURRENT).isPresent();
     }
 }
