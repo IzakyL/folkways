@@ -6,6 +6,7 @@ import { commandPos, frames } from "../shared/harness/bw-helpers";
 import { shaderEvidence } from "../shared/capture/shaders";
 import { admitPromoSettlersFast, foundPromoColonyFast, licenseCrewFast, setMaintainDemandsFast } from "./fast-setup";
 import { dressCookeryGarden } from "./cookery-set";
+import { buildCookeryElevator, readCookeryElevator } from "./cookery-elevator";
 import { cinematicWorld, hideHud, launchPromoPair, promoClip, setFov, setTickRate, sleepMs, take, type PromoPair } from "./promo-kit";
 
 const K = "kaleidoscope_cookery:";
@@ -61,19 +62,21 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     await tick.sprint(server, 10);
     const founded = await foundPromoColonyFast(server, name, [...Object.values(cells), ...scenery.beds]);
     run.note("founded", founded);
-    run.note("admitted", await admitPromoSettlersFast(server, name, founded.colony_id, 6));
+    run.note("elevator", await buildCookeryElevator(server, name, founded.colony_id, o));
+    run.note("admitted", await admitPromoSettlersFast(server, name, founded.colony_id, 8));
     const residents = (await world.entities(server, { types: ["folkways:resident"], limit: 20 })).entities;
-    expect(residents).toHaveLength(6);
+    expect(residents).toHaveLength(8);
     const cooks = residents.slice(0, 3).map(one => one.uuid);
-    const diners = residents.slice(3).map(one => one.uuid);
-    run.note("cast", { cooks, diners, licences: await licenseCrewFast(server,
+    const diners = residents.slice(3, 6).map(one => one.uuid);
+    const porters = residents.slice(6).map(one => one.uuid);
+    run.note("cast", { cooks, diners, porters, licences: await licenseCrewFast(server,
       residents.map((one, i) => ({ uuid: one.uuid, trades: i < 3 ? ["crafting", "hauling"] : ["hauling"] }))) });
     run.note("dining", await server.run(STAGE_DINING, {
       colony: founded.colony_id, cells: scenery.dining.cells, food: DINNER,
     }));
     for (const [i, resident] of residents.entries()) {
       await world.command(server, `data merge entity ${resident.uuid} {Invulnerable:1b}`);
-      const post = i < 3 ? at(-4 + i * 3, 7) : { ...scenery.dining.chairs[i - 3], z: o.z - 1 };
+      const post = i < 3 ? at(-4 + i * 3, 7) : at(-6 + (i - 3) * 1.5, -1);
       await world.command(server, `tp ${resident.uuid} ${post.x + 0.5} ${post.y} ${post.z + 0.5}`);
     }
     run.note("orders", await setMaintainDemandsFast(server, name, [
@@ -82,8 +85,8 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     await world.command(server, `item replace entity ${name} weapon.mainhand with minecraft:air`);
     await world.command(server, `gamemode spectator ${name}`);
     await setFov(client, 62);
-    const feet = at(-11, -7, 5);
-    const aim = at(0, 7, 1);
+    const feet = at(17, -18, 11);
+    const aim = at(-1, 6, 4);
     const look = cameraLookingAt({ x: feet.x + 0.5, y: feet.y + 1.62, z: feet.z + 0.5 },
       { x: aim.x + 0.5, y: aim.y + 0.5, z: aim.z + 0.5 });
     await world.command(server, `tp ${name} ${feet.x + 0.5} ${feet.y} ${feet.z + 0.5} ${look.yaw} ${look.pitch}`);
@@ -100,7 +103,7 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     try {
       const started = Date.now();
       while (Date.now() - started < 300_000) {
-        const state = await sample(server, founded.colony_id, residents.map(one => one.uuid), scenery.dining.tables);
+        const state = await sample(server, founded.colony_id, residents.map(one => one.uuid), scenery.dining.tables, o);
         warmup.push(state);
         if (state.portions >= 8 && state.people.some((one: any) => cooks.includes(one.uuid) && KITCHEN_WORK.has(one.doing))) {
           ready = true; break;
@@ -114,18 +117,30 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     }
     expect(ready, "real table replenishment and active native kitchen work must be ready before filming").toBe(true);
     await licenseCrewFast(server, diners.map(uuid => ({ uuid, trades: [] })));
-    // Scene blocking only: put the diners near their tables and give each an appetite through real work exhaustion.
+    // Scene blocking only: put the diners near the ground-floor lift entrance and give each an appetite through real work exhaustion.
     for (const [i, uuid] of diners.entries()) {
-      const post = scenery.dining.chairs[i];
-      await world.command(server, `tp ${uuid} ${post.x + 0.5} ${post.y} ${post.z - 0.5}`);
+      const post = at(-6 + i * 1.5, -1);
+      await world.command(server, `tp ${uuid} ${post.x + 0.5} ${post.y} ${post.z + 0.5}`);
     }
     await server.run(APPETITE, { uuids: diners });
-    await tick.sprint(server, 45);
-    await run.shot(client, "composition", { subject: "Kitchen and dining share one stationary frame",
+    await tick.freeze(server, false);
+    let seated = false;
+    const boarding: any[] = [];
+    try {
+      const started = Date.now();
+      while (Date.now() - started < 60_000) {
+        const state = await sample(server, founded.colony_id, residents.map(one => one.uuid), scenery.dining.tables, o);
+        boarding.push(state);
+        if (state.people.some((one: any) => diners.includes(one.uuid) && one.dining && one.riding)) { seated = true; break; }
+        await sleepMs(500);
+      }
+    } finally { await tick.freeze(server, true); run.note("boarding", boarding); }
+    expect(seated, "a diner must genuinely ride to the upstairs restaurant and start eating before the take").toBe(true);
+    await run.shot(client, "composition", { subject: "Ground-floor kitchen, upstairs restaurant and the real elevator share one stationary frame",
       worldState: { cells, dining: scenery.dining, cooks, diners }, hard: true });
     const evidence: any[] = [];
     await promoClip(run, client, server, "01-kitchen-dining", {
-      subject: "A continuous real-time view of native kitchen work and residents eating at the foreground tables",
+      subject: "One continuous view of the working kitchen, upstairs diners and residents riding the elevator",
       worldState: { cells, dining: scenery.dining, cooks, diners, stagedTableFood: DINNER,
         kitchenOrder: DISH, kitchenRawSupply: RAW }, seconds: SECONDS,
       during: async () => {
@@ -138,7 +153,7 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
             appetiteAt += 3;
           }
           evidence.push({ seconds, ...await sample(server, founded.colony_id,
-            residents.map(one => one.uuid), scenery.dining.tables) });
+            residents.map(one => one.uuid), scenery.dining.tables, o) });
           await sleepMs(1000);
         }
       },
@@ -147,6 +162,11 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     const simultaneous = evidence.filter(state => state.people.some((one: any) => diners.includes(one.uuid) && one.dining && one.riding)
       && state.people.some((one: any) => cooks.includes(one.uuid) && KITCHEN_WORK.has(one.doing)));
     run.note("simultaneous", { samples: simultaneous.length, total: evidence.length });
+    const occupied = evidence.filter(state => state.lift.passengers.length > 0);
+    run.note("journeys", occupied.map(state => ({ seconds: state.seconds, contactY: state.lift.contactY, passengers: state.lift.passengers })));
+    expect(occupied.length, "the same shot must contain real elevator passengers, excluding diners on chairs").toBeGreaterThanOrEqual(3);
+    const heights = occupied.map(state => Number(state.lift.contactY));
+    expect(Math.max(...heights) - Math.min(...heights), "occupied elevator must actually travel between floors on camera").toBeGreaterThan(3);
     expect(simultaneous.length, "the shot must actually show seated diners alongside kitchen work").toBeGreaterThanOrEqual(5);
     const after = evidence.at(-1);
     expect(after.people.filter((one: any) => diners.includes(one.uuid) && one.dined >= 0).length,
@@ -160,8 +180,8 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
   }
 });
 
-async function sample(server: MinecraftServer, colony: string, uuids: string[], tables: Vec[]): Promise<any> {
-  return server.run(ACTIVITY, { colony, uuids, tables });
+async function sample(server: MinecraftServer, colony: string, uuids: string[], tables: Vec[], origin: Vec): Promise<any> {
+  return { ...await server.run(ACTIVITY, { colony, uuids, tables }), lift: await readCookeryElevator(server, colony, origin) };
 }
 
 const STAGE_DINING = defineTask<Record<string, any>, any>({

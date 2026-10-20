@@ -9,7 +9,7 @@ sys.path.insert(0, HERE)
 os.environ["PROMO_TEXT"] = os.path.join(HERE, "promo-cookery.toml")
 import build
 
-build.OUT = os.path.join(build.WORK, "cookery-shots")
+build.OUT = os.path.join(build.WORK, "cookery-elevator-shots")
 TAKE = os.path.join(build.T, "cookery")
 
 
@@ -56,7 +56,7 @@ def main():
             segments.append(segment)
     with open(os.path.join(build.OUT, "segments.json"), "w") as file:
         json.dump({"width": build.W, "height": build.H, "segments": segments}, file)
-    os.environ["PROMO_SHOTS"], os.environ["PROMO_NAME"] = build.OUT, "folkways-cookery"
+    os.environ["PROMO_SHOTS"], os.environ["PROMO_NAME"] = build.OUT, "folkways-cookery-elevator"
     os.environ.setdefault("PROMO_MUSIC", "minecraft/sounds/music/game/comforting_memories.ogg")
     import assemble  # joins this cut's segments and writes upload and preview films
 

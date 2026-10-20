@@ -18,7 +18,9 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
   await fill(-10, 0, -1, 9, 18, -1, "minecraft:stone_bricks");
   await fill(-9, 1, -1, 8, 17, -1, "minecraft:smooth_sandstone");
   await fill(-7, 4, -1, 6, 15, -1, "minecraft:polished_andesite");
-  await fill(-2, -10, -1, 2, 0, -1, "minecraft:gravel");
+  // The elevator builder owns x=-2..2,z=-6..-2, including its lowest deck.
+  await fill(-2, -10, -1, 2, -7, -1, "minecraft:gravel");
+  await fill(-2, -1, -1, 2, 0, -1, "minecraft:gravel");
   for (let x = -8; x <= 7; x += 3) for (let z = 2; z <= 16; z += 3) {
     if ((x + z) % 2 === 0) await set(x, z, -1, "minecraft:andesite");
   }
@@ -67,21 +69,32 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
     await set(x, 17, 4, K + "chili_ristra[is_head=true]");
     await set(x, 17, 3, K + "chili_ristra[is_head=false]");
   }
-  // Real adjacent tables and chairs in the foreground: diners remain in the same shot as the stove bank.
-  // Keep the main east aisle, serving counter and the mill's three-by-three footprint unobstructed.
-  await fill(-6, -2, -1, -2, 3, -1, "minecraft:smooth_sandstone");
-  const dining = {
-    tables: [-5, -4, -3].map(x => at(x, 1)),
-    chairs: [-5, -4, -3].map(x => at(x, 0)),
-    cells: [] as Vec[],
-  };
-  for (const x of [-5, -4, -3]) {
-    await set(x, 1, 0, K + "table_spruce");
-    await set(x, 0, 0, K + "chair_spruce[facing=south]");
+  // An upper dining terrace keeps the foreground diners and rear kitchen in one continuous shot.
+  // The five-by-five elevator column to its east is entirely reserved for the lift builder.
+  await fill(-5, -5, -1, -3, 1, -1, "minecraft:smooth_sandstone");
+  await fill(-9, -6, 5, -3, 3, 5, "minecraft:spruce_planks");
+  // Slim uprights support the terrace without crossing the lower landing or kitchen aisles.
+  for (const [x, z] of [[-9, -6], [-9, 3], [-3, 3]] as const) {
+    await fill(x, z, 0, x, z, 4, "minecraft:stripped_spruce_log[axis=y]");
   }
-  // Include both the patio and furniture layers so either floor or furniture marking uses this same area.
-  for (let x = -6; x <= -2; x++) for (let z = -1; z <= 2; z++) {
-    dining.cells.push(at(x, z, -1), at(x, z));
+  await fill(-9, -6, 6, -3, -6, 6, "minecraft:spruce_fence");
+  await fill(-9, 3, 6, -3, 3, 6, "minecraft:spruce_fence");
+  await fill(-9, -5, 6, -9, 2, 6, "minecraft:spruce_fence");
+  await fill(-3, -2, 6, -3, 2, 6, "minecraft:spruce_fence");
+  // The only upper entrance is east at x=-3,z=-5..-3, immediately beside the cabin.
+  const groundEntry = at(-3, -4);
+  const dining = {
+    tables: [-7, -6, -5].map(x => at(x, 1, 6)),
+    chairs: [-7, -6, -5].map(x => at(x, 0, 6)),
+    cells: [] as Vec[],
+    entry: at(-3, -4, 6),
+  };
+  for (const x of [-7, -6, -5]) {
+    await set(x, 1, 6, K + "table_spruce");
+    await set(x, 0, 6, K + "chair_spruce[facing=south]");
+  }
+  for (let x = -8; x <= -4; x++) for (let z = -1; z <= 2; z++) {
+    dining.cells.push(at(x, z, 5), at(x, z, 6));
   }
   // Raised herb and vegetable beds, flower borders and a small pond soften the kitchen's edges.
   for (const [x, z] of [[-6, 21], [0, 21], [6, 21]] as const) {
@@ -111,10 +124,10 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
     await set(x, z, 1, "minecraft:flowering_azalea");
   }
   // The residents' beds are behind the western garden, outside the kitchen composition.
-  const beds = [4, 6, 8, 10, 12, 14].map(z => at(-17, z));
+  const beds = [0, 2, 4, 6, 8, 10, 12, 14].map(z => at(-17, z));
   for (const bed of beds) {
     await world.command(server, `setblock ${commandPos(bed)} minecraft:white_bed[part=foot,facing=west]`);
     await world.command(server, `setblock ${commandPos({ ...bed, x: bed.x - 1 })} minecraft:white_bed[part=head,facing=west]`);
   }
-  return { beds, dining, theme: "open-air garden kitchen with foreground dining tables, stove bank, prep island, pergola and pantry" };
+  return { beds, dining, groundEntry, theme: "open-air garden kitchen with an elevator-only upper dining terrace, stove bank, prep island, pergola and pantry" };
 }

@@ -163,19 +163,26 @@ See the [documentation index](docs/README.md) for the layout and maintenance not
 | `npm run pattern:take` | Lays out each work pattern's gallery and shoots it |
 | `npm run bench:take` | Performance benchmarks on a large colony |
 | `npm run promo:take` | Films the promotional takes |
-| `npm run promo:cookery` | Films one 50-second, real-time view of native kitchen work and residents dining |
+| `npm run promo:cookery` | Films one 50-second, real-time shot of the downstairs kitchen, Create elevator and upstairs dining room |
 | `npm run promo:cookery:film` | Adds brief Chinese captions and music to that continuous take, producing upload and preview MP4s |
 
 The Cookery promo's wording lives in `tests/promo/film/promo-cookery.toml`. Run
-`npm run setup` before filming. The continuous, 50-second real-time take is saved as
-`tests/out/promo/takes/cookery/01-kitchen-dining.mp4`, alongside its production
-evidence. The finished `folkways-cookery-upload.mp4` and
-`folkways-cookery-preview.mp4` are in `tests/out/promo/film/`. The script stages the
-set, residents and dining food: the tables are supplied with Dongpo pork
-(`dongpo_pork`), while a real stock target maintains 24 plates of steamed buns
-(`baozi_plate`) through the planner, real recipes and native kitchen appliances.
-Kitchen work is warmed up before recording, so cooking and a relaxed meal are
-visible together. The film observes that staged activity in one uninterrupted
+`npm run setup` before filming. The scene and recording are defined by
+`tests/promo/cookery.take.ts` and `tests/promo/cookery-elevator.ts`: a native kitchen
+downstairs, a dining room upstairs, and a native Create elevator as their only
+vertical route. Residents actually board the elevator to reach their meal; its
+passengers are observed separately from residents seated at dining tables.
+
+The continuous, 50-second real-time take is saved as
+`tests/out/promo/takes/cookery/01-kitchen-dining.mp4`, alongside production and elevator
+journey evidence. The finished `folkways-cookery-elevator-upload.mp4` and
+`folkways-cookery-elevator-preview.mp4` are in `tests/out/promo/film/`.
+The script stages the set, residents and dining food: the upstairs tables are supplied
+with Dongpo pork (`dongpo_pork`), while a real stock target maintains 24 plates of
+steamed buns (`baozi_plate`) through the planner, real recipes and native downstairs
+kitchen appliances. Kitchen work and table replenishment are warmed up before
+recording. Ordinary colony errands determine the elevator calls and journeys.
+The film observes the kitchen, elevator and dining room together in one uninterrupted
 shot at normal speed; it does not demonstrate a complete raw-ingredient chain.
 Brief opening captions leave the dining area clear.
 
