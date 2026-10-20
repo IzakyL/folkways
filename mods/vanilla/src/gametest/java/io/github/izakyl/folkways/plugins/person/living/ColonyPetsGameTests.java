@@ -44,7 +44,16 @@ public final class ColonyPetsGameTests {
     @GameTest(template = "empty", batch = "colony_pets")
     public static void arrivalsRespectDevelopmentCooldownAndUnloadedQuota(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
-        helper.runAfterDelay(4, () -> {
+        // Block-light propagation runs asynchronously; a fixed tick delay can cache a dark room
+        // on a busy full-suite server even though its glowstone floor and ceiling are already placed.
+        helper.startSequence().thenWaitUntil(() -> {
+            for (BlockPos at : BlockPos.betweenClosed(fixture.origin.offset(1, 0, 1), fixture.origin.offset(12, 0, 12))) {
+                if (fixture.level.getBlockState(at).isAir()) {
+                    helper.assertTrue(fixture.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, at) >= 8,
+                        "waiting for the dormitory's glowstone lighting at " + at);
+                }
+            }
+        }).thenExecute(() -> {
             try (fixture) {
                 fixture.survey();
                 helper.assertTrue(fixture.rooms.get(fixture.level, fixture.beds.getFirst()).grade()

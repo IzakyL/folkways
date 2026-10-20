@@ -667,7 +667,7 @@
   "folkways.choice.folkways.food_whitelist": "白名单（只允许列表内食物）",
   "folkways.choice.folkways.food_blacklist": "黑名单（拒绝列表内食物）",
   "folkways.settings.rules": "已选择 %s 条规则",
-  "folkways.settings.food": "食物规则",
+  "folkways.settings.food": "随身口粮",
   "folkways.settings.fuel": "燃料",
   "folkways.settings.layout": "窗口布局",
   "folkways.settings.invert_wheel": "滚轮推拉反转",
@@ -1122,5 +1122,16 @@
   "folkways.perk.patrolling_alert": "警觉",
   "folkways.perk.patrolling_alert.desc": "发现威胁距离增加4/8/12格，并向附近巡逻员共享目标。",
   "folkways.perk.patrolling_reassuring": "安民",
-  "folkways.perk.patrolling_reassuring.desc": "保护区内居民安全心情额外提高3/6/10，受袭阴影消退加快30%%/60%%/100%%。"
+  "folkways.perk.patrolling_reassuring.desc": "保护区内居民安全心情额外提高3/6/10，受袭阴影消退加快30%%/60%%/100%%。",
+  "folkways.delegation.folkways.dining": "用餐区",
+  "folkways.doing.folkways.setting_table": "布置餐桌",
+  "folkways.doing.folkways.setting_table.about": "摆上%s",
+  "folkways.doing.folkways.dining_eating": "在餐桌用餐",
+  "folkways.settings.dining.food": "餐桌食物",
+  "folkways.settings.dining.servings": "每桌份数",
+  "folkways.dining.summary": "%s张餐桌，%s个座位",
+  "folkways.dining.furniture": "请在区域内相邻放置餐桌和椅子，并在椅子旁留出过道。",
+  "folkways.dining.help": "居民会自动补充选中的可食用食物。普通桌面可摆放食物方块；原生餐桌按设定份数补餐。",
+  "folkways.mood.reason.dining": "惬意的一餐：%s",
+  "folkways.dining.no_food": "当前所选食物不适用于这些餐桌。森罗餐桌可摆放可食用物品；普通桌面需要支持的可放置食物，如蛋糕。"
 }

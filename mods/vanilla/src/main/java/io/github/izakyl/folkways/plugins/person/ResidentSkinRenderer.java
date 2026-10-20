@@ -54,6 +54,11 @@ public final class ResidentSkinRenderer extends HumanoidMobRenderer<ResidentEnti
             super.setupAnim(resident, stride, amount, age, yaw, pitch);
             float wave = Mth.sin(age * 0.09F);
             switch (resident.leisureMotion()) {
+                case "dining" -> {
+                    rightArm.xRot = -1.0F + wave * 0.18F;
+                    leftArm.xRot = -0.65F;
+                    head.xRot += 0.15F;
+                }
                 case "chatting" -> {
                     boolean speaking = ((int) (resident.level().getGameTime() / 60) + resident.leisurePhase()) % 2 == 0;
                     if (speaking) { rightArm.xRot = -0.65F + wave * 0.15F; rightArm.zRot = 0.20F; }

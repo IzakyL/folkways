@@ -667,7 +667,7 @@
   "folkways.choice.folkways.food_whitelist": "Whitelist (only listed food)",
   "folkways.choice.folkways.food_blacklist": "Blacklist (except listed food)",
   "folkways.settings.rules": "%s rules selected",
-  "folkways.settings.food": "Food rules",
+  "folkways.settings.food": "Pocket rations",
   "folkways.settings.fuel": "Fuel",
   "folkways.settings.layout": "Window layout",
   "folkways.settings.invert_wheel": "Invert wheel push and pull",
@@ -1122,5 +1122,16 @@
   "folkways.perk.patrolling_alert": "Vigilance",
   "folkways.perk.patrolling_alert.desc": "Detect threats 4/8/12 blocks farther away and share targets with nearby patrollers.",
   "folkways.perk.patrolling_reassuring": "Reassurance",
-  "folkways.perk.patrolling_reassuring.desc": "Wards grant residents +3/6/10 safety mood and make attack distress fade 30%%/60%%/100%% faster."
+  "folkways.perk.patrolling_reassuring.desc": "Wards grant residents +3/6/10 safety mood and make attack distress fade 30%%/60%%/100%% faster.",
+  "folkways.delegation.folkways.dining": "Dining area",
+  "folkways.doing.folkways.setting_table": "Setting the table",
+  "folkways.doing.folkways.setting_table.about": "Setting the table with %s",
+  "folkways.doing.folkways.dining_eating": "Eating at a table",
+  "folkways.settings.dining.food": "Table food",
+  "folkways.settings.dining.servings": "Servings per table",
+  "folkways.dining.summary": "%s tables, %s seats",
+  "folkways.dining.furniture": "Place adjacent tables and chairs inside the area, with an aisle beside each chair.",
+  "folkways.dining.help": "Residents replenish the selected edible foods on display. Basic tabletops support placeable foods; native tables use the configured serving count.",
+  "folkways.mood.reason.dining": "A pleasant meal: %s",
+  "folkways.dining.no_food": "The selected food does not suit these tables. Kaleidoscope Cookery tables display edible items; basic tabletops need supported placeable foods, such as cake."
 }

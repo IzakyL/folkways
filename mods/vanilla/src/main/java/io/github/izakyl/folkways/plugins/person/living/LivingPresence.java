@@ -97,6 +97,7 @@ final class LivingPresence implements Facing {
     private final HousingRooms rooms = new HousingRooms();
     private final ColonyPets pets;
     private final Leisure leisure;
+    private final Dining dining;
 
     Mood mood(UUID resident) { return moods.computeIfAbsent(resident, ignored -> new Mood()); }
     void changed() { unwritten = true; }
@@ -119,11 +120,13 @@ final class LivingPresence implements Facing {
         this.colony = colony;
         this.pets = new ColonyPets(colony, rooms);
         this.leisure = new Leisure(colony, this);
+        this.dining = new Dining(colony, this);
         this.sweep = new Sweep(colony, LivingContent.ID, 100);
         load(Reader.of(colony.kept(LivingContent.ID)));
     }
 
     void refresh(MinecraftServer server) {
+        dining.refresh(server);
         Set<UUID> belonging = new LinkedHashSet<>();
         for (Resident resident : colony.residents()) {
             belonging.add(resident.id());
@@ -142,6 +145,7 @@ final class LivingPresence implements Facing {
     }
 
     public void tick(MinecraftServer server) {
+        dining.tick(server);
         sweep.tick(server, this::refresh, this::goals);
         rooms.tick();
         if (pets.tick(server)) { unwritten = true; write(); }
@@ -219,13 +223,16 @@ final class LivingPresence implements Facing {
 
     private Optional<Urge> eating(Worker who, ColonyView colony) {
         Optional<Integer> level = foodLevelOf(who.resident().id());
-        if (level.isEmpty() || !hunger.holds(who.resident().id(), level.get()) || !carriesAMeal(who)) {
+        if (level.isEmpty() || !hunger.holds(who.resident().id(), level.get())) {
             return Optional.empty();
         }
         ServerLevel where = colony.level();
         BlockPos at = who.body().blockPosition();
         boolean urgent = hunger.urgent(level.get());
         double weight = urgent ? Urge.NOW : Urge.SPARE;
+        Optional<Urge> meal = dining.urge(who, colony, weight, urgent || !who.effects().has(Stats.PATIENT));
+        if (meal.isPresent()) { return meal; }
+        if (!carriesAMeal(who)) { return Optional.empty(); }
         return Optional.of(new Urge(EAT, weight, urgent || !who.effects().has(Stats.PATIENT),
             () -> new EatAction(where, this, who.resident().id(), at)));
     }
@@ -294,6 +301,13 @@ final class LivingPresence implements Facing {
         }
     }
 
+    void dined(UUID resident, long now) {
+        mood(resident).dined = now;
+        sweep.nudge();
+        unwritten = true;
+        write();
+    }
+
     static final TagKey<Item> FINE_MEALS = TagKey.create(
         Registries.ITEM, ResourceLocation.fromNamespaceAndPath("folkways", "fine_meals"));
 
@@ -332,13 +346,13 @@ final class LivingPresence implements Facing {
     }
 
     public List<Grown> goals(ColonyView view) {
+        List<Grown> wanted = new ArrayList<>(dining.goals(view));
         Optional<ItemSpec> allowed = LivingContent.food(colony);
         if (allowed.isEmpty()) {
-            return List.of();
+            return List.copyOf(wanted);
         }
         ItemSpec food = allowed.get();
         ServerLevel level = view.level();
-        List<Grown> wanted = new ArrayList<>();
         for (Resident resident : view.residents()) {
             if (!LivingContent.looksAfter(resident)) {
                 continue;
@@ -393,6 +407,7 @@ final class LivingPresence implements Facing {
     }
 
     public void closed(Closing why) {
+        dining.clear();
         if (why == Closing.RAZED) {
             beds.clear();
             bellies.clear();
@@ -406,6 +421,11 @@ final class LivingPresence implements Facing {
             return;
         }
         write();
+    }
+
+    @Override
+    public List<Line> zoneLines(io.github.izakyl.folkways.front.api.ZoneView zone, ColonyView view) {
+        return zone.delegation().equals(LivingContent.DINING) ? dining.lines(zone, view) : List.of();
     }
 
     @Override
@@ -431,7 +451,7 @@ final class LivingPresence implements Facing {
         List<Component> lines = new ArrayList<>();
         lines.add(Component.translatable("folkways.mood.summary", (int) Math.round(mood.value),
             (int) Math.round(Mood.speed(mood.value) * 100), (int) Math.round(mood.leisure)));
-        for (String reason : List.of("food", "housing", "rest", "leisure", "social", "safety", "environment")) {
+        for (String reason : List.of("food", "dining", "housing", "rest", "leisure", "social", "safety", "environment")) {
             int value = mood.reasons.getOrDefault(reason, 0);
             lines.add(Component.translatable("folkways.mood.reason." + reason, (value > 0 ? "+" : "") + value));
         }

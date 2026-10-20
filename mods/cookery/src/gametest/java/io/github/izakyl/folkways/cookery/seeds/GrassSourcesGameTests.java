@@ -188,7 +188,7 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(template = "empty_large", timeoutTicks = 300)
     public static void anAdoptedGrassSourceRemainsWantedWhileItsResidentTravelsAcrossRepeatedSweeps(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos travellingFeet = helper.absolutePos(new BlockPos(10, 1, 10)).offset(-41, 1, 0);
@@ -196,9 +196,11 @@ public final class GrassSourcesGameTests {
         // The 24-block template does not load this distant resident. Keep the real colony view live.
         boolean forced = !level.getForcedChunks().contains(travellingChunk.toLong())
             && level.setChunkForced(travellingChunk.x, travellingChunk.z, true);
-        helper.runAfterDelay(20, () -> {
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(level.isPositionEntityTicking(travellingFeet),
+                "the travelling resident's real chunk ticks before the sweep starts"))
+            .thenExecute(() -> {
             try {
-                helper.assertTrue(level.isPositionEntityTicking(travellingFeet), "the travelling resident's real chunk ticks before the sweep starts");
                 for (boolean restore : List.of(false, true)) {
                     try (Fixture rig = new Fixture(helper)) {
                         rig.mark(restore); rig.wearHat();

@@ -67,13 +67,22 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
     await set(x, 17, 4, K + "chili_ristra[is_head=true]");
     await set(x, 17, 3, K + "chili_ristra[is_head=false]");
   }
-  // A little outdoor dining area, well outside the mill's three-by-three footprint.
-  for (const x of [-11, -10]) {
-    await set(x, 12, 0, K + "table_spruce");
-    await set(x, 10, 0, K + "chair_spruce[facing=south]");
+  // Real adjacent tables and chairs in the foreground: diners remain in the same shot as the stove bank.
+  // Keep the main east aisle, serving counter and the mill's three-by-three footprint unobstructed.
+  await fill(-6, -2, -1, -2, 3, -1, "minecraft:smooth_sandstone");
+  const dining = {
+    tables: [-5, -4, -3].map(x => at(x, 1)),
+    chairs: [-5, -4, -3].map(x => at(x, 0)),
+    cells: [] as Vec[],
+  };
+  for (const x of [-5, -4, -3]) {
+    await set(x, 1, 0, K + "table_spruce");
+    await set(x, 0, 0, K + "chair_spruce[facing=south]");
   }
-  await set(-11, 12, 1, K + "fruit_basket");
-  await set(-10, 12, 1, "minecraft:lantern");
+  // Include both the patio and furniture layers so either floor or furniture marking uses this same area.
+  for (let x = -6; x <= -2; x++) for (let z = -1; z <= 2; z++) {
+    dining.cells.push(at(x, z, -1), at(x, z));
+  }
   // Raised herb and vegetable beds, flower borders and a small pond soften the kitchen's edges.
   for (const [x, z] of [[-6, 21], [0, 21], [6, 21]] as const) {
     await fill(x - 2, z - 1, -1, x + 2, z + 1, -1, "minecraft:farmland[moisture=7]");
@@ -102,10 +111,10 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
     await set(x, z, 1, "minecraft:flowering_azalea");
   }
   // The residents' beds are behind the western garden, outside the kitchen composition.
-  const beds = [8, 10, 12].map(z => at(-17, z));
+  const beds = [4, 6, 8, 10, 12, 14].map(z => at(-17, z));
   for (const bed of beds) {
     await world.command(server, `setblock ${commandPos(bed)} minecraft:white_bed[part=foot,facing=west]`);
     await world.command(server, `setblock ${commandPos({ ...bed, x: bed.x - 1 })} minecraft:white_bed[part=head,facing=west]`);
   }
-  return { beds, theme: "open-air garden kitchen with stove bank, prep island, pergola and pantry" };
+  return { beds, dining, theme: "open-air garden kitchen with foreground dining tables, stove bank, prep island, pergola and pantry" };
 }

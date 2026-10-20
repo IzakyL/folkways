@@ -1,4 +1,4 @@
-"""Cut the native Cookery short. Run from the repository root after filming the cookery take."""
+"""Render one continuous, real-time kitchen and dining take, then assemble the usual two films."""
 import json
 import os
 import subprocess
@@ -26,39 +26,24 @@ def length(name):
     return duration
 
 
-def chain(marks, duration, target=35.0):
-    """Show every production step; accelerate the middle, preserving the opening and finished dish."""
-    end = min(float(marks.get("end") or duration), duration)
-    done = marks.get("done")
-    if done is not None:
-        # Four seconds after completion are enough to see delivery, without a long idle hold.
-        end = min(end, max(0.0, float(done)) + 4.0)
-    if end <= target:
-        return [(0.0, end, 1.0)]
-    first, last = 2.0, end - 4.0
-    speed = (last - first) / (target - 6.0)
-    return [(0.0, first, 1.0), (first, last, speed), (last, end, 1.0)]
-
-
-def shots(context):
-    kitchen = min(6.0, length("01-kitchen.mp4"))
-    order = length("02-order.mp4")  # Keep the complete UI interaction at its recorded pace.
-    production = chain((context.get("chain") or {}).get("marks") or {}, length("03-chain.mp4"))
-    result = min(6.0, length("04-result.mp4"))
+def shots(_context=None):
+    """One camera take, with a brief opening caption and no time skipped or accelerated."""
+    source = "01-kitchen-dining.mp4"
+    duration = min(50.0, length(source))
+    if duration < 45.0:
+        raise ValueError(f"kitchen and dining take is too short ({duration:.2f}s); record at least 45.1 seconds")
+    # Adjacent ranges from the same source keep every frame in order at 1x. The section boundary
+    # only removes the opening text; it introduces no shot change, dissolve, hold, or jump in time.
     return [
-        ("card:disclaimer",),
-        ("kitchen", "cookery/01-kitchen.mp4", [("kitchen", [(0.0, kitchen, 1.0)])], 0.4, "bl"),
-        ("order", "cookery/02-order.mp4", [("order", [(0.0, order, 1.0)])], 0.4, "bl"),
-        ("chain", "cookery/03-chain.mp4", [("chain", production)], 0.4, "bl"),
-        ("result", "cookery/04-result.mp4", [("result", [(0.0, result, 1.0)])], 0.4, "bl"),
-        ("card:ending",),
+        ("kitchen-dining", "cookery/" + source, [
+            ("kitchen_dining", [(0.0, 8.0, 1.0)]),
+            ("watch", [(8.0, duration, 1.0)]),
+        ], 0.4, "tl"),
     ]
 
 
 def main():
-    with open(os.path.join(TAKE, "index.json")) as file:
-        context = json.load(file)["context"]
-    build.SHOTS = shots(context)
+    build.SHOTS = shots()
     os.makedirs(build.OUT, exist_ok=True)
     build.fetch_fonts()
     build.gradients()

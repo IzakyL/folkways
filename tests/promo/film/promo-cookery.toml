@@ -1,29 +1,10 @@
 # 森罗物语联动宣传片。拍摄后在仓库根目录运行：python3 tests/promo/film/cookery.py
-# 顺序：说明 → 厨房全景 → 成品订单 → 完整生产链（中段加速）→ 成品 → 仓库地址。
-# 下单和成品界面不加字幕，保留界面内容；中文字形、渐变和卡片沿用主宣传片。
+# 一个约 50 秒的连续镜头，原速观察原生厨房与餐桌；无片头尾卡、UI插镜或过程加速。
+# 字幕只在前 8 秒出现在左上方，给下方餐桌和人物活动留出空间。
 
-[cards.disclaimer]
-seconds = 7
-lines = [
-  { style = "label", text = "FOLKWAYS · 森罗物语 1.6.0 联动" },
-  { style = "body", text = "从原材料，到一盘包子" },
-  { style = "gap", text = "" },
-  { style = "note", text = "本片由自动化脚本拍摄，生产过程经加速。" },
-]
+[scenes.kitchen_dining]
+tag = "FOLKWAYS · 森罗物语 1.6.0 联动"
+captions = ["原生厨房 · 惬意一餐"]
 
-[scenes.kitchen]
-tag = "聚落厨房"
-captions = ["纳入原生厨具，让居民接手烹饪"]
-
-[scenes.chain]
-tag = "只需下达成品订单 · 生产过程已加速"
-captions = ["磨粉、和面、包馅、蒸制", "居民自动安排材料、厨具与中间步骤"]
-
-[cards.ending]
-seconds = 6
-lines = [
-  { style = "label", text = "FOLKWAYS · 聚落" },
-  { style = "body", text = "让居民把原料变成一桌饭菜" },
-  { style = "gap", text = "" },
-  { style = "url", text = "github.com/IzakyL/folkways" },
-]
+[scenes.watch]
+captions = []

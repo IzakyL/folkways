@@ -22,6 +22,7 @@ import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.notice.Meter;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.network.chat.Component;
@@ -46,6 +47,10 @@ public final class LivingContent {
 
     public static final ResourceLocation RECREATION = ResourceLocation.fromNamespaceAndPath("folkways", "recreation");
 
+    public static final ResourceLocation DINING = ResourceLocation.fromNamespaceAndPath("folkways", "dining");
+    public static final ResourceLocation SETTING_TABLE = ResourceLocation.fromNamespaceAndPath("folkways", "setting_table");
+    public static final ResourceLocation DINING_EATING = ResourceLocation.fromNamespaceAndPath("folkways", "dining_eating");
+
     public static final ResourceLocation WHITELIST = ResourceLocation.fromNamespaceAndPath("folkways", "food_whitelist");
     public static final ResourceLocation BLACKLIST = ResourceLocation.fromNamespaceAndPath("folkways", "food_blacklist");
 
@@ -55,6 +60,12 @@ public final class LivingContent {
 
     public static final Schema.Setting FOOD_SAFETY = new Schema.Setting.Flag(
         "food_safety", "folkways.settings.food_safety", ResourceLocation.withDefaultNamespace("shield"), true);
+
+    public static final Schema.Setting DINING_FOOD = new Schema.Setting.Items(
+        "food", "folkways.settings.dining.food", ResourceLocation.withDefaultNamespace("cake"),
+        vanilla("bread", "cooked_beef", "cake"));
+    public static final Schema.Setting DINING_SERVINGS = new Schema.Setting.Count(
+        "servings", "folkways.settings.dining.servings", ResourceLocation.withDefaultNamespace("bowl"), 1, 4, 4);
 
     public static final Schema.Setting FOOD = new Schema.Setting.Items(
         "food", "folkways.settings.food", ResourceLocation.withDefaultNamespace("cooked_beef"),
@@ -129,7 +140,9 @@ public final class LivingContent {
             .map(value -> (Facing) value));
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(BED, new Shape.Block(Housing::isBed, Housing::sleepingCell)),
-                new Delegation(RECREATION, new Shape.Volume(4096), ResourceLocation.withDefaultNamespace("poppy"))),
+                new Delegation(RECREATION, new Shape.Volume(4096), ResourceLocation.withDefaultNamespace("poppy")),
+                new Delegation(DINING, new Shape.Volume(4096), new Schema(List.of(DINING_FOOD, DINING_SERVINGS)),
+                    ResourceLocation.withDefaultNamespace("cake"))),
             new Schema(List.of(FOOD_MODE, FOOD_SAFETY, FOOD)), List.of()));
     }
 
@@ -159,5 +172,9 @@ public final class LivingContent {
 
     static boolean looksAfter(Resident resident) {
         return Participations.between(resident.kind(), Stake.urge(ID)) != Participation.NONE;
+    }
+
+    private static List<ItemFilter> vanilla(String... items) {
+        return Arrays.stream(items).map(ResourceLocation::withDefaultNamespace).map(ItemFilter::item).toList();
     }
 }

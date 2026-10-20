@@ -34,9 +34,25 @@ versions. Back up your world before trying a nightly build.
 - **Build from drawings.** Choose patterns for roads, arch bridges, walls, docks,
   mines, railways, arcades and terraced fields. Builders clear the site and use
   the colony's stores.
-- **Care for residents.** They sleep in their own beds, carry meals, tire from work
+- **Care for residents.** They sleep in their own beds, carry three days of rations, tire from work
   and travel, learn trades, gain perks and flee danger. Data packs can replace
   colony name and appearance pools.
+
+### Dining and pocket rations
+
+Residents carry three days of food by default, replenishing when their pocket rations fall below one
+working day. Choose permitted pocket foods in the colony's Living settings. A day's ration is calculated
+from nutrition rather than item count, so different foods require different amounts.
+
+Mark a dining area, select its table foods, and place adjacent tables and chairs inside it. Leave an
+accessible aisle beside each chair. Residents bring one serving at a time from colony stores and keep
+food on display. Basic tables, including top slabs, support placeable foods such as cake; supported
+native tables accept edible foods and use the area's servings-per-table setting. Residents preserve
+food components, leave manually placed servings alone, and return unused supplies if an area is removed.
+
+Hungry residents prefer an available nearby table and return native food containers after eating.
+Finishing a table meal grants +6 dining mood for one day. If no suitable table meal is available, they
+can eat their pocket rations. Cancelling a table meal leaves its food untouched and frees the seat.
 
 ### Resident growth and everyday life
 
