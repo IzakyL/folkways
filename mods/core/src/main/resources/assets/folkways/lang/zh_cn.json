@@ -1,4 +1,9 @@
 {
+  "folkways.delegation.folkways.elevator": "电梯",
+  "folkways.doing.folkways.elevator_boarding": "进入电梯",
+  "folkways.doing.folkways.elevator_riding": "乘坐电梯",
+  "folkways.refusal.elevator.unavailable": "这座电梯或座位已不可用",
+  "folkways.refusal.elevator.ride_cancelled": "这趟电梯行程已无法服务",
   "key.folkways.overhead": "俯瞰",
   "key.categories.folkways": "Folkways",
   "folkways.refusal.draft.no_ground": "建筑样式找不到可以落脚的地面：%s",

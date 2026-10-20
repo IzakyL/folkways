@@ -54,6 +54,8 @@ public record ModelLibrary(
     private static final String YSM_IDLE = "idle";
     private static final String YSM_WALK = "walk";
     private static final String YSM_WORK = "swing_hand";
+    private static final String YSM_RIDE = "ride";
+    private static final String YSM_SIT = "sit";
 
     public ModelLibrary {
         entries = Map.copyOf(entries);
@@ -156,6 +158,9 @@ public record ModelLibrary(
         Optional<String> work = manifest.workAnimation().isPresent()
             ? manifest.workAnimation()
             : Optional.of(YSM_WORK).filter(animationNames::contains);
+        // YSM sit is a floor pose; ride bends the legs for a chair or vehicle seat.
+        Optional<String> seated = manifest.seatedAnimation().or(() ->
+            java.util.stream.Stream.of(YSM_RIDE, YSM_SIT).filter(animationNames::contains).findFirst());
         List<String> textures = texturesIn(contents, label, rejected);
         if (textures.isEmpty()) {
             return;
@@ -165,7 +170,7 @@ public record ModelLibrary(
         ResourceLocation animationsAt = model.withPath("animations/resident_models/" + name + ".animation.json");
         Map<String, byte[]> staged = new TreeMap<>();
         staged.put(packPath(geometryAt), geometry);
-        staged.put(packPath(animationsAt), animations);
+        staged.put(packPath(animationsAt), portableSeatedAnimation(animations, seated));
         Map<ResourceLocation, ResidentLook> stagedEntries = new LinkedHashMap<>();
         for (String texture : textures) {
             String stem = texture.substring(TEXTURE_DIR.length() + 1, texture.length() - PNG_SUFFIX.length());
@@ -179,7 +184,7 @@ public record ModelLibrary(
             stagedEntries.put(
                 model.withPath("model/" + name + "/" + stem),
                 new ResidentLook(
-                    new ResidentLook.Model(geometryAt, animationsAt, textureAt, idle, walk, work,
+                    new ResidentLook.Model(geometryAt, animationsAt, textureAt, idle, walk, work, seated,
                         manifest.fallback().orElse(ResidentLooks.FALLBACK.appearance().skin()), 1.0F, manifest.leisureAnimations()),
                     manifest.weight()));
         }
@@ -195,8 +200,48 @@ public record ModelLibrary(
         entries.putAll(stagedEntries);
     }
 
+    // A rider animation can carry YSM-only queries (head angle, equipment, etc.). Keep the
+    // portable Molang understood by GeckoLib and give unsupported queries their neutral value.
+    private static byte[] portableSeatedAnimation(byte[] bytes, Optional<String> seated) {
+        if (seated.isEmpty()) {
+            return bytes;
+        }
+        var json = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
+        var animation = json.getAsJsonObject("animations").getAsJsonObject(seated.get());
+        if (animation.has("bones") && animation.get("bones").isJsonObject()) {
+            animation.getAsJsonObject("bones").entrySet().forEach(bone -> {
+                if (bone.getValue().isJsonObject()) {
+                    var channels = bone.getValue().getAsJsonObject();
+                    for (String channel : List.of("rotation", "position", "scale")) {
+                        if (channels.has(channel)) {
+                            channels.add(channel, portableChannel(channels.get(channel)));
+                        }
+                    }
+                }
+            });
+        }
+        return json.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static JsonElement portableChannel(JsonElement value) {
+        if (value.isJsonArray()) {
+            var out = new com.google.gson.JsonArray();
+            value.getAsJsonArray().forEach(part -> out.add(portableChannel(part)));
+            return out;
+        }
+        if (value.isJsonObject()) {
+            var out = new com.google.gson.JsonObject();
+            value.getAsJsonObject().entrySet().forEach(part -> out.add(part.getKey(),
+                List.of("easing", "lerp_mode").contains(part.getKey()) ? part.getValue() : portableChannel(part.getValue())));
+            return out;
+        }
+        return value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()
+            ? new com.google.gson.JsonPrimitive(Molang.portable(value.getAsString())) : value;
+    }
+
     private static String firstMissing(Set<String> animationNames, Manifest manifest) {
-        for (Optional<String> asked : List.of(manifest.idleAnimation(), manifest.walkAnimation(), manifest.workAnimation())) {
+        for (Optional<String> asked : List.of(manifest.idleAnimation(), manifest.walkAnimation(),
+                manifest.workAnimation(), manifest.seatedAnimation())) {
             if (asked.isPresent() && !animationNames.contains(asked.get())) {
                 return asked.get();
             }
@@ -313,21 +358,33 @@ public record ModelLibrary(
             Optional<String> idleAnimation,
             Optional<String> walkAnimation,
             Optional<String> workAnimation,
+            Optional<String> seatedAnimation,
             int weight,
             Optional<ResidentLook.Skin> fallback,
             Map<String, String> leisureAnimations) {
 
         Manifest(Optional<String> idleAnimation, Optional<String> walkAnimation, Optional<String> workAnimation,
                 int weight, Optional<ResidentLook.Skin> fallback) {
-            this(idleAnimation, walkAnimation, workAnimation, weight, fallback, Map.of());
+            this(idleAnimation, walkAnimation, workAnimation, Optional.empty(), weight, fallback, Map.of());
         }
 
-        static final Manifest DEFAULT = new Manifest(Optional.empty(), Optional.empty(), Optional.empty(), 1, Optional.empty());
+        Manifest(Optional<String> idleAnimation, Optional<String> walkAnimation, Optional<String> workAnimation,
+                int weight, Optional<ResidentLook.Skin> fallback, Map<String, String> leisureAnimations) {
+            this(idleAnimation, walkAnimation, workAnimation, Optional.empty(), weight, fallback, leisureAnimations);
+        }
+
+        Manifest(Optional<String> idleAnimation, Optional<String> walkAnimation, Optional<String> workAnimation,
+                Optional<String> seatedAnimation, int weight, Optional<ResidentLook.Skin> fallback) {
+            this(idleAnimation, walkAnimation, workAnimation, seatedAnimation, weight, fallback, Map.of());
+        }
+
+        static final Manifest DEFAULT = new Manifest(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), 1, Optional.empty());
 
         static final Codec<Manifest> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.STRING.optionalFieldOf("idle_animation").forGetter(Manifest::idleAnimation),
             Codec.STRING.optionalFieldOf("walk_animation").forGetter(Manifest::walkAnimation),
             Codec.STRING.optionalFieldOf("work_animation").forGetter(Manifest::workAnimation),
+            Codec.STRING.optionalFieldOf("seated_animation").forGetter(Manifest::seatedAnimation),
             ExtraCodecs.POSITIVE_INT.optionalFieldOf("weight", 1).forGetter(Manifest::weight),
             ResidentLook.Skin.CODEC.codec().optionalFieldOf("fallback").forGetter(Manifest::fallback),
             Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("leisure_animations", Map.of())

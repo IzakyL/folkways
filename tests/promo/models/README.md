@@ -9,7 +9,7 @@ derivatives under the same licence. Each folder keeps its original `ysm.json`, w
 the authors to credit. Wine Fox variants marked "All Rights Reserved" upstream
 (`09_hailuo`, `10_zhiban`, `17_mini`) are deliberately left out.
 
-The model folders are downloaded on demand and ignored by Git. The models take runs
+The model folders are downloaded on demand and ignored by Git. The models and elevator takes run
 `vendor.py` before launching Minecraft; other takes and ordinary tests do not download them.
 To prepare them manually (Python 3, Linux, network access on the first run):
 

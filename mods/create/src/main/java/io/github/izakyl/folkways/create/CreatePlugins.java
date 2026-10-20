@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.create;
 
 import io.github.izakyl.folkways.create.build.CreateBuildPlugin;
 import io.github.izakyl.folkways.create.dispatch.DispatchPlugin;
+import io.github.izakyl.folkways.create.elevator.ElevatorPlugin;
 import io.github.izakyl.folkways.create.rail.RailPlugin;
 import net.neoforged.bus.api.IEventBus;
 
@@ -14,6 +15,7 @@ public final class CreatePlugins {
     public static void install(IEventBus modBus) {
         CreateBuildPlugin.install(modBus);
         RailPlugin.install(modBus);
+        ElevatorPlugin.install(modBus);
         DispatchPlugin.install(modBus);
     }
 }

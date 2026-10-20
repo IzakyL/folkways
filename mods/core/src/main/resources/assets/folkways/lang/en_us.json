@@ -1,4 +1,9 @@
 {
+  "folkways.delegation.folkways.elevator": "Elevator",
+  "folkways.doing.folkways.elevator_boarding": "Boarding the elevator",
+  "folkways.doing.folkways.elevator_riding": "Riding the elevator",
+  "folkways.refusal.elevator.unavailable": "This elevator or its seat is no longer available",
+  "folkways.refusal.elevator.ride_cancelled": "This elevator ride can no longer be served",
   "key.folkways.overhead": "View from above",
   "key.categories.folkways": "Folkways",
   "folkways.refusal.draft.no_ground": "The pattern found no ground to stand on: %s",

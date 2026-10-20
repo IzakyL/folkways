@@ -99,8 +99,6 @@ public final class Roaming {
 
     private static final long BACKGROUND_TTL = 600L;
 
-    private static final long EXTENT_WINDOW_TICKS = 6_000L;
-
     private record Shelf(Ask ask, long until) {
     }
 
@@ -183,7 +181,7 @@ public final class Roaming {
 
     private final Map<Tract, Waypoints.Net> frozen = new LinkedHashMap<>();
 
-    private final Map<Realm, Extent> extents = new LinkedHashMap<>();
+    private final Map<Realm, TravelExtent> extents = new LinkedHashMap<>();
 
     private long receivedRequests;
     private long enqueuedRequests;
@@ -255,7 +253,7 @@ public final class Roaming {
         List<Ask> fresh = new ArrayList<>();
         for (Ask ask : asked.drain()) {
             receivedRequests++;
-            Extent extent = extent(ask.realm());
+            TravelExtent extent = extent(ask.realm());
             extent.covers(BlockPos.of(ask.from()));
             for (int at = 0; at < ask.goals().size(); at++) {
                 BlockPos goal = BlockPos.of(ask.goals().getLong(at));
@@ -283,8 +281,8 @@ public final class Roaming {
             extent(crossing.landing().realm()).covers(crossing.landing().cell());
         }
         for (Map.Entry<Tract, Waypoints> held : nets.entrySet()) {
-            Extent extent = extent(held.getKey().realm());
-            held.getValue().room(extent.ground(), extent.wanted());
+            TravelExtent extent = extent(held.getKey().realm());
+            held.getValue().room(extent.ground(), extent.wanted(), extent.layers());
         }
         if (now >= nextExpiry) {
             expire(now);
@@ -456,8 +454,8 @@ public final class Roaming {
             return 0;
         }
         Waypoints net = net(sort, ask.realm());
-        Extent extent = extent(ask.realm());
-        net.room(extent.ground(), extent.wanted());
+        TravelExtent extent = extent(ask.realm());
+        net.room(extent.ground(), extent.wanted(), extent.layers());
         if (answered(net, ask, now)) {
             countAnswered();
             return 0;
@@ -953,8 +951,8 @@ public final class Roaming {
         return net.joinsAny(from, ends, now);
     }
 
-    private Extent extent(Realm realm) {
-        return extents.computeIfAbsent(realm, where -> new Extent());
+    private TravelExtent extent(Realm realm) {
+        return extents.computeIfAbsent(realm, where -> new TravelExtent());
     }
 
     private void settle(Quest done, Quest.State state, long now) {
@@ -1114,68 +1112,4 @@ public final class Roaming {
         return feet;
     }
 
-    private static final class Extent {
-
-        private LongOpenHashSet wanted = new LongOpenHashSet();
-
-        private int westmost = Integer.MAX_VALUE;
-        private int eastmost = Integer.MIN_VALUE;
-        private int northmost = Integer.MAX_VALUE;
-        private int southmost = Integer.MIN_VALUE;
-
-        private int wantedBefore;
-        private int westBefore = Integer.MAX_VALUE;
-        private int eastBefore = Integer.MIN_VALUE;
-        private int northBefore = Integer.MAX_VALUE;
-        private int southBefore = Integer.MIN_VALUE;
-
-        private long windowFrom = -1L;
-
-        void roll(long now) {
-            if (windowFrom < 0L) {
-                windowFrom = now;
-                return;
-            }
-            if (now - windowFrom < EXTENT_WINDOW_TICKS) {
-                return;
-            }
-            windowFrom = now;
-            wantedBefore = wanted.size();
-            westBefore = westmost;
-            eastBefore = eastmost;
-            northBefore = northmost;
-            southBefore = southmost;
-            wanted = new LongOpenHashSet();
-            westmost = Integer.MAX_VALUE;
-            eastmost = Integer.MIN_VALUE;
-            northmost = Integer.MAX_VALUE;
-            southmost = Integer.MIN_VALUE;
-        }
-
-        void covers(BlockPos at) {
-            westmost = Math.min(westmost, at.getX());
-            eastmost = Math.max(eastmost, at.getX());
-            northmost = Math.min(northmost, at.getZ());
-            southmost = Math.max(southmost, at.getZ());
-        }
-
-        void wants(BlockPos at) {
-            wanted.add(at.asLong());
-        }
-
-        int wanted() {
-            return Math.max(wanted.size(), wantedBefore);
-        }
-
-        long ground() {
-            int west = Math.min(westmost, westBefore);
-            int east = Math.max(eastmost, eastBefore);
-            int north = Math.min(northmost, northBefore);
-            int south = Math.max(southmost, southBefore);
-            if (east < west) {
-                return 0L;
-            }
-            return (long) (east - west + 1) * (south - north + 1);
-        }
-    }
 }

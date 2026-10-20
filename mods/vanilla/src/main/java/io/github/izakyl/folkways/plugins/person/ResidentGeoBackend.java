@@ -66,6 +66,10 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
             VertexConsumer buffer, boolean isReRender, float partialTick, int light, int overlay, int colour) {
         withScale(getCurrentEntity() == null ? 1.0F
             : modelOf(getCurrentEntity()).map(ResidentLook.Model::scale).orElse(1.0F));
+        // Animation names such as YSM ride are shared by different models. Resolve them in this
+        // resident's file first, rather than borrowing the first model in the pool's skeleton.
+        ((Rig) getGeoModel()).currentModel = getCurrentEntity() == null ? null
+            : modelOf(getCurrentEntity()).orElse(null);
         super.preRender(pose, crew, baked, buffers, buffer, isReRender, partialTick, light, overlay, colour);
     }
 
@@ -116,8 +120,7 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
             }
             return modelOf(resident)
                 .map(model -> state.setAndContinue(
-                    loop(state.isMoving() ? model.walkAnimation() : model.leisureAnimations()
-                        .getOrDefault(resident.leisureMotion(), model.idleAnimation()))))
+                    loop(ResidentAnimation.loop(resident, model, state.isMoving()))))
                 .orElse(PlayState.STOP);
         }
 
@@ -126,6 +129,10 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
         private static PlayState chooseWork(AnimationState<Crew> state) {
             Entity entity = state.getData(DataTickets.ENTITY);
             if (!(entity instanceof ResidentEntity resident)) {
+                return PlayState.STOP;
+            }
+            if (ResidentAnimation.seated(resident)) {
+                state.getController().forceAnimationReset();
                 return PlayState.STOP;
             }
             Optional<String> work = modelOf(resident).flatMap(ResidentLook.Model::workAnimation);
@@ -163,6 +170,7 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
     private static final class Rig extends GeoModel<Crew> {
 
         private static final String HEAD_BONE = "head";
+        private ResidentLook.Model currentModel;
 
         @Override
         public ResourceLocation getModelResource(Crew crew) {
@@ -176,7 +184,7 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
 
         @Override
         public ResourceLocation getAnimationResource(Crew crew) {
-            return firstModelInPool().animations();
+            return (currentModel == null ? firstModelInPool() : currentModel).animations();
         }
 
         @Override
@@ -190,11 +198,24 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
         @Override
         public void setCustomAnimations(Crew crew, long instanceId, AnimationState<Crew> state) {
             super.setCustomAnimations(crew, instanceId, state);
+            Entity entity = state.getData(DataTickets.ENTITY);
+            if (entity instanceof ResidentEntity resident && ResidentAnimation.seated(resident)
+                    && modelOf(resident).flatMap(ResidentLook.Model::seatedAnimation).isEmpty()) {
+                // Old humanoid packs can ride without adding an authored animation. GeckoLib resets
+                // these bones on dismount, so the ordinary idle/walk motion resumes normally.
+                for (GeoBone bone : getAnimationProcessor().getRegisteredBones()) {
+                    String name = bone.getName().replace("_", "").toLowerCase(java.util.Locale.ROOT);
+                    if (name.equals("leftleg") || name.equals("legleft") || name.equals("rightleg")
+                            || name.equals("legright")) {
+                        bone.setRotX(-1.4137167F);
+                        bone.setRotY(name.contains("left") ? -Mth.PI / 10 : Mth.PI / 10);
+                    }
+                }
+            }
             EntityModelData look = state.getData(DataTickets.ENTITY_MODEL_DATA);
             if (look == null) {
                 return;
             }
-            Entity entity = state.getData(DataTickets.ENTITY);
             String motion = entity instanceof ResidentEntity resident ? resident.leisureMotion() : "";
             boolean ownAnimation = entity instanceof ResidentEntity resident
                 && modelOf(resident).map(model -> model.leisureAnimations().containsKey(motion)).orElse(false);

@@ -1,4 +1,9 @@
 {
+  "folkways.delegation.folkways.elevator": "電梯",
+  "folkways.doing.folkways.elevator_boarding": "進入電梯",
+  "folkways.doing.folkways.elevator_riding": "搭乘電梯",
+  "folkways.refusal.elevator.unavailable": "這座電梯或座位已無法使用",
+  "folkways.refusal.elevator.ride_cancelled": "這趟電梯行程已無法提供服務",
   "key.folkways.overhead": "俯瞰",
   "key.categories.folkways": "Folkways",
   "folkways.refusal.draft.no_ground": "建築樣式找不到可以落腳的地面：%s",

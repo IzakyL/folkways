@@ -91,6 +91,54 @@ public final class ResidentModelGameTests {
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void vehicleSeatsPreferTheAuthoredRidePoseOverTheFloorSitPose(GameTestHelper helper) {
+        DataPack files = new DataPack();
+        files.model("rider", """
+            {"animations":{"idle":{},"walk":{},"ride":{"bones":{"Head":{"rotation":
+            ["-13+ysm.head_pitch","math.clamp(ysm.head_yaw,-60,60)",0]}}},"sit":{}}}
+            """, "main");
+        ModelLibrary library = ModelLibrary.read(files.held);
+        helper.assertValueEqual(onlyModel(helper, library).seatedAnimation(), Optional.of("ride"),
+            "a vehicle uses the model's chair pose rather than kneeling on the floor");
+        String carried = new String(library.assets().get(
+            "assets/folkways/animations/resident_models/rider.animation.json"), StandardCharsets.UTF_8);
+        helper.assertTrue(!carried.contains("ysm.head"),
+            "the carried riding pose must use portable Molang instead of unsupported YSM queries");
+        helper.assertTrue(carried.contains("-13"), "keep the authored head angle while neutralizing its query");
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void seatedAnimationIsOptionalAndCanBeOverridden(GameTestHelper helper) {
+        DataPack files = new DataPack();
+        files.model("rider", "{\"animations\":{\"idle\":{},\"walk\":{},\"sit\":{},\"custom.chair\":{}}}", "main");
+        helper.assertValueEqual(onlyModel(helper, ModelLibrary.read(files.held)).seatedAnimation(), Optional.of("sit"),
+            "a model without ride can still supply its native sitting pose");
+        files.put("rider", "folkways.json", "{\"seated_animation\":\"custom.chair\"}");
+        helper.assertValueEqual(onlyModel(helper, ModelLibrary.read(files.held)).seatedAnimation(), Optional.of("custom.chair"),
+            "a pack can select a pose with its own name");
+        files.put("rider", "folkways.json", "{\"seated_animation\":\"absent.chair\"}");
+        ModelLibrary rejected = ModelLibrary.read(files.held);
+        helper.assertTrue(rejected.entries().isEmpty() && rejected.rejected().getFirst().contains("absent.chair"),
+            "explicit invalid seated animations are refused rather than silently rendering standing");
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void oldModelEntriesStillDecodeWithoutASeatedAnimation(GameTestHelper helper) {
+        DataPack files = new DataPack();
+        files.model("ranger", YSM_ANIMATIONS, "main");
+        ResidentLook look = ModelLibrary.read(files.held).entries().values().iterator().next();
+        var json = ResidentLook.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE, look).getOrThrow();
+        json.getAsJsonObject().remove("seated_animation");
+        ResidentLook restored = ResidentLook.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE, json).getOrThrow();
+        helper.assertValueEqual(((ResidentLook.Model) restored.appearance()).seatedAnimation(), Optional.empty(),
+            "old saved and networked entries retain the generic humanoid rider fallback");
+        helper.assertValueEqual(restored, look, "all old fields must survive the codec round trip");
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
     public static void aManifestNamingAnAbsentAnimationIsRefusedWholeAndSaysSo(GameTestHelper helper) {
         DataPack files = new DataPack();
         files.model("sprinter", YSM_ANIMATIONS, "main");
