@@ -76,6 +76,7 @@ for (const stage of twins()) test(stage.title("compost recovery: discover player
     const residentInput = await read(server, stage, cells); evidence.residentInput = residentInput;
     expect(residentInput.fill).toBe(0); expect(total(residentInput, SEED)).toBe(256);
     const initialBone = total(residentInput, BONE);
+    expect(initialBone, "the resident phase starts with only the player's collected bone meal").toBe(1);
     const levels = new Set<number>(); let completed = 0;
     const assertResidentBalance = (sample: State) => {
       completed = sample.compostStats.collections - residentInput.compostStats.collections;
