@@ -1,0 +1,103 @@
+// A compile-only attachment: public signatures are closed over Folkways types, never over method bodies.
+configurations {
+    apiTools {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+}
+
+dependencies {
+    apiTools "org.ow2.asm:asm-commons:9.8"
+}
+
+def toolClasses = layout.buildDirectory.dir("api-tools/classes")
+def compileApiTools = tasks.register("compileApiTools", JavaCompile) {
+    source rootProject.fileTree("tests/java/io/github/izakyl/folkways/build") { include "*.java" }
+    classpath = configurations.apiTools
+    destinationDirectory = toolClasses
+    options.release = project.java_release.toInteger()
+    options.annotationProcessorPath = files()
+}
+
+def toolClasspath = files(toolClasses, configurations.apiTools)
+def toolLauncher = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(project.java_release.toInteger())
+}
+def apiClosureTest = tasks.register("apiClosureTest", JavaExec) {
+    group = "verification"
+    description = "Checks API closure discovery with synthetic bytecode, without Minecraft."
+    dependsOn compileApiTools
+    classpath = toolClasspath
+    javaLauncher = toolLauncher
+    mainClass = "io.github.izakyl.folkways.build.ApiClosureTest"
+}
+
+def indexFile = layout.buildDirectory.file("api-tools/classes.txt")
+def apiClassIndex = tasks.register("apiClassIndex", JavaExec) {
+    dependsOn compileApiTools, tasks.named("compileJava")
+    classpath = toolClasspath
+    javaLauncher = toolLauncher
+    mainClass = "io.github.izakyl.folkways.build.ApiClosure"
+    inputs.files(sourceSets.main.output.classesDirs)
+    outputs.file(indexFile)
+    doFirst {
+        args = ["index", indexFile.get().asFile.absolutePath] + sourceSets.main.output.classesDirs.files.collect {
+            it.absolutePath
+        }
+    }
+}
+
+def selectedClasses = providers.fileContents(indexFile).asText.map { it.readLines().toSet() }
+def apiJar = tasks.register("apiJar", Jar) {
+    dependsOn apiClassIndex
+    archiveClassifier = "api"
+    inputs.file(indexFile)
+    from(sourceSets.main.output.classesDirs) {
+        include { entry -> entry.directory || selectedClasses.get().contains(entry.relativePath.pathString) }
+    }
+    includeEmptyDirs = false
+    manifest.attributes("Folkways-Compile-Only": "true")
+}
+publishing.publications.mod.artifact apiJar
+
+def verifyApiJar = tasks.register("verifyApiJar", JavaExec) {
+    group = "verification"
+    description = "Verifies the packaged API has its complete public signature closure."
+    dependsOn apiJar
+    classpath = toolClasspath
+    javaLauncher = toolLauncher
+    mainClass = "io.github.izakyl.folkways.build.ApiClosure"
+    inputs.file(apiJar.flatMap { it.archiveFile })
+    doFirst { args = ["verify", apiJar.get().archiveFile.get().asFile.absolutePath] }
+}
+
+def checkApiConsumer = tasks.register("checkApiConsumer", JavaCompile) {
+    group = "verification"
+    description = "Compiles an external consumer against only the API attachment and declared external dependencies."
+    dependsOn verifyApiJar, apiClosureTest
+    source rootProject.fileTree("tests/api-consumer") { include "**/*.java" }
+    destinationDirectory = layout.buildDirectory.dir("api-consumer/classes")
+    // Deliberately not sourceSets.main.compileClasspath/output, or another project's configuration.
+    classpath = files(apiJar.flatMap { it.archiveFile }, configurations.compileClasspath)
+    options.sourcepath = files()
+    options.annotationProcessorPath = files()
+    options.compilerArgs.add("-proc:none")
+    options.release = project.java_release.toInteger()
+    doFirst {
+        File attachment = apiJar.get().archiveFile.get().asFile.canonicalFile
+        classpath.files.each { entry ->
+            if (entry.canonicalFile != attachment) {
+                if (!entry.isFile() || !entry.name.endsWith(".jar")) {
+                    throw new GradleException("API consumer dependency is not an external JAR: ${entry}")
+                }
+                new java.util.zip.ZipFile(entry).withCloseable { jar ->
+                    if (jar.entries().any { it.name.startsWith("io/github/izakyl/folkways/") }) {
+                        throw new GradleException("API consumer leaked a Folkways implementation dependency: ${entry}")
+                    }
+                }
+            }
+        }
+    }
+}
+
+tasks.named("check") { dependsOn checkApiConsumer }

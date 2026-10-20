@@ -40,15 +40,7 @@ dependencies {
     gametestCompileOnly project(":create")
 }
 
-def apiJar = tasks.register("apiJar", Jar) {
-    archiveClassifier = "api"
-    from sourceSets.main.output
-    include "io/github/izakyl/folkways/core/api/**", "io/github/izakyl/folkways/front/api/**"
-    include "io/github/izakyl/folkways/base/task/**"
-    includeEmptyDirs = false
-}
-
-publishing.publications.mod.artifact apiJar
+apply from: rootProject.file("gradle/api.gradle")
 
 // The job service has no game dependency; exercise its concurrency contracts on every check, including CI.
 def jobTestClasses = layout.buildDirectory.dir("jobs-test")
