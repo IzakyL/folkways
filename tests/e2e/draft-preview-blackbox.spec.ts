@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { writeFileSync } from "node:fs";
 import { defineTask, javaTask, media, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { clickElement, panelElements } from "../ldlib2";
@@ -20,6 +21,47 @@ const CHOOSE = "folkways.draft.choose";
 const PATTERN = "folkways.draft.pattern.folkways.terraced_field";
 const PREVIEW = "folkways.draft.preview";
 const BUILD = "folkways.draft.confirm";
+
+// Setup only: put an unparsed source file on this client's shelf. The book UI must load it itself.
+const SETUP_LOCAL_PATTERN = defineTask<{ stem: string }, { path: string; id: string; ui: string }>({
+  name: "folkways.draft-preview.setup-local-file",
+  side: "client",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: [
+      "io.github.izakyl.folkways.plugins.build.draft.Patterns",
+      "java.nio.file.Files",
+      "java.nio.file.StandardOpenOption",
+      "net.minecraft.resources.ResourceLocation",
+    ],
+    body: `
+String stem = Args.of(ctx).string("stem");
+if (!stem.matches("draft_preview_[a-z0-9_-]+")) throw new IllegalArgumentException("invalid fixture name");
+String source = Patterns.sources().get(ResourceLocation.parse("folkways:terraced_field"));
+if (source == null) throw new IllegalStateException("the server has not offered terraced_field");
+var folder = Patterns.SHELF.path();
+Files.createDirectories(folder);
+var file = folder.resolve(stem + ".star");
+Files.writeString(file, source, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+return Map.of("path", file.toAbsolutePath().toString(), "id", "local:" + stem,
+    "ui", "folkways.draft.pattern.local." + stem);
+`,
+  }),
+});
+
+const CLEANUP_LOCAL_PATTERN = defineTask<{ stem: string }, boolean>({
+  name: "folkways.draft-preview.cleanup-local-file",
+  side: "client",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: ["io.github.izakyl.folkways.plugins.build.draft.Patterns", "java.nio.file.Files"],
+    body: `
+String stem = Args.of(ctx).string("stem");
+if (!stem.matches("draft_preview_[a-z0-9_-]+")) throw new IllegalArgumentException("invalid fixture name");
+return Files.deleteIfExists(Patterns.SHELF.path().resolve(stem + ".star"));
+`,
+  }),
+});
 
 // The blocks the preview stands in the world, read off the client.
 const PREVIEWED = defineTask<undefined, Record<string, any>>({
@@ -61,12 +103,14 @@ return Map.of("sites", ((List<?>) orders.invoke(held)).size(), "growing", ((Map<
   }),
 });
 
-for (const stage of twins()) test(stage.title("a pattern is previewed out in the world before it is built, and the window opens on it again"), async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("a local file pattern is previewed before it is built, and the window opens on it again"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
   const runId = newRunId();
+  const localStem = `draft_preview_${runId.toLowerCase()}`;
   let pair: E2EPair | undefined;
+  let localFileCreated = false;
   const evidence: any = {};
 
   try {
@@ -111,9 +155,16 @@ for (const stage of twins()) test(stage.title("a pattern is previewed out in the
     expect(evidence.mark.marked.text, "the two corners mark a box over the floor").toMatch(/marked$/);
     evidence.sites_before = await sites(server, playerName);
 
-    // The first time, only a preview can be asked for.
+    evidence.local_file = await client.run(SETUP_LOCAL_PATTERN, { stem: localStem });
+    localFileCreated = true;
+
+    // Both shelves appear through the normal book UI; preview the actual client file.
     await openOffer(server, client, playerName, origin, stage);
-    await clickElement(client, { id: PATTERN });
+    await waitForElement(client, { id: evidence.local_file.ui }, { timeoutMs: 8_000 });
+    evidence.offered = await tokensOf(client);
+    expect(evidence.offered, "the picker keeps the built-in pattern beside the local file")
+      .toEqual(expect.arrayContaining([PATTERN, evidence.local_file.ui]));
+    await clickElement(client, { id: evidence.local_file.ui });
     await settlePanel(server, client);
     evidence.first = await tokensOf(client);
     expect(evidence.first, "the pattern's page offers a preview").toContain(PREVIEW);
@@ -161,8 +212,16 @@ for (const stage of twins()) test(stage.title("a pattern is previewed out in the
     pair?.failing(error);
     throw error;
   } finally {
-    testInfo.attach(stage.name("evidence"), { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
-    await pair?.teardown(testInfo);
+    try {
+      if (pair && localFileCreated) {
+        evidence.local_file_deleted = await pair.client.run(CLEANUP_LOCAL_PATTERN, { stem: localStem });
+      }
+    } finally {
+      const file = testInfo.outputPath("local-pattern-evidence.json");
+      writeFileSync(file, JSON.stringify(evidence, null, 2));
+      await testInfo.attach(stage.name("evidence"), { path: file, contentType: "application/json" });
+      await pair?.teardown(testInfo);
+    }
   }
 });
 

@@ -902,6 +902,7 @@
   "folkways.doing.folkways.composting.about": "Composting %s",
   "folkways.refusal.seed.no_straw_hat": "The farmer needs a straw hat in the head slot.",
   "folkways.refusal.seed.no_grass": "The short grass or required bone meal is no longer available.",
+  "folkways.refusal.seed.reserve_unavailable": "The seed reserve is below target or has changed.",
   "folkways.refusal.seed.unsafe_growth_area": "Grass growth needs a clear, flat 15 by 15 grass area inside the marked zone.",
   "folkways.refusal.seed.area_changed": "The seed grassland has changed or is no longer enrolled.",
   "folkways.page.cookery.compost": "Composting surplus seeds",

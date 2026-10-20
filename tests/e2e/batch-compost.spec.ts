@@ -74,6 +74,7 @@ for (const cookery of [false, true]) for (const stage of twins()) {
       evidence.batch = { elapsedTicks: state.tick - begin.tick, walked: state.walked - begin.walked,
         seedsConsumed: 80 - state.seeds, acquisitions, maxCarried };
       expect(maxCarried, "a batch must physically fetch multiple seeds together").toBeGreaterThanOrEqual(8);
+      expect(maxCarried, "reserve checks must not carry the protected stack along with this batch").toBeLessThanOrEqual(16);
       expect(acquisitions, "one 16-seed allowance should not produce one warehouse fetch per seed").toBe(1);
       expect(state.storedBone).toBe(state.bone);
       await tick.sprint(server, 120);

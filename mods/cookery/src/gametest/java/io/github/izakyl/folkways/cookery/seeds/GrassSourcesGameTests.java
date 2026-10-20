@@ -305,6 +305,39 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty_large")
+    public static void aKeepReservationStillLetsNativeGrassFillAnActualSeedDeficit(GameTestHelper helper) {
+        try (Fixture rig = new Fixture(helper)) {
+            rig.mark(false); rig.wearHat();
+            rig.body.pack().setItem(0, new ItemStack(ModItems.TOMATO_SEED.get(), 63));
+            BlockPos storeCell = rig.center.offset(8, 1, 8);
+            rig.level.setBlock(storeCell, Blocks.BARREL.defaultBlockState(), Block.UPDATE_ALL);
+            rig.colony.stores(SeedPresence.ID, rig.level.dimension(), List.of(WorldPos.of(rig.level, storeCell)));
+            for (BlockPos ground : rig.allowed) rig.level.setBlock(ground.above(), Blocks.SHORT_GRASS.defaultBlockState(), Block.UPDATE_ALL);
+            rig.presence.refresh(rig.level.getServer());
+            Node keep = rig.presence.goals(rig.colony.view(rig.level)).stream().flatMap(goal -> goal.nodes().stream())
+                .filter(node -> node.worker().isEmpty()).findFirst().orElseThrow();
+            rig.claims = List.of(new SeedBudget.Claim(keep.id(), SeedBudget.Location.pack(rig.body.id()),
+                Goods.specOf(ModItems.TOMATO_SEED.get().getDefaultInstance()), 64));
+            rig.level.random.setSeed(0L);
+            long count = 63;
+            for (int attempt = 0; attempt < rig.allowed.size() && count < 64; attempt++) {
+                Node source = rig.source();
+                var feet = source.spec().stances().cells().iterator().next().cell();
+                rig.body.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
+                helper.assertTrue(source.planned(rig.level).isEmpty(), "the real grass source owns its exclusive turn");
+                var done = (Outcome.Done) Commit.run(rig.level, source, rig);
+                done.made().forEach(stack -> helper.assertTrue(io.github.izakyl.folkways.core.api.terms.Containers.insert(rig.body.pack(), stack).isEmpty(), "native grass loot fits actual cargo"));
+                source.ended(rig.level, Ending.DONE);
+                count = Goods.countIn(rig.body.pack(), Goods.specOf(ModItems.TOMATO_SEED.get().getDefaultInstance()));
+            }
+            helper.assertTrue(count >= 64, "real native grass loot supplies the missing planting seed");
+            helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(),
+                "the fulfilled reserve stops both grass gathering and Keep despite its old outstanding self claim");
+        }
+        helper.succeed();
+    }
+
     private static final class Fixture implements Worker, AutoCloseable {
         final ServerLevel level;
         final BlockPos center;
@@ -312,6 +345,7 @@ public final class GrassSourcesGameTests {
         final Colony colony;
         final ResidentEntity body;
         final SeedPresence presence;
+        List<SeedBudget.Claim> claims = List.of();
         Fixture(GameTestHelper helper) {
             level = helper.getLevel();
             center = helper.absolutePos(new BlockPos(10, 1, 10));
@@ -333,7 +367,7 @@ public final class GrassSourcesGameTests {
             colony.entered(body);
             SeedBudget budget = new SeedBudget(() -> new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("real source pack",
                 SeedBudget.Location.pack(body.id()), IntStream.range(0, body.pack().getContainerSize()).mapToObj(body.pack()::getItem).toList())),
-                List.of(), List.of(), Map.of()), () -> Set.of(ModItems.TOMATO_SEED.get()));
+                claims, List.of(), Map.of()), () -> Set.of(ModItems.TOMATO_SEED.get()));
             presence = new SeedPresence(colony, ignored -> budget, () -> true);
         }
         UUID mark(boolean restore) {

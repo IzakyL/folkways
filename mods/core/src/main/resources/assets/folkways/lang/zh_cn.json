@@ -902,6 +902,7 @@
   "folkways.doing.folkways.composting.about": "将%s堆肥",
   "folkways.refusal.seed.no_straw_hat": "农夫需要在头部装备草帽。",
   "folkways.refusal.seed.no_grass": "矮草或所需骨粉已不可用。",
+  "folkways.refusal.seed.reserve_unavailable": "留种库存尚未达标或已发生变化。",
   "folkways.refusal.seed.unsafe_growth_area": "恢复矮草需要标记范围内一片平整、无遮挡的15×15草地区域。",
   "folkways.refusal.seed.area_changed": "采种草地已改变或取消委托。",
   "folkways.page.cookery.compost": "正在堆肥多余种子",
