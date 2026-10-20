@@ -249,6 +249,54 @@ public final class BatchExecutionGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void scheduleRecoveryPreservesARealPartlyCommittedBatch(GameTestHelper helper)
+            throws ReflectiveOperationException {
+        ServerLevel level = helper.getLevel();
+        Batch parent = new Batch(level, List.of(new Need(SEEDS, 2)), 2, i -> action(level, 1,
+            who -> new Outcome.Done(List.of(), List.of(new ItemStack(Items.BONE_MEAL)), Optional.empty())));
+        RunnerRig rig = new RunnerRig(level, parent, 2);
+        try {
+            for (int i = 0; i < 40 && parent.receipts.isEmpty(); i++) rig.tick();
+            helper.assertValueEqual(parent.receipts.size(), 1, "a real input and output commit before the scheduling fault");
+            BatchExecution execution = rig.labor.existingBatch(parent.id());
+            var holds = execution.outputHolds();
+            helper.assertValueEqual(holds.stream().mapToLong(ReservedInput::count).sum(), 1L, "the real output is reserved");
+            SchedulingRecoveryGameTests.Fixture scene = new SchedulingRecoveryGameTests.Fixture(helper, 2, parent,
+                placed(2), rig.body.resident(), rig.labor);
+            scene.delivered = result -> {
+                var route = result.all().get(rig.body.id());
+                if (route != null) rig.runner.follow(route.nodes());
+            };
+            scene.begin();
+            scene.afterTicks(() -> {
+                try {
+                    helper.assertTrue(rig.labor.existingBatch(parent.id()) == execution,
+                        "recovery keeps the active execution ledger rather than starting a new batch");
+                    helper.assertTrue(execution.outputHolds().equals(holds), "rebuilding routes keeps actual output holds");
+                    helper.assertValueEqual(execution.remainingDraws(placed(2).draws()).getFirst().count(), 1L,
+                        "only the unspent input remains reserved");
+                    helper.assertValueEqual(Goods.countIn(rig.body.pack(), SEEDS), 1L, "the committed seed is never refunded");
+                    helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 1L,
+                        "a failed layout cannot repeat or lose its existing product");
+                    helper.assertTrue(scene.published.getLast().all().get(rig.body.id()).nodes().contains(parent.id()),
+                        "the recovered route retains the session's worker and holding constraint");
+                    for (int i = 0; i < 40 && parent.receipts.size() < 2; i++) rig.tick();
+                    helper.assertValueEqual(parent.receipts.size(), 2, "the same session can finish its remaining step");
+                    helper.assertValueEqual(Goods.countIn(rig.body.pack(), SEEDS), 0L, "the original two inputs are consumed once");
+                    helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 2L,
+                        "the two committed steps produce exactly two real outputs");
+                    helper.succeed();
+                } finally {
+                    rig.close();
+                }
+            });
+        } catch (RuntimeException | Error broken) {
+            rig.close();
+            throw broken;
+        }
+    }
+
+    @GameTest(template = "empty")
     public static void receiptObserverFailureCannotLoseOrRepeatTheRealRunnersOutput(GameTestHelper helper)
             throws ReflectiveOperationException {
         ServerLevel level = helper.getLevel();
