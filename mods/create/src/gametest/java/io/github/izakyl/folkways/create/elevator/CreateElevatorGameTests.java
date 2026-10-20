@@ -7,6 +7,8 @@ import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.core.api.resident.Going;
 import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.core.api.terms.Keepouts;
+import io.github.izakyl.folkways.core.api.terms.Structures;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import java.util.HashSet;
 import java.util.Set;
@@ -92,6 +94,52 @@ public final class CreateElevatorGameTests {
             + " theoretical=" + pulley.getTheoreticalSpeed() + " motor=" + (motor == null ? "missing" : motor.getTheoreticalSpeed())
             + " error=" + (pulley.getLastAssemblyException() == null ? "none" : pulley.getLastAssemblyException().component.getString() + " at " + pulley.getLastAssemblyException().getPosition()) + " attached=" + pulley.getAttachedContraption()
             + " ticking=" + ((net.minecraft.server.level.ServerLevel) pulley.getLevel()).isPositionEntityTicking(pulley.getBlockPos()) + " bodyTicks=" + f.body.tickCount;
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void ordinaryWalkingAvoidsTheWholeShaftWhileOnlyThisStoppedDeckCanBeEntered(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var f = fixture(helper);
+        helper.succeedWhen(() -> {
+            var view = f.adapter.inspect(level.getServer(), f.ref).orElseThrow(() ->
+                new net.minecraft.gametest.framework.GameTestAssertException(assembly(f)));
+            BlockPos lower = f.deck.offset(2, 1, 2);
+            BlockPos upper = lower.above(5);
+            helper.assertTrue(Keepouts.forbidden(level, lower) && Keepouts.forbidden(level, upper),
+                "ordinary navigation excludes both the present cabin and the empty upstairs shaft");
+            // A decorative beam or apparent solid floor in the shaft must not become a workplace.
+            level.setBlockAndUpdate(upper.below(), Blocks.STONE.defaultBlockState());
+            helper.assertFalse(Footing.withFeetAt(level, upper), "ordinary work footings reject the shaft even with a real solid support");
+            BlockPos landing = f.deck.offset(2, 1, -1);
+            helper.assertTrue(Footing.withFeetAt(level, landing) && !Keepouts.forbidden(level, landing),
+                "the actual landing beside the cabin remains usable");
+            for (BlockPos floor : BlockPos.betweenClosed(f.deck.offset(-1, 0, -3), f.deck.offset(5, 0, 6))) {
+                level.setBlockAndUpdate(floor, Blocks.STONE.defaultBlockState());
+            }
+            var path = f.body.getNavigation().createPath(Set.of(f.deck.offset(2, 1, 5)), 0);
+            helper.assertTrue(path != null && path.canReach(), "ordinary navigation still reaches the opposite side via a real outside aisle");
+            for (int i = 0; i < path.getNodeCount(); i++) {
+                var node = path.getNode(i);
+                helper.assertFalse(Keepouts.forbidden(level, node.x, node.y, node.z), "ordinary path takes the outside aisle instead of cutting across the elevator");
+            }
+            var vehicle = f.pulley.getAttachedContraption();
+            var min = f.deck.offset(-2, 0, -4);
+            var max = f.deck.offset(6, 10, 7);
+            Set<BlockPos> deck = ElevatorDeck.footings(vehicle).stream().map(feet ->
+                BlockPos.containing(vehicle.toGlobalVector(Vec3.atBottomCenterOf(feet), 1))).collect(java.util.stream.Collectors.toSet());
+            var region = new CabinPathRegion(level, landing, Structures.region(level, min, max), java.util.Map.of(), vehicle.getUUID(), deck);
+            helper.assertFalse(Keepouts.forbidden(level, region, lower), "the stopped cabin's own path view admits its actual standing deck");
+            helper.assertFalse(Keepouts.forbidden(level, region, lower.above()), "the same path view admits the standing passenger's head clearance");
+            helper.assertTrue(Keepouts.forbidden(level, region, upper), "the local boarding permission never opens another floor of the shaft");
+            var other = new CabinPathRegion(level, landing, Structures.region(level, min, max), java.util.Map.of(), UUID.randomUUID(), deck);
+            helper.assertTrue(Keepouts.forbidden(level, other, lower), "a different vehicle's path context cannot open this shaft");
+            Runnable remove = Keepouts.install((host, x, y, z) -> host == level && lower.equals(new BlockPos(x, y, z)));
+            try {
+                helper.assertTrue(Keepouts.forbidden(level, region, lower), "boarding permission does not suppress an unrelated keepout at the same cell");
+            } finally { remove.run(); }
+            level.setBlockAndUpdate(upper.below(), Blocks.AIR.defaultBlockState());
+            f.cleanup.run();
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 1200)

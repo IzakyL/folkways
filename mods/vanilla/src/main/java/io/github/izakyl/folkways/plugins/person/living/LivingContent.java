@@ -79,6 +79,7 @@ public final class LivingContent {
         new Meter(ResourceLocation.fromNamespaceAndPath("folkways", "hud/rest"), 0xFFE8D98C);
 
     public static void declare(Declaring declaring) {
+        DiningTables.installKeepout();
         declaring.colony(ID, scope -> {
             LivingPresence state = new LivingPresence(scope.colony());
             scope.share(state);

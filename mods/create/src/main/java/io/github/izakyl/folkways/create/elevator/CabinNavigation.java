@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.create.elevator;
 
 import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
-import io.github.izakyl.folkways.core.api.terms.ObstructedPathRegion;
 import io.github.izakyl.folkways.core.api.terms.Structures;
 import io.github.izakyl.folkways.plugins.person.walk.ResidentNodeEvaluator;
 import java.util.HashMap;
@@ -67,7 +66,14 @@ final class CabinNavigation {
                 if (!pos.equals(start)) blocks.put(pos.immutable(), Blocks.BARRIER.defaultBlockState());
             }
         }
-        var region = new ObstructedPathRegion(level, start, Structures.region(level, min, max), blocks);
+        Set<BlockPos> deck = new java.util.HashSet<>();
+        if (vehicle.getContraption() instanceof com.simibubi.create.content.contraptions.elevator.ElevatorContraption elevator
+                && elevator.arrived && vehicle.position().distanceToSqr(vehicle.getPrevAnchorVec()) < 1.0D / (1024 * 1024)) {
+            for (BlockPos feet : ElevatorDeck.footings(vehicle)) {
+                deck.add(BlockPos.containing(vehicle.toGlobalVector(Vec3.atBottomCenterOf(feet), 1.0F).add(0, 0.001D, 0)));
+            }
+        }
+        var region = new CabinPathRegion(level, start, Structures.region(level, min, max), blocks, vehicle.getUUID(), deck);
         var evaluator = new ResidentNodeEvaluator(start);
         evaluator.setCanOpenDoors(true);
         evaluator.setCanPassDoors(true);

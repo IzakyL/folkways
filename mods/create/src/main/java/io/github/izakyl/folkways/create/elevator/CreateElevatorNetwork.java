@@ -8,8 +8,8 @@ import com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlockEnti
 import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -95,26 +95,7 @@ public final class CreateElevatorNetwork implements ElevatorNetwork {
 
     // The lowest connected deck is the passenger floor; roof tops are not another passenger deck.
     private Set<BlockPos> cabinFootings(Lift lift) {
-        BlockGetter blocks = lift.contraption().getContraptionWorld();
-        Set<BlockPos> candidates = new HashSet<>();
-        for (BlockPos support : lift.contraption().getBlocks().keySet()) {
-            BlockPos feet = support.above();
-            if (Footing.withFeetAt(blocks, feet)) candidates.add(feet);
-        }
-        if (candidates.isEmpty()) return Set.of();
-        BlockPos first = candidates.stream().min(Comparator.<BlockPos>comparingInt(cell -> cell.getY())
-            .thenComparingInt(BlockPos::getX).thenComparingInt(BlockPos::getZ)).orElseThrow();
-        Set<BlockPos> connected = new HashSet<>();
-        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
-        connected.add(first); queue.add(first);
-        while (!queue.isEmpty()) {
-            BlockPos cell = queue.remove();
-            for (Direction side : Direction.Plane.HORIZONTAL) {
-                BlockPos next = cell.relative(side);
-                if (candidates.contains(next) && connected.add(next)) queue.add(next);
-            }
-        }
-        return Set.copyOf(connected);
+        return ElevatorDeck.footings(lift.vehicle());
     }
 
     private List<BlockPos> standingPlaces(Lift lift, Set<BlockPos> cabin) {

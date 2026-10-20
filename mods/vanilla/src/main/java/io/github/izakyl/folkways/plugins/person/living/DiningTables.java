@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
+import io.github.izakyl.folkways.core.api.terms.Keepouts;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -31,7 +32,16 @@ public final class DiningTables {
     private static final Map<ResourceLocation, Table> TABLES = new LinkedHashMap<>();
     private static final Map<ResourceLocation, Seat> SEATS = new LinkedHashMap<>();
     private static final String SEAT_MARKER = "folkways:dining_seat";
+    private static boolean keepoutInstalled;
     private DiningTables() { }
+
+    /** Furniture remains reachable from beside it, but its top is never a work or walking footing. */
+    static synchronized void installKeepout() {
+        if (keepoutInstalled) { return; }
+        Keepouts.install((level, x, y, z) -> level instanceof ServerLevel server
+            && table(server, new BlockPos(x, y - 1, z)));
+        keepoutInstalled = true;
+    }
 
     public static synchronized void register(ResourceLocation id, Table adapter) {
         if (TABLES.putIfAbsent(id, adapter) != null) { throw new IllegalArgumentException("duplicate dining table: " + id); }

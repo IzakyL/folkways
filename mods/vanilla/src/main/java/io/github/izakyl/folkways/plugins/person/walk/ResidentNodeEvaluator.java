@@ -28,6 +28,7 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
     @Nullable
     private BlockPos start;
     private boolean outOfBounds;
+    private Keepouts.Keepout escapeWalls;
 
     public ResidentNodeEvaluator(@Nullable BlockPos start) {
         this.start = start;
@@ -41,7 +42,9 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
     @Override
     public void prepare(PathNavigationRegion region, Mob mob) {
         super.prepare(region, mob);
-        outOfBounds = Keepouts.forbidden(mob.level(), start != null ? start : mob.blockPosition());
+        BlockPos feet = start != null ? start : mob.blockPosition();
+        outOfBounds = Keepouts.forbidden(mob.level(), region, feet.getX(), feet.getY(), feet.getZ());
+        escapeWalls = outOfBounds ? Keepouts.blockingEscapeFrom(mob.level(), region, feet) : null;
     }
 
     // Off the ground, vanilla starts a path on the floor under the mob, through anything it could walk through: for
@@ -85,7 +88,8 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
                 || context.getBlockState(probePos.set(x, y - 1, z)).is(Blocks.BARRIER)) {
             return PathType.BLOCKED;
         }
-        if (!outOfBounds && mob != null && Keepouts.forbidden(mob.level(), x, y, z)) {
+        if (mob != null && (outOfBounds ? escapeWalls.forbids(mob.level(), x, y, z)
+                : Keepouts.forbidden(mob.level(), context.level(), x, y, z))) {
             return PathType.BLOCKED;
         }
         PathType type = super.getPathType(context, x, y, z);
@@ -156,12 +160,29 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
     public int getNeighbors(Node[] neighbors, Node node) {
         Searches.expanded();
         int count = super.getNeighbors(neighbors, node);
-        if (!inColumn(node)) {
-            return count;
+        if (inColumn(node)) {
+            count = append(neighbors, count, climbNode(node.x, node.y + 1, node.z), node);
+            count = append(neighbors, count, climbNode(node.x, node.y - 1, node.z), node);
         }
-        count = append(neighbors, count, climbNode(node.x, node.y + 1, node.z), node);
-        count = append(neighbors, count, climbNode(node.x, node.y - 1, node.z), node);
+        // A misplaced resident may leave the forbidden area it starts in. Once outside,
+        // its route cannot enter that area again or use another keepout as a shortcut.
+        if (outOfBounds && !forbidden(node)) {
+            int kept = 0;
+            for (int i = 0; i < count; i++) {
+                Node next = neighbors[i];
+                if (forbidden(next)) continue;
+                if (node.x != next.x && node.z != next.z
+                        && (Keepouts.forbidden(mob.level(), currentContext.level(), next.x, node.y, node.z)
+                            || Keepouts.forbidden(mob.level(), currentContext.level(), node.x, node.y, next.z))) continue;
+                neighbors[kept++] = next;
+            }
+            count = kept;
+        }
         return count;
+    }
+
+    private boolean forbidden(Node node) {
+        return Keepouts.forbidden(mob.level(), currentContext.level(), node.x, node.y, node.z);
     }
 
     private int append(Node[] neighbors, int count, @Nullable Node candidate, Node from) {
