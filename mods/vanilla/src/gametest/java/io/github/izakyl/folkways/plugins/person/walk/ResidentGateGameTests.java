@@ -189,24 +189,49 @@ public final class ResidentGateGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void aGateHeldByAResidentThatIsGoneClosesAfterTheNext(GameTestHelper helper) {
+    public static void aGateClosesAsSoonAsItsLastResidentIsRemoved(GameTestHelper helper) {
         BlockPos gate = gateRoom(helper, Direction.EAST);
         Vec3 centre = Vec3.atBottomCenterOf(gate);
         ResidentEntity gone = residentAt(helper, centre.add(-0.9D, 0.0D, 0.0D));
         openGate(helper, gone, gate);
         gone.discard();
+        helper.assertFalse(Doorways.inUse(helper.getLevel(), gate),
+            "the removed resident no longer holds the gate");
+        helper.assertFalse(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
+            "the gate closes without waiting for another resident");
         ResidentEntity next = residentAt(helper, centre.add(-1.2D, 0.0D, 0.0D));
-        walkTo(helper, next, centre.add(2.0D, 0.0D, 0.0D));
-        var goal = new OpenDoorwayGoal(next);
-        helper.assertTrue(goal.canUse(), "the next resident joins the gate left held");
-        goal.start();
+        OpenDoorwayGoal goal = openGate(helper, next, gate);
         next.setPos(centre.add(1.3D, 0.0D, 0.0D));
         goal.tick();
         helper.assertFalse(goal.canContinueToUse(), "the next resident is through");
         goal.stop();
         helper.assertFalse(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
-            "the holder that never let go no longer keeps the gate open");
+            "the next resident can open, pass through and close the gate normally");
         next.discard();
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aRemovedResidentLeavesTheGateOpenForAnotherHolder(GameTestHelper helper) {
+        BlockPos gate = gateRoom(helper, Direction.EAST);
+        Vec3 centre = Vec3.atBottomCenterOf(gate);
+        ResidentEntity opener = residentAt(helper, centre.add(-0.9D, 0.0D, 0.0D));
+        openGate(helper, opener, gate);
+        ResidentEntity other = residentAt(helper, centre.add(-1.2D, 0.0D, 0.0D));
+        walkTo(helper, other, centre.add(2.0D, 0.0D, 0.0D));
+        var otherGoal = new OpenDoorwayGoal(other);
+        helper.assertTrue(otherGoal.canUse(), "the other resident joins the held gate");
+        otherGoal.start();
+        opener.discard();
+        helper.assertTrue(Doorways.inUse(helper.getLevel(), gate),
+            "the remaining resident still holds the gate");
+        helper.assertTrue(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
+            "removing one resident does not close the gate on another holder");
+        other.discard();
+        helper.assertFalse(Doorways.inUse(helper.getLevel(), gate),
+            "removing the last resident releases the gate");
+        helper.assertFalse(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
+            "removing the last resident closes the gate");
         helper.succeed();
     }
 

@@ -1161,7 +1161,9 @@ public final class DomainPage implements Draw {
                     && entry.contains(RAW);
                 row.counts[slot] = counts;
                 press.setDisplay(!counts);
-                press.style(style -> style.tooltips(label));
+                Component tooltip = label.getString().isBlank() ? caption : label;
+                press.style(style -> style.tooltips(tooltip.getString().isBlank()
+                    ? new Component[0] : new Component[] {tooltip}));
 
                 Tokens.name(press, counts ? Tokens.NONE : token(kinds[index][slot], index, slot));
                 if (number != null) {

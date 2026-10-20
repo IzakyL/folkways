@@ -2,6 +2,9 @@ package io.github.izakyl.folkways.front.api.ui;
 
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvent;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEventListener;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -21,13 +24,28 @@ public final class ItemDrops {
     public record Target(UIElement element, Drop drop) {
     }
 
-    private static final Map<UIElement, Drop> DROPS = new WeakHashMap<>();
+    private static final String DROP_OWNER = "folkways:item_drop_owner";
+    private static final Map<UIElement, WeakReference<OwnedDrop>> DROPS = new WeakHashMap<>();
+
+    // The element owns its callback through its listeners; the index must not retain a callback that
+    // captures the element or its containing screen. This private event is only used for ownership.
+    private record OwnedDrop(Drop drop) implements UIEventListener {
+        @Override
+        public void handleEvent(UIEvent event) {
+        }
+    }
 
     private ItemDrops() {
     }
 
     public static void on(UIElement element, Drop drop) {
-        DROPS.put(element, drop);
+        OwnedDrop owned = new OwnedDrop(drop);
+        WeakReference<OwnedDrop> previous = DROPS.put(element, new WeakReference<>(owned));
+        OwnedDrop old = previous == null ? null : previous.get();
+        if (old != null) {
+            element.removeEventListener(DROP_OWNER, old);
+        }
+        element.addEventListener(DROP_OWNER, owned);
     }
 
     // The ones shown on this screen now: displayed, as are all they sit in.
@@ -36,9 +54,10 @@ public final class ItemDrops {
         if (ui == null) {
             return shown;
         }
-        DROPS.forEach((element, drop) -> {
-            if (element.getModularUI() == ui && displayed(element)) {
-                shown.add(new Target(element, drop));
+        DROPS.forEach((element, reference) -> {
+            OwnedDrop owned = reference.get();
+            if (owned != null && element.getModularUI() == ui && displayed(element)) {
+                shown.add(new Target(element, owned.drop()));
             }
         });
         return shown;

@@ -30,6 +30,7 @@ public final class FolkwaysPonderPlugin implements PonderPlugin {
     // Every scene hangs off the colony book, folder after folder, so pondering the book is the whole course.
     @Override
     public void registerScenes(PonderSceneRegistrationHelper<ResourceLocation> helper) {
+        Lessons.clear();
         List<Scenes.Folder> folders = Lessons.folders();
         MultiSceneBuilder book = helper.forComponents(FolkwaysItems.COLONY_BOOK.getId());
         for (Scenes.Folder folder : folders) {

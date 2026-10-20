@@ -42,6 +42,10 @@ public final class Lessons {
         ENTRIES.computeIfAbsent(lesson, key -> new ArrayList<>()).add(entry);
     }
 
+    public static void clear() {
+        ENTRIES.clear();
+    }
+
     public static List<StoryBoardEntry> scenesFor(ResourceLocation lesson) {
         return ENTRIES.getOrDefault(lesson, List.of());
     }
