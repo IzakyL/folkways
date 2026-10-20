@@ -164,10 +164,9 @@ See the [documentation index](docs/README.md) for the layout and maintenance not
 | `npm run bench:take` | Performance benchmarks on a large colony |
 | `npm run promo:take` | Films the promotional takes |
 | `npm run promo:cookery` | Films one 50-second, real-time shot of the downstairs kitchen, Create elevator and upstairs dining room |
-| `npm run promo:cookery:film` | Adds brief Chinese captions and music to that continuous take, producing upload and preview MP4s |
+| `npm run promo:cookery:film` | Copies the complete original recording to `folkways-cookery-raw.mp4` and writes model credits |
 
-The Cookery promo's wording lives in `tests/promo/film/promo-cookery.toml`. Run
-`npm run setup` before filming. The scene and recording are defined by
+Run `npm run setup` before filming. The scene and recording are defined by
 `tests/promo/cookery.take.ts` and `tests/promo/cookery-elevator.ts`: a native kitchen
 downstairs, an open dining room upstairs, and a native Create elevator as their only
 vertical route. Residents walk into the cabin, stand on its moving floor, and walk
@@ -193,20 +192,27 @@ asking for an estimate does not call the elevator or reserve a place.
 
 The continuous, 50-second real-time take is saved as
 `tests/out/promo/takes/cookery/01-kitchen-dining.mp4`, alongside production and elevator
-journey evidence. The finished `folkways-cookery-elevator-upload.mp4` and
-`folkways-cookery-elevator-preview.mp4` are in `tests/out/promo/film/`.
+journey evidence. `npm run promo:cookery:film` copies that file byte for byte to
+`tests/out/promo/film/folkways-cookery-raw.mp4`. The final recording keeps the source's
+1080p60 video, original audio, complete duration and metadata. Export performs no
+trimming, transcoding, captions, music mixing, gradients or fades.
 The script stages the set, residents and dining food: the upstairs tables are supplied
-with Dongpo pork (`dongpo_pork`), while a real stock target maintains 24 plates of
-steamed buns (`baozi_plate`) through the planner, real recipes and native downstairs
-kitchen appliances. Kitchen work and table replenishment are warmed up before
+with Dongpo pork (`dongpo_pork`), while stock targets maintain 24 plates of steamed
+buns (`baozi_plate`), 12 pepper-pork stir-fries and eight bowls of pork-bone soup through
+the planner, real recipes and six working appliances in the compact downstairs kitchen.
+The pantry supplies ingredients, oil, bowls and pot lids. Chairs face the camera from
+behind the dining tables, and the closer elevated camera exposes the food and work
+surfaces. A ninth resident, admitted after rehearsal, performs real harvesting,
+replanting and storage work in two courtyard fields, staged by
+`tests/promo/cookery-work.ts`. Kitchen work and table replenishment are warmed up before
 recording. Ordinary colony errands determine the elevator calls and journeys.
 The film observes the kitchen, elevator and dining room together in one uninterrupted
 shot at normal speed; it does not demonstrate a complete raw-ingredient chain.
 The set uses pale plaster, dark timber frames and weathered copper roofs around a
 landscaped inn courtyard. The former standalone elevator promo is replaced by this
 combined take. Wine Fox cast models retain their source and author metadata in
-`folkways-cookery-elevator-credits.txt` beside the exports. Brief opening captions
-leave the dining area clear.
+`folkways-cookery-elevator-credits.txt` beside the raw export. Credits are a separate
+text file and are not overlaid on the recording.
 
 The game suites download Minecraft, NeoForge and the fixture mods on first run, and their
 test servers accept the [Minecraft EULA](https://www.minecraft.net/eula) through

@@ -15,25 +15,25 @@ export async function buildCookeryElevator(
   const at = (x: number, y: number, z: number): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
   const deck = at(-2, -1, -6);
   const cabin = (x: number, y: number, z: number): Vec => ({ x: deck.x + x, y: deck.y + y, z: deck.z + z });
-  const pulley = cabin(2, 15, 2);
+  const pulley = cabin(2, 13, 2);
   const contacts = [0, RISE].map(rise => cabin(5, 3 + rise, 2));
   // A permanent timber tower surrounds the moving cabin. Leave both west landings open;
   // all framing is outside the glued five-by-five column or above the cabin's highest roof.
   const fixed = async (x: number, y: number, z: number, xx: number, yy: number, zz: number, block: string) =>
     world.command(server, `fill ${commandPos(at(x, y, z))} ${commandPos(at(xx, yy, zz))} ${block}`);
   for (const x of [-3, 3]) for (const z of [-1]) {
-    await fixed(x, -1, z, x, 14, z, "minecraft:stripped_spruce_log[axis=y]");
+    await fixed(x, -1, z, x, 12, z, "minecraft:stripped_spruce_log[axis=y]");
     await fixed(x, -1, z, x, 0, z, "minecraft:cut_sandstone");
   }
-  for (const y of [5, 11]) {
+  for (const y of [5, 9]) {
     await fixed(-3, y, -1, 3, y, -1, "minecraft:stripped_spruce_log[axis=x]");
   }
   // Machinery cabinet: the pulley and rope stay exposed in the centre bay.
-  await fixed(-2, 13, -5, -1, 13, -3, "minecraft:dark_oak_planks");
-  await fixed(-2, 14, -5, -2, 14, -3, "minecraft:dark_oak_planks");
-  for (const z of [-5, -3]) await fixed(-1, 14, z, -1, 14, z, "minecraft:dark_oak_planks");
-  await fixed(-3, 15, -7, 3, 15, -1, "minecraft:weathered_cut_copper");
-  await fixed(-2, 16, -6, 2, 16, -2, "minecraft:weathered_cut_copper_slab[type=bottom]");
+  await fixed(-2, 11, -5, -1, 11, -3, "minecraft:dark_oak_planks");
+  await fixed(-2, 12, -5, -2, 12, -3, "minecraft:dark_oak_planks");
+  for (const z of [-5, -3]) await fixed(-1, 12, z, -1, 12, z, "minecraft:dark_oak_planks");
+  await fixed(-3, 13, -7, 3, 13, -1, "minecraft:weathered_cut_copper");
+  await fixed(-2, 14, -6, 2, 14, -2, "minecraft:weathered_cut_copper_slab[type=bottom]");
   const commands = [
     `fill ${commandPos(cabin(0, 0, 0))} ${commandPos(cabin(4, 0, 4))} minecraft:spruce_planks`,
     // Copper covers the rear and side frame. The front-centre, including the standing cabin floor, stays open to the camera.
@@ -45,7 +45,7 @@ export async function buildCookeryElevator(
     `setblock ${commandPos(cabin(4, 2, 2))} minecraft:stripped_spruce_log[axis=y]`,
     `setblock ${commandPos(cabin(4, 3, 2))} create:redstone_contact[facing=east]`,
     `setblock ${commandPos(pulley)} create:elevator_pulley[facing=north]`,
-    `setblock ${commandPos(cabin(1, 15, 2))} create:creative_motor[facing=east]`,
+    `setblock ${commandPos(cabin(1, 13, 2))} create:creative_motor[facing=east]`,
   ];
   for (const x of [0, 4]) for (const z of [0, 4]) {
     commands.push(`fill ${commandPos(cabin(x, 1, z))} ${commandPos(cabin(x, 3, z))} minecraft:stripped_spruce_log[axis=y]`);
@@ -74,9 +74,9 @@ export async function buildCookeryElevator(
     throw new Error(`Cookery elevator did not expose two powered, delegated landings and usable standing places: ${JSON.stringify(state)}`);
   }
   return {
-    deck, pulley, motor: cabin(1, 15, 2), contacts, rise: RISE,
+    deck, pulley, motor: cabin(1, 13, 2), contacts, rise: RISE,
     feetHeights: [origin.y, origin.y + RISE],
-    shaft: { min: deck, max: cabin(4, 14, 4) },
+    shaft: { min: deck, max: cabin(4, 12, 4) },
     glue, power, assembly, delegated, state,
   };
 }
@@ -95,7 +95,7 @@ const ASSEMBLE = defineTask<Record<string, any>, Record<string, any>>({
 var args=Args.of(ctx);var o=args.requireObject("origin").raw();var level=ctx.server().overworld();
 var deck=new BlockPos(((Number)o.get("x")).intValue()-2,((Number)o.get("y")).intValue()-1,((Number)o.get("z")).intValue()-6);
 if(args.flag("click",false)){
- if(!(level.getBlockEntity(deck.offset(2,15,2)) instanceof ElevatorPulleyBlockEntity pulley))throw new IllegalStateException("Cookery elevator pulley is missing");
+ if(!(level.getBlockEntity(deck.offset(2,13,2)) instanceof ElevatorPulleyBlockEntity pulley))throw new IllegalStateException("Cookery elevator pulley is missing");
  pulley.clicked();
  return Sync.stamp(Map.of("clicked",true,"speed",pulley.getSpeed(),"assemblyError",String.valueOf(pulley.getLastAssemblyException())));
 }
@@ -111,7 +111,7 @@ const POWER = defineTask<Record<string, any>, Record<string, any>>({
       "com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlockEntity", "net.minecraft.core.BlockPos"],
     body: `
 var o=Args.of(ctx).requireObject("origin").raw();var level=ctx.server().overworld();
-var pulleyPos=new BlockPos(((Number)o.get("x")).intValue(),((Number)o.get("y")).intValue()+14,((Number)o.get("z")).intValue()-4);
+var pulleyPos=new BlockPos(((Number)o.get("x")).intValue(),((Number)o.get("y")).intValue()+12,((Number)o.get("z")).intValue()-4);
 if(!(level.getBlockEntity(pulleyPos.west()) instanceof CreativeMotorBlockEntity motor)||motor.generatedSpeed==null)
  throw new IllegalStateException("Cookery elevator motor has not initialized");
 motor.generatedSpeed.setValue(64);
@@ -133,7 +133,7 @@ const STATUS = defineTask<Record<string, any>, Record<string, any>>({
       "com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlockEntity", "net.minecraft.core.BlockPos"],
     body: `
 var args=Args.of(ctx);var o=args.requireObject("origin").raw();var level=ctx.server().overworld();
-var pos=new BlockPos(((Number)o.get("x")).intValue(),((Number)o.get("y")).intValue()+14,((Number)o.get("z")).intValue()-4);
+var pos=new BlockPos(((Number)o.get("x")).intValue(),((Number)o.get("y")).intValue()+12,((Number)o.get("z")).intValue()-4);
 var ref=new ElevatorRef(level.dimension(),pos);var network=new CreateElevatorNetwork();var found=network.inspect(ctx.server(),ref);
 var out=new LinkedHashMap<String,Object>();out.put("pulley",point(pos));out.put("frozen",level.tickRateManager().isFrozen());
 if(level.getBlockEntity(pos) instanceof ElevatorPulleyBlockEntity pulley){

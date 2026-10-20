@@ -2,9 +2,11 @@ import { expect, test } from "@playwright/test";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { defineTask, javaTask, player, screen, tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { ADMIT_SETTLERS, runColonyTask } from "../shared/colony/colony-tasks";
 import { commandPos, frames } from "../shared/harness/bw-helpers";
 import { shaderEvidence } from "../shared/capture/shaders";
 import { admitPromoSettlersFast, foundPromoColonyFast, licenseCrewFast, setMaintainDemandsFast } from "./fast-setup";
+import { stageCookerySideWork, readCookerySideWork } from "./cookery-work";
 import { dressCookeryGarden } from "./cookery-set";
 import { prepareCookeryModels, WINE_FOX_MODELS, applyCookeryLooks } from "./cookery-cast";
 import { buildCookeryElevator, readCookeryElevator } from "./cookery-elevator";
@@ -13,8 +15,8 @@ import { cinematicWorld, hideHud, launchPromoPair, promoClip, setFov, setTickRat
 const K = "kaleidoscope_cookery:";
 const DISH = K + "baozi_plate";
 const DINNER = K + "dongpo_pork";
-const RAW = ["minecraft:wheat", "minecraft:porkchop", K + "green_chili", "minecraft:water_bucket",
-  "minecraft:oak_planks", "minecraft:iron_ingot", "minecraft:brick"];
+const PANTRY_SUPPLIES = ["minecraft:wheat", "minecraft:porkchop", K + "green_chili", "minecraft:water_bucket",
+  "minecraft:oak_planks", "minecraft:iron_ingot", "minecraft:brick", "minecraft:bone", "minecraft:bowl", K + "oil", K + "stockpot_lid"];
 const KITCHEN_WORK = new Set(["preparing_food", "chopping_food", "cooking_food", "serving_food", "crafting"]);
 const SECONDS = 50;
 
@@ -35,9 +37,10 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     const o = { x: Math.round(grounded.pos.x), y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) };
     const at = (x: number, z: number, y = 0): Vec => ({ x: o.x + x, y: o.y + y, z: o.z + z });
     const cells = {
-      food: at(-16, -3), source: at(-16, -1), store: at(-16, 1), dinner: at(-16, 3), target: at(-5, -4),
-      table: at(-12, 0), board: at(-9, 0, 1), stockpot: at(-6, 1, 1), pot: at(-6, 3, 1),
-      steamer: at(-6, 5, 1), mill: at(-12, 4),
+      food: at(-17, -4), source: at(-17, -2), store: at(-17, 0), dinner: at(-17, 2), target: at(-4, -5),
+      table: at(-14, -2), board: at(-10, 0, 1), stockpot: at(-12, -4, 1), pot: at(-9, -4, 1),
+      steamer: at(-6, -4, 1), mill: at(-14, 1),
+      stockpotSecond: at(-11, -4, 1), potSecond: at(-8, -4, 1), steamerSecond: at(-5, -4, 1),
     };
     const set = async (p: Vec, block: string) => world.command(server, `setblock ${commandPos(p)} ${block}`);
     const scenery = await dressCookeryGarden(server, o);
@@ -48,12 +51,12 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     // The dining spread is set dressing. The kitchen's separate baozi order still uses raw inputs and native work.
     for (let slot = 0; slot < 8; slot++) await world.command(server,
       `item replace block ${commandPos(cells.dinner)} container.${slot} with ${DINNER} 8`);
-    await set(cells.source, `folkways:creative_supply_box{all:0b,whitelist:${JSON.stringify(RAW.map(id => "i" + id))}}`);
+    await set(cells.source, `folkways:creative_supply_box{all:0b,whitelist:${JSON.stringify(PANTRY_SUPPLIES.map(id => "i" + id))}}`);
     await set(cells.table, "minecraft:crafting_table");
     await set(cells.board, K + "chopping_board");
-    for (const key of ["stockpot", "pot", "steamer"] as const) {
-      await set({ ...cells[key], y: cells[key].y - 1 }, K + "stove[facing=west,lit=true]");
-      await set(cells[key], K + key);
+    for (const key of ["stockpot", "pot", "steamer", "stockpotSecond", "potSecond", "steamerSecond"] as const) {
+      await set({ ...cells[key], y: cells[key].y - 1 }, K + "stove[facing=north,lit=true]");
+      await set(cells[key], K + key.replace("Second", ""));
     }
     await set(cells.mill, K + "millstone[part=center]");
     for (const [dx, dz, part] of [[-1,-1,"left_up"],[0,-1,"up"],[1,-1,"right_up"],[-1,0,"left_center"],
@@ -72,7 +75,8 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     run.note("looks", await applyCookeryLooks(server, client, residents.map(one => one.uuid)));
     const cooks = residents.slice(0, 3).map(one => one.uuid);
     const diners = residents.slice(3, 6).map(one => one.uuid);
-    const porters = residents.slice(6).map(one => one.uuid);
+    const porters = residents.slice(6, 8).map(one => one.uuid);
+    const farmers: string[] = [];
     run.note("cast", { cooks, diners, porters, licences: await licenseCrewFast(server,
       residents.map((one, i) => ({ uuid: one.uuid, trades: i < 3 ? ["crafting", "hauling"] : ["hauling"] }))) });
     run.note("dining", await server.run(STAGE_DINING, {
@@ -80,17 +84,19 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     }));
     for (const [i, resident] of residents.entries()) {
       await world.command(server, `data merge entity ${resident.uuid} {Invulnerable:1b}`);
-      const post = i < 3 ? at(-13 + i * 3, -3) : at(-6 + (i - 3) * 1.5, -8);
+      const post = i < 3 ? at(-13 + i * 3, -2) : at(-6 + (i - 3) * 1.5, -8);
       await world.command(server, `tp ${resident.uuid} ${post.x + 0.5} ${post.y} ${post.z + 0.5}`);
     }
     run.note("orders", await setMaintainDemandsFast(server, name, [
       { at: cells.target, item: DISH, count: 24, low: 12 },
+      { at: cells.target, item: K + "stir_fried_pork_with_peppers", count: 12, low: 6 },
+      { at: cells.target, item: K + "pork_bone_soup", count: 8, low: 4 },
     ]));
     await world.command(server, `item replace entity ${name} weapon.mainhand with minecraft:air`);
     await world.command(server, `gamemode spectator ${name}`);
-    await setFov(client, 45);
-    const feet = at(5, -35, 7);
-    const aim = at(-7, 1, 5);
+    await setFov(client, 50);
+    const feet = at(0, -27, 11);
+    const aim = at(-5, -2, 4.5);
     const look = cameraLookingAt({ x: feet.x + 0.5, y: feet.y + 1.62, z: feet.z + 0.5 },
       { x: aim.x + 0.5, y: aim.y + 0.5, z: aim.z + 0.5 });
     await world.command(server, `tp ${name} ${feet.x + 0.5} ${feet.y} ${feet.z + 0.5} ${look.yaw} ${look.pitch}`);
@@ -137,13 +143,24 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
       }
     } finally { await tick.freeze(server, true); run.note("boarding", boarding); }
     expect(seated, "a diner must walk aboard the standing elevator, reach the upstairs restaurant and start eating before the take").toBe(true);
+    // Admit the farmer only after rehearsal, so every admitted resident remains free to use the lift.
+    run.note("farmerAdmission", await runColonyTask(server, ADMIT_SETTLERS, { player: name, colony_id: founded.colony_id, count: 1 }));
+    const known = new Set(residents.map(one => one.uuid));
+    const newcomers = (await world.entities(server, { types: ["folkways:resident"], limit: 20 })).entities
+      .filter(one => !known.has(one.uuid));
+    expect(newcomers).toHaveLength(1);
+    residents.push(...newcomers);
+    farmers.push(...newcomers.map(one => one.uuid));
+    run.note("sideWork", await stageCookerySideWork(server, name, founded.colony_id, o, farmers));
+    await world.command(server, `data merge entity ${farmers[0]} {Invulnerable:1b}`);
+    run.note("looks", await applyCookeryLooks(server, client, residents.map(one => one.uuid)));
     await run.shot(client, "composition", { subject: "Ground-floor kitchen, upstairs restaurant and the real elevator share one stationary frame",
       worldState: { cells, dining: scenery.dining, cooks, diners }, hard: true });
     const evidence: any[] = [];
     await promoClip(run, client, server, "01-kitchen-dining", {
       subject: "One continuous view of the working kitchen, upstairs diners and residents standing in the moving elevator",
       worldState: { cells, dining: scenery.dining, cooks, diners, stagedTableFood: DINNER,
-        kitchenOrder: DISH, kitchenRawSupply: RAW }, seconds: SECONDS,
+        kitchenOrder: DISH, kitchenSupplies: PANTRY_SUPPLIES }, seconds: SECONDS,
       during: async () => {
         const started = Date.now();
         let appetiteAt = 3;
@@ -154,12 +171,15 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
             appetiteAt += 3;
           }
           evidence.push({ seconds, ...await sample(server, founded.colony_id,
-            residents.map(one => one.uuid), scenery.dining.tables, o) });
+            residents.map(one => one.uuid), scenery.dining.tables, o),
+            sideWork: await readCookerySideWork(server, founded.colony_id, o, farmers) });
           await sleepMs(1000);
         }
       },
     });
     run.note("activity", evidence);
+    run.note("farmProgress", evidence.at(-1)?.sideWork);
+    expect(evidence.at(-1)?.sideWork.mature, "the filmed farmer actually harvests the staged field").toBeLessThan(48);
     const simultaneous = evidence.filter(state => state.people.some((one: any) => diners.includes(one.uuid) && one.dining && one.seatedAtTable)
       && state.people.some((one: any) => cooks.includes(one.uuid) && KITCHEN_WORK.has(one.doing)));
     run.note("simultaneous", { samples: simultaneous.length, total: evidence.length });
