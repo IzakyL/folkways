@@ -70,7 +70,16 @@ public final class Scheduler {
             return new Scheduled(Map.of(), List.of(), false, Long.MAX_VALUE, Map.of(),
                 new Timing(applied - started, 0), tick);
         }
-        Schedule schedule = tours.schedule(weave, fresh, crew, ways, tick, retry);
+        Schedule schedule;
+        try {
+            schedule = tours.schedule(weave, fresh, crew, ways, tick, retry);
+        } catch (RuntimeException | Error broken) {
+            // Inputs are now part of the weave. Only the route projection is suspect: rebuilding it must not
+            // replay messages, regrow material demands, or discard the last routes handed to the colony.
+            // A new Tours reads every vertex, including its pins and the crew's work already in hand.
+            tours = new Tours();
+            throw broken;
+        }
         tellStructural(schedule);
         Map<UUID, Tour> changed = new LinkedHashMap<>();
         schedule.tours().forEach((resident, tour) -> {
