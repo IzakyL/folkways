@@ -80,6 +80,11 @@ use, for example:
 npm run test:e2e -- tests/e2e/founding-smoke.spec.ts --workers=1
 ```
 
+CI runs the base and Cookery GameTestServer profiles as separate required checks before publishing the nightly release.
+Each check has a 50-minute process timeout and uploads its console log, game logs, crash reports, and a JUnit suite-level
+result under `run/gametest/ci/` even when it fails. The JUnit case records whether that GameTestServer invocation passed;
+the detailed individual GameTest outcomes remain in the uploaded server logs.
+
 Each suite is a directory under `tests/` (`e2e`, `sable`, `visual`, `ponder`, `pattern`, `bench`, `promo`) with
 its own `playwright.config.ts` and `tsconfig.json`. Code more than one suite uses lives in
 `tests/shared/`; a suite imports from there and from `tests/ldlib2/`, never from another
