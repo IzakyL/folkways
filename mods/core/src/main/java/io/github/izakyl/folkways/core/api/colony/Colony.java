@@ -39,6 +39,11 @@ public interface Colony {
         return Optional.empty();
     }
 
+    // Effective rules at a store, including the permissions checked again when a transfer executes.
+    default List<StoreRule> storeRules(WorldPos at) {
+        return List.of();
+    }
+
     // Current unspent input obligations; these must be reconciled with actual goods, never counted as stock.
     default List<io.github.izakyl.folkways.core.api.work.ReservedInput> reservedInputs(ServerLevel level) {
         return List.of();

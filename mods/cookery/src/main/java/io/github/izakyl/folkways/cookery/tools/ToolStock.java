@@ -8,7 +8,6 @@ import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.StoreRule;
-import io.github.izakyl.folkways.core.engine.plan.Stores;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
@@ -212,11 +211,11 @@ final class ToolStock {
     }
 
     boolean takes(WorldPos at) {
-        return StoreRule.takes(Stores.rulesAt(at));
+        return StoreRule.takes(colony.storeRules(at));
     }
 
     boolean stores(WorldPos at) {
-        return StoreRule.stores(Stores.rulesAt(at));
+        return StoreRule.stores(colony.storeRules(at));
     }
 
     static long roomCount(Container into, ItemStack stack) {

@@ -340,6 +340,11 @@ public final class ColonyWorks extends Stretch implements Colony {
     }
 
     @Override
+    public List<StoreRule> storeRules(WorldPos at) {
+        return Stores.rulesAt(at);
+    }
+
+    @Override
     public List<io.github.izakyl.folkways.core.api.work.ReservedInput> reservedInputs(ServerLevel level) {
         return io.github.izakyl.folkways.core.engine.labor.Labor.reservedInputs(id(), level.dimension());
     }
