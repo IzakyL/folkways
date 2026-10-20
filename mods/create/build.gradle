@@ -18,6 +18,5 @@ dependencies {
         transitive = false
     }
 
-    gametestImplementation project(":core").sourceSets.gametest.output
-    gametestImplementation project(":vanilla").sourceSets.gametest.output
+    gametestImplementation project(":core").sourceSets.gameTestFixtures.output
 }

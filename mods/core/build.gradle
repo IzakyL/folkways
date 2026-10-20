@@ -8,7 +8,26 @@ ext.modId = "folkways_core"
 ext.modName = "folkways-core"
 apply from: rootProject.file("gradle/mod.gradle")
 
+// Shared helpers stay in the core module to retain access to package-private planning internals.
+// They contain no test registration, so consumers never load the core test suite to reuse them.
+sourceSets {
+    gameTestFixtures
+}
+
+neoForge {
+    addModdingDependenciesTo sourceSets.gameTestFixtures
+}
+
+configurations {
+    gameTestFixturesCompileOnly.extendsFrom compileOnly
+    gameTestFixturesImplementation.extendsFrom implementation
+    gameTestFixturesRuntimeOnly.extendsFrom runtimeOnly
+}
+
 dependencies {
+    gameTestFixturesImplementation sourceSets.main.output
+    gameTestFixturesImplementation project(":vanilla")
+    gametestImplementation sourceSets.gameTestFixtures.output
     compileOnly lib("emi")
     compileOnly lib("jei")
     compileOnly lib("shouldersurfing")
@@ -35,9 +54,8 @@ dependencies {
     }
     api("com.lowdragmc.ldlib2:ldlib2-neoforge-${project.minecraft_version}:${project.ldlib_version}:all")
 
-    // The core's game tests stand residents up as the plugins' people, and one checks Create's extensions.
+    // Engine integration tests use Vanilla's residents without loading Vanilla's test suite.
     gametestImplementation project(":vanilla")
-    gametestCompileOnly project(":create")
 }
 
 def apiJar = tasks.register("apiJar", Jar) {

@@ -50,7 +50,7 @@ of its own.
 | `mods/modulargolems/.../modulargolems` | Golems as residents |
 | `mods/cookery/.../cookery` | Cookery appliances, farming adapters, tools and lessons |
 | `mods/vanilla/src/main/resources/data/folkways/folkways/pattern` | Built-in building patterns (Starlark) |
-| `mods/*/src/gametest` | NeoForge game tests, run together by the root's `runGameTestServer` |
+| `mods/*/src/gametest` | Mod-owned NeoForge game tests, selected by the root's `runGameTestServer` |
 | `tests/` | Blockwright and Playwright suites, listed below |
 
 ## Tests
@@ -62,7 +62,10 @@ of its own.
 | `npm run typecheck` | Type checks every TypeScript suite |
 | `./gradlew check` | Compiles everything and lints for tabs and trailing whitespace |
 | `./gradlew runGameTestServer` | NeoForge game tests in every `mods/*/src/gametest`, with the base mods but not Modular Golems or Cookery loaded |
-| `./gradlew -PcookeryTests=true runGameTestServer` | Also loads Cookery and runs its native recipe and lifecycle fixtures |
+| `./gradlew -PcookeryTests=true runGameTestServer` | Also loads Cookery and runs its native recipe and lifecycle tests |
+| `./gradlew -PgameTestMod=core runGameTestServer` | Only Core-owned tests in the base environment; also accepts `vanilla` or `create` |
+| `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer` | Core-owned tests with Cookery installed, including `core/src/cookeryTest`; also accepts `vanilla` |
+| `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer` | Only Cookery-owned tests, with Cookery installed |
 | `npm run test:e2e` | End-to-end tests against a real client and server, on the ground |
 | `npm run test:sable` | The same against a [Sable](https://modrinth.com/mod/sable) ship: each twin spec's aboard test, and the ship-only specs |
 | `npm run visual:take` | Screenshots of screens, panels, looks and in-world visuals |
@@ -80,10 +83,30 @@ use, for example:
 npm run test:e2e -- tests/e2e/founding-smoke.spec.ts --workers=1
 ```
 
-CI runs the base and Cookery GameTestServer profiles as separate required checks before publishing the nightly release.
-Each check has a 50-minute process timeout and uploads its console log, game logs, crash reports, and a JUnit suite-level
-result under `run/gametest/ci/` even when it fails. The JUnit case records whether that GameTestServer invocation passed;
-the detailed individual GameTest outcomes remain in the uploaded server logs.
+GameTest ownership is separate from the installed mods: selecting `-PgameTestMod=core`
+runs only Core's tests, but still loads the Vanilla residents and other integrations needed
+by those scenarios. Shared helpers live in Core's `src/gameTestFixtures` source set, so a mod can reuse
+a helper without discovering another mod's tests. Keep tests in the mod that owns the
+behavior, including tests that need package-private internals; use fixtures for shared setup.
+
+CI has one GameTest check per tested mod: Core, Vanilla, Create and Cookery. Core and Vanilla
+each run twice, with Cookery absent and present, preserving optional-integration coverage;
+Create runs in the base environment and Cookery runs with Cookery installed. Core also retains
+the existing LDLib2 dependency tests; the other mod checks do not repeat them. Both environments
+are attempted even if the first fails, and either failure fails that mod's check. Modular
+Golems has no GameTests yet, so it does not get an empty check. The nightly release requires
+all four checks and the real-client smoke check to pass.
+
+Each server invocation has a 50-minute process timeout; a mod's CI job has a 110-minute
+limit to allow both environments. Selected runs use `run/gametest/<mod>/<base|cookery>/`
+for their isolated game directories. Without `gameTestMod`, the combined run still uses
+`run/gametest/`. For a direct Gradle run, accept the Minecraft EULA in the selected game
+directory's `eula.txt` before starting the server.
+
+CI uploads console logs, game logs, crash reports, and a JUnit suite-level result even when
+tests fail. Console logs and JUnit files are written immediately after each invocation under
+`run/gametest/ci/<mod>-<profile>.*`. The JUnit case records whether that GameTestServer
+invocation passed; detailed individual GameTest outcomes remain in the uploaded server logs.
 
 Each suite is a directory under `tests/` (`e2e`, `sable`, `visual`, `ponder`, `pattern`, `bench`, `promo`) with
 its own `playwright.config.ts` and `tsconfig.json`. Code more than one suite uses lives in
@@ -144,6 +167,7 @@ and all thirteen lessons. `creative-supplies.spec.ts` also runs without Cookery.
 
 Cookery game tests live in `mods/cookery/src/gametest`. The core and vanilla tests that
 need their own package internals live in `mods/{core,vanilla}/src/cookeryTest` and join
-the same run only with `-PcookeryTests=true`. The native audit covers all 612 pinned
-recipe resources and writes `run/gametest/cookery-recipe-audit.json`. Generate its graph
-with `node tests/shared/cookery/recipe-graph.mjs run/gametest/cookery-recipe-audit.json tests/out/cookery-recipe-graph.json`.
+their owning mod's run only with `-PcookeryTests=true`. The native audit covers all 612
+pinned recipe resources and writes `cookery-recipe-audit.json` in the game directory
+(`run/gametest/cookery/cookery/` for the selected Cookery run). Generate its graph with
+`node tests/shared/cookery/recipe-graph.mjs run/gametest/cookery/cookery/cookery-recipe-audit.json tests/out/cookery-recipe-graph.json`.

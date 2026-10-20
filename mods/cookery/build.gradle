@@ -16,6 +16,5 @@ dependencies {
     compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
         transitive = false
     }
-    gametestImplementation project(":core").sourceSets.gametest.output
-    gametestImplementation project(":vanilla").sourceSets.gametest.output
+    gametestImplementation project(":core").sourceSets.gameTestFixtures.output
 }

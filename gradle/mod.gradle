@@ -51,8 +51,7 @@ ext.lib = { String name ->
     files(paths.collect { rootProject.file(it) })
 }
 
-// The game tests of every mod run together (the root's gameTestServer), so a mod's tests may lean on the mods
-// above it and on the core's fixtures.
+// Optional integration tests reuse their own mod's tests; cross-mod helpers have a separate fixtures output.
 dependencies {
     gametestImplementation sourceSets.main.output
     cookeryTestImplementation sourceSets.main.output
