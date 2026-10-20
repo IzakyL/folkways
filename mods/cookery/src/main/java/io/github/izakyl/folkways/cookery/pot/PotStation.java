@@ -7,6 +7,11 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.Reach;
+import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Mob;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Intent;
@@ -48,6 +53,27 @@ public final class PotStation implements KitchenStation {
     }
 
     public boolean matches(BlockState state) { return state.is(ModBlocks.POT.get()); }
+
+    @Override
+    public Optional<Stances> stances(ServerLevel level, WorldPos at) {
+        if (!at.in(level)) return Optional.empty();
+        BlockPos target = at.block(level);
+        if (!level.isLoaded(target) || !matches(level.getBlockState(target))) return Optional.empty();
+        // The native north-facing model's handle extends to z=-5; blockstate rotations
+        // rotate it with FACING. Only the immediately adjacent handle column is usable.
+        BlockPos side = target.relative(level.getBlockState(target).getValue(PotBlock.FACING));
+        return Stances.of(List.of(side.below(), side).stream()
+            .filter(cell -> level.isLoaded(cell) && Footing.withFeetAt(level, cell))
+            .map(cell -> at.at(at.cell().offset(cell.subtract(target)))).toList());
+    }
+
+    static Optional<BlockPos> operatingFeet(ServerLevel level, WorldPos at, Mob body) {
+        if (body.level() != level) return Optional.empty();
+        // Use the same arrival tolerance as OnFoot and BodyRunner, while recalculating the
+        // single current handle stance on every interaction (including after a rotation).
+        return new PotStation().stances(level, at).flatMap(allowed -> Reach.stanceHolding(body, allowed))
+            .flatMap(feet -> WorldSpaces.storage(level, at.at(feet)));
+    }
 
     static Optional<PotBlockEntity> pot(ServerLevel level, WorldPos at) {
         return at.in(level) && level.isLoaded(at.block(level)) && level.getBlockEntity(at.block(level)) instanceof PotBlockEntity pot

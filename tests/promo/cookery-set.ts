@@ -49,16 +49,29 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
 
   const groundEntry = at(-3, -4);
   const dining = {
-    tables: [-15, -11, -7].map(x => at(x, -3, 6)),
-    chairs: [-15, -11, -7].map(x => at(x, -2, 6)),
+    tables: [] as Vec[],
+    chairs: [] as Vec[],
     cells: [] as Vec[],
     entry: at(-3, -4, 6),
   };
-  for (const x of [-15, -11, -7]) {
-    await set(x, -3, 6, K + "table_spruce");
-    await set(x, -2, 6, K + "chair_spruce[facing=north]");
+  // One joined banquet table, with fourteen inward-facing chairs and a clear aisle all around.
+  for (let x = -15; x <= -7; x++) for (const z of [-3, -2]) {
+    await set(x, z, 6, K + "table_spruce");
+    dining.tables.push(at(x, z, 6));
   }
-  for (let x = -16; x <= -5; x++) for (let z = -5; z <= 1; z++) {
+  const chair = async (x: number, z: number, facing: string) => {
+    await set(x, z, 6, K + `chair_spruce[facing=${facing}]`);
+    dining.chairs.push(at(x, z, 6));
+  };
+  for (const x of [-15, -13, -11, -9, -7]) {
+    await chair(x, -4, "south");
+    await chair(x, -1, "north");
+  }
+  for (const z of [-3, -2]) {
+    await chair(-16, z, "east");
+    await chair(-6, z, "west");
+  }
+  for (let x = -17; x <= -5; x++) for (let z = -5; z <= 1; z++) {
     dining.cells.push(at(x, z, 5), at(x, z, 6));
   }
   for (const x of [-16, -10, -5]) await set(x, 2, 6, "minecraft:potted_fern");

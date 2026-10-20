@@ -37,7 +37,8 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     const o = { x: Math.round(grounded.pos.x), y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) };
     const at = (x: number, z: number, y = 0): Vec => ({ x: o.x + x, y: o.y + y, z: o.z + z });
     const cells = {
-      food: at(-17, -4), source: at(-17, -2), store: at(-17, 0), dinner: at(-17, 2), target: at(-4, -5),
+      // Keep the lift's west approach level and clear of the chest's climbable collision box.
+      food: at(-17, -4), source: at(-17, -2), store: at(-17, 0), dinner: at(-17, 2), target: at(-4, 1),
       table: at(-14, -2), board: at(-10, 0, 1), stockpot: at(-12, -4, 1), pot: at(-9, -4, 1),
       steamer: at(-6, -4, 1), mill: at(-14, 1),
       stockpotSecond: at(-11, -4, 1), potSecond: at(-8, -4, 1), steamerSecond: at(-5, -4, 1),
@@ -56,7 +57,9 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     await set(cells.board, K + "chopping_board");
     for (const key of ["stockpot", "pot", "steamer", "stockpotSecond", "potSecond", "steamerSecond"] as const) {
       await set({ ...cells[key], y: cells[key].y - 1 }, K + "stove[facing=north,lit=true]");
-      await set(cells[key], K + key.replace("Second", ""));
+      const appliance = key.replace("Second", "");
+      // The skillet's north handle opens directly onto the one-cell front operator aisle.
+      await set(cells[key], K + appliance + (appliance === "pot" ? "[facing=north]" : ""));
     }
     await set(cells.mill, K + "millstone[part=center]");
     for (const [dx, dz, part] of [[-1,-1,"left_up"],[0,-1,"up"],[1,-1,"right_up"],[-1,0,"left_center"],

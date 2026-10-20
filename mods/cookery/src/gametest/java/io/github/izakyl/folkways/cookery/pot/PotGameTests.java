@@ -2,6 +2,13 @@ package io.github.izakyl.folkways.cookery.pot;
 
 import io.github.izakyl.folkways.effect.Effects;
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IPot;
+import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.PotBlock;
+import net.minecraft.core.Direction;
+import io.github.izakyl.folkways.core.api.terms.Reach;
+import io.github.izakyl.folkways.core.api.terms.Realm;
+import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.Entity;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.container.SimpleInput;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.PotRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
@@ -83,6 +90,149 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class PotGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(PotGameTests.class); }
+
+    @GameTest(template = "empty")
+    public static void theNativePotHandleDefinesTheOnlyAdjacentOperatingCellInEveryRotation(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos pot = helper.absolutePos(new BlockPos(3, 2, 3));
+        for (BlockPos floor : BlockPos.betweenClosed(pot.offset(-3, -2, -3), pot.offset(3, -2, 3))) {
+            level.setBlockAndUpdate(floor, Blocks.STONE.defaultBlockState());
+        }
+        level.setBlockAndUpdate(pot.below(), Blocks.CAMPFIRE.defaultBlockState());
+        var station = new PotStation();
+        WorldPos at = WorldPos.of(level, pot);
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            level.setBlockAndUpdate(pot, ModBlocks.POT.get().defaultBlockState().setValue(PotBlock.FACING, facing));
+            BlockPos feet = pot.relative(facing).below();
+            helper.assertTrue(station.stances(level, at).orElseThrow().cells().equals(java.util.Set.of(WorldPos.of(level, feet))),
+                "the rotated handle publishes exactly its adjacent floor cell: " + facing);
+            level.setBlockAndUpdate(feet, Blocks.STONE.defaultBlockState());
+            level.setBlockAndUpdate(feet.above(), Blocks.STONE.defaultBlockState());
+            helper.assertTrue(station.stances(level, at).isEmpty(),
+                "blocking the handle cannot fall back to another side, distant floor, or the block above: " + facing);
+            level.setBlockAndUpdate(feet, Blocks.AIR.defaultBlockState());
+            level.setBlockAndUpdate(feet.above(), Blocks.AIR.defaultBlockState());
+            level.setBlockAndUpdate(feet.below(), Blocks.AIR.defaultBlockState());
+            helper.assertTrue(station.stances(level, at).isEmpty(),
+                "an unsupported handle approach cannot borrow any of the other reachable floors: " + facing);
+            level.setBlockAndUpdate(feet.below(), Blocks.STONE.defaultBlockState());
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void rotatingAPlannedPotRejectsTheOldHandleSideWithoutLoadingAnyFood(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
+            rig.stockBeef(3, 1);
+            Node load = ((Workload.Within.Turn.Piece) rig.work.next(rig.level, rig.worker)).node();
+            rig.level.setBlockAndUpdate(rig.cell, rig.pot.getBlockState().setValue(PotBlock.FACING, Direction.NORTH));
+            CompoundTag before = rig.pot.saveWithFullMetadata(rig.level.registryAccess());
+            helper.assertTrue(Commit.run(rig.level, load, rig.worker) instanceof Outcome.Failed,
+                "execution recalculates the physical handle side instead of trusting the old plan");
+            helper.assertTrue(before.equals(rig.pot.saveWithFullMetadata(rig.level.registryAccess())), "rotation refusal never oils or loads the native pot");
+            helper.assertValueEqual(rig.count(Items.BEEF), 3L, "all physical beef remains in the pack");
+            helper.assertValueEqual(rig.count(ModItems.OIL.get()), 1L, "physical oil remains unspent");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 150)
+    public static void aCookReallyWalksToTheHandleAndLoadsAndStirsUsingTheSharedArrivalTolerance(GameTestHelper helper) {
+        Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1);
+        rig.stockBeef(3, 1);
+        for (BlockPos floor : BlockPos.betweenClosed(rig.cell.offset(1, -1, -1), rig.cell.offset(5, -1, 1))) {
+            rig.level.setBlockAndUpdate(floor, Blocks.STONE.defaultBlockState());
+        }
+        rig.body.setNoAi(false);
+        rig.body.moveTo(rig.cell.getX() + 4.5, rig.cell.getY(), rig.cell.getZ() + 0.5);
+        var forced = new java.util.HashSet<Long>();
+        var had = java.util.Set.copyOf(rig.level.getForcedChunks());
+        for (int x = rig.cell.getX() >> 4; x <= (rig.cell.getX() + 5) >> 4; x++) {
+            for (int z = (rig.cell.getZ() - 1) >> 4; z <= (rig.cell.getZ() + 1) >> 4; z++) {
+                long chunk = net.minecraft.world.level.ChunkPos.asLong(x, z);
+                if (!had.contains(chunk) && rig.level.setChunkForced(x, z, true)) forced.add(chunk);
+            }
+        }
+        Runnable cleanup = () -> {
+            rig.close();
+            forced.forEach(chunk -> rig.level.setChunkForced(net.minecraft.world.level.ChunkPos.getX(chunk),
+                net.minecraft.world.level.ChunkPos.getZ(chunk), false));
+        };
+        helper.runAtTickTime(145, cleanup);
+        var walking = new io.github.izakyl.folkways.plugins.person.walk.OnFoot(0.6D, CookeryRefusal.STATION_CHANGED);
+        walking.setOut(rig.level, rig.body, rig.stances.cells());
+        helper.succeedWhen(() -> {
+            var result = walking.step(rig.level, rig.body, rig.stances.cells());
+            helper.assertTrue(result instanceof io.github.izakyl.folkways.core.api.resident.Going.Arrived,
+                "waiting for the actual resident's native path to the handle: " + result + " at " + rig.body.position());
+            walking.release(rig.level, rig.body);
+            helper.assertTrue(rig.body.walkDist > 0.1F, "the cook reached its working stance through real walking");
+            helper.assertTrue(Reach.standingIn(rig.body, rig.stances), "real OnFoot arrival and work use the same handle tolerance");
+            rig.start();
+            helper.assertValueEqual(rig.count(Items.BEEF), 0L, "walking arrival hands all three real inputs to the native pot");
+            helper.assertValueEqual(PotBatch.stirs(rig.pot, rig.level), 0, "the arrived resident completes the native stirs without a failed-work loop");
+            cleanup.run();
+        });
+    }
+
+    @GameTest(template = "empty")
+    public static void rotatingALoadedPotAlsoPreventsNativeStirringFromItsOldHandle(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
+            rig.stockBeef(3, 1);
+            rig.step();
+            Node stir = ((Workload.Within.Turn.Piece) rig.work.next(rig.level, rig.worker)).node();
+            rig.level.setBlockAndUpdate(rig.cell, rig.pot.getBlockState().setValue(PotBlock.FACING, Direction.NORTH));
+            CompoundTag before = rig.pot.saveWithFullMetadata(rig.level.registryAccess());
+            helper.assertTrue(Commit.run(rig.level, stir, rig.worker) instanceof Outcome.Failed, "a loaded batch still requires the current physical handle side");
+            helper.assertTrue(before.equals(rig.pot.saveWithFullMetadata(rig.level.registryAccess())), "a rejected stir changes neither native progress nor ownership");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aRotatedMovingFrameKeepsTheHandleCellInThePotsOwnRealm(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
+            rig.stockBeef(3, 1);
+            UUID frameId = UUID.randomUUID();
+            Vec3 origin = Vec3.atLowerCornerOf(rig.cell.offset(40, 8, 12));
+            WorldSpaces.Frame frame = new WorldSpaces.Frame() {
+                public UUID id() { return frameId; }
+                public Level level() { return rig.level; }
+                public BlockPos storageOrigin() { return rig.cell; }
+                public Vec3 toWorld(Vec3 local) { return origin.add(-local.z, local.y, local.x); }
+                public Vec3 toLocal(Vec3 world) {
+                    Vec3 delta = world.subtract(origin);
+                    return new Vec3(delta.z, delta.y, -delta.x);
+                }
+            };
+            Runnable remove = WorldSpaces.install(new WorldSpaces.Source() {
+                public Optional<WorldSpaces.Frame> frame(Level host, UUID key) {
+                    return host == rig.level && key.equals(frameId) ? Optional.of(frame) : Optional.empty();
+                }
+                public Optional<WorldSpaces.Frame> containing(Level host, BlockPos cell) { return Optional.empty(); }
+                public Optional<WorldSpaces.Frame> aboard(Entity entity) { return Optional.empty(); }
+            });
+            Hold claim = null;
+            try {
+                WorldPos at = new WorldPos(new Realm.Frame(frameId), BlockPos.ZERO);
+                WorldPos handle = at.at(new BlockPos(1, 0, 0));
+                Stances stances = rig.station.stances(rig.level, at).orElseThrow();
+                helper.assertTrue(stances.cells().equals(java.util.Set.of(handle)), "handle stance preserves the native pot's frame realm");
+                rig.claim.release(Ending.DROPPED);
+                rig.work = new PotWork(rig.colony, at, stances, rig.plan, 1, rig.bookings, () -> {});
+                claim = rig.bookings.hold(at, rig.work.id());
+                helper.assertTrue(claim.take().isEmpty(), "the framed pot has its own actual booking");
+                rig.body.moveTo(frame.toWorld(Vec3.atBottomCenterOf(handle.cell())));
+                rig.step();
+                helper.assertValueEqual(rig.count(Items.BEEF), 0L, "the rotated world-space cook loads all three real inputs into the storage-space pot");
+                helper.assertTrue(!rig.pot.isEmpty(), "native pot interaction succeeds from the rotated frame's handle side");
+            } finally {
+                if (claim != null) claim.release(Ending.REVOKED);
+                remove.run();
+            }
+        }
+        helper.succeed();
+    }
 
     @GameTest(template = "empty")
     public static void potBudgetDeduplicatesThePromisedBeefButRetainsUnexpectedResultRoom(GameTestHelper helper) {
@@ -557,7 +707,8 @@ public final class PotGameTests {
             stances = Stances.at(level, cell.east());
             level.setBlockAndUpdate(cell.below(), Blocks.CAMPFIRE.defaultBlockState());
             level.setBlockAndUpdate(cell.east().below(), Blocks.STONE.defaultBlockState());
-            level.setBlockAndUpdate(cell, ModBlocks.POT.get().defaultBlockState());
+            level.setBlockAndUpdate(cell, ModBlocks.POT.get().defaultBlockState()
+                .setValue(PotBlock.FACING, Direction.EAST));
             pot = (PotBlockEntity) level.getBlockEntity(cell);
             pot.getPersistentData();
             body = PersonBody.RESIDENT.get().create(level);

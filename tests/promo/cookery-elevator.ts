@@ -16,7 +16,9 @@ export async function buildCookeryElevator(
   const deck = at(-2, -1, -6);
   const cabin = (x: number, y: number, z: number): Vec => ({ x: deck.x + x, y: deck.y + y, z: deck.z + z });
   const pulley = cabin(2, 13, 2);
-  const contacts = [0, RISE].map(rise => cabin(5, 3 + rise, 2));
+  // Put both real contact faces on the rear (south) edge, behind the passengers and timber frame.
+  // Their unchanged local Y keeps the cabin feet aligned with the two existing landings.
+  const contacts = [0, RISE].map(rise => cabin(2, 3 + rise, 5));
   // A permanent timber tower surrounds the moving cabin. Leave both west landings open;
   // all framing is outside the glued five-by-five column or above the cabin's highest roof.
   const fixed = async (x: number, y: number, z: number, xx: number, yy: number, zz: number, block: string) =>
@@ -28,6 +30,10 @@ export async function buildCookeryElevator(
   for (const y of [5, 9]) {
     await fixed(-3, y, -1, 3, y, -1, "minecraft:stripped_spruce_log[axis=x]");
   }
+  // Rear service enclosure sits beyond the cabin's z=-2 swept boundary. Its dark cheeks recess
+  // the fixed contacts without crossing the west entrances or entering the moving glue volume.
+  await fixed(-1, 0, 0, 1, 9, 0, "minecraft:dark_oak_planks");
+  for (const x of [-1, 1]) await fixed(x, 0, -1, x, 9, -1, "minecraft:stripped_spruce_log[axis=y]");
   // Machinery cabinet: the pulley and rope stay exposed in the centre bay.
   await fixed(-2, 11, -5, -1, 11, -3, "minecraft:dark_oak_planks");
   await fixed(-2, 12, -5, -2, 12, -3, "minecraft:dark_oak_planks");
@@ -40,17 +46,19 @@ export async function buildCookeryElevator(
     `fill ${commandPos(cabin(0, 4, 3))} ${commandPos(cabin(4, 4, 4))} minecraft:weathered_cut_copper`,
     `fill ${commandPos(cabin(0, 4, 0))} ${commandPos(cabin(0, 4, 2))} minecraft:weathered_cut_copper`,
     `fill ${commandPos(cabin(4, 4, 0))} ${commandPos(cabin(4, 4, 2))} minecraft:weathered_cut_copper`,
-    `setblock ${commandPos(cabin(2, 3, 4))} minecraft:lantern[hanging=true]`,
-    `setblock ${commandPos(cabin(4, 1, 2))} minecraft:stripped_spruce_log[axis=y]`,
-    `setblock ${commandPos(cabin(4, 2, 2))} minecraft:stripped_spruce_log[axis=y]`,
-    `setblock ${commandPos(cabin(4, 3, 2))} create:redstone_contact[facing=east]`,
+    `setblock ${commandPos(cabin(1, 3, 4))} minecraft:lantern[hanging=true]`,
+    // The moving contact belongs to the rear centre post; its small timber hood hangs under
+    // the roof above head height, hiding its front texture without consuming a walking doorway.
+    `fill ${commandPos(cabin(2, 1, 4))} ${commandPos(cabin(2, 2, 4))} minecraft:stripped_spruce_log[axis=y]`,
+    `setblock ${commandPos(cabin(2, 3, 3))} minecraft:dark_oak_planks`,
+    `setblock ${commandPos(cabin(2, 3, 4))} create:redstone_contact[facing=south]`,
     `setblock ${commandPos(pulley)} create:elevator_pulley[facing=north]`,
     `setblock ${commandPos(cabin(1, 13, 2))} create:creative_motor[facing=east]`,
   ];
   for (const x of [0, 4]) for (const z of [0, 4]) {
     commands.push(`fill ${commandPos(cabin(x, 1, z))} ${commandPos(cabin(x, 3, z))} minecraft:stripped_spruce_log[axis=y]`);
   }
-  for (const contact of contacts) commands.push(`setblock ${commandPos(contact)} create:elevator_contact[facing=west]`);
+  for (const contact of contacts) commands.push(`setblock ${commandPos(contact)} create:elevator_contact[facing=north]`);
   for (const command of commands) await world.command(server, command);
   const glue = await runColonyTask(server, ASSEMBLE, { origin });
   await tick.sprint(server, 60);
