@@ -59,6 +59,7 @@ for (var entity : level.getAllEntities()) {
             .filter(slot -> !body.pack().getItem(slot).isEmpty()).count(),
         "doing", body.doing().map(Object::toString).orElse(""),
         "balk", body.balk().map(Object::toString).orElse(""),
+        "millExiting", entity.getPersistentData().contains("folkways.cookery.millstone.exit"),
         "effects", body.effects().parts().stream().map(Object::toString).toList()));
 }
 var snapshot = new LinkedHashMap<String,Object>();
@@ -210,7 +211,32 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
     }
     expect(done, "the only final order must complete all real intermediate tasks, with no injected tools or products").toBe(true);
     await tick.sprint(server, 240);
-    evidence.final = await samplePhysical(server, cells);
+    // Seed keeping may legitimately start further rice batches before the dish is delivered. Wait for
+    // those real batches and their drivers to finish, including queued batches between unbound moments.
+    // A 64-item reserve needs at most three 500-tick mill batches; leave room for hauling and walking clear.
+    evidence.millSettlement = { limit: 6000, samples: [], completed: false };
+    for (let elapsed = 0; elapsed <= evidence.millSettlement.limit; elapsed += 20) {
+      const sample = await samplePhysical(server, cells);
+      evidence.millSettlement.samples.push({ elapsed, ...sample });
+      const mill = sample.state.mill.nbt as any;
+      const graph = evidence.workGraphs[sample.workGraph];
+      const pendingMill = graph.nodes.some((node: any) => node.kind === "MillstoneWork"
+        && !["DONE", "FAILED", "CANCELLED"].includes(node.state));
+      const settled = !sample.millBound && !mill.InputItem?.id && collectStacks(mill.OutputItem).length === 0
+        && sample.workers.every((worker: any) => !worker.millExiting) && !pendingMill;
+      expect(sample.target.filter((stack: any) => stack.id === scenario.dish)
+        .reduce((sum: number, stack: any) => sum + Number(stack.count ?? 1), 0),
+      "waiting for independent reserves never repeats the delivered food order").toBe(1);
+      if (settled) {
+        evidence.final = sample;
+        evidence.millSettlement.elapsed = elapsed;
+        evidence.millSettlement.completed = true;
+        break;
+      }
+      if (elapsed < evidence.millSettlement.limit) await tick.sprint(server, 20);
+    }
+    expect(evidence.millSettlement.completed,
+      "every queued native mill batch finishes and its actual driver walks clear within the bounded window").toBe(true);
     const source = await world.block(server, stage.at(cells.source), { nbt: true });
     const generated = (source.nbt as any).generated as Record<string, number | string>;
     evidence.generated = generated;
@@ -232,7 +258,9 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
     expect(evidence.final.millBound, "the millstone releases its actual driver").toBe(false);
     await tick.sprint(server, 120);
     const stable = await samplePhysical(server, cells);
+    evidence.stable = stable;
     expect(stable.millBound, "an exited driver must not be captured again").toBe(false);
+    expect(stable.workers.every((worker: any) => !worker.millExiting), "the driver finishes its physical exit").toBe(true);
     expect(stable.target.filter((stack: any) => stack.id === scenario.dish).reduce((sum: number, stack: any) => sum + Number(stack.count ?? 1), 0)).toBe(1);
   } catch (error) {
     pair?.failing(error); evidence.failure = String(error); throw error;
