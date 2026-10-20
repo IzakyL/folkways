@@ -16,6 +16,25 @@ public final class CropSeeds {
     public record Sowing(UUID node, ItemSpec seed, long count) {
     }
 
+    private static final java.util.Map<net.minecraft.resources.ResourceLocation, java.util.function.Supplier<List<Item>>> PURPOSES = new java.util.LinkedHashMap<>();
+
+    // Ordered alternatives have one shared normal-stack reserve; the first is retained first.
+    public static void purpose(net.minecraft.resources.ResourceLocation owner, java.util.function.Supplier<List<Item>> alternatives) {
+        PURPOSES.put(owner, alternatives);
+    }
+
+    public static List<List<Item>> purposes(Set<Item> seeds) {
+        var remaining = new LinkedHashSet<>(seeds);
+        var result = new java.util.ArrayList<List<Item>>();
+        PURPOSES.values().forEach(source -> {
+            List<Item> group = source.get().stream().distinct().filter(remaining::contains).toList();
+            if (!group.isEmpty()) { result.add(group); remaining.removeAll(group); }
+        });
+        remaining.stream().sorted(java.util.Comparator.comparing(item -> net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item).toString()))
+            .forEach(item -> result.add(List.of(item)));
+        return List.copyOf(result);
+    }
+
     private CropSeeds() {
     }
 

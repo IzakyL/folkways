@@ -28,6 +28,12 @@ Saves, data pack formats and the Java API may still change between versions.
   Blacklists and whitelists use the shared item picker, including item, tag and search
   rules. Container rules apply to residents; players and external automation keep their
   normal access.
+- **Vanilla composting needs no kitchen equipment.** Register an ordinary composter
+  with the Colony Book; neither Cookery nor a straw hat is required. Residents take at
+  most 16 surplus seeds per pickup and feed them one at a time using vanilla's composting
+  chance. One normal stack stays reserved, while sowing, orders and other reservations
+  are protected. A full composter's bone meal is collected separately. Cookery rice uses
+  the same reserve and composting route.
 - **Buildings from drawings.** Frame ground or draw a line, pick a pattern (roads, arch
   bridges, walls, docks, mines, railways, arcades, terraced fields), and builders clear
   the site and lay it from the colony's stores. Patterns are small
@@ -59,6 +65,8 @@ which files were turned away and why.
 
 On a client, `folkways/pattern/`, `piece/` and `blueprint/` also make up the player's
 own library. The player draws these on their side and sends the result to the server.
+The local library is read asynchronously while its screen shows a loading message.
+If reading fails, close and reopen the screen to retry.
 
 ## Installation
 

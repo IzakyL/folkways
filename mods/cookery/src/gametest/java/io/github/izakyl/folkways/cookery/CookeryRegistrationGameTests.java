@@ -29,6 +29,11 @@ import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.core.engine.colony.ColonyWorks;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.engine.batch.BatchExecution;
+import io.github.izakyl.folkways.core.api.work.batch.BatchSession;
+import io.github.izakyl.folkways.core.api.work.batch.StepResult;
+import io.github.izakyl.folkways.plugins.compost.CompostContent;
+import io.github.izakyl.folkways.plugins.compost.CompostPresence;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.engine.Enrollments;
 import io.github.izakyl.folkways.front.engine.colony.MemberToggle;
@@ -254,7 +259,7 @@ public final class CookeryRegistrationGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void theRealBookRegistersANativeComposterPointAndTheKitchenPagePublishesIt(GameTestHelper helper) {
+    public static void theRealBookRegistersANativeComposterPointAndItsOwnPagePublishesIt(GameTestHelper helper) {
         try (Kitchen rig = new Kitchen(helper)) {
             BlockPos cell = helper.absolutePos(new BlockPos(4, 1, 4)); WorldPos at = WorldPos.of(rig.level, cell);
             rig.level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState()); rig.mark(cell);
@@ -264,13 +269,13 @@ public final class CookeryRegistrationGameTests {
                 && holding.what() instanceof Held.Point).isPresent(), "real book membership persists its distinct compost delegation");
             helper.assertTrue(rig.level.getBlockEntity(cell) == null, "the real native composter keeps no block entity");
             helper.assertTrue(rig.colony.view(rig.level).blocks(CookeryContent.COMPOST).contains(cell), "the actual loaded point view reaches the kitchen service");
-            rig.presence.refresh(rig.level.getServer());
-            var page = rig.presence.board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow();
-            helper.assertTrue(page.rows().stream().anyMatch(row -> row.icon().is(Blocks.COMPOSTER.asItem())), "the kitchen board lists the actual native point and its status");
+            var compost = rig.colony.service(CompostContent.ID, CompostPresence.class).orElseThrow();
+            var page = compost.board(CompostContent.ID, rig.colony.view(rig.level)).orElseThrow();
+            helper.assertTrue(page.rows().stream().anyMatch(row -> row.icon().is(Blocks.COMPOSTER.asItem())), "the compost board lists the actual native point and its status");
             rig.level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState().setValue(ComposterBlock.LEVEL, 8));
-            helper.assertValueEqual(rig.presence.goals(rig.colony.view(rig.level)).size(), 1, "the real marked point exposes its native ready-compost task");
-            rig.mark(cell); rig.presence.refresh(rig.level.getServer());
-            helper.assertTrue(rig.colony.holdingAt(at).isEmpty() && rig.presence.goals(rig.colony.view(rig.level)).isEmpty(), "a second real book click unmarks and withdraws the native point");
+            helper.assertValueEqual(compost.goals(rig.colony.view(rig.level)).size(), 1, "the real marked point exposes its native ready-compost task");
+            rig.mark(cell);
+            helper.assertTrue(rig.colony.holdingAt(at).isEmpty() && compost.goals(rig.colony.view(rig.level)).isEmpty(), "a second real book click unmarks and withdraws the native point");
         }
         helper.succeed();
     }
@@ -280,19 +285,24 @@ public final class CookeryRegistrationGameTests {
         try (Kitchen rig = new Kitchen(helper)) {
             BlockPos cell = helper.absolutePos(new BlockPos(4, 1, 4));
             rig.level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState().setValue(ComposterBlock.LEVEL, 8));
-            rig.mark(cell); rig.presence.refresh(rig.level.getServer());
-            Node old = rig.presence.goals(rig.colony.view(rig.level)).getFirst().nodes().getFirst();
+            rig.mark(cell);
+            var compost = rig.colony.service(CompostContent.ID, CompostPresence.class).orElseThrow();
+            Node old = compost.goals(rig.colony.view(rig.level)).getFirst().nodes().getFirst();
             helper.assertTrue(old.planned(rig.level).isEmpty(), "the native collect action obtains the real kitchen turn");
             rig.mark(cell);
             helper.assertTrue(Commit.run(rig.level, old, rig.worker) instanceof Outcome.Failed, "unmarking withdraws the old point generation before any native mutation");
             old.ended(rig.level, Ending.REVOKED);
             helper.assertValueEqual(rig.level.getBlockState(cell).getValue(ComposterBlock.LEVEL), 8, "the original physical compost remains ready");
-            rig.mark(cell); rig.presence.refresh(rig.level.getServer());
-            Node recovered = rig.presence.goals(rig.colony.view(rig.level)).getFirst().nodes().getFirst();
+            rig.mark(cell);
+            Node recovered = compost.goals(rig.colony.view(rig.level)).getFirst().nodes().getFirst();
             helper.assertTrue(recovered.planned(rig.level).isEmpty(), "remarked native contents obtain one new valid generation");
             var feet = recovered.spec().stances().cells().iterator().next().cell();
             rig.body.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
-            Outcome result = Commit.run(rig.level, recovered, rig.worker);
+            var execution = new BatchExecution(recovered);
+            var step = (StepResult.Step) execution.next(rig.level, rig.worker);
+            Outcome result = Commit.run(rig.level, step.node(), rig.worker, execution);
+            execution.notifySettled(rig.level);
+            execution.ended(rig.level, step.node(), Ending.DONE);
             helper.assertTrue(result instanceof Outcome.Done, "the new point executes real native compost extraction");
             var made = ((Outcome.Done) result).made();
             helper.assertValueEqual(made.stream().filter(stack -> stack.is(Items.BONE_MEAL)).mapToInt(ItemStack::getCount).sum(), 1,
@@ -442,10 +452,16 @@ public final class CookeryRegistrationGameTests {
 
         void firstPiece(Node work) {
             // A published kitchen task can first borrow its shared tool. Continue to the actual food load.
+            BatchExecution batch = work.spec().workload() instanceof BatchSession ? new BatchExecution(work) : null;
             for (int step = 0; step < 8; step++) {
                 Node piece = work;
                 Workload.Within within = work.spec().workload() instanceof Workload.Within nested ? nested : null;
-                if (within != null) {
+                if (batch != null) {
+                    var turn = batch.next(level, worker);
+                    helper.assertTrue(turn instanceof StepResult.Step || turn instanceof StepResult.Auxiliary,
+                        "a batch prepares or loads a physical step: " + turn);
+                    piece = turn instanceof StepResult.Step action ? action.node() : ((StepResult.Auxiliary) turn).node();
+                } else if (within != null) {
                     var turn = within.next(level, worker);
                     helper.assertTrue(turn instanceof Workload.Within.Turn.Piece,
                         "production prepares or loads a physical batch: " + turn);
@@ -453,12 +469,14 @@ public final class CookeryRegistrationGameTests {
                 }
                 piece.spec().stances().cells().stream().findFirst().ifPresent(at ->
                     body.moveTo(at.cell().getX() + 0.5, at.cell().getY(), at.cell().getZ() + 0.5));
-                Outcome outcome = Commit.run(level, piece, worker);
+                Outcome outcome = Commit.run(level, piece, worker, batch != null && batch.active(piece) ? batch : null);
                 helper.assertTrue(outcome instanceof Outcome.Done, "the physical production piece commits: " + outcome);
                 ((Outcome.Done) outcome).made().forEach(this::put);
+                if (batch != null) batch.notifySettled(level);
                 piece.released(level, worker, Ending.DONE);
                 piece.ended(level, Ending.DONE);
-                if (within != null) within.ended(level, piece, Ending.DONE);
+                if (batch != null) batch.ended(level, piece, Ending.DONE);
+                else if (within != null) within.ended(level, piece, Ending.DONE);
                 if (level.getBlockEntity(boardCell) instanceof ChoppingBoardBlockEntity board
                         && !board.getCurrentCutStack().isEmpty() || !pot.isEmpty()) return;
             }

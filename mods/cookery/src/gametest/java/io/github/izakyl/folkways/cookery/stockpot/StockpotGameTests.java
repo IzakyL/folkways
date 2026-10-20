@@ -40,6 +40,8 @@ import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.engine.batch.BatchExecution;
+import io.github.izakyl.folkways.core.api.work.batch.StepResult;
 import io.github.izakyl.folkways.core.engine.plan.Crew;
 import io.github.izakyl.folkways.core.engine.plan.Known;
 import io.github.izakyl.folkways.core.engine.plan.Message;
@@ -693,13 +695,12 @@ public final class StockpotGameTests {
         rig.claim.release(Ending.DROPPED);
         rig.claim = rig.bookings.hold(rig.at, work.id());
         helper.assertTrue(rig.claim.take().isEmpty(), "the multi-batch work owns the station");
-        var interrupted = (Workload.Within.Turn.Piece) work.next(rig.level, rig.worker);
-        work.ended(rig.level, interrupted.node(), Ending.DROPPED);
-        var resumed = (Workload.Within.Turn.Piece) work.next(rig.level, rig.worker);
+        var interrupted = (StepResult.Step) rig.batch(work).next(rig.level, rig.worker);
+        rig.batch(work).ended(rig.level, interrupted.node(), Ending.DROPPED);
+        var resumed = (StepResult.Step) rig.batch(work).next(rig.level, rig.worker);
         helper.assertTrue(!interrupted.node().id().equals(resumed.node().id()),
             "an urge resumes the same batch under a fresh action id");
-        rig.apply(resumed.node());
-        work.ended(rig.level, resumed.node(), Ending.DONE);
+        rig.apply(work, resumed.node());
         work.ended(rig.level, Ending.DROPPED);
         rig.claim.release(Ending.DROPPED);
         helper.assertValueEqual(rig.count(ModItems.RICE_SEED.get()), 2L, "unstarted batches retain their rice");
@@ -729,7 +730,7 @@ public final class StockpotGameTests {
             Hold laterTurn = rig.bookings.hold(rig.at, later.id());
             helper.assertTrue(laterTurn.take().isEmpty(), "a stale empty-pot snapshot reaches the queue head");
             helper.assertTrue(later.refusal(rig.level).isPresent()
-                && later.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Leave,
+                && later.advance(rig.level, rig.worker) instanceof StepResult.Failed,
                 "the old invested batch causes an explicit failure instead of an endless wait");
             laterTurn.release(new Ending.Failed(later.id(),
                 CookeryRefusal.STATION_CHANGED));
@@ -753,7 +754,7 @@ public final class StockpotGameTests {
             Hold newTurn = rig.bookings.hold(rig.at, old.id());
             helper.assertTrue(newTurn.take().isEmpty(), "a newly marked kitchen can issue a fresh ticket");
             helper.assertTrue(old.refusal(rig.level).isPresent()
-                && old.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Leave,
+                && old.advance(rig.level, rig.worker) instanceof StepResult.Failed,
                 "the old object cannot borrow a new ticket with the same UUID");
             helper.assertValueEqual(rig.count(ModItems.RICE_SEED.get()), 1L, "withdrawn work does not spend ingredients");
             helper.assertTrue(rig.pot.getStatus() == IStockpot.PUT_SOUP_BASE, "withdrawn work does not load the pot");
@@ -1006,6 +1007,7 @@ public final class StockpotGameTests {
         Hold claim;
         Node load;
         Node take;
+        BatchExecution execution;
 
         Rig(GameTestHelper helper, String recipe, boolean originalLid) {
             this(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "stockpot/" + recipe), originalLid);
@@ -1097,14 +1099,11 @@ public final class StockpotGameTests {
 
         void drive(StockpotWork work) {
             for (int steps = 0; steps < 4; steps++) {
-                Workload.Within.Turn turn = work.next(level, worker);
-                if (turn instanceof Workload.Within.Turn.Piece action) {
-                    Outcome outcome = Commit.run(level, action.node(), worker);
-                    helper.assertTrue(outcome instanceof Outcome.Done, "the real inner stockpot action commits: " + outcome);
-                    ((Outcome.Done) outcome).made().forEach(this::put);
-                    work.ended(level, action.node(), Ending.DONE);
-                } else if (turn instanceof Workload.Within.Turn.Leave) {
-                    helper.assertTrue(work.commit(level, worker) instanceof Outcome.Done,
+                StepResult turn = batch(work).next(level, worker);
+                if (turn instanceof StepResult.Step action) {
+                    apply(work, action.node());
+                } else if (turn instanceof StepResult.Complete) {
+                    helper.assertTrue(batch(work).finish(level, worker) instanceof Outcome.Done,
                         "the outer production offer completes only after every serving");
                     return;
                 } else {
@@ -1112,6 +1111,19 @@ public final class StockpotGameTests {
                 }
             }
             helper.assertTrue(false, "more real work remains for the next server tick");
+        }
+
+        BatchExecution batch(StockpotWork work) {
+            if (execution == null || !execution.parent().equals(work.id())) execution = new BatchExecution(work);
+            return execution;
+        }
+
+        void apply(StockpotWork work, Node node) {
+            Outcome outcome = Commit.run(level, node, worker, batch(work));
+            helper.assertTrue(outcome instanceof Outcome.Done, "the budgeted stockpot step commits: " + outcome);
+            ((Outcome.Done) outcome).made().forEach(this::put);
+            batch(work).notifySettled(level);
+            batch(work).ended(level, node, Ending.DONE);
         }
         void finished() {
             var current = level.getBlockEntity(cell);

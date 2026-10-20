@@ -53,6 +53,23 @@ of its own.
 | `mods/*/src/gametest` | NeoForge game tests, run together by the root's `runGameTestServer` |
 | `tests/` | Blockwright and Playwright suites, listed below |
 
+## Batched work
+
+Core exposes the `BatchSession` protocol for work that advances through multiple steps. The
+remaining-input ledger and `StepReceipt` record what is still owed and what a completed step
+actually did. Pausing keeps the worker assigned; it does not release the worker for
+reassignment. Recovery checks the real device and inventory before continuing. Vanilla
+composting and the Cookery stockpot are the first integrations.
+
+Compost discovery shares one inventory observation across its registered stations. Each native input still
+rechecks current inventories and reservations; a full sixteen-seed batch can take sixteen fresh inventory scans.
+There is no reliable inventory revision for every container provider, so execution does not cache that check.
+Measure large-colony tick costs separately from the reduced warehouse trips before claiming a TPS improvement.
+
+`Jobs` lives in Core's public `base/task` package. Virtual threads perform file I/O only;
+CPU work stays bounded, and results return to the owning thread before game state changes.
+The `jobsTest` suite runs as part of Gradle `check` and CI.
+
 ## Tests
 
 | Command | What it runs |

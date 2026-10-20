@@ -71,12 +71,15 @@ public final class SeedSupportGameTests {
             rig.body.pack().setItem(3, new ItemStack(ModItems.STRAW_HAT.get()));
             BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
             rig.level.setBlock(at, Blocks.COMPOSTER.defaultBlockState(), Block.UPDATE_ALL);
-            var station = KitchenStations.find(rig.level.getBlockState(at)).orElseThrow();
-            var bookings = new KitchenBookings();
+            var station = new io.github.izakyl.folkways.plugins.compost.CompostStation(
+                ignored -> Optional.of(rig.colony.service(io.github.izakyl.folkways.plugins.compost.CompostContent.ID,
+                    io.github.izakyl.folkways.plugins.compost.CompostPresence.class).orElseThrow().budget(rig.level)),
+                rig.support::catalogue);
+            var bookings = new io.github.izakyl.folkways.plugins.compost.CompostBookings();
             ColonyFront.of(rig.colony).setSetting(CookeryContent.ID, "wear_hat", new ColonySettings.Value.Flag(false));
             helper.assertTrue(!seeds.enabled(), "disabling task hat borrowing disables autonomous seed support");
             helper.assertTrue(station.recovery(rig.colony.id(), rig.level, WorldPos.of(rig.level, at), Stances.WHEREVER,
-                bookings, () -> {}).isEmpty(), "the registered composter does not feed while seed task support is disabled");
+                bookings, () -> {}).size() == 1, "native composting remains available when optional straw-hat gathering is disabled");
             ColonyFront.of(rig.colony).setSetting(CookeryContent.ID, "wear_hat", new ColonySettings.Value.Flag(true));
             helper.assertTrue(seeds.enabled(), "task permission enables the demand before a first shared hat is borrowed");
             helper.assertValueEqual(seeds.budget(rig.level).tally(Items.WHEAT_SEEDS).physical(), 130L,

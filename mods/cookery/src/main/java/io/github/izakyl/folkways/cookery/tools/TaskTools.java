@@ -112,8 +112,8 @@ public final class TaskTools {
             boolean shared = node.spec().tools().stream().anyMatch(use -> Tools.shared(use.need()).isPresent());
             var clothing = node.spec().site().where().level(server).map(level -> CookeryGear.request(colony, node, level)).orElse(CookeryGear.Request.NONE);
             if (node instanceof ToolWork || node instanceof ClothingWork) return node;
-            if (!clothing.empty()) return (Node) new ClothingWork(this, node, clothing);
-            return shared ? (Node) new ToolWork(this, node) : node;
+            if (!clothing.empty()) return (Node) ClothingWork.of(this, node, clothing);
+            return shared ? (Node) ToolWork.of(this, node) : node;
         }).toList();
         return new Grown(wrapped, original.links(), original.workerGroups(), original.follows());
     }

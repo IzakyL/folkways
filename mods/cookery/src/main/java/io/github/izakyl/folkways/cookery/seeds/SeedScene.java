@@ -59,7 +59,7 @@ public final class SeedScene {
         farmer.lookAt(scene, util.vector().centerOf(compost));
         scene.world().setBlock(compost, Blocks.COMPOSTER.defaultBlockState().setValue(ComposterBlock.LEVEL, 1), false);
         farmer.hold(scene, new ItemStack(ModItems.TOMATO_SEED.get(), 3));
-        scene.overlay().showText(100).text("Mark a composter as a kitchen station. Before every input the seed allowance is checked again. Native composting can spend a seed without raising its level; a failed roll does not return that seed.")
+        scene.overlay().showText(100).text("Register a vanilla composter with the colony book; neither Cookery nor a straw hat is needed. Surplus seeds can feed it. A full composter yields its bone meal separately.")
             .pointAt(util.vector().topOf(compost)).placeNearTarget().attachKeyFrame();
         scene.idle(50);
         farmer.hold(scene, new ItemStack(ModItems.TOMATO_SEED.get(), 2));

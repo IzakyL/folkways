@@ -52,15 +52,23 @@ public final class BlueprintsPage implements Draw {
 
     private static Supplier<List<Entry>> shelf = List::of;
     private static Consumer<Entry> taking = entry -> { };
+    private static java.util.function.Function<Consumer<Entry>, UIElement> localPage =
+        takes -> shelfOf(shelf.get(), takes);
 
     public static void install(Supplier<List<Entry>> shelved, Consumer<Entry> takes) {
         shelf = shelved;
+        taking = takes;
+        localPage = picked -> shelfOf(shelf.get(), picked);
+    }
+
+    public static void installPage(java.util.function.Function<Consumer<Entry>, UIElement> page, Consumer<Entry> takes) {
+        localPage = page;
         taking = takes;
     }
 
     @Override
     public UIElement build(Player viewer) {
-        return viewer.level().isClientSide() ? shelfOf(shelf.get(), taking) : shelfOf(List.of(), entry -> { });
+        return viewer.level().isClientSide() ? localPage.apply(taking) : shelfOf(List.of(), entry -> { });
     }
 
     // The folders and what stands beside them, for this page and for the picker the view from above opens on its own.

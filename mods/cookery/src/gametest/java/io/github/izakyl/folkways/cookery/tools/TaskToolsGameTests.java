@@ -48,6 +48,15 @@ import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Workshop;
+import io.github.izakyl.folkways.core.api.work.batch.BatchAction;
+import io.github.izakyl.folkways.core.api.work.batch.BatchCommit;
+import io.github.izakyl.folkways.core.api.work.batch.BatchSession;
+import io.github.izakyl.folkways.core.api.work.batch.BatchSpec;
+import io.github.izakyl.folkways.core.api.work.batch.InventoryTransfer;
+import io.github.izakyl.folkways.core.api.work.batch.StepReceipt;
+import io.github.izakyl.folkways.core.api.work.batch.StepResult;
+import io.github.izakyl.folkways.core.engine.batch.BatchExecution;
+import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonyRegistry;
 import io.github.izakyl.folkways.core.engine.colony.ColonyWorks;
@@ -99,6 +108,94 @@ public final class TaskToolsGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(TaskToolsGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void batchDecoratorReturnsItsPhysicalKnifeAfterAnAcceptedStop(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            rig.body.pack().setItem(0, new ItemStack(Items.WHEAT_SEEDS));
+            rig.body.pack().setItem(1, new ItemStack(Items.PAPER));
+            AtomicInteger receipts = new AtomicInteger();
+            ItemSpec seed = Goods.specOf(Items.WHEAT_SEEDS.getDefaultInstance());
+            class Production implements Node, BatchSession {
+                private boolean transferred;
+                private final NodeSpec spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(rig.boardAt),
+                    Stances.WHEREVER, this).needs(new Need(seed, 1)).tools(new ToolUse(KNIFE, 0)).done();
+                public NodeSpec spec() { return spec; }
+                public BatchSpec batch() { return BatchSpec.of(id()); }
+                public StepResult advance(ServerLevel level, Worker who) {
+                    if (!transferred) return new StepResult.Auxiliary(new InventoryTransfer() {
+                        private final NodeSpec action = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(rig.boardAt),
+                            Stances.WHEREVER, Workload.Once.of(0)).tools(new ToolUse(KNIFE, 0)).done();
+                        public NodeSpec spec() { return action; }
+                        public Outcome commit(ServerLevel ignored, Worker actual) {
+                            ItemStack paper = Containers.extract(actual.pack(), stack -> stack.is(Items.PAPER), 1);
+                            if (paper.isEmpty()) return Outcome.failed(LaborRefusal.GOODS_GONE);
+                            ItemStack left = Containers.insert(rig.chest, paper);
+                            if (!left.isEmpty()) {
+                                Containers.insert(actual.pack(), left);
+                                return Outcome.failed(LaborRefusal.NOWHERE_TO_PUT_IT);
+                            }
+                            transferred = true;
+                            return Outcome.done();
+                        }
+                    });
+                    return receipts.get() > 0 ? new StepResult.Complete() : new StepResult.Step("native/load", new BatchAction() {
+                        private final NodeSpec action = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(rig.boardAt),
+                            Stances.WHEREVER, Workload.Once.of(0)).needs(new Need(seed, 1)).tools(new ToolUse(KNIFE, 0)).done();
+                        public NodeSpec spec() { return action; }
+                        public BatchCommit execute(ServerLevel ignored, Worker supplied) {
+                            helper.assertTrue(!supplied.held(KNIFE).isEmpty(), "native batch sees the actual borrowed knife");
+                            helper.assertValueEqual(supplied.supplied().getFirst().getCount(), 1, "only the production slice is supplied");
+                            return BatchCommit.accepted(new Outcome.Done(List.of(), List.of(new ItemStack(Items.PAPER)), Optional.empty()),
+                                LaborRefusal.WORK_BROKE);
+                        }
+                    });
+                }
+                public void settled(ServerLevel level, StepReceipt receipt) {
+                    helper.assertValueEqual(receipt.step(), "native/load", "decorators preserve logical production keys");
+                    helper.assertTrue(receipt.parent().equals(id()), "the enclosing parent owns the input receipt");
+                    helper.assertTrue(receipt.stop().isPresent(), "accepted stop survives the physical tool action wrapper");
+                    receipts.incrementAndGet();
+                }
+                public Outcome commit(ServerLevel level, Worker who) { return finish(level, who); }
+            }
+            Production production = new Production();
+            Node work = rig.tools.decorate(Grown.of(production)).nodes().getFirst();
+            helper.assertTrue(work instanceof ToolWork && work.spec().workload() instanceof BatchSession,
+                "only the batch uses the batch-aware shared-tool decorator");
+            helper.assertTrue(work.planned(rig.level).isEmpty(), "the real tool request is adopted");
+            BatchExecution execution = new BatchExecution(work);
+            boolean complete = false;
+            for (int turn = 0; turn < 12; turn++) {
+                StepResult next = execution.next(rig.level, rig.worker);
+                if (next instanceof StepResult.Complete) { complete = true; break; }
+                helper.assertTrue(next instanceof StepResult.Step || next instanceof StepResult.Auxiliary,
+                    "borrow, production and return all remain executable: " + next);
+                Node piece = next instanceof StepResult.Step step ? step.node() : ((StepResult.Auxiliary) next).node();
+                rig.stand(piece);
+                Outcome outcome = next instanceof StepResult.Step ? Commit.run(rig.level, piece, rig.worker, execution)
+                    : Commit.run(rig.level, piece, rig.worker);
+                helper.assertTrue(outcome instanceof Outcome.Done, "the physical child transaction succeeds");
+                ((Outcome.Done) outcome).made().forEach(stack -> Containers.insert(rig.body.pack(), stack));
+                execution.notifySettled(rig.level);
+                piece.released(rig.level, rig.worker, Ending.DONE);
+                piece.ended(rig.level, Ending.DONE);
+                execution.ended(rig.level, piece, Ending.DONE);
+            }
+            helper.assertTrue(complete, "accepted failure drains physical returns before completing");
+            helper.assertTrue(execution.finish(rig.level, rig.worker) instanceof Outcome.Failed, "the final status still reports failure");
+            helper.assertValueEqual(receipts.get(), 1, "borrowing and returning do not emit production receipts");
+            helper.assertValueEqual(Goods.countIn(rig.chest, Goods.specOf(Items.PAPER.getDefaultInstance())), 1L,
+                "a native auxiliary transfer preserves its marker through the tool decorator");
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), seed), 0L, "the accepted seed is not refunded");
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.PAPER.getDefaultInstance())), 1L, "the accepted product exists once");
+            helper.assertTrue(IntStream.range(0, rig.rack.getContainerSize()).mapToObj(rig.rack::getItem)
+                .anyMatch(stack -> ItemStack.isSameItemSameComponents(stack, rig.namedKnife())), "the original component-bearing knife returns physically");
+            work.ended(rig.level, new Ending.Failed(work.id(), LaborRefusal.WORK_BROKE));
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")

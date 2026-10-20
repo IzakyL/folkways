@@ -197,8 +197,8 @@ const READ_COMPOST = defineTask<{ compost: Vec; withdrawn: Vec }, State>({
   name: "folkways.e2e.read-autonomous-compost", side: "server", timeoutMs: 20000,
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-    "io.github.izakyl.folkways.core.api.terms.WorldPos", "io.github.izakyl.folkways.cookery.seeds.SeedPresence",
-    "io.github.izakyl.folkways.cookery.KitchenStations", "io.github.izakyl.folkways.core.api.work.Node", "net.minecraft.world.Container",
+    "io.github.izakyl.folkways.core.api.terms.WorldPos", "io.github.izakyl.folkways.plugins.compost.CompostContent",
+    "io.github.izakyl.folkways.plugins.compost.CompostPresence", "net.minecraft.world.Container",
     "com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod", "net.minecraft.world.entity.EquipmentSlot",
     "net.minecraft.core.BlockPos", "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.world.item.ItemStack",
     "net.minecraft.world.item.Items", "net.minecraft.world.entity.item.ItemEntity", "net.minecraft.world.level.block.ComposterBlock",
@@ -214,13 +214,12 @@ for(var resident:colony.residents()){
  residents.add(Map.of("id",resident.id().toString(),"walked",entity.walkDist,"doing",body.doing().map(Object::toString).orElse(""),"balk",body.balk().map(Object::toString).orElse(""),"hat",body.mob().getItemBySlot(EquipmentSlot.HEAD).is(TagMod.STRAW_HAT)));
 }
 for(var entity:level.getAllEntities())if(entity instanceof ItemEntity drop&&!drop.getItem().isEmpty())drops.add(item(drop.getItem()));
-var support=colony.service(SeedPresence.ID,SeedPresence.class).orElseThrow();var budget=support.budget(level);var wheat=budget.tally(Items.WHEAT_SEEDS);
+var support=colony.service(CompostContent.ID,CompostPresence.class).orElseThrow();var budget=support.budget(level);var wheat=budget.tally(Items.WHEAT_SEEDS);
 var detached=(Map<?,?>)args.value("withdrawn");var isolatedAt=new BlockPos(((Number)detached.get("x")).intValue(),((Number)detached.get("y")).intValue(),((Number)detached.get("z")).intValue());
 var withdrawn=new ArrayList<Object>();if(!(level.getBlockEntity(isolatedAt) instanceof Container isolated))throw new IllegalStateException("missing physical isolation chest");
 for(int slot=0;slot<isolated.getContainerSize();slot++)if(!isolated.getItem(slot).isEmpty())withdrawn.add(item(isolated.getItem(slot)));
-boolean activeFeed=false;String activeId="";var provider=KitchenStations.find(level.getBlockState(cell)).orElseThrow();
-var activeField=provider.getClass().getDeclaredField("active");activeField.setAccessible(true);
-for(var value:((Map<?,?>)activeField.get(provider)).values())if(value instanceof Node node&&node.spec().site().where().equals(WorldPos.of(level,cell))){activeFeed=!node.spec().needs().isEmpty();activeId=node.id().toString();}
+boolean activeFeed=false;String activeId="";
+for(var active:support.activeSessions())for(var claim:colony.reservedInputs(level))if(claim.node().equals(active)){activeFeed=true;activeId=active.toString();}
 var out=new LinkedHashMap<String,Object>();out.put("tick",level.getGameTime());out.put("fill",level.getBlockState(cell).getValue(ComposterBlock.LEVEL));out.put("marked",colony.holdingAt(WorldPos.of(level,cell)).isPresent());
 out.put("stores",stores);out.put("packs",packs);out.put("drops",drops);out.put("residents",residents);out.put("withdrawn",withdrawn);out.put("activeFeed",activeFeed);out.put("activeId",activeId);boolean awaitingSeed=false;for(var claim:colony.reservedInputs(level))if(claim.node().toString().equals(activeId))awaitingSeed=true;out.put("awaitingSeed",awaitingSeed);
 out.put("seedBudget",Map.of("complete",budget.complete(),"physical",wheat.physical(),"compostable",wheat.compostable()));out.put("stalls",colony.stallsIn(level.dimension()).stream().map(Object::toString).filter(text->text.contains("compost")||text.contains("wheat_seeds")).toList());return out;

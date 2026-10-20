@@ -12,7 +12,6 @@ import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.cookery.board.ChoppingBoardWorkshops;
-import io.github.izakyl.folkways.cookery.compost.CompostStation;
 import io.github.izakyl.folkways.cookery.pot.PotStation;
 import io.github.izakyl.folkways.cookery.seeds.SeedPresence;
 import io.github.izakyl.folkways.cookery.stockpot.StockpotWorkshops;
@@ -39,18 +38,6 @@ final class BuiltinKitchenStations {
         KitchenStations.register(new PotStation());
         KitchenStations.register(new TrayStation());
         KitchenStations.register(new TeapotStation());
-        KitchenStations.register(new CompostStation(colonyId -> {
-            var server = ServerLifecycleHooks.getCurrentServer();
-            return server == null ? Optional.empty() : Colonies.of(server, colonyId)
-                .flatMap(colony -> colony.service(SeedPresence.ID,
-                    SeedPresence.class))
-                .filter(SeedPresence::enabled)
-                .map(support -> support.budget(server.overworld()));
-        }, () -> {
-            var server = ServerLifecycleHooks.getCurrentServer();
-            return server == null ? Set.of()
-                : CropSeeds.catalogue(server.overworld(), BlockPos.ZERO);
-        }));
         KitchenStations.register(new io.github.izakyl.folkways.cookery.stove.StoveStation());
         KitchenStations.register(new io.github.izakyl.folkways.cookery.spit.SpitStation());
         KitchenStations.register(new io.github.izakyl.folkways.cookery.steamer.SteamerStation());

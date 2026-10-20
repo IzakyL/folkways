@@ -41,6 +41,7 @@ public final class DraftOffer {
     }
     public static void register(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
+            LocalPatterns.install();
             BoxOffers.register(new BoxOffers.Offer(ID, DraftPanel.TOKEN, ResourceLocation.withDefaultNamespace("paper"),
                 (min, max, taking) -> DraftPanel.body(new Hint.Zone(min, max), DraftOffer::send, taking)));
             PathOffers.register(new PathOffers.Offer(ALONG, DraftPanel.TOKEN,
@@ -49,19 +50,15 @@ public final class DraftOffer {
         });
     }
 
-    private static void send(CompoundTag file, BlockPos anchor, String siteName, boolean raise) {
+    private static void send(byte[] bytes, BlockPos anchor, String siteName, boolean raise) {
         Optional<UUID> colony = colonyInHand();
         if (colony.isEmpty()) {
             LOGGER.warn("no bound colony book in hand; the drawing was not sent");
             return;
         }
-        bytesOf(file).ifPresent(bytes -> BlueprintUploads.send(new UploadBlueprintPacket(
+        BlueprintUploads.send(new UploadBlueprintPacket(
             colony.get(), ID.getPath(), siteName, bytes, anchor, true, Rotation.NONE, Mirror.NONE, raise),
-            PacketDistributor::sendToServer));
-    }
-
-    static boolean fits(CompoundTag file) {
-        return bytesOf(file).isPresent();
+            PacketDistributor::sendToServer);
     }
 
     static void commission(Pattern pattern, Hint hint, Chosen settings, Direction facing, String siteName,
@@ -80,7 +77,7 @@ public final class DraftOffer {
         return player == null ? Optional.empty() : Books.heldColony(player);
     }
 
-    private static Optional<byte[]> bytesOf(CompoundTag file) {
+    static Optional<byte[]> bytesOf(CompoundTag file) {
         try (ByteArrayOutputStream written = new ByteArrayOutputStream()) {
             NbtIo.writeCompressed(file, written);
             byte[] bytes = written.toByteArray();

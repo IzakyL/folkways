@@ -1,21 +1,25 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
+import io.github.izakyl.folkways.base.task.Jobs;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.colony.Books;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.api.ui.LonePanel;
 import io.github.izakyl.folkways.front.api.ui.Placing;
+import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.plugins.build.draft.Templates;
 import io.github.izakyl.folkways.plugins.build.draft.client.LocalPatterns;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -37,8 +41,6 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @OnlyIn(Dist.CLIENT)
 public final class HeldBlueprints {
 
-    private static final String STRUCTURE = ".nbt";
-
     private HeldBlueprints() {
     }
 
@@ -46,7 +48,7 @@ public final class HeldBlueprints {
     private static final float PICKER_HEIGHT = 230f;
 
     public static void install() {
-        BlueprintsPage.install(HeldBlueprints::shelf, entry -> take(entry, () -> {
+        BlueprintsPage.installPage(HeldBlueprints::page, entry -> take(entry, () -> {
             Player player = Minecraft.getInstance().player;
             if (player != null) {
                 player.closeContainer();
@@ -59,19 +61,46 @@ public final class HeldBlueprints {
     // The same list on a panel of its own, which goes back to the view it was opened from once one is picked.
     private static void pick() {
         LonePanel.open("blueprint_picker", Component.translatable(BuildContent.BLUEPRINTS.nameKey()),
-            PICKER_WIDTH, PICKER_HEIGHT, pane -> BlueprintsPage.shelfOf(shelf(), entry -> take(entry, pane::close)));
+            PICKER_WIDTH, PICKER_HEIGHT, pane -> page(entry -> take(entry, pane::close)));
     }
 
-    private static List<BlueprintsPage.Entry> shelf() {
+    private static UIElement page(Consumer<BlueprintsPage.Entry> takes) {
+        UIElement page = Rows.page().addChildren(Rows.text(Component.translatable("folkways.library.loading")));
+        Jobs.Scope files = LocalPatterns.scope();
+        page.addEventListener(UIEvents.REMOVED, event -> {
+            if (event.target == page) {
+                files.close();
+            }
+        });
         Map<ResourceLocation, CompoundTag> offered = Templates.files();
-        Map<ResourceLocation, CompoundTag> mine = new LinkedHashMap<>();
-        LocalPatterns.walk(Templates.BLUEPRINTS, STRUCTURE, Templates.BLUEPRINT, (id, file) ->
-            LocalPatterns.readStructure(file).filter(tag -> !Objects.equals(tag, offered.get(id)))
-                .ifPresent(tag -> mine.put(id, tag)));
+        LocalPatterns.blueprints(files, page, mine -> {
+            page.clearAllChildren();
+            page.addChildren(BlueprintsPage.shelfOf(shelf(offered, mine), takes));
+        }).whenComplete((loaded, broken) -> {
+            if (broken != null) {
+                Minecraft.getInstance().execute(() -> {
+                    if (files.isOpen() && LocalPatterns.visible(page)) {
+                        page.clearAllChildren();
+                        page.addChildren(Rows.text(Component.translatable("folkways.library.failed")),
+                            BlueprintsPage.shelfOf(shelf(Templates.files(), Map.of()), takes));
+                    }
+                });
+            }
+        });
+        return page;
+    }
+
+    private static List<BlueprintsPage.Entry> shelf(Map<ResourceLocation, CompoundTag> offered,
+            Map<ResourceLocation, CompoundTag> mine) {
         List<BlueprintsPage.Entry> entries = new ArrayList<>();
         offered.keySet().stream().filter(Templates::isBlueprint).sorted().forEach(id ->
             entries.add(new BlueprintsPage.Entry(id, Component.literal(nameOf(id)), false, offered.get(id))));
-        mine.forEach((id, tag) -> entries.add(new BlueprintsPage.Entry(id, Component.literal(nameOf(id)), true, tag)));
+        mine.keySet().stream().sorted().forEach(id -> {
+            CompoundTag tag = mine.get(id);
+            if (!Objects.equals(tag, offered.get(id))) {
+                entries.add(new BlueprintsPage.Entry(id, Component.literal(nameOf(id)), true, tag));
+            }
+        });
         return entries;
     }
 

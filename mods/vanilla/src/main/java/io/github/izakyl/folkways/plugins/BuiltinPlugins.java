@@ -22,6 +22,7 @@ public final class BuiltinPlugins {
         WaresPlugin.install(modBus);
         BuildPlugin.install(modBus);
         FarmingPlugin.install(modBus);
+        io.github.izakyl.folkways.plugins.compost.CompostContent.install(modBus);
         PasturePlugin.install(modBus);
         FishingPlugin.install(modBus);
         GroundworkPlugin.install(modBus);
