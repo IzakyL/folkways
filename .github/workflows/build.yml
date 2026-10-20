@@ -32,10 +32,60 @@ jobs:
           name: folkways-jars
           path: build/libs/*.jar
           if-no-files-found: error
+  game-tests:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: base
+            gradle-args: ""
+          - profile: cookery
+            gradle-args: "-PcookeryTests=true"
+    name: GameTests (${{ matrix.profile }})
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: gradle/actions/setup-gradle@v5
+      - uses: actions/cache@v5
+        with:
+          path: .blockwright-store
+          key: blockwright-mods-${{ hashFiles('blockwright.toml') }}
+      - run: npm ci
+      - run: npm run setup
+      - name: Run ${{ matrix.profile }} GameTests
+        shell: bash
+        run: |
+          mkdir -p run/gametest/ci
+          printf 'eula=true\n' > run/gametest/eula.txt
+          set -o pipefail
+          timeout --signal=TERM --kill-after=60s 50m ./gradlew ${{ matrix.gradle-args }} --console=plain runGameTestServer 2>&1 | tee "run/gametest/ci/${{ matrix.profile }}.log"
+      - name: Write JUnit result
+        if: always()
+        run: node scripts/ci/write-game-test-junit.mjs "${{ matrix.profile }}" "${{ job.status }}"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: gametest-${{ matrix.profile }}-reports
+          path: |
+            run/gametest/ci/*.xml
+            run/gametest/ci/*.log
+            run/gametest/logs/**
+            run/gametest/crash-reports/**
+          if-no-files-found: warn
   nightly:
     # Every push to master replaces the "nightly" prerelease with that commit's jars.
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: build
+    needs: [build, game-tests]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
