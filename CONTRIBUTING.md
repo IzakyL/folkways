@@ -144,3 +144,14 @@ Update English and Chinese pages together. Use the game's locale catalogs for UI
 names and keep commands, paths and Java symbols literal. Put detailed gameplay,
 content, testing and architecture material under `docs/en/` and `docs/zh-CN/`.
 See the [documentation index](docs/README.md) for the layout and maintenance notes.
+
+| `npm run promo:cookery` | Films the native Cookery order, production chain and finished dish |
+| `npm run promo:cookery:film` | Cuts those takes with Chinese captions and music into upload and preview MP4s |
+
+The Cookery promo's wording lives in `tests/promo/film/promo-cookery.toml`. Run
+`npm run setup` before filming. Raw takes and production evidence are written to
+`tests/out/promo/takes/cookery/`; the finished `folkways-cookery-upload.mp4` and
+`folkways-cookery-preview.mp4` are in `tests/out/promo/film/`. The set and residents
+are staged by the script; the filmed order uses real recipes and native appliances,
+with only raw ingredients available from a creative supply box. The middle of the
+production shot is accelerated in the edit.
