@@ -32,11 +32,22 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestInfo;
+import net.minecraft.gametest.framework.GameTestListener;
+import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -110,6 +121,175 @@ public final class SchedulingRecoveryGameTests {
             cleanup.forEach(Runnable::run);
             helper.succeed();
         });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void asynchronousSuccessAndRecoveryPublishInOrderAcrossAFailure(GameTestHelper helper) {
+        new AsyncRecovery(helper, false).start();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void asynchronousRecoveryFinishingAfterCloseCannotPublish(GameTestHelper helper) {
+        new AsyncRecovery(helper, true).start();
+    }
+
+    // A real serial lane, not an inline executor. The server only polls signals on simulation ticks; the lane
+    // reads immutable fixture inputs and never the level or helper. A listener also cleans up timeout failures.
+    private static final class AsyncRecovery {
+        final GameTestHelper helper;
+        final Fixture scene;
+        final boolean closeDuringRecovery;
+        final Thread server = Thread.currentThread();
+        final ExecutorService pool;
+        final Executor lane;
+        final AtomicInteger submitted = new AtomicInteger();
+        final AtomicInteger finished = new AtomicInteger();
+        final AtomicLong simulationTick = new AtomicLong();
+        final AtomicLong retrySubmittedAt = new AtomicLong(Long.MIN_VALUE);
+        final AtomicReference<Throwable> workerFailure = new AtomicReference<>();
+        final CountDownLatch inRecovery = new CountDownLatch(1);
+        final CountDownLatch releaseRecovery = new CountDownLatch(1);
+        final AtomicBoolean firstRecovery = new AtomicBoolean();
+        final AtomicBoolean releasedNormally = new AtomicBoolean();
+        final List<Boolean> serverPublications = new ArrayList<>();
+        boolean successPrecededFailureNotice;
+        boolean retired;
+        int phase;
+        long armedAt;
+
+        AsyncRecovery(GameTestHelper helper, boolean closeDuringRecovery) {
+            this.helper = helper;
+            this.closeDuringRecovery = closeDuringRecovery;
+            scene = new Fixture(helper, 1, null, Placement.NOWHERE, null);
+            pool = Executors.newSingleThreadExecutor(task -> {
+                Thread worker = new Thread(task, "folkways-test-schedule-recovery");
+                worker.setDaemon(true);
+                return worker;
+            });
+            lane = task -> {
+                if (submitted.incrementAndGet() == 3) retrySubmittedAt.set(simulationTick.get());
+                pool.execute(() -> {
+                    try { task.run(); }
+                    catch (RuntimeException | Error broken) { workerFailure.compareAndSet(null, broken); }
+                    finally { finished.incrementAndGet(); }
+                });
+            };
+            scene.delivered = result -> {
+                serverPublications.add(Thread.currentThread() == server);
+                if (scene.published.size() == 1) {
+                    successPrecededFailureNotice = field(scene.pipeline, "retry") == null;
+                }
+            };
+            scene.whenRecovered = () -> {
+                if (firstRecovery.compareAndSet(false, true)) {
+                    inRecovery.countDown();
+                    if (closeDuringRecovery) {
+                        try {
+                            if (!releaseRecovery.await(2, TimeUnit.SECONDS)) {
+                                throw new IllegalStateException("test did not release the recovery signal");
+                            }
+                            releasedNormally.set(true);
+                        } catch (InterruptedException broken) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException(broken);
+                        }
+                    }
+                }
+            };
+            helper.testInfo.addListener(new GameTestListener() {
+                public void testStructureLoaded(GameTestInfo test) { }
+                public void testPassed(GameTestInfo test, GameTestRunner runner) { abort(); }
+                public void testFailed(GameTestInfo test, GameTestRunner runner) { abort(); }
+                public void testAddedForRerun(GameTestInfo before, GameTestInfo after, GameTestRunner runner) { abort(); }
+            });
+        }
+
+        void start() {
+            try {
+                simulationTick.set(helper.getLevel().getGameTime());
+                scene.enqueue(scene.initial(), scene.crew, lane);
+                helper.onEachTick(this::tick);
+            } catch (RuntimeException | Error broken) {
+                abort();
+                throw broken;
+            }
+        }
+
+        void tick() {
+            try {
+                simulationTick.set(helper.getLevel().getGameTime());
+                helper.assertTrue(workerFailure.get() == null, "the serial executor must not lose an uncaught task failure");
+                if (phase == 0 && finished.get() >= 1) {
+                    // Keep the first success queued for the server while a later layout partially fails.
+                    helper.assertTrue(scene.published.isEmpty(), "background success waits for a simulation-tick publication");
+                    scene.enqueue(scene.changed(), scene.crew, lane);
+                    phase = 1;
+                } else if (phase == 1 && finished.get() >= 2) {
+                    helper.assertValueEqual(scene.failures, 1, "the second asynchronous layout really failed");
+                    helper.assertTrue(scene.partialFailures.equals(List.of(true)), "failure followed a real Tours mutation");
+                    helper.assertTrue(scene.published.isEmpty(), "neither worker task applies callbacks itself");
+                    armedAt = simulationTick.get();
+                    scene.pipeline.applyReady(helper.getLevel());
+                    helper.assertValueEqual(scene.published.size(), 1, "the queued success is published before retrying");
+                    helper.assertTrue(successPrecededFailureNotice, "made preserves success before its later failure notice");
+                    phase = 2;
+                } else if (phase == 2) {
+                    scene.pipeline.applyReady(helper.getLevel());
+                    if (closeDuringRecovery && inRecovery.getCount() == 0) {
+                        // The lane is parked inside the replacement Tours. Closing queues cleanup behind it,
+                        // then releases it to compute a valid but retired result on that same serial lane.
+                        retire();
+                        phase = 3;
+                    } else if (!closeDuringRecovery && finished.get() >= 3) {
+                        scene.pipeline.applyReady(helper.getLevel());
+                        helper.assertValueEqual(scene.published.size(), 2, "the recovered result publishes exactly once");
+                        retire();
+                        phase = 3;
+                    }
+                } else if (phase == 3 && pool.isTerminated()) {
+                    scene.pipeline.applyReady(helper.getLevel());
+                    helper.assertTrue(retrySubmittedAt.get() > armedAt, "only a later simulation tick submits the recovery");
+                    helper.assertTrue(serverPublications.stream().allMatch(Boolean::booleanValue),
+                        "all publications run on the owning server thread");
+                    helper.assertTrue(scene.published.getFirst().all().get(scene.second.id()).nodes().equals(List.of(scene.old.id())),
+                        "the first publication remains the original successful route");
+                    helper.assertValueEqual((Integer) field(scene.pipeline, "scheduleFailures"), 0,
+                        "the replacement layout finished successfully before cleanup");
+                    if (closeDuringRecovery) {
+                        helper.assertTrue(releasedNormally.get(), "the in-flight recovery was released normally after close");
+                        helper.assertValueEqual(scene.published.size(), 1, "close rejects the late replacement publication");
+                    } else {
+                        Scheduler.Scheduled recovered = scene.published.getLast();
+                        helper.assertTrue(recovered.all().get(scene.first.id()).nodes().equals(List.of(scene.head.id(), scene.tail.id())),
+                            "the second publication is the complete replacement route");
+                        helper.assertTrue(recovered.changed().get(scene.second.id()).nodes().isEmpty(),
+                            "the recovered diff still removes the earlier published route");
+                    }
+                    helper.succeed();
+                }
+            } catch (RuntimeException | Error broken) {
+                abort();
+                throw broken;
+            }
+        }
+
+        void retire() {
+            if (retired) return;
+            retired = true;
+            try { scene.pipeline.close(Runnable::run, lane); }
+            finally {
+                releaseRecovery.countDown();
+                pool.shutdown();
+            }
+        }
+
+        void abort() {
+            try { retire(); }
+            finally {
+                releaseRecovery.countDown();
+                pool.shutdownNow();
+            }
+        }
     }
 
     // Also used by the real batch-runner fixture: it keeps its existing execution and inventory while this
@@ -186,9 +366,21 @@ public final class SchedulingRecoveryGameTests {
         }
 
         void begin() {
-            enqueue(Shown.delta(Map.of(old.id(), old), List.of(), List.of(), Map.of(old.id(), second.id()), Set.of()), crew);
+            enqueue(initial(), crew);
             pipeline.applyReady(helper.getLevel());
             helper.assertValueEqual(published.size(), 1, "the fixture first publishes a good route");
+            enqueue(changed(), crew);
+            pipeline.applyReady(helper.getLevel());
+            helper.assertValueEqual(failures, 1, "the real scheduler failed after accepting its changed graph");
+            helper.assertTrue(partialFailures.getFirst(), "the first fault happened after an earlier node changed Tours");
+            helper.assertValueEqual(published.size(), 1, "a partial layout is not published");
+        }
+
+        WeaveDelta initial() {
+            return Shown.delta(Map.of(old.id(), old), List.of(), List.of(), Map.of(old.id(), second.id()), Set.of());
+        }
+
+        WeaveDelta changed() {
             Map<UUID, Vertex> put = new LinkedHashMap<>();
             put.put(head.id(), head);
             put.put(tail.id(), tail);
@@ -199,20 +391,20 @@ public final class SchedulingRecoveryGameTests {
                 put.put(active.id(), new Vertex(active.id(), active, activePlan));
                 pins.put(active.id(), Optional.of(second.id()));
             }
-            enqueue(new WeaveDelta(put, Set.of(old.id()), Set.of(new Before(head.id(), tail.id())), Set.of(),
+            return new WeaveDelta(put, Set.of(old.id()), Set.of(new Before(head.id(), tail.id())), Set.of(),
                 Map.of(),
-                pins, Set.copyOf(put.keySet()), List.of(), Optional.empty()), crew);
-            pipeline.applyReady(helper.getLevel());
-            helper.assertValueEqual(failures, 1, "the real scheduler failed after accepting its changed graph");
-            helper.assertTrue(partialFailures.getFirst(), "the first fault happened after an earlier node changed Tours");
-            helper.assertValueEqual(published.size(), 1, "a partial layout is not published");
+                pins, Set.copyOf(put.keySet()), List.of(), Optional.empty());
         }
 
         void enqueue(WeaveDelta delta, Crew hands) {
+            enqueue(delta, hands, Runnable::run);
+        }
+
+        void enqueue(WeaveDelta delta, Crew hands, Executor lane) {
             try {
                 var method = Pipeline.class.getDeclaredMethod("lay", Executor.class, Scheduler.Input.class, Consumer.class);
                 method.setAccessible(true);
-                method.invoke(pipeline, (Executor) Runnable::run,
+                method.invoke(pipeline, lane,
                     new Scheduler.Input(delta, hands, ways, true, helper.getLevel().getGameTime()),
                     (Consumer<Scheduler.Scheduled>) result -> { published.add(result); delivered.accept(result); });
             } catch (InvocationTargetException broken) {
