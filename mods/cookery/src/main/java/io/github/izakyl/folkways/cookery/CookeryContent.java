@@ -35,7 +35,7 @@ public final class CookeryContent {
     private CookeryContent() {
     }
 
-    public static List<ResourceLocation> stations() { return List.of(STATION, COMPOST, STOVE); }
+    public static List<ResourceLocation> stations() { return List.of(STATION, STOVE); }
 
     public static boolean station(BlockState state) {
         return KitchenStations.find(state).isPresent();
@@ -43,6 +43,9 @@ public final class CookeryContent {
 
     public static void declare(Declaring event) {
         BuiltinKitchenStations.register();
+        io.github.izakyl.folkways.plugins.farming.CropSeeds.purpose(id("cookery_rice"), () -> List.of(
+            com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.WILD_RICE_SEED.get(),
+            com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.RICE_SEED.get()));
         io.github.izakyl.folkways.cookery.racks.KitchenRacks.register();
         io.github.izakyl.folkways.cookery.oil.PlacedOilStore.register();
         io.github.izakyl.folkways.cookery.farming.CookeryCrops.register();
@@ -67,7 +70,6 @@ public final class CookeryContent {
             CookeryPresence state = new CookeryPresence(scope.colony(), scope.server());
             scope.share(state);
             scope.watch(STATION, state);
-            scope.watch(COMPOST, state);
             scope.watch(STOVE, state);
             scope.tick(state::tick);
             scope.closed(state::closed);
@@ -80,8 +82,6 @@ public final class CookeryContent {
         event.enrollment(ID, new Enrollment(List.of(
             new Delegation(STATION, new Shape.Block(state -> !state.is(net.minecraft.world.level.block.Blocks.COMPOSTER)
                 && !state.is(com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks.STOVE.get()) && station(state), KitchenStations::anchor)),
-            new Delegation(COMPOST, new Shape.Point(state -> state.is(net.minecraft.world.level.block.Blocks.COMPOSTER)),
-                ResourceLocation.withDefaultNamespace("composter")),
             new Delegation(STOVE, new Shape.Point(state -> state.is(com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks.STOVE.get())),
                 ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "stove")),
             new Delegation(SeedPresence.GRASS, new Shape.Volume(io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig.maxFarmCells()),

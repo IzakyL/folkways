@@ -31,6 +31,7 @@ final class StockpotLoad extends StockpotNode {
     private final long generation;
     private final StockpotPlan plan;
     private final boolean hasLid;
+    private final boolean replaceLid;
     private final KitchenBookings bookings;
     private final Runnable changed;
 
@@ -46,6 +47,12 @@ final class StockpotLoad extends StockpotNode {
 
     StockpotLoad(UUID colony, UUID batch, WorldPos at, Stances stances, StockpotPlan plan,
                  boolean hasLid, KitchenBookings bookings, Runnable changed, UUID turn, long generation) {
+        this(colony, batch, at, stances, plan, hasLid, bookings, changed, turn, generation, hasLid);
+    }
+
+    StockpotLoad(UUID colony, UUID batch, WorldPos at, Stances stances, StockpotPlan plan,
+                 boolean hasLid, KitchenBookings bookings, Runnable changed, UUID turn, long generation,
+                 boolean replaceLid) {
         super(spec(UUID.randomUUID(), at, stances)
             .needs(plan.loadingNeeds(hasLid, lid()).stream()
                 .map(need -> new Need(need.spec(), need.count(), true)).toList())
@@ -58,6 +65,7 @@ final class StockpotLoad extends StockpotNode {
         this.generation = generation;
         this.plan = plan;
         this.hasLid = hasLid;
+        this.replaceLid = replaceLid;
         this.bookings = bookings;
         this.changed = changed;
     }
@@ -161,7 +169,7 @@ final class StockpotLoad extends StockpotNode {
             if (!act(level, pot, who, cover, () -> pot.onLitClick(level, who.body(), cover), made)) {
                 return rolledBack(level, before);
             }
-            StockpotBatch.start(colony, batch, plan, pot, level, hasLid).save(pot, level);
+            StockpotBatch.start(colony, batch, plan, pot, level, replaceLid).save(pot, level);
             // Carriers are preflighted before loading but spent only by serving. Within's one outer need books
             // them once; returning them as unused keeps their real components in the worker's pack meanwhile.
             List<ItemStack> unused = new ArrayList<>(supplied.get().unused());

@@ -8,6 +8,8 @@ import net.minecraft.world.item.ItemStack;
 
 // Work whose inputs are the very stacks the planner chose, at the place it chose, rather than whatever
 // matches its needs. The core takes them through here before the work runs and puts them back if it fails.
+// draw is responsible for the placement's physical source and component identity; supplied stacks alone cannot
+// prove where they came from. Batch execution additionally checks their remaining declared/planned quantities.
 public interface Staged {
 
     sealed interface Drawn {

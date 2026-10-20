@@ -15,6 +15,9 @@ import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.WorkProgress;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workshop;
+import io.github.izakyl.folkways.core.api.work.batch.BatchSession;
+import io.github.izakyl.folkways.core.engine.batch.BatchExecution;
+import io.github.izakyl.folkways.core.engine.batch.BatchHolds;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonySnapshot;
 import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
@@ -103,6 +106,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     private final WeaveView graph = new WeaveView();
     // Actual execution survives route changes while its physical output awaits the planner hand-off.
     private final Map<UUID, UUID> inputWorkers = new LinkedHashMap<>();
+    private final Map<UUID, BatchExecution> batches = new LinkedHashMap<>();
     private final Set<UUID> declined = new LinkedHashSet<>();
     private final Map<UUID, Tour> tours = new LinkedHashMap<>();
     private Schedule schedule = Schedule.EMPTY;
@@ -166,6 +170,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         runners.close(this);
         phases.retain(Set.of());
         inputWorkers.clear();
+        batches.clear();
         personal.retain(Set.of());
         personalRequests.clear();
         endings.clear();
@@ -223,6 +228,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     }
 
     private void ending(UUID node, Ending how) {
+        batches.remove(node);
         if (!closed) {
             endings.add(new Ended(node, how));
         }
@@ -265,7 +271,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         Ways ways = ColonyWays.of(colony, level);
         List<Workshop> workshops = new ArrayList<>(colony.works().workshopsIn(dimension));
         salvage.workshop().ifPresent(workshops::add);
-        Known known = survey.known(ways, List.copyOf(workshops));
+        Known known = BatchHolds.exclude(survey.known(ways, List.copyOf(workshops)), batchOutputHolds());
         readout.froze(known.hands().size(), inbox.size());
         pipeline.weave(lanes.weave(), lanes.schedule(), known, level.getGameTime(),
             (batch, woven) -> woven(level, batch, woven), this::laid);
@@ -353,8 +359,28 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             if (vertex != null && vertex.node().worker().isPresent()) return vertex.node().worker().get();
             UUID pinned = graph.pin(node);
             return pinned != null ? pinned : assigned.get(node);
+        }, node -> {
+            Vertex vertex = graph.vertex(node);
+            if (vertex == null) return List.of();
+            BatchExecution batch = batches.get(node);
+            return batch == null ? vertex.plan().draws() : batch.remainingDraws(vertex.plan().draws());
+        }, node -> {
+            BatchExecution batch = batches.get(node);
+            return batch == null ? List.of() : batch.outputHolds();
         });
     }
+
+    private List<io.github.izakyl.folkways.core.api.work.ReservedInput> batchOutputHolds() {
+        return batches.entrySet().stream().filter(entry -> phases.of(entry.getKey()) == NodeState.WORKING)
+            .flatMap(entry -> entry.getValue().outputHolds().stream()).toList();
+    }
+
+    BatchExecution batch(Node parent) {
+        if (!(parent.spec().workload() instanceof BatchSession)) return null;
+        return batches.computeIfAbsent(parent.id(), ignored -> new BatchExecution(parent));
+    }
+
+    BatchExecution existingBatch(UUID parent) { return batches.get(parent); }
     private void woven(ServerLevel level, List<Message> batch, Planner.Woven woven) {
         WeaveDelta delta = woven.delta();
         Set<UUID> withdrawn = new LinkedHashSet<>();

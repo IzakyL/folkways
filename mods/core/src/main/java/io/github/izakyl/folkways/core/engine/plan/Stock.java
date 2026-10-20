@@ -31,6 +31,7 @@ public final class Stock {
     private final Map<Stash, List<Holding>> byStash;
     private final Map<Stash, List<StoreRule>> rules;
     private final Map<Stash, Set<Item>> refused;
+    private final Stock physicalRoom;
 
     private final Map<ItemSpec, Long> counted = new ConcurrentHashMap<>();
     private final Map<ItemSpec, List<Lot>> lots = new ConcurrentHashMap<>();
@@ -46,6 +47,12 @@ public final class Stock {
     // `refused` holds, per store, the items the container itself will not take in any slot.
     public Stock(List<Holding> holdings, Map<Stash, Integer> emptyCells, Map<Stash, List<StoreRule>> rules,
                  Map<Stash, Set<Item>> refused) {
+        this(holdings, emptyCells, rules, refused, null);
+    }
+
+    private Stock(List<Holding> holdings, Map<Stash, Integer> emptyCells, Map<Stash, List<StoreRule>> rules,
+                  Map<Stash, Set<Item>> refused, Stock physicalRoom) {
+        this.physicalRoom = physicalRoom;
         this.rules = Map.copyOf(rules);
         this.refused = Map.copyOf(refused);
         this.holdings = List.copyOf(holdings);
@@ -61,6 +68,27 @@ public final class Stock {
         }
         grouped.replaceAll((where, held) -> List.copyOf(held));
         this.byStash = Map.copyOf(grouped);
+    }
+
+    // Hide already-produced goods promised by a still-running batch, without inventing physical free space.
+    public Stock withheld(Map<Stash, List<Need>> held) {
+        if (held.isEmpty()) return this;
+        Map<Stash, long[]> left = new LinkedHashMap<>();
+        held.forEach((stash, needs) -> left.put(stash, needs.stream().mapToLong(Need::count).toArray()));
+        List<Holding> available = new ArrayList<>();
+        for (Holding holding : holdings) {
+            ItemStack stack = holding.stack().copy();
+            List<Need> needs = held.getOrDefault(holding.where(), List.of());
+            long[] remaining = left.get(holding.where());
+            for (int i = 0; i < needs.size() && !stack.isEmpty(); i++) {
+                if (!Goods.matches(stack, needs.get(i).spec())) continue;
+                int take = (int) Math.min(remaining[i], stack.getCount());
+                stack.shrink(take);
+                remaining[i] -= take;
+            }
+            if (!stack.isEmpty()) available.add(new Holding(holding.where(), stack));
+        }
+        return new Stock(available, emptyCells, rules, refused, this);
     }
 
     public Set<Stash> stashes() {
@@ -153,6 +181,7 @@ public final class Stock {
     }
 
     public long roomAt(Stash where, ItemSpec spec) {
+        if (physicalRoom != null) return physicalRoom.roomAt(where, spec);
         if (!stashes.contains(where) || !admits(where, spec)) {
             return 0;
         }

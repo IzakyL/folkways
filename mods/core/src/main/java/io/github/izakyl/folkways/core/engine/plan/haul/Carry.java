@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.api.work.StockCheck;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.engine.plan.Carrying;
 import io.github.izakyl.folkways.core.engine.plan.Edge;
@@ -66,16 +67,19 @@ final class Carry implements Carrying {
 
     // These stacks stay in the pack they are in, and the one carrying them does the consumer's work with them.
     private static long fromHand(Laying plan, UUID hand, List<ItemStack> stacks, UUID consumer) {
+        boolean checking = plan.node(consumer) instanceof StockCheck;
         long served = 0;
         for (ItemStack stack : stacks) {
             ItemSpec concrete = Goods.specOf(stack);
-            spend(plan, consumer, concrete, stack.getCount());
+            if (!checking) spend(plan, consumer, concrete, stack.getCount());
             plan.book(new Resource.Cargo(hand, concrete), consumer, stack.getCount());
             plan.flow(new Flow(new Flow.From.Carried(hand), consumer, concrete, stack.getCount()));
             served += stack.getCount();
         }
-        plan.hand(consumer, new Manifest(stacks, List.of()));
-        plan.by(consumer, hand);
+        if (!checking) {
+            plan.hand(consumer, new Manifest(stacks, List.of()));
+            plan.by(consumer, hand);
+        }
         return served;
     }
 
@@ -111,6 +115,11 @@ final class Carry implements Carrying {
     // pack of whoever does it. `made` goods are not there yet: their maker puts them there first.
     private static long fromStash(Laying plan, Stash where, Edge edge, ItemSpec concrete, long count, boolean made) {
         UUID consumer = edge.consumer();
+        if (plan.node(consumer) instanceof StockCheck) {
+            plan.book(new Resource.Lot(where, concrete), consumer, count);
+            lies(plan, where, consumer, concrete, count, made);
+            return count;
+        }
         if (!edge.carried()) {
             Set<Stand> athand = plan.reaching(consumer, where);
             if (!athand.isEmpty()) {
@@ -209,7 +218,7 @@ final class Carry implements Carrying {
     private static long fromMaker(Laying plan, UUID maker, long yield, boolean shared, Edge edge, ItemSpec concrete,
                                   long count) {
         UUID consumer = edge.consumer();
-        if (!shared && plan.putsInto(maker).isEmpty()) {
+        if (!(plan.node(consumer) instanceof StockCheck) && !shared && plan.putsInto(maker).isEmpty()) {
             Laying.Mark mark = plan.mark();
             plan.carry(maker, new Amount(concrete, yield));
             spend(plan, consumer, concrete, count);
@@ -362,6 +371,7 @@ final class Carry implements Carrying {
     // Whether goods put into `out` could go on to the consumer at all, checked before anything is booked there.
     private static boolean leaves(Laying plan, Stash out, Edge edge, ItemSpec concrete, long count) {
         UUID consumer = edge.consumer();
+        if (plan.node(consumer) instanceof StockCheck) return true;
         if (!edge.carried() && (!plan.reaching(consumer, out).isEmpty()
                 || landing(plan, out, plan.closure(consumer), consumer, concrete, count) != null)) {
             return true;

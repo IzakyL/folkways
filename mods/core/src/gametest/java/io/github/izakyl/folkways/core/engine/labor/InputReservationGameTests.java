@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.core.api.work.NodeState;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.ReservedInput;
 import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.api.work.StockCheck;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
@@ -62,6 +63,45 @@ public final class InputReservationGameTests {
     public static void register(RegisterGameTestsEvent event) { event.register(InputReservationGameTests.class); }
 
     public record Exported(List<ReservedInput> inputs, List<ItemStack> pack, UUID consumer, UUID resident) { }
+
+    private record Observation(NodeSpec spec) implements Node, StockCheck {
+        public Drawn draw(ServerLevel level, Worker who) { return new Taken(List.of()); }
+        public void restore(ServerLevel level, Worker who, List<ItemStack> goods) {
+            if (!goods.isEmpty()) throw new AssertionError("an observation exchanges no material");
+        }
+        public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
+    }
+
+    @GameTest(template = "empty")
+    public static void stockObservationsAreNotExportedAsDestructiveConsumerClaims(GameTestHelper helper) {
+        var f = new PlanningFixture(helper);
+        var observed = new Observation(NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(f.target),
+            Stances.at(f.target), Workload.Once.of(1)).needs(new Need(SEEDS, 64)).done());
+        var ordinarySpec = NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(f.target),
+            Stances.at(f.target), Workload.Once.of(1)).needs(new Need(SEEDS, 16)).done();
+        Node ordinary = new Node() {
+            public NodeSpec spec() { return ordinarySpec; }
+            public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
+        };
+        var solver = new Solving();
+        try {
+            var world = f.situation(new Stock(List.of(new Stock.Holding(new Stash(f.source),
+                new ItemStack(Items.WHEAT_SEEDS, 80))), Map.of(new Stash(f.source), 25, new Stash(f.target), 27)), List.of());
+            var planned = solver.handle(new Known(world, f.crew.hands()), List.of(
+                new Message.Submitted(OWNER, Grown.of(observed)), new Message.Submitted(OWNER, Grown.of(ordinary))), 0);
+            helper.assertTrue(planned.diagnosis().shortfalls().isEmpty(), "64 retained and 16 consumed use the distinct 80 known units");
+            helper.assertValueEqual(solver.plan().vertex(observed.id()).plan().draws().stream()
+                .mapToLong(draw -> draw.count()).sum(), 64L, "the observation still has real internal planner reservations");
+            var exported = InputReservations.read(solver.plan(), id -> NodeState.PENDING, id -> null);
+            helper.assertTrue(exported.stream().noneMatch(input -> input.node().equals(observed.id())),
+                "a stock target cannot be charged again as planned consumption by domain reserve budgets");
+            helper.assertTrue(exported.stream().anyMatch(input -> input.node().equals(ordinary.id()) && input.count() == 16),
+                "the ordinary consumer's destructive claim is still exported");
+            helper.assertTrue(exported.stream().anyMatch(input -> input.store().filter(f.source::equals).isPresent()
+                && input.count() == 16), "the real upstream source draw remains protected");
+        } finally { solver.closed(); }
+        helper.succeed();
+    }
 
     @GameTest(template = "empty")
     public static void independentFetchesToOneConsumerExportAll129PhysicalSeeds(GameTestHelper helper) {

@@ -187,7 +187,7 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(template = "empty_large", timeoutTicks = 300)
     public static void anAdoptedGrassSourceRemainsWantedWhileItsResidentTravelsAcrossRepeatedSweeps(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos travellingFeet = helper.absolutePos(new BlockPos(10, 1, 10)).offset(-41, 1, 0);
@@ -195,9 +195,14 @@ public final class GrassSourcesGameTests {
         // The 24-block template does not load this distant resident. Keep the real colony view live.
         boolean forced = !level.getForcedChunks().contains(travellingChunk.toLong())
             && level.setChunkForced(travellingChunk.x, travellingChunk.z, true);
-        helper.runAfterDelay(20, () -> {
+        long readyBy = level.getGameTime() + 200;
+        boolean[] started = { false };
+        helper.onEachTick(() -> {
+            if (started[0]) return;
+            if (!level.isPositionEntityTicking(travellingFeet) && level.getGameTime() < readyBy) return;
+            started[0] = true;
             try {
-                helper.assertTrue(level.isPositionEntityTicking(travellingFeet), "the travelling resident's real chunk ticks before the sweep starts");
+                helper.assertTrue(level.isPositionEntityTicking(travellingFeet), "the travelling resident's real chunk must become entity-ticking within 200 ticks before the sweep starts: " + travellingChunk);
                 for (boolean restore : List.of(false, true)) {
                     try (Fixture rig = new Fixture(helper)) {
                         rig.mark(restore); rig.wearHat();
@@ -300,6 +305,39 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty_large")
+    public static void anObservationalKeepStillLetsNativeGrassFillAnActualSeedDeficit(GameTestHelper helper) {
+        try (Fixture rig = new Fixture(helper)) {
+            rig.mark(false); rig.wearHat();
+            rig.body.pack().setItem(0, new ItemStack(ModItems.TOMATO_SEED.get(), 63));
+            BlockPos storeCell = rig.center.offset(8, 1, 8);
+            rig.level.setBlock(storeCell, Blocks.BARREL.defaultBlockState(), Block.UPDATE_ALL);
+            rig.colony.stores(SeedPresence.ID, rig.level.dimension(), List.of(WorldPos.of(rig.level, storeCell)));
+            for (BlockPos ground : rig.allowed) rig.level.setBlock(ground.above(), Blocks.SHORT_GRASS.defaultBlockState(), Block.UPDATE_ALL);
+            rig.presence.refresh(rig.level.getServer());
+            Node keep = rig.presence.goals(rig.colony.view(rig.level)).stream().flatMap(goal -> goal.nodes().stream())
+                .filter(node -> node.worker().isEmpty()).findFirst().orElseThrow();
+            helper.assertTrue(keep instanceof io.github.izakyl.folkways.core.api.work.StockCheck,
+                "the concurrent bootstrap request observes inventory rather than consuming the retained seeds");
+            rig.level.random.setSeed(0L);
+            long count = 63;
+            for (int attempt = 0; attempt < rig.allowed.size() && count < 64; attempt++) {
+                Node source = rig.source();
+                var feet = source.spec().stances().cells().iterator().next().cell();
+                rig.body.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
+                helper.assertTrue(source.planned(rig.level).isEmpty(), "the real grass source owns its exclusive turn");
+                var done = (Outcome.Done) Commit.run(rig.level, source, rig);
+                done.made().forEach(stack -> helper.assertTrue(io.github.izakyl.folkways.core.api.terms.Containers.insert(rig.body.pack(), stack).isEmpty(), "native grass loot fits actual cargo"));
+                source.ended(rig.level, Ending.DONE);
+                count = Goods.countIn(rig.body.pack(), Goods.specOf(ModItems.TOMATO_SEED.get().getDefaultInstance()));
+            }
+            helper.assertTrue(count >= 64, "real native grass loot supplies the missing planting seed");
+            helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(),
+                "the fulfilled physical reserve stops both grass gathering and the observational Keep");
+        }
+        helper.succeed();
+    }
+
     private static final class Fixture implements Worker, AutoCloseable {
         final ServerLevel level;
         final BlockPos center;
@@ -352,7 +390,39 @@ public final class GrassSourcesGameTests {
             };
         }
         void finish(Node node) {
-            if (node.spec().workload() instanceof Workload.Within within) {
+            if (node.spec().workload() instanceof io.github.izakyl.folkways.core.api.work.batch.BatchSession) {
+                var batch = new io.github.izakyl.folkways.core.engine.batch.BatchExecution(node);
+                boolean complete = false;
+                for (int index = 0; index < 16; index++) {
+                    var next = batch.next(level, this);
+                    if (next instanceof io.github.izakyl.folkways.core.api.work.batch.StepResult.Complete) {
+                        complete = true;
+                        break;
+                    }
+                    if (!(next instanceof io.github.izakyl.folkways.core.api.work.batch.StepResult.Step)
+                            && !(next instanceof io.github.izakyl.folkways.core.api.work.batch.StepResult.Auxiliary)) {
+                        throw new AssertionError("the arrived real source makes progress: " + next);
+                    }
+                    Node action = next instanceof io.github.izakyl.folkways.core.api.work.batch.StepResult.Step step
+                        ? step.node() : ((io.github.izakyl.folkways.core.api.work.batch.StepResult.Auxiliary) next).node();
+                    if (action.planned(level).isPresent()) throw new AssertionError("the retained action can be planned");
+                    Outcome result = next instanceof io.github.izakyl.folkways.core.api.work.batch.StepResult.Step
+                        ? Commit.run(level, action, this, batch) : Commit.run(level, action, this);
+                    if (!(result instanceof Outcome.Done done)) throw new AssertionError("the original source action commits after arrival: " + result);
+                    for (ItemStack made : done.made()) {
+                        if (!io.github.izakyl.folkways.core.api.terms.Containers.insert(body.pack(), made).isEmpty()) throw new AssertionError("native seed output fits real cargo");
+                    }
+                    action.released(level, this, Ending.DONE);
+                    action.ended(level, Ending.DONE);
+                    batch.notifySettled(level);
+                    batch.ended(level, action, Ending.DONE);
+                }
+                if (!complete) throw new AssertionError("the retained decorated source must finish its native action and returns");
+                if (!(batch.finish(level, this) instanceof Outcome.Done)) throw new AssertionError("the arrived source completes its real batch");
+                node.released(level, this, Ending.DONE);
+                node.ended(level, Ending.DONE);
+                return;
+            } else if (node.spec().workload() instanceof Workload.Within within) {
                 boolean complete = false;
                 for (int step = 0; step < 16; step++) {
                     var turn = within.next(level, this);
