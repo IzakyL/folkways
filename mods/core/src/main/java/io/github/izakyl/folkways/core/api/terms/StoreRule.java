@@ -43,6 +43,28 @@ public sealed interface StoreRule {
         }
     }
 
+    // Preferred destinations for these goods. Larger values win among reachable stores with room.
+    record Prefer(WorldPos where, ItemSpec goods, int priority) implements StoreRule {
+        public Prefer {
+            Objects.requireNonNull(where, "where");
+            Objects.requireNonNull(goods, "goods");
+            if (priority < 0) {
+                throw new IllegalArgumentException("storage priority cannot be negative");
+            }
+        }
+    }
+
+    // The slots residents may reach into, counted from zero, `to` exclusive.
+    record Slots(WorldPos where, int from, int to) implements StoreRule {
+
+        public Slots {
+            Objects.requireNonNull(where, "where");
+            if (from < 0 || to <= from) {
+                throw new IllegalArgumentException("slots " + from + ".." + to + " hold nothing");
+            }
+        }
+    }
+
     // General storage is independent of directed orders.
     record Access(WorldPos where, boolean take, boolean store) implements StoreRule {
         public Access { Objects.requireNonNull(where, "where"); }

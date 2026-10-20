@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.engine.colony;
 
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.colony.Holding;
+import io.github.izakyl.folkways.core.api.colony.PointSites;
 import io.github.izakyl.folkways.core.api.colony.Release;
 import io.github.izakyl.folkways.base.persist.Entries;
 import io.github.izakyl.folkways.base.persist.Reader;
@@ -42,6 +43,7 @@ public final class Holdings implements ColonyChangeSource {
     private static final String TAG_ENTITY = "entity";
     private static final String TAG_TYPE = "type";
     private static final String TAG_BLOCK = "block";
+    private static final String TAG_POINT = "point";
     private static final String TAG_AREA = "area";
     private static final String TAG_LINE = "line";
     private static final String TAG_REALM = "realm";
@@ -89,6 +91,7 @@ public final class Holdings implements ColonyChangeSource {
                     present.add(body.id());
                 }
             });
+            case Held.Point ignored -> { }
             case Held.Area ignored -> { }
             case Held.Line ignored -> { }
         }
@@ -112,6 +115,7 @@ public final class Holdings implements ColonyChangeSource {
                     bodyOf(server, entity.entity()).ifPresent(Body::leaveColony);
                 }
             }
+            case Held.Point ignored -> { }
             case Held.Area ignored -> { }
             case Held.Line ignored -> { }
         }
@@ -123,6 +127,7 @@ public final class Holdings implements ColonyChangeSource {
     boolean taken(Held what) {
         return switch (what) {
             case Held.Block block -> blocks.containsKey(block.cell());
+            case Held.Point point -> blocks.containsKey(point.cell());
             case Held.Entity entity -> entities.containsKey(entity.entity());
             case Held.Area ignored -> false;
             case Held.Line ignored -> false;
@@ -224,18 +229,19 @@ public final class Holdings implements ColonyChangeSource {
         return List.copyOf(found);
     }
 
-    // Lets go every held block whose block entity, loaded, no longer carries this colony.
+    // Loaded blocks keep their entity mark; native points keep satisfying their declared predicate.
     void reconcile(MinecraftServer server) {
         for (Holding holding : List.copyOf(held.values())) {
-            if (!(holding.what() instanceof Held.Block block)) {
-                continue;
-            }
-            WorldSpaces.Block where = WorldSpaces.resolve(server, block.cell()).orElse(null);
+            WorldPos cell = holding.what().singleCell().orElse(null);
+            if (cell == null) continue;
+            WorldSpaces.Block where = WorldSpaces.resolve(server, cell).orElse(null);
             if (where == null || !where.level().isLoaded(where.cell())) {
                 continue;
             }
             BlockEntity entity = where.level().getBlockEntity(where.cell());
-            if (entity == null || !marked(entity)) {
+            boolean valid = holding.what() instanceof Held.Point
+                ? PointSites.accepts(holding.owner(), where.level(), where.cell()) : entity != null && marked(entity);
+            if (!valid) {
                 release(server, holding.id(), Release.GONE);
             }
         }
@@ -281,6 +287,7 @@ public final class Holdings implements ColonyChangeSource {
         held.put(holding.id(), holding);
         switch (holding.what()) {
             case Held.Block block -> blocks.put(block.cell(), holding.id());
+            case Held.Point point -> blocks.put(point.cell(), holding.id());
             case Held.Entity entity -> entities.put(entity.entity(), holding.id());
             case Held.Area ignored -> { }
             case Held.Line ignored -> { }
@@ -291,6 +298,7 @@ public final class Holdings implements ColonyChangeSource {
         held.remove(holding.id());
         switch (holding.what()) {
             case Held.Block block -> blocks.remove(block.cell(), holding.id());
+            case Held.Point point -> blocks.remove(point.cell(), holding.id());
             case Held.Entity entity -> entities.remove(entity.entity(), holding.id());
             case Held.Area ignored -> { }
             case Held.Line ignored -> { }
@@ -335,6 +343,7 @@ public final class Holdings implements ColonyChangeSource {
         switch (holding.what()) {
             case Held.Entity entity -> writer.uuid(TAG_ENTITY, entity.entity()).id(TAG_TYPE, entity.type());
             case Held.Block block -> writer.blob(TAG_BLOCK, block.cell().save());
+            case Held.Point point -> writer.blob(TAG_POINT, point.cell().save());
             case Held.Area area -> writer.children(TAG_AREA, byRealm(area.covered()).entrySet(),
                 group -> Writer.of().blob(TAG_REALM, group.getKey().save()).intArray(TAG_CELLS, packed(group.getValue())).tag());
             case Held.Line line -> writer.children(TAG_LINE, line.points(), WorldPos::save);
@@ -361,6 +370,8 @@ public final class Holdings implements ColonyChangeSource {
         if (block.isPresent()) {
             return Optional.of(new Held.Block(block.get()));
         }
+        Optional<WorldPos> point = reader.child(TAG_POINT).flatMap(WorldPos::load);
+        if (point.isPresent()) return Optional.of(new Held.Point(point.get()));
         Set<WorldPos> covered = new LinkedHashSet<>();
         for (Reader group : reader.children(TAG_AREA)) {
             Optional<Realm> realm = group.child(TAG_REALM).flatMap(Realm::load);

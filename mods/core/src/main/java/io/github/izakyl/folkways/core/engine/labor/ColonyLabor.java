@@ -101,6 +101,8 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     // The plan as the colony keeps it, change by change, and the routes laid on it.
     private final WeaveView graph = new WeaveView();
+    // Actual execution survives route changes while its physical output awaits the planner hand-off.
+    private final Map<UUID, UUID> inputWorkers = new LinkedHashMap<>();
     private final Set<UUID> declined = new LinkedHashSet<>();
     private final Map<UUID, Tour> tours = new LinkedHashMap<>();
     private Schedule schedule = Schedule.EMPTY;
@@ -163,6 +165,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         colony.works().unlisten(dimension, this);
         runners.close(this);
         phases.retain(Set.of());
+        inputWorkers.clear();
         personal.retain(Set.of());
         personalRequests.clear();
         endings.clear();
@@ -338,6 +341,20 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     // What the weave changed, applied: work that went or was grown afresh is let go of and ends as the plan says,
     // and work new to the plan, or grown afresh, enters it.
+    List<io.github.izakyl.folkways.core.api.work.ReservedInput> reservedInputs() {
+        Map<UUID, UUID> assigned = new LinkedHashMap<>();
+        for (Tour tour : schedule.tours().values()) {
+            for (UUID node : tour.nodes()) assigned.put(node, tour.resident());
+        }
+        return InputReservations.read(graph, phases::of, node -> {
+            UUID actual = inputWorkers.get(node);
+            if (actual != null) return actual;
+            Vertex vertex = graph.vertex(node);
+            if (vertex != null && vertex.node().worker().isPresent()) return vertex.node().worker().get();
+            UUID pinned = graph.pin(node);
+            return pinned != null ? pinned : assigned.get(node);
+        });
+    }
     private void woven(ServerLevel level, List<Message> batch, Planner.Woven woven) {
         WeaveDelta delta = woven.delta();
         Set<UUID> withdrawn = new LinkedHashSet<>();
@@ -376,6 +393,8 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         });
         Set<UUID> heldBefore = graph.held();
         graph.apply(delta);
+        inputWorkers.keySet().removeAll(replaced);
+        inputWorkers.keySet().retainAll(graph.vertices().keySet());
         declined.removeAll(delta.removed());
         reportedFailures.removeAll(delta.removed());
         untaken.keySet().removeAll(delta.removed());
@@ -668,6 +687,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     }
 
     void started(UUID node, UUID resident) {
+        if (graph.has(node)) inputWorkers.put(node, resident);
         progress(node, WorkProgress.Step.STARTED, Optional.of(resident));
         inbox.raise(new Message.Started(node, resident));
     }

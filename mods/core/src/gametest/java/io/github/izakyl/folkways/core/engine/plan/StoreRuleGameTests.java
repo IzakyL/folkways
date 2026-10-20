@@ -159,6 +159,36 @@ public final class StoreRuleGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
+    public static void slotRangesAndGeneralAccessRulesRemainIndependent(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos cell = helper.absolutePos(new BlockPos(1, 1, 1));
+        level.setBlockAndUpdate(cell, Blocks.BARREL.defaultBlockState());
+        var barrel = Containers.at(level, cell).orElseThrow();
+        barrel.setItem(0, new ItemStack(Items.BREAD, 7));
+        WorldPos where = WorldPos.of(level, cell);
+        UUID colony = UUID.randomUUID();
+        List<StoreRule> rules = List.of(new StoreRule.Slots(where, 2, 4),
+            new StoreRule.Access(where, false, false), new StoreRule.Prefer(where, IRON, 100),
+            new StoreRule.Admit(where, true, List.of(IRON)));
+        try {
+            Stores.ruled(colony, Map.of(where, rules));
+            var kept = Stores.at(level, where).orElseThrow();
+            helper.assertTrue(kept.getContainerSize() == 2 && Goods.countIn(kept, BREAD) == 0,
+                "general access and destination preferences do not discard slot restrictions");
+            helper.assertTrue(!StoreRule.takes(Stores.rulesAt(where)) && !StoreRule.stores(Stores.rulesAt(where)),
+                "slot restrictions and preferences do not discard general access permissions");
+            helper.assertTrue(Containers.insert(kept, new ItemStack(Items.IRON_INGOT, 130)).getCount() == 2
+                    && barrel.getItem(2).getCount() == 64 && barrel.getItem(3).getCount() == 64,
+                "a directed write through the container view still uses only admitted, selected slots");
+            helper.assertTrue(barrel.getItem(0).getCount() == 7 && barrel.getItem(4).isEmpty(),
+                "the inaccessible slots remain untouched");
+        } finally {
+            Stores.ruled(colony, Map.of());
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
     public static void aStoreHasNoRoomForWhatItsContainerRefuses(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos boxAt = helper.absolutePos(new BlockPos(1, 1, 1));

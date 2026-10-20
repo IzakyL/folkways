@@ -59,6 +59,20 @@ public final class Leaves {
         return amounts(left);
     }
 
+    // The rest of an entire-output estimate after concrete output promises already counted as cargo.
+    // Exact specs share their counts; different byproducts and unknown goods keep their own space.
+    public static List<Amount> unpromised(Collection<Amount> expected, Collection<Amount> promised) {
+        Map<ItemSpec, Long> left = new LinkedHashMap<>();
+        for (Amount amount : expected) {
+            if (amount.count() > 0) left.merge(amount.spec(), amount.count(), Long::sum);
+        }
+        for (Amount amount : promised) {
+            if (amount.count() > 0) left.computeIfPresent(amount.spec(),
+                (spec, count) -> Math.max(0L, count - amount.count()));
+        }
+        return amounts(left);
+    }
+
     public static List<Amount> merged(Collection<Amount> amounts) {
         Map<ItemSpec, Long> left = new LinkedHashMap<>();
         amounts.forEach(amount -> left.merge(amount.spec(), amount.count(), Long::sum));

@@ -57,6 +57,11 @@ public final class Labor {
         return labor == null ? Optional.empty() : Optional.ofNullable(labor.sites.get(new Site(colony, dimension)));
     }
 
+    public static List<io.github.izakyl.folkways.core.api.work.ReservedInput> reservedInputs(UUID colony,
+            ResourceKey<Level> dimension) {
+        return site(colony, dimension).map(ColonyLabor::reservedInputs).orElse(List.of());
+    }
+
     public void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
         if (!server.tickRateManager().runsNormally()) {

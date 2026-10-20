@@ -18,6 +18,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -128,6 +129,9 @@ public final class PonderScenery {
                 return null;
             }
             stand(body, pos, yRot);
+            if (body instanceof Mob mob) {
+                mob.setNoAi(true);
+            }
             return body;
         });
         return new Body(link, pos, yRot);
@@ -165,6 +169,18 @@ public final class PonderScenery {
             facing = yaw;
         }
 
+        // One scheduled animation step, with an explicit native facing, for motion driven by an appliance.
+        public void moveTo(SceneBuilder scene, Vec3 target, float yRot) {
+            Vec3 from = at;
+            scene.world().modifyEntity(link, entity -> stride(entity, from, target, yRot));
+            at = target;
+            facing = yRot;
+        }
+
+        public void lookAt(SceneBuilder scene, Vec3 target) {
+            turnTo(scene, yawTowards(at, target));
+        }
+
         public void turnTo(SceneBuilder scene, float yRot) {
             Vec3 here = at;
             scene.world().modifyEntity(link, entity -> stand(entity, here, yRot));
@@ -191,6 +207,10 @@ public final class PonderScenery {
         entity.yRotO = entity.getYRot();
         entity.setYRot(yaw);
         entity.setYHeadRot(yaw);
+        if (entity instanceof LivingEntity living) {
+            living.yBodyRotO = living.yBodyRot;
+            living.yBodyRot = yaw;
+        }
         entity.setDeltaMovement(Vec3.ZERO);
     }
 

@@ -20,6 +20,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.Container;
 import net.minecraft.world.level.Level;
 
 public interface Colony {
@@ -32,6 +33,21 @@ public interface Colony {
     void stores(ResourceLocation owner, ResourceKey<Level> dimension, Collection<WorldPos> stores);
 
     List<WorldPos> storesIn(ResourceKey<Level> dimension);
+
+    // The resident's view of an offered store, with the player's slot and admission rules applied.
+    default Optional<Container> store(ServerLevel level, WorldPos at) {
+        return Optional.empty();
+    }
+
+    // Effective rules at a store, including the permissions checked again when a transfer executes.
+    default List<StoreRule> storeRules(WorldPos at) {
+        return List.of();
+    }
+
+    // Current unspent input obligations; these must be reconciled with actual goods, never counted as stock.
+    default List<io.github.izakyl.folkways.core.api.work.ReservedInput> reservedInputs(ServerLevel level) {
+        return List.of();
+    }
 
     // The colony's work standing still in that dimension, each told where it is; see Stall.
     List<Stall> stallsIn(ResourceKey<Level> dimension);

@@ -326,6 +326,16 @@ export async function wheelCell(
 const TRACK_NUDGES = 4;
 
 function scrollViewAround(elements: Element[], row: Element) {
+  // Other hidden pages can overlap this row geometrically. Follow its actual preorder ancestors.
+  let depth = row.depth;
+  for (let index = row.index - 1; index >= 0; index--) {
+    const ancestor = elements[index];
+    if (ancestor.depth >= depth) continue;
+    depth = ancestor.depth;
+    if (ancestor.className.endsWith(".ScrollerView") && ancestor.width > 0 && ancestor.height > 0) {
+      return { x: ancestor.x, y: ancestor.y, width: ancestor.width, height: ancestor.height };
+    }
+  }
   const boxes = elements
     .filter((element) => element.className.endsWith(".ScrollerView"))
     .filter((element) => element.width > 0 && element.height > 0)

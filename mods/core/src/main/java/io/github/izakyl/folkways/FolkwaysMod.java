@@ -152,6 +152,7 @@ public final class FolkwaysMod {
 
     private void forgetServer(MinecraftServer server) {
         labor.shutdown();
+        io.github.izakyl.folkways.core.api.resident.body.TaskTools.clear();
         ColonyRuntime.closeAll(server);
         PathfindingLoad.forgetServer();
         TravelBudget.forgetServer();

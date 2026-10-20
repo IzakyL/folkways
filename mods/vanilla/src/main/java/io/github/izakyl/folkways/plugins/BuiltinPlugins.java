@@ -27,5 +27,6 @@ public final class BuiltinPlugins {
         GroundworkPlugin.install(modBus);
         PatrolPlugin.install(modBus);
         OrdersPlugin.install(modBus);
+        io.github.izakyl.folkways.plugins.supply.SupplyContent.install(modBus);
     }
 }

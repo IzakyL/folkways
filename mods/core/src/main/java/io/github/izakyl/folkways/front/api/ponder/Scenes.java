@@ -33,6 +33,8 @@ public final class Scenes {
         }
     }
 
+    private static final java.util.Map<ResourceLocation, List<ResourceLocation>> ITEMS = new java.util.LinkedHashMap<>();
+
     // A lesson one mod sets in a folder another owns, after the folder's own; dropped if that folder never comes.
     public record Addition(ResourceLocation folder, Scene scene) {
     }
@@ -46,6 +48,16 @@ public final class Scenes {
 
     public static Scene scene(String title, PonderStoryBoard board) {
         return new Scene(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, title), board);
+    }
+
+    public static Scene scene(String title, PonderStoryBoard board, ResourceLocation... items) {
+        Scene scene = scene(title, board);
+        ITEMS.put(scene.id(), java.util.Arrays.stream(items).distinct().toList());
+        return scene;
+    }
+
+    public static List<ResourceLocation> itemsFor(Scene scene) {
+        return ITEMS.getOrDefault(scene.id(), List.of());
     }
 
     public static void folder(ResourceLocation id, String nameKey, ResourceLocation icon, Scene... scenes) {

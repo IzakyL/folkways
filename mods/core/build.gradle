@@ -48,3 +48,9 @@ def apiJar = tasks.register("apiJar", Jar) {
 }
 
 publishing.publications.mod.artifact apiJar
+
+// Native optional-integration tests share this mod's package and module, without linking its main source to Cookery.
+dependencies {
+    cookeryTestImplementation project(":cookery")
+    cookeryTestCompileOnly lib("kaleidoscope_cookery")
+}

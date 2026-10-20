@@ -13,6 +13,7 @@ import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.pathfinder.Node;
 import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.PathfindingContext;
@@ -49,7 +50,7 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
     @Override
     public Node getStart() {
         if (start != null) {
-            return getStartNode(start);
+            return getStartNode(floatingStart(start));
         }
         BlockPos feet = mob.blockPosition();
         if (!mob.onGround() && (isClimbable(currentContext, feet.getX(), feet.getY(), feet.getZ())
@@ -57,6 +58,22 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
             return getStartNode(feet);
         }
         return super.getStart();
+    }
+
+    // A graph search can start anywhere, including deep water away from the sizing mob. Like vanilla's live
+    // navigation, a floating walker begins in the top water cell, where its float goal can bring it to the bank.
+    private BlockPos floatingStart(BlockPos feet) {
+        if (!canFloat()) {
+            return feet;
+        }
+        BlockPos.MutableBlockPos cell = feet.mutable();
+        BlockState state = currentContext.getBlockState(cell);
+        while (cell.getY() < currentContext.level().getMaxBuildHeight()
+                && (state.is(Blocks.WATER) || state.getFluidState() == Fluids.WATER.getSource(false))) {
+            cell.move(Direction.UP);
+            state = currentContext.getBlockState(cell);
+        }
+        return cell.getY() == feet.getY() ? feet : cell.below();
     }
 
     // Vanilla only weighs a burning cell (a lit campfire, fire, the top of magma): with no other way, or a way

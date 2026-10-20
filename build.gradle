@@ -2,18 +2,20 @@ plugins {
     id "net.neoforged.moddev" version "2.0.141"
 }
 
-// The root builds no mod of its own: it runs the four under mods/ together for the game tests.
+// The root builds no mod of its own: it runs the modules under mods/ together for the game tests.
 
 def modProjects = [
     folkways_core: ":core",
     folkways_vanilla: ":vanilla",
     folkways_create: ":create",
     folkways_modulargolems: ":modulargolems",
+    folkways_cookery: ":cookery",
 ]
 modProjects.values().each { evaluationDependsOn(it) }
 
 // The game tests run without Modular Golems, so its Folkways mod stays out of that run.
-def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" }
+def cookeryTests = providers.gradleProperty("cookeryTests").map { it.toBoolean() }.getOrElse(false)
+def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" && (path != ":cookery" || cookeryTests) }
 
 repositories {
     mavenCentral()
@@ -40,6 +42,9 @@ neoForge {
             create(id) {
                 sourceSet mod.sourceSets.main
                 sourceSet mod.sourceSets.gametest
+                if (cookeryTests && path in [":core", ":vanilla"]) {
+                    sourceSet mod.sourceSets.cookeryTest
+                }
             }
         }
     }
@@ -65,9 +70,13 @@ dependencies {
     testedMods.values().each { path ->
         runtimeOnly project(path).sourceSets.main.output
         runtimeOnly project(path).sourceSets.gametest.output
+        if (cookeryTests && path in [":core", ":vanilla"]) {
+            runtimeOnly project(path).sourceSets.cookeryTest.output
+        }
     }
     runtimeOnly ldlib2Coordinate
     runtimeOnly core.lib("create")
+    if (cookeryTests) { runtimeOnly core.lib("kaleidoscope_cookery") }
     additionalRuntimeClasspath("com.eed3si9n.starlark:starlark:${project.starlark_version}") {
         transitive = false
     }
@@ -130,4 +139,5 @@ tasks.register("lintScaffold") {
 tasks.named("check") {
     dependsOn "lintScaffold"
     modProjects.values().each { dependsOn "${it}:check", "${it}:compileGametestJava" }
+    if (cookeryTests) { dependsOn ":core:compileCookeryTestJava", ":vanilla:compileCookeryTestJava" }
 }

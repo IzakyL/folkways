@@ -24,6 +24,7 @@ final class HarvestNode extends FarmNode {
     HarvestNode(Chore chore) {
         super(FarmNode.declare(chore, Workload.Once.of(FarmingContent.CELL_TICKS,
             FarmingContent::haste))
+            .tools(chore.crop().harvestMethod().map(HarvestMethod::tools).orElseGet(List::of))
             .leaves(leaves(chore))
             .doing(FarmingContent.HARVESTING, chore.crop().fruit()).done(), chore);
         this.crop = chore.crop();
@@ -33,6 +34,10 @@ final class HarvestNode extends FarmNode {
     private static List<Amount> leaves(Chore chore) {
         Crop crop = chore.crop();
         int cells = chore.job().cells().size();
+        if (crop.harvestMethod().isPresent()) return crop.harvestMethod().get().leaves(cells);
+        if (crop.behavior().isPresent()) {
+            return crop.behavior().get().leaves(cells);
+        }
         List<Amount> left = new ArrayList<>(Leaves.ofBlocks(
             Collections.nCopies(cells, crop.fruit().defaultBlockState())));
         if (crop.cutWhole()) {
@@ -43,6 +48,17 @@ final class HarvestNode extends FarmNode {
 
     @Override
     Outcome work(ServerLevel level, Worker who, Job job) {
+        if (crop.harvestMethod().isPresent()) {
+            return crop.harvestMethod().get().harvest(level, who, crop.block(), job.cells());
+        }
+        Optional<CropBehavior.Harvest> gathered = crop.behavior().flatMap(adapted ->
+            adapted.gather(level, who, job.cells()));
+        if (gathered.isPresent()) {
+            CropBehavior.Harvest result = gathered.get();
+            if (result.worked() == 0) return Outcome.done();
+            return new Outcome.Done(result.noises(), result.items(),
+                Optional.of(new Xp(FarmingContent.trade(), result.worked())));
+        }
         List<ItemStack> taken = new ArrayList<>();
         List<WorkNoise> heard = new ArrayList<>();
         boolean replants = who.effects().has(FarmingContent.REPLANTS);
@@ -62,7 +78,7 @@ final class HarvestNode extends FarmNode {
             broken++;
             cut = true;
             if (replants) {
-                replant(level, cell, taken).ifPresent(heard::add);
+                replant(level, who, cell, taken).ifPresent(heard::add);
             }
         }
         if (!cut) {
@@ -78,17 +94,18 @@ final class HarvestNode extends FarmNode {
             Optional.of(new Xp(FarmingContent.trade(), Math.max(1, broken))));
     }
 
-    private Optional<WorkNoise> replant(ServerLevel level, BlockPos cell, List<ItemStack> taken) {
-        if (!crop.cutWhole() || !crop.sown().canSurvive(level, cell)) {
+    private Optional<WorkNoise> replant(ServerLevel level, Worker who, BlockPos cell, List<ItemStack> taken) {
+        if (!crop.cutWhole()) {
             return Optional.empty();
         }
-        for (ItemStack stack : taken) {
-            if (stack.isEmpty() || !Goods.matches(stack, crop.seedSpec())) {
-                continue;
+        List<net.minecraft.world.item.Item> seeds = crop.behavior().map(CropBehavior::seeds)
+            .orElseGet(() -> List.of(crop.seed()));
+        for (var seed : seeds) {
+            for (ItemStack stack : taken) {
+                if (!stack.isEmpty() && stack.is(seed) && crop.plant(level, who, cell, stack)) {
+                    return Optional.of(WorkNoise.placed(cell, level.getBlockState(cell)));
+                }
             }
-            stack.shrink(1);
-            level.setBlock(cell, crop.sown(), 3);
-            return Optional.of(WorkNoise.placed(cell, crop.sown()));
         }
         return Optional.empty();
     }

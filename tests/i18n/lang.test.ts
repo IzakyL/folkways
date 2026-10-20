@@ -181,3 +181,43 @@ test("notice and refusal enums have translations for every declared value", () =
   }
   assert.ok(checked > 0, "no enum translations were checked");
 });
+
+// Task and delegation names derive from ResourceLocation, outside literal translatable-call checks.
+test("declared task and delegation names have translated dynamic keys", () => {
+  const declarations = new Map<string, string>();
+  for (const { name, text } of sources) {
+    const type = name.split(/[\\/]/).at(-1)!.replace(/\.java$/, "");
+    const helpers = new Set([...text.matchAll(/ResourceLocation\s+(\w+)\(String\s+(\w+)\)\s*\{\s*return\s+ResourceLocation\.fromNamespaceAndPath\((?:"folkways"|FolkwaysMod\.MOD_ID),\s*\2\);/g)]
+      .map(match => match[1]));
+    for (const constant of text.matchAll(/(?:final\s+)?ResourceLocation\s+(\w+)\s*=\s*([^;]+);/g)) {
+      const expression = constant[2];
+      const direct = /ResourceLocation\.fromNamespaceAndPath\("([^"]+)",\s*"([^"]+)"\)/.exec(expression);
+      const helper = /^(\w+)\("([^"]+)"\)$/.exec(expression.trim());
+      const value = direct ? direct[1] + "." + direct[2] : helper && helpers.has(helper[1]) ? "folkways." + helper[2] : undefined;
+      if (value) declarations.set(type + "." + constant[1], value);
+    }
+  }
+  const checked = new Set<string>();
+  for (const { name, text } of sources) {
+    const type = name.split(/[\\/]/).at(-1)!.replace(/\.java$/, "");
+    const statics = new Map([...text.matchAll(/import static [\w.]+\.(\w+)\.(\w+);/g)].map(match => [match[2], match[1] + "." + match[2]]));
+    for (const method of ["doing", "Delegation"]) for (const call of calls(text, method)) {
+      if (!call.args.length) continue;
+      const direct = /ResourceLocation\.fromNamespaceAndPath\("([^"]+)",\s*"([^"]+)"\)/.exec(call.args[0]);
+      const ids = direct ? [direct[1] + "." + direct[2]] : [...call.args[0].matchAll(/\b(?:(\w+)\.)?([A-Z][A-Z_0-9]+)\b/g)]
+        .map(match => declarations.get(match[1] ? match[1] + "." + match[2] : statics.get(match[2]) ?? type + "." + match[2]))
+        .filter((id): id is string => !!id);
+      for (const id of ids) {
+        const key = (method === "doing" ? "folkways.doing." : "folkways.delegation.") + id;
+        assert.ok(Object.hasOwn(english, key), name + ": " + key);
+        if (method === "doing" && call.args.length > 1) assert.ok(Object.hasOwn(english, key + ".about"), name + ": " + key + ".about");
+        checked.add(key);
+      }
+    }
+  }
+  for (const key of ["stove", "compost", "creative_supply_box"])
+    assert.ok(checked.has("folkways.delegation.folkways." + key), key + ": delegation escaped the audit");
+  assert.ok([...checked].filter(key => key.startsWith("folkways.doing.")).length > 30, "task-key audit must resolve the actual declarations across modules");
+  for (const key of ["taking_supplies", "leaving_millstone", "planting", "composting"])
+    assert.ok(checked.has("folkways.doing.folkways." + key), key + ": dynamic task key escaped the audit");
+});

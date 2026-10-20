@@ -1097,7 +1097,7 @@ public final class Weaver {
         Map<UUID, Integer> groups = new HashMap<>();
         Map<UUID, Long> cheapest = new HashMap<>();
         List<WorldPos> hands = null;
-        if (!stockOnly.contains(edge.id()) && costs.reachable(edge.spec(), near, edge.trail())) {
+        if (!stockOnly.contains(edge.id()) && consumer.permitsProduction(edge.spec()) && costs.reachable(edge.spec(), near, edge.trail())) {
             for (Costs.Offer offer : costs.offers(Produce.of(OWNER, near, edge.spec(), left,
                     sizing.batching(whole)))) {
                 Grown made = offer.change().replacement();
@@ -1625,6 +1625,11 @@ public final class Weaver {
         }
 
         @Override
+        public int preference(Stash where, ItemSpec goods) {
+            return now.stock().preference(where, goods);
+        }
+
+        @Override
         public Set<Stand> around(Stash where) {
             return now.stands().around(where);
         }
@@ -1839,7 +1844,8 @@ public final class Weaver {
     private List<RecoveryStore> puttingAway(List<RecoveryStore> stores, ItemSpec spec) {
         List<RecoveryStore> ordered = new ArrayList<>(stores);
         ordered.sort(Comparator.comparingInt(
-                (RecoveryStore store) -> now.stock().keepsOther(store.stash(), spec) ? 1 : 0)
+                (RecoveryStore store) -> -now.stock().preference(store.stash(), spec))
+            .thenComparingInt(store -> now.stock().keepsOther(store.stash(), spec) ? 1 : 0)
             .thenComparingInt(RecoveryStore::ticks));
         return ordered;
     }
@@ -2211,7 +2217,7 @@ public final class Weaver {
         // What the work leaves in the pack fills it as goods carried do, though nobody is promised it.
         Node worked = nodes.get(node);
         if (worked != null) {
-            carrying.addAll(worked.spec().leaves());
+            carrying.addAll(worked.planningLeaves(carrying.stream().filter(amount -> amount.count() > 0).toList()));
         }
         return new Placement(stands == null ? Set.of() : stands, carrying, List.copyOf(from), List.copyOf(into),
             drawsOf(node));
@@ -2226,9 +2232,9 @@ public final class Weaver {
                 case Resource.Lot(Stash where, ItemSpec spec) ->
                     draws.add(new Placement.Draw(Optional.of(where), spec, claim.amount()));
                 case Resource.Cargo(UUID resident, ItemSpec spec) ->
-                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount()));
+                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount(), Optional.of(resident), Optional.empty()));
                 case Resource.Handed(UUID by, ItemSpec spec) ->
-                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount()));
+                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount(), Optional.empty(), Optional.of(by)));
                 case Resource.Space space -> {
                 }
             }

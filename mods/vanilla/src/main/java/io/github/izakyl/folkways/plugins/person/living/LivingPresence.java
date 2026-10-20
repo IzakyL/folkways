@@ -39,7 +39,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -197,7 +196,7 @@ final class LivingPresence implements Facing {
         Container pack = who.pack();
         for (int slot = 0; slot < pack.getContainerSize(); slot++) {
             ItemStack stack = pack.getItem(slot);
-            FoodProperties food = stack.isEmpty() ? null : stack.get(DataComponents.FOOD);
+            FoodProperties food = stack.isEmpty() ? null : stack.getFoodProperties(who.body());
             if (food != null && wouldEat(who.resident().id(), food)) {
                 return true;
             }
@@ -267,7 +266,7 @@ final class LivingPresence implements Facing {
             if (body == null) {
                 continue;
             }
-            int carried = Bodies.of(body).map(had -> nourishing(had.pack(), food)).orElse(0);
+            int carried = Bodies.of(body).map(had -> nourishing(had.pack(), food, had.mob())).orElse(0);
             if (carried >= RESTOCK_DAYS * Hunger.FOOD_PER_DAY) {
                 continue;
             }
@@ -279,11 +278,11 @@ final class LivingPresence implements Facing {
     }
 
     // How much the food in the pack nourishes, of the food the colony eats.
-    private static int nourishing(Container pack, ItemSpec food) {
+    private static int nourishing(Container pack, ItemSpec food, LivingEntity body) {
         int points = 0;
         for (int slot = 0; slot < pack.getContainerSize(); slot++) {
             ItemStack stack = pack.getItem(slot);
-            FoodProperties eaten = stack.isEmpty() ? null : stack.get(DataComponents.FOOD);
+            FoodProperties eaten = stack.isEmpty() ? null : stack.getFoodProperties(body);
             if (eaten != null && Goods.matches(stack, food)) {
                 points += eaten.nutrition() * stack.getCount();
             }
@@ -297,7 +296,7 @@ final class LivingPresence implements Facing {
         int whole = 0;
         int kinds = 0;
         for (Item item : Goods.members(food)) {
-            FoodProperties eaten = item.getDefaultInstance().get(DataComponents.FOOD);
+            FoodProperties eaten = item.getDefaultInstance().getFoodProperties(null);
             if (eaten != null && eaten.nutrition() > 0) {
                 whole += eaten.nutrition();
                 kinds++;

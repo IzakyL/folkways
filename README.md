@@ -66,7 +66,7 @@ There is no tagged release yet. The
 [Nightly build](https://github.com/IzakyL/folkways/releases/tag/nightly) is rebuilt from
 every push to `master`; back up your world before trying it.
 
-Folkways comes as four jars. Install the first two; add the others only with the mod they pair with:
+Folkways has four base jars and a Cookery extension. Install the first two; add the others only with the mod they pair with:
 
 | Jar | When |
 | --- | --- |
@@ -74,8 +74,13 @@ Folkways comes as four jars. Install the first two; add the others only with the
 | Folkways Vanilla (`folkways-vanilla-*.jar`) | Always: the work residents do (farming, herding, fishing, hauling, crafting, building, patrol) |
 | Folkways × Create (`folkways-create-*.jar`) | With Create: trains, parcels, track and schematics |
 | Folkways × Modular Golems (`folkways-modulargolems-*.jar`) | With Modular Golems: golems as residents |
+| Folkways × Kaleidoscope Cookery (`folkways-cookery-*.jar`) | With Kaleidoscope Cookery 1.6.0: crops, appliances and shared kitchen tools |
 
-All four must be the same version. Folkways also needs these mods installed alongside it:
+The Cookery extension supplies native appliance production, flooded-rice farming, shared tools,
+kitchen racks, seed reserves and thirteen lessons. The creative supply box belongs to
+Folkways Vanilla and also works without Cookery.
+
+All installed Folkways jars must be the same version. Folkways also needs these mods installed alongside it:
 
 | Mod | Version |
 | --- | --- |
@@ -92,6 +97,7 @@ Starlark interpreter inside the Folkways Vanilla jar; none needs a separate inst
 | [Create](https://modrinth.com/mod/create) 6.0+, with Folkways × Create | Hand a schematic to the colony to build; hand over an assembled train for residents to drive; order from a stock keeper's package network. Without Folkways × Create, residents still walk round Create's contraptions |
 | [Sable](https://modrinth.com/mod/sable) | Residents path onto and off Sable sub-levels, such as Create Aeronautics ships |
 | [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems | Golems join the roster as a second kind of resident and take trades like people |
+| [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0, with Folkways × Kaleidoscope Cookery | Residents grow crops, prepare ingredients and cook with native appliances, borrowing and returning shared tools |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+ | Residents can wear bedrock-format models instead of player skins |
 | [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib | Its built-in and installed add-on maid models become looks a colony can switch on, one by one or a whole pack at once. Each client reads its own installed packs; pack assets are not sent over the network |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+ | The Colony Book aims along its third-person crosshair |
@@ -133,7 +139,7 @@ npm run setup
 ./gradlew build
 ```
 
-The four mod jars land in `build/libs/`. To work on Folkways, see
+The five mod jars land in `build/libs/`. To work on Folkways, see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

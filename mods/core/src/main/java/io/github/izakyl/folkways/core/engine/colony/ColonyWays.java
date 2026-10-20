@@ -135,12 +135,14 @@ public final class ColonyWays {
         return Hops.in(colony.works());
     }
 
-    // Where the colony works in this level: every block it holds, every store it was offered, and every workshop's
-    // site. Each joins the ways, as a station's platform does.
+    // Where the colony works in this level: every block or point it holds, every store it was offered, and every
+    // workshop's site. Each joins the ways, as a station's platform does.
     private static Set<WorldPos> sitesIn(ColonyData colony, ServerLevel level) {
         Set<WorldPos> found = new LinkedHashSet<>();
         for (Holding holding : colony.works().holdings()) {
             if (holding.what() instanceof Held.Block(WorldPos cell) && cell.in(level)) {
+                found.add(cell);
+            } else if (holding.what() instanceof Held.Point(WorldPos cell) && cell.in(level)) {
                 found.add(cell);
             }
         }

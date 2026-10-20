@@ -14,7 +14,7 @@ Thanks for helping with Folkways. Issues and pull requests are welcome at
 ```sh
 npm install      # Blockwright, Playwright and TypeScript
 npm run setup    # downloads the integration mods and writes .blockwright/mods.json
-./gradlew build  # the four mod jars, in build/libs/
+./gradlew build  # the five mod jars, in build/libs/
 ```
 
 `npm run setup` must run before the first Gradle build. The build compiles against the
@@ -23,7 +23,7 @@ downloads, as pinned in `blockwright.toml`.
 
 ## Layout
 
-Folkways is four mods, each a Gradle project under `mods/`, all registering under the `folkways` namespace.
+Folkways has four base mods and a Cookery extension, each a Gradle project under `mods/`, all registering under the `folkways` namespace.
 `./gradlew build` builds them and gathers their jars into `build/libs/`.
 
 | Mod | Project | What it is |
@@ -32,6 +32,7 @@ Folkways is four mods, each a Gradle project under `mods/`, all registering unde
 | Folkways Vanilla (`folkways_vanilla`) | `mods/vanilla` | The work residents do among vanilla blocks |
 | Folkways × Create (`folkways_create`) | `mods/create` | What Create adds: rail, dispatch, and Create's side of building (track joints, schematic hand-off) |
 | Folkways × Modular Golems (`folkways_modulargolems`) | `mods/modulargolems` | Modular Golems as a second sort of resident |
+| Folkways × Kaleidoscope Cookery (`folkways_cookery`) | `mods/cookery` | Native Cookery farming, appliances and shared kitchen tools |
 
 An integration whose absence would leave the colony misreading a world that has that mod (Sable's sub-levels,
 Create's contraptions in the way) belongs in the core; one that only adds something when its mod is there is a mod
@@ -47,6 +48,7 @@ of its own.
 | `mods/vanilla/.../plugins` | Each feature (farming, pasture, build, …) as a plugin over the two APIs |
 | `mods/create/.../create` | Rail, dispatch and `create/build` |
 | `mods/modulargolems/.../modulargolems` | Golems as residents |
+| `mods/cookery/.../cookery` | Cookery appliances, farming adapters, tools and lessons |
 | `mods/vanilla/src/main/resources/data/folkways/folkways/pattern` | Built-in building patterns (Starlark) |
 | `mods/*/src/gametest` | NeoForge game tests, run together by the root's `runGameTestServer` |
 | `tests/` | Blockwright and Playwright suites, listed below |
@@ -59,7 +61,8 @@ of its own.
 | `npm run test:i18n` | Language keys, placeholders and notice/refusal coverage; no game or dependencies |
 | `npm run typecheck` | Type checks every TypeScript suite |
 | `./gradlew check` | Compiles everything and lints for tabs and trailing whitespace |
-| `./gradlew runGameTestServer` | NeoForge game tests in every `mods/*/src/gametest`, with all mods but Modular Golems loaded |
+| `./gradlew runGameTestServer` | NeoForge game tests in every `mods/*/src/gametest`, with the base mods but not Modular Golems or Cookery loaded |
+| `./gradlew -PcookeryTests=true runGameTestServer` | Also loads Cookery and runs its native recipe and lifecycle fixtures |
 | `npm run test:e2e` | End-to-end tests against a real client and server, on the ground |
 | `npm run test:sable` | The same against a [Sable](https://modrinth.com/mod/sable) ship: each twin spec's aboard test, and the ship-only specs |
 | `npm run visual:take` | Screenshots of screens, panels, looks and in-world visuals |
@@ -122,3 +125,15 @@ the LDLib2 UI adapter in `tests/ldlib2/`.
 
 Include the Minecraft, NeoForge and Folkways versions, your mod list, and `latest.log`
 (and the crash report, if there is one).
+
+The Cookery profiles load both `folkways_cookery` and Kaleidoscope Cookery 1.6.0.
+`cookery-native` loads only the native mod to verify that the extension stays optional.
+The complete, millstone, tools, farming, blackbox and Ponder e2e suites run native
+production, interruptions, shared tool stock, flooded dirt through harvest/replanting,
+and all thirteen lessons. `creative-supplies.spec.ts` also runs without Cookery.
+
+Cookery game tests live in `mods/cookery/src/gametest`. The core and vanilla tests that
+need their own package internals live in `mods/{core,vanilla}/src/cookeryTest` and join
+the same run only with `-PcookeryTests=true`. The native audit covers all 612 pinned
+recipe resources and writes `run/gametest/cookery-recipe-audit.json`. Generate its graph
+with `node tests/shared/cookery/recipe-graph.mjs run/gametest/cookery-recipe-audit.json tests/out/cookery-recipe-graph.json`.

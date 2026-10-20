@@ -15,6 +15,10 @@ import net.minecraft.server.level.ServerPlayer;
 
 public interface Facing {
 
+    default boolean shows(ResourceLocation page) {
+        return true;
+    }
+
     default Optional<Board> board(ResourceLocation page, ColonyView colony) {
         return Optional.empty();
     }

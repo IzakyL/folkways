@@ -41,6 +41,7 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
 
     private ResidentGeoBackend(EntityRendererProvider.Context context) {
         super(context, new Rig(), Crew.INSTANCE);
+        addRenderLayer(new ResidentGeoArmorLayer(this, context));
     }
 
     public static EntityRenderer<ResidentEntity> create(EntityRendererProvider.Context context) {

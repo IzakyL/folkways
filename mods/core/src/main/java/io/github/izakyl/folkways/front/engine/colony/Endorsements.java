@@ -67,7 +67,7 @@ public final class Endorsements {
 
     private static Optional<BlockPos> doorstep(ServerLevel level, ColonyView view) {
         return view.holdings().stream()
-            .sorted((one, other) -> Boolean.compare(!(one.what() instanceof Held.Block), !(other.what() instanceof Held.Block)))
+            .sorted((one, other) -> Boolean.compare(one.what().singleCell().isEmpty(), other.what().singleCell().isEmpty()))
             .map(Holding::what).flatMap(what -> what.cells().stream())
             .flatMap(cell -> io.github.izakyl.folkways.core.api.terms.WorldSpaces.storage(level, cell).stream())
             .findFirst().map(cell -> arrivalSpot(level, cell));

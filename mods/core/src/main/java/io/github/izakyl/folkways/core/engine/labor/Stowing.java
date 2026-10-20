@@ -24,8 +24,8 @@ final class Stowing {
                 for (Worker.Store store : who.within()) {
                     if (store.at().equals(into.pos())) {
                         if (StoreRule.stores(Stores.rulesAt(store.at()))) {
-                        left = Containers.insert(store.contents(), left);
-                    }
+                            left = Containers.insert(store.contents(), left);
+                        }
                         break;
                     }
                 }

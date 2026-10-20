@@ -23,6 +23,8 @@ final class TillNode extends FarmNode {
 
     private static final ToolUse HOE = ToolUse.of(new ToolNeed.Ability(ItemAbilities.HOE_TILL));
 
+    private final Crop crop;
+
     // A weed pulled off the ground may leave a seed.
     private static final List<Amount> WEED_SEED = List.of(
         new Amount(ItemSpec.of(ResourceLocation.withDefaultNamespace("wheat_seeds")), 1));
@@ -32,6 +34,7 @@ final class TillNode extends FarmNode {
     TillNode(Chore chore, Tillage.Clearing clearing) {
         super(FarmNode.declare(chore, Workload.Once.of(FarmingContent.CELL_TICKS,
             FarmingContent::haste)).tools(HOE).leaves(WEED_SEED).doing(FarmingContent.TILLING).done(), chore);
+        this.crop = chore.crop();
         this.clearing = clearing;
     }
 
@@ -43,7 +46,7 @@ final class TillNode extends FarmNode {
         }
         ItemStack hoe = who.held(HOE.need());
         BlockState state = level.getBlockState(ground);
-        if (!Tillage.canTill(level, ground, state, hoe, clearing)) {
+        if (!crop.canTill(level, ground, state, hoe, clearing)) {
             return Outcome.done();
         }
         List<WorkNoise> heard = new ArrayList<>();
@@ -54,7 +57,7 @@ final class TillNode extends FarmNode {
             taken.addAll(Yield.take(level, who.body(), above, weeds));
             heard.add(WorkNoise.broke(above, weeds));
         }
-        Optional<BlockState> turned = Tillage.tilled(level, ground, state, hoe);
+        Optional<BlockState> turned = crop.tilled(level, ground, state, hoe);
         if (turned.isEmpty()) {
             return new Outcome.Done(heard, taken, Optional.empty());
         }

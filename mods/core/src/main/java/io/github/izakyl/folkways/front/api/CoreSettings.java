@@ -35,6 +35,7 @@ public final class CoreSettings {
                 collect(tool, kit);
             }
         }
+        io.github.izakyl.folkways.core.api.work.Tools.sharedGoods().forEach(tool -> collect(tool, kit));
         return List.copyOf(kit);
     }
 

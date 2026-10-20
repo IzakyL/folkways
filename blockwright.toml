@@ -25,6 +25,17 @@ path = "build/libs/folkways-create-*.jar"
 [mods.folkways_modulargolems]
 path = "build/libs/folkways-modulargolems-*.jar"
 
+# The optional Folkways extension is installed beside its native mod only by Cookery profiles.
+[mods.folkways_cookery]
+path = "build/libs/folkways-cookery-*.jar"
+target = []
+
+# Compiled against, and installed only by the cookery test profiles.
+[mods.kaleidoscope_cookery]
+url = "https://cdn.modrinth.com/data/v17FatAc/versions/g8w0b2ly/kaleidoscopecookery-1.6.0-neoforge%2Bmc1.21.1.jar"
+sha512 = "b562f73395f70d39fb26d89ca62a5b5cebe7d66b11e8930217f0daf03fdcea617629728f55e4c8ced690406204c44462a8a568e5c15f05f5940274904ce0b77f"
+target = []
+
 [mods.ldlib2]
 path = "build/deps/ldlib2-*.jar"
 
@@ -150,8 +161,8 @@ target = []
 
 # Measures folkways itself, mixins included; off unless BLOCKWRIGHT_COVERAGE=1 (npm run test:coverage).
 [coverage]
-mods = ["folkways_core", "folkways_vanilla", "folkways_create", "folkways_modulargolems"]
-sources = ["mods/core/src/main/java", "mods/vanilla/src/main/java", "mods/create/src/main/java", "mods/modulargolems/src/main/java"]
+mods = ["folkways_core", "folkways_vanilla", "folkways_create", "folkways_modulargolems", "folkways_cookery"]
+sources = ["mods/core/src/main/java", "mods/vanilla/src/main/java", "mods/create/src/main/java", "mods/modulargolems/src/main/java", "mods/cookery/src/main/java"]
 
 [profile.bench.neoforge]
 jvm_args = ["-Xmx3G"]
@@ -329,8 +340,21 @@ shouldersurfing = { target = ["client"] }
 [profile.sable.mods]
 sable = { target = ["server", "client"] }
 
+# The cookery integration runs against the real kitchen mod, on the ground and aboard a ship.
+[profile.cookery.mods]
+folkways_cookery = { target = ["server", "client"] }
+kaleidoscope_cookery = { target = ["server", "client"] }
+
+[profile.cookery-sable.mods]
+folkways_cookery = { target = ["server", "client"] }
+kaleidoscope_cookery = { target = ["server", "client"] }
+sable = { target = ["server", "client"] }
 # The e2e pair with FTB Teams on both sides, for a colony handed to a party.
 [profile.ftbteams.mods]
 ftbteams = { target = ["server", "client"] }
 ftblibrary = { target = ["server", "client"] }
 architectury = { target = ["server", "client"] }
+
+# Native Cookery alone must not activate the separately installed Folkways extension.
+[profile.cookery-native.mods]
+kaleidoscope_cookery = { target = ["server", "client"] }

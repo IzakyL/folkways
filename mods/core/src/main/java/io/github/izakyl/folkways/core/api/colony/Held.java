@@ -7,6 +7,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -18,6 +19,15 @@ public sealed interface Held {
 
     // Every cell it lies on; an entity lies on none, it goes where it goes.
     List<WorldPos> cells();
+
+    // A single registered site: blocks carry a block-entity mark, points are kept in the colony ledger.
+    default Optional<WorldPos> singleCell() {
+        return switch (this) {
+            case Block block -> Optional.of(block.cell());
+            case Point point -> Optional.of(point.cell());
+            default -> Optional.empty();
+        };
+    }
 
     // The same thing after the cells in `moved` were carried along with their realm.
     Held moved(Map<WorldPos, WorldPos> moved);
@@ -60,6 +70,13 @@ public sealed interface Held {
         public Held moved(Map<WorldPos, WorldPos> moved) {
             return new Block(moved.getOrDefault(cell, cell));
         }
+    }
+
+    // A native block without a block entity. Its owner's registered predicate validates loaded contents.
+    record Point(WorldPos cell) implements Held {
+        public Point { Objects.requireNonNull(cell, "cell"); }
+        public List<WorldPos> cells() { return List.of(cell); }
+        public Held moved(Map<WorldPos, WorldPos> moved) { return new Point(moved.getOrDefault(cell, cell)); }
     }
 
     record Area(Set<WorldPos> covered) implements Held {

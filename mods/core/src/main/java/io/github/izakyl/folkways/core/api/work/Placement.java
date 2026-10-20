@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.api.terms.Stash;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 public record Placement(Set<Stand> stands, List<Amount> carrying, List<Stash> from, List<Stash> into,
                         List<Draw> draws) {
@@ -14,7 +15,11 @@ public record Placement(Set<Stand> stands, List<Amount> carrying, List<Stash> fr
 
     // Goods the plan has set aside for this work, and where they are taken from: a store, or the worker's pack
     // when `from` is empty. The work's needs are drawn from these and nowhere else.
-    public record Draw(Optional<Stash> from, ItemSpec spec, long count) {
+    public record Draw(Optional<Stash> from, ItemSpec spec, long count, Optional<UUID> resident,
+                       Optional<UUID> producer) {
+        public Draw(Optional<Stash> from, ItemSpec spec, long count) {
+            this(from, spec, count, Optional.empty(), Optional.empty());
+        }
     }
 
     public Placement {

@@ -8,7 +8,6 @@ import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import net.createmod.ponder.api.registration.MultiSceneBuilder;
 import net.createmod.ponder.api.registration.PonderPlugin;
 import net.createmod.ponder.api.registration.PonderSceneRegistrationHelper;
 import net.minecraft.resources.ResourceLocation;
@@ -32,13 +31,21 @@ public final class FolkwaysPonderPlugin implements PonderPlugin {
     public void registerScenes(PonderSceneRegistrationHelper<ResourceLocation> helper) {
         Lessons.clear();
         List<Scenes.Folder> folders = Lessons.folders();
-        MultiSceneBuilder book = helper.forComponents(FolkwaysItems.COLONY_BOOK.getId());
+        ResourceLocation colonyBook = FolkwaysItems.COLONY_BOOK.getId();
+
         for (Scenes.Folder folder : folders) {
             for (Scenes.Scene scene : folder.scenes()) {
-                book.addStoryBoard(folder.id().getPath() + "/" + scene.id().getPath(), scene.board(), entry -> {
+                String schematic = folder.id().getPath() + "/" + scene.id().getPath();
+                // Ponder invokes the callback once per component. Only the book's entry belongs in our lesson list.
+                helper.forComponents(colonyBook).addStoryBoard(schematic, scene.board(), entry -> {
                     Lessons.bind(folder.id(), entry);
                     Lessons.bind(scene.id(), entry);
                 });
+                List<ResourceLocation> components = Scenes.itemsFor(scene).stream()
+                    .filter(component -> !component.equals(colonyBook)).distinct().toList();
+                if (!components.isEmpty()) {
+                    helper.forComponents(components.toArray(ResourceLocation[]::new)).addStoryBoard(schematic, scene.board());
+                }
             }
         }
         unlessoned(folders);

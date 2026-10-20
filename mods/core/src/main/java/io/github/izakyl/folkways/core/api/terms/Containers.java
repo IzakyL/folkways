@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.core.api.terms;
 
 import java.util.ArrayList;
+import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +24,27 @@ import net.minecraft.world.level.block.state.properties.ChestType;
 public final class Containers {
 
     private static volatile List<ItemStack> samples;
+    private static volatile List<Adapter<?>> adapters = List.of();
+
+    private record Adapter<T extends BlockEntity>(Class<T> type,
+            BiFunction<Level, T, Optional<Container>> read) {
+        Optional<Container> at(Level level, BlockEntity entity) {
+            return type.isInstance(entity) ? read.apply(level, type.cast(entity)) : Optional.empty();
+        }
+    }
+
+    // Optional integrations expose their real slots without making the core depend on their classes.
+    public static synchronized <T extends BlockEntity> void register(Class<T> type,
+            BiFunction<Level, T, Optional<Container>> read) {
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(read, "read");
+        if (adapters.stream().anyMatch(adapter -> adapter.type().equals(type))) {
+            throw new IllegalArgumentException("container adapter already registered: " + type);
+        }
+        List<Adapter<?>> next = new ArrayList<>(adapters);
+        next.add(new Adapter<>(type, read));
+        adapters = List.copyOf(next);
+    }
 
     // A container that never overrides canPlaceItem and has no faces takes anything, and needs no reading.
     private static final ClassValue<Boolean> PICKY = new ClassValue<>() {
@@ -53,7 +76,18 @@ public final class Containers {
             return Optional.ofNullable(ChestBlock.getContainer(chest, state, level, pos, true));
         }
         BlockEntity entity = level.getBlockEntity(pos);
-        return entity instanceof Container container ? Optional.of(container) : Optional.empty();
+        if (entity instanceof Container container) {
+            return Optional.of(container);
+        }
+        if (entity != null && !entity.isRemoved()) {
+            for (Adapter<?> adapter : adapters) {
+                Optional<Container> found = adapter.at(level, entity);
+                if (found.isPresent()) {
+                    return found;
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     public static boolean gone(Level level, BlockPos pos) {
@@ -182,6 +216,6 @@ public final class Containers {
     }
 
     private static int capacity(Container into, ItemStack stack) {
-        return Math.min(into.getMaxStackSize(), stack.getMaxStackSize());
+        return into.getMaxStackSize(stack);
     }
 }

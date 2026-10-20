@@ -23,17 +23,22 @@ java {
 
 sourceSets {
     gametest
+    cookeryTest
 }
 
 neoForge {
     version = project.neoforge_version
     addModdingDependenciesTo sourceSets.gametest
+    addModdingDependenciesTo sourceSets.cookeryTest
 }
 
 configurations {
     gametestCompileOnly.extendsFrom compileOnly
     gametestImplementation.extendsFrom implementation
     gametestRuntimeOnly.extendsFrom runtimeOnly
+    cookeryTestCompileOnly.extendsFrom gametestCompileOnly
+    cookeryTestImplementation.extendsFrom gametestImplementation
+    cookeryTestRuntimeOnly.extendsFrom gametestRuntimeOnly
 }
 
 def modsManifest = rootProject.file(".blockwright/mods.json")
@@ -50,6 +55,8 @@ ext.lib = { String name ->
 // above it and on the core's fixtures.
 dependencies {
     gametestImplementation sourceSets.main.output
+    cookeryTestImplementation sourceSets.main.output
+    cookeryTestImplementation sourceSets.gametest.output
 }
 
 tasks.named("jar", Jar) {

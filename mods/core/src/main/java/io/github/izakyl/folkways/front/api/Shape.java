@@ -64,6 +64,12 @@ public sealed interface Shape {
         }
     }
 
+    // A native block kept in the colony ledger, without adding a block entity or an attachment.
+    record Point(Block.Accepts accepts, Block.Anchor anchor) implements Shape {
+        public Point(Predicate<BlockState> accepts) { this((level, pos) -> accepts.test(level.getBlockState(pos)), (level, pos) -> pos); }
+        public Gesture gesture() { return Gesture.POINT; }
+    }
+
     record Body(Predicate<EntityType<?>> accepts) implements Shape {
 
         @Override

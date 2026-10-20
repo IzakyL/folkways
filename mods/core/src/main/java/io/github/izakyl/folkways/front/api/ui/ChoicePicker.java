@@ -237,7 +237,8 @@ public final class ChoicePicker {
                     "folkways.choice.variant." + option.getPath().substring(stroke + 1), whole);
             }
         }
-        return Component.literal(option.getPath());
+        String key = "folkways.choice." + option.getNamespace() + "." + option.getPath().replace('/', '.');
+        return Component.translatableWithFallback(key, option.getPath());
     }
 
     @Nullable

@@ -36,7 +36,7 @@ public record ColonyMetrics(
             }
         }
         int members = (int) colony.holdings().stream()
-            .filter(holding -> holding.what() instanceof io.github.izakyl.folkways.core.api.colony.Held.Block).count();
+            .filter(holding -> holding.what().singleCell().isPresent()).count();
         List<Held> stock = new ArrayList<>();
         Map<Item, Integer> tally = ColonyStocks.tally(colony, server);
         tally.forEach((item, count) -> stock.add(new Held(BuiltInRegistries.ITEM.getKey(item), count)));

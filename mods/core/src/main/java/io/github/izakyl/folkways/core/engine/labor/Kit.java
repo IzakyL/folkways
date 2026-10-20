@@ -2,8 +2,10 @@ package io.github.izakyl.folkways.core.engine.labor;
 
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.Equipment;
 import io.github.izakyl.folkways.core.api.resident.body.Licences;
 import io.github.izakyl.folkways.core.api.resident.body.PackKeeps;
+import io.github.izakyl.folkways.core.api.resident.body.TaskTools;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
@@ -16,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.ObjIntConsumer;
+import java.util.function.Predicate;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -24,10 +27,12 @@ final class Kit {
 
     private final Set<ItemSpec> specs;
     private final List<Amount> kept;
+    private final Predicate<ItemStack> borrowed;
 
-    private Kit(Set<ItemSpec> specs, List<Amount> kept) {
+    private Kit(Set<ItemSpec> specs, List<Amount> kept, Predicate<ItemStack> borrowed) {
         this.specs = specs;
         this.kept = kept;
+        this.borrowed = borrowed;
     }
 
     static Kit of(Colony colony, Body body) {
@@ -40,7 +45,13 @@ final class Kit {
                 }
             }
         }
-        return new Kit(Set.copyOf(wanted), PackKeeps.of(colony, body));
+        List<Amount> kept = new ArrayList<>(PackKeeps.of(colony, body));
+        for (Equipment.Demand clothing : Equipment.wanted(colony, body)) {
+            if (!Goods.matches(body.mob().getItemBySlot(clothing.slot()), clothing.items())) {
+                kept.add(new Amount(clothing.items(), 1));
+            }
+        }
+        return new Kit(Set.copyOf(wanted), List.copyOf(kept), stack -> TaskTools.holds(body.id(), stack));
     }
 
     // The part of a kit's tool the colony lets its residents take up; nothing, when it allows none of it.
@@ -48,7 +59,8 @@ final class Kit {
         Set<Item> named = new LinkedHashSet<>();
         collect(tool, named);
         List<ItemSpec> kept = named.stream()
-            .filter(item -> KitRules.allows(colony, item))
+            .filter(item -> KitRules.allows(colony, item)
+                && !io.github.izakyl.folkways.core.api.work.Tools.sharedItem(item.getDefaultInstance()))
             .map(item -> ItemSpec.of(BuiltInRegistries.ITEM.getKey(item)))
             .toList();
         if (kept.size() == named.size()) {
@@ -72,7 +84,7 @@ final class Kit {
     }
 
     boolean holds(ItemStack stack) {
-        if (stack.isEmpty()) {
+        if (stack.isEmpty() || borrowed.test(stack)) {
             return true;
         }
         for (ItemSpec spec : specs) {

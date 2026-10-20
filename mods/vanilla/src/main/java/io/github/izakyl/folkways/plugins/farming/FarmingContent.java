@@ -57,6 +57,7 @@ public final class FarmingContent {
     static final int FELL_TICKS_PER_LEAF = 2;
 
     public static final String CROP = "crop";
+    public static final String HARVEST_MODE = "harvest_mode";
 
     // Whether residents pull up the grass and flowers standing on ground the plot wants tilled.
     public static final Schema.Setting CLEAR_GRASS = new Schema.Setting.Flag("clear_grass",
@@ -97,7 +98,7 @@ public final class FarmingContent {
         registering.facing(ID, colony -> colony.service(ID, FarmPresence.class).map(Facing.class::cast));
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(PLOT, new Shape.Volume(FolkwaysVanillaConfig.maxFarmCells()),
-                new Schema(List.of(crop(), CLEAR_GRASS, CLEAR_FLOWERS)),
+                new Schema(List.of(crop(), harvestMode(), CLEAR_GRASS, CLEAR_FLOWERS)),
                 ResourceLocation.withDefaultNamespace("wheat"))),
             Schema.none(), List.of(PAGE)));
     }
@@ -109,6 +110,11 @@ public final class FarmingContent {
     // What a farmer pulls up before tilling, for work that weeds ground it never tills: the grass, the flowers, or both.
     public static boolean weed(BlockState state, boolean grass, boolean flowers) {
         return new Tillage.Clearing(grass, flowers).clears(state);
+    }
+
+    private static Schema.Setting harvestMode() {
+        return new Schema.Setting.Choice(HARVEST_MODE, "folkways.settings.harvest_mode",
+            ResourceLocation.withDefaultNamespace("shears"), HarvestMethods.choices(), HarvestMethods.PICK);
     }
 
     private static Schema.Setting crop() {

@@ -309,7 +309,8 @@ public final class ZoneSelection {
     }
 
     public static void render(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS
+        // Draw against solid terrain before water writes its depth, as the native block outline does.
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES
             || (origin == null && min == null)) {
             return;
         }

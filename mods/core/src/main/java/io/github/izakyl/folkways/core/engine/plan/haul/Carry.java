@@ -289,8 +289,8 @@ final class Carry implements Carrying {
         WorkSite near = plan.node(consumer).spec().site();
         WorkSite made = plan.node(maker).spec().site();
         List<Stash> stores = new ArrayList<>(plan.stores());
-        stores.sort(Comparator.comparingLong((Stash one) ->
-                edge.carried() || plan.reaching(consumer, one).isEmpty() ? 1 : 0)
+        stores.sort(Comparator.comparingInt((Stash one) -> -plan.preference(one, concrete))
+            .thenComparingLong(one -> edge.carried() || plan.reaching(consumer, one).isEmpty() ? 1 : 0)
             .thenComparingLong(one -> 2 * Transfer.walk(one.pos(), made) + Transfer.walk(one.pos(), near)));
         for (Stash into : stores) {
             Set<Stand> unloading = plan.around(into);
@@ -372,7 +372,9 @@ final class Carry implements Carrying {
 
     // A store among `ins` the goods could be relayed into from `out`, with room for them, that `eater` reaches.
     private static Stash landing(Laying plan, Stash out, Set<Stash> ins, UUID eater, ItemSpec concrete, long count) {
-        for (Stash in : ins) {
+        List<Stash> ordered = new ArrayList<>(ins);
+        ordered.sort(Comparator.comparingInt(in -> -plan.preference(in, concrete)));
+        for (Stash in : ordered) {
             if (!in.equals(out) && plan.roomFor(in, concrete) >= count
                 && (eater == null || plan.feeds(in, eater, concrete) && !plan.reaching(eater, in).isEmpty())
                 && passable(plan, out, in)) {

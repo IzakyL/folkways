@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.api.resident.Locomotion;
 import io.github.izakyl.folkways.core.api.resident.Locomotions;
 import io.github.izakyl.folkways.core.api.resident.ResidentKind;
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.vocation.VocationSpec;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Refinement;
@@ -37,6 +38,10 @@ public final class Declaring extends Event implements IModBusEvent {
 
     public void vocation(VocationSpec spec) {
         Vocations.register(spec);
+    }
+
+    public void kit(ResourceLocation vocation, ItemSpec tool) {
+        Vocations.addKit(vocation, tool);
     }
 
     public void locomotion(Locomotion gait) {

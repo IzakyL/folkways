@@ -154,6 +154,7 @@ public final class ColonyWorks extends Stretch implements Colony {
     @Override
     public void submit(ResourceLocation owner, ResourceKey<Level> dimension, Grown work,
             BiConsumer<UUID, Ending> ended) {
+        work = io.github.izakyl.folkways.core.api.work.WorkDecorators.apply(this, work);
         Submission fresh = new Submission(owner, dimension, work, java.util.Objects.requireNonNull(ended));
         boolean blocked = false;
         for (UUID node : fresh.left) {
@@ -319,7 +320,8 @@ public final class ColonyWorks extends Stretch implements Colony {
     @Override
     public void publish(ResourceLocation owner, ResourceKey<Level> dimension,
                         Collection<Workshop> offering) {
-        if (workshops.publish(owner, dimension, List.copyOf(offering))) {
+        if (workshops.publish(owner, dimension, offering.stream().map(workshop ->
+                io.github.izakyl.folkways.core.api.work.WorkDecorators.apply(this, workshop)).toList())) {
             listener(dimension).ifPresent(Listening::offered);
         }
     }
@@ -329,6 +331,22 @@ public final class ColonyWorks extends Stretch implements Colony {
         if (stores.publish(owner, dimension, List.copyOf(offering))) {
             listener(dimension).ifPresent(Listening::offered);
         }
+    }
+
+    @Override
+    public Optional<net.minecraft.world.Container> store(ServerLevel level, WorldPos at) {
+        return storesIn(level.dimension()).contains(at)
+            ? io.github.izakyl.folkways.core.engine.plan.Stores.at(level, at) : Optional.empty();
+    }
+
+    @Override
+    public List<StoreRule> storeRules(WorldPos at) {
+        return Stores.rulesAt(at);
+    }
+
+    @Override
+    public List<io.github.izakyl.folkways.core.api.work.ReservedInput> reservedInputs(ServerLevel level) {
+        return io.github.izakyl.folkways.core.engine.labor.Labor.reservedInputs(id(), level.dimension());
     }
 
     @Override
@@ -388,6 +406,11 @@ public final class ColonyWorks extends Stretch implements Colony {
     @Override
     public Optional<Holding> hold(ResourceLocation owner, Held what) {
         MinecraftServer running = required();
+        if (what instanceof Held.Point point && io.github.izakyl.folkways.core.api.terms.WorldSpaces.resolve(running, point.cell())
+                .filter(where -> where.level().isLoaded(where.cell())
+                    && io.github.izakyl.folkways.core.api.colony.PointSites.accepts(owner, where.level(), where.cell())).isEmpty()) {
+            return Optional.empty();
+        }
         if (ColonyRegistry.get(running).taken(what)) {
             return Optional.empty();
         }

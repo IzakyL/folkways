@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Sweep;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.front.api.Facing;
@@ -42,8 +43,9 @@ final class FarmPresence implements Facing {
 
     private static final String TAG_MADE = "made";
 
-    // Plots that clear differently are worked as different fields.
-    private record Plot(ResourceKey<Level> dimension, ResourceLocation crop, Tillage.Clearing clearing) {
+    // Plots with different harvest or clearing choices are worked as different fields.
+    private record Plot(ResourceKey<Level> dimension, ResourceLocation crop, ResourceLocation harvest,
+            Tillage.Clearing clearing) {
     }
 
     private final Colony colony;
@@ -111,7 +113,15 @@ final class FarmPresence implements Facing {
     }
 
     private void retireAllBut(Set<Plot> chosen) {
-        fields.keySet().retainAll(chosen);
+        fields.entrySet().removeIf(entry -> {
+            if (chosen.contains(entry.getKey())) return false;
+            entry.getValue().close();
+            return true;
+        });
+    }
+
+    List<CropSeeds.Sowing> sowingPlans(ServerLevel level) {
+        return fields.values().stream().flatMap(field -> field.sowingPlans(level).stream()).toList();
     }
 
     public List<Grown> goals(ColonyView view) {
@@ -132,10 +142,20 @@ final class FarmPresence implements Facing {
         if (crop.isEmpty()) {
             return Optional.empty();
         }
+        if (crop.get().behavior().isPresent()) {
+            List<Item> seeds = crop.get().behavior().get().seeds();
+            Item preferred = seeds.stream().filter(seed -> Fronts.of(colony)
+                .stocked(level.getServer(), Goods.specOf(seed.getDefaultInstance())) > 0)
+                .findFirst().orElse(seeds.getFirst());
+            crop = Optional.of(crop.get().using(preferred));
+        }
         Settings settings = zone.settings();
+        ResourceLocation harvest = settings.choice(FarmingContent.HARVEST_MODE);
+        if (harvest == null) harvest = HarvestMethods.PICK;
+        crop = Optional.of(crop.get().harvesting(harvest));
         Tillage.Clearing clearing = new Tillage.Clearing(settings.flag(FarmingContent.CLEAR_GRASS.key()),
             settings.flag(FarmingContent.CLEAR_FLOWERS.key()));
-        Plot plot = new Plot(level.dimension(), chosen, clearing);
+        Plot plot = new Plot(level.dimension(), chosen, harvest, clearing);
         Field field = fields.get(plot);
         if (field == null) {
             field = new Field(crop.get(), clearing, WorldPos.of(level, anywhere.get()), sweep::nudge, made);

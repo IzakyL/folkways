@@ -249,6 +249,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
         if (colonyId().filter(id -> Colonies.razed(level.getServer(), id)).isEmpty()) {
             return;
         }
+        io.github.izakyl.folkways.core.api.resident.body.Equipment.release(this);
         pack().dropContents(this);
         leaveColony();
         discard();

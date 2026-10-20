@@ -33,3 +33,12 @@ dependencies {
     // loaded beside them in the game tests' run.
     gametestCompileOnly lib("create")
 }
+
+// Native optional-integration tests share this mod's package and module, without linking its main source to Cookery.
+dependencies {
+    cookeryTestImplementation project(":cookery")
+    cookeryTestCompileOnly lib("kaleidoscope_cookery")
+}
+
+// The recipe audit is one fixture shared by native kitchen and vanilla crafting tests in their own modules.
+sourceSets.cookeryTest.resources.srcDir(rootProject.file("mods/cookery/src/gametest/resources"))

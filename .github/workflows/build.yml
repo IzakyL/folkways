@@ -58,7 +58,8 @@ jobs:
           Built automatically from master at ${GITHUB_SHA::7}. Untested pre-release; back up your world before trying it.
 
           Install **folkways-core** and **folkways-vanilla**, plus LDLib2. Add **folkways-create** only with Create,
-          and **folkways-modulargolems** only with Modular Golems. All Folkways jars must come from the same build.
+          **folkways-modulargolems** only with Modular Golems, and **folkways-cookery** only with Kaleidoscope Cookery 1.6.0.
+          All Folkways jars must come from the same build.
           EOF
           gh release create nightly jars/*.jar --prerelease --target "$GITHUB_SHA" \
             --title "Nightly build" \

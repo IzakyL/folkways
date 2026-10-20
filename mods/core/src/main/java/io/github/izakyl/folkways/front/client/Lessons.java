@@ -42,12 +42,13 @@ public final class Lessons {
         ENTRIES.computeIfAbsent(lesson, key -> new ArrayList<>()).add(entry);
     }
 
+    // Ponder rebuilds its registry on a resource reload; rebuild our matching playback entries as well.
     public static void clear() {
         ENTRIES.clear();
     }
 
     public static List<StoryBoardEntry> scenesFor(ResourceLocation lesson) {
-        return ENTRIES.getOrDefault(lesson, List.of());
+        return List.copyOf(ENTRIES.getOrDefault(lesson, List.of()));
     }
 
     public static boolean has(ResourceLocation lesson) {

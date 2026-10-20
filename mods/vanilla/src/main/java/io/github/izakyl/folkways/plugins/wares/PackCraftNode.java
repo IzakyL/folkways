@@ -28,6 +28,7 @@ final class PackCraftNode extends CraftNode {
                 Workload.Once.of(runs * Stations.LABOR_TICKS, WaresContent::haste))
                 .needs(needsFor(demands, runs))
                 .gives(new Amount(produces, perRun * runs))
+                .leaves(assembly.remainders().stream().map(amount -> new Amount(amount.spec(), amount.count() * runs)).toList())
                 .doing(WaresContent.CRAFTING, produces)
                 .done(),
             at, block);
@@ -46,8 +47,19 @@ final class PackCraftNode extends CraftNode {
     @Override
     Outcome work(ServerLevel level, Worker who) {
         List<ItemStack> supplied = who.supplied();
-        SimpleContainer pool = new SimpleContainer(Math.max(1, supplied.size()));
-        supplied.forEach(stack -> Containers.insert(pool, stack));
+        // A draw may aggregate several unstackable buckets into one supplied amount. Restore their
+        // actual native stack limits before crafting rather than losing the excess in a too-small pool.
+        SimpleContainer limits = new SimpleContainer(0);
+        int cells = Math.toIntExact(supplied.stream().mapToLong(stack -> {
+            int size = Math.max(1, limits.getMaxStackSize(stack));
+            return (stack.getCount() + (long) size - 1) / size;
+        }).sum());
+        SimpleContainer pool = new SimpleContainer(Math.max(1, cells));
+        for (ItemStack stack : supplied) {
+            if (!Containers.insert(pool, stack).isEmpty()) {
+                return Outcome.failed(WaresRefusal.NOTHING_TO_WORK_WITH);
+            }
+        }
         List<ItemStack> made = new ArrayList<>();
         for (int run = 0; run < runs; run++) {
             Optional<List<ItemStack>> ran = assembly.runOnce(level, pool);
