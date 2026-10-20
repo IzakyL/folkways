@@ -9,6 +9,8 @@ import { admitPromoSettlersFast, foundPromoColonyFast, licenseCrewFast, setMaint
 import { stageCookerySideWork, readCookerySideWork } from "./cookery-work";
 import { configureMarketMenu, stageExtraKitchen, startExtraTea, readExtraKitchen } from "./cookery-extra-kitchen";
 import { stageExtraYard, readExtraYard } from "./cookery-extra-yard";
+import { stageCookeryChain, readCookeryChain } from "./cookery-chain";
+import { stageCookeryVisitors, readCookeryVisitors, summarizeCookeryVisitors } from "./cookery-visitors";
 import { dressCookeryGarden } from "./cookery-set";
 import { prepareCookeryModels, WINE_FOX_MODELS, applyCookeryLooks } from "./cookery-cast";
 import { buildCookeryElevator, readCookeryElevator } from "./cookery-elevator";
@@ -20,7 +22,7 @@ const DINNER = K + "dongpo_pork";
 const PANTRY_SUPPLIES = ["minecraft:wheat", "minecraft:porkchop", K + "green_chili", "minecraft:water_bucket",
   "minecraft:oak_planks", "minecraft:bamboo", "minecraft:iron_ingot", "minecraft:brick", "minecraft:bone", "minecraft:bowl", K + "oil", K + "stockpot_lid"];
 const KITCHEN_WORK = new Set(["preparing_food", "chopping_food", "cooking_food", "serving_food", "crafting"]);
-const SECONDS = 75;
+const SECONDS = 90;
 
 test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) => {
   const run = take("cookery");
@@ -76,7 +78,7 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     run.note("founded", founded);
     run.note("elevator", await buildCookeryElevator(server, name, founded.colony_id, o));
     run.note("admitted", await admitPromoSettlersFast(server, name, founded.colony_id, 8));
-    const residents = (await world.entities(server, { types: ["folkways:resident"], limit: 20 })).entities;
+    const residents = (await world.entities(server, { types: ["folkways:resident"], limit: 32 })).entities;
     expect(residents).toHaveLength(8);
     run.note("looks", await applyCookeryLooks(server, client, residents.map(one => one.uuid)));
     const cooks = residents.slice(0, 3).map(one => one.uuid);
@@ -100,8 +102,8 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     ]));
     await world.command(server, `item replace entity ${name} weapon.mainhand with minecraft:air`);
     await world.command(server, `gamemode spectator ${name}`);
-    await setFov(client, 52);
-    const feet = at(-5, -34, 13);
+    await setFov(client, 56);
+    const feet = at(-1, -39, 15);
     const aim = at(-7, -3, 4);
     const look = cameraLookingAt({ x: feet.x + 0.5, y: feet.y + 1.62, z: feet.z + 0.5 },
       { x: aim.x + 0.5, y: aim.y + 0.5, z: aim.z + 0.5 });
@@ -154,7 +156,7 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     for (let i = 0; i < 3; i++) admissions.push(await runColonyTask(server, ADMIT_SETTLERS,
       { player: name, colony_id: founded.colony_id, count: 1 }));
     const known = new Set(residents.map(one => one.uuid));
-    const marketNewcomers = (await world.entities(server, { types: ["folkways:resident"], limit: 20 })).entities
+    const marketNewcomers = (await world.entities(server, { types: ["folkways:resident"], limit: 32 })).entities
       .filter(one => !known.has(one.uuid));
     expect(marketNewcomers).toHaveLength(3);
     residents.push(...marketNewcomers);
@@ -175,18 +177,38 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
       }
     } finally { await tick.freeze(server, true); run.note("marketWarmup", marketWarmup); }
     expect(roasting, "ordinary market orders must load the real rotating spit before filming").toBe(true);
+    // The inn now serves its arriving patrons at the banquet. Existing staff keep
+    // their packed rations; new arrivals use the normal dining urge rather than restocking road snacks.
+    run.note("tavernMenu", await server.run(TAVERN_MENU, { colony: founded.colony_id }));
     for (let i = 0; i < 4; i++) admissions.push(await runColonyTask(server, ADMIT_SETTLERS,
       { player: name, colony_id: founded.colony_id, count: 1 }));
     run.note("crewAdmissions", admissions);
     const staged = new Set(residents.map(one => one.uuid));
-    const newcomers = (await world.entities(server, { types: ["folkways:resident"], limit: 20 })).entities
+    const newcomers = (await world.entities(server, { types: ["folkways:resident"], limit: 32 })).entities
       .filter(one => !staged.has(one.uuid));
     expect(newcomers).toHaveLength(4);
     residents.push(...newcomers);
     farmers.push(newcomers[0].uuid);
     const yardCrew = newcomers.slice(1).map(one => one.uuid);
+    // Fresh road visitors and the two logistics workers begin only after rehearsal.
+    const existing = new Set(residents.map(one => one.uuid));
+    for (let i = 0; i < 6; i++) admissions.push(await runColonyTask(server, ADMIT_SETTLERS,
+      { player: name, colony_id: founded.colony_id, count: 1 }));
+    const arrivals = (await world.entities(server, { types: ["folkways:resident"], limit: 32 })).entities
+      .filter(one => !existing.has(one.uuid));
+    expect(arrivals).toHaveLength(6);
+    residents.push(...arrivals);
+    const visitorCrew = arrivals.slice(0, 4).map(one => one.uuid);
+    const chainCrew = arrivals.slice(4).map(one => one.uuid);
+    // Let the real logistics counter become available before the frozen one-off yard work is staged.
+    run.note("chain", await stageCookeryChain(server, name, founded.colony_id, o, chainCrew));
+    await tick.freeze(server, true);
     run.note("sideWork", await stageCookerySideWork(server, name, founded.colony_id, o, farmers));
     run.note("extraYard", await stageExtraYard(server, name, founded.colony_id, o, yardCrew));
+    const visitors = await stageCookeryVisitors(server, name, founded.colony_id, o, visitorCrew);
+    cooks.push(...visitors.cooks);
+    run.note("visitors", visitors);
+    run.note("crewAdmissions", admissions);
     run.note("teaOrder", await startExtraTea(server, name, founded.colony_id, o));
     for (const resident of newcomers) await world.command(server, `data merge entity ${resident.uuid} {Invulnerable:1b}`);
     run.note("looks", await applyCookeryLooks(server, client, residents.map(one => one.uuid)));
@@ -212,12 +234,23 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
             residents.map(one => one.uuid), scenery.dining.tables, o),
             sideWork: await readCookerySideWork(server, founded.colony_id, o, farmers),
             extraKitchen: await readExtraKitchen(server, founded.colony_id, o, marketCrew),
-            extraYard: await readExtraYard(server, founded.colony_id, o, yardCrew) });
+            extraYard: await readExtraYard(server, founded.colony_id, o, yardCrew),
+            visitors: await readCookeryVisitors(server, founded.colony_id, o, visitorCrew),
+            chain: await readCookeryChain(server, founded.colony_id, o, chainCrew) });
           await sleepMs(1000);
         }
       },
     });
     run.note("activity", evidence);
+    const visits = summarizeCookeryVisitors(evidence.map(state => ({ seconds: state.seconds, ...state.visitors })), visitorCrew);
+    run.note("visits", visits);
+    expect(visits.some(visit => visit.complete), "a real visitor must walk in, dine and return beyond the frame with its delivery").toBe(true);
+    const chain = evidence.at(-1)?.chain;
+    run.note("chainProgress", chain);
+    expect(chain.evidence.packingSeen, "a resident must work at the native packing counter").toBe(true);
+    expect(chain.evidence.chainParcelSeen, "the ingredient parcel must really travel on the chain").toBe(true);
+    expect(chain.evidence.collectingSeen, "a resident must collect the received parcel").toBe(true);
+    expect(chain.evidence.maxTargetCount, "the real kitchen supply must reach its destination").toBeGreaterThanOrEqual(32);
     run.note("farmProgress", evidence.at(-1)?.sideWork);
     expect(evidence.at(-1)?.sideWork.harvested, "the filmed farmer actually picks or harvests initially mature crops").toBeGreaterThan(0);
     run.note("yardProgress", evidence.at(-1)?.extraYard);
@@ -281,8 +314,8 @@ for (var raw : args.list("cells")) {
     var cell = (Map<?, ?>) raw;
     cells.add(new BlockPos(((Number) cell.get("x")).intValue(), ((Number) cell.get("y")).intValue(), ((Number) cell.get("z")).intValue()));
 }
-// Only tabletops adjoining a chair publish meals; one portion on each keeps the
-// shared banquet supplied without drawing the entire yard crew into table deliveries.
+// Joined tabletops share all seats and can be served from either end. One portion
+// per physical tabletop keeps the long banquet supplied without obscuring its surface.
 var settings = ColonySettings.empty().with(LivingContent.DINING_SERVINGS.key(), new ColonySettings.Value.Count(1))
     .with(LivingContent.DINING_FOOD.key(), new ColonySettings.Value.Items(List.of(ItemFilter.item(ResourceLocation.parse(args.string("food"))))));
 var zone = front.addZone(ctx.server().overworld(), LivingContent.DINING, cells, settings).orElseThrow();
@@ -302,6 +335,20 @@ for (var id : ids) {
     WorkExertion.performed(body.mob(), 4000 / Math.max(0.1, appetite), 0, 0);
 }
 return Map.of("stagedAppetite", ids);
+` }),
+});
+
+const TAVERN_MENU = defineTask<{ colony: string }, any>({
+  name: "folkways.promo.cookery-tavern-menu", side: "server", timeoutMs: 20_000,
+  source: javaTask({ imports: [
+    "io.github.izakyl.folkways.core.api.colony.Colonies",
+    "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
+    "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
+    "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+  ], body: `
+var colony = Colonies.of(ctx.server(), UUID.fromString(Args.of(ctx).string("colony"))).orElseThrow();
+ColonyFront.of(colony).setSetting(LivingContent.ID, LivingContent.FOOD.key(), new ColonySettings.Value.Items(List.of()));
+return Sync.stamp(Map.of("arrivingPatrons", "table-meals", "scope", "filming-colony"));
 ` }),
 });
 

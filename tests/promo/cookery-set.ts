@@ -115,6 +115,21 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
   await fill(-17, -11, -1, -4, -7, -1, "minecraft:polished_andesite");
   await fill(-16, -10, -1, -5, -7, -1, "minecraft:polished_diorite");
   await fill(-18, -14, -1, 3, -12, -1, "minecraft:gravel");
+  // A village street continues beyond both edges of the locked camera. Low borders
+  // keep the approaches legible without hiding cooks or the courtyard work.
+  await fill(-65, -18, -1, 55, -15, -1, "minecraft:stone_bricks");
+  await fill(-65, -17, -1, 55, -16, -1, "minecraft:gravel");
+  await fill(-18, -14, -1, 18, -12, -1, pale);
+  for (const [from, to] of [[-65, -29], [14, 55]] as const) {
+    await fill(from, -14, 0, to, -14, 0, "minecraft:spruce_fence");
+  }
+  // Off-camera roadside depots keep their own walkable service bays.
+  for (const x of [-39, 29]) await set(x, -14, 0, "minecraft:air");
+  for (const x of [-49, -36, 24, 39, 52]) {
+    await fill(x, -18, 0, x, -18, 1, "minecraft:cobblestone_wall");
+    await set(x, -18, 2, "minecraft:lantern");
+    await set(x - 1, -19, 0, "minecraft:flowering_azalea");
+  }
   // Little paving insets separate the chopping, tea and roasting bays without walls.
   for (const x of [-14, -10, -6]) await fill(x - 1, -9, -1, x + 1, -7, -1, "minecraft:smooth_sandstone");
   // A compact left woodshed and grain reserve make the kitchen's supply side read as a working inn.
@@ -151,17 +166,16 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
     await fill(x - 2, z - 1, 0, x + 2, z + 1, 0, "minecraft:wheat[age=7]");
   }
   // A small enclosed bunkhouse sits behind the inn; its real beds stay out of the foreground.
-  await fill(-18, 7, -1, -3, 12, -1, "minecraft:stone_bricks");
-  await fill(-17, 8, 0, -4, 11, 2, "minecraft:air");
-  await fill(-18, 7, 0, -18, 12, 2, plaster);
-  await fill(-3, 7, 0, -3, 12, 2, plaster);
+  await fill(-18, 7, -1, -3, 14, -1, "minecraft:stone_bricks");
+  await fill(-17, 8, 0, -4, 13, 2, "minecraft:air");
+  await fill(-18, 7, 0, -18, 14, 2, plaster);
+  await fill(-3, 7, 0, -3, 14, 2, plaster);
   await fill(-18, 7, 0, -3, 7, 2, plaster);
-  await fill(-18, 12, 0, -3, 12, 2, plaster);
-  await fill(-18, 7, 3, -3, 12, 3, "minecraft:dark_oak_planks");
+  await fill(-18, 14, 0, -3, 14, 2, plaster);
+  await fill(-18, 7, 3, -3, 14, 3, "minecraft:dark_oak_planks");
   await fill(-18, 9, 0, -18, 9, 1, "minecraft:air");
   await set(-10, 10, 2, "minecraft:lantern[hanging=true]");
-  const beds = [-15, -13, -11, -9, -7, -5, -3].flatMap(x => [at(x - 1, 8), at(x - 1, 11)]);
-  beds.push(at(-4, 9));
+  const beds = [-15, -13, -11, -9, -7, -5, -3].flatMap(x => [at(x - 1, 8), at(x - 1, 11), at(x - 1, 13)]);
   for (const bed of beds) {
     await world.command(server, `setblock ${commandPos(bed)} minecraft:white_bed[part=foot,facing=west]`);
     await world.command(server, `setblock ${commandPos({ ...bed, x: bed.x - 1 })} minecraft:white_bed[part=head,facing=west]`);
