@@ -11,8 +11,8 @@ sealed interface OrderAct {
     String ADMIT_ONLY = "admit_only";
     String ADMIT_EXCEPT = "admit_except";
     String ADMIT_ANY = "admit_any";
-    String SLOTS = "slots";
-    String ALL_SLOTS = "all_slots";
+    String FILTER_MODE = "filter_mode";
+    String ACCESS = "access:";
 
     record Maintain() implements OrderAct {
     }
@@ -29,10 +29,10 @@ sealed interface OrderAct {
     record AdmitAny() implements OrderAct {
     }
 
-    record Slots() implements OrderAct {
+    record FilterMode() implements OrderAct {
     }
 
-    record AllSlots() implements OrderAct {
+    record Access(String mode) implements OrderAct {
     }
 
     default String key() {
@@ -42,8 +42,8 @@ sealed interface OrderAct {
             case Withdraw withdraw -> WITHDRAW + withdraw.goods();
             case Admit admit -> admit.only() ? ADMIT_ONLY : ADMIT_EXCEPT;
             case AdmitAny ignored -> ADMIT_ANY;
-            case Slots ignored -> SLOTS;
-            case AllSlots ignored -> ALL_SLOTS;
+            case FilterMode ignored -> FILTER_MODE;
+            case Access access -> ACCESS + access.mode();
         };
     }
 
@@ -57,9 +57,10 @@ sealed interface OrderAct {
             case DELIVER -> Optional.of(new Deliver());
             case ADMIT_ONLY -> Optional.of(new Admit(true));
             case ADMIT_EXCEPT -> Optional.of(new Admit(false));
+            case FILTER_MODE -> Optional.of(new FilterMode());
             case ADMIT_ANY -> Optional.of(new AdmitAny());
-            case SLOTS -> Optional.of(new Slots());
-            case ALL_SLOTS -> Optional.of(new AllSlots());
+            case "access:take" -> Optional.of(new Access("take"));
+            case "access:store" -> Optional.of(new Access("store"));
             default -> key.startsWith(WITHDRAW)
                 ? Optional.of(new Withdraw(key.substring(WITHDRAW.length())))
                 : Optional.empty();

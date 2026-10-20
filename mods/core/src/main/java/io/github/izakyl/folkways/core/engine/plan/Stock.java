@@ -71,6 +71,14 @@ public final class Stock {
         return stashes.contains(where);
     }
 
+    public boolean takes(Stash where) {
+        return StoreRule.takes(rules.getOrDefault(where, List.of()));
+    }
+
+    public boolean stores(Stash where) {
+        return StoreRule.stores(rules.getOrDefault(where, List.of()));
+    }
+
     public boolean admits(Stash where, ItemSpec spec) {
         Set<Item> barred = refused.getOrDefault(where, Set.of());
         return StoreRule.admits(rules.getOrDefault(where, List.of()), spec)

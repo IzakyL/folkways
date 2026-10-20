@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -164,13 +165,15 @@ final class OrdersPresence implements Facing {
             case OrderAct.Withdraw withdraw -> withdraw(into, withdraw.goods());
             case OrderAct.Admit admit -> admit(into, admit.only(), view);
             case OrderAct.AdmitAny ignored -> shelve(shelfAt(into).taking(Optional.empty()));
-            case OrderAct.Slots ignored -> slots(into, view);
-            case OrderAct.AllSlots ignored -> shelve(shelfAt(into).spanning(Optional.empty()));
+            case OrderAct.FilterMode ignored -> toggleFilter(into, view);
+            case OrderAct.Access access -> Containers.at(view.level(), into.block(view.level())).isPresent()
+                ? shelve(shelfAt(into).toggle(access.mode()))
+                : Attempt.refused(OrderRefusal.NOT_A_CONTAINER);
         };
     }
 
     private Attempt admit(WorldPos into, boolean only, ColonyView view) {
-        Optional<ItemSpec> what = Fronts.of(colony).settings(OrdersContent.ID).items(OrdersContent.ITEM.key());
+        Optional<ItemSpec> what = Fronts.of(colony).settings(OrdersContent.ID).items(OrdersContent.FILTER.key());
         if (what.isEmpty() || Goods.members(what.get()).isEmpty()) {
             return Attempt.refused(OrderRefusal.UNKNOWN_ITEM);
         }
@@ -186,13 +189,47 @@ final class OrdersPresence implements Facing {
         return shelve(next);
     }
 
-    private Attempt slots(WorldPos into, ColonyView view) {
-        if (Containers.at(view.level(), into.block(view.level())).isEmpty()) {
+    @Override
+    public Optional<List<ItemFilter>> itemFiltersAt(ResourceLocation page, BlockPos at, String key, ColonyView view) {
+        return filterShelf(page, at, key, view)
+            .map(shelf -> shelf.admitting().map(Shelf.Admitting::filters).orElseGet(List::of));
+    }
+
+    @Override
+    public Optional<Attempt> setItemFiltersAt(ResourceLocation page, BlockPos at, String key,
+            List<ItemFilter> filters, ColonyView view) {
+        return filterShelf(page, at, key, view).map(shelf -> changeFilter(shelf,
+            new Shelf.Admitting(shelf.admitting().map(Shelf.Admitting::only).orElse(false), filters)));
+    }
+
+    private Optional<Shelf> filterShelf(ResourceLocation page, BlockPos at, String key, ColonyView view) {
+        BlockPos anchor = Containers.anchor(view.level(), at);
+        if (!page.equals(OrdersContent.PAGE.id()) || !key.equals(OrdersContent.FILTER.key())
+            || !view.blocks(WaresContent.STORE).contains(anchor)
+            || Containers.at(view.level(), anchor).isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(shelfAt(WorldPos.of(view.level(), anchor)));
+    }
+
+    private Attempt toggleFilter(WorldPos into, ColonyView view) {
+        if (!view.blocks(WaresContent.STORE).contains(into.block(view.level()))
+            || Containers.at(view.level(), into.block(view.level())).isEmpty()) {
             return Attempt.refused(OrderRefusal.NOT_A_CONTAINER);
         }
-        Settings draft = Fronts.of(colony).settings(OrdersContent.ID);
-        return shelve(shelfAt(into).spanning(Optional.of(Shelf.Span.between(
-            draft.count(OrdersContent.FIRST_SLOT.key()), draft.count(OrdersContent.LAST_SLOT.key())))));
+        Shelf shelf = shelfAt(into);
+        Shelf.Admitting before = shelf.admitting().orElseGet(() -> new Shelf.Admitting(false, List.of()));
+        return changeFilter(shelf, new Shelf.Admitting(!before.only(), before.filters()));
+    }
+
+    private Attempt changeFilter(Shelf shelf, Shelf.Admitting admitting) {
+        Shelf next = shelf.taking(Optional.of(admitting));
+        for (Order order : ordersAt(shelf.into())) {
+            if (!next.admits(order.what())) {
+                return Attempt.refused(OrderRefusal.ORDERED_HERE);
+            }
+        }
+        return shelve(next);
     }
 
     private Shelf shelfAt(WorldPos into) {
@@ -281,7 +318,7 @@ final class OrdersPresence implements Facing {
         write();
     }
 
-    // Standing orders are reserves, and every shelf says what its container takes and which slots are ours.
+    // Standing orders are reserves; shelves govern access and incoming goods.
     private void rule(MinecraftServer server) {
         Map<ResourceKey<Level>, List<StoreRule>> rules = new LinkedHashMap<>();
         for (Order order : orders.values()) {
@@ -439,24 +476,29 @@ final class OrdersPresence implements Facing {
         WorldPos into = WorldPos.of(level, Containers.anchor(level, at));
         List<Order> here = ordersAt(into);
         List<Board.Row> rows = new ArrayList<>();
+        rows.addAll(shelfRows(shelfAt(into)));
+        rows.add(Board.Row.heading(Component.translatable("folkways.panel.orders.replenish")));
         rows.add(draftRow());
         rows.add(new Board.Row(ItemStack.EMPTY,
-            Component.translatable("folkways.panel.orders.file"),
-            Component.translatable("folkways.panel.orders.file.detail"),
-            List.of(new Board.Act.Do(new OrderAct.Maintain().key(), "folkways.orders.maintain", icon("repeater")),
-                new Board.Act.Do(new OrderAct.Deliver().key(), "folkways.orders.deliver",
-                    icon("chest_minecart")))).wide());
+            Component.empty(), Component.empty(),
+            List.of(new Board.Act.Do(new OrderAct.Maintain().key(), "folkways.panel.orders.maintain", icon("repeater")),
+                new Board.Act.Do(new OrderAct.Deliver().key(), "folkways.panel.orders.deliver",
+                    icon("chest_minecart")))).actions().wide());
         rows.add(Board.Row.heading(Component.translatable("folkways.panel.orders.here")));
         for (Order order : here) {
             rows.add(orderRow(order, level.getServer(), List.of(new Board.Act.Do(
                 OrderAct.withdrawing(order.what()).key(), "folkways.action.delete", icon("barrier")))));
         }
-        rows.addAll(shelfRows(shelfAt(into)));
+        if (here.isEmpty()) {
+            rows.add(Board.Row.of(ItemStack.EMPTY,
+                Component.translatable("folkways.panel.orders.here.empty"),
+                Component.empty()).note().wide());
+        }
         return Optional.of(new Board(
             List.of(new Board.Figure("folkways.panel.orders.here",
                 Component.literal(Integer.toString(here.size())))),
             rows,
-            Optional.empty()));
+            Optional.empty()).form());
     }
 
     // One order on a line of its own: what it keeps, then whether it stands or comes once, the counts it keeps to, how
@@ -517,44 +559,30 @@ final class OrdersPresence implements Facing {
         return Component.translatable("folkways.panel.orders.container", block, cell.getX(), cell.getY(), cell.getZ());
     }
 
-    private static List<Board.Row> shelfRows(Shelf shelf) {
+    private List<Board.Row> shelfRows(Shelf shelf) {
         List<Board.Row> rows = new ArrayList<>();
         rows.add(Board.Row.heading(Component.translatable("folkways.panel.orders.shelf")));
-        List<Board.Act> admitting = new ArrayList<>(List.of(
-            new Board.Act.Do(new OrderAct.Admit(true).key(), "folkways.orders.admit_only", icon("hopper")),
-            new Board.Act.Do(new OrderAct.Admit(false).key(), "folkways.orders.admit_except",
-                icon("iron_bars"))));
-        if (shelf.admitting().isPresent()) {
-            admitting.add(new Board.Act.Do(new OrderAct.AdmitAny().key(), "folkways.orders.admit_any",
-                icon("bucket")));
-        }
-        rows.add(new Board.Row(
-            shelf.admitting().map(admit -> iconOf(admit.goods())).orElse(ItemStack.EMPTY),
-            Component.translatable("folkways.panel.orders.admits"),
-            shelf.admitting()
-                .map(admit -> Component.translatable(admit.only()
-                    ? "folkways.panel.orders.admits.only" : "folkways.panel.orders.admits.except",
-                    nameOf(admit.goods())))
-                .orElse(Component.translatable("folkways.panel.orders.admits.any")),
-            admitting)
-            .told(shelf.admitting()
-                .map(admit -> admitsTold(admit.only(), admit.goods()))
-                .orElse(Sentence.EMPTY)));
-        List<Board.Act> spanning = new ArrayList<>(List.of(
-            new Board.Act.Edit(OrdersContent.FIRST_SLOT.key()),
-            new Board.Act.Edit(OrdersContent.LAST_SLOT.key()),
-            new Board.Act.Do(new OrderAct.Slots().key(), "folkways.orders.slots", icon("item_frame"))));
-        if (shelf.slots().isPresent()) {
-            spanning.add(new Board.Act.Do(new OrderAct.AllSlots().key(), "folkways.orders.all_slots",
-                icon("chest")));
-        }
-        rows.add(new Board.Row(ItemStack.EMPTY,
-            Component.translatable("folkways.panel.orders.slots"),
-            shelf.slots()
-                .map(span -> Component.translatable("folkways.panel.orders.slots.span", span.first(), span.last()))
-                .orElse(Component.translatable("folkways.panel.orders.slots.all")),
-            spanning));
+        rows.add(accessRow("take", shelf.take(), "hopper"));
+        rows.add(accessRow("store", shelf.store(), "chest"));
+        rows.add(Board.Row.heading(Component.translatable("folkways.panel.orders.filter.section")));
+        Shelf.Admitting admitting = shelf.admitting().orElseGet(() -> new Shelf.Admitting(false, List.of()));
+        int count = admitting.goods().map(spec -> Goods.members(spec).size()).orElse(0);
+        rows.add(new Board.Row(ItemStack.EMPTY, Component.empty(),
+            Component.translatable(admitting.only()
+                ? "folkways.panel.orders.filter.only.count" : "folkways.panel.orders.filter.except.count", count),
+            List.of(new Board.Act.Edit(OrdersContent.FILTER.key()))).field().wide());
+        rows.add(new Board.Row(ItemStack.EMPTY, Component.empty(), Component.empty(),
+            List.of(new Board.Act.Do(new OrderAct.FilterMode().key(), admitting.only()
+                ? "folkways.panel.orders.filter.mode.only" : "folkways.panel.orders.filter.mode.except",
+                icon(admitting.only() ? "hopper" : "iron_bars")))).actions().wide());
         return rows;
+    }
+
+    private static Board.Row accessRow(String mode, boolean enabled, String item) {
+        return new Board.Row(ItemStack.EMPTY,
+            Component.empty(), Component.empty(),
+            List.of(new Board.Act.Do(new OrderAct.Access(mode).key(),
+                "folkways.panel.orders.access." + mode + (enabled ? ".on" : ".off"), icon(item)))).toggle(enabled);
     }
 
     private List<Order> ordersAt(WorldPos into) {
@@ -572,29 +600,10 @@ final class OrdersPresence implements Facing {
         Optional<ItemSpec> what = draft.items(OrdersContent.ITEM.key());
         return new Board.Row(
             what.map(OrdersPresence::iconOf).orElse(ItemStack.EMPTY),
-            Component.translatable("folkways.panel.orders.draft"),
-            Component.translatable("folkways.panel.orders.draft.detail",
-                draft.count(OrdersContent.LOW.key()),
-                draft.count(OrdersContent.COUNT.key())),
+            Component.empty(), Component.empty(),
             List.of(new Board.Act.Edit(OrdersContent.ITEM.key()),
                 new Board.Act.Edit(OrdersContent.LOW.key()),
-                new Board.Act.Edit(OrdersContent.COUNT.key()))).wide();
-    }
-
-    private static Sentence admitsTold(boolean only, ItemSpec goods) {
-        List<Sentence.Token.Ware> wares = new ArrayList<>();
-        List<ItemSpec> each = goods.anyOf().isEmpty() ? List.of(goods)
-            : goods.anyOf().stream().sorted(Comparator.comparing(ItemSpec::describe)).toList();
-        for (ItemSpec spec : each) {
-            wareOf(spec, 0).ifPresent(wares::add);
-        }
-        return wares.isEmpty() ? Sentence.EMPTY : Sentence.wares(Sentence.glyph(only ? "admits" : "refuses"), wares);
-    }
-
-    private static Optional<Sentence.Token.Ware> wareOf(ItemSpec spec, long count) {
-        ItemStack icon = iconOf(spec);
-        return icon.isEmpty() ? Optional.empty()
-            : Optional.of(new Sentence.Token.Ware(BuiltInRegistries.ITEM.getKey(icon.getItem()), count));
+                new Board.Act.Edit(OrdersContent.COUNT.key()))).field().wide();
     }
 
     private static ResourceLocation icon(String path) {

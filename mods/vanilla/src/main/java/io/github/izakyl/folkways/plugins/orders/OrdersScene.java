@@ -68,7 +68,7 @@ public final class OrdersScene {
         scene.idle(90);
 
         scene.overlay().showText(90)
-            .text("The draft is an item, a Refill below mark, a Fill to count, and a Priority from -2, served first, to 2, served last.")
+            .text("The draft is an item, a Refill below mark, and a Fill to count.")
             .pointAt(target)
             .placeNearTarget()
             .attachKeyFrame();

@@ -106,7 +106,7 @@ abstract class ToolAction implements Node {
 
         @Override
         public Outcome commit(ServerLevel level, Worker who) {
-            if (!who.resident().id().equals(lease.resident()) || !reaches(level, who)
+            if (!who.resident().id().equals(lease.resident()) || !reaches(level, who) || !service.stock.takes(at)
                     || service.pool.leases(service.colony.id()).stream().noneMatch(current ->
                         current.id().equals(lease.id()) && current.phase() == KitchenTools.Phase.IN_TRANSIT)) {
                 return Outcome.failed(CookeryRefusal.STATION_CHANGED);
@@ -147,7 +147,7 @@ abstract class ToolAction implements Node {
 
         @Override
         public Outcome commit(ServerLevel level, Worker who) {
-            if (!who.resident().id().equals(lease.resident()) || !reaches(level, who)) {
+            if (!who.resident().id().equals(lease.resident()) || !reaches(level, who) || !service.stock.stores(at)) {
                 return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             }
             Optional<Container> found = service.stock.store(level, at);

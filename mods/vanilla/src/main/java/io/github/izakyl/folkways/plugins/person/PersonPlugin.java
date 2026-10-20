@@ -65,6 +65,7 @@ public final class PersonPlugin {
         NeoForge.EVENT_BUS.addListener(ServerStoppingEvent.class, event -> ResidentModels.forgetServer());
         NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> ResidentModels.forgetServer());
         NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> Doorways.forgetServer());
+        NeoForge.EVENT_BUS.addListener(Doorways::onLeaveLevel);
         if (FMLEnvironment.dist.isClient()) {
             PersonClient.install(modBus);
         }

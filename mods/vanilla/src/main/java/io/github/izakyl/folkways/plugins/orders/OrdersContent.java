@@ -27,20 +27,14 @@ public final class OrdersContent {
         ResourceLocation.withDefaultNamespace("comparator"),
         Order.MIN_COUNT, Order.MAX_COUNT, Order.MIN_COUNT);
 
-    static final Schema.Setting FIRST_SLOT = new Schema.Setting.Count(
-        "first_slot", "folkways.settings.orders.first_slot",
-        ResourceLocation.withDefaultNamespace("hopper"),
-        1, Shelf.MAX_SLOT, 1);
-
-    static final Schema.Setting LAST_SLOT = new Schema.Setting.Count(
-        "last_slot", "folkways.settings.orders.last_slot",
-        ResourceLocation.withDefaultNamespace("hopper"),
-        1, Shelf.MAX_SLOT, 27);
+    static final Schema.Setting FILTER = new Schema.Setting.Items(
+        "filter", "folkways.settings.orders.filter",
+        ResourceLocation.withDefaultNamespace("hopper"), List.of());
 
     static final PageKind PAGE = PageKind.boarded(ID, "folkways.panel.orders",
         ResourceLocation.withDefaultNamespace("writable_book"));
 
-    private static final Schema DRAFT = new Schema(List.of(ITEM, LOW, COUNT, FIRST_SLOT, LAST_SLOT));
+    private static final Schema DRAFT = new Schema(List.of(ITEM, LOW, COUNT, FILTER));
 
     public static void declare(Declaring declaring) {
         declaring.colony(ID, scope -> {

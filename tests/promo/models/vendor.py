@@ -1,4 +1,4 @@
-"""Rebuild the promo Wine Fox models from an OpenYSM checkout: python3 vendor.py <OpenYSM root>.
+"""Prepare cached promo Wine Fox models: python3 vendor.py [<OpenYSM root>].
 
 Each model is reshaped into the layout ModelLibrary reads, and the bones YSM keeps hidden at rest are dropped,
 since the resident renderer plays only idle/walk and would otherwise draw them. A layer (pre_parallelN, then
@@ -7,11 +7,16 @@ v./ysm./q./ctrl. value is 0 (no helmet, no vehicle, fox form off, default expres
 to b. A scale this cannot evaluate keeps its bone.
 """
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+import fcntl
+import hashlib
 import json
 import math
 import re
 import shutil
 import sys
+import tempfile
+import urllib.request
 
 PICKS = {
     "18_wedding": "skin", "05_magical": "winefox", "16_tactics": "tactics",
@@ -119,19 +124,98 @@ def strip(geometry_path, animations):
     return len(bones), len(geometry["bones"]), sum(len(bone.get("cubes", [])) for bone in geometry["bones"])
 
 
-if len(sys.argv) != 2:
-    raise SystemExit(__doc__.splitlines()[0])
-source = Path(sys.argv[1]) / BUILTIN
-here = Path(__file__).resolve().parent
-for stale in here.glob("wine_fox_*"):
-    shutil.rmtree(stale)
-for upstream, skin in PICKS.items():
-    origin, out = source / upstream, here / ("wine_fox_" + upstream.split("_", 1)[1])
-    (out / "textures").mkdir(parents=True)
-    shutil.copy(origin / "models/main.json", out / "main.json")
-    shutil.copy(origin / "animations/main.animation.json", out / "main.animation.json")
-    shutil.copy(origin / "textures" / f"{skin}.png", out / "textures" / f"{skin}.png")
-    shutil.copy(origin / "ysm.json", out / "ysm.json")
-    animations = json.loads((out / "main.animation.json").read_text())["animations"]
-    before, after, cubes = strip(out / "main.json", animations)
-    print(f"{out.name}: bones {before} -> {after}, {cubes} cubes")
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[2]
+MANIFEST = HERE / "sources.json"
+STATE = HERE / ".prepared.json"
+
+
+def sha256(file):
+    return hashlib.sha256(file.read_bytes()).hexdigest()
+
+
+def cached_sources(manifest, cache):
+    """Fetch only missing/corrupt inputs, verifying each pinned file before publishing it."""
+    def fetch(item):
+        relative, expected = item
+        target = cache / relative
+        if target.is_file() and sha256(target) == expected:
+            return
+        url = f"https://raw.githubusercontent.com/OpenYSM/OpenYSM/{manifest['revision']}/{relative}"
+        print(f"Downloading {relative}", flush=True)
+        with urllib.request.urlopen(url, timeout=60) as response:
+            data = response.read()
+        if hashlib.sha256(data).hexdigest() != expected:
+            raise ValueError(f"SHA-256 mismatch: {relative}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as output:
+            temporary = Path(output.name)
+            output.write(data)
+        try:
+            temporary.replace(target)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        list(pool.map(fetch, manifest["sha256"].items()))
+    return cache / BUILTIN
+
+
+def ready(fingerprint):
+    try:
+        state = json.loads(STATE.read_text())
+        return (state["fingerprint"] == fingerprint and bool(state["sha256"])
+                and all(sha256(HERE / file) == expected for file, expected in state["sha256"].items()))
+    except (OSError, ValueError, KeyError):
+        return False
+
+
+def render(source, destination):
+    for upstream, skin in PICKS.items():
+        origin = source / upstream
+        out = destination / ("wine_fox_" + upstream.split("_", 1)[1])
+        (out / "textures").mkdir(parents=True)
+        shutil.copy(origin / "models/main.json", out / "main.json")
+        shutil.copy(origin / "animations/main.animation.json", out / "main.animation.json")
+        shutil.copy(origin / "textures" / f"{skin}.png", out / "textures" / f"{skin}.png")
+        shutil.copy(origin / "ysm.json", out / "ysm.json")
+        animations = json.loads((out / "main.animation.json").read_text())["animations"]
+        before, after, cubes = strip(out / "main.json", animations)
+        print(f"{out.name}: bones {before} -> {after}, {cubes} cubes")
+
+
+def prepare(checkout=None):
+    manifest = json.loads(MANIFEST.read_text())
+    fingerprint = hashlib.sha256(Path(__file__).read_bytes() + MANIFEST.read_bytes()).hexdigest()
+    cache = REPO / ".blockwright-store/promo-models" / manifest["revision"]
+    cache.mkdir(parents=True, exist_ok=True)
+    # The store can be shared by worktrees; serialize downloads and model publication.
+    with (cache / ".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if checkout is None and ready(fingerprint):
+            print("Wine Fox models are ready (no download needed).")
+            return
+        source = Path(checkout) / BUILTIN if checkout is not None else cached_sources(manifest, cache)
+        # Download and transform every input before replacing any existing model.
+        with tempfile.TemporaryDirectory(prefix=".prepare-", dir=HERE) as temporary:
+            staging = Path(temporary)
+            render(source, staging)
+            files = {str(file.relative_to(staging)): sha256(file)
+                     for file in sorted(staging.rglob("*")) if file.is_file()}
+            STATE.unlink(missing_ok=True)
+            for model in sorted(staging.iterdir()):
+                target = HERE / model.name
+                if target.exists():
+                    shutil.rmtree(target)
+                model.replace(target)
+            if checkout is None:
+                STATE.write_text(json.dumps({"fingerprint": fingerprint, "sha256": files}, indent=2) + "\n")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 2:
+        raise SystemExit(__doc__.splitlines()[0])
+    try:
+        prepare(sys.argv[1] if len(sys.argv) == 2 else None)
+    except Exception as error:
+        raise SystemExit(f"Cannot prepare Wine Fox models: {error}\nRetry with: npm run setup:promo-models")

@@ -64,6 +64,66 @@ public final class SurveyGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void completedChoresStaySpentAcrossSweeps(GameTestHelper helper) {
+        java.util.UUID zone = java.util.UUID.randomUUID();
+        BlockPos cell = helper.absolutePos(new BlockPos(2, 1, 2));
+        Job job = Job.at(cell, new io.github.izakyl.folkways.core.api.work.WorkSite.AtBlock(
+            WorldPos.of(helper.getLevel(), cell)), io.github.izakyl.folkways.core.api.work.Stances.WHEREVER);
+        Chores chores = new Chores(zone, "clear", (level, chore) -> {
+            throw new AssertionError("completed work must never be offered again");
+        }, () -> {}, new io.github.izakyl.folkways.front.api.PastDay());
+        chores.settle(List.of(job));
+        Chores.Chore chore = new Chores.Chore(java.util.UUID.randomUUID(), job, chores);
+        chores.planned(chore);
+        helper.assertTrue(chores.busy(), "planned work keeps the site busy");
+        chores.ended(chore, io.github.izakyl.folkways.core.api.work.Ending.DONE);
+        chores.settle(List.of(job));
+        chores.goals(helper.getLevel(), new java.util.ArrayList<>());
+        helper.assertTrue(!chores.busy() && chores.spent().contains(job.key()),
+            "a later sweep preserves completion and releases busy work");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void discoveryIncludesEveryClearLayerBeforeItCanBeReached(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
+        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.STONE);
+        Set<BlockPos> box = box(origin, origin.offset(1, 2, 1));
+        box.forEach(cell -> place(level, cell, Blocks.DIRT.defaultBlockState()));
+
+        helper.assertTrue(cellsOf(new Survey(level, box).clear(cell -> false))
+            .equals(box(origin.above(2), origin.offset(1, 2, 1))),
+            "working survey still asks for only the accessible top layer");
+        helper.assertTrue(cellsOf(new Survey(level, box).discovering().clear(cell -> false)).equals(box),
+            "discovery records every layer before clearing opens it");
+
+        BlockPos floating = origin.above(16);
+        Set<BlockPos> unreachable = box(floating, floating.above(2));
+        unreachable.forEach(cell -> place(level, cell, Blocks.DIRT.defaultBlockState()));
+        helper.assertTrue(new Survey(level, unreachable).clear(cell -> false).isEmpty(),
+            "floating blocks have no safe place to stand and clear them");
+        helper.assertTrue(cellsOf(new Survey(level, unreachable).discovering().clear(cell -> false))
+            .equals(unreachable), "discovery also records work with no current stance");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void discoveryIncludesEveryFillLayerBeforeSupportIsLaid(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
+        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.STONE);
+        Set<BlockPos> box = box(origin, origin.offset(1, 2, 1));
+        box.forEach(cell -> place(level, cell, Blocks.AIR.defaultBlockState()));
+
+        helper.assertTrue(cellsOf(new Survey(level, box).fill()).equals(box(origin, origin.offset(1, 0, 1))),
+            "working survey still asks for only the supported bottom layer");
+        helper.assertTrue(cellsOf(new Survey(level, box).discovering().fill()).equals(box),
+            "discovery records upper layers before the lower layers support them");
+        helper.succeed();
+    }
+
     // Cleared and filled together, the fill block already in the box stays, and a cell other work has taken is left
     // to it, with what lies under it.
     @GameTest(template = "empty", timeoutTicks = 100)

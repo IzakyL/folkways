@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { openOrderDraft } from "../shared/colony/membership-optin";
 import { input, media, screen, tick } from "@izakyl/blockwright-minecraft";
-import { panelElements } from "../ldlib2";
+import { clickElement, panelElements } from "../ldlib2";
+import { boardActs } from "../shared/ui/site-panel";
 import { writeFileSync } from "node:fs";
 import { createColonyViaBook, optInViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
-import { drawItems, drawTexts, sleepMs, type DrawCaptureResult } from "../shared/capture/draw-capture";
+import { drawTexts, sleepMs, type DrawCaptureResult } from "../shared/capture/draw-capture";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, outAbs, shotPath, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
@@ -70,7 +71,6 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     expect(button, "the order draft should have an item button").toBeTruthy();
     const draftRow = elements.find((element) => element.id === evidence.enter.row_id);
     expect(draftRow, "the order draft's row should be on the panel").toBeTruthy();
-    const rowBounds = { x: draftRow!.x, y: draftRow!.y, width: draftRow!.width, height: draftRow!.height };
     const sitePanel = elements.find((element) => element.id === "folkways.site.panel");
     expect(sitePanel, "this site's panel should be in its window").toBeTruthy();
     const dropTarget = {
@@ -79,8 +79,7 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     };
     evidence.drop_target = dropTarget;
 
-    const before = await captureHud(client);
-    evidence.row_icons_before = iconsIn(before, rowBounds);
+    evidence.row_text_before = await controlText(client, evidence.enter.edit_item);
 
     const found = await findHoveredIndexCell(client, sitePanel!.x + sitePanel!.width, dropTarget);
     evidence.cell_search = found.search;
@@ -89,9 +88,9 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     evidence.drag_source = dragSource;
     evidence.hovered_tooltip = found.tooltip;
     const draggedId = `minecraft:${found.tooltip[0].toLowerCase().replace(/ /g, "_")}`;
+    const draggedName = found.tooltip[0];
     evidence.dragged_id = draggedId;
-    expect(evidence.row_icons_before.map((icon: any) => icon.id), "the draft should not name the item yet")
-      .not.toContain(draggedId);
+    expect(evidence.row_text_before, "the draft should not name the item yet").not.toContain(draggedName);
 
     evidence.shot_before_drag = await shoot(client, shotPath("e2e", "emi-drag-before"));
 
@@ -100,12 +99,25 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     expect(dragReach.pressArmed, "the press must set MouseHandler's drag state").toBe(true);
     expect(dragReach.dispatched, "every step must actually move the cursor").toBeGreaterThan(0);
 
+    // The readable order form paints the selection as text; its old icon is deliberately hidden.
+    const named = await waitForDraftText(server, client, evidence.enter.edit_item, draggedName);
+    evidence.row_text_after = named;
+    expect(named, "after the EMI drop the order draft should name the dragged item").toContain(draggedName);
     evidence.shot_after_drag = await shoot(client, shotPath("e2e", "emi-drag-after"));
 
-    const named = await waitForDraftIcon(server, client, rowBounds, draggedId);
-    evidence.row_icons_after = named;
-    expect(named.map((icon) => icon.id), "after the EMI drop the order draft should name the dragged item")
-      .toContain(draggedId);
+    const submit = (await boardActs(client, "do", "folkways.orders"))
+      .find((act) => act.row > evidence.enter.row && act.act === 0);
+    expect(submit, "the draft should offer a Maintain action").toBeTruthy();
+    await clickElement(client, { id: submit!.id }, { scrollIntoView: true });
+    await expect.poll(async () => {
+      await tick.sprint(server, 10);
+      await frames(client, 3);
+      const actions = (await boardActs(client, "do", "folkways.orders")).filter(act => act.row > submit!.row);
+      const words = (await Promise.all(actions.map(act =>
+        controlText(client, `folkways.board.row.folkways.orders.${act.row}`)))).flat();
+      evidence.order_text = words;
+      return words;
+    }, { message: "the dropped item must be filed as an order", timeout: 10_000 }).toContain(draggedName);
   } catch (error) {
     pair?.failing(error);
     throw error;
@@ -158,32 +170,32 @@ function textLines(capture: DrawCaptureResult): Set<string> {
   return new Set(drawTexts(capture).map((entry) => entry.text));
 }
 
-function iconsIn(capture: DrawCaptureResult, rect: { x: number; y: number; width: number; height: number }) {
-  const seen = new Map<string, { id: string; x: number; y: number }>();
-  for (const item of drawItems(capture)) {
-    const inside = item.x >= rect.x && item.x < rect.x + rect.width
-      && item.y >= rect.y && item.y < rect.y + rect.height;
-    if (inside && !seen.has(item.id)) {
-      seen.set(item.id, { id: item.id, x: item.x, y: item.y });
-    }
+async function controlText(client: any, id: string): Promise<string[]> {
+  const elements = await panelElements(client);
+  const root = elements.find(element => element.id === id);
+  if (!root) return [];
+  const words: string[] = [];
+  for (let at = root.index + 1; at < elements.length && elements[at].depth > root.depth; at++) {
+    const element = elements[at];
+    if (element.displayed && element.text?.trim()) words.push(element.text);
   }
-  return [...seen.values()];
+  return words;
 }
 
-async function waitForDraftIcon(
-  server: any, client: any, rect: { x: number; y: number; width: number; height: number }, id: string,
+async function waitForDraftText(
+  server: any, client: any, id: string, name: string,
 ) {
-  let icons: { id: string; x: number; y: number }[] = [];
+  let words: string[] = [];
   for (let round = 0; round < SYNC_ROUNDS; round++) {
     await input.move(client, { x: 0, y: 0 });
-    icons = iconsIn(await captureHud(client), rect);
-    if (icons.some((icon) => icon.id === id)) {
-      return icons;
+    words = await controlText(client, id);
+    if (words.includes(name)) {
+      return words;
     }
     await sleepMs(500);
     await tick.sprint(server, 5);
   }
-  return icons;
+  return words;
 }
 
 async function flattenPlot(server: any, origin: Vec) {

@@ -94,6 +94,17 @@ public final class SettingsPage implements Draw {
             Rows.name(Component.translatable("folkways.settings.invert_wheel")),
             invertWheel));
 
+        Toggle forgetDrawingSettings = Controls.tick();
+        if (LDLib2.isRemote()) {
+            forgetDrawingSettings.setOn(!FolkwaysClientConfig.rememberDrawingSettings(), false);
+            forgetDrawingSettings.setOnToggleChanged(on -> FolkwaysClientConfig.rememberDrawingSettings(!on));
+        }
+        Tokens.name(forgetDrawingSettings, "folkways.settings.forget_drawing_settings");
+        table.addChildren(Rows.row().addChildren(
+            Rows.icon(ItemStack.EMPTY),
+            Rows.name(Component.translatable("folkways.settings.forget_drawing_settings")),
+            forgetDrawingSettings));
+
         Razing razing = new Razing();
         table.addChildren(Rows.row().addChildren(
             Rows.icon(ItemStack.EMPTY),
@@ -247,16 +258,21 @@ public final class SettingsPage implements Draw {
 
     // What a client sends is weighed again here: a lone item where one is named, blocks where blocks are.
     static void setItems(Player player, Scope where, Schema.Setting.Items items, List<ItemFilter> filters) {
+        List<ItemFilter> kept = keptItems(items, filters);
+        if (items.single() && kept.size() != 1) {
+            return;
+        }
+        put(player, where, items, items.key(), new ColonySettings.Value.Items(kept));
+    }
+
+    static List<ItemFilter> keptItems(Schema.Setting.Items items, List<ItemFilter> filters) {
         List<ItemFilter> kept = new ArrayList<>();
         for (ItemFilter filter : filters) {
             if (kept.size() < MOST_RULES && allowed(items, filter) && !kept.contains(filter)) {
                 kept.add(filter);
             }
         }
-        if (items.single() && kept.size() != 1) {
-            return;
-        }
-        put(player, where, items, items.key(), new ColonySettings.Value.Items(List.copyOf(kept)));
+        return List.copyOf(kept);
     }
 
     private static boolean allowed(Schema.Setting.Items items, ItemFilter filter) {

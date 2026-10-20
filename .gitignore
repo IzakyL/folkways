@@ -37,6 +37,9 @@ package-lock.json.*
 .blockwright-store/
 
 tests/out/
+tests/promo/models/wine_fox_*/
+tests/promo/models/.prepared.json
+tests/promo/models/.prepare-*/
 
 javac.*.args
 

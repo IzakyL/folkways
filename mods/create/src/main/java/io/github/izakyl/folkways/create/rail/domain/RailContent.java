@@ -19,6 +19,8 @@ import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 public final class RailContent {
 
@@ -52,7 +54,10 @@ public final class RailContent {
     }
 
     public static void declare(Declaring declaring) {
-        TransitNetworks.install(new CreateTransitNetwork());
+        CreateTransitNetwork network = new CreateTransitNetwork();
+        TransitNetworks.install(network);
+        NeoForge.EVENT_BUS.addListener(network::tick);
+        NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> network.forgetServer());
         declaring.vocation(SPEC);
         declaring.colony(ID, scope -> {
             RailPresence state = new RailPresence(scope.colony());

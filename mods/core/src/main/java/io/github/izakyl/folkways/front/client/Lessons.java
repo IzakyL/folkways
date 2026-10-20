@@ -38,13 +38,13 @@ public final class Lessons {
         return at < 0 ? enrolled.size() : at;
     }
 
-    // Ponder rebuilds its registry on a resource reload; rebuild our matching playback entries as well.
-    public static void beginRegistration() {
-        ENTRIES.clear();
-    }
-
     public static void bind(ResourceLocation lesson, StoryBoardEntry entry) {
         ENTRIES.computeIfAbsent(lesson, key -> new ArrayList<>()).add(entry);
+    }
+
+    // Ponder rebuilds its registry on a resource reload; rebuild our matching playback entries as well.
+    public static void clear() {
+        ENTRIES.clear();
     }
 
     public static List<StoryBoardEntry> scenesFor(ResourceLocation lesson) {

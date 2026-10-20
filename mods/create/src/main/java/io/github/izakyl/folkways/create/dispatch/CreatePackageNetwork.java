@@ -45,6 +45,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemHandlerHelper;
 import net.neoforged.neoforge.items.ItemStackHandler;
@@ -61,6 +62,17 @@ final class CreatePackageNetwork implements PackageNetwork {
 
     // A network's layout is walked once a tick at most, however many ports ask after it.
     private final Map<Laid, Read> layouts = new ConcurrentHashMap<>();
+
+    void tick(ServerTickEvent.Post event) {
+        if (event.getServer().getTickCount() % 20 == 0) {
+            layouts.keySet().removeIf(key -> event.getServer().getLevel(key.realm()) == null
+                || !Create.LOGISTICS.logisticsNetworks.containsKey(key.network()));
+        }
+    }
+
+    void forgetServer() {
+        layouts.clear();
+    }
 
     private CreateLayout layoutOf(ServerLevel level, UUID network) {
         long now = level.getGameTime();

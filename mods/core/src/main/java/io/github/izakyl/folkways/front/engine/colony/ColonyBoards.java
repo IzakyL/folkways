@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.engine.colony;
 
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
+import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
@@ -67,13 +68,15 @@ public final class ColonyBoards {
         List<Board.Row> rows = new ArrayList<>();
         Optional<Component> whenEmpty = Optional.empty();
         CompoundTag data = new CompoundTag();
+        Board.Layout layout = Board.Layout.LIST;
         for (Board board : answered) {
             figures.addAll(board.figures());
             rows.addAll(board.rows());
             whenEmpty = whenEmpty.or(board::whenEmpty);
             data.merge(board.data());
+            if (board.layout() == Board.Layout.FORM) layout = Board.Layout.FORM;
         }
-        return Optional.of(new Board(figures, rows, whenEmpty, data));
+        return Optional.of(new Board(figures, rows, whenEmpty, data, layout));
     }
 
     private static Optional<Board> answering(Facing facing, ResourceLocation page,
@@ -81,6 +84,26 @@ public final class ColonyBoards {
         return at
             .map(pos -> facing.boardAt(page, pos, view))
             .orElseGet(() -> facing.board(page, view));
+    }
+
+    public static Optional<List<ItemFilter>> itemFilters(Colony colony, ResourceLocation page,
+            Optional<BlockPos> at, String key, ColonyView view) {
+        if (at.isEmpty()) return Optional.empty();
+        for (Facing facing : Facing.all(colony)) {
+            Optional<List<ItemFilter>> filters = facing.itemFiltersAt(page, at.get(), key, view);
+            if (filters.isPresent()) return filters.map(List::copyOf);
+        }
+        return Optional.empty();
+    }
+
+    public static Optional<Attempt> setItemFilters(Colony colony, ResourceLocation page,
+            Optional<BlockPos> at, String key, List<ItemFilter> filters, ColonyView view) {
+        if (at.isEmpty()) return Optional.empty();
+        for (Facing facing : Facing.all(colony)) {
+            Optional<Attempt> result = facing.setItemFiltersAt(page, at.get(), key, List.copyOf(filters), view);
+            if (result.isPresent()) return result;
+        }
+        return Optional.empty();
     }
 
     public static Optional<Attempt> act(ServerLevel level, Colony colony, ResourceLocation page,

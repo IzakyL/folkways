@@ -22,6 +22,12 @@ Saves, data pack formats and the Java API may still change between versions.
   how many head to keep. Frame a riverbank as a fishery, or draw a patrol route.
 - **Orders keep things stocked.** Name an item and an amount for a chest, and the colony
   crafts, smelts, harvests or hauls until it holds that much.
+- **Containers have their own rules.** Choose whether residents may take goods or use a
+  container for ordinary storage. Orders still deliver to containers that refuse ordinary
+  storage.
+  Blacklists and whitelists use the shared item picker, including item, tag and search
+  rules. Container rules apply to residents; players and external automation keep their
+  normal access.
 - **Buildings from drawings.** Frame ground or draw a line, pick a pattern (roads, arch
   bridges, walls, docks, mines, railways, arcades, terraced fields), and builders clear
   the site and lay it from the colony's stores. Patterns are small
@@ -68,9 +74,9 @@ Folkways has four base jars and a Cookery extension. Install the first two; add 
 | Folkways Vanilla (`folkways-vanilla-*.jar`) | Always: the work residents do (farming, herding, fishing, hauling, crafting, building, patrol) |
 | Folkways × Create (`folkways-create-*.jar`) | With Create: trains, parcels, track and schematics |
 | Folkways × Modular Golems (`folkways-modulargolems-*.jar`) | With Modular Golems: golems as residents |
+| Folkways × Kaleidoscope Cookery (`folkways-cookery-*.jar`) | With Kaleidoscope Cookery 1.6.0: crops, appliances and shared kitchen tools |
 
-The local Cookery-enabled build adds `folkways-cookery-*.jar` beside Kaleidoscope Cookery 1.6.0.
-This extension supplies native appliance production, flooded-rice farming, shared tools,
+The Cookery extension supplies native appliance production, flooded-rice farming, shared tools,
 kitchen racks, seed reserves and thirteen lessons. The creative supply box belongs to
 Folkways Vanilla and also works without Cookery.
 
@@ -91,11 +97,19 @@ Starlark interpreter inside the Folkways Vanilla jar; none needs a separate inst
 | [Create](https://modrinth.com/mod/create) 6.0+, with Folkways × Create | Hand a schematic to the colony to build; hand over an assembled train for residents to drive; order from a stock keeper's package network. Without Folkways × Create, residents still walk round Create's contraptions |
 | [Sable](https://modrinth.com/mod/sable) | Residents path onto and off Sable sub-levels, such as Create Aeronautics ships |
 | [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems | Golems join the roster as a second kind of resident and take trades like people |
+| [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0, with Folkways × Kaleidoscope Cookery | Residents grow crops, prepare ingredients and cook with native appliances, borrowing and returning shared tools |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+ | Residents can wear bedrock-format models instead of player skins |
-| [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib | Its built-in maid models become looks a colony can switch on, one by one or a whole pack at once. They are read from the installed mod and never copied or sent |
+| [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib | Its built-in and installed add-on maid models become looks a colony can switch on, one by one or a whole pack at once. Each client reads its own installed packs; pack assets are not sent over the network |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+ | The Colony Book aims along its third-person crosshair |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi) | Item filters in the colony panel open the recipe viewer's ingredient list |
 | [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+ | A colony's founder can hand it to their party: from then on the party's members keep the colony and its owner holds the founder's rights |
+
+Touhou Little Maid add-ons load from ZIP files or pack folders directly under
+`<gamedir>/tlm_custom_pack/`; ZIP files do not need extracting. Install the same packs
+on the server and each client. After changing packs, run `/reload` on the server and
+reload client resources with F3+T, or restart the game. Files in
+`config/touhou_little_maid/file/` are download caches and do not count as installed packs.
+Model looks still require GeckoLib; without it they are disabled with a dependency tooltip.
 
 ## Getting started
 

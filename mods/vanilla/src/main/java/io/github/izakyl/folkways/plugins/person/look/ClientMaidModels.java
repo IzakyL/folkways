@@ -6,11 +6,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.SoftReference;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -34,12 +30,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 // The resource pack the maids are drawn from: nothing on disk, each file made on the spot from the model the
-// installed Touhou Little Maid holds. Their textures need no making; they are read where that mod keeps them.
+// installed Touhou Little Maid and its installed add-ons hold, including their textures and translated names.
 @OnlyIn(Dist.CLIENT)
 public final class ClientMaidModels {
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-models");
     private static final String PACK_ID = "folkways/maid_models";
-    private static final Set<String> FOLDERS = Set.of("geo", "animations");
+    private static final Set<String> FOLDERS = Set.of("geo", "animations", "textures", "lang");
     private static final String MADE_UNDER = "/resident_models/maid/";
 
     private static SoftReference<Map<ResourceLocation, byte[]>> kept = new SoftReference<>(null);
@@ -48,8 +44,7 @@ public final class ClientMaidModels {
     }
 
     public static void addPackFinder(AddPackFindersEvent event) {
-        if (event.getPackType() != PackType.CLIENT_RESOURCES || !ModList.get().isLoaded("geckolib")
-                || MaidLooks.all().isEmpty()) {
+        if (event.getPackType() != PackType.CLIENT_RESOURCES || !ModList.get().isLoaded(MaidLooks.MOD)) {
             return;
         }
         Pack pack = Pack.readMetaAndCreate(
@@ -63,6 +58,7 @@ public final class ClientMaidModels {
 
                 @Override
                 public PackResources openFull(PackLocationInfo info, Pack.Metadata metadata) {
+                    invalidate();
                     return new Made(info);
                 }
             },
@@ -77,42 +73,27 @@ public final class ClientMaidModels {
     private static synchronized Map<ResourceLocation, byte[]> files() {
         Map<ResourceLocation, byte[]> files = kept.get();
         if (files == null) {
-            files = MaidLooks.packs().map(ClientMaidModels::make).orElseGet(Map::of);
+            files = make();
             kept = new SoftReference<>(files);
         }
         return files;
     }
 
+    private static synchronized void invalidate() {
+        MaidLooks.invalidate();
+        kept.clear();
+    }
+
     // A maid whose files cannot be made is left out, and is then drawn in its fallback skin.
-    private static Map<ResourceLocation, byte[]> make(Path packs) {
+    private static Map<ResourceLocation, byte[]> make() {
         long began = System.nanoTime();
         JsonObject defaults = MaidLooks.installed(MaidLooks.MAID_DEFAULTS.split("/"))
             .map(ClientMaidModels::readOrEmpty)
             .orElseGet(JsonObject::new);
-        Map<ResourceLocation, byte[]> files = new LinkedHashMap<>();
-        for (MaidLooks.Maid maid : MaidLooks.all()) {
-            try {
-                JsonObject model = MaidLooks.json(packs.resolve(maid.geometry()));
-                List<String> bones = MaidAssets.boneNames(model);
-                if (maid.gecko()) {
-                    List<JsonObject> layered = new ArrayList<>(List.of(defaults));
-                    for (String file : maid.animations()) {
-                        layered.add(MaidLooks.json(packs.resolve(file)));
-                    }
-                    JsonObject animations = MaidAssets.merged(layered);
-                    files.put(maid.geometryAt(),
-                        bytes(MaidAssets.geometry(model, MaidAssets.hiddenByLayers(animations, bones))));
-                    files.put(maid.animationsAt(), bytes(MaidAssets.animations(maid, animations)));
-                } else {
-                    files.put(maid.geometryAt(),
-                        bytes(MaidAssets.geometry(model, MaidAssets.hiddenByScripts(maid.animations(), bones))));
-                }
-            } catch (IOException | RuntimeException exception) {
-                LOGGER.warn("[folkways-models] maid {} cannot be drawn ({})", maid.model(), exception.toString());
-            }
-        }
+        var maids = MaidLooks.all();
+        Map<ResourceLocation, byte[]> files = MaidModelFiles.make(maids, defaults, ModList.get().isLoaded("geckolib"));
         LOGGER.info("[folkways-models] made {} files for {} maids in {} ms",
-            files.size(), MaidLooks.all().size(), (System.nanoTime() - began) / 1_000_000);
+            files.size(), maids.size(), (System.nanoTime() - began) / 1_000_000);
         return files;
     }
 
@@ -125,11 +106,13 @@ public final class ClientMaidModels {
         }
     }
 
-    private static byte[] bytes(JsonObject json) {
-        return json.toString().getBytes(StandardCharsets.UTF_8);
-    }
-
     private static boolean isMade(String path) {
+        if (path.startsWith("lang/")) {
+            return path.endsWith(".json");
+        }
+        if (path.startsWith("textures/entity/resident_models/maid/")) {
+            return path.endsWith(".png");
+        }
         int slash = path.indexOf('/');
         return slash > 0 && FOLDERS.contains(path.substring(0, slash)) && path.startsWith(MADE_UNDER, slash);
     }
@@ -154,11 +137,11 @@ public final class ClientMaidModels {
         @Override
         public void listResources(PackType type, String namespace, String path, ResourceOutput output) {
             if (type != PackType.CLIENT_RESOURCES || !namespace.equals(FolkwaysMod.MOD_ID)
-                    || !FOLDERS.contains(path.split("/", 2)[0])) {
+                    || (!path.isEmpty() && !FOLDERS.contains(path.split("/", 2)[0]))) {
                 return;
             }
             files().forEach((location, file) -> {
-                if (location.getPath().startsWith(path + "/")) {
+                if (path.isEmpty() || location.getPath().startsWith(path + "/")) {
                     output.accept(location, () -> new ByteArrayInputStream(file));
                 }
             });

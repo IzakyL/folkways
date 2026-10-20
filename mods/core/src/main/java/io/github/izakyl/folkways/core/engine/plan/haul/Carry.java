@@ -376,7 +376,8 @@ final class Carry implements Carrying {
         ordered.sort(Comparator.comparingInt(in -> -plan.preference(in, concrete)));
         for (Stash in : ordered) {
             if (!in.equals(out) && plan.roomFor(in, concrete) >= count
-                && (eater == null || !plan.reaching(eater, in).isEmpty()) && passable(plan, out, in)) {
+                && (eater == null || plan.feeds(in, eater, concrete) && !plan.reaching(eater, in).isEmpty())
+                && passable(plan, out, in)) {
                 return in;
             }
         }

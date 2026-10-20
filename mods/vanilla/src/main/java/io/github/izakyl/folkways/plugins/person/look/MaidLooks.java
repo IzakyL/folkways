@@ -18,12 +18,12 @@ import java.util.Optional;
 import java.util.stream.Stream;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.ModList;
+import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforgespi.language.IModFileInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-// The maid models Touhou Little Maid ships, offered as looks wherever that mod is installed. Nothing of them is
-// copied or sent: the server offers the ids, and each client draws them out of its own copy of that mod.
+// Models from Touhou Little Maid and its installed packs. Each client reads its own local resources.
 public final class MaidLooks {
     public static final String MOD = "touhou_little_maid";
 
@@ -55,7 +55,14 @@ public final class MaidLooks {
             String geometry,
             List<String> animations,
             ResourceLocation texture,
-            float scale) {
+            float scale,
+            MaidResources source,
+            String textureFile) {
+
+        public Maid(ResourceLocation model, boolean gecko, String geometry, List<String> animations,
+                ResourceLocation texture, float scale) {
+            this(model, gecko, geometry, animations, texture, scale, null, null);
+        }
 
         public Maid {
             animations = List.copyOf(animations);
@@ -122,19 +129,29 @@ public final class MaidLooks {
         return installed(PACKS).filter(Files::isDirectory);
     }
 
-    public static List<Maid> all() {
+    public static synchronized List<Maid> all() {
         List<Maid> known = maids;
         if (known == null && ModList.get() == null) {
             return List.of();
         }
         if (known == null) {
-            known = packs().map(MaidLooks::read).orElseGet(List::of);
+            Map<ResourceLocation, Maid> merged = new LinkedHashMap<>();
+            if (ModList.get().isLoaded(MOD)) {
+                packs().map(MaidLooks::read).orElseGet(List::of).forEach(maid -> merged.put(maid.model(), maid));
+                readInstalled(FMLPaths.GAMEDIR.get().resolve(PACKS))
+                    .forEach(maid -> merged.put(maid.model(), maid));
+            }
+            known = merged.values().stream().sorted(java.util.Comparator.comparing(maid -> maid.model().toString())).toList();
             if (!known.isEmpty()) {
                 LOGGER.info("[folkways-models] {} maid models from {}", known.size(), MOD);
             }
             maids = known;
         }
         return known;
+    }
+
+    public static synchronized void invalidate() {
+        maids = null;
     }
 
     public static Map<ResourceLocation, ResidentLook> entries() {
@@ -176,54 +193,96 @@ public final class MaidLooks {
         return List.copyOf(found);
     }
 
+    public static List<Maid> readInstalled(Path directory) {
+        Map<ResourceLocation, Maid> found = new LinkedHashMap<>();
+        if (!Files.isDirectory(directory)) {
+            return List.of();
+        }
+        try (Stream<Path> children = Files.list(directory)) {
+            for (Path child : children.sorted().toList()) {
+                boolean archive = Files.isRegularFile(child)
+                    && child.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".zip");
+                if (!archive && !Files.isDirectory(child)) {
+                    continue;
+                }
+                MaidResources source = new MaidResources(child, archive);
+                try {
+                    for (String file : source.files()) {
+                        if (file.matches("assets/[^/]+/maid_model\\.json")) {
+                            try {
+                                List<Maid> entries = new ArrayList<>();
+                                readManifest(source, "", source.json(file), entries, true);
+                                entries.forEach(maid -> found.put(maid.model(), maid));
+                            } catch (IOException | RuntimeException exception) {
+                                LOGGER.warn("[folkways-models] {} in {} is unreadable ({})", file, child, exception.getMessage());
+                            }
+                        }
+                    }
+                } catch (IOException | RuntimeException exception) {
+                    LOGGER.warn("[folkways-models] {} is unreadable ({})", child, exception.getMessage());
+                }
+            }
+        } catch (IOException exception) {
+            LOGGER.warn("[folkways-models] {} is unreadable ({})", directory, exception.getMessage());
+        }
+        return found.values().stream().sorted(java.util.Comparator.comparing(maid -> maid.model().toString())).toList();
+    }
+
     private static void readManifest(Path packs, Path pack, JsonObject manifest, List<Maid> found) {
+        readManifest(new MaidResources(packs, false), slashed(packs.relativize(pack)) + "/", manifest, found, false);
+    }
+
+    private static void readManifest(MaidResources source, String prefix, JsonObject manifest,
+            List<Maid> found, boolean external) {
         JsonElement listed = manifest.get("model_list");
         if (listed == null || !listed.isJsonArray()) {
             return;
         }
         for (JsonElement element : listed.getAsJsonArray()) {
-            if (!element.isJsonObject()) {
-                continue;
-            }
-            JsonObject entry = element.getAsJsonObject();
-            ResourceLocation model = ResourceLocation.tryParse(text(entry, "model_id", ""));
-            if (model == null || model.getPath().isEmpty()) {
-                continue;
-            }
-            Path geometry = inPack(pack, text(entry, "model",
-                model.getNamespace() + ":models/entity/" + model.getPath() + ".json"));
-            Path texture = inPack(pack, text(entry, "texture",
-                model.getNamespace() + ":textures/entity/" + model.getPath() + ".png"));
-            ResourceLocation textureAt = texture == null ? null : ResourceLocation.tryBuild(
-                MOD, slashed(packs.getParent().relativize(texture)));
-            if (geometry == null || textureAt == null
-                    || !Files.isRegularFile(geometry) || !Files.isRegularFile(texture)) {
-                LOGGER.warn("[folkways-models] maid {} is skipped: its model or texture is not in the pack", model);
-                continue;
-            }
-            boolean gecko = entry.has("is_gecko") && entry.get("is_gecko").getAsBoolean();
-            List<String> animations = new ArrayList<>();
-            if (entry.get("animation") instanceof JsonArray named) {
-                for (JsonElement name : named) {
-                    Path file = gecko ? inPack(pack, name.getAsString()) : null;
-                    animations.add(file == null ? name.getAsString() : slashed(packs.relativize(file)));
+            try {
+                if (!element.isJsonObject()) {
+                    continue;
                 }
+                JsonObject entry = element.getAsJsonObject();
+                ResourceLocation model = ResourceLocation.tryParse(text(entry, "model_id", ""));
+                if (model == null || model.getPath().isEmpty()) {
+                    continue;
+                }
+                String geometry = inPack(prefix, text(entry, "model",
+                    model.getNamespace() + ":models/entity/" + model.getPath() + ".json"));
+                String texture = inPack(prefix, text(entry, "texture",
+                    model.getNamespace() + ":textures/entity/" + model.getPath() + ".png"));
+                ResourceLocation textureAt = texture == null ? null : external
+                    ? ResourceLocation.tryBuild(FolkwaysMod.MOD_ID,
+                        "textures/entity/resident_models/maid/" + model.getNamespace() + "/" + model.getPath() + ".png")
+                    : ResourceLocation.tryBuild(MOD, PACKS + "/" + texture);
+                if (geometry == null || textureAt == null || !source.contains(geometry) || !source.contains(texture)) {
+                    LOGGER.warn("[folkways-models] maid {} is skipped: its model or texture is not in the pack", model);
+                    continue;
+                }
+                boolean gecko = entry.has("is_gecko") && entry.get("is_gecko").getAsBoolean();
+                List<String> animations = new ArrayList<>();
+                if (entry.get("animation") instanceof JsonArray named) {
+                    for (JsonElement name : named) {
+                        String file = gecko ? inPack(prefix, name.getAsString()) : null;
+                        animations.add(file == null ? name.getAsString() : file);
+                    }
+                }
+                float scale = entry.has("render_entity_scale") ? entry.get("render_entity_scale").getAsFloat() : 1.0F;
+                found.add(new Maid(model, gecko, geometry, animations, textureAt,
+                    Float.isFinite(scale) && scale > 0.0F ? scale : 1.0F, source, texture));
+            } catch (RuntimeException exception) {
+                LOGGER.warn("[folkways-models] malformed maid entry in {} ({})", source.root(), exception.getMessage());
             }
-            float scale = entry.has("render_entity_scale") ? entry.get("render_entity_scale").getAsFloat() : 1.0F;
-            found.add(new Maid(model, gecko, slashed(packs.relativize(geometry)), animations, textureAt,
-                scale > 0.0F ? scale : 1.0F));
         }
     }
 
-    // A pack names its files the way a resource pack does, "namespace:path", each under its own assets folder.
-    private static Path inPack(Path pack, String named) {
+    private static String inPack(String prefix, String named) {
         ResourceLocation id = ResourceLocation.tryParse(named);
-        if (id == null) {
+        if (id == null || Stream.of(id.getPath().split("/", -1)).anyMatch(part -> part.equals("..") || part.equals(".") || part.isEmpty())) {
             return null;
         }
-        Path assets = pack.resolve("assets");
-        Path file = assets.resolve(id.getNamespace()).resolve(id.getPath()).normalize();
-        return file.startsWith(assets) ? file : null;
+        return prefix + "assets/" + id.getNamespace() + "/" + id.getPath();
     }
 
     static JsonObject json(Path file) throws IOException {

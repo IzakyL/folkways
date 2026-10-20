@@ -65,6 +65,19 @@ public sealed interface StoreRule {
         }
     }
 
+    // General storage is independent of directed orders.
+    record Access(WorldPos where, boolean take, boolean store) implements StoreRule {
+        public Access { Objects.requireNonNull(where, "where"); }
+    }
+
+    static boolean takes(List<StoreRule> rules) {
+        return rules.stream().noneMatch(rule -> rule instanceof Access access && !access.take());
+    }
+
+    static boolean stores(List<StoreRule> rules) {
+        return rules.stream().noneMatch(rule -> rule instanceof Access access && !access.store());
+    }
+
     static boolean admits(List<StoreRule> rules, ItemStack stack) {
         return all(rules, admit -> admit.admits(stack));
     }

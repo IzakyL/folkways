@@ -25,6 +25,7 @@ public final class ResidentModels {
     }
 
     public static ModelLibrary reload(ResourceManager resources) {
+        MaidLooks.invalidate();
         ModelLibrary library = ModelLibrary.scan(resources);
         current = library;
         ResidentLooks.installRuntime(looks(library));

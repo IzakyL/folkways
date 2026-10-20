@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
+import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.work.Doing;
 import io.github.izakyl.folkways.core.api.work.Doings;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -47,6 +48,7 @@ public final class TransferNode implements Node, Staged {
     private final Endpoint to;
     private final Manifest cargo;
     private final boolean handed;
+    private boolean directed;
     private final LongConsumer landed;
 
     public TransferNode(UUID id, Endpoint from, Endpoint to, Manifest goods, Stances stances,
@@ -91,6 +93,7 @@ public final class TransferNode implements Node, Staged {
         this.from = from;
         this.to = to;
         this.handed = handed;
+        this.directed = handed;
         this.landed = landed;
     }
 
@@ -101,7 +104,9 @@ public final class TransferNode implements Node, Staged {
     }
 
     public TransferNode resolved(Manifest manifest) {
-        return new TransferNode(spec, from, to, manifest, false, landed);
+        TransferNode resolved = new TransferNode(spec, from, to, manifest, false, landed);
+        resolved.directed = directed;
+        return resolved;
     }
 
     @Override
@@ -190,6 +195,10 @@ public final class TransferNode implements Node, Staged {
     // The core lifts the planned goods out of the source; all of them or none.
     @Override
     public Drawn draw(ServerLevel level, Worker who) {
+        if (from instanceof Endpoint.Store store
+                && !StoreRule.takes(Stores.rulesAt(store.stash().pos()))) {
+            return new Short(HaulRefusal.NOTHING_TO_TAKE);
+        }
         List<ItemStack> goods = cargo.exact();
         List<Need> produced = cargo.pending();
         if (goods.isEmpty() && produced.isEmpty()) {
@@ -243,6 +252,10 @@ public final class TransferNode implements Node, Staged {
     // Putting the goods down is the whole of the work, and it happens only if they all fit.
     @Override
     public Outcome commit(ServerLevel level, Worker who) {
+        if (!directed && to instanceof Endpoint.Store store
+                && !StoreRule.stores(Stores.rulesAt(store.stash().pos()))) {
+            return Outcome.failed(HaulRefusal.NO_ROOM);
+        }
         Container destination = inventory(to, level, who).orElse(null);
         if (destination == null) {
             return Outcome.failed(HaulRefusal.NOT_A_CONTAINER);

@@ -24,6 +24,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Stash;
+import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Amount;
@@ -98,6 +99,79 @@ public final class TaskToolsGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(TaskToolsGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void sharedToolStockRespectsIndependentTakeAndStoreAccess(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            rig.colony.works().rule(CookeryContent.ID, rig.level.dimension(), List.of(
+                new StoreRule.Access(rig.rackAt, false, true)));
+            var blocked = rig.tools.stock.read(rig.level, KNIVES);
+            helper.assertTrue(blocked.sources().isEmpty(), "a rack with take disabled offers no physical borrowing source");
+            helper.assertTrue(blocked.inventory().tools().stream().allMatch(tool ->
+                tool.whereabouts() == KitchenTools.Whereabouts.UNREACHABLE), "the real inaccessible tool remains observed");
+            helper.assertTrue(rig.tools.pool.supply(rig.colony.colonyId(), KNIVES, blocked.inventory()).replenishment().isEmpty(),
+                "a real tool behind disabled take access is not duplicated by automatic replenishment");
+            rig.colony.works().rule(CookeryContent.ID, rig.level.dimension(), List.of(
+                new StoreRule.Access(rig.rackAt, true, false), new StoreRule.Access(rig.chestAt, false, false)));
+            helper.assertValueEqual(rig.tools.stock.read(rig.level, KNIVES).sources().size(), 1,
+                "store access does not prevent borrowing when take access remains enabled");
+            helper.assertTrue(rig.tools.stock.destinations(rig.level, rig.namedKnife()).isEmpty(),
+                "a destination with store disabled cannot receive returns or automatic replenishment");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void borrowingRechecksTakeAccessAfterTheTripWasPlanned(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            Node work = rig.simple(new AtomicInteger(), false);
+            var within = (Workload.Within) work.spec().workload();
+            Node borrow = ((Workload.Within.Turn.Piece) within.next(rig.level, rig.worker)).node();
+            rig.stand(borrow);
+            rig.colony.works().rule(CookeryContent.ID, rig.level.dimension(), List.of(
+                new StoreRule.Access(rig.rackAt, false, true)));
+            helper.assertTrue(Commit.run(rig.level, borrow, rig.worker) instanceof Outcome.Failed,
+                "take access disabled during the trip is checked again before removing the tool");
+            helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "the player's restricted knife remains on the rack");
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 0L, "no borrowed copy appears in the resident's pack");
+            within.ended(rig.level, borrow, new Ending.Failed(borrow.id(),
+                io.github.izakyl.folkways.cookery.CookeryRefusal.STATION_CHANGED));
+            work.ended(rig.level, Ending.REVOKED);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aPendingToolReturnWaitsForStoreAccessWithoutRepeatingWork(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            var executions = new AtomicInteger();
+            Node work = rig.simple(executions, false);
+            helper.assertFalse(rig.step(work), "the real knife is borrowed first");
+            helper.assertFalse(rig.step(work), "the actual food action runs once before the return");
+            var within = (Workload.Within) work.spec().workload();
+            Node returning = ((Workload.Within.Turn.Piece) within.next(rig.level, rig.worker)).node();
+            rig.stand(returning);
+            rig.colony.works().rule(CookeryContent.ID, rig.level.dimension(), List.of(
+                new StoreRule.Access(rig.rackAt, true, false), new StoreRule.Access(rig.chestAt, true, false)));
+            helper.assertTrue(Commit.run(rig.level, returning, rig.worker) instanceof Outcome.Failed,
+                "store access disabled during the return trip is checked again before insertion");
+            within.ended(rig.level, returning, new Ending.Failed(returning.id(),
+                io.github.izakyl.folkways.cookery.CookeryRefusal.STATION_CHANGED));
+            helper.assertTrue(within.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Wait,
+                "a completed task waits while every destination refuses storage");
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 1L,
+                "the physical loan stays in the pack while return storage is disabled");
+            rig.colony.works().rule(CookeryContent.ID, rig.level.dimension(), List.of());
+            rig.finish(work);
+            helper.assertValueEqual(executions.get(), 1, "reopening storage finishes the return without replaying the action");
+            helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "the real named knife returns to its preferred rack");
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 0L, "the returned knife leaves no carried duplicate");
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")

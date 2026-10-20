@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -49,7 +50,10 @@ public final class FolderPicker {
      * One thing filed: the key told back when it is picked, where it is kept ("root:some/path/name"), the words it
      * reads as, and the token its row is named by.
      */
-    public record Leaf(String key, String filed, Component name, String token) {
+    public record Leaf(String key, String filed, Component name, String token, Optional<Component> disabledReason) {
+        public Leaf(String key, String filed, Component name, String token) {
+            this(key, filed, name, token, Optional.empty());
+        }
     }
 
     private final String token;
@@ -227,20 +231,38 @@ public final class FolderPicker {
         UIElement row;
         if (ticked) {
             Toggle box = new Toggle().setText(leaf.name());
-            box.setOnToggleChanged(on -> say.accept(on ? ON : OFF, leaf.key()));
+            box.setOnToggleChanged(on -> {
+                if (leaf.disabledReason().isEmpty()) {
+                    say.accept(on ? ON : OFF, leaf.key());
+                }
+            });
             // The box alone answers a click of its own accord; the name beside it should too.
             box.toggleLabel(label -> label.textStyle(style -> style.textWrap(TextWrap.HIDE))
-                .addEventListener(UIEvents.MOUSE_DOWN, event -> box.setOn(!box.isOn(), true)));
+                .addEventListener(UIEvents.MOUSE_DOWN, event -> {
+                    if (leaf.disabledReason().isEmpty()) {
+                        box.setOn(!box.isOn(), true);
+                    }
+                }));
             row = box;
         } else {
             Button press = new Button().setText(leaf.name());
             leftward(press);
             press.setOnClick(event -> {
+                if (leaf.disabledReason().isPresent()) {
+                    return;
+                }
                 mark(Set.of(leaf.key()));
                 say.accept(PICK, leaf.key());
             });
             row = press;
         }
+        leaf.disabledReason().ifPresent(reason -> {
+            row.setActive(false);
+            row.style(style -> style.tooltips(reason));
+            if (row instanceof Toggle box) {
+                box.toggleLabel(label -> label.textStyle(style -> style.textColor(0xFF8F7F62)));
+            }
+        });
         row.layout(layout -> layout.widthPercent(100).height(ROW).flexShrink(0));
         row.addEventListener(UIEvents.MOUSE_ENTER, event -> hovered.accept(leaf.key()), true);
         Tokens.name(row, leaf.token());
@@ -308,7 +330,17 @@ public final class FolderPicker {
             if (ticked) {
                 box = new Toggle().noText();
                 box.layout(layout -> layout.width(BOX).height(BOX).flexShrink(0));
-                box.setOnToggleChanged(on -> say.accept(on ? FOLDER_ON : FOLDER_OFF, folder.prefix()));
+                Optional<Component> disabled = folder.all().stream()
+                    .flatMap(leaf -> leaf.disabledReason().stream()).findFirst();
+                box.setOnToggleChanged(on -> {
+                    if (disabled.isEmpty()) {
+                        say.accept(on ? FOLDER_ON : FOLDER_OFF, folder.prefix());
+                    }
+                });
+                disabled.ifPresent(reason -> {
+                    box.setActive(false);
+                    box.style(style -> style.tooltips(reason));
+                });
                 Tokens.name(box, token + ".tick." + named);
                 line.addChildren(box);
             } else {

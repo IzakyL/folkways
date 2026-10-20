@@ -1,0 +1,52 @@
+version = 1
+name = "folkways"
+
+[setup]
+script = '''
+set -eu
+
+worktree_root=$(git rev-parse --show-toplevel)
+common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+source_root=$(dirname "$common_dir")
+
+for directory in node_modules .blockwright-store; do
+  source_path="$source_root/$directory"
+  target_path="$worktree_root/$directory"
+
+  if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+    printf 'Keeping existing %s\n' "$target_path"
+  elif [ -d "$source_path" ]; then
+    ln -s "$source_path" "$target_path"
+    printf 'Linked %s -> %s\n' "$target_path" "$source_path"
+  else
+    printf 'Missing shared directory: %s\n' "$source_path" >&2
+    printf 'Prepare dependencies in the main checkout before retrying setup.\n' >&2
+    exit 1
+  fi
+done
+'''
+
+[[actions]]
+name = "Prepare mods"
+icon = "tool"
+command = "npm run setup"
+
+[[actions]]
+name = "Build"
+icon = "tool"
+command = "./gradlew build"
+
+[[actions]]
+name = "Check Java"
+icon = "test"
+command = "./gradlew check"
+
+[[actions]]
+name = "Typecheck"
+icon = "test"
+command = "npm run typecheck"
+
+[[actions]]
+name = "Unit tests"
+icon = "test"
+command = "npm run test:unit"

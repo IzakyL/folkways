@@ -3,6 +3,8 @@ package io.github.izakyl.folkways.front.ui.screen;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.IDataSource;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.DataBindingBuilder;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.SimpleBinding;
+import com.lowdragmc.lowdraglib2.gui.sync.rpc.RPCEmitter;
+import com.lowdragmc.lowdraglib2.gui.sync.rpc.RPCEventBuilder;
 import com.lowdragmc.lowdraglib2.gui.texture.ItemStackTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.data.TextWrap;
@@ -10,9 +12,11 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignContent;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
+import dev.vfyjxf.taffy.style.FlexWrap;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Enrollment;
@@ -76,6 +80,8 @@ public final class DomainPage implements Draw {
     private static final String TARGET = "target";
     private static final String HEADING = "heading";
     private static final String WHOLE = "whole";
+    private static final String LAYOUT = "layout";
+    private static final String STYLE = "style";
     private static final String METER = "meter";
     private static final String METER_MAX = "meter_max";
     private static final String MIN = "min";
@@ -136,6 +142,13 @@ public final class DomainPage implements Draw {
         figures = Rows.strip();
         figures.layout(layout -> layout.widthAuto().flexShrink(0));
         UIElement grid = Rows.grid();
+        drawn.grid = grid;
+        drawn.carrying = grid.addRPCEvent(RPCEventBuilder.simple(Integer.class, Integer.class,
+            (index, slot) -> {
+                if (index >= 0 && index < ROW_SLOTS && slot >= 0 && slot < ACT_SLOTS) {
+                    carryOut(player, index, slot);
+                }
+            }));
         drawn.asking = new ChoicePicker.Asking(grid, (key, option) -> choose(player, key, option));
         drawn.sending = new ItemPicker.Sending(grid, (key, filters) -> hold(player, key, filters));
         for (int index = 0; index < ROW_SLOTS; index++) {
@@ -196,8 +209,8 @@ public final class DomainPage implements Draw {
             Button press = Rows.act();
             UIElement shown = Rows.actIcon(ItemStack.EMPTY);
             press.addChildren(shown);
-            press.setOnServerClick(event -> carryOut(player, index, slot));
             press.setOnClick(event -> {
+                drawn.carrying.send(index, slot);
                 switch (drawn.kindAt(index, slot)) {
                     case KIND_OPEN -> drawn.openAt(player, index, slot);
                     case KIND_PING -> drawn.pingAt(index, slot);
@@ -219,6 +232,9 @@ public final class DomainPage implements Draw {
                 }
             });
 
+            row.editLabels.add(Rows.note(Component.empty()));
+            row.editBoxes.add(new UIElement().layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
+                .flexGrow(1).flexShrink(1).minWidth(0).gapAll(3)));
             row.acts.add(shown);
             row.presses.add(press);
             element.addChildren(press);
@@ -231,6 +247,9 @@ public final class DomainPage implements Draw {
                 element.addChildren(number);
             }
         }
+        row.controls = new UIElement().layout(layout -> layout.flexDirection(FlexDirection.ROW)
+            .widthPercent(100).gapAll(5));
+        row.controls.addEventListener(UIEvents.LAYOUT_CHANGED, event -> drawn.sizeControls(row));
         row.element = element;
         row.cell = Rows.cell(element);
         drawn.rows.add(row);
@@ -281,6 +300,7 @@ public final class DomainPage implements Draw {
         for (int index = 0; index < Math.min(all.size(), ROW_SLOTS); index++) {
             rows.add(rowTag(player, registries, all.get(index)));
         }
+        tag.putString(LAYOUT, board.get().layout().name());
         tag.put(FIGURES, figures);
         tag.put(ROWS, rows);
         tag.putInt(TOTAL, all.size());
@@ -297,6 +317,7 @@ public final class DomainPage implements Draw {
         row.told().ifPresent(told -> tag.put(TOLD, told.save()));
         tag.putBoolean(HEADING, row.heading());
         tag.putBoolean(WHOLE, row.whole());
+        tag.putString(STYLE, row.style().name());
         row.meter().ifPresent(meter -> {
             tag.putInt(METER, meter.value());
             tag.putInt(METER_MAX, meter.max());
@@ -312,6 +333,7 @@ public final class DomainPage implements Draw {
             }
             if (act instanceof Board.Act.Edit edit) {
                 setting(edit.settingKey()).ifPresent(pair -> {
+                    entry.putString(NAME, pair.setting().nameKey());
                     if (pair.setting() instanceof Schema.Setting.Count count) {
                         entry.putString(SETTING, count.key());
                         entry.putString(RAW, Integer.toString(SettingsPage.countOf(
@@ -327,11 +349,10 @@ public final class DomainPage implements Draw {
                     if (pair.setting() instanceof Schema.Setting.Items items) {
                         entry.putString(SETTING, items.key());
                         entry.putBoolean(PICKS, true);
-                        entry.putString(HELD, ItemPicker.encode(SettingsPage.itemsOf(
-                            player, new SettingsPage.Scope.AtColony(pair.scope()), items)));
+                        entry.putString(HELD, ItemPicker.encode(siteItems(player, items.key()).orElseGet(() ->
+                            SettingsPage.itemsOf(player, new SettingsPage.Scope.AtColony(pair.scope()), items))));
                         entry.putBoolean(SINGLE, items.single());
                         entry.putBoolean(BLOCKS, items.blocks());
-                        entry.putString(NAME, items.nameKey());
                     }
                 });
             }
@@ -479,10 +500,37 @@ public final class DomainPage implements Draw {
         });
     }
 
+    private Optional<List<ItemFilter>> siteItems(Player player, String key) {
+        Optional<Colony> colony = Pages.colonyOf(player);
+        Optional<ServerLevel> level = Pages.levelOf(player);
+        if (colony.isEmpty() || level.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<BlockPos> at = ColonyShell.siteOf(player);
+        return ColonyBoards.itemFilters(colony.get(), page.id(), at, key,
+            ColonyViews.forBoard(colony.get(), level.get(), at));
+    }
+
     private void hold(Player player, String key, List<ItemFilter> filters) {
         setting(key).ifPresent(pair -> {
             if (pair.setting() instanceof Schema.Setting.Items items) {
-                SettingsPage.setItems(player, new SettingsPage.Scope.AtColony(pair.scope()), items, filters);
+                List<ItemFilter> kept = SettingsPage.keptItems(items, filters);
+                if (items.single() && kept.size() != 1) {
+                    return;
+                }
+                Optional<Colony> colony = Pages.colonyOf(player);
+                Optional<ServerLevel> level = Pages.levelOf(player);
+                if (player instanceof ServerPlayer serverPlayer && colony.isPresent() && level.isPresent()) {
+                    Optional<BlockPos> at = ColonyShell.siteOf(player);
+                    Optional<Attempt> applied = ColonyBoards.setItemFilters(colony.get(), page.id(), at, key, kept,
+                        ColonyViews.forBoard(colony.get(), level.get(), at));
+                    if (applied.isPresent()) {
+                        applied.get().refusal().ifPresent(why ->
+                            serverPlayer.displayClientMessage(why.component(), true));
+                        return;
+                    }
+                }
+                SettingsPage.setItems(player, new SettingsPage.Scope.AtColony(pair.scope()), items, kept);
             }
         });
     }
@@ -504,6 +552,14 @@ public final class DomainPage implements Draw {
         // A row that takes a whole line stacks its title over its detail in words in here; any other, and one told in
         // pictures, which stand taller than a line of words, lays them along itself.
         private UIElement words;
+        private UIElement controls;
+        private boolean formControls;
+        private int editorCount;
+        private Board.Row.Style presentation = Board.Row.Style.DEFAULT;
+        private float editorWidth = -1;
+        private final boolean[] counts = new boolean[ACT_SLOTS];
+        private final List<Label> editLabels = new ArrayList<>();
+        private final List<UIElement> editBoxes = new ArrayList<>();
         private final List<UIElement> acts = new ArrayList<>();
         private final List<Button> presses = new ArrayList<>();
         private final List<TextField> numbers = new ArrayList<>();
@@ -515,6 +571,8 @@ public final class DomainPage implements Draw {
         private UIElement figures;
         private UIElement grid;
         private Label footer;
+        private boolean form;
+        private String structure = "";
         private int[][] kinds = new int[ROW_SLOTS][ACT_SLOTS];
         private ResourceLocation[][] opens = new ResourceLocation[ROW_SLOTS][ACT_SLOTS];
         private BlockPos[][] pings = new BlockPos[ROW_SLOTS][ACT_SLOTS];
@@ -525,6 +583,7 @@ public final class DomainPage implements Draw {
         private boolean[][] blocks = new boolean[ROW_SLOTS][ACT_SLOTS];
         private String[][] named = new String[ROW_SLOTS][ACT_SLOTS];
         private ItemPicker.Sending sending;
+        private RPCEmitter carrying;
         private ResourceLocation[][] chosen = new ResourceLocation[ROW_SLOTS][ACT_SLOTS];
         private ChoicePicker.Asking asking;
         private final String[][] typed = new String[ROW_SLOTS][ACT_SLOTS];
@@ -537,7 +596,8 @@ public final class DomainPage implements Draw {
             binding.setRemoteDataSource(IDataSource.of(ignored -> {
             }, () -> Controls.stamped(
                 Objects.requireNonNullElse(typed[index][slot], ""), number.getValue())));
-            number.addSyncValue(binding.getSyncValue());
+            // The form may move its editors, while the grid always stays attached.
+            grid.addSyncValue(binding.getSyncValue());
         }
 
         private void retype(Player player, int index, int slot, String key, String value) {
@@ -624,6 +684,8 @@ public final class DomainPage implements Draw {
             acceptFigures(registries, board.getList(FIGURES, Tag.TAG_COMPOUND));
             ListTag listed = board.getList(ROWS, Tag.TAG_COMPOUND);
             grid.setDisplay(!listed.isEmpty());
+            form = Board.Layout.FORM.name().equals(board.getString(LAYOUT));
+            arrange(listed);
             acceptRows(registries, listed);
             footer.setText(board.contains(FOOTER)
                 ? Pages.readText(registries, board.get(FOOTER)) : Component.empty());
@@ -636,6 +698,88 @@ public final class DomainPage implements Draw {
                 CompoundTag entry = list.getCompound(index);
                 figures.addChildren(Rows.figure(Component.translatable(entry.getString(LABEL)),
                     Pages.readText(registries, entry.get(VALUE))));
+            }
+        }
+
+        // Only regroup when structure changes; live count updates retain their editor and focus.
+        private void arrange(ListTag list) {
+            StringBuilder shape = new StringBuilder(Boolean.toString(form));
+            for (int index = 0; index < list.size(); index++) {
+                CompoundTag entry = list.getCompound(index);
+                shape.append(':').append(entry.getBoolean(HEADING)).append(entry.getString(STYLE));
+            }
+            if (structure.equals(shape.toString())) {
+                return;
+            }
+            structure = shape.toString();
+            for (Row row : rows) {
+                if (row.cell.getParent() != null) {
+                    row.cell.getParent().removeChild(row.cell);
+                }
+            }
+            grid.clearAllChildren();
+            grid.layout(layout -> layout.flexDirection(form ? FlexDirection.COLUMN : FlexDirection.ROW)
+                .gapAll(form ? 4 : 0));
+            UIElement section = null;
+            UIElement sectionRows = null;
+            UIElement top = Rows.strip();
+            top.layout(layout -> layout.alignItems(AlignItems.STRETCH).gapAll(0).flexShrink(0));
+            top.addEventListener(UIEvents.LAYOUT_CHANGED, event -> {
+                boolean narrow = top.getSizeWidth() < 300;
+                if (narrow == top.hasClass("folkways_stacked_sections")) {
+                    return;
+                }
+                if (narrow) {
+                    top.addClass("folkways_stacked_sections");
+                } else {
+                    top.removeClass("folkways_stacked_sections");
+                }
+                top.layout(layout -> layout.flexDirection(narrow ? FlexDirection.COLUMN : FlexDirection.ROW));
+                for (int at = 0; at < top.getChildren().size(); at++) {
+                    boolean first = at == 0;
+                    top.getChildren().get(at).layout(layout -> layout.widthPercent(narrow ? 100 : first ? 33 : 67)
+                        .paddingRight(!narrow && first ? 2 : 0).paddingLeft(!narrow && !first ? 2 : 0)
+                        .paddingBottom(narrow && first ? 4 : 0));
+                }
+            });
+            int sections = 0;
+            for (int index = 0; index < rows.size(); index++) {
+                Row row = rows.get(index);
+                if (!form || index >= list.size()) {
+                    grid.addChildren(row.cell);
+                    continue;
+                }
+                boolean heading = list.getCompound(index).getBoolean(HEADING);
+                if (section == null || heading) {
+                    section = Rows.page().addClass("folkways_form_section");
+                    section.layout(layout -> layout.paddingHorizontal(4).paddingVertical(4).gapAll(2).flexShrink(0));
+                    sectionRows = Rows.grid(270);
+                    if (sections < 2) {
+                        if (sections == 0) {
+                            grid.addChildren(top);
+                        }
+                        boolean first = sections == 0;
+                        section.layout(layout -> layout.flexGrow(1));
+                        if (first) {
+                            sectionRows.layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
+                                .flexWrap(FlexWrap.NO_WRAP));
+                        }
+                        UIElement column = new UIElement().layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
+                            .widthPercent(first ? 33 : 67).flexShrink(0).minWidth(0)
+                            .paddingRight(first ? 2 : 0).paddingLeft(first ? 0 : 2));
+                        column.addChildren(section);
+                        top.addChildren(column);
+                    } else {
+                        grid.addChildren(section);
+                    }
+                    sections++;
+                    if (heading) {
+                        section.addChildren(row.cell, sectionRows);
+                        continue;
+                    }
+                    section.addChildren(sectionRows);
+                }
+                sectionRows.addChildren(row.cell);
             }
         }
 
@@ -657,18 +801,218 @@ public final class DomainPage implements Draw {
                 row.title.setText(Pages.readText(registries, entry.get(TITLE)));
                 row.detail.setText(Pages.readText(registries, entry.get(DETAIL)));
                 boolean heading = entry.getBoolean(HEADING);
+                Board.Row.Style presentation = rowStyle(entry);
+                if (row.formControls && (!form || heading || presentation == Board.Row.Style.DEFAULT)) {
+                    restoreRow(row);
+                }
                 acceptHeading(row, heading);
+                if (form && heading) {
+                    row.element.layout(layout -> layout.height(16));
+                    row.cell.layout(layout -> layout.paddingBottom(1));
+                } else if (form && presentation != Board.Row.Style.DEFAULT) {
+                    row.cell.layout(layout -> layout.paddingBottom(2));
+                } else {
+                    row.element.layout(layout -> layout.height(Rows.ROW_HEIGHT));
+                    row.cell.layout(layout -> layout.paddingBottom(Rows.GAP));
+                }
                 acceptTold(row, entry, heading);
-                acceptStacked(row, !heading && entry.getBoolean(WHOLE) && !entry.contains(TOLD));
+                if (!row.formControls) {
+                    acceptStacked(row, !heading && entry.getBoolean(WHOLE) && !entry.contains(TOLD));
+                }
                 acceptIcon(registries, row, entry.getCompound(ICON));
                 acceptMeter(row, entry);
                 ListTag acts = entry.getList(ACTS, Tag.TAG_COMPOUND);
-                acceptActs(registries, row, index, acts);
-                boolean wide = heading || entry.getBoolean(WHOLE) || acts.size() > 2
+                acceptActs(registries, row, index, acts, form && presentation != Board.Row.Style.DEFAULT);
+                if (form) {
+                    acceptForm(row, presentation, heading, acts.size());
+                }
+                boolean toggle = presentation == Board.Row.Style.ON || presentation == Board.Row.Style.OFF;
+                boolean wide = form ? !toggle : heading || entry.getBoolean(WHOLE) || acts.size() > 2
                     || row.numbers.stream().anyMatch(UIElement::isDisplayed);
-                Rows.Span span = wide ? Rows.Span.WHOLE : right ? Rows.Span.RIGHT : Rows.Span.LEFT;
+                if (heading) {
+                    right = false;
+                }
+                Rows.Span span = form && toggle ? Rows.Span.CONTENT
+                    : wide ? Rows.Span.WHOLE : right ? Rows.Span.RIGHT : Rows.Span.LEFT;
                 Rows.place(row.cell, span);
                 right = span == Rows.Span.LEFT;
+            }
+        }
+
+        private Board.Row.Style rowStyle(CompoundTag entry) {
+            try {
+                return Board.Row.Style.valueOf(entry.getString(STYLE));
+            } catch (IllegalArgumentException ignored) {
+                return Board.Row.Style.DEFAULT;
+            }
+        }
+
+        private void restoreRow(Row row) {
+            row.element.removeChild(row.controls);
+            for (int slot = 0; slot < ACT_SLOTS; slot++) {
+                UIElement box = row.editBoxes.get(slot);
+                Button press = row.presses.get(slot);
+                box.removeChild(press);
+                row.element.addChildren(press);
+                press.noText();
+                press.layout(layout -> layout.width(Rows.ACT_SIZE).height(Rows.ACT_SIZE).paddingAll(0));
+                if (!row.numbers.isEmpty()) {
+                    TextField number = row.numbers.get(slot);
+                    box.removeChild(number);
+                    row.element.addChildren(number);
+                    number.layout(layout -> layout.width(50));
+                }
+            }
+            row.controls.clearAllChildren();
+            for (String style : List.of("folkways_form_toggle", "folkways_form_on", "folkways_form_off")) {
+                row.element.removeClass(style);
+            }
+            row.element.layout(layout -> layout.flexDirection(FlexDirection.ROW).height(Rows.ROW_HEIGHT)
+                .alignItems(AlignItems.CENTER).gapAll(Rows.GAP).paddingVertical(0).paddingHorizontal(Rows.GAP));
+            row.title.setDisplay(true);
+            row.title.textStyle(style -> style.textWrap(TextWrap.HOVER_ROLL).adaptiveHeight(false));
+            row.detail.layout(layout -> layout.heightAuto());
+            row.detail.textStyle(style -> style.textWrap(TextWrap.HOVER_ROLL).adaptiveWidth(true)
+                .adaptiveHeight(false).textColor(Rows.INK));
+            row.element.layout(layout -> layout.widthPercent(100));
+            row.formControls = false;
+            row.editorWidth = -1;
+        }
+
+        private void acceptForm(Row row, Board.Row.Style presentation, boolean heading, int acts) {
+            boolean custom = !heading && presentation != Board.Row.Style.DEFAULT;
+            if (!custom) {
+                return;
+            }
+            boolean toggle = presentation == Board.Row.Style.ON || presentation == Board.Row.Style.OFF;
+            boolean note = presentation == Board.Row.Style.NOTE;
+            row.element.removeClass("folkways_card");
+            for (String style : List.of("folkways_form_toggle", "folkways_form_on", "folkways_form_off")) {
+                row.element.removeClass(style);
+            }
+            if (toggle) {
+                row.element.addClass("folkways_form_toggle");
+                row.element.addClass(presentation == Board.Row.Style.ON ? "folkways_form_on" : "folkways_form_off");
+            }
+            row.icon.setDisplay(false);
+            row.element.layout(layout -> layout.flexDirection(FlexDirection.COLUMN).heightAuto()
+                .alignItems(AlignItems.STRETCH).gapAll(2).paddingHorizontal(0).paddingVertical(0));
+            if (!row.formControls) {
+                // Keep the original bound widgets; moving them never changes their action indices.
+                if (row.words.getParent() == row.element) {
+                    row.element.removeChild(row.words);
+                }
+                for (UIElement part : List.of(row.title, row.meter, row.detail, row.told)) {
+                    if (part.getParent() != null) {
+                        part.getParent().removeChild(part);
+                    }
+                    row.element.addChildren(part);
+                }
+                for (int slot = 0; slot < ACT_SLOTS; slot++) {
+                    Button press = row.presses.get(slot);
+                    if (press.getParent() != null) {
+                        press.getParent().removeChild(press);
+                    }
+                    UIElement box = row.editBoxes.get(slot);
+                    if (row.editLabels.get(slot).getParent() == null) {
+                        box.addChildren(row.editLabels.get(slot));
+                    }
+                    box.addChildren(press);
+                    if (!row.numbers.isEmpty()) {
+                        TextField number = row.numbers.get(slot);
+                        if (number.getParent() != null) {
+                            number.getParent().removeChild(number);
+                        }
+                        box.addChildren(number);
+                    }
+                    row.controls.addChildren(box);
+                }
+                row.element.addChildren(row.controls);
+                row.formControls = true;
+            }
+            row.title.layout(layout -> layout.widthPercent(100).flexGrow(0).flexShrink(0).minWidth(0));
+            row.title.textStyle(style -> style.textWrap(TextWrap.WRAP).adaptiveHeight(true));
+            row.title.setDisplay(note && !row.title.getText().getString().isEmpty());
+            row.detail.layout(layout -> layout.widthPercent(100).flexShrink(0));
+            row.detail.textStyle(style -> style.textWrap(TextWrap.WRAP).adaptiveWidth(false).adaptiveHeight(true)
+                .textColor(Rows.QUIET));
+            boolean pictorial = !toggle && row.told.isDisplayed();
+            row.detail.setDisplay(!toggle && !pictorial && !row.detail.getText().getString().isEmpty());
+            row.detail.textStyle(style -> style.textWrap(TextWrap.HOVER_ROLL).adaptiveHeight(false));
+            row.detail.layout(layout -> layout.height(12));
+            row.told.layout(layout -> layout.widthPercent(100).flexGrow(0).flexShrink(0));
+            row.told.setDisplay(pictorial);
+            row.controls.setDisplay(!note && acts > 0);
+            row.controls.layout(layout -> layout.flexWrap(FlexWrap.NO_WRAP));
+            row.editorCount = acts;
+            row.presentation = presentation;
+            if (!toggle) {
+                row.element.layout(layout -> layout.widthPercent(100));
+            }
+            for (int slot = 0; slot < ACT_SLOTS; slot++) {
+                UIElement box = row.editBoxes.get(slot);
+                box.layout(layout -> layout.flexGrow(0).flexShrink(0).gapAll(1));
+                row.editLabels.get(slot).setDisplay(presentation == Board.Row.Style.FIELD && acts > 1 && slot < acts);
+                row.editLabels.get(slot).layout(layout -> layout.minHeight(11).height(11).flexShrink(0));
+                row.presses.get(slot).layout(layout -> layout.height(Rows.ACT_SIZE)
+                    .paddingHorizontal(4));
+            }
+            boolean singleField = presentation == Board.Row.Style.FIELD && acts == 1
+                && (!row.detail.getText().getString().isEmpty() || pictorial);
+            if (singleField) {
+                row.element.layout(layout -> layout.flexDirection(FlexDirection.ROW).alignItems(AlignItems.CENTER));
+                row.detail.layout(layout -> layout.width(0).flexGrow(1).flexShrink(1).minWidth(0));
+                row.told.layout(layout -> layout.width(0).flexGrow(1).flexShrink(1).minWidth(0));
+            }
+            row.controls.layout(layout -> layout.flexGrow(0).flexShrink(0).minWidth(0));
+            if (presentation == Board.Row.Style.FIELD && acts > 1) {
+                row.detail.setDisplay(false);
+            }
+            row.editorWidth = -1;
+            sizeControls(row);
+        }
+
+        // Controls keep the width their content needs; pixels avoid zero-basis percentage resolution in Taffy.
+        private void sizeControls(Row row) {
+            if (!row.formControls || row.editorCount <= 0) {
+                return;
+            }
+            boolean field = row.presentation == Board.Row.Style.FIELD;
+            boolean toggle = row.presentation == Board.Row.Style.ON || row.presentation == Board.Row.Style.OFF;
+            float room = row.element.getContentWidth();
+            float[] widths = new float[row.editorCount];
+            float total = 5 * (row.editorCount - 1);
+            for (int slot = 0; slot < row.editorCount; slot++) {
+                int text = Minecraft.getInstance().font.width(row.presses.get(slot).text.getText());
+                widths[slot] = row.counts[slot] ? 56 : field ? row.editorCount == 1 ? 72 : 96
+                    : Math.max(40, Math.min(toggle ? 80 : 100, text + 12));
+                total += widths[slot];
+            }
+            float scale = field && room > 0 && total > room
+                ? Math.max(0.1f, (room - 5 * (row.editorCount - 1)) / (total - 5 * (row.editorCount - 1))) : 1;
+            float used = 5 * (row.editorCount - 1);
+            for (float width : widths) {
+                used += width * scale;
+            }
+            if (Math.abs(used - row.editorWidth) < 0.01f) {
+                return;
+            }
+            row.editorWidth = used;
+            float strip = used;
+            row.controls.layout(layout -> layout.width(strip));
+            if (toggle) {
+                row.element.layout(layout -> layout.width(strip));
+            }
+            for (int slot = 0; slot < row.editorCount; slot++) {
+                float width = widths[slot] * scale;
+                row.editBoxes.get(slot).layout(layout -> layout.width(width).flexGrow(0).flexShrink(0));
+                row.editLabels.get(slot).layout(layout -> layout.width(width));
+                row.presses.get(slot).layout(layout -> layout.width(width));
+                row.presses.get(slot).text.layout(layout -> layout.width(Math.max(1, width - 12)));
+                row.presses.get(slot).textStyle(style -> style.adaptiveWidth(false).textWrap(TextWrap.HOVER_ROLL));
+                if (!row.numbers.isEmpty()) {
+                    row.numbers.get(slot).layout(layout -> layout.width(width));
+                }
             }
         }
 
@@ -757,10 +1101,13 @@ public final class DomainPage implements Draw {
             row.icon.style(style -> style.background(new ItemStackTexture(stack)));
         }
 
-        private void acceptActs(HolderLookup.Provider registries, Row row, int index, ListTag list) {
+        private void acceptActs(HolderLookup.Provider registries, Row row, int index, ListTag list,
+                boolean readable) {
             for (int slot = 0; slot < row.presses.size(); slot++) {
                 TextField number = row.numbers.isEmpty() ? null : row.numbers.get(slot);
                 if (slot >= list.size()) {
+                    row.counts[slot] = false;
+                    row.editBoxes.get(slot).setDisplay(false);
                     row.presses.get(slot).setDisplay(false);
                     Tokens.name(row.presses.get(slot), Tokens.NONE);
                     if (number != null) {
@@ -780,6 +1127,18 @@ public final class DomainPage implements Draw {
                 CompoundTag entry = list.getCompound(slot);
                 Button press = row.presses.get(slot);
                 Component label = Pages.readText(registries, entry.get(LABEL));
+                Component caption = entry.getString(NAME).isEmpty()
+                    ? label : Component.translatable(entry.getString(NAME));
+                row.editLabels.get(slot).setText(caption);
+                row.editBoxes.get(slot).setDisplay(true);
+                row.acts.get(slot).setDisplay(!readable);
+                if (readable) {
+                    boolean multipleItems = entry.getBoolean(PICKS) && !entry.getBoolean(SINGLE);
+                    Component readableLabel = multipleItems || label.getString().isBlank() ? caption : label;
+                    press.enableText().setText(readableLabel);
+                } else {
+                    press.noText();
+                }
                 ItemStack icon = ItemStack.parse(registries, entry.getCompound(ICON))
                     .orElse(ItemStack.EMPTY);
                 row.acts.get(slot).style(style -> style.background(new ItemStackTexture(icon)));
@@ -800,8 +1159,11 @@ public final class DomainPage implements Draw {
 
                 boolean counts = number != null && kinds[index][slot] == KIND_EDIT
                     && entry.contains(RAW);
+                row.counts[slot] = counts;
                 press.setDisplay(!counts);
-                press.style(style -> style.tooltips(label));
+                Component tooltip = label.getString().isBlank() ? caption : label;
+                press.style(style -> style.tooltips(tooltip.getString().isBlank()
+                    ? new Component[0] : new Component[] {tooltip}));
 
                 Tokens.name(press, counts ? Tokens.NONE : token(kinds[index][slot], index, slot));
                 if (number != null) {
@@ -821,6 +1183,9 @@ public final class DomainPage implements Draw {
             if (!key.equals(typed[index][slot])) {
                 typed[index][slot] = key;
                 echoed.forget(index * ACT_SLOTS + slot);
+                Controls.ranged(number, entry.getInt(MIN), entry.getInt(MAX));
+            }
+            if (!form) {
                 Controls.ranged(number, entry.getInt(MIN), entry.getInt(MAX));
             }
             String raw = entry.getString(RAW);

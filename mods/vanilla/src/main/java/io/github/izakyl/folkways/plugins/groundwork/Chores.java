@@ -51,7 +51,15 @@ final class Chores {
 
     void settle(List<Job> jobs) {
         standing = List.copyOf(jobs);
-        spent.clear();
+
+    }
+
+    Set<String> spent() {
+        return Set.copyOf(spent);
+    }
+
+    boolean busy() {
+        return !busy.isEmpty();
     }
 
     void goals(ServerLevel level, List<Grown> into) {

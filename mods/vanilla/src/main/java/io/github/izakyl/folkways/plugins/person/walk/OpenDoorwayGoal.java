@@ -139,7 +139,10 @@ public final class OpenDoorwayGoal extends Goal {
         if (doorway == null) {
             return;
         }
-        Level level = mob.level();
+        setOpen(mob, mob.level(), doorway, open);
+    }
+
+    static void setOpen(Mob mob, Level level, BlockPos doorway, boolean open) {
         BlockState state = level.getBlockState(doorway);
         if (state.getBlock() instanceof DoorBlock door) {
             door.setOpen(mob, level, state, doorway, open);

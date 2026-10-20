@@ -11,6 +11,7 @@ import { MARK_MEMBERS, runColonyTask } from "../shared/colony/colony-tasks";
 import { markZone, residentPositions, settleClient } from "./scene";
 import { setMaintainDemandsFast } from "./fast-setup";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import {
   cinematicWorld,
   hideHud,
@@ -82,6 +83,7 @@ const LEISURE = new Set(["idle", "folkways:chatting", "folkways:eating", "folkwa
 
 test("one resident walks about a small colony at work, card up, while cycling through server YSM models", async ({}, testInfo) => {
   test.setTimeout(BUDGET.bench);
+  execFileSync("python3", ["tests/promo/models/vendor.py"], { stdio: "inherit" });
   const run = take("models");
   let pair: PromoPair | undefined;
   let server: any;

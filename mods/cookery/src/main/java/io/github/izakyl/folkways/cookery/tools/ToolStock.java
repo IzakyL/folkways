@@ -7,6 +7,8 @@ import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
+import io.github.izakyl.folkways.core.api.terms.StoreRule;
+import io.github.izakyl.folkways.core.engine.plan.Stores;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
@@ -91,7 +93,7 @@ final class ToolStock {
                         continue;
                     }
                     UUID id = physical.computeIfAbsent(stack, ignored -> UUID.randomUUID());
-                    boolean reachable = level == where && approach.isPresent();
+                    boolean reachable = level == where && approach.isPresent() && takes(at);
                     tools.add(new KitchenTools.Tool(id, stack.copyWithCount(1), reachable
                         ? KitchenTools.Whereabouts.AVAILABLE : KitchenTools.Whereabouts.UNREACHABLE));
                     if (reachable) {
@@ -168,7 +170,7 @@ final class ToolStock {
     List<Destination> destinations(ServerLevel level, ItemStack stack) {
         List<Destination> targets = new ArrayList<>();
         for (WorldPos at : colony.storesIn(level.dimension())) {
-            if (!at.in(level) || !level.isLoaded(at.block(level))) {
+            if (!at.in(level) || !level.isLoaded(at.block(level)) || !stores(at)) {
                 continue;
             }
             Optional<Container> store = colony.store(level, at);
@@ -207,6 +209,14 @@ final class ToolStock {
 
     Optional<Container> store(ServerLevel level, WorldPos at) {
         return colony.store(level, at);
+    }
+
+    boolean takes(WorldPos at) {
+        return StoreRule.takes(Stores.rulesAt(at));
+    }
+
+    boolean stores(WorldPos at) {
+        return StoreRule.stores(Stores.rulesAt(at));
     }
 
     static long roomCount(Container into, ItemStack stack) {

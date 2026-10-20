@@ -23,6 +23,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 public final class DispatchContent {
 
@@ -59,7 +61,10 @@ public final class DispatchContent {
     }
 
     public static void declare(Declaring declaring) {
-        PackageNetworks.install(new CreatePackageNetwork());
+        CreatePackageNetwork network = new CreatePackageNetwork();
+        PackageNetworks.install(network);
+        NeoForge.EVENT_BUS.addListener(network::tick);
+        NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> network.forgetServer());
         declaring.vocation(SPEC);
         declaring.colony(ID, scope -> {
             DispatchPresence state = new DispatchPresence(scope.colony());

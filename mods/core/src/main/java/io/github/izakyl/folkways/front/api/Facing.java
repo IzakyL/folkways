@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.api;
 
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
+import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.panel.Board;
@@ -29,6 +30,17 @@ public interface Facing {
     default Attempt act(ResourceLocation page, String actionKey, Optional<BlockPos> at,
             ColonyView colony) {
         return Attempt.went();
+    }
+
+    // A block may own an item list instead of using the colony's shared draft settings.
+    default Optional<List<ItemFilter>> itemFiltersAt(ResourceLocation page, BlockPos at,
+            String key, ColonyView colony) {
+        return Optional.empty();
+    }
+
+    default Optional<Attempt> setItemFiltersAt(ResourceLocation page, BlockPos at,
+            String key, List<ItemFilter> filters, ColonyView colony) {
+        return Optional.empty();
     }
 
     // The book pointed at a block in member mode; a present answer stands in for making the block a member.

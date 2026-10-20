@@ -46,7 +46,11 @@ public final class LooksPage implements Draw {
 
         ScrollerView scroller = Rows.box();
         scroller.addScrollViewChild(Rows.page().addChildren(
-            new PoolSets("looks", LooksPage::offered, LooksPage::replace).build(player),
+            new PoolSets("looks", LooksPage::offered, LooksPage::replace)
+                .disabledReason(id -> LookPicker.disabledReason(
+                    LookSet.of(player.level().registryAccess(), id).map(LookSet::looks)
+                        .or(() -> Optional.ofNullable(MaidLooks.sets().get(id))).orElseGet(List::of)))
+                .build(player),
             picker.tree()));
         UIElement page = Rows.page().addChildren(picker.beside(picker.searching(scroller)));
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));

@@ -23,10 +23,12 @@ import com.simibubi.create.content.trains.station.GlobalStation;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.create.CreateMod;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.createmod.catnip.data.Couple;
@@ -39,6 +41,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 final class CreateTransitNetwork implements TransitNetwork {
 
@@ -53,7 +56,10 @@ final class CreateTransitNetwork implements TransitNetwork {
     private final Map<UUID, double[]> stood = new ConcurrentHashMap<>();
 
     // Whether each train last came into each station backwards, by train and station.
-    private final Map<String, Boolean> cameIn = new ConcurrentHashMap<>();
+    private record Berthing(UUID train, UUID station) {
+    }
+
+    private final Map<Berthing, Boolean> cameIn = new ConcurrentHashMap<>();
 
     // What makes a stop's name a pattern to Create (Glob) rather than one station's name.
     private static final String PATTERN = "*?[]{}\\";
@@ -64,6 +70,28 @@ final class CreateTransitNetwork implements TransitNetwork {
     private static final double OVERHANG = 1.0D;
 
     private static final double UNSEEN_WIDTH = 3.0D;
+
+    void tick(ServerTickEvent.Post event) {
+        if (event.getServer().getTickCount() % 20 != 0) {
+            return;
+        }
+        GlobalRailwayManager railways = railways(event.getServer());
+        Set<UUID> trains = railways.trains.keySet();
+        widths.keySet().retainAll(trains);
+        lengths.keySet().retainAll(trains);
+        stood.keySet().retainAll(trains);
+        Set<UUID> stations = new HashSet<>();
+        railways.trackNetworks.values().forEach(graph ->
+            graph.getPoints(EdgePointType.STATION).forEach(station -> stations.add(station.id)));
+        cameIn.keySet().removeIf(key -> !trains.contains(key.train()) || !stations.contains(key.station()));
+    }
+
+    void forgetServer() {
+        widths.clear();
+        lengths.clear();
+        stood.clear();
+        cameIn.clear();
+    }
 
     @Override
     public boolean isAvailable() {
@@ -584,7 +612,7 @@ final class CreateTransitNetwork implements TransitNetwork {
         // there, is loaded, or is miles away.
         double wheelbase = t.getTotalLength();
         boolean arriving = candidate == t.getCurrentStation() || candidate == t.navigation.destination;
-        String berthed = train + "/" + candidate.id;
+        Berthing berthed = new Berthing(train, candidate.id);
         if (arriving) {
             cameIn.put(berthed, t.currentlyBackwards);
         }

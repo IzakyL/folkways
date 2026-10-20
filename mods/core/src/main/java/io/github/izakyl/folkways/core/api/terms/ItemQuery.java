@@ -1,13 +1,14 @@
 package io.github.izakyl.folkways.core.api.terms;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -25,7 +26,16 @@ import org.jetbrains.annotations.Nullable;
 // server keeps none.
 public final class ItemQuery {
 
-    private static final Map<String, List<Item>> FOUND = new ConcurrentHashMap<>();
+    private static final int CACHED_QUERIES = 256;
+
+    // Rules can be replaced indefinitely; keep only the results used most recently.
+    private static final Map<String, List<Item>> FOUND = Collections.synchronizedMap(
+        new LinkedHashMap<>(CACHED_QUERIES, 0.75F, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, List<Item>> eldest) {
+                return size() > CACHED_QUERIES;
+            }
+        });
 
     @Nullable
     private static volatile Known known;
