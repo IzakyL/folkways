@@ -14,6 +14,8 @@ import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.LinkedHashMap;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -44,7 +46,10 @@ final class Dining {
     private final Map<UUID, Meal> meals = new ConcurrentHashMap<>();
 
     record Seat(BlockPos chair, BlockPos approach) { }
-    record Table(ServerLevel level, UUID zone, BlockPos at, ItemSpec food, int target, List<Seat> seats) { }
+    private static final int MAX_TABLE_CELLS = 128;
+    private static final int MAX_DINING_ZONE_CELLS = 4096;
+    record Table(ServerLevel level, UUID zone, BlockPos at, ItemSpec food, int target,
+                 Set<BlockPos> tops, List<Seat> seats, List<BlockPos> approaches) { }
     private record Portion(WorldPos at, int slot) { }
     private record Choice(Table table, Seat seat, int slot) { }
 
@@ -63,33 +68,71 @@ final class Dining {
                 if (!zone.delegation().equals(LivingContent.DINING)) { continue; }
                 Optional<ItemSpec> food = zone.settings().items(LivingContent.DINING_FOOD.key());
                 if (food.isEmpty()) { continue; }
-                // A one-layer outline may mark the floor beneath the furniture or the furniture itself.
-                for (BlockPos at : zone.cells().stream().flatMap(cell -> java.util.stream.Stream.of(cell, cell.above())).toList()) {
-                    if (!level.isLoaded(at) || !DiningTables.table(level, at)
-                            || seen.contains(WorldPos.of(level, at))) { continue; }
-                    List<Seat> chairs = new ArrayList<>();
-                    for (Direction side : Direction.Plane.HORIZONTAL) {
+                Set<BlockPos> candidates = tableCells(level, zone);
+                Set<BlockPos> remaining = new HashSet<>(candidates);
+                while (!remaining.isEmpty()) {
+                    BlockPos first = remaining.iterator().next();
+                    Set<BlockPos> tops = component(first, candidates);
+                    remaining.removeAll(tops);
+                    if (tops.size() > MAX_TABLE_CELLS || tops.stream().anyMatch(at -> seen.contains(WorldPos.of(level, at)))) { continue; }
+                    var chairs = new LinkedHashMap<BlockPos, Seat>();
+                    for (BlockPos at : tops) for (Direction side : Direction.Plane.HORIZONTAL) {
                         BlockPos chair = at.relative(side);
-                        if (!includes(zone, chair) || !level.isLoaded(chair)
+                        if (tops.contains(chair) || !includes(zone, chair) || !level.isLoaded(chair)
                                 || !DiningTables.chair(level, chair)) { continue; }
-                        // Walk to an aisle beside the chair; a native seat provider mounts the actual chair.
+                        // Every physical chair appears once, even when it borders several table cells.
                         for (Direction aisle : Direction.Plane.HORIZONTAL) {
                             BlockPos approach = chair.relative(aisle);
-                            if (!approach.equals(at) && level.isLoaded(approach)
+                            if (!tops.contains(approach) && level.isLoaded(approach)
                                     && Footing.withFeetAt(level, approach) && level.getFluidState(approach).isEmpty()) {
-                                chairs.add(new Seat(chair.immutable(), approach.immutable())); break;
+                                chairs.putIfAbsent(chair.immutable(), new Seat(chair.immutable(), approach.immutable())); break;
                             }
                         }
                     }
                     if (!chairs.isEmpty()) {
-                        seen.add(WorldPos.of(level, at));
-                        found.add(new Table(level, zone.id(), at.immutable(), food.get(),
-                            Math.clamp(zone.settings().count(LivingContent.DINING_SERVINGS.key()), 1, 4), List.copyOf(chairs)));
+                        List<Seat> seats = List.copyOf(chairs.values());
+                        Set<BlockPos> approaches = new HashSet<>();
+                        seats.forEach(seat -> approaches.add(seat.approach));
+                        for (BlockPos at : tops) for (Direction side : Direction.Plane.HORIZONTAL) {
+                            BlockPos edge = at.relative(side);
+                            if (!tops.contains(edge) && level.isLoaded(edge) && Footing.withFeetAt(level, edge)
+                                    && level.getFluidState(edge).isEmpty()) approaches.add(edge.immutable());
+                        }
+                        for (BlockPos at : tops) {
+                            seen.add(WorldPos.of(level, at));
+                            found.add(new Table(level, zone.id(), at, food.get(),
+                                Math.clamp(zone.settings().count(LivingContent.DINING_SERVINGS.key()), 1, 4), tops, seats, List.copyOf(approaches)));
+                        }
                     }
                 }
             }
         }
         tables = List.copyOf(found);
+    }
+
+    private static Set<BlockPos> tableCells(ServerLevel level, ZoneView zone) {
+        // Inspect only explicitly marked cells and the furniture immediately above their floor.
+        if (zone.cells().size() > MAX_DINING_ZONE_CELLS) { return Set.of(); }
+        Set<BlockPos> cells = new HashSet<>();
+        for (BlockPos floor : zone.cells()) for (BlockPos at : List.of(floor, floor.above())) {
+            if (level.isLoaded(at) && DiningTables.table(level, at)) cells.add(at.immutable());
+        }
+        return cells;
+    }
+
+    private static Set<BlockPos> component(BlockPos first, Set<BlockPos> candidates) {
+        if (!candidates.contains(first)) { return Set.of(); }
+        Set<BlockPos> found = new HashSet<>();
+        ArrayDeque<BlockPos> pending = new ArrayDeque<>();
+        found.add(first); pending.add(first);
+        while (!pending.isEmpty()) {
+            BlockPos at = pending.remove();
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                BlockPos next = at.relative(side);
+                if (candidates.contains(next) && found.add(next)) pending.add(next);
+            }
+        }
+        return Set.copyOf(found);
     }
 
     List<Grown> goals(ColonyView view) {
@@ -141,7 +184,7 @@ final class Dining {
         ServerLevel level = view.level();
         BlockPos from = WorldSpaces.at(who.body()).block(level);
         for (Table table : tables) {
-            if (table.level != level || table.at.distSqr(from) > 16 * 16 || !valid(table)) { continue; }
+            if (table.level != level || table.tops.stream().noneMatch(at -> at.distSqr(from) <= 16 * 16) || !valid(table)) { continue; }
             Optional<Container> display = DiningTables.inventory(level, table.at);
             int count = display.map(Container::getContainerSize).orElse(1);
             for (int slot = 0; slot < count; slot++) {
@@ -178,7 +221,23 @@ final class Dining {
             && Fronts.of(colony).zonesIn(table.level).stream().anyMatch(zone -> zone.id().equals(table.zone)
                 && zone.delegation().equals(LivingContent.DINING) && includes(zone, table.at)
                 && Math.clamp(zone.settings().count(LivingContent.DINING_SERVINGS.key()), 1, 4) == table.target
-                && zone.settings().items(LivingContent.DINING_FOOD.key()).filter(table.food::equals).isPresent());
+                && zone.settings().items(LivingContent.DINING_FOOD.key()).filter(table.food::equals).isPresent()
+                && sameTops(table, zone));
+    }
+
+    private static boolean sameTops(Table table, ZoneView zone) {
+        if (zone.cells().size() > MAX_DINING_ZONE_CELLS) { return false; }
+        // The surveyed component was connected. An unchanged member set and unchanged boundary
+        // prove it still is, without repeatedly scanning the whole dining zone for every diner.
+        for (BlockPos top : table.tops) {
+            if (!includes(zone, top) || !table.level.isLoaded(top) || !DiningTables.table(table.level, top)) { return false; }
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                BlockPos next = top.relative(side);
+                if (!table.tops.contains(next) && includes(zone, next) && table.level.isLoaded(next)
+                        && DiningTables.table(table.level, next)) { return false; }
+            }
+        }
+        return true;
     }
 
     private boolean valid(Table table, Seat seat) {
@@ -211,8 +270,8 @@ final class Dining {
     }
 
     private static boolean near(Table table, Mob body) {
-        return WorldSpaces.world(table.level, WorldPos.of(table.level, table.at))
-            .map(at -> body.position().distanceToSqr(at) <= 4 * 4).orElse(false);
+        return table.tops.stream().anyMatch(top -> WorldSpaces.world(table.level, WorldPos.of(table.level, top))
+            .map(at -> body.position().distanceToSqr(at) <= 4 * 4).orElse(false));
     }
 
     void tick(MinecraftServer server) {
@@ -229,8 +288,9 @@ final class Dining {
 
     List<Line> lines(ZoneView zone, ColonyView view) {
         List<Table> here = tables.stream().filter(table -> table.zone.equals(zone.id())).toList();
-        int chairs = here.stream().mapToInt(table -> table.seats.size()).sum();
-        return List.of(Line.text(Component.translatable("folkways.dining.summary", here.size(), chairs)),
+        long count = here.stream().map(Table::tops).distinct().count();
+        long chairs = here.stream().flatMap(table -> table.seats.stream()).map(Seat::chair).distinct().count();
+        return List.of(Line.text(Component.translatable("folkways.dining.summary", count, chairs)),
             Line.text(Component.translatable(here.isEmpty() ? "folkways.dining.furniture"
                 : here.stream().allMatch(table -> accepted(table).isEmpty()) ? "folkways.dining.no_food" : "folkways.dining.help")));
     }
@@ -242,17 +302,19 @@ final class Dining {
         final NodeSpec spec;
         SetTable(Table table, int slot, ItemSpec food) {
             this.table = table; this.slot = slot; this.food = food;
-            UUID id = UUID.nameUUIDFromBytes(("dining/" + table.zone + "/" + table.at + "/" + slot + "/" + food.describe())
+            UUID id = UUID.nameUUIDFromBytes(("dining/" + table.zone + "/" + table.at + "/" + slot + "/" + food.describe() + "/" + table.tops.stream().sorted(BlockPos::compareTo).toList() + "/" + table.target)
                 .getBytes(StandardCharsets.UTF_8));
             spec = NodeSpec.of(id, LivingContent.ID, WorkSite.at(table.level, table.at),
-                Stances.of(table.level, table.seats.stream().map(Seat::approach).toList()).orElseThrow(), Workload.Once.of(20))
+                Stances.of(table.level, table.approaches).orElseThrow(), Workload.Once.of(20))
                 .needs(new Need(food, 1)).doing(LivingContent.SETTING_TABLE, food).focus(table.at).done();
         }
         @Override public NodeSpec spec() { return spec; }
         @Override public Outcome commit(ServerLevel level, Worker who) {
             List<ItemStack> back = new ArrayList<>(who.supplied().stream().map(ItemStack::copy).toList());
             if (level != table.level || who.body().level() != level || !near(table, who.body())
-                    || !valid(table) || table.seats.stream().noneMatch(seat -> valid(table, seat))) {
+                    || !valid(table) || table.seats.stream().noneMatch(seat -> valid(table, seat))
+                    || table.approaches.stream().noneMatch(at -> level.isLoaded(at) && Footing.withFeetAt(level, at)
+                        && level.getFluidState(at).isEmpty())) {
                 return new Outcome.Done(List.of(), List.of(), Optional.empty(), back);
             }
             Optional<Container> display = DiningTables.inventory(level, table.at);
@@ -308,7 +370,8 @@ final class Dining {
             Mob body = who.body();
             ServerLevel level = choice.table.level;
             return body.level() == level && body.isAlive() && !body.isRemoved()
-                && level.getEntity(body.getUUID()) == body && (!nearby || near(choice.table, body));
+                && level.getEntity(body.getUUID()) == body && (!nearby || WorldSpaces.world(level,
+                    WorldPos.of(level, choice.seat.chair)).map(at -> body.position().distanceToSqr(at) <= 4 * 4).orElse(false));
         }
         @Override public Optional<io.github.izakyl.folkways.core.api.terms.RefusalKind> refusal(ServerLevel level) {
             return level != choice.table.level || finished || !present(engaged)

@@ -243,20 +243,54 @@ public final class DiningGameTests {
         helper.succeed();
     }
 
-    private static final class Fixture implements AutoCloseable {
+    @GameTest(template = "empty")
+    public static void connectedBasicTablesShareTheActualCakeAtTheirFarEnd(GameTestHelper helper) {
+        var slab = Blocks.OAK_SLAB.defaultBlockState().setValue(net.minecraft.world.level.block.SlabBlock.TYPE,
+            net.minecraft.world.level.block.state.properties.SlabType.TOP);
+        try (Fixture f = new Fixture(helper, slab)) {
+            f.zone(Items.CAKE);
+            var settings = f.front.zone(f.zone).orElseThrow().settings();
+            f.front.erase(f.zone);
+            var cells = new java.util.HashSet<BlockPos>();
+            cells.add(f.chair);
+            for (int x = 0; x < 8; x++) {
+                BlockPos at = f.at.east(x);
+                f.level.setBlockAndUpdate(at.below(), Blocks.STONE.defaultBlockState());
+                f.level.setBlockAndUpdate(at, slab);
+                cells.add(at);
+            }
+            f.zone = f.front.addZone(f.level, LivingContent.DINING, cells, settings).orElseThrow().id();
+            f.dining.refresh(f.level.getServer());
+            var far = f.at.east(7);
+            Node supply = f.goals().stream().filter(node -> node.spec().focus().filter(far::equals).isPresent()).findFirst().orElseThrow();
+            f.worker.supplied = List.of(new ItemStack(Items.CAKE));
+            helper.assertTrue(supply.commit(f.level, f.worker) instanceof Outcome.Done, "one end places food at the opposite end");
+            helper.assertTrue(f.level.getBlockState(far.above()).is(Blocks.CAKE), "food remains an actual distant world block");
+            Node meal = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
+            helper.assertTrue(meal.commit(f.level, f.worker) instanceof Outcome.Done, "the only near-end seat shares the remote cake");
+            helper.assertValueEqual(f.level.getBlockState(far.above()).getValue(net.minecraft.world.level.block.CakeBlock.BITES), 1,
+                "one shared meal advances the native cake by exactly one bite");
+            helper.assertTrue(f.level.getBlockState(f.at.above()).isAir(), "no duplicate cake appears beside the diner");
+        }
+        helper.succeed();
+    }
+
+    static final class Fixture implements AutoCloseable {
         final ServerLevel level;
         final Colony colony;
         final ColonyFront front;
         final BlockPos at;
         final BlockPos chair;
-        final SimpleContainer display = new SimpleContainer(2);
+        final Container display;
         final ResidentEntity person;
         final TestWorker worker;
         final LivingPresence living;
         final Dining dining;
         UUID zone;
 
-        Fixture(GameTestHelper helper) {
+        Fixture(GameTestHelper helper) { this(helper, Blocks.GOLD_BLOCK.defaultBlockState()); }
+
+        Fixture(GameTestHelper helper, net.minecraft.world.level.block.state.BlockState tableBlock) {
             level = helper.getLevel();
             colony = Colonies.mint(level.getServer());
             front = ColonyFront.of(colony);
@@ -267,7 +301,8 @@ public final class DiningGameTests {
                 level.setBlockAndUpdate(floor.above(), Blocks.AIR.defaultBlockState());
                 level.setBlockAndUpdate(floor.above(2), Blocks.AIR.defaultBlockState());
             }
-            level.setBlockAndUpdate(at, Blocks.GOLD_BLOCK.defaultBlockState());
+            level.setBlockAndUpdate(at, tableBlock);
+            display = DiningTables.inventory(level, at).orElseGet(() -> new SimpleContainer(2));
             level.setBlockAndUpdate(chair, Blocks.OAK_STAIRS.defaultBlockState());
             DISPLAYS.put(WorldPos.of(level, at), display);
             person = PersonBody.RESIDENT.get().create(level);
@@ -296,7 +331,7 @@ public final class DiningGameTests {
         public void close() { dining.clear(); person.discard(); DISPLAYS.remove(WorldPos.of(level, at)); colony.raze(); }
     }
 
-    private static final class TestWorker implements Worker {
+    static final class TestWorker implements Worker {
         final ResidentEntity person;
         List<ItemStack> supplied = List.of();
         TestWorker(ResidentEntity person) { this.person = person; }
