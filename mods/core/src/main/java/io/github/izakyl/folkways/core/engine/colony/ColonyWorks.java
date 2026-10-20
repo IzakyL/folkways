@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.engine.colony;
 
 import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.base.task.Cleanup;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyContext;
@@ -252,9 +253,11 @@ public final class ColonyWorks extends Stretch implements Colony {
 
     private void forgetAsked(ResourceLocation owner) {
         waiting.removeIf(one -> one.owner.equals(owner));
-        for (Asked one : List.copyOf(asked.values())) {
-            if (one.from.owner.equals(owner)) {
-                forget(one);
+        try (Cleanup cleanup = new Cleanup("Colony " + id() + " forgetting work from " + owner)) {
+            for (Asked one : List.copyOf(asked.values())) {
+                if (one.from.owner.equals(owner)) {
+                    cleanup.run("withdraw " + one.node, () -> forget(one));
+                }
             }
         }
     }
@@ -266,7 +269,11 @@ public final class ColonyWorks extends Stretch implements Colony {
         rules.clear();
         Stores.ruled(id(), Map.of());
         waiting.clear();
-        List.copyOf(asked.values()).forEach(this::forget);
+        try (Cleanup cleanup = new Cleanup("Colony " + id() + " clearing work")) {
+            for (Asked one : List.copyOf(asked.values())) {
+                cleanup.run("withdraw " + one.from.owner + " " + one.node, () -> forget(one));
+            }
+        }
     }
 
     private void forget(Asked gone) {
@@ -590,13 +597,18 @@ public final class ColonyWorks extends Stretch implements Colony {
 
     @Override
     protected void ended(Closing why) {
-        ColonyLifecycle.closed(this, why);
-        clearWork();
-        scopes.clear();
-        services.clear();
-        settled = false;
-        if (why == Closing.RAZED) {
-            colony.keeps().clear();
+        try (Cleanup cleanup = new Cleanup("Closing colony " + id() + " as " + why)) {
+            try {
+                cleanup.run("listeners", () -> ColonyLifecycle.closed(this, why));
+                cleanup.run("work", this::clearWork);
+            } finally {
+                scopes.clear();
+                services.clear();
+                settled = false;
+                if (why == Closing.RAZED) {
+                    cleanup.run("keeps", () -> colony.keeps().clear());
+                }
+            }
         }
     }
 
@@ -673,14 +685,22 @@ public final class ColonyWorks extends Stretch implements Colony {
             if (shared != null) {
                 services.remove(owner, shared);
             }
-            endings.forEach(callback -> callback.accept(why));
-            if (scopes.stream().noneMatch(scope -> scope.owner.equals(owner))) {
-                workshops.forget(owner);
-                stores.forget(owner);
-                withheld.forget(owner);
-                rules.forget(owner);
-                Stores.ruled(id(), rules.all());
-                forgetAsked(owner);
+            try (Cleanup cleanup = new Cleanup("Closing colony " + id() + " owner " + owner + " as " + why)) {
+                try {
+                    int index = 0;
+                    for (Consumer<Closing> callback : endings) {
+                        cleanup.run("callback " + index++, () -> callback.accept(why));
+                    }
+                } finally {
+                    if (scopes.stream().noneMatch(scope -> scope.owner.equals(owner))) {
+                        cleanup.run("workshops", () -> workshops.forget(owner));
+                        cleanup.run("stores", () -> stores.forget(owner));
+                        cleanup.run("withheld stores", () -> withheld.forget(owner));
+                        cleanup.run("rules", () -> rules.forget(owner));
+                        cleanup.run("published rules", () -> Stores.ruled(id(), rules.all()));
+                        cleanup.run("asked work", () -> forgetAsked(owner));
+                    }
+                }
             }
         }
     }
