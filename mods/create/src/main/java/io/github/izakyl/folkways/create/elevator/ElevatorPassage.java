@@ -23,12 +23,11 @@ public final class ElevatorPassage implements Passage {
         if (server == null || lifts == null) {
             return List.of();
         }
-        long now = server.overworld().getGameTime();
         List<Hop> hops = new ArrayList<>();
         for (ElevatorRef lift : lifts.all()) {
             ElevatorController controller = ElevatorDispatch.controller(server, colony.id(), lift).orElse(null);
             ElevatorNetwork.View view = controller == null ? null : controller.view().orElse(null);
-            if (view == null || !view.powered() || view.seats().isEmpty() || controller.retired()) {
+            if (view == null || !view.powered() || view.places().isEmpty() || controller.retired()) {
                 continue;
             }
             // The lift need not be here now, and being full does not remove a floor from the network.
@@ -37,9 +36,8 @@ public final class ElevatorPassage implements Passage {
                     if (from.y() == to.y()) {
                         continue;
                     }
-                    long ticks = Math.max(1L, controller.estimate(from.y(), to.y(), now) - now);
-                    hops.add(new Hop(lift.service(), from.platform(), to.platform(),
-                        new ElevatorFare(colony.id(), lift, from.y(), to.y(), ticks)));
+                    hops.add(new Hop(lift.service(), from.waiting(), to.platform(),
+                        new ElevatorFare(colony.id(), lift, from.y(), to.y(), controller.forecast())));
                 }
             }
         }

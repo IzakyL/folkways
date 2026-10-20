@@ -109,6 +109,7 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
       while (Date.now() - started < 300_000) {
         const state = await sample(server, founded.colony_id, residents.map(one => one.uuid), scenery.dining.tables, o);
         warmup.push(state);
+        if (warmup.length % 10 === 0) run.note("warmup", warmup);
         if (state.portions >= 8 && state.people.some((one: any) => cooks.includes(one.uuid) && KITCHEN_WORK.has(one.doing))) {
           ready = true; break;
         }
@@ -121,11 +122,7 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     }
     expect(ready, "real table replenishment and active native kitchen work must be ready before filming").toBe(true);
     await licenseCrewFast(server, diners.map(uuid => ({ uuid, trades: [] })));
-    // Scene blocking only: put the diners near the ground-floor lift entrance and give each an appetite through real work exhaustion.
-    for (const [i, uuid] of diners.entries()) {
-      const post = at(-6 + i * 1.5, -8);
-      await world.command(server, `tp ${uuid} ${post.x + 0.5} ${post.y} ${post.z + 0.5}`);
-    }
+    // Rehearsal journeys remain physical: never move an actor off a cabin or landing between tasks.
     await server.run(APPETITE, { uuids: diners });
     await tick.freeze(server, false);
     let seated = false;
@@ -135,16 +132,16 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
       while (Date.now() - started < 60_000) {
         const state = await sample(server, founded.colony_id, residents.map(one => one.uuid), scenery.dining.tables, o);
         boarding.push(state);
-        if (state.people.some((one: any) => diners.includes(one.uuid) && one.dining && one.riding)) { seated = true; break; }
+        if (state.people.some((one: any) => diners.includes(one.uuid) && one.dining && one.seatedAtTable)) { seated = true; break; }
         await sleepMs(500);
       }
     } finally { await tick.freeze(server, true); run.note("boarding", boarding); }
-    expect(seated, "a diner must genuinely ride to the upstairs restaurant and start eating before the take").toBe(true);
+    expect(seated, "a diner must walk aboard the standing elevator, reach the upstairs restaurant and start eating before the take").toBe(true);
     await run.shot(client, "composition", { subject: "Ground-floor kitchen, upstairs restaurant and the real elevator share one stationary frame",
       worldState: { cells, dining: scenery.dining, cooks, diners }, hard: true });
     const evidence: any[] = [];
     await promoClip(run, client, server, "01-kitchen-dining", {
-      subject: "One continuous view of the working kitchen, upstairs diners and residents riding the elevator",
+      subject: "One continuous view of the working kitchen, upstairs diners and residents standing in the moving elevator",
       worldState: { cells, dining: scenery.dining, cooks, diners, stagedTableFood: DINNER,
         kitchenOrder: DISH, kitchenRawSupply: RAW }, seconds: SECONDS,
       during: async () => {
@@ -163,12 +160,14 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
       },
     });
     run.note("activity", evidence);
-    const simultaneous = evidence.filter(state => state.people.some((one: any) => diners.includes(one.uuid) && one.dining && one.riding)
+    const simultaneous = evidence.filter(state => state.people.some((one: any) => diners.includes(one.uuid) && one.dining && one.seatedAtTable)
       && state.people.some((one: any) => cooks.includes(one.uuid) && KITCHEN_WORK.has(one.doing)));
     run.note("simultaneous", { samples: simultaneous.length, total: evidence.length });
     const occupied = evidence.filter(state => state.lift.passengers.length > 0);
+    run.note("standingCapacity", evidence.map(state => ({ seconds: state.seconds,
+      capacity: state.lift.capacity, free: state.lift.free })));
     run.note("journeys", occupied.map(state => ({ seconds: state.seconds, contactY: state.lift.contactY, passengers: state.lift.passengers })));
-    expect(occupied.length, "the same shot must contain real elevator passengers, excluding diners on chairs").toBeGreaterThanOrEqual(3);
+    expect(occupied.length, "the same shot must contain verified standing cabin passengers, excluding nearby residents and diners on chairs").toBeGreaterThanOrEqual(3);
     const heights = occupied.map(state => Number(state.lift.contactY));
     expect(Math.max(...heights) - Math.min(...heights), "occupied elevator must actually travel between floors on camera").toBeGreaterThan(3);
     expect(simultaneous.length, "the shot must actually show seated diners alongside kitchen work").toBeGreaterThanOrEqual(5);
@@ -185,7 +184,12 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
 });
 
 async function sample(server: MinecraftServer, colony: string, uuids: string[], tables: Vec[], origin: Vec): Promise<any> {
-  return { ...await server.run(ACTIVITY, { colony, uuids, tables }), lift: await readCookeryElevator(server, colony, origin) };
+  const activity = await server.run(ACTIVITY, { colony, uuids, tables });
+  const lift = await readCookeryElevator(server, colony, origin);
+  const standing = new Set(lift.passengers.map((one: any) => one.uuid));
+  return { ...activity, people: activity.people.map((one: any) => ({ ...one,
+    inLift: standing.has(one.uuid), seatedAtTable: one.dining && one.mounted && !standing.has(one.uuid),
+  })), lift };
 }
 
 const STAGE_DINING = defineTask<Record<string, any>, any>({
@@ -248,7 +252,7 @@ for (var id : args.strings("uuids")) {
     }
     people.add(Map.of("uuid", id, "doing", body.doing().map(doing -> doing.toward().orElse(doing.what()).getPath()).orElse("idle"),
         "dining", entity instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person && person.leisureMotion().equals("dining"),
-        "riding", entity.isPassenger(), "dined", dined,
+        "mounted", entity.isPassenger(), "dined", dined,
         "position", List.of(entity.getX(), entity.getY(), entity.getZ())));
 }
 int portions = 0;

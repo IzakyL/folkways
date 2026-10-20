@@ -104,6 +104,28 @@ public final class ElevatorHoldingsGameTests {
         }
     }
 
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void removingOneOfTwoHoldingsDoesNotRetireTheSharedPhysicalLift(GameTestHelper helper) {
+        Fixture fixture = new Fixture(helper);
+        fixture.hold();
+        fixture.hold();
+        Elevators service = new Elevators(fixture.colony);
+        try {
+            service.tick(helper.getLevel().getServer());
+            ElevatorController controller = fixture.controller();
+            fixture.holdings.removeFirst();
+            service.tick(helper.getLevel().getServer());
+            helper.assertTrue(service.all().equals(List.of(fixture.lift))
+                    && fixture.controller() == controller && !controller.retired(),
+                "another ordinary holding keeps the same physical lift and its standing-place reservations alive");
+            fixture.holdings.clear();
+            service.tick(helper.getLevel().getServer());
+            helper.assertTrue(controller.retired() && service.all().isEmpty(),
+                "only withdrawing the last holding retires the physical lift");
+        } finally { service.closed(Closing.SHUTDOWN); }
+        helper.succeed();
+    }
+
     private static final class Fixture {
         final GameTestHelper helper;
         final UUID id = UUID.randomUUID();

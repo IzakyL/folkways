@@ -170,8 +170,26 @@ The Cookery promo's wording lives in `tests/promo/film/promo-cookery.toml`. Run
 `npm run setup` before filming. The scene and recording are defined by
 `tests/promo/cookery.take.ts` and `tests/promo/cookery-elevator.ts`: a native kitchen
 downstairs, an open dining room upstairs, and a native Create elevator as their only
-vertical route. Residents actually board the elevator to reach their meal; its
-passengers are observed separately from residents seated at dining tables.
+vertical route. Residents walk into the cabin, stand on its moving floor, and walk
+out at the destination to reach their meal. The cabin has no seat cushions or rider
+mounts. Its capacity is discovered from usable standing places; evidence records
+both total capacity and free places rather than assuming two passengers. Verified
+cabin occupants with active journeys are observed separately from nearby residents
+on the landings and residents seated at dining tables.
+
+The elevator's `places`, `freePlaces` and `placeOf` describe standing room, replacing
+the earlier `seats`, `freeSeats` and `seatOf` model. They do not refer to native Create
+seat slots. Boarding, alighting and cancellation use ordinary movement and physical
+support on the cabin floor; cancellation does not teleport a resident to a landing.
+Dining chairs retain their native seated interaction.
+
+Passengers wait away from the doorway, then follow a path across the stopped cabin's
+actual blocks to their reserved standing places. The dispatcher waits for complete
+boarding, a clear entrance, and complete alighting before the next journey. Exit
+selection follows the onward route, including when another nearby ledge is closer.
+Route estimates use immutable queue snapshots with physical occupancy, reserved
+capacity, same-destination batching and the passenger's expected arrival time;
+asking for an estimate does not call the elevator or reserve a place.
 
 The continuous, 50-second real-time take is saved as
 `tests/out/promo/takes/cookery/01-kitchen-dining.mp4`, alongside production and elevator

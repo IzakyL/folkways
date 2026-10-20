@@ -36,12 +36,10 @@ export async function buildCookeryElevator(
   await fixed(-2, 16, -6, 2, 16, -2, "minecraft:weathered_cut_copper_slab[type=bottom]");
   const commands = [
     `fill ${commandPos(cabin(0, 0, 0))} ${commandPos(cabin(4, 0, 4))} minecraft:spruce_planks`,
-    // Copper covers the rear and side frame. The front-centre, including both seats, stays open to the camera.
+    // Copper covers the rear and side frame. The front-centre, including the standing cabin floor, stays open to the camera.
     `fill ${commandPos(cabin(0, 4, 3))} ${commandPos(cabin(4, 4, 4))} minecraft:weathered_cut_copper`,
     `fill ${commandPos(cabin(0, 4, 0))} ${commandPos(cabin(0, 4, 2))} minecraft:weathered_cut_copper`,
     `fill ${commandPos(cabin(4, 4, 0))} ${commandPos(cabin(4, 4, 2))} minecraft:weathered_cut_copper`,
-    `setblock ${commandPos(cabin(1, 1, 2))} create:yellow_seat`,
-    `setblock ${commandPos(cabin(3, 1, 2))} create:yellow_seat`,
     `setblock ${commandPos(cabin(2, 3, 4))} minecraft:lantern[hanging=true]`,
     `setblock ${commandPos(cabin(4, 1, 2))} minecraft:stripped_spruce_log[axis=y]`,
     `setblock ${commandPos(cabin(4, 2, 2))} minecraft:stripped_spruce_log[axis=y]`,
@@ -63,7 +61,7 @@ export async function buildCookeryElevator(
   await tick.sprint(server, 60);
   const delegated = await runColonyTask(server, MARK_MEMBERS, { player, colony_id, cells: [pulley.x, pulley.y, pulley.z] });
   let state = await readCookeryElevator(server, colony_id, origin);
-  for (let attempt = 0; attempt < 6 && (state.floors.length !== 2 || state.capacity !== 2 || !state.controller); attempt++) {
+  for (let attempt = 0; attempt < 6 && (state.floors.length !== 2 || state.capacity < 1 || !state.controller); attempt++) {
     await tick.sprint(server, 20);
     state = await readCookeryElevator(server, colony_id, origin);
   }
@@ -71,9 +69,9 @@ export async function buildCookeryElevator(
   // Create deliberately reports getSpeed()==0 while Minecraft ticks are frozen. Sprint restores
   // that freeze, so verify the real kinetic network's stored speed without advancing the scene.
   const powered = state.powered || state.frozen && state.pulleyTheoreticalSpeed !== 0 && !state.overstressed;
-  if (state.floors.length !== 2 || state.capacity !== 2 || !powered || !state.controller
+  if (state.floors.length !== 2 || state.capacity < 1 || !powered || !state.controller
       || !expectedFloors.every(y => state.floors.some((floor: any) => floor.y === y))) {
-    throw new Error(`Cookery elevator did not expose two powered, delegated landings and two seats: ${JSON.stringify(state)}`);
+    throw new Error(`Cookery elevator did not expose two powered, delegated landings and usable standing places: ${JSON.stringify(state)}`);
   }
   return {
     deck, pulley, motor: cabin(1, 15, 2), contacts, rise: RISE,
@@ -83,7 +81,7 @@ export async function buildCookeryElevator(
   };
 }
 
-/** Read the actual Create contraption and seat mapping; dining-chair passengers never count as lift riders. */
+/** Read verified standing places on the real Create cabin; nearby landings and dining chairs are excluded. */
 export async function readCookeryElevator(server: MinecraftServer, colony_id: string, origin: Vec) {
   return runColonyTask(server, STATUS, { colony_id, origin });
 }
@@ -150,33 +148,34 @@ if(found.isEmpty()){
  if(level.getBlockEntity(pos) instanceof ElevatorPulleyBlockEntity pulley){
   out.put("speed",pulley.getSpeed());out.put("assemblyError",String.valueOf(pulley.getLastAssemblyException()));
  }
- out.put("floors",List.of());out.put("capacity",0);out.put("passengers",List.of());out.put("seatOccupants",List.of());out.put("people",List.of());out.put("contactY",0);
+ out.put("floors",List.of());out.put("capacity",0);out.put("free",0);out.put("passengers",List.of());out.put("placeOccupants",List.of());out.put("people",List.of());out.put("contactY",0);
  return Sync.stamp(out);
 }
 var v=found.get();var colony=Colonies.of(ctx.server(),UUID.fromString(args.string("colony_id"))).orElseThrow();
 var controller=ElevatorDispatch.controller(ctx.server(),colony.id(),ref);
 out.put("vehicle",v.vehicle().toString());out.put("powered",v.powered());out.put("contactY",v.contactY());
-out.put("stopped",v.stoppedAt().orElse(Integer.MIN_VALUE));out.put("capacity",v.seats().size());out.put("free",v.freeSeats().size());out.put("controller",controller.isPresent());
+out.put("stopped",v.stoppedAt().orElse(Integer.MIN_VALUE));out.put("capacity",v.places().size());out.put("free",v.freePlaces().size());out.put("controller",controller.isPresent());
 out.put("floors",v.floors().stream().map(floor->Map.of("y",floor.y(),"cells",floor.platform().cells().stream().map(cell->point(cell.cell())).toList())).toList());
-var occupied=new LinkedHashMap<UUID,Integer>();var seatOccupants=new ArrayList<Object>();
-for(int seat:v.seats()){
- var occupant=network.occupant(ctx.server(),ref,seat);
- if(occupant.isPresent()){occupied.put(occupant.get(),seat);seatOccupants.add(Map.of("seat",seat,"uuid",occupant.get().toString()));}
-}
-out.put("seatOccupants",seatOccupants);
+var placeOccupants=new ArrayList<Object>();
 var passengers=new ArrayList<Object>();var people=new ArrayList<Object>();
 for(var resident:colony.residents()){
- var entity=level.getEntity(resident.id());if(entity==null)continue;
- boolean sameVehicle=entity.getVehicle()!=null&&entity.getVehicle().getUUID().equals(v.vehicle());
- boolean riding=sameVehicle&&occupied.containsKey(entity.getUUID());
- var one=new LinkedHashMap<String,Object>();one.put("uuid",entity.getUUID().toString());
- one.put("x",entity.getX());one.put("y",entity.getY());one.put("z",entity.getZ());
- one.put("inLift",riding);one.put("seated",entity.isPassenger());one.put("seat",riding?occupied.get(entity.getUUID()):-1);
- one.put("vehicle",entity.getVehicle()==null?"none":entity.getVehicle().getUUID().toString());
- one.put("doing",Bodies.of(entity).flatMap(body->body.doing()).map(Object::toString).orElse("idle"));
- one.put("request",controller.map(control->control.status(entity.getUUID()).toString()).orElse("unclaimed"));
- people.add(one);if(riding)passengers.add(one);
+ var entity=level.getEntity(resident.id());if(!(entity instanceof net.minecraft.world.entity.Mob body))continue;
+ var place=network.placeOf(ctx.server(),ref,body);
+ String request=controller.map(control->control.status(body.getUUID()).toString()).orElse("unclaimed");
+ // placeOf verifies physical support inside this cabin. A live journey also rules out a
+ // bystander on the stationary landing; dining chairs are separate native mounts.
+ boolean aboard=place.filter(v.places()::contains).isPresent()&&!body.isPassenger()
+  &&(request.equals("RIDING")||request.equals("ALIGHTING"));
+ boolean dining=body instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person&&person.leisureMotion().equals("dining");
+ var one=new LinkedHashMap<String,Object>();one.put("uuid",body.getUUID().toString());
+ one.put("x",body.getX());one.put("y",body.getY());one.put("z",body.getZ());
+ one.put("inLift",aboard);one.put("seatedAtTable",dining&&body.isPassenger());one.put("place",aboard?place.orElseThrow():-1);
+ one.put("doing",Bodies.of(body).flatMap(foundBody->foundBody.doing()).map(Object::toString).orElse("idle"));
+ one.put("request",request);
+ people.add(one);
+ if(aboard){passengers.add(one);placeOccupants.add(Map.of("place",place.orElseThrow(),"uuid",body.getUUID().toString()));}
 }
+out.put("placeOccupants",placeOccupants);
 out.put("people",people);out.put("passengers",passengers);
 return Sync.stamp(out);`,
     members: `static Map<String,Integer> point(BlockPos p){return Map.of("x",p.getX(),"y",p.getY(),"z",p.getZ());}`,

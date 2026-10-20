@@ -1,122 +1,107 @@
 package io.github.izakyl.folkways.create.elevator;
 
+import io.github.izakyl.folkways.core.api.resident.Conveyance;
 import io.github.izakyl.folkways.core.api.resident.Going;
 import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Doing;
+import io.github.izakyl.folkways.core.api.work.Doings;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.create.FolkwaysCreateConfig;
-import io.github.izakyl.folkways.create.transport.SeatedConveyance;
+import io.github.izakyl.folkways.create.transport.PassengerLanding;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 
-final class ElevatorConveyance extends SeatedConveyance<Integer> {
-
+/** Walking passengers remain ordinary, standing entities throughout their journey. */
+final class ElevatorConveyance implements Conveyance {
     private final ElevatorFare fare;
     private final Stances.Cells boarding;
-    private UUID rider;
+    private final Stances.Cells landing;
     private boolean requested;
-    private boolean rejected;
+    private Doing doing = Doing.open(Doings.WAITING);
 
     ElevatorConveyance(ElevatorFare fare, Stances.Cells boarding, Stances.Cells landing) {
-        super(boarding, landing, FolkwaysCreateConfig::seatTicks,
-            ElevatorPlugin.BOARDING, ElevatorPlugin.RIDING, ElevatorRefusal.UNAVAILABLE);
         this.fare = fare;
         this.boarding = boarding;
-    }
-
-    private Optional<ElevatorController> controller(ServerLevel level) {
-        return ElevatorDispatch.controller(level.getServer(), fare.colony(), fare.lift());
+        this.landing = landing;
     }
 
     @Override
     public Going step(ServerLevel level, Mob body, Set<WorldPos> to) {
-        rider = body.getUUID();
-        ElevatorController lift = controller(level).orElse(null);
-        if (lift != null) {
-            Set<BlockPos> cells = new LinkedHashSet<>();
-            for (WorldPos cell : boarding.cells()) {
-                if (cell.in(level)) {
-                    cells.add(cell.block(level));
-                }
-            }
-            if (Reach.stanceHolding(body.position(), cells).isPresent()) {
-                if (!requested && !rejected && lift.view().isPresent()) {
-                    requested = lift.request(rider, fare.from(), fare.to(), level.getGameTime());
-                    rejected = !requested;
-                }
-                if (requested) {
-                    lift.touch(rider, level.getGameTime());
-                }
-            }
+        var lift = ElevatorDispatch.controller(level.getServer(), fare.colony(), fare.lift()).orElse(null);
+        if (lift == null || !level.dimension().equals(fare.lift().dimension())) {
+            return new Going.Failed(ElevatorRefusal.UNAVAILABLE);
         }
-        return super.step(level, body, to);
+        if (!requested) {
+            if (!atPlatform(level, body)) {
+                walkToPlatform(level, body);
+                return Going.UNDERWAY;
+            }
+            requested = lift.request(body.getUUID(), fare.from(), fare.to(), level.getGameTime());
+            if (!requested) { return new Going.Failed(ElevatorRefusal.RIDE_CANCELLED); }
+        }
+        lift.touch(body.getUUID(), level.getGameTime());
+        PassengerLanding.at(level, landing, to).ifPresent(cell ->
+            lift.exitThrough(body.getUUID(), Set.of(WorldPos.of(level, cell))));
+        switch (lift.status(body.getUUID())) {
+            case WAITING -> {
+                doing = Doing.open(Doings.WAITING);
+                if (!atPlatform(level, body)) { walkToPlatform(level, body); }
+            }
+            case BOARDING -> {
+                doing = Doing.open(ElevatorPlugin.BOARDING);
+                lift.board(level.getServer(), body.getUUID(), body);
+            }
+            case RIDING -> {
+                doing = Doing.open(ElevatorPlugin.RIDING);
+                body.getNavigation().stop();
+            }
+            case ALIGHTING -> {
+                doing = Doing.open(ElevatorPlugin.BOARDING);
+                lift.alight(level.getServer(), body.getUUID(), body);
+                if (lift.status(body.getUUID()) == ElevatorController.Status.FINISHED) { return Going.ARRIVED; }
+            }
+            case FINISHED -> { return Going.ARRIVED; }
+            case FAILED -> { return new Going.Failed(ElevatorRefusal.RIDE_CANCELLED); }
+        }
+        return Going.UNDERWAY;
+    }
+
+    private Set<BlockPos> platform(ServerLevel level) {
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        for (WorldPos pos : boarding.cells()) { if (pos.in(level)) { cells.add(pos.block(level)); } }
+        return cells;
+    }
+
+    private boolean atPlatform(ServerLevel level, Mob body) {
+        return Reach.stanceHolding(body.position(), platform(level)).isPresent();
+    }
+
+    private void walkToPlatform(ServerLevel level, Mob body) {
+        if (!body.getNavigation().isDone()) { return; }
+        Set<BlockPos> goals = platform(level);
+        var traffic = level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, body.getBoundingBox().inflate(12));
+        goals.removeIf(cell -> {
+            double half = body.getBbWidth() / 2.0D;
+            var space = new net.minecraft.world.phys.AABB(cell.getX() + 0.5D - half, cell.getY(), cell.getZ() + 0.5D - half,
+                cell.getX() + 0.5D + half, cell.getY() + body.getBbHeight(), cell.getZ() + 0.5D + half);
+            return traffic.stream().anyMatch(other -> other != body && other.isAlive() && other.getBoundingBox().intersects(space));
+        });
+        if (goals.isEmpty()) { return; }
+        var path = body.getNavigation().createPath(goals, 0);
+        if (path != null) { body.getNavigation().moveTo(path, 1.0D); }
     }
 
     @Override
-    protected boolean available(ServerLevel level) {
-        return level.dimension().equals(fare.lift().dimension()) && controller(level).isPresent();
-    }
-
-    @Override
-    protected Optional<RefusalKind> boardingFailure(ServerLevel level) {
-        return rejected || requested && controller(level).map(lift -> lift.status(rider)
-                == ElevatorController.Status.FAILED).orElse(true)
-            ? Optional.of(ElevatorRefusal.RIDE_CANCELLED) : Optional.empty();
-    }
-
-    @Override
-    protected Going awaitVehicle(ServerLevel level) {
-        return requested && controller(level).map(lift -> lift.status(rider)
-            == ElevatorController.Status.BOARDING).orElse(false) ? Going.ARRIVED : Going.UNDERWAY;
-    }
-
-    @Override
-    protected Optional<Integer> freeSeat(ServerLevel level) {
-        return controller(level).flatMap(lift -> lift.seat(rider));
-    }
-
-    @Override
-    protected boolean occupied(ServerLevel level, Integer seat) {
-        return ElevatorDispatch.network().occupant(level.getServer(), fare.lift(), seat).isPresent();
-    }
-
-    @Override
-    protected boolean board(ServerLevel level, Integer seat, Mob body) {
-        return controller(level).map(lift -> lift.board(level.getServer(), rider, body)).orElse(false);
-    }
-
-    @Override
-    protected boolean atDestination(ServerLevel level) {
-        return controller(level).map(lift -> lift.status(rider) == ElevatorController.Status.ALIGHTING
-            && lift.view().map(view -> view.stoppedAt().orElse(Integer.MIN_VALUE) == fare.to()).orElse(false))
-            .orElse(false);
-    }
-
-    @Override
-    protected Optional<Integer> seatOf(ServerLevel level, Mob body) {
-        return ElevatorDispatch.network().seatOf(level.getServer(), fare.lift(), body);
-    }
-
-    @Override
-    protected void disembark(ServerLevel level, Integer seat, Mob body) {
-        controller(level).ifPresent(lift -> lift.alight(level.getServer(), rider, body));
-    }
-
-    @Override
-    protected boolean canRelease(ServerLevel level) {
-        // Cancellation in transit leaves the passenger aboard; the controller completes a safe drop-off.
-        return atDestination(level);
-    }
+    public Optional<Doing> doing() { return Optional.of(doing); }
 
     @Override
     public void release(ServerLevel level, Mob body) {
-        super.release(level, body);
-        controller(level).ifPresent(lift -> lift.cancel(body.getUUID()));
+        // The controller owns a cancelled passenger until its normal walk out finishes at a landing.
+        ElevatorDispatch.controller(level.getServer(), fare.colony(), fare.lift())
+            .ifPresent(lift -> lift.cancel(body.getUUID()));
     }
 }
