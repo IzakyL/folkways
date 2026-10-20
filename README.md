@@ -88,7 +88,10 @@ The Cookery extension supplies native appliance production, flooded-rice farming
 kitchen racks, seed reserves and thirteen lessons. The creative supply box belongs to
 Folkways Vanilla and also works without Cookery.
 
-All installed Folkways jars must be the same version. Folkways also needs these mods installed alongside it:
+All installed Folkways jars must come from the same build. Their full version includes a shared
+content hash after `+`; update all installed Folkways modules together. The loader and Core reject
+mixed builds, including old jars without the build identity. Optional modules remain optional.
+Folkways also needs these mods installed alongside it:
 
 | Mod | Version |
 | --- | --- |
