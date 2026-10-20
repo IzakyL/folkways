@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.engine.colony;
 
+import io.github.izakyl.folkways.base.task.Cleanup;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,15 +24,20 @@ abstract class Stretch {
             return;
         }
         closing = true;
-        for (Stretch nested : List.copyOf(inner)) {
-            nested.closed(why);
+        try (Cleanup cleanup = new Cleanup("Closing " + getClass().getName() + " as " + why)) {
+            try {
+                for (Stretch nested : List.copyOf(inner)) {
+                    cleanup.run("nested " + nested.getClass().getName(), () -> nested.closed(why));
+                }
+            } finally {
+                inner.clear();
+                if (outer != null) {
+                    outer.inner.remove(this);
+                    outer = null;
+                }
+                cleanup.run("ended", () -> ended(why));
+            }
         }
-        inner.clear();
-        if (outer != null) {
-            outer.inner.remove(this);
-            outer = null;
-        }
-        ended(why);
     }
 
     final boolean over() {

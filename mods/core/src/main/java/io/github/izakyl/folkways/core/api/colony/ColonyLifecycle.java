@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.api.colony;
 
+import io.github.izakyl.folkways.base.task.Cleanup;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,12 @@ public final class ColonyLifecycle {
     }
 
     public static void closed(Colony colony, Closing why) {
-        LISTENERS.forEach(listener -> listener.closed(colony, why));
+        try (Cleanup cleanup = new Cleanup("Closing colony " + colony.id() + " listeners as " + why)) {
+            int index = 0;
+            for (Listener listener : LISTENERS) {
+                cleanup.run("listener " + index++ + " " + listener.getClass().getName(),
+                    () -> listener.closed(colony, why));
+            }
+        }
     }
 }
