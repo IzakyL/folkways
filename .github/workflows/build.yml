@@ -82,10 +82,50 @@ jobs:
             run/gametest/logs/**
             run/gametest/crash-reports/**
           if-no-files-found: warn
+  client-smoke:
+    needs: build
+    name: Client smoke (founding and batch compost)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: gradle/actions/setup-gradle@v5
+      - uses: actions/cache@v5
+        with:
+          path: .blockwright-store
+          key: blockwright-mods-${{ hashFiles('blockwright.toml') }}
+      - name: Install Linux client libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri libx11-6 libxrandr2 libxcursor1 libxi6 libxinerama1 libxxf86vm1 libasound2t64
+      - run: npm ci
+      - run: npm run setup
+      - name: Run focused real-client smoke tests
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: ${{ github.workspace }}/tests/out/e2e/playwright/junit.xml
+        run: >-
+          npm exec -- playwright test --config tests/e2e/playwright.config.ts
+          tests/e2e/founding-smoke.spec.ts tests/e2e/batch-compost.spec.ts
+          --workers=1 --reporter=line,junit
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: client-smoke-results
+          path: tests/out/
+          if-no-files-found: warn
   nightly:
     # Every push to master replaces the "nightly" prerelease with that commit's jars.
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: [build, game-tests]
+    needs: [build, game-tests, client-smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
