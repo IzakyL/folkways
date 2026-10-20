@@ -11,6 +11,9 @@ displayURL = "https://github.com/IzakyL/folkways"
 description = "Settlers who plan their own work. Found a colony, mark out fields, pens and fishing waters, and the settlement schedules the whole day's labour for itself."
 authors = "IzakyL"
 
+[modproperties.${mod_id}]
+folkwaysBuildIdentity = "${build_identity}"
+
 [[dependencies.${mod_id}]]
 modId = "minecraft"
 type = "required"

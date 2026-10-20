@@ -70,6 +70,25 @@ def jobsTest = tasks.register("jobsTest", JavaExec) {
 }
 tasks.named("check") { dependsOn jobsTest }
 
+def buildTestClasses = layout.buildDirectory.dir("module-builds-test")
+def compileModuleBuildsTest = tasks.register("compileModuleBuildsTest", JavaCompile) {
+    source file("src/main/java/io/github/izakyl/folkways/base/build/ModuleBuilds.java")
+    source rootProject.file("tests/java/io/github/izakyl/folkways/base/build/ModuleBuildsTest.java")
+    classpath = files()
+    destinationDirectory = buildTestClasses
+    options.release = project.java_release.toInteger()
+    options.encoding = "UTF-8"
+}
+def moduleBuildsTest = tasks.register("moduleBuildsTest", JavaExec) {
+    dependsOn compileModuleBuildsTest
+    classpath = files(buildTestClasses)
+    mainClass = "io.github.izakyl.folkways.base.build.ModuleBuildsTest"
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(project.java_release.toInteger())
+    }
+}
+tasks.named("check") { dependsOn moduleBuildsTest }
+
 // Native optional-integration tests share this mod's package and module, without linking its main source to Cookery.
 dependencies {
     cookeryTestImplementation project(":cookery")

@@ -11,6 +11,9 @@ displayURL = "https://github.com/IzakyL/folkways"
 description = "The colony engine the Folkways mods stand on: residents who plan their own work, the paths they walk, and the colony book and panel. On its own it adds no work for them to do; install Folkways Vanilla for that."
 authors = "IzakyL"
 
+[modproperties.${mod_id}]
+folkwaysBuildIdentity = "${build_identity}"
+
 [[dependencies.${mod_id}]]
 modId = "minecraft"
 type = "required"

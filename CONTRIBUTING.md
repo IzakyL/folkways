@@ -76,6 +76,16 @@ Measure large-colony tick costs separately from the reduced warehouse trips befo
 CPU work stays bounded, and results return to the owning thread before game state changes.
 The `jobsTest` suite runs as part of Gradle `check` and CI.
 
+All five modules embed the same content-based build identity in their mod properties. Core checks
+the identities of the installed Folkways modules before initialization and rejects mixed or legacy
+jars without an identity. The identity also qualifies the module version and its exact loader dependency
+ranges, so new extensions cannot silently load against a legacy Core. Optional modules remain optional.
+The identity covers production sources, resources, effective Gradle properties (including `-P` overrides)
+and pinned integration dependencies; it excludes machine paths,
+timestamps and CI run numbers. It also works with local edits and offline source archives without Git.
+Use `./gradlew printBuildIdentity` to inspect it. This is separate from the network protocol version;
+it checks modules within one installation, not client/server protocol compatibility.
+
 ## Tests
 
 | Command | What it runs |

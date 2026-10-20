@@ -2,6 +2,8 @@ plugins {
     id "net.neoforged.moddev" version "2.0.141"
 }
 
+apply from: "gradle/identity.gradle"
+
 // The root builds no mod of its own: it runs the modules under mods/ together for the game tests.
 
 def modProjects = [
@@ -96,7 +98,7 @@ tasks.named("jar") {
 }
 
 // Every mod's jar into build/libs, where the e2e instances find them.
-def collectJars = tasks.register("collectJars", Copy) {
+def collectJars = tasks.register("collectJars", Sync) {
     modProjects.values().each { path -> from(project(path).tasks.named("jar")) }
     into layout.buildDirectory.dir("libs")
 }

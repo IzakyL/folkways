@@ -3,6 +3,7 @@ package io.github.izakyl.folkways;
 import io.github.izakyl.folkways.core.api.Declaring;
 import io.github.izakyl.folkways.base.FolkwaysMixinPlugin;
 import io.github.izakyl.folkways.base.Ledger;
+import io.github.izakyl.folkways.base.build.ModuleBuilds;
 import io.github.izakyl.folkways.core.api.Relating;
 import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Contributions;
@@ -38,6 +39,7 @@ import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.net.ColonyOverviews;
 import io.github.izakyl.folkways.front.ui.UiRegistrations;
 import java.util.Set;
+import java.util.HashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.minecraft.server.MinecraftServer;
@@ -45,6 +47,8 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.ModLoader;
+import net.neoforged.fml.ModLoadingException;
+import net.neoforged.fml.ModLoadingIssue;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.config.ModConfigEvent;
@@ -67,6 +71,7 @@ public final class FolkwaysMod {
     private final Labor labor = new Labor();
 
     public FolkwaysMod(IEventBus modBus, ModContainer container) {
+        verifyModuleBuilds();
         container.registerConfig(ModConfig.Type.SERVER, FolkwaysConfig.SPEC);
         container.registerConfig(ModConfig.Type.CLIENT, FolkwaysClientConfig.SPEC);
         fitTheShell(modBus);
@@ -87,6 +92,21 @@ public final class FolkwaysMod {
         });
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onServerStopped);
+    }
+
+    private static void verifyModuleBuilds() {
+        var installed = new HashMap<String, Object>();
+        for (var mod : ModList.get().getMods()) {
+            if (ModuleBuilds.MODULES.contains(mod.getModId())) {
+                installed.put(mod.getModId(), mod.getModProperties().get(ModuleBuilds.PROPERTY));
+            }
+        }
+        var issues = ModuleBuilds.mismatches(installed).stream().map(mismatch ->
+            // Loader diagnostics precede the game's resource/language catalogs, like essential mixin errors.
+            ModLoadingIssue.error("Folkways module {0} has build {1}; expected {2}. "
+                + "Install all Folkways modules from the same build.",
+                mismatch.module(), mismatch.found(), mismatch.expected())).toList();
+        if (!issues.isEmpty()) throw new ModLoadingException(issues);
     }
 
     private static void fitTheShell(IEventBus modBus) {

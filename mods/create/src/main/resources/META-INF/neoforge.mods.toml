@@ -11,6 +11,9 @@ displayURL = "https://github.com/IzakyL/folkways"
 description = "What Create brings to a Folkways colony: residents drive its trains, send and collect parcels through its packaging and postboxes, lay its track, and take a schematic as a build order."
 authors = "IzakyL"
 
+[modproperties.${mod_id}]
+folkwaysBuildIdentity = "${build_identity}"
+
 [[dependencies.${mod_id}]]
 modId = "minecraft"
 type = "required"

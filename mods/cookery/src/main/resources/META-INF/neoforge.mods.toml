@@ -11,6 +11,9 @@ displayURL = "https://github.com/IzakyL/folkways"
 description = "Residents prepare, grow, cook and store Kaleidoscope Cookery food with its native appliances."
 authors = "IzakyL"
 
+[modproperties.${mod_id}]
+folkwaysBuildIdentity = "${build_identity}"
+
 [[dependencies.${mod_id}]]
 modId = "minecraft"
 type = "required"

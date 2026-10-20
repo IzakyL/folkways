@@ -1,0 +1,36 @@
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+
+// A content identity works for clean checkouts, local edits and source archives without Git or a network.
+// Keep timestamps, machine paths and CI run numbers out of it; all modules in this source tree share it.
+def identitySources = fileTree(rootDir) {
+    include "mods/*/src/main/**", "mods/*/build.gradle", "gradle/**"
+    include "build.gradle", "settings.gradle", "gradle.properties", "blockwright.toml"
+    exclude "mods/*/build/**", "**/.gradle/**"
+}
+def digest = MessageDigest.getInstance("SHA-256")
+def declared = new Properties()
+file("gradle.properties").withInputStream { declared.load(it) }
+declared.stringPropertyNames().findAll { !it.startsWith("org.gradle.") }.sort().each { key ->
+    // -P overrides must not disguise a different loader, library or Java target as the same build.
+    String value = String.valueOf(findProperty(key))
+    digest.update(("property:" + key + "\u0000" + value + "\u0000").getBytes(StandardCharsets.UTF_8))
+}
+identitySources.files.sort { relativePath(it).replace('\\', '/') }.each { source ->
+    String name = relativePath(source).replace('\\', '/')
+    byte[] bytes = source.bytes
+    // Git's text files use LF. Also accept source archives unpacked by tools that convert text to CRLF.
+    if (name ==~ /.*\.(java|gradle|properties|toml|json|md|txt|cfg|mcmeta|accesswidener)$/) {
+        bytes = new String(bytes, StandardCharsets.UTF_8).replace("\r\n", "\n").getBytes(StandardCharsets.UTF_8)
+    }
+    digest.update(name.getBytes(StandardCharsets.UTF_8))
+    digest.update((byte) 0)
+    digest.update(Long.toString(bytes.length).getBytes(StandardCharsets.US_ASCII))
+    digest.update((byte) 0)
+    digest.update(bytes)
+}
+ext.folkwaysBuildIdentity = "sha256:" + HexFormat.of().formatHex(digest.digest())
+
+tasks.register("printBuildIdentity") {
+    doLast { println rootProject.folkwaysBuildIdentity }
+}

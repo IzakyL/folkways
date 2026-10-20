@@ -1,7 +1,8 @@
 // What every Folkways mod project shares. A project sets modId and modName before applying this.
 
 group = project.maven_group
-version = project.mod_version
+// Exact loader ranges also reject new extensions installed beside a legacy Core without the build guard.
+version = "${project.mod_version}+${rootProject.folkwaysBuildIdentity.substring('sha256:'.length())}"
 
 base {
     archivesName = "${project.modName}-neoforge-${project.minecraft_version}"
@@ -74,6 +75,7 @@ tasks.withType(JavaCompile).configureEach {
 def expanded = [
     "mod_id": project.modId,
     "version": project.version,
+    "build_identity": rootProject.folkwaysBuildIdentity,
     "loader_version_range": project.loader_version_range,
     "minecraft_requirement": project.minecraft_requirement,
     "neoforge_requirement": project.neoforge_requirement,
