@@ -285,7 +285,7 @@ public final class DraftRoadGameTests {
             "a zone is the wrong mark");
         Drawn.Refused back = DraftKit.refused(helper, draw(pattern, flat, settings(pattern),
             new BlockPos(0, 64, 0), new BlockPos(20, 64, 0), new BlockPos(2, 64, 1)));
-        helper.assertTrue(DraftKit.explanationKey(back).equals("folkways.draft.error.road.bend"),
+        helper.assertTrue(DraftKit.explanationKey(back).equals(DraftKit.key(pattern, "error.road.bend")),
             "doubling back is explained");
         DraftKit.Ground cliff = new DraftKit.Ground(64);
         for (int x = 10; x <= 40; x++) {
@@ -295,7 +295,7 @@ public final class DraftRoadGameTests {
         }
         Drawn.Refused steep = DraftKit.refused(helper, draw(pattern, cliff, settings(pattern),
             new BlockPos(0, 64, 0), new BlockPos(14, 84, 0)));
-        helper.assertTrue(Set.of("folkways.draft.error.road.grade", "folkways.draft.error.road.point_grade")
+        helper.assertTrue(Set.of(DraftKit.key(pattern, "error.road.grade"), DraftKit.key(pattern, "error.road.point_grade"))
             .contains(DraftKit.explanationKey(steep)), "too steep: " + steep.detail());
         DraftKit.Ground lake = new DraftKit.Ground(64).water(at -> at.getX() >= 4 && at.getX() <= 40 && at.getY() <= 64);
         for (int x = 4; x <= 40; x++) {
@@ -305,12 +305,12 @@ public final class DraftRoadGameTests {
         }
         Drawn.Refused wide = DraftKit.refused(helper, draw(pattern, lake, settings(pattern),
             new BlockPos(0, 64, 0), new BlockPos(46, 64, 0)));
-        helper.assertTrue(Set.of("folkways.draft.error.road.water_depth", "folkways.draft.error.road.water_crossing")
+        helper.assertTrue(Set.of(DraftKit.key(pattern, "error.road.water_depth"), DraftKit.key(pattern, "error.road.water_crossing"))
             .contains(DraftKit.explanationKey(wide)),
             "a wide water points at the bridge: " + wide.detail());
         Drawn.Refused narrow = DraftKit.refused(helper, draw(pattern, flat, settings(pattern).count("width", 2),
             new BlockPos(0, 64, 0), new BlockPos(20, 64, 0)));
-        helper.assertTrue(DraftKit.explanationKey(narrow).equals("folkways.draft.error.road.width"),
+        helper.assertTrue(DraftKit.explanationKey(narrow).equals(DraftKit.key(pattern, "error.road.width")),
             "a width out of range is explained");
         helper.succeed();
     }

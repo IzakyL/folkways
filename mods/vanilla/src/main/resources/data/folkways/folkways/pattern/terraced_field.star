@@ -39,6 +39,13 @@ lang = {
         "fence": "Fence",
         "gate": "Gate",
         "lamp": "Lamps",
+        "error.field.ground": "No ground under the field",
+        "error.field.size": "A terraced field must be 6–56 blocks on each side",
+        "error.field.height": "Terrace height must be 1–4 blocks",
+        "error.field.spacing": "Water spacing must be 2–8 blocks",
+        "error.material": "Choose material for %s",
+        "error.field.water": "The field is under water",
+        "error.field.steep": "Too steep to terrace",
     },
     "zh_cn": {
         "title": "梯田",
@@ -54,6 +61,13 @@ lang = {
         "fence": "栅栏",
         "gate": "栅栏门",
         "lamp": "灯具",
+        "error.field.ground": "田地下方没有地面",
+        "error.field.size": "梯田每边须为 6–56 格",
+        "error.field.height": "梯田台阶高须为 1–4 格",
+        "error.field.spacing": "水眼间距须为 2–8 格",
+        "error.material": "请为%s选择材料",
+        "error.field.water": "田地大部分在水下",
+        "error.field.steep": "坡度太陡，无法修成梯田",
     },
     "zh_hk": {
         "title": "梯田",
@@ -69,6 +83,13 @@ lang = {
         "fence": "柵欄",
         "gate": "柵欄門",
         "lamp": "燈具",
+        "error.field.ground": "田地下方沒有地面",
+        "error.field.size": "梯田每邊須為 6–56 格",
+        "error.field.height": "梯田每級高度須為 1–4 格",
+        "error.field.spacing": "水眼間距須為 2–8 格",
+        "error.material": "請為%s選擇材料",
+        "error.field.water": "田地大部分在水下",
+        "error.field.steep": "坡度太陡，無法修成梯田",
     },
     "zh_tw": {
         "title": "梯田",
@@ -84,6 +105,13 @@ lang = {
         "fence": "柵欄",
         "gate": "柵欄門",
         "lamp": "燈具",
+        "error.field.ground": "田地下方沒有地面",
+        "error.field.size": "梯田每邊須為 6–56 格",
+        "error.field.height": "梯田每級高度須為 1–4 格",
+        "error.field.spacing": "水眼間距須為 2–8 格",
+        "error.material": "請為%s選擇材料",
+        "error.field.water": "田地大部分在水下",
+        "error.field.steep": "坡度太陡，無法修成梯田",
     },
 }
 
@@ -128,7 +156,7 @@ def ground(site, work, seen):
         for x in range(work.width):
             found = height_at(site, work, x, z, seen)
             if found == None:
-                reject("folkways.draft.error.field.ground")
+                reject("error.field.ground")
             row.append(found)
         grid.append(row)
     return grid
@@ -384,18 +412,18 @@ def palette(items):
 def draw(site):
     zone = site.zone.sized(height = 1)
     if zone.width < 6 or zone.depth < 6 or zone.width > 56 or zone.depth > 56:
-        reject("folkways.draft.error.field.size")
+        reject("error.field.size")
     rise = site.count("rise")
     spacing = site.count("spacing")
     if rise < 1 or rise > 4:
-        reject("folkways.draft.error.field.height")
+        reject("error.field.height")
     if spacing < 2 or spacing > 8:
-        reject("folkways.draft.error.field.spacing")
+        reject("error.field.spacing")
     for key in ["soil", "bund", "wall", "cap", "path", "steps", "fence", "gate", "lamp"]:
         if not site.items(key):
-            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
+            reject("error.material", translated(key))
     if site.survey(zone).water > 0.2:
-        reject("folkways.draft.error.field.water")
+        reject("error.field.water")
     seen = {}
     work = zone
     grid = ground(site, work, seen)
@@ -423,7 +451,7 @@ def draw(site):
             break
         count = 0
     if count == 0:
-        reject("folkways.draft.error.field.steep")
+        reject("error.field.steep")
     levels = [nearest(bottom) + (count - 1 - k) * rise for k in range(count)]
     edges = lips(surface, levels, rise, least)
 

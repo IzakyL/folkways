@@ -149,22 +149,22 @@ public final class DockPatternGameTests {
         DraftKit.Filled settings = defaults();
         Drawn dry = draw(pattern, new Hint.Path(List.of(BlockPos.ZERO, new BlockPos(0, 0, 20))), settings,
             new DraftKit.Ground(-1));
-        helper.assertTrue(DraftKit.explanationKey(refused(helper, dry)).equals("folkways.draft.error.dock.end"),
+        helper.assertTrue(DraftKit.explanationKey(refused(helper, dry)).equals(DraftKit.key(pattern, "error.dock.end")),
             "dry land is refused");
         Drawn backwards = draw(pattern, new Hint.Path(List.of(new BlockPos(0, 2, 20), new BlockPos(0, 2, -3))),
             settings, lake(1));
-        helper.assertTrue(DraftKit.explanationKey(refused(helper, backwards)).equals("folkways.draft.error.dock.start"),
+        helper.assertTrue(DraftKit.explanationKey(refused(helper, backwards)).equals(DraftKit.key(pattern, "error.dock.start")),
             "a path from the water is refused");
         Drawn bent = draw(pattern, new Hint.Path(List.of(new BlockPos(0, 2, -3), new BlockPos(0, 2, 8),
             new BlockPos(6, 2, 16))), settings, lake(1));
         refused(helper, bent);
         Drawn stub = draw(pattern, new Hint.Path(List.of(new BlockPos(0, 2, -3), new BlockPos(0, 2, 3))),
             settings, lake(1));
-        helper.assertTrue(DraftKit.explanationKey(refused(helper, stub)).equals("folkways.draft.error.dock.reach"),
+        helper.assertTrue(DraftKit.explanationKey(refused(helper, stub)).equals(DraftKit.key(pattern, "error.dock.reach")),
             "a stub is refused");
         Drawn cliff = draw(pattern, new Hint.Path(List.of(new BlockPos(0, 8, -3), new BlockPos(0, 8, 20))),
             settings, lake(7));
-        helper.assertTrue(DraftKit.explanationKey(refused(helper, cliff)).equals("folkways.draft.error.dock.bank"),
+        helper.assertTrue(DraftKit.explanationKey(refused(helper, cliff)).equals(DraftKit.key(pattern, "error.dock.bank")),
             "a cliff is refused");
         Drawn wide = draw(pattern, new Hint.Path(List.of(new BlockPos(0, 2, -3), new BlockPos(0, 2, 20))),
             defaults().count("width", 12), lake(1));

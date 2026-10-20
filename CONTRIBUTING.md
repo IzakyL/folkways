@@ -99,9 +99,10 @@ the LDLib2 UI adapter in `tests/ldlib2/`.
 
 - Match the surrounding code: its naming, comment density and idiom.
 - No tabs and no trailing whitespace. `./gradlew check` enforces this.
-- Every player-facing string goes in all four catalogs under `assets/folkways/lang/`:
+- Mod-owned player-facing strings go in all four catalogs under `assets/folkways/lang/`:
   `en_us.json`, `zh_cn.json`, `zh_hk.json` (Hong Kong) and `zh_tw.json` (Taiwan).
-  Use each region's Minecraft terminology, not just converted characters.
+  Pattern-owned strings belong in the pattern's `lang` dictionary. Use each region's
+  Minecraft terminology, not just converted characters.
 - Keep translated text as a `Component` until it reaches the client. Use `Pages.text`
   / `Pages.readText` for UI sync and `Line.text` for information cards; resolving a name
   with `getString()` on the server loses the player's language. Translation arguments
@@ -109,13 +110,17 @@ the LDLib2 UI adapter in `tests/ldlib2/`.
 - Run `npm run test:i18n` after editing translations. It also runs in `test:unit` in CI;
   it checks catalog keys and arguments, direct translation calls, notice/refusal enums,
   and the built-in patterns' dictionaries and errors, not every computed Java key.
-- Built-in patterns also translate their `lang` dictionaries in all four locales.
+- Built-in patterns and shared pattern libraries translate their `lang` dictionaries in all four locales.
+  These dictionaries own their titles, control labels, material names and refusal messages;
+  they do not need matching entries in the mod's language catalogs.
   Custom patterns fall back per word to another Chinese locale, then to `en_us`;
   `zh_hk` and `zh_tw` prefer one another before `zh_cn`.
-- A pattern's expected refusal uses `reject("translation.key", ...)`, with at most four
-  text or numeric arguments. Use `translated("another.key")` for an argument that
-  also needs translation. Keep ordinary `fail(...)` for script diagnostics in custom
-  patterns; built-in player-facing failures belong in the language catalogs.
+- A pattern's expected refusal uses `reject("error.key", ...)`, with at most four
+  text or numeric arguments. Both `reject` and `translated("another.key")` resolve
+  keys in the pattern's `lang` dictionary, including words brought by its shared libraries.
+  The pattern's own words override library words for the same locale and key. Use `translated`
+  for an argument such as a material name that also needs translation. Keep ordinary
+  `fail(...)` for script diagnostics in custom patterns.
 - Commit messages follow `type(scope): summary`, for example
   `fix(plan): keep rations out of cargo` or `feat(draft): add a dock pattern`.
 - Add or update a test for behavioural changes. Prefer a black-box e2e spec for anything

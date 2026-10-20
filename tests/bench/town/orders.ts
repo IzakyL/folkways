@@ -28,7 +28,7 @@ const DIG_RISE = 20;
 
 /** The materials each pattern is built in, all of the colony's own making. */
 export const MAKEABLE = {
-  mine: { level: "iron", pairs: 6, branch: 16, timber: ["minecraft:oak_log"], planks: ["minecraft:oak_planks"],
+  mine: { y: 16, pairs: 6, branch: 16, timber: ["minecraft:oak_log"], planks: ["minecraft:oak_planks"],
     stairs: ["minecraft:oak_stairs"], rail: ["minecraft:oak_fence"], gate: ["minecraft:oak_fence_gate"], seal: ["minecraft:cobblestone"] },
   arch_bridge: { width: 5 },
   arcade: { lights: false, pillar: ["minecraft:oak_log"], beam: ["minecraft:oak_planks"], tiles: ["minecraft:stone_bricks"],

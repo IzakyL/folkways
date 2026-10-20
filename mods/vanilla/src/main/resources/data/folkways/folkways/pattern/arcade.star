@@ -51,6 +51,10 @@ lang = {
         "ridge": "Ridge",
         "fence": "Railing",
         "lamp": "Lamps",
+        "error.arcade.steep": "Too steep for one stretch: add a point or lengthen it",
+        "error.material": "Choose material for %s",
+        "error.arcade.length": "An arcade runs 6–96 blocks; split longer ones",
+        "error.arcade.bay": "Stretch %s is too short for a bay between its pavilions",
     },
     "zh_cn": {
         "title": "风雨廊",
@@ -74,6 +78,10 @@ lang = {
         "ridge": "屋脊",
         "fence": "栏杆用料",
         "lamp": "灯具",
+        "error.arcade.steep": "这一段太陡：请加一个点或拉长这一段",
+        "error.material": "请为%s选择材料",
+        "error.arcade.length": "风雨廊长度须为 6–96 格，更长的请分段修建",
+        "error.arcade.bay": "第 %s 段太短，放不下一个开间",
     },
     "zh_hk": {
         "title": "風雨廊",
@@ -97,6 +105,10 @@ lang = {
         "ridge": "屋脊",
         "fence": "欄杆用料",
         "lamp": "燈具",
+        "error.arcade.steep": "這一段太陡：請加一個點或拉長這一段",
+        "error.material": "請為%s選擇材料",
+        "error.arcade.length": "風雨廊長度須為 6–96 格，更長的請分段修建",
+        "error.arcade.bay": "第 %s 段太短，放不下一個開間",
     },
     "zh_tw": {
         "title": "風雨廊",
@@ -120,6 +132,10 @@ lang = {
         "ridge": "屋脊",
         "fence": "欄杆用料",
         "lamp": "燈具",
+        "error.arcade.steep": "這一段太陡：請加一個點或拉長這一段",
+        "error.material": "請為%s選擇材料",
+        "error.arcade.length": "風雨廊長度須為 6–96 格，更長的請分段修建",
+        "error.arcade.bay": "第 %s 段太短，放不下一個開間",
     },
 }
 
@@ -249,7 +265,7 @@ def stretch(site, run, start, end):
             if after != None:
                 levels[i] = max(after - 1, min(after + 1, levels[i]))
     if (start != None and size(levels[0] - start) > 1) or (end != None and size(levels[-1] - end) > 1):
-        reject("folkways.draft.error.arcade.steep")
+        reject("error.arcade.steep")
     out = []
     for i in range(len(bays)):
         before = start if i == 0 else levels[i - 1]
@@ -280,13 +296,13 @@ def draw(site):
     width = site.count("width")
     for key in ["floor", "footing", "pillar", "beam", "tiles", "ridge", "fence", "lamp"]:
         if not site.items(key):
-            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
+            reject("error.material", translated(key))
     runs = site.path.stretches
     length = 0
     for one in runs:
         length += one.depth
     if length < 6 or length > 96:
-        reject("folkways.draft.error.arcade.length")
+        reject("error.arcade.length")
     side = width + 2
     half = side // 2
     at_ends = site.flag("pavilions")
@@ -304,7 +320,7 @@ def draw(site):
         back = half + 1 if rooms[j] != None else 0
         front = half if rooms[j + 1] != None else 0
         if lane.depth - back - front < site.count("bay"):
-            reject("folkways.draft.error.arcade.bay", j + 1)
+            reject("error.arcade.bay", j + 1)
         out.append(STRETCH(lane.inset(back = back, front = front),
             None if rooms[j] == None else rooms[j].origin.y,
             None if rooms[j + 1] == None else rooms[j + 1].origin.y))

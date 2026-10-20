@@ -1,3 +1,58 @@
+lang = {
+    "zh_hk": {
+        "error.road.points": "道路至少需要兩個不同的點",
+        "error.road.bend": "路徑在第 %s 個點處折返，轉角不得超過 135°",
+        "error.internal": "繪製時發生內部錯誤",
+        "error.road.ground": "道路 (%s, %s) 附近下方沒有地面",
+        "error.road.water_depth": "水深超過 %s 格，請改用拱橋",
+        "error.road.water_crossing": "水面超過 %s 格，請改用拱橋",
+        "error.road.grade": "坡度過陡：兩端高差 %s 格，路長僅 %s 格",
+        "error.road.point_grade": "坡度過陡：第 %s、%s 個點高差 %s 格，相距僅 %s 格",
+        "error.road.water_grade": "道路無法既高出水面又與兩端地面銜接",
+        "error.road.earthworks": "地形起伏過大，需要挖填 %s 格；請增加路徑點或改建橋樑",
+        "error.road.side_ground": "道路旁 (%s, %s) 沒有地面",
+    },
+    "zh_tw": {
+        "error.road.points": "道路至少需要兩個不同的點",
+        "error.road.bend": "路徑在第 %s 個點處折返，轉角不得超過 135°",
+        "error.internal": "繪製時發生內部錯誤",
+        "error.road.ground": "道路 (%s, %s) 附近下方沒有地面",
+        "error.road.water_depth": "水深超過 %s 格，請改用拱橋",
+        "error.road.water_crossing": "水面超過 %s 格，請改用拱橋",
+        "error.road.grade": "坡度過陡：兩端高差 %s 格，路長僅 %s 格",
+        "error.road.point_grade": "坡度過陡：第 %s、%s 個點高差 %s 格，相距僅 %s 格",
+        "error.road.water_grade": "道路無法既高出水面又與兩端地面銜接",
+        "error.road.earthworks": "地形起伏過大，需要挖填 %s 格；請增加路徑點或改建橋梁",
+        "error.road.side_ground": "道路旁 (%s, %s) 沒有地面",
+    },
+    "en_us": {
+        "error.road.points": "A road needs two different points",
+        "error.road.bend": "The path doubles back at point %s; bends up to 135° are allowed",
+        "error.internal": "An internal drawing error occurred",
+        "error.road.ground": "No ground under the road near (%s, %s)",
+        "error.road.water_depth": "Water deeper than %s blocks — build an arch bridge here",
+        "error.road.water_crossing": "Water crossing longer than %s blocks — build an arch bridge here",
+        "error.road.grade": "Too steep: the ends differ by %s blocks over %s",
+        "error.road.point_grade": "Too steep: points %s and %s differ by %s blocks over %s",
+        "error.road.water_grade": "The road cannot climb clear of the water and still meet the ground at both ends",
+        "error.road.earthworks": "The ground is too uneven: it would take %s blocks of cut or fill; add points or bridge the gap",
+        "error.road.side_ground": "No ground beside the road at (%s, %s)",
+    },
+    "zh_cn": {
+        "error.road.points": "道路至少需要两个不同的点",
+        "error.road.bend": "路径在第 %s 个点处折返，转角不得超过 135°",
+        "error.internal": "绘制时发生内部错误",
+        "error.road.ground": "道路 (%s, %s) 附近下方没有地面",
+        "error.road.water_depth": "水深超过 %s 格，请改用拱桥",
+        "error.road.water_crossing": "水面超过 %s 格，请改用拱桥",
+        "error.road.grade": "坡度过陡：两端高差 %s 格，路长仅 %s 格",
+        "error.road.point_grade": "坡度过陡：第 %s、%s 个点高差 %s 格，相距仅 %s 格",
+        "error.road.water_grade": "道路无法既高出水面又与两端地面衔接",
+        "error.road.earthworks": "地形起伏过大，需要挖填 %s 格；请增加路径点或改建桥梁",
+        "error.road.side_ground": "道路旁 (%s, %s) 没有地面",
+    },
+}
+
 NEARLY = 0.000001
 FAR = 1000000.0
 
@@ -44,13 +99,13 @@ def centreline(site, width):
             marks.append(spot)
             heights.append(p.y)
     if len(marks) < 2:
-        reject("folkways.draft.error.road.points")
+        reject("error.road.points")
     line = runs_of(marks)
     line["heights"] = heights
     runs = line["runs"]
     for j in range(1, len(runs)):
         if runs[j - 1]["ux"] * runs[j]["ux"] + runs[j - 1]["uz"] * runs[j]["uz"] < -0.7072:
-            reject("folkways.draft.error.road.bend", j + 1)
+            reject("error.road.bend", j + 1)
     if width % 2 == 1:
         return line
     shifted = []
@@ -108,7 +163,7 @@ def at(line, s):
         if s <= run["start"] + run["length"] or run == line["runs"][-1]:
             d = max(0.0, min(run["length"], s - run["start"]))
             return run["ax"] + run["ux"] * d, run["az"] + run["uz"] * d, run
-    reject("folkways.draft.error.internal")
+    reject("error.internal")
 
 def landings(line, half):
     runs = line["runs"]
@@ -148,7 +203,7 @@ def survey(site, line, width):
             cz = floor(station["z"] + run["ux"] * o)
             ground = site.ground(cx, cz)
             if ground == None:
-                reject("folkways.draft.error.road.ground", cx, cz)
+                reject("error.road.ground", cx, cz)
             heights.append(ground)
             if o == 0:
                 station["centre"] = ground
@@ -176,11 +231,11 @@ def profile(site, line, width, grade = 0.5, smoothing = 4.0, deepest = 8, crossi
         station = stations[i]
         if station["water"] != None:
             if station["water"] - station["bed"] > drowned:
-                reject("folkways.draft.error.road.water_depth", drowned)
+                reject("error.road.water_depth", drowned)
             if wet_from == None:
                 wet_from = station["s"]
             if station["s"] - wet_from > crossing:
-                reject("folkways.draft.error.road.water_crossing", crossing)
+                reject("error.road.water_crossing", crossing)
         else:
             wet_from = None
     spans = landings(line, width / 2.0)
@@ -209,7 +264,7 @@ def profile(site, line, width, grade = 0.5, smoothing = 4.0, deepest = 8, crossi
     first = ends[0]
     last = ends[-1]
     if True not in held and size(last - first) > grade * total + NEARLY:
-        reject("folkways.draft.error.road.grade", size(last - first), int(line["length"]))
+        reject("error.road.grade", size(last - first), int(line["length"]))
     fixed = [None] * count
     ruled = [False] * count
     fixed[0] = first
@@ -221,7 +276,7 @@ def profile(site, line, width, grade = 0.5, smoothing = 4.0, deepest = 8, crossi
         b = at_mark[j + 1]
         length = run[b] - run[a]
         if size(ends[j + 1] - ends[j]) > grade * length + NEARLY:
-            reject("folkways.draft.error.road.point_grade", j + 1, j + 2, size(ends[j + 1] - ends[j]), int(runs[j]["length"]))
+            reject("error.road.point_grade", j + 1, j + 2, size(ends[j + 1] - ends[j]), int(runs[j]["length"]))
         for i in range(a, b + 1):
             fixed[i] = ends[j] + (ends[j + 1] - ends[j]) * ((run[i] - run[a]) / length if length > 0 else 0.0)
             ruled[i] = True
@@ -257,7 +312,7 @@ def profile(site, line, width, grade = 0.5, smoothing = 4.0, deepest = 8, crossi
     heights = []
     for i in range(count):
         if low[i] > high[i] + NEARLY:
-            reject("folkways.draft.error.road.water_grade")
+            reject("error.road.water_grade")
         heights.append(max(low[i], min(high[i], targets[i])))
     for i in range(1, count):
         step = grade * (run[i] - run[i - 1])
@@ -273,7 +328,7 @@ def profile(site, line, width, grade = 0.5, smoothing = 4.0, deepest = 8, crossi
         if not stations[i]["bored"]:
             worst = max(worst, ceil(size(cut)))
     if worst > deepest:
-        reject("folkways.draft.error.road.earthworks", worst)
+        reject("error.road.earthworks", worst)
     return {"stations": stations, "depth": worst}
 
 # Whether the road runs under the hill at s: the nearer station tells.
@@ -334,7 +389,7 @@ def earthworks(site, line, profile, width, shoulder = 1, headroom = 4, canopy = 
                 continue
             ground = site.ground(x, z)
             if ground == None:
-                reject("folkways.draft.error.road.side_ground", x, z)
+                reject("error.road.side_ground", x, z)
             top = bed(level(profile, s))
             k = 0 if beyond < -NEARLY else max(1, ceil(beyond))
             if bored(profile, s) and ground - top > headroom + 1:

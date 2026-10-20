@@ -62,7 +62,7 @@ test("language catalogs have matching keys and interpolation arguments", () => {
   }
 });
 
-test("built-in pattern controls have complete translations in all supported locales", () => {
+test("built-in pattern dictionaries have complete translations in all supported locales", () => {
   let checked = 0;
   for (const file of readdirSync(PATTERNS).filter(name => name.endsWith(".star"))) {
     const source = read(new URL(file, PATTERNS));
@@ -80,8 +80,6 @@ test("built-in pattern controls have complete translations in all supported loca
     for (const locale of LOCALES) {
       assert.ok(words[locale], `${file}: missing ${locale}`);
       assert.deepEqual(Object.keys(words[locale]).sort(), keys, `${file}: ${locale} keys`);
-      assert.equal(words[locale].title, catalogs.get(locale + ".json")![`folkways.pattern.folkways.${file.slice(0, -5)}`],
-        `${file}: ${locale} title must agree with its language catalog`);
       for (const key of keys) {
         assert.ok(typeof words[locale][key] === "string" && words[locale][key].trim(), `${file}: ${locale} ${key}`);
         assert.deepEqual(argumentsOf(words[locale][key]), argumentsOf(words.en_us[key]), `${file}: ${locale} ${key}`);
@@ -97,7 +95,8 @@ test("Hong Kong and Taiwan wording preserves their Minecraft terminology", () =>
     assert.ok(words["folkways.draft.grow.local"].includes(dataPack), `${locale}: data pack`);
     assert.ok(words["folkways.draft.grow.local"].includes("伺服器"), `${locale}: server`);
     assert.ok(words["folkways.draft.grow.local"].includes("資料夾"), `${locale}: folder`);
-    assert.ok(words["folkways.draft.error.rail.track"].includes(track), `${locale}: rail`);
+    const railway = patternWords(read(new URL("railway.star", PATTERNS)))!;
+    assert.ok(railway[locale]["error.rail.track"].includes(track), `${locale}: rail`);
     assert.ok(words["folkways.ponder.workshop.text_1"].includes("工作台"), `${locale}: crafting table`);
     assert.ok(words["folkways.ponder.workshop.text_1"].includes("鍛造台"), `${locale}: smithing table`);
   }
@@ -108,19 +107,25 @@ test("built-in pattern errors keep translation keys and the correct number of ar
   for (const file of readdirSync(PATTERNS).filter(name => name.endsWith(".star"))) {
     const source = read(new URL(file, PATTERNS));
     assert.equal(calls(source, "fail").length, 0, `${file}: player-facing errors must use reject`);
+    const words = patternWords(source);
     for (const call of calls(source, "reject")) {
       const key = JSON.parse(call.args[0]);
-      assert.ok(Object.hasOwn(english, key), `${file}: ${key}`);
-      assert.equal(call.args.length - 1, Math.max(0, ...argumentsOf(english[key])), `${file}: ${key} argument count`);
+      assert.ok(words && Object.hasOwn(words.en_us, key), `${file}: ${key} missing from pattern dictionary`);
+      assert.equal(call.args.length - 1, Math.max(0, ...argumentsOf(words.en_us[key])), `${file}: ${key} argument count`);
       assert.ok(call.args.length - 1 <= 4, `${file}: too many notice arguments`);
       checked++;
-      if (call.args.includes('translated("folkways.draft.knob." + key)')) {
+      if (call.args.includes('translated(key)')) {
         const loops = [...source.slice(0, call.index).matchAll(/for key in \[([^\]]+)\]/g)];
         assert.ok(loops.length, `${file}: dynamic material key needs a check`);
         for (const material of loops.at(-1)![1].matchAll(/"([^"]+)"/g)) {
-          assert.ok(Object.hasOwn(english, "folkways.draft.knob." + material[1]), `${file}: ${material[1]}`);
+          assert.ok(Object.hasOwn(words.en_us, material[1]), `${file}: ${material[1]}`);
         }
       }
+    }
+    for (const call of calls(source, "translated")) {
+      if (call.args[0] === "key") continue; // Material loop checked above.
+      const key = JSON.parse(call.args[0]);
+      assert.ok(words && Object.hasOwn(words.en_us, key), `${file}: ${key} missing from pattern dictionary`);
     }
   }
   assert.ok(checked > 0, "no pattern errors were checked");

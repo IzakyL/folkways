@@ -92,8 +92,8 @@ const SHOTS: Shot[] = [
   // The meadow where the cliff comes down to the lake, the mine mouths in a row under it.
   { pattern: "mine", camera: { centre: { x: 14, y: 71, z: -44 }, yaw: 90, off: 34, pitch: 45 }, drawings: [
     { gesture: "box", cells: [[6, -72], [18, -60]] },
-    { gesture: "box", cells: [[8, -50], [20, -38]], knobs: [{ key: "level", option: "shallow" }] },
-    { gesture: "box", cells: [[10, -28], [22, -16]], knobs: [{ key: "level", option: "copper" },
+    { gesture: "box", cells: [[8, -50], [20, -38]], knobs: [{ key: "y", value: 55 }] },
+    { gesture: "box", cells: [[10, -28], [22, -16]], knobs: [{ key: "y", value: 48 },
       { key: "timber", toggle: ["minecraft:spruce_log", "minecraft:dark_oak_log"] },
       { key: "planks", toggle: ["minecraft:spruce_planks", "minecraft:dark_oak_planks"] }] },
   ], under: { solid: { min: [-200, -260], max: [200, 170] }, back: 2.2, down: 10, pitch: 0 } },

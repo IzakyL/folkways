@@ -141,23 +141,23 @@ public final class DraftCityWallGameTests {
         DraftKit.Filled settings = defaults(pattern);
         String shortWall = DraftKit.explanationKey(DraftKit.refused(helper,
             draw(pattern, settings, on(0, 0), on(8, 0))));
-        helper.assertTrue(shortWall.equals("folkways.draft.error.wall.stretch")
-            || shortWall.equals("folkways.draft.error.wall.gate_length"), "a stretch shorter than two towers is refused");
+        helper.assertTrue(shortWall.equals(DraftKit.key(pattern, "error.wall.stretch"))
+            || shortWall.equals(DraftKit.key(pattern, "error.wall.gate_length")), "a stretch shorter than two towers is refused");
         helper.assertTrue(DraftKit.explanationKey(DraftKit.refused(helper,
-            draw(pattern, settings, on(0, 0), on(20, 0)))).equals("folkways.draft.error.wall.gate_length"),
+            draw(pattern, settings, on(0, 0), on(20, 0)))).equals(DraftKit.key(pattern, "error.wall.gate_length")),
             "a wall too short for its gate is refused");
         helper.assertTrue(DraftKit.explanationKey(DraftKit.refused(helper,
-            draw(pattern, settings, on(0, 0), on(40, 0), on(0, 5)))).equals("folkways.draft.error.wall.corner"),
+            draw(pattern, settings, on(0, 0), on(40, 0), on(0, 5)))).equals(DraftKit.key(pattern, "error.wall.corner")),
             "a path doubling back is refused");
         helper.assertTrue(DraftKit.explanationKey(DraftKit.refused(helper,
-            draw(pattern, settings, on(0, 0), on(130, 0)))).equals("folkways.draft.error.wall.length"),
+            draw(pattern, settings, on(0, 0), on(130, 0)))).equals(DraftKit.key(pattern, "error.wall.length")),
             "an overlong wall is refused");
         helper.assertValueEqual(DraftKit.refused(helper, pattern.drawOn(new Commission(DraftKit.zone(20, 4, 20),
             settings, new DraftKit.Ground(GROUND), Direction.NORTH, 0L))).why(), DraftRefusal.WRONG_MARK,
             "a zone is not a wall line");
         helper.assertTrue(DraftKit.explanationKey(DraftKit.refused(helper,
             pattern.drawOn(new Commission(new Hint.Path(List.of(on(0, 0), on(60, 0))), settings, World.NONE,
-                Direction.NORTH, 0L)))).equals("folkways.draft.error.wall.ground"),
+                Direction.NORTH, 0L)))).equals(DraftKit.key(pattern, "error.wall.ground")),
             "a wall with no ground under it is refused");
         helper.succeed();
     }

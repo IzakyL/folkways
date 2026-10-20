@@ -29,6 +29,9 @@ lang = {
         "spacing": "Light spacing",
         "post": "Posts",
         "lamp": "Lamps",
+        "error.road.width": "Road width must be 3–9 blocks",
+        "error.material": "Choose material for %s",
+        "error.road.length": "Road length must be 2–96 blocks; split longer roads into several",
     },
     "zh_cn": {
         "title": "道路",
@@ -40,6 +43,9 @@ lang = {
         "spacing": "路灯间距",
         "post": "灯柱",
         "lamp": "灯具",
+        "error.road.width": "道路宽度须为 3–9 格",
+        "error.material": "请为%s选择材料",
+        "error.road.length": "道路长度须为 2–96 格，更长的请分段修建",
     },
     "zh_hk": {
         "title": "道路",
@@ -51,6 +57,9 @@ lang = {
         "spacing": "路燈間距",
         "post": "燈柱",
         "lamp": "燈具",
+        "error.road.width": "道路寬度須為 3–9 格",
+        "error.material": "請為%s選擇材料",
+        "error.road.length": "道路長度須為 2–96 格，更長的請分段修建",
     },
     "zh_tw": {
         "title": "道路",
@@ -62,6 +71,9 @@ lang = {
         "spacing": "路燈間距",
         "post": "燈柱",
         "lamp": "燈具",
+        "error.road.width": "道路寬度須為 3–9 格",
+        "error.material": "請為%s選擇材料",
+        "error.road.length": "道路長度須為 2–96 格，更長的請分段修建",
     },
 }
 
@@ -95,13 +107,13 @@ def lights(line, columns, width, spacing):
 def draw(site):
     width = site.count("width")
     if width < 3 or width > 9:
-        reject("folkways.draft.error.road.width")
+        reject("error.road.width")
     for key in ["surface", "edge", "fill", "post", "lamp"]:
         if not site.items(key):
-            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
+            reject("error.material", translated(key))
     line = centreline(site, width)
     if line["length"] < 2 or line["length"] > 96:
-        reject("folkways.draft.error.road.length")
+        reject("error.road.length")
     plan = profile(site, line, width)
     works = earthworks(site, line, plan, width)
     spine = trace(plan)

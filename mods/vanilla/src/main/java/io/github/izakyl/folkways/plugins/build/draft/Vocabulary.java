@@ -64,14 +64,14 @@ public final class Vocabulary implements StarlarkValue {
         }
     }
 
-    @StarlarkMethod(name = "translated", doc = "An argument read in the player's language, rather than as literal text.",
+    @StarlarkMethod(name = "translated", doc = "An argument read from this pattern's lang dictionary in the player's language.",
         parameters = {@Param(name = "key")})
     public Translation translated(String key) throws EvalException {
         checkTranslationKey(key);
         return new Translation(key);
     }
 
-    @StarlarkMethod(name = "reject", doc = "Stop drawing with a translation key and up to four arguments."
+    @StarlarkMethod(name = "reject", doc = "Stop drawing with a key in this pattern's lang dictionary and up to four arguments."
         + " Arguments are text, numbers, booleans, or translated(key).",
         parameters = {@Param(name = "key")}, extraPositionals = @Param(name = "args"), useStarlarkThread = true)
     public Object reject(String key, Tuple args, StarlarkThread thread) throws EvalException {
@@ -79,10 +79,12 @@ public final class Vocabulary implements StarlarkValue {
         if (args.size() > Notice.MAX_ARGS) {
             throw Starlark.errorf("reject takes at most %d arguments", Notice.MAX_ARGS);
         }
+        Derivation drawing = Derivation.of(thread);
+        String scoped = drawing.translationKey(key);
         List<Notice.Arg> words = new ArrayList<>();
         for (Object arg : args) {
             if (arg instanceof Translation translation) {
-                words.add(Notice.named(translation.key()));
+                words.add(Notice.named(drawing.translationKey(translation.key())));
             } else if (arg instanceof String || arg instanceof StarlarkInt || arg instanceof StarlarkFloat
                     || arg instanceof Boolean) {
                 words.add(Notice.text(Starlark.str(arg)));
@@ -90,7 +92,7 @@ public final class Vocabulary implements StarlarkValue {
                 throw Starlark.errorf("reject arguments must be text, numbers, booleans, or translated(key)");
             }
         }
-        throw Derivation.of(thread).reject(new Notice(key, words));
+        throw drawing.reject(new Notice(scoped, words));
     }
 
     private static void checkTranslationKey(String key) throws EvalException {

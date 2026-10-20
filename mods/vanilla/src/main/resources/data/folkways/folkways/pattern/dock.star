@@ -40,6 +40,18 @@ lang = {
         "landing": "Landing",
         "lantern": "Lanterns",
         "roof": "Roof",
+        "error.dock.points": "A dock needs exactly two path points, shore then water",
+        "error.dock.length": "Dock length must be 6–64 blocks",
+        "error.dock.width": "Dock width must be 3–9 blocks",
+        "error.material": "Choose material for %s",
+        "error.dock.start": "Start the dock on dry land",
+        "error.dock.end": "The dock must end over water",
+        "error.dock.shore": "The dock must cross the shore only once",
+        "error.dock.ground": "No ground under the landing",
+        "error.dock.bank": "The bank stands too high above the water",
+        "error.dock.reach": "The dock is too short to reach open water",
+        "error.dock.depth": "The water is too deep to drive piles",
+        "error.dock.aground": "The dock would run aground",
     },
     "zh_cn": {
         "title": "码头",
@@ -57,6 +69,18 @@ lang = {
         "landing": "岸台",
         "lantern": "灯具",
         "roof": "棚顶",
+        "error.dock.points": "码头只支持两个路径点：先岸上，后水面",
+        "error.dock.length": "码头长度须为 6–64 格",
+        "error.dock.width": "码头宽度须为 3–9 格",
+        "error.material": "请为%s选择材料",
+        "error.dock.start": "码头须从岸上起步",
+        "error.dock.end": "码头终点须在水面上",
+        "error.dock.shore": "码头只能跨过一次岸线",
+        "error.dock.ground": "码头岸台下方没有地面",
+        "error.dock.bank": "岸比水面高出太多",
+        "error.dock.reach": "码头太短，伸不进水里",
+        "error.dock.depth": "水太深，无法打桩",
+        "error.dock.aground": "码头会搁浅在岸上",
     },
     "zh_hk": {
         "title": "碼頭",
@@ -74,6 +98,18 @@ lang = {
         "landing": "岸台",
         "lantern": "燈具",
         "roof": "棚頂",
+        "error.dock.points": "碼頭只支援兩個路徑點：先岸上，後水面",
+        "error.dock.length": "碼頭長度須為 6–64 格",
+        "error.dock.width": "碼頭寬度須為 3–9 格",
+        "error.material": "請為%s選擇材料",
+        "error.dock.start": "碼頭須從岸上起步",
+        "error.dock.end": "碼頭終點須在水面上",
+        "error.dock.shore": "碼頭只能跨過一次岸線",
+        "error.dock.ground": "碼頭岸台下方沒有地面",
+        "error.dock.bank": "岸比水面高出太多",
+        "error.dock.reach": "碼頭太短，伸不進水裏",
+        "error.dock.depth": "水太深，無法打樁",
+        "error.dock.aground": "碼頭會擱淺在岸上",
     },
     "zh_tw": {
         "title": "碼頭",
@@ -91,6 +127,18 @@ lang = {
         "landing": "岸臺",
         "lantern": "燈具",
         "roof": "棚頂",
+        "error.dock.points": "碼頭只支援兩個路徑點：先岸上，後水面",
+        "error.dock.length": "碼頭長度須為 6–64 格",
+        "error.dock.width": "碼頭寬度須為 3–9 格",
+        "error.material": "請為%s選擇材料",
+        "error.dock.start": "碼頭須從岸上起步",
+        "error.dock.end": "碼頭終點須在水面上",
+        "error.dock.shore": "碼頭只能跨過一次岸線",
+        "error.dock.ground": "碼頭岸臺下方沒有地面",
+        "error.dock.bank": "岸比水面高出太多",
+        "error.dock.reach": "碼頭太短，伸不進水裡",
+        "error.dock.depth": "水太深，無法打樁",
+        "error.dock.aground": "碼頭會擱淺在岸上",
     },
 }
 
@@ -172,16 +220,16 @@ def roof(width, layers, depth):
 
 def draw(site):
     if len(site.path.points) != 2:
-        reject("folkways.draft.error.dock.points")
+        reject("error.dock.points")
     length = site.path.length
     if length < 6 or length > 64:
-        reject("folkways.draft.error.dock.length")
+        reject("error.dock.length")
     width = site.count("width")
     if width < 3 or width > 9:
-        reject("folkways.draft.error.dock.width")
+        reject("error.dock.width")
     for key in ["deck", "beam", "pile", "rail", "landing", "lantern", "roof"]:
         if not site.items(key):
-            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
+            reject("error.material", translated(key))
     shape = site.choice("head")
     shelter = site.flag("shelter")
     run = site.zone
@@ -196,9 +244,9 @@ def draw(site):
     middle = (width - 1) // 2
 
     if look(site, band, seen, middle, 0)[1] != None:
-        reject("folkways.draft.error.dock.start")
+        reject("error.dock.start")
     if look(site, band, seen, middle, span)[1] == None:
-        reject("folkways.draft.error.dock.end")
+        reject("error.dock.end")
     shore = span
     for z in range(span, -1, -1):
         if look(site, band, seen, middle, z)[1] == None:
@@ -206,7 +254,7 @@ def draw(site):
         shore = z
     for z in range(1, shore):
         if look(site, band, seen, middle, z)[1] != None:
-            reject("folkways.draft.error.dock.shore")
+            reject("error.dock.shore")
     level = max([look(site, band, seen, middle, z)[1] for z in range(shore, span + 1)])
 
     back = min(0, shore - 2)
@@ -215,25 +263,25 @@ def draw(site):
         for x in range(-1, width + 1):
             ground = look(site, band, seen, x, z)[0]
             if ground == None:
-                reject("folkways.draft.error.dock.ground")
+                reject("error.dock.ground")
             bank = max(bank, ground)
     deck = bank
     if deck - level > 4:
-        reject("folkways.draft.error.dock.bank")
+        reject("error.dock.bank")
 
     depth = 5 if shelter else 4
     head = span - depth + 1
     if head <= shore:
-        reject("folkways.draft.error.dock.reach")
+        reject("error.dock.reach")
     lo, hi = extent(shape, width, 2 if width <= 4 else 3)
     for z in range(shore, span + 1):
         xs = range(lo, hi + 1) if z >= head else range(width)
         for x in xs:
             ground = look(site, band, seen, x, z)[0]
             if ground == None or deck - ground > 32:
-                reject("folkways.draft.error.dock.depth")
+                reject("error.dock.depth")
             if ground >= deck:
-                reject("folkways.draft.error.dock.aground")
+                reject("error.dock.aground")
 
     landing = []
     for z in range(back, shore):

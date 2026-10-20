@@ -91,7 +91,7 @@ test("a blueprint and a road are laid by hand, then the colony's other works com
         walkway: ["minecraft:polished_deepslate"], trim: ["minecraft:deepslate_tiles"],
         timber: ["minecraft:stripped_dark_oak_log"], panel: ["minecraft:dark_oak_planks"] } },
       { pattern: "folkways:mine", min: at(-55, -18, -1), max: { ...at(-43, -6, -1), y: at(-55, -18, -1).y }, knobs: {
-        level: "shallow", timber: ["minecraft:dark_oak_log"], planks: ["minecraft:dark_oak_planks"],
+        y: at(-55, -18, -1).y - 16, timber: ["minecraft:dark_oak_log"], planks: ["minecraft:dark_oak_planks"],
         stairs: ["minecraft:dark_oak_stairs"], rail: ["minecraft:dark_oak_fence"],
         gate: ["minecraft:dark_oak_fence_gate"], lamp: ["minecraft:soul_lantern"], seal: ["minecraft:cobbled_deepslate"] } },
       { pattern: "folkways:arch_bridge", points: [at(20, 8), at(59, 8)], knobs: {

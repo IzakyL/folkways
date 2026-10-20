@@ -21,6 +21,7 @@ import io.github.izakyl.folkways.plugins.build.draft.Round;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Pattern;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
+import io.github.izakyl.folkways.plugins.build.draft.PatternText;
 import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Optional;
@@ -62,12 +63,14 @@ public final class GrowingGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 40)
-    public static void savedFailuresKeepTheirTranslationAndReadOlderSaves(GameTestHelper helper) {
+    public static void savedFailuresKeepTheirTranslationAndReadOlderSaves(GameTestHelper helper) throws Exception {
         Hint hint = new Hint.Zone(BlockPos.ZERO, new BlockPos(2, 2, 2));
         Growing growing = Growing.begun(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "mine"),
             "Mine", hint, new CompoundTag(), Direction.NORTH, 1L, WorldPos.of(helper.getLevel(), BlockPos.ZERO),
             Optional.empty(), "");
-        Notice explanation = new Notice("folkways.draft.error.mine.flooded", List.of(Notice.count(12)));
+        Pattern mine = Patterns.find(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "mine")).orElseThrow();
+        Notice explanation = new Notice(PatternText.key(mine.face(), "error.mine.flooded"),
+            List.of(Notice.count(12)));
         Growing stopped = growing.stuck(new Drawn.Refused(DraftRefusal.PATTERN_FAILED, "diagnostic",
             Optional.of(explanation)), 100L);
         CompoundTag saved = stopped.save();
@@ -276,9 +279,9 @@ public final class GrowingGameTests {
 
     private static final ResourceLocation MINE = ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "mine");
 
-    private static CompoundTag defaults(Pattern pattern, String level) {
+    private static CompoundTag defaults(Pattern pattern, int y) {
         CompoundTag picked = new CompoundTag();
-        picked.putString("level", "pattern:" + level);
+        picked.putInt("y", y);
         Chosen loaded = Chosen.load(pattern.knobs(), picked);
         return Chosen.of(pattern.knobs(), new Settings() {
             public boolean flag(String key) {
@@ -317,7 +320,7 @@ public final class GrowingGameTests {
         Pattern mine = Patterns.find(MINE).orElseThrow(() -> new AssertionError("the mine is not loaded"));
         BlockPos mark = ground.above();
         Hint hint = new Hint.Zone(mark, mark.offset(2, 0, 2));
-        Growing fresh = Growing.begun(MINE, "", hint, defaults(mine, "shallow"), Direction.NORTH, 3L,
+        Growing fresh = Growing.begun(MINE, "", hint, defaults(mine, ground.getY() - 16), Direction.NORTH, 3L,
             WorldPos.of(level, mark), Optional.empty(), "");
         BuildPresence presence = new BuildPresence(rig.colony(), level.getServer());
         CompletableFuture<Optional<Component>> first = presence.grow(level, fresh);

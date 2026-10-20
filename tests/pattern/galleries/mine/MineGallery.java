@@ -161,7 +161,7 @@ public final class Task {
         }
         List<Object> mines = new ArrayList<>();
         mines.add(dig(level, pattern, "iron", -36, 0, Map.of()));
-        mines.add(dig(level, pattern, "copper", 36, 0, Map.of("level", "copper", "branch", 8, "spacing", 2,
+        mines.add(dig(level, pattern, "copper", 36, 0, Map.of("y", 48, "branch", 8, "spacing", 2,
             "pairs", 4, "timber", "minecraft:oak_log", "planks", "minecraft:oak_planks",
             "stairs", "minecraft:oak_stairs", "rail", "minecraft:oak_fence", "gate", "minecraft:oak_fence_gate")));
         boolean ok = mines.stream().allMatch(m -> "ended".equals(((Map<?, ?>) m).get("end"))

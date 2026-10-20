@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.plugins.build.draft.Drawn;
 import io.github.izakyl.folkways.plugins.build.draft.Growth;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
+import io.github.izakyl.folkways.plugins.build.draft.PatternText;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -110,7 +111,7 @@ record Growing(
     }
 
     Component stuckText() {
-        return Component.translatable(stuck, stuckExplanation.map(Notice::component)
+        return Component.translatable(stuck, stuckExplanation.map(PatternText::component)
             .orElseGet(() -> Component.literal(stuckDetail)));
     }
 

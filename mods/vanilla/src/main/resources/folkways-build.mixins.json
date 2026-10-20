@@ -6,6 +6,9 @@
   "mixins": [
     "GrowingPlantBlockAccess"
   ],
+  "client": [
+    "ClientLanguageMixin"
+  ],
   "injectors": {
     "defaultRequire": 0
   }

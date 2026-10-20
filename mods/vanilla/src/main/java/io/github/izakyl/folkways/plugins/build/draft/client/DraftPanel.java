@@ -228,9 +228,7 @@ public final class DraftPanel {
     // A pattern's own words come first; the game's language files name the ones that bring none.
     private static Component nameOf(Pattern pattern) {
         return pattern.face().word(language(), Face.TITLE).<Component>map(Component::literal)
-            .orElseGet(() -> Component.translatableWithFallback(
-                "folkways.pattern." + pattern.id().getNamespace() + "." + pattern.id().getPath(),
-                pattern.id().getPath()));
+            .orElseGet(() -> Component.literal(pattern.id().getPath()));
     }
 
     private static String language() {

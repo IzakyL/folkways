@@ -33,6 +33,7 @@ final class Derivation {
         Comparator.comparingInt((Queued waiting) -> -waiting.node().priority()).thenComparingInt(Queued::order);
 
     private final Commission commission;
+    private final Face face;
     private final Area area;
     private final List<String> phases;
     private final List<PriorityQueue<Queued>> queues = new ArrayList<>();
@@ -53,7 +54,8 @@ final class Derivation {
     private Notice explanation;
     private Vocabulary.Grown grown;
 
-    Derivation(Commission commission, Area area, List<String> phases) {
+    Derivation(Commission commission, Area area, List<String> phases, Face face) {
+        this.face = face;
         this.commission = commission;
         this.area = area;
         this.phases = List.copyOf(phases);
@@ -129,6 +131,10 @@ final class Derivation {
 
     Optional<Notice> explanation() {
         return Optional.ofNullable(explanation);
+    }
+
+    String translationKey(String key) throws EvalException {
+        return PatternText.key(face, key);
     }
 
     EvalException reject(Notice notice) {

@@ -43,7 +43,7 @@ public sealed interface Drawn {
         }
 
         public Component component() {
-            return Component.translatable(why.translationKey(), explanation.map(Notice::component)
+            return Component.translatable(why.translationKey(), explanation.map(PatternText::component)
                 .orElseGet(() -> Component.literal(detail)));
         }
     }

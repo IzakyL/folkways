@@ -2,12 +2,7 @@ load("folkways:materials.star", "FENCES", "GATES", "LAMPS", "LOGS", "MASONRY", "
 
 accepts = ["zone"]
 knobs = [
-    choice("level", [
-        option("shallow", icon = "minecraft:stone"), option("copper", icon = "minecraft:raw_copper"),
-        option("iron", icon = "minecraft:raw_iron"), option("gold", icon = "minecraft:raw_gold"),
-        option("diamond", icon = "minecraft:diamond"),
-    ], default = "iron",
-        icon = "minecraft:iron_pickaxe"),
+    count("y", -64, 319, default = 16, icon = "minecraft:iron_pickaxe"),
     count("branch", 4, 32, default = 12, icon = "minecraft:rail"),
     count("spacing", 2, 6, default = 3, icon = "minecraft:stone"),
     count("pairs", 1, 24, default = 6, icon = "minecraft:stone_pickaxe"),
@@ -30,12 +25,7 @@ knobs = [
 lang = {
     "en_us": {
         "title": "Mine",
-        "level": "Level",
-        "level.shallow": "Shallow",
-        "level.copper": "Copper",
-        "level.iron": "Iron",
-        "level.gold": "Gold",
-        "level.diamond": "Diamond",
+        "y": "Mining Y",
         "branch": "Branch length",
         "spacing": "Branch spacing",
         "pairs": "Branch pairs",
@@ -47,15 +37,16 @@ lang = {
         "gate": "Gate",
         "lamp": "Lamps",
         "seal": "Seal",
+        "error.mine.level": "The chosen Y lies above or too near the mine mouth",
+        "error.mine.flooded": "Water or lava floods the way on from height %s; drain it and the mine goes on",
+        "error.mine.ground": "No ground under the mine mouth",
+        "error.mine.water": "The mine mouth lies in water",
+        "error.material": "Choose material for %s",
+        "error.mine.lamp": "The lamp must be a lantern",
     },
     "zh_cn": {
         "title": "矿井",
-        "level": "开采层",
-        "level.shallow": "浅层",
-        "level.copper": "铜",
-        "level.iron": "铁",
-        "level.gold": "金",
-        "level.diamond": "钻石",
+        "y": "开采 Y 值",
         "branch": "支巷长度",
         "spacing": "支巷间距",
         "pairs": "支巷对数",
@@ -67,15 +58,16 @@ lang = {
         "gate": "栅栏门",
         "lamp": "灯具",
         "seal": "封堵",
+        "error.mine.level": "所选 Y 值高于矿口或离矿口太近",
+        "error.mine.flooded": "前方高度 %s 起被水或岩浆淹没，排干后矿井会继续挖",
+        "error.mine.ground": "矿口下方没有地面",
+        "error.mine.water": "矿口位于水中",
+        "error.material": "请为%s选择材料",
+        "error.mine.lamp": "灯具须为灯笼",
     },
     "zh_hk": {
         "title": "礦井",
-        "level": "開採層",
-        "level.shallow": "淺層",
-        "level.copper": "銅",
-        "level.iron": "鐵",
-        "level.gold": "金",
-        "level.diamond": "鑽石",
+        "y": "開採 Y 值",
         "branch": "支巷長度",
         "spacing": "支巷間距",
         "pairs": "支巷對數",
@@ -87,15 +79,16 @@ lang = {
         "gate": "柵欄門",
         "lamp": "燈具",
         "seal": "封堵",
+        "error.mine.level": "所選 Y 值高於礦口或離礦口太近",
+        "error.mine.flooded": "前方高度 %s 起被水或岩漿淹沒，排乾後礦井會繼續挖",
+        "error.mine.ground": "礦口下方沒有地面",
+        "error.mine.water": "礦口位於水中",
+        "error.material": "請為%s選擇材料",
+        "error.mine.lamp": "燈具須為燈籠",
     },
     "zh_tw": {
         "title": "礦井",
-        "level": "開採層",
-        "level.shallow": "淺層",
-        "level.copper": "銅",
-        "level.iron": "鐵",
-        "level.gold": "金",
-        "level.diamond": "鑽石",
+        "y": "開採 Y 值",
         "branch": "支巷長度",
         "spacing": "支巷間距",
         "pairs": "支巷對數",
@@ -107,11 +100,15 @@ lang = {
         "gate": "柵欄門",
         "lamp": "燈具",
         "seal": "封堵",
+        "error.mine.level": "所選 Y 值高於礦口或離礦口太近",
+        "error.mine.flooded": "前方高度 %s 起被水或岩漿淹沒，排乾後礦井會繼續挖",
+        "error.mine.ground": "礦口下方沒有地面",
+        "error.mine.water": "礦口位於水中",
+        "error.material": "請為%s選擇材料",
+        "error.mine.lamp": "燈具須為燈籠",
     },
 }
 
-LEVELS = {"copper": 48, "iron": 16, "gold": -16, "diamond": -59}
-SHALLOW = 16
 FALLING = "minecraft:gravel|minecraft:sand|minecraft:red_sand|minecraft:suspicious_sand|minecraft:suspicious_gravel"
 ORES = "#c:ores"
 FLIGHT = 24
@@ -243,11 +240,10 @@ def cells_of(bx):
             for dy in range(bx[4]) for db in range(bx[5]) for da in range(bx[3])]
 
 def depth_of(site, y0):
-    level = site.choice("level")
-    wanted = SHALLOW if level == "shallow" else site.altitude + y0 - LEVELS[level]
+    wanted = site.altitude + y0 - site.count("y")
     if wanted >= 14:
         return LAP * (wanted // FALL) + 8 * (wanted % FALL // 3) + 1 + wanted % 3
-    reject("folkways.draft.error.mine.level")
+    reject("error.mine.level")
 
 def flooded(site, m, boxes):
     found = []
@@ -259,7 +255,7 @@ def flooded(site, m, boxes):
                 found.append(site.altitude + c[1])
     if len(found) > FLOODED:
         top = max(found)
-        reject("folkways.draft.error.mine.flooded", top)
+        reject("error.mine.flooded", top)
 
 def guarded(site, m, boxes):
     flooded(site, m, boxes)
@@ -325,9 +321,9 @@ def head(site):
     m = frame(site, (zone.width - 1) // 2 - 4, (zone.depth - 1) // 2 - 4)
     ground = site.survey(room(m, -1, 0, -1, 11, 1, 11))
     if ground.median == None:
-        reject("folkways.draft.error.mine.ground")
+        reject("error.mine.ground")
     if ground.water > 0.25:
-        reject("folkways.draft.error.mine.water")
+        reject("error.mine.water")
     heights = {}
     for a in range(-1, 10):
         for b in range(-1, 10):
@@ -490,10 +486,10 @@ def drift(site, m, k, chased):
 def grow(site):
     for key in ["timber", "planks", "stairs", "rail", "gate", "lamp", "seal"]:
         if not site.items(key):
-            reject("folkways.draft.error.material", translated("folkways.draft.knob." + key))
+            reject("error.material", translated(key))
     light = site.items("lamp")[0]
     if light.startswith("#") or not light.endswith("lantern"):
-        reject("folkways.draft.error.mine.lamp")
+        reject("error.mine.lamp")
     k = site.kept
     if not k:
         return head(site)

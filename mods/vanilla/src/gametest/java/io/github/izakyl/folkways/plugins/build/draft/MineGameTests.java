@@ -149,7 +149,7 @@ public final class MineGameTests {
             }
         }
         helper.assertTrue(turned > 4, "the stair takes several rounds to reach the level, turned at " + turned);
-        helper.assertTrue(floor >= 16 - 1 && floor <= 16 + 3, "the stair ends at iron level, got " + floor);
+        helper.assertValueEqual(floor, 16, "the stair ends at the default Y coordinate");
         int reach = 0;
         for (int round = turned; round < laid.size(); round++) {
             Laid one = laid.get(round);
@@ -181,6 +181,24 @@ public final class MineGameTests {
             + " rounds");
         helper.assertTrue(pattern.growOn(new Commission(mark(), DraftKit.Filled.defaulting(pattern.knobs()),
             ground(), Direction.NORTH, 7L, Growth.first(mark()))) instanceof Round.Grew, "a fresh mine grows again");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 400)
+    public static void customPositiveAndNegativeYCoordinatesSetTheExactMineFloor(GameTestHelper helper) {
+        Pattern pattern = mine(helper);
+        for (int target : new int[] {37, -23}) {
+            List<Laid> laid = dig(helper, pattern, DraftKit.Filled.defaulting(pattern.knobs()).count("y", target),
+                ground(), MOST_ROUNDS);
+            helper.assertTrue(laid.size() > 2 && laid.size() < MOST_ROUNDS,
+                "the mine finishes at Y " + target);
+            int lowest = laid.stream().skip(1).mapToInt(Laid::lowest).min().orElseThrow();
+            helper.assertValueEqual(lowest, target, "the stair reaches the requested world Y coordinate");
+            Laid drift = laid.get(laid.size() - 1);
+            helper.assertValueEqual(drift.lowest(), target + 1, "the final drift digs just above the requested floor Y");
+            helper.assertTrue(drift.maxX() - drift.minX() > 10 || drift.maxZ() - drift.minZ() > 10,
+                "the mine opens its branches at Y " + target);
+        }
         helper.succeed();
     }
 
@@ -341,7 +359,7 @@ public final class MineGameTests {
             head.get(0).ready().draft(), hint.anchor());
         Round flooded = pattern.growOn(new Commission(hint, settings, world, Direction.NORTH, 7L, growth));
         helper.assertTrue(flooded instanceof Round.Stuck stuck && stuck.refused().explanation()
-            .filter(notice -> notice.key().equals("folkways.draft.error.mine.flooded")
+            .filter(notice -> notice.key().equals(DraftKit.key(pattern, "error.mine.flooded"))
                 && notice.args().equals(List.of(Notice.count(SURFACE - 6))))
             .isPresent(),
             "a lake across the stair holds the mine up and says where, got " + flooded);
@@ -365,7 +383,7 @@ public final class MineGameTests {
         Round round = pattern.growOn(new Commission(hint, DraftKit.Filled.defaulting(pattern.knobs()), low,
             Direction.NORTH, 7L, Growth.first(hint)));
         helper.assertTrue(round instanceof Round.Stuck stuck && stuck.refused().explanation()
-            .filter(notice -> notice.key().equals("folkways.draft.error.mine.level")).isPresent(),
+            .filter(notice -> notice.key().equals(DraftKit.key(pattern, "error.mine.level"))).isPresent(),
             "iron level lies above a mouth at y 10, got " + round);
         helper.succeed();
     }

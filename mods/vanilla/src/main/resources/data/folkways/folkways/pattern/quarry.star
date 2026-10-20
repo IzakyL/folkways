@@ -6,18 +6,38 @@ lang = {
     "en_us": {
         "title": "Quarry",
         "depth": "Depth",
+        "error.quarry.size": "A quarry must be 8–64 blocks on each side",
+        "error.quarry.depth": "Quarry depth must be 0–16 blocks",
+        "error.quarry.water": "The quarry is under water",
+        "error.quarry.ground": "No ground under the quarry",
+        "error.quarry.empty": "Nothing here stands above the quarry's floor",
     },
     "zh_cn": {
         "title": "采石场",
         "depth": "深度",
+        "error.quarry.size": "采石场每边须为 8–64 格",
+        "error.quarry.depth": "采石场深度须为 0–16 格",
+        "error.quarry.water": "采石场大部分在水下",
+        "error.quarry.ground": "采石场下方没有地面",
+        "error.quarry.empty": "这里没有高于采石场底面的地面",
     },
     "zh_hk": {
         "title": "採石場",
         "depth": "深度",
+        "error.quarry.size": "採石場每邊須為 8–64 格",
+        "error.quarry.depth": "採石場深度須為 0–16 格",
+        "error.quarry.water": "採石場大部分在水下",
+        "error.quarry.ground": "採石場下方沒有地面",
+        "error.quarry.empty": "這裏沒有高於採石場底面的地面",
     },
     "zh_tw": {
         "title": "採石場",
         "depth": "深度",
+        "error.quarry.size": "採石場每邊須為 8–64 格",
+        "error.quarry.depth": "採石場深度須為 0–16 格",
+        "error.quarry.water": "採石場大部分在水下",
+        "error.quarry.ground": "採石場下方沒有地面",
+        "error.quarry.empty": "這裡沒有高於採石場底面的地面",
     },
 }
 
@@ -34,12 +54,12 @@ def cell(work, x, z, y, width = 1, height = 1):
 def draw(site):
     zone = site.zone.sized(height = 1)
     if zone.width < 8 or zone.depth < 8 or zone.width > 64 or zone.depth > 64:
-        reject("folkways.draft.error.quarry.size")
+        reject("error.quarry.size")
     depth = site.count("depth")
     if depth < 0 or depth > 16:
-        reject("folkways.draft.error.quarry.depth")
+        reject("error.quarry.depth")
     if site.survey(zone).water > 0.2:
-        reject("folkways.draft.error.quarry.water")
+        reject("error.quarry.water")
     width = zone.width
     deep = zone.depth
     top = {}
@@ -49,7 +69,7 @@ def draw(site):
             spot = zone.at(x = x, z = z).origin
             ground = site.ground(spot.x, spot.z)
             if ground == None:
-                reject("folkways.draft.error.quarry.ground")
+                reject("error.quarry.ground")
             found = site.highest(spot.x, spot.z, "solid")
             top[(x, z)] = max(ground, found) if found != None else ground
             if (x == 0 or z == 0 or x == width - 1 or z == deep - 1) and (rim == None or ground < rim):
@@ -76,7 +96,7 @@ def draw(site):
                     dig.append(found)
             start = x if cut else None
     if not dig:
-        reject("folkways.draft.error.quarry.empty")
+        reject("error.quarry.empty")
     report("floor", floor)
     report("cuts", len(dig))
     return [clear("dig", dig)]

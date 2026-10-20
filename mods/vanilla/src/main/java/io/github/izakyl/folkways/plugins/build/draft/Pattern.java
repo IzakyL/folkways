@@ -65,6 +65,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(knobs, "knobs");
         Objects.requireNonNull(face, "face");
+        PatternText.register(face);
         accepts = Set.copyOf(accepts);
         phases = List.copyOf(phases);
         Objects.requireNonNull(capture, "capture");
@@ -88,7 +89,8 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
     public static Optional<Pattern> parse(ResourceLocation id, String source,
             Function<ResourceLocation, Optional<String>> libraries, Consumer<String> refused) {
         try (Mutability mutability = Mutability.create("pattern", id)) {
-            Module module = execute(id, source, libraries, mutability, new HashMap<>(), new LinkedHashSet<>());
+            Map<ResourceLocation, Module> loaded = new LinkedHashMap<>();
+            Module module = execute(id, source, libraries, mutability, loaded, new LinkedHashSet<>());
             Object drawing = module.getGlobal(DRAW);
             Object growing = module.getGlobal(GROW);
             if (drawing == null && growing == null) {
@@ -98,7 +100,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
                 throw Starlark.errorf("a pattern defines draw(site) or grow(site), and not both");
             }
             Pattern pattern = new Pattern(id, schema(module.getGlobal(KNOBS)),
-                new Face(offered(module.getGlobal(KNOBS)), words(module.getGlobal(LANG))),
+                new Face(offered(module.getGlobal(KNOBS)), words(module, loaded)),
                 accepts(module.getGlobal(ACCEPTS)), phases(module.getGlobal(PHASES)),
                 Capture.parse(module.getGlobal(CAPTURE)), drawing, growing);
             Set<ResourceLocation> unloaded = pattern.unloaded();
@@ -232,7 +234,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
                 case Round.Stuck stuck -> stuck.refused();
             };
         }
-        Derivation drawing = new Derivation(commission, area(commission.hint(), commission.growth()), phases);
+        Derivation drawing = new Derivation(commission, area(commission.hint(), commission.growth()), phases, face);
         Drawn drawn = run(commission, drawing, draw);
         if (drawn instanceof Drawn.Ready && drawing.grown() != null) {
             return Drawn.refused(DraftRefusal.PATTERN_FAILED, "grown(...) is what grow(site) answers, not draw(site)");
@@ -244,7 +246,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
         if (grow == null) {
             return new Round.Stuck(new Drawn.Refused(DraftRefusal.PATTERN_FAILED, id + " does not grow"));
         }
-        Derivation drawing = new Derivation(commission, area(commission.hint(), commission.growth()), phases);
+        Derivation drawing = new Derivation(commission, area(commission.hint(), commission.growth()), phases, face);
         Drawn drawn = run(commission, drawing, grow);
         Vocabulary.Grown grown = drawing.grown();
         return switch (drawn) {
@@ -364,6 +366,19 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
             }
         }
         return offered;
+    }
+
+    // Shared libraries bring their words too; the pattern's own dictionary has the last say.
+    private static Map<String, Map<String, String>> words(Module module, Map<ResourceLocation, Module> loaded)
+            throws EvalException {
+        Map<String, Map<String, String>> merged = new LinkedHashMap<>();
+        List<Module> modules = new ArrayList<>(loaded.values());
+        modules.add(module);
+        for (Module part : modules) {
+            words(part.getGlobal(LANG)).forEach((language, entries) ->
+                merged.computeIfAbsent(language, ignored -> new LinkedHashMap<>()).putAll(entries));
+        }
+        return merged;
     }
 
     // lang = {"en_us": {"title": "Road", "width": "Width", "roof.gable": "Gable"}, "zh_cn": {...}}
