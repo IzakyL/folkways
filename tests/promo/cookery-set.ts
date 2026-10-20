@@ -4,130 +4,136 @@ import type { Vec } from "../shared/colony/colony-founding";
 
 const K = "kaleidoscope_cookery:";
 
-/** An outdoor garden kitchen, with clear aisles around every real workstation. */
+/** A front-cutaway two-storey inn: working kitchen below, dining room above, lift on its right. */
 export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
   const at = (x: number, z: number, y = 0): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
   const set = async (x: number, z: number, y: number, block: string) =>
     world.command(server, `setblock ${commandPos(at(x, z, y))} ${block}`);
   const fill = async (x: number, z: number, y: number, xx: number, zz: number, yy: number, block: string) =>
     tryCommand(server, `fill ${commandPos(at(x, z, y))} ${commandPos(at(xx, zz, yy))} ${block}`);
+  const plaster = "minecraft:white_terracotta";
+  const pale = "minecraft:smooth_sandstone";
+  const timber = "minecraft:stripped_dark_oak_log[axis=y]";
+  const beam = "minecraft:stripped_dark_oak_log[axis=x]";
 
-  await fill(-32, -12, 0, -1, 36, 12, "minecraft:air");
-  await fill(0, -12, 0, 32, 36, 12, "minecraft:air");
-  // A gravel approach and a worn, bordered patio, surrounded by grass rather than a bare square platform.
-  await fill(-10, 0, -1, 9, 18, -1, "minecraft:stone_bricks");
-  await fill(-9, 1, -1, 8, 17, -1, "minecraft:smooth_sandstone");
-  await fill(-7, 4, -1, 6, 15, -1, "minecraft:polished_andesite");
-  // The elevator builder owns x=-2..2,z=-6..-2, including its lowest deck.
-  await fill(-2, -10, -1, 2, -7, -1, "minecraft:gravel");
-  await fill(-2, -1, -1, 2, 0, -1, "minecraft:gravel");
-  for (let x = -8; x <= 7; x += 3) for (let z = 2; z <= 16; z += 3) {
-    if ((x + z) % 2 === 0) await set(x, z, -1, "minecraft:andesite");
+  await fill(-32, -14, 0, -1, 36, 16, "minecraft:air");
+  await fill(0, -14, 0, 32, 36, 16, "minecraft:air");
+  // The building is one compact volume viewed through its entirely open north face.
+  // No scenery enters the lift builder's x=-2..2,z=-6..-2 column, even below its cabin.
+  await fill(-20, -8, -1, -3, 8, -1, "minecraft:stone_bricks");
+  await fill(-18, -6, -1, -3, 7, -1, pale);
+  await fill(-17, -5, -1, -4, 6, -1, "minecraft:polished_andesite");
+  await fill(-18, -6, 5, -3, 7, 5, "minecraft:dark_oak_planks");
+  await fill(-17, -5, 5, -4, 6, 5, "minecraft:spruce_planks");
+  // White side and rear walls enclose both rooms. There is no front wall or central facade pillar.
+  for (const y of [0, 6]) {
+    await fill(-18, -6, y, -18, 7, y + 3, plaster);
+    await fill(-18, 7, y, -3, 7, y + 3, plaster);
+    for (const x of [-16, -12, -8, -5]) await fill(x, 7, y + 1, x + 1, 7, y + 2, "minecraft:glass_pane");
+    for (const z of [-3, 2]) await fill(-18, z, y + 1, -18, z + 2, y + 2, "minecraft:glass_pane");
   }
-  // Low plaster garden wall. The open timber lattice above it frames the herb beds and trees.
-  await fill(-9, 18, 0, 9, 18, 0, "minecraft:bricks");
-  await fill(-9, 18, 1, 9, 18, 1, "minecraft:smooth_sandstone");
-  await fill(-9, 18, 2, 9, 18, 2, "minecraft:spruce_trapdoor[facing=north,half=bottom,open=true]");
-  for (const x of [-9, -1, 8]) {
-    await fill(x, 17, 0, x, 17, 4, "minecraft:stripped_spruce_log[axis=y]");
+  // Only the outer front posts interrupt the cutaway: both levels and all their actors remain readable.
+  for (const [x, z] of [[-18, -6], [-3, -6], [-18, 7], [-3, 7]] as const) {
+    await fill(x, z, 0, x, z, 9, timber);
+    await set(x, z, -1, "minecraft:cut_sandstone");
   }
-  await fill(-9, 17, 5, 8, 17, 5, "minecraft:spruce_log[axis=x]");
-  await fill(-9, 14, 5, 8, 14, 5, "minecraft:spruce_log[axis=x]");
-  for (let x = -9; x <= 8; x += 2) {
-    await fill(x, 14, 6, x, 18, 6, "minecraft:spruce_slab[type=bottom]");
+  for (const x of [-13, -8]) await fill(x, 7, 0, x, 7, 9, timber);
+  await fill(-18, 7, 4, -3, 7, 4, beam);
+  await fill(-18, 7, 9, -3, 7, 9, beam);
+  // The upper floor is the kitchen's ceiling. A single copper crown covers the inn, never a separate kitchen roof.
+  await fill(-18, -6, 10, -3, 7, 10, "minecraft:dark_oak_planks");
+  await fill(-19, -6, 11, -3, 8, 11, "minecraft:weathered_cut_copper");
+  await fill(-18, -5, 12, -4, 7, 12, "minecraft:weathered_cut_copper_slab[type=bottom]");
+  // A low front balcony edge leaves seated heads and hands above it; the eastern lift door is fully open.
+  await fill(-17, -6, 6, -4, -6, 6, "minecraft:spruce_trapdoor[facing=north,open=true]");
+  await fill(-3, -2, 6, -3, 6, 6, "minecraft:spruce_fence");
+  for (const x of [-17, -4]) await set(x, -6, 7, "minecraft:lantern");
+  for (const x of [-15, -10, -5]) {
+    await set(x, 6, 3, "minecraft:lantern[hanging=true]");
+    await set(x, 6, 8, "minecraft:lantern[hanging=true]");
   }
-  for (const x of [-7, 2, 6]) await set(x, 17, 4, "minecraft:lantern[hanging=true]");
-  // Continuous L-shaped counters: the native stoves will sit in the long eastern run.
-  await fill(4, 7, 0, 5, 16, 0, "minecraft:bricks");
-  await fill(-7, 16, 0, 5, 16, 0, "minecraft:polished_andesite");
-  for (let z = 7; z <= 16; z++) await set(5, z, 1, "minecraft:smooth_stone_slab[type=bottom]");
-  for (const z of [7, 9, 10, 12, 13, 15]) await set(4, z, 1, "minecraft:smooth_stone_slab[type=bottom]");
-  for (let x = -7; x <= 3; x++) {
-    await set(x, 16, 1, "minecraft:smooth_stone_slab[type=bottom]");
-    await set(x, 15, 0, "minecraft:spruce_trapdoor[facing=south,half=bottom,open=true]");
-  }
-  // Preparation island, with the crafting table and the chopping board inset into its top.
-  await fill(-3, 5, 0, 1, 5, 0, "minecraft:stripped_spruce_log[axis=x]");
-  for (const x of [-2, -1, 1]) await set(x, 5, 1, "minecraft:smooth_stone_slab[type=bottom]");
-  await set(1, 5, 1, K + "fruit_basket[facing=south]");
-  // Serving counter and stores. Storage remains reachable from the central aisle.
-  await fill(0, 2, 0, 3, 2, 0, "minecraft:stripped_spruce_log[axis=x]");
-  for (const x of [0, 2, 3]) await set(x, 2, 1, "minecraft:spruce_slab[type=bottom]");
-  await fill(-7, 3, 0, -7, 8, 0, "minecraft:spruce_planks");
-  await fill(-7, 3, 2, -7, 8, 2, "minecraft:spruce_slab[type=bottom]");
-  for (const z of [3, 8]) await set(-7, z, 1, "minecraft:spruce_fence");
-  await set(-7, 4, 1, "minecraft:barrel[facing=east]");
-  await set(-7, 6, 1, "minecraft:barrel[facing=east]");
-  await set(-7, 7, 1, K + "fruit_basket");
-  await set(-8, 5, 0, "minecraft:hay_block");
-  await set(-8, 6, 0, "minecraft:hay_block");
-  // A sink, oil crock and hanging chillies make the rear counter read as a working kitchen.
-  await set(-5, 16, 1, K + "enamel_basin");
-  await set(-3, 16, 1, K + "oil_pot[facing=south]");
-  await set(1, 16, 1, "minecraft:flower_pot");
-  for (const x of [-5, -3, 4]) {
-    await set(x, 17, 4, K + "chili_ristra[is_head=true]");
-    await set(x, 17, 3, K + "chili_ristra[is_head=false]");
-  }
-  // An upper dining terrace keeps the foreground diners and rear kitchen in one continuous shot.
-  // The five-by-five elevator column to its east is entirely reserved for the lift builder.
-  await fill(-5, -5, -1, -3, 1, -1, "minecraft:smooth_sandstone");
-  await fill(-9, -6, 5, -3, 3, 5, "minecraft:spruce_planks");
-  // Slim uprights support the terrace without crossing the lower landing or kitchen aisles.
-  for (const [x, z] of [[-9, -6], [-9, 3], [-3, 3]] as const) {
-    await fill(x, z, 0, x, z, 4, "minecraft:stripped_spruce_log[axis=y]");
-  }
-  await fill(-9, -6, 6, -3, -6, 6, "minecraft:spruce_fence");
-  await fill(-9, 3, 6, -3, 3, 6, "minecraft:spruce_fence");
-  await fill(-9, -5, 6, -9, 2, 6, "minecraft:spruce_fence");
-  await fill(-3, -2, 6, -3, 2, 6, "minecraft:spruce_fence");
-  // The only upper entrance is east at x=-3,z=-5..-3, immediately beside the cabin.
+
   const groundEntry = at(-3, -4);
   const dining = {
-    tables: [-7, -6, -5].map(x => at(x, 1, 6)),
-    chairs: [-7, -6, -5].map(x => at(x, 0, 6)),
+    tables: [-15, -11, -7].map(x => at(x, -3, 6)),
+    chairs: [-15, -11, -7].map(x => at(x, -4, 6)),
     cells: [] as Vec[],
     entry: at(-3, -4, 6),
   };
-  for (const x of [-7, -6, -5]) {
-    await set(x, 1, 6, K + "table_spruce");
-    await set(x, 0, 6, K + "chair_spruce[facing=south]");
+  for (const x of [-15, -11, -7]) {
+    await set(x, -3, 6, K + "table_spruce");
+    await set(x, -4, 6, K + "chair_spruce[facing=south]");
   }
-  for (let x = -8; x <= -4; x++) for (let z = -1; z <= 2; z++) {
+  for (let x = -16; x <= -5; x++) for (let z = -5; z <= 2; z++) {
     dining.cells.push(at(x, z, 5), at(x, z, 6));
   }
-  // Raised herb and vegetable beds, flower borders and a small pond soften the kitchen's edges.
-  for (const [x, z] of [[-6, 21], [0, 21], [6, 21]] as const) {
+  // Small furnishings sit against the rear walls, never between the camera and the actual dining seats.
+  for (const x of [-16, -10, -5]) {
+    await set(x, 5, 6, "minecraft:spruce_trapdoor[facing=south,open=true]");
+    await set(x, 5, 7, "minecraft:potted_fern");
+  }
+
+  // Kitchen positions are installed by cookery.take.ts. Keep the mill's full x=-13..-11,z=3..5 clear.
+  // Right-hand brick supports frame the native stoves at x=-6 without hiding the cooking aisle on their west.
+  await fill(-5, 1, 0, -5, 5, 0, "minecraft:bricks");
+  await fill(-16, 6, 0, -5, 6, 0, "minecraft:polished_andesite");
+  for (let x = -16; x <= -5; x++) await set(x, 6, 1, "minecraft:smooth_stone_slab[type=bottom]");
+  await fill(-10, 0, 0, -8, 0, 0, "minecraft:stripped_spruce_log[axis=x]");
+  for (const x of [-10, -8]) await set(x, 0, 1, "minecraft:smooth_stone_slab[type=bottom]");
+  await set(-15, 6, 1, K + "enamel_basin");
+  await set(-9, 6, 1, K + "oil_pot[facing=north]");
+  await set(-5, 6, 1, K + "fruit_basket[facing=north]");
+  for (const x of [-15, -10, -5]) {
+    await set(x, 7, 3, K + "chili_ristra[is_head=true]");
+    await set(x, 7, 2, K + "chili_ristra[is_head=false]");
+  }
+  // Shelves behind the four supply chests add kitchen scale without occupying their own slots or approach.
+  for (const z of [-3, -1, 1, 3]) {
+    await set(-17, z, 0, "minecraft:spruce_planks");
+    await set(-17, z, 2, "minecraft:spruce_slab[type=bottom]");
+  }
+
+  // A low right-hand courtyard balances the tall left wing and elevator without competing with their silhouettes.
+  await fill(4, -6, -1, 11, 8, -1, "minecraft:stone_bricks");
+  await fill(5, -5, -1, 10, 7, -1, pale);
+  await fill(5, -3, -2, 9, 1, -1, "minecraft:cut_sandstone");
+  await fill(6, -2, -1, 8, 0, -1, "minecraft:water");
+  await set(7, -1, 0, "minecraft:lily_pad");
+  // This garden shade is airy and only three blocks high; no new upper storey appears beside the lift.
+  for (const x of [5, 10]) for (const z of [4, 7]) await fill(x, z, 0, x, z, 2, "minecraft:stripped_spruce_log[axis=y]");
+  for (const z of [4, 6, 7]) await fill(5, z, 3, 10, z, 3, "minecraft:spruce_slab[type=bottom]");
+  for (const x of [6, 9]) await set(x, 7, 2, "minecraft:lantern[hanging=true]");
+  // A pale entry court and flower boxes stay low enough to reveal both levels from the north.
+  await fill(-20, -12, -1, 11, -8, -1, "minecraft:stone_bricks");
+  await fill(-19, -11, -1, 10, -9, -1, pale);
+  await fill(-2, -14, -1, 2, -12, -1, "minecraft:gravel");
+  for (const [x, z, length] of [[-20, -11, 5], [11, -6, 5], [11, 4, 5]] as const) {
+    await fill(x, z, 0, x, z + length - 1, 0, "minecraft:azalea_leaves[persistent=true]");
+    await set(x, z + 1, 1, "minecraft:potted_poppy");
+  }
+  for (const [x, z] of [[-19, -12], [10, -9], [4, 7]] as const) await set(x, z, 0, "minecraft:lantern");
+
+  // All trees are behind the house or far outside its silhouette. Layered foliage replaces foreground obstructions.
+  for (const [x, z, h] of [[-27, 12, 11], [-24, 30, 13], [-17, 19, 12], [-7, 18, 14], [4, 17, 12], [15, 10, 11]] as const) {
+    await fill(x, z, 0, x, z, h, "minecraft:spruce_log[axis=y]");
+    for (let layer = 0; layer < 7; layer++) {
+      const radius = layer < 3 ? 2 : layer < 5 ? 1 : 0;
+      const y = h - 5 + layer;
+      await fill(x - radius, z - radius, y, x + radius, z + radius, y, "minecraft:spruce_leaves[persistent=true]");
+      if (radius > 0) for (const dx of [-radius, radius]) for (const dz of [-radius, radius]) await set(x + dx, z + dz, y, "minecraft:air");
+    }
+    await fill(x, z, 0, x, z, h - 1, "minecraft:spruce_log[axis=y]");
+  }
+  await fill(-21, 10, -1, 11, 10, 0, "minecraft:mossy_stone_bricks");
+  for (const [x, z] of [[-17, 13], [-9, 13], [1, 13]] as const) {
     await fill(x - 2, z - 1, -1, x + 2, z + 1, -1, "minecraft:farmland[moisture=7]");
     await fill(x - 2, z - 1, 0, x + 2, z + 1, 0, "minecraft:wheat[age=7]");
-    await fill(x - 2, z + 2, 0, x + 2, z + 2, 0, "minecraft:spruce_trapdoor[facing=north,open=true]");
   }
-  for (const x of [-10, 9]) {
-    for (let z = 2; z <= 17; z++) {
-      await set(x, z, 0, "minecraft:oak_leaves[persistent=true]");
-      if (z % 3 === 0) await set(x, z, 1, "minecraft:potted_fern");
-    }
-  }
-  await fill(12, 6, -1, 16, 12, -1, "minecraft:clay");
-  await fill(13, 7, -1, 15, 11, -1, "minecraft:water");
-  for (const [x, z] of [[12, 6], [16, 9], [14, 12]] as const) await set(x, z, 0, "minecraft:mossy_cobblestone_slab[type=bottom]");
-  // Layered, irregular tree crowns replace the empty flat-world horizon with a garden grove.
-  for (const [i, [x, z]] of [[-17, 16], [-12, 27], [0, 29], [12, 26], [21, 15], [-24, 29], [25, 32]].entries()) {
-    const h = 6 + i % 3;
-    await fill(x, z, 0, x, z, h, "minecraft:oak_log[axis=y]");
-    await fill(x - 3, z - 2, h - 1, x + 3, z + 2, h + 1, "minecraft:oak_leaves[persistent=true]");
-    await fill(x - 2, z - 3, h, x + 2, z + 3, h + 2, "minecraft:oak_leaves[persistent=true]");
-    await fill(x - 1, z - 1, h + 3, x + 1, z + 1, h + 3, "minecraft:oak_leaves[persistent=true]");
-  }
-  for (const [x, z] of [[-14, 2], [12, 2], [17, 19], [-14, 23], [5, 25]] as const) {
-    await fill(x - 1, z, 0, x + 1, z + 1, 0, "minecraft:azalea_leaves[persistent=true]");
-    await set(x, z, 1, "minecraft:flowering_azalea");
-  }
-  // The residents' beds are behind the western garden, outside the kitchen composition.
-  const beds = [0, 2, 4, 6, 8, 10, 12, 14].map(z => at(-17, z));
+  // Founding beds move out of the new kitchen volume, behind the western garden.
+  const beds = [12, 14, 16, 18, 20, 22, 24, 26].map(z => at(-24, z));
   for (const bed of beds) {
     await world.command(server, `setblock ${commandPos(bed)} minecraft:white_bed[part=foot,facing=west]`);
     await world.command(server, `setblock ${commandPos({ ...bed, x: bed.x - 1 })} minecraft:white_bed[part=head,facing=west]`);
   }
-  return { beds, dining, groundEntry, theme: "open-air garden kitchen with an elevator-only upper dining terrace, stove bank, prep island, pergola and pantry" };
+  return { beds, dining, groundEntry, theme: "front-cutaway two-storey white-plaster inn: open kitchen below the dining balcony, with dark timber, green copper and a courtyard lift" };
 }

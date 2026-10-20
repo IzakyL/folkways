@@ -6,6 +6,7 @@ import { commandPos, frames } from "../shared/harness/bw-helpers";
 import { shaderEvidence } from "../shared/capture/shaders";
 import { admitPromoSettlersFast, foundPromoColonyFast, licenseCrewFast, setMaintainDemandsFast } from "./fast-setup";
 import { dressCookeryGarden } from "./cookery-set";
+import { prepareCookeryModels, WINE_FOX_MODELS, applyCookeryLooks } from "./cookery-cast";
 import { buildCookeryElevator, readCookeryElevator } from "./cookery-elevator";
 import { cinematicWorld, hideHud, launchPromoPair, promoClip, setFov, setTickRate, sleepMs, take, type PromoPair } from "./promo-kit";
 
@@ -21,20 +22,22 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
   const run = take("cookery");
   let pair: PromoPair | undefined;
   try {
-    pair = await launchPromoPair("cookery", { config: "blockwright.toml#promo-cookery" });
+    prepareCookeryModels();
+    pair = await launchPromoPair("cookery", { config: "blockwright.toml#promo-cookery", models: WINE_FOX_MODELS });
     const { server, client, clientInstance } = pair;
     const grounded = await waitForGroundedPlayer(server);
     const name = grounded.name;
     await world.command(server, `op ${name}`);
     await cinematicWorld(server);
     await world.command(server, "difficulty normal");
-    await world.command(server, "time set 3500");
+    await world.command(server, "gamerule doMobSpawning false");
+    await world.command(server, "time set 4500");
     const o = { x: Math.round(grounded.pos.x), y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) };
     const at = (x: number, z: number, y = 0): Vec => ({ x: o.x + x, y: o.y + y, z: o.z + z });
     const cells = {
-      food: at(-6, 3), source: at(-6, 5), store: at(-6, 7), dinner: at(-6, 9), target: at(1, 2),
-      table: at(-3, 5), board: at(0, 5, 1), stockpot: at(4, 8, 1), pot: at(4, 11, 1),
-      steamer: at(4, 14, 1), mill: at(-3, 11),
+      food: at(-16, -3), source: at(-16, -1), store: at(-16, 1), dinner: at(-16, 3), target: at(-5, -4),
+      table: at(-12, 0), board: at(-9, 0, 1), stockpot: at(-6, 1, 1), pot: at(-6, 3, 1),
+      steamer: at(-6, 5, 1), mill: at(-12, 4),
     };
     const set = async (p: Vec, block: string) => world.command(server, `setblock ${commandPos(p)} ${block}`);
     const scenery = await dressCookeryGarden(server, o);
@@ -66,6 +69,7 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     run.note("admitted", await admitPromoSettlersFast(server, name, founded.colony_id, 8));
     const residents = (await world.entities(server, { types: ["folkways:resident"], limit: 20 })).entities;
     expect(residents).toHaveLength(8);
+    run.note("looks", await applyCookeryLooks(server, client, residents.map(one => one.uuid)));
     const cooks = residents.slice(0, 3).map(one => one.uuid);
     const diners = residents.slice(3, 6).map(one => one.uuid);
     const porters = residents.slice(6).map(one => one.uuid);
@@ -76,7 +80,7 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     }));
     for (const [i, resident] of residents.entries()) {
       await world.command(server, `data merge entity ${resident.uuid} {Invulnerable:1b}`);
-      const post = i < 3 ? at(-4 + i * 3, 7) : at(-6 + (i - 3) * 1.5, -1);
+      const post = i < 3 ? at(-13 + i * 3, -3) : at(-6 + (i - 3) * 1.5, -8);
       await world.command(server, `tp ${resident.uuid} ${post.x + 0.5} ${post.y} ${post.z + 0.5}`);
     }
     run.note("orders", await setMaintainDemandsFast(server, name, [
@@ -84,9 +88,9 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     ]));
     await world.command(server, `item replace entity ${name} weapon.mainhand with minecraft:air`);
     await world.command(server, `gamemode spectator ${name}`);
-    await setFov(client, 62);
-    const feet = at(17, -18, 11);
-    const aim = at(-1, 6, 4);
+    await setFov(client, 45);
+    const feet = at(5, -35, 7);
+    const aim = at(-7, 1, 5);
     const look = cameraLookingAt({ x: feet.x + 0.5, y: feet.y + 1.62, z: feet.z + 0.5 },
       { x: aim.x + 0.5, y: aim.y + 0.5, z: aim.z + 0.5 });
     await world.command(server, `tp ${name} ${feet.x + 0.5} ${feet.y} ${feet.z + 0.5} ${look.yaw} ${look.pitch}`);
@@ -119,7 +123,7 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     await licenseCrewFast(server, diners.map(uuid => ({ uuid, trades: [] })));
     // Scene blocking only: put the diners near the ground-floor lift entrance and give each an appetite through real work exhaustion.
     for (const [i, uuid] of diners.entries()) {
-      const post = at(-6 + i * 1.5, -1);
+      const post = at(-6 + i * 1.5, -8);
       await world.command(server, `tp ${uuid} ${post.x + 0.5} ${post.y} ${post.z + 0.5}`);
     }
     await server.run(APPETITE, { uuids: diners });

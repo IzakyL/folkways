@@ -17,12 +17,29 @@ export async function buildCookeryElevator(
   const cabin = (x: number, y: number, z: number): Vec => ({ x: deck.x + x, y: deck.y + y, z: deck.z + z });
   const pulley = cabin(2, 15, 2);
   const contacts = [0, RISE].map(rise => cabin(5, 3 + rise, 2));
+  // A permanent timber tower surrounds the moving cabin. Leave both west landings open;
+  // all framing is outside the glued five-by-five column or above the cabin's highest roof.
+  const fixed = async (x: number, y: number, z: number, xx: number, yy: number, zz: number, block: string) =>
+    world.command(server, `fill ${commandPos(at(x, y, z))} ${commandPos(at(xx, yy, zz))} ${block}`);
+  for (const x of [-3, 3]) for (const z of [-1]) {
+    await fixed(x, -1, z, x, 14, z, "minecraft:stripped_spruce_log[axis=y]");
+    await fixed(x, -1, z, x, 0, z, "minecraft:cut_sandstone");
+  }
+  for (const y of [5, 11]) {
+    await fixed(-3, y, -1, 3, y, -1, "minecraft:stripped_spruce_log[axis=x]");
+  }
+  // Machinery cabinet: the pulley and rope stay exposed in the centre bay.
+  await fixed(-2, 13, -5, -1, 13, -3, "minecraft:dark_oak_planks");
+  await fixed(-2, 14, -5, -2, 14, -3, "minecraft:dark_oak_planks");
+  for (const z of [-5, -3]) await fixed(-1, 14, z, -1, 14, z, "minecraft:dark_oak_planks");
+  await fixed(-3, 15, -7, 3, 15, -1, "minecraft:weathered_cut_copper");
+  await fixed(-2, 16, -6, 2, 16, -2, "minecraft:weathered_cut_copper_slab[type=bottom]");
   const commands = [
     `fill ${commandPos(cabin(0, 0, 0))} ${commandPos(cabin(4, 0, 4))} minecraft:spruce_planks`,
     // Copper covers the rear and side frame. The front-centre, including both seats, stays open to the camera.
-    `fill ${commandPos(cabin(0, 4, 3))} ${commandPos(cabin(4, 4, 4))} minecraft:cut_copper`,
-    `fill ${commandPos(cabin(0, 4, 0))} ${commandPos(cabin(0, 4, 2))} minecraft:cut_copper`,
-    `fill ${commandPos(cabin(4, 4, 0))} ${commandPos(cabin(4, 4, 2))} minecraft:cut_copper`,
+    `fill ${commandPos(cabin(0, 4, 3))} ${commandPos(cabin(4, 4, 4))} minecraft:weathered_cut_copper`,
+    `fill ${commandPos(cabin(0, 4, 0))} ${commandPos(cabin(0, 4, 2))} minecraft:weathered_cut_copper`,
+    `fill ${commandPos(cabin(4, 4, 0))} ${commandPos(cabin(4, 4, 2))} minecraft:weathered_cut_copper`,
     `setblock ${commandPos(cabin(1, 1, 2))} create:yellow_seat`,
     `setblock ${commandPos(cabin(3, 1, 2))} create:yellow_seat`,
     `setblock ${commandPos(cabin(2, 3, 4))} minecraft:lantern[hanging=true]`,

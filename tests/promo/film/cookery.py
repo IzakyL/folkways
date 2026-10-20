@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -38,7 +39,7 @@ def shots(_context=None):
         ("kitchen-dining", "cookery/" + source, [
             ("kitchen_dining", [(0.0, 8.0, 1.0)]),
             ("watch", [(8.0, duration, 1.0)]),
-        ], 0.4, "tl"),
+        ], 0.4, "tr"),
     ]
 
 
@@ -59,6 +60,19 @@ def main():
     os.environ["PROMO_SHOTS"], os.environ["PROMO_NAME"] = build.OUT, "folkways-cookery-elevator"
     os.environ.setdefault("PROMO_MUSIC", "minecraft/sounds/music/game/comforting_memories.ogg")
     import assemble  # joins this cut's segments and writes upload and preview films
+    # Keep the borrowed cast's original authors and adaptation details with both exports.
+    credits = ["Wine Fox / 酒狐 model credits", "Source: https://github.com/OpenYSM/OpenYSM",
+               "License: CC BY-NC-SA 4.0 — https://creativecommons.org/licenses/by-nc-sa/4.0/",
+               "Promo adaptation: hidden YSM-only bones removed; resident animation rendering.", "",
+               "Background music: Minecraft — Comforting Memories",
+               "Game asset: " + os.environ["PROMO_MUSIC"], ""]
+    for folder in sorted((Path(HERE).parent / "models").glob("wine_fox_*")):
+        metadata = json.loads((folder / "ysm.json").read_text())["metadata"]
+        credits.append(metadata["name"])
+        for author in metadata["authors"]:
+            credits.append(f"  {author['name']} — {author.get('role', '')} {json.dumps(author.get('contact', {}), ensure_ascii=False)}")
+        credits.append("")
+    (Path(build.WORK).parent / "folkways-cookery-elevator-credits.txt").write_text("\n".join(credits))
 
 
 if __name__ == "__main__":

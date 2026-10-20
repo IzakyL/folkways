@@ -17,7 +17,7 @@ export const WINE_FOX_MODELS: SeededModel[] = MODEL_NAMES.map((name) => ({
 }));
 
 /** Run before launchPromoPair; its models seed copies these prepared folders into the server datapack. */
-export function prepareElevatorModels() {
+export function prepareCookeryModels() {
   execFileSync("python3", [path.resolve("tests/promo/models/vendor.py")], { stdio: "inherit" });
 }
 
@@ -26,12 +26,12 @@ type CastEvidence = { residents: ResidentLook[] };
 const geometry = (name: string) => `assets/folkways/geo/resident_models/${name}.geo.json`;
 
 /** Give every actor a fixed Wine Fox appearance, and verify the client receives the same entity data. */
-export async function applyElevatorLooks(server: MinecraftServer, client: MinecraftClient, uuids: string[]) {
-  if (!uuids.length) throw new Error("The elevator cast must contain at least one resident");
+export async function applyCookeryLooks(server: MinecraftServer, client: MinecraftClient, uuids: string[]) {
+  if (!uuids.length) throw new Error("The cookery cast must contain at least one resident");
   const arrival = await waitForModelsOnClient(client, geometry(MODEL_NAMES[0]));
   const resources = MODEL_NAMES.map((name) => ({ name, arrived: clientHasModelFile(client, geometry(name)) }));
   if (resources.some((model) => !model.arrived)) {
-    throw new Error(`The elevator's Wine Fox model pack is incomplete: ${JSON.stringify(resources)}`);
+    throw new Error(`The cookery's Wine Fox model pack is incomplete: ${JSON.stringify(resources)}`);
   }
   const assigned = await server.run(APPLY_LOOKS, { uuids, names: [...MODEL_NAMES] });
   await tick.sprint(server, 2);
@@ -50,7 +50,7 @@ export async function applyElevatorLooks(server: MinecraftServer, client: Minecr
 }
 
 const APPLY_LOOKS = defineTask<{ uuids: string[]; names: string[] }, CastEvidence>({
-  name: "folkways.promo.elevator-wine-fox-cast",
+  name: "folkways.promo.cookery-wine-fox-cast",
   side: "server",
   timeoutMs: 20_000,
   source: javaTask({
@@ -66,7 +66,7 @@ var residents=new ArrayList<Map<String,Object>>();
 for(int index=0;index<uuids.size();index++){
     String uuid=String.valueOf(uuids.get(index));
     if(!(level.getEntity(UUID.fromString(uuid)) instanceof ResidentEntity resident))
-        throw new IllegalStateException("Missing elevator resident "+uuid);
+        throw new IllegalStateException("Missing cookery resident "+uuid);
     String prefix="model/"+names.get(index%names.size())+"/";
     var id=ResidentLooks.pool(level.registryAccess()).keySet().stream()
         .filter(key->key.getNamespace().equals("folkways")&&key.getPath().startsWith(prefix))
@@ -81,7 +81,7 @@ return Map.of("residents",residents);
 });
 
 const READ_CLIENT_LOOKS = defineTask<{ uuids: string[] }, CastEvidence>({
-  name: "folkways.promo.elevator-client-cast",
+  name: "folkways.promo.cookery-client-cast",
   side: "client",
   timeoutMs: 20_000,
   source: javaTask({

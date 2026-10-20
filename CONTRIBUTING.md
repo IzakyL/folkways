@@ -169,7 +169,7 @@ See the [documentation index](docs/README.md) for the layout and maintenance not
 The Cookery promo's wording lives in `tests/promo/film/promo-cookery.toml`. Run
 `npm run setup` before filming. The scene and recording are defined by
 `tests/promo/cookery.take.ts` and `tests/promo/cookery-elevator.ts`: a native kitchen
-downstairs, a dining room upstairs, and a native Create elevator as their only
+downstairs, an open dining room upstairs, and a native Create elevator as their only
 vertical route. Residents actually board the elevator to reach their meal; its
 passengers are observed separately from residents seated at dining tables.
 
@@ -184,7 +184,11 @@ kitchen appliances. Kitchen work and table replenishment are warmed up before
 recording. Ordinary colony errands determine the elevator calls and journeys.
 The film observes the kitchen, elevator and dining room together in one uninterrupted
 shot at normal speed; it does not demonstrate a complete raw-ingredient chain.
-Brief opening captions leave the dining area clear.
+The set uses pale plaster, dark timber frames and weathered copper roofs around a
+landscaped inn courtyard. The former standalone elevator promo is replaced by this
+combined take. Wine Fox cast models retain their source and author metadata in
+`folkways-cookery-elevator-credits.txt` beside the exports. Brief opening captions
+leave the dining area clear.
 
 The game suites download Minecraft, NeoForge and the fixture mods on first run, and their
 test servers accept the [Minecraft EULA](https://www.minecraft.net/eula) through
