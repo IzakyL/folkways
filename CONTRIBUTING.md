@@ -163,56 +163,57 @@ See the [documentation index](docs/README.md) for the layout and maintenance not
 | `npm run pattern:take` | Lays out each work pattern's gallery and shoots it |
 | `npm run bench:take` | Performance benchmarks on a large colony |
 | `npm run promo:take` | Films the promotional takes |
-| `npm run promo:cookery` | Films one 50-second, real-time shot of the downstairs kitchen, Create elevator and upstairs dining room |
-| `npm run promo:cookery:film` | Copies the complete original recording to `folkways-cookery-raw.mp4` and writes model credits |
+| `npm run promo:cookery` | Films one 240-second, real-time inn scene with a working kitchen, Create elevator and two dining areas |
+| `npm run promo:cookery:film` | Preserves the complete original, exports a 120-second 2× speed copy with accelerated game audio, and writes model credits; requires FFmpeg with libx264 |
 
-Run `npm run setup` before filming. The scene and recording are defined by
-`tests/promo/cookery.take.ts` and `tests/promo/cookery-elevator.ts`: a native kitchen
-downstairs, an open dining room upstairs, and a native Create elevator as their only
-vertical route. Residents walk into the cabin, stand on its moving floor, and walk
-out at the destination to reach their meal. The cabin has no seat cushions or rider
-mounts. Its capacity is discovered from usable standing places; evidence records
-both total capacity and free places rather than assuming two passengers. Verified
-cabin occupants with active journeys are observed separately from nearby residents
-on the landings and residents seated at dining tables.
+Run `npm run setup` before filming. `tests/promo/cookery.take.ts` stages a timber-and-plaster
+inn with a layered copper roof, a wooded garden, an open kitchen, three upstairs table
+groups and three courtyard tables. The native Create elevator is the only vertical
+route. There is no chain conveyor or package-delivery network in this take.
 
-The elevator's `places`, `freePlaces` and `placeOf` describe standing room, replacing
-the earlier `seats`, `freeSeats` and `seatOf` model. They do not refer to native Create
-seat slots. Boarding, alighting and cancellation use ordinary movement and physical
-support on the cabin floor; cancellation does not teleport a resident to a landing.
-Dining chairs retain their native seated interaction.
+Residents walk into the cabin, stand on its moving floor and walk out at the destination.
+The cabin has no seats or rider mounts. Capacity is discovered from usable standing
+places; evidence records physical occupants, active journeys, total capacity and free
+places separately from residents on the landings or seated at dining tables. Route
+estimates do not call the elevator or reserve places. Boarding, alighting and cancellation
+use ordinary movement without teleporting residents to landings.
 
-Passengers wait away from the doorway, then follow a path across the stopped cabin's
-actual blocks to their reserved standing places. The dispatcher waits for complete
-boarding, a clear entrance, and complete alighting before the next journey. Exit
-selection follows the onward route, including when another nearby ledge is closer.
-Route estimates use immutable queue snapshots with physical occupancy, reserved
-capacity, same-destination batching and the passenger's expected arrival time;
-asking for an estimate does not call the elevator or reserve a place.
+Five kitchen workers prefer crafting over general hauling; four porters support the
+service. Ordinary stock orders maintain 48 plates of steamed buns (`baozi_plate`), 24
+pepper-pork stir-fries and eight bowls of pork-bone soup, while table-service requests
+can drive additional Dongpo pork production. A native hopper drains the output shelf
+into unregistered cellar storage, keeping the bounded kitchen orders active. The native Cookery appliances
+operate on supplied raw ingredients, tools, oil, bowls and pot lids. A small opening
+service stock contains 128 portions of Dongpo pork; subsequent table deliveries can use
+the kitchen's real products. Both dining areas serve this substantial main dish,
+so visitors can finish their meal before walking home. Whole bun platters are display
+items without FOOD and are not used as native-table food. Three additional workers
+operate native cutting, tea and roasting stations;
+a farmer and three yard workers harvest, fish, shear and milk in the courtyard.
 
-The continuous, 50-second real-time take is saved as
-`tests/out/promo/takes/cookery/01-kitchen-dining.mp4`, alongside production and elevator
-journey evidence. `npm run promo:cookery:film` copies that file byte for byte to
-`tests/out/promo/film/folkways-cookery-raw.mp4`. The final recording keeps the source's
-1080p60 video, original audio, complete duration and metadata. Export performs no
-trimming, transcoding, captions, music mixing, gradients or fades.
-The script stages the set, residents and dining food: the upstairs tables are supplied
-with Dongpo pork (`dongpo_pork`), while stock targets maintain 24 plates of steamed
-buns (`baozi_plate`), 12 pepper-pork stir-fries and eight bowls of pork-bone soup through
-the planner, real recipes and six working appliances in the compact downstairs kitchen.
-The pantry supplies ingredients, oil, bowls and pot lids. Chairs face the camera from
-behind the dining tables, and the closer elevated camera exposes the food and work
-surfaces. A ninth resident, admitted after rehearsal, performs real harvesting,
-replanting and storage work in two courtyard fields, staged by
-`tests/promo/cookery-work.ts`. Kitchen work and table replenishment are warmed up before
-recording. Ordinary colony errands determine the elevator calls and journeys.
-The film observes the kitchen, elevator and dining room together in one uninterrupted
-shot at normal speed; it does not demonstrate a complete raw-ingredient chain.
-The set uses pale plaster, dark timber frames and weathered copper roofs around a
-landscaped inn courtyard. The former standalone elevator promo is replaced by this
-combined take. Wine Fox cast models retain their source and author metadata in
-`folkways-cookery-elevator-credits.txt` beside the raw export. Credits are a separate
-text file and are not overlaid on the recording.
+Sixteen visiting diners arrive from both ends of the village street, staggered by eight seconds.
+Half walk to the upstairs entrance using the elevator before becoming hungry; the others
+enter the courtyard. The filming director submits worker-bound native walking and waiting
+nodes. It creates appetite through normal exertion after arrival, observes a completed
+meal and food level 18+ from the living system, and submits the return walk. After a pause,
+completed visitors join the arrival cycle again to keep both dining areas busy. All visible
+movement, cooking,
+table service and eating use the game's normal systems. Only initial blocking takes place
+by teleport while ticks are frozen; visitors carry no cargo or delivery jobs.
+
+The uninterrupted 240-second take is saved as
+`tests/out/promo/takes/cookery/01-kitchen-dining.mp4`. Evidence beside it records the two
+areas' servings and replenishment, kitchen activity, ordered visitor arrivals/meals/exits,
+and occupied elevator travel. Checks require fresh service to both areas, multiple
+completed visits and kitchen activity in at least 70% of samples. The recording retains
+1080p60 video and original game audio. `npm run promo:cookery:film` copies the whole
+recording byte for byte to `tests/out/promo/film/folkways-cookery-raw.mp4`, without
+trimming, transcoding, overlays or added music. It also exports the entire take at two
+times speed as `tests/out/promo/film/folkways-cookery-2x.mp4`: approximately 120 seconds
+of 1080p60 H.264 video, with the original game audio accelerated by the same factor.
+The viewing copy changes playback speed only; it adds no staged or fabricated movement.
+Wine Fox source and author metadata is
+written beside it in `folkways-cookery-elevator-credits.txt`.
 
 The game suites download Minecraft, NeoForge and the fixture mods on first run, and their
 test servers accept the [Minecraft EULA](https://www.minecraft.net/eula) through

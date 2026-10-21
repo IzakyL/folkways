@@ -11,7 +11,7 @@ function layout(origin: Vec) {
   return {
     stations: { board: at(-14, 1, -8), tea: at(-10, 1, -8), spit: at(-6, 0, -8) },
     sources: [at(-13, 0, -7), at(-11, 0, -7), at(-7, 0, -7)],
-    targets: [at(-14, 0, -7), at(-5, 6, 0), at(-5, 0, -7)],
+    targets: [at(-14, 0, -7), at(-9, 0, -7), at(-5, 0, -7)],
     posts: [at(-14, 0, -9), at(-10, 0, -9), at(-6, 0, -9)],
     products: [K + "sashimi", K + "barley_tea", "minecraft:cooked_rabbit"],
   };
@@ -23,7 +23,7 @@ export async function configureMarketMenu(server: MinecraftServer) {
 }
 
 /** Ordinary maintain orders drive native cutting and the powered rotating spit; tea starts separately.
- * Initial supplies contain no requested products. All work and upstairs tea delivery belong to Folkways. */
+ * Initial supplies contain no requested products. All work and courtyard tea delivery belong to Folkways. */
 export async function stageExtraKitchen(
   server: MinecraftServer, player: string, colony_id: string, origin: Vec, workersUUIDs: string[],
 ) {
@@ -59,7 +59,7 @@ export async function stageExtraKitchen(
   const licensed = await licenseCrewFast(server, workersUUIDs.map(uuid => ({ uuid, trades: ["crafting", "hauling"] })));
   const filters = await runColonyTask(server, FILTER_TARGETS, { colony_id, ...plan });
   // Start only cutting and roasting here. The director files the twelve-cup tea order
-  // after the native spit has started, so brewing and upstairs delivery happen during the shot.
+  // after the native spit has started, so brewing and courtyard delivery happen during the shot.
   const demands = [
     { at: plan.targets[0], item: plan.products[0], count: 24, low: 12 },
     { at: plan.targets[2], item: plan.products[2], count: 8, low: 8 },

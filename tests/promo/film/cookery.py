@@ -1,6 +1,7 @@
-"""Export the complete original Cookery recording without changing its video or audio."""
+"""Export the complete original Cookery recording and a six-times-speed viewing copy."""
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -32,6 +33,17 @@ def main():
     shutil.copy2(TAKE, destination)
     write_credits()
     print(destination, flush=True)
+    accelerated = OUT / "folkways-cookery-2x.mp4"
+    subprocess.run([
+        "ffmpeg", "-hide_banner", "-y", "-i", str(destination),
+        "-map", "0:v:0", "-map", "0:a:0?",
+        "-vf", "setpts=PTS/2,fps=60",
+        "-af", "atempo=2",
+        "-c:v", "libx264", "-crf", "20", "-preset", "fast", "-threads", "4",
+        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+        "-movflags", "+faststart", str(accelerated),
+    ], check=True)
+    print(accelerated, flush=True)
 
 
 if __name__ == "__main__":
