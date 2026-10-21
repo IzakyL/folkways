@@ -76,7 +76,7 @@ final class TrayWork implements Node, Workload.Within {
         if (!recovering) { return Optional.empty(); }
         if (hold != null) return bookings.valid(at, id(), generation) ? Optional.empty() : Optional.of(CookeryRefusal.STATION_CHANGED);
         if (generation != bookings.generation(at) || !bookings.free(at)) { return Optional.of(CookeryRefusal.STATION_CHANGED); }
-        hold = bookings.hold(at, id());
+        hold = bookings.hold(at, id(), spec().estimate());
         var refused = hold.take();
         if (refused.isEmpty()) TrayStation.rememberRecovery(colony, at, this);
         return refused;

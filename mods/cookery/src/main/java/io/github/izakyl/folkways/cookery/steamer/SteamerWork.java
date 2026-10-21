@@ -77,7 +77,7 @@ final class SteamerWork implements Node, Workload.Within {
     public Optional<RefusalKind> planned(ServerLevel level) {
         if (!recovering) { return Optional.empty(); }
         if (generation != bookings.generation(at) || !bookings.free(at)) { return Optional.of(CookeryRefusal.STATION_CHANGED); }
-        hold = bookings.hold(at, id());
+        hold = bookings.hold(at, id(), spec().estimate());
         Optional<RefusalKind> refused = hold.take();
         if (refused.isEmpty()) { SteamerStation.keep(colony, at, recoveryGoal, generation); }
         return refused;

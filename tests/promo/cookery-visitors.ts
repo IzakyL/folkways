@@ -2,19 +2,10 @@ import { defineTask, javaTask, type MinecraftServer } from "@izakyl/blockwright-
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import type { Vec } from "../shared/colony/colony-founding";
 import { licenseCrewFast } from "./fast-setup";
+import { cookeryVisitorPlans, WAVE_SIZE, WAVE_SECONDS, BALCONY_CAPACITY, COURTYARD_CAPACITY } from "./cookery-visitor-flow";
+export { summarizeCookeryVisitors } from "./cookery-visitor-flow";
 
 const OWNER = "folkways:promo_visitors";
-
-function layout(origin: Vec, count: number) {
-  const at = (x: number, z: number, y = 0): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
-  return Array.from({ length: count }, (_, i) => ({
-    // Alternate roads and floors. Separate waiting positions keep the pavement clear.
-    start: at(i % 2 === 0 ? -37 - Math.floor(i / 2) * 2 : 27 + Math.floor(i / 2) * 2, -16),
-    entrance: i % 2 === 0 ? at(-5, -5, 6) : at(-3, -10),
-    area: i % 2 === 0 ? "balcony" : "courtyard",
-    release: i * 8,
-  }));
-}
 
 /** Frozen-time blocking only. Visitors carry no cargo and have no delivery jobs. */
 export async function stageCookeryVisitors(
@@ -24,9 +15,9 @@ export async function stageCookeryVisitors(
     throw new Error("Cookery visitors require distinct newly admitted residents");
   }
   const licensed = await licenseCrewFast(server, workersUUIDs.map(uuid => ({ uuid, trades: [] })));
-  const plans = layout(origin, workersUUIDs.length);
+  const plans = cookeryVisitorPlans(origin, workersUUIDs.length);
   const prepared = await runColonyTask(server, STAGE, { colony_id, origin, workers: workersUUIDs, plans });
-  return { visitors: workersUUIDs, workers: workersUUIDs, plans, licensed, prepared,
+  return { visitors: workersUUIDs, workers: workersUUIDs, plans, waveSize: WAVE_SIZE, waveSeconds: WAVE_SECONDS, capacity: { balcony: BALCONY_CAPACITY, courtyard: COURTYARD_CAPACITY }, licensed, prepared,
     initial: await readCookeryVisitors(server, colony_id, origin, workersUUIDs),
     via: "native-walking-and-dining" };
 }
@@ -38,7 +29,7 @@ export async function stepCookeryVisitors(
   server: MinecraftServer, colony_id: string, origin: Vec, visitorUUIDs: string[], seconds: number,
 ) {
   await runColonyTask(server, STEP, {
-    colony_id, origin, workers: visitorUUIDs, plans: layout(origin, visitorUUIDs.length), seconds,
+    colony_id, origin, workers: visitorUUIDs, plans: cookeryVisitorPlans(origin, visitorUUIDs.length), seconds,
   });
   return readCookeryVisitors(server, colony_id, origin, visitorUUIDs);
 }
@@ -50,45 +41,12 @@ export async function readCookeryVisitors(
   return runColonyTask(server, READ, { colony_id, origin, workers: workersUUIDs });
 }
 
-export function summarizeCookeryVisitors(samples: Array<{ seconds: number; [key: string]: any }>, workersUUIDs: string[]) {
-  return workersUUIDs.map(uuid => {
-    let outside: number | undefined, entered: number | undefined, ate: number | undefined, departed: number | undefined;
-    let baseline = -24000, visits = 0;
-    let last: any;
-    let diningSamples = 0, upperFloorSamples = 0;
-    const phases = new Set<string>();
-    for (const sample of samples) {
-      const person = sample.people?.find((one: any) => one.uuid === uuid);
-      if (!person) continue;
-      last = person;
-      phases.add(person.phase);
-      if (person.doing === "dining_eating") diningSamples++;
-      if (person.local?.[1] >= 5) upperFloorSamples++;
-      if (outside === undefined && person.offscreen) { outside = sample.seconds; baseline = person.dined; }
-      if (outside !== undefined && entered === undefined && sample.seconds > outside && person.insideInn) entered = sample.seconds;
-      if (entered !== undefined && ate === undefined && person.dined > baseline && person.dined >= sample.started) ate = sample.seconds;
-      if (ate !== undefined && sample.seconds > ate && person.offscreen && person.departures > 0) departed ??= sample.seconds;
-      visits = Math.max(visits, person.departures ?? 0);
-    }
-    const incompleteReason = outside === undefined ? "never observed off camera"
-      : entered === undefined ? "entrance walk not observed"
-      : ate === undefined ? "no completed table meal observed"
-      : departed === undefined ? "exit walk not completed off camera" : undefined;
-    return { uuid, outside, entered, ate, departed, visits, diningSamples, upperFloorSamples,
-      phases: [...phases], lastPhase: last?.phase, lastDoing: last?.doing, lastLocal: last?.local,
-      lastFood: last?.food, lastDined: last?.dined, walkEnding: last?.walkEnding,
-      failure: last?.failure || undefined, lastFailure: last?.lastFailure || undefined,
-      walkAttempts: last?.walkAttempts ?? 0, walkFailures: last?.walkFailures ?? 0,
-      walkRetries: last?.walkRetries ?? 0, retryAt: last?.retryAt, incompleteReason,
-      complete: outside !== undefined && entered !== undefined && ate !== undefined && departed !== undefined };
-  });
-}
-
 const imports = [
   "io.github.izakyl.folkways.core.api.colony.Colonies",
   "io.github.izakyl.folkways.core.api.resident.body.Bodies",
   "io.github.izakyl.folkways.core.api.work.*",
   "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+  "io.github.izakyl.folkways.plugins.person.living.DiningTables",
   "net.minecraft.core.BlockPos", "net.minecraft.nbt.CompoundTag", "net.minecraft.resources.ResourceLocation",
   "io.github.izakyl.folkways.core.api.colony.Colony", "net.minecraft.server.level.ServerLevel",
 ];
@@ -143,7 +101,8 @@ for(int i=0;i<ids.size();i++){
  if(!Footing.withFeetAt(level,plan.blockPos("entrance")))throw new IllegalStateException("Visitor entrance is obstructed: "+plan.blockPos("entrance"));
  body.pack().clearContent();body.mob().teleportTo(post.getX()+0.5,post.getY(),post.getZ()+0.5);body.mob().setInvulnerable(true);
  var state=new CompoundTag();state.putString("phase","holding");state.putDouble("release",plan.number("release"));
- state.putString("area",plan.string("area"));state.putInt("departures",0);saved.put(ids.get(i),state);
+ state.putString("area",plan.string("area"));state.putInt("wave",(int)plan.integer("wave"));
+ state.putInt("departures",0);saved.put(ids.get(i),state);
 }
 var owner=ResourceLocation.parse("${OWNER}");colony.keep(owner,saved);
 for(int i=0;i<ids.size();i++){
@@ -165,38 +124,111 @@ var colony=Colonies.of(ctx.server(),UUID.fromString(args.string("colony_id"))).o
 var owner=ResourceLocation.parse("${OWNER}");var saved=colony.kept(owner).copy();
 var ids=args.strings("workers");double seconds=args.number("seconds");var life=colony.kept(LivingContent.ID);
 var walks=new ArrayList<Runnable>();
-for(int i=0;i<ids.size();i++){
+// Reserve the whole visit, including the return trip, so inbound visitors cannot
+// fill the lift while an earlier party is still trying to leave it.
+var active=new HashMap<String,Integer>();
+var claims=new HashMap<String,Integer>();
+for(var uuid:ids){
+ var state=saved.getCompound(uuid);var phase=state.getString("phase");
+ if(phase.equals("walk_failed"))phase=state.getString("walkPhase");
+ if(Set.of("arriving","inside","waiting_for_food","dining","departing").contains(phase))active.merge(state.getString("area"),1,Integer::sum);
+ var entity=level.getEntity(UUID.fromString(uuid));var body=entity==null?null:Bodies.of(entity).orElse(null);
+ boolean eating=body!=null&&body.doing().map(doing->doing.toward().orElse(doing.what()).getPath().equals("dining_eating")).orElse(false);
+ if(phase.equals("dining")||eating)claims.merge(state.getString("area"),1,Integer::sum);
+}
+var order=new ArrayList<Integer>();for(int i=0;i<ids.size();i++)order.add(i);
+order.sort(Comparator.comparingDouble(i->saved.getCompound(ids.get(i)).getDouble("release")));
+var queues=new HashMap<String,ArrayDeque<String>>();
+for(int i:order){
+ var state=saved.getCompound(ids.get(i));var phase=state.getString("phase");
+ if(phase.equals("walk_failed"))phase=state.getString("walkPhase");
+ if((phase.equals("waiting")||phase.equals("holding"))&&seconds>=state.getDouble("release"))
+  queues.computeIfAbsent(state.getString("area"),key->new ArrayDeque<String>()).add(ids.get(i));
+}
+for(int i:order){
  var uuid=ids.get(i);var entity=level.getEntity(UUID.fromString(uuid));if(entity==null)continue;
  var body=Bodies.of(entity).orElseThrow();var state=saved.getCompound(uuid);var phase=state.getString("phase");
  var plan=Args.of((Map)args.list("plans").get(i),"visitor");
  long dined=-24000;for(var raw:life.getList("moods",10)){var mood=(CompoundTag)raw;
   if(mood.hasUUID("resident")&&mood.getUUID("resident").equals(body.resident().id()))dined=mood.getCompound("times").getLong("dined");}
- int food=-1;for(var raw:life.getList("hunger",10)){var hunger=(CompoundTag)raw;
-  if(hunger.hasUUID("resident")&&hunger.getUUID("resident").equals(body.resident().id()))food=hunger.getInt("FoodLevel");}
+ int food=-1;double saturation=0,exhaustion=0;
+ for(var raw:life.getList("hunger",10)){var hunger=(CompoundTag)raw;
+  if(hunger.hasUUID("resident")&&hunger.getUUID("resident").equals(body.resident().id())){
+   food=hunger.getInt("FoodLevel");saturation=hunger.getFloat("Saturation");exhaustion=hunger.getFloat("Exhaustion");
+  }
+ }
  if(phase.equals("walk_failed")&&level.getGameTime()>=state.getLong("retryAt")&&state.contains("walkDestination")){
   var retryDestination=BlockPos.of(state.getLong("walkDestination"));
   var retryAfter=state.getString("walkAfter");int retryTicks=Math.max(1,state.getInt("walkTicks"));
   state.putString("phase",state.getString("walkPhase"));state.putInt("walkRetries",state.getInt("walkRetries")+1);
   walks.add(()->walk(colony,level,owner,body.resident().id(),uuid,retryDestination,retryAfter,retryTicks));
  }else if(phase.equals("waiting")&&seconds>=state.getDouble("release")){
-  state.putString("phase","arriving");state.putLong("baseline",dined);
-  walks.add(()->walk(colony,level,owner,body.resident().id(),uuid,plan.blockPos("entrance"),"inside"));
- }else if(phase.equals("inside")){
-  // Actual survival exertion creates hunger; no food, eating progress or mood is fabricated.
-  WorkExertion.performed(body.mob(),4000/Math.max(0.1,body.effects().value(Stats.APPETITE)),0,0);
-  state.putString("phase","dining");state.putLong("baseline",dined);
- }else if(phase.equals("dining")&&dined>state.getLong("baseline")&&food>=18){
-  // Living's hunger watermark stays engaged until FoodLevel reaches 18, including after
-  // a small meal. Let real repeat meals finish before asking this diner to walk out.
-  // ate()/dined() synchronously write the hunger and mood snapshot used above.
+  var area=state.getString("area");var queue=queues.get(area);
+  int capacity=area.equals("balcony")?${BALCONY_CAPACITY}:${COURTYARD_CAPACITY};
+  if(active.getOrDefault(area,0)<capacity&&queue!=null&&uuid.equals(queue.peek())){
+   queue.remove();active.merge(area,1,Integer::sum);
+   state.putString("phase","arriving");state.putLong("baseline",dined);
+   walks.add(()->walk(colony,level,owner,body.resident().id(),uuid,plan.blockPos("entrance"),"inside"));
+  }else{
+   // Keep an over-capacity party at its off-camera post through ordinary work.
+   // Its original release time stays intact, preserving FIFO across repeat visits.
+   state.putString("phase","holding");
+   walks.add(()->walk(colony,level,owner,body.resident().id(),uuid,plan.blockPos("start"),"waiting",20));
+  }
+ }else if(Set.of("inside","waiting_for_food","dining").contains(phase)&&dined>state.getLong("baseline")&&food>4){
+  // A real completed table meal starts the return journey. Native hunger can still
+  // interrupt it for further servings and then resume it. Mixed meal nutrition can
+  // stop below 18 when another full serving would be wasted; never strand that diner.
   state.putString("phase","departing");state.putLong("ateAt",dined);
   walks.add(()->walk(colony,level,owner,body.resident().id(),uuid,plan.blockPos("start"),"outside"));
+ }else if(phase.equals("inside")
+   &&!body.doing().map(doing->doing.toward().orElse(doing.what()).getPath().equals("dining_eating")).orElse(false)){
+  // The entrance is a waiting point, not proof of a ready meal. Do not create
+  // hungry idle wanderers when replenishment has not reached this floor yet.
+  int readyPortions=0;
+  for(var raw:plan.list("tables")){
+   var at=Args.of(Map.of("at",raw),"table").blockPos("at");
+   var display=DiningTables.inventory(level,at).orElse(null);if(display==null)continue;
+   for(int slot=0;slot<display.getContainerSize();slot++){
+    var stack=display.getItem(slot);var properties=stack.getFoodProperties(body.mob());
+    if(!stack.isEmpty()&&properties!=null&&properties.nutrition()>0
+      &&properties.nutrition()<=20-Math.min(10,Math.max(0,food)))readyPortions++;
+   }
+  }
+  // Count earlier table claims, including new admissions from this same sample,
+  // so a single displayed serving cannot release a whole hungry party.
+  if(readyPortions<=claims.getOrDefault(state.getString("area"),0)){
+   state.putString("phase","waiting_for_food");
+   walks.add(()->walk(colony,level,owner,body.resident().id(),uuid,plan.blockPos("entrance"),"inside",20));
+  }else{
+  claims.merge(state.getString("area"),1,Integer::sum);
+  // Use ordinary exertion to arrive at food 10: every menu dish fits, without
+  // emptying the belly and requiring several small dishes before the exit walk.
+  // Hunger spends one point per four exhaustion, exhausting saturation first.
+  if(food>10){
+   double needed=Math.max(0,4*(Math.ceil(saturation)+food-10)-exhaustion+0.001);
+   double units=needed/0.05/Math.max(0.1,body.effects().value(Stats.APPETITE));
+   WorkExertion.performed(body.mob(),units,0,0);
+  }
+  state.putString("phase","dining");state.putLong("baseline",dined);
+  }
+ }else if(phase.equals("dining")&&dined<=state.getLong("baseline")
+   &&!body.doing().map(doing->doing.toward().orElse(doing.what()).getPath().equals("dining_eating")).orElse(false)){
+  // A serving may have gone to another patron since the previous sample. Keep
+  // waiting near the assigned entrance; a native table urge can interrupt this
+  // ordinary walk as soon as it has a real portion and seat to claim.
+  state.putString("phase","waiting_for_food");
+  walks.add(()->walk(colony,level,owner,body.resident().id(),uuid,plan.blockPos("entrance"),"inside",20));
  }else if(phase.equals("outside")){
   var start=plan.blockPos("start");
   if(entity.distanceToSqr(start.getX()+0.5,start.getY(),start.getZ()+0.5)<=9){
    state.putInt("departures",state.getInt("departures")+1);
-   state.putDouble("release",seconds+8+(i%4)*2);state.putString("phase","holding");
-   int waitingTicks=(8+(i%4)*2)*20;
+   // Rejoin the next slot for this wave, keeping later arrivals in the stream.
+   // Off-camera waiting is a native job so ordinary leisure cannot wander into shot.
+   int cycleSeconds=((ids.size()+${WAVE_SIZE}-1)/${WAVE_SIZE})*${WAVE_SECONDS};
+   double nextRelease=plan.number("release")+(Math.floor((seconds-plan.number("release"))/cycleSeconds)+1)*cycleSeconds;
+   state.putDouble("release",nextRelease);state.putString("phase","holding");
+   int waitingTicks=Math.max(1,(int)Math.ceil((nextRelease-seconds)*20));
    walks.add(()->walk(colony,level,owner,body.resident().id(),uuid,start,"waiting",waitingTicks));
   }
  }
@@ -227,7 +259,10 @@ for(var uuid:args.strings("workers")){
  var state=history.getCompound(uuid);var one=new LinkedHashMap<String,Object>();
  one.put("uuid",uuid);one.put("role","visitor");one.put("position",List.of(entity.getX(),entity.getY(),entity.getZ()));one.put("local",List.of(x,y,z));
  one.put("doing",body.doing().map(doing->doing.toward().orElse(doing.what()).getPath()).orElse("idle"));
+ boolean dining=entity instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person&&person.leisureMotion().equals("dining");
+ one.put("dining",dining);one.put("seatedAtTable",dining&&entity.isPassenger());
  one.put("food",food);one.put("dined",dined);one.put("phase",state.getString("phase"));one.put("area",state.getString("area"));
+ one.put("wave",state.getInt("wave"));one.put("release",state.getDouble("release"));
  one.put("walkAttempts",state.getInt("walkAttempts"));one.put("walkFailures",state.getInt("walkFailures"));
  one.put("walkRetries",state.getInt("walkRetries"));one.put("retryAt",state.getLong("retryAt"));
  one.put("lastFailure",state.getString("lastFailure"));

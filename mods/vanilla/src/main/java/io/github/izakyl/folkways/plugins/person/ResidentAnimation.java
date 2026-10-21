@@ -13,6 +13,8 @@ final class ResidentAnimation {
     }
 
     static String loop(ResidentEntity resident, ResidentLook.Model model, boolean moving) {
+        String leisure = model.leisureAnimations().get(resident.leisureMotion());
+        if (leisure != null) { return leisure; }
         return seated(resident) ? model.seatedAnimation().orElse(model.idleAnimation())
             : moving ? model.walkAnimation() : model.idleAnimation();
     }

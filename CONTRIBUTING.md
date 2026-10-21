@@ -164,6 +164,7 @@ See the [documentation index](docs/README.md) for the layout and maintenance not
 | `npm run bench:take` | Performance benchmarks on a large colony |
 | `npm run promo:take` | Films the promotional takes |
 | `npm run promo:cookery` | Films one 240-second, real-time inn scene with a working kitchen, Create elevator and two dining areas |
+| `npm run promo:cookery:validate` | Rechecks saved native samples, including pre-roll arrival evidence and recorded meal completions/exits; writes `validation.json` |
 | `npm run promo:cookery:film` | Preserves the complete original, exports a 120-second 2× speed copy with accelerated game audio, and writes model credits; requires FFmpeg with libx264 |
 
 Run `npm run setup` before filming. `tests/promo/cookery.take.ts` stages a timber-and-plaster
@@ -179,33 +180,54 @@ estimates do not call the elevator or reserve places. Boarding, alighting and ca
 use ordinary movement without teleporting residents to landings.
 
 Five kitchen workers prefer crafting over general hauling; four porters support the
-service. Ordinary stock orders maintain 48 plates of steamed buns (`baozi_plate`), 24
-pepper-pork stir-fries and eight bowls of pork-bone soup, while table-service requests
-can drive additional Dongpo pork production. A native hopper drains the output shelf
-into unregistered cellar storage, keeping the bounded kitchen orders active. The native Cookery appliances
-operate on supplied raw ingredients, tools, oil, bowls and pot lids. A small opening
-service stock contains 128 portions of Dongpo pork; subsequent table deliveries can use
-the kitchen's real products. Both dining areas serve this substantial main dish,
-so visitors can finish their meal before walking home. Whole bun platters are display
-items without FOOD and are not used as native-table food. Three additional workers
-operate native cutting, tea and roasting stations;
+service. Both dining areas select from steamed buns (`baozi`), pepper-pork stir-fry,
+pork-bone soup, sashimi, roast rabbit, sweet-and-sour pork, braised beef and fish-flavoured
+shredded pork. Each empty table slot requests one randomly
+chosen dish and retains that choice until delivery. These dining requests drive native
+production directly, without separate kitchen stock orders, an output-draining hopper
+or pre-stocked finished meals. Appliances use supplied raw ingredients, tools, oil,
+bowls and pot lids. Flour is ground from raw wheat through the native courtyard mill.
+A communal cupboard holds two spatulas and two knives, borrowed and physically returned through the native tool queue.
+The mill sits in the open west courtyard, with a clear seven-block
+working square for its native circular driver path. Three additional kitchen workers support the courtyard stations;
 a farmer and three yard workers harvest, fish, shear and milk in the courtyard.
 
-Sixteen visiting diners arrive from both ends of the village street, staggered by eight seconds.
-Half walk to the upstairs entrance using the elevator before becoming hungry; the others
-enter the courtyard. The filming director submits worker-bound native walking and waiting
-nodes. It creates appetite through normal exertion after arrival, observes a completed
-meal and food level 18+ from the living system, and submits the return walk. After a pause,
-completed visitors join the arrival cycle again to keep both dining areas busy. All visible
-movement, cooking,
-table service and eating use the game's normal systems. Only initial blocking takes place
-by teleport while ticks are frozen; visitors carry no cargo or delivery jobs.
+Fifty-six visiting diners arrive from both ends of the street in groups of eight,
+with a new group every twelve seconds. Seven patrons in each group use the courtyard;
+one takes the elevator upstairs. Admissions remain FIFO, with at most two upstairs
+and eighteen courtyard guests in progress, including return journeys. This limit
+reserves room for departing elevator passengers instead of filling the cabin with
+another incoming group. The upstairs tables leave a waiting hall beside the elevator,
+whose upper landing also has a north approach outside the moving cabin.
+
+The filming director submits worker-bound native walking and waiting nodes. Courtyard
+patrons choose their meal from the street, outside the upstairs tables' selection
+radius. A guest waits near the assigned entrance until that floor has a suitable real
+serving, accounting for patrons already eating or approaching a claimed meal. Exertion
+then reduces fullness to about ten points through the normal hunger system. A completed
+native table meal triggers the return walk; departed diners rejoin their original wave
+in the next cycle. The filming server sets `living.diningMealTicks` to 1200,
+so the actual meal lasts sixty seconds at twenty ticks per second; ordinary servers
+retain the 100-tick default. Food consumption and dining history still come from the
+native meal completion, and no extra hunger is imposed while a guest eats.
+
+All visible movement, cooking, table service and eating use the game's normal systems.
+Initial blocking takes place by teleport while ticks are frozen; visitors carry no
+cargo or delivery jobs.
 
 The uninterrupted 240-second take is saved as
 `tests/out/promo/takes/cookery/01-kitchen-dining.mp4`. Evidence beside it records the two
 areas' servings and replenishment, kitchen activity, ordered visitor arrivals/meals/exits,
-and occupied elevator travel. Checks require fresh service to both areas, multiple
-completed visits and kitchen activity in at least 70% of samples. The recording retains
+and occupied elevator travel. Validation separates an actor's current action from its
+`toward` destination: walking toward a stove is travel rather than cooking, and
+walking toward a meal is not seated eating. Seated-meal evidence requires the actual
+dining motion and a table seat, excluding standing elevator passengers. Checks cover
+fresh table service, actual kitchen actions, completed visits with real meal history
+and off-camera departures, and simultaneous seated diners. These are recording
+requirements; inspect the run's saved evidence for measured results. Pre-roll arrivals stay in
+the evidence; counted meal completions and departures must occur in the recorded shot.
+`npm run promo:cookery:validate` runs the same checks against saved evidence without
+launching Minecraft, including at least four distinct served menu dishes. The recording retains
 1080p60 video and original game audio. `npm run promo:cookery:film` copies the whole
 recording byte for byte to `tests/out/promo/film/folkways-cookery-raw.mp4`, without
 trimming, transcoding, overlays or added music. It also exports the entire take at two

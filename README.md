@@ -46,7 +46,8 @@ from nutrition rather than item count, so different foods require different amou
 
 Mark a dining area, select its table foods, and place adjacent tables and chairs inside it. Leave an
 accessible aisle beside each chair. Residents bring one serving at a time from colony stores and keep
-food on display. Basic tables, including top slabs, support placeable foods such as cake; supported
+food on display. With several table foods selected, each empty serving slot requests a random
+dish from the menu and keeps that choice until delivery; these requests can drive production directly. Basic tables, including top slabs, support placeable foods such as cake; supported
 native tables accept edible foods and use the area's servings-per-table setting. Residents preserve
 food components, leave manually placed servings alone, and return unused supplies if an area is removed.
 

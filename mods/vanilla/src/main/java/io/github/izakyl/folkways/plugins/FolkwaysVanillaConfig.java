@@ -38,6 +38,7 @@ public final class FolkwaysVanillaConfig {
     private static final ModConfigSpec.ConfigValue<List<? extends Number>> FARMING_HASTE;
     private static final ModConfigSpec.ConfigValue<List<? extends Number>> FISHING_HASTE;
     private static final ModConfigSpec.DoubleValue PATH_SEARCH_BUDGET;
+    private static final ModConfigSpec.IntValue DINING_MEAL_TICKS;
 
     public static final ModConfigSpec SPEC;
 
@@ -161,6 +162,13 @@ public final class FolkwaysVanillaConfig {
             .defineInRange("pathSearchBudget", 8.0D, 1.0D, 32.0D);
         BUILDER.pop();
 
+        BUILDER.push("living");
+        DINING_MEAL_TICKS = BUILDER
+            .comment("Ticks a resident spends eating a serving at a dining table. Food is consumed only",
+                "when the meal finishes; leaving early releases the seat and preserves the serving.")
+            .defineInRange("diningMealTicks", 100, 20, 1200);
+        BUILDER.pop();
+
         SPEC = BUILDER.build();
     }
 
@@ -256,6 +264,10 @@ public final class FolkwaysVanillaConfig {
 
     public static float pathSearchBudget() {
         return read(PATH_SEARCH_BUDGET).floatValue();
+    }
+
+    public static int diningMealTicks() {
+        return read(DINING_MEAL_TICKS);
     }
 
     // The wasteful recipes refused unless a server says otherwise.

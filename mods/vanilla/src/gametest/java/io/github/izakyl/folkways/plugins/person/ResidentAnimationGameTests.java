@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLook;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLooks;
 import java.util.Optional;
+import java.util.Map;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
@@ -42,6 +43,17 @@ public final class ResidentAnimationGameTests {
             ResidentLooks.FALLBACK.appearance().skin(), 1.0F);
         helper.assertValueEqual(ResidentAnimation.loop(resident, old, true), "idle",
             "old models keep their idle upper body while the renderer applies humanoid seated legs");
+        var dining = new ResidentLook.Model(resource, resource, resource, "idle", "walk",
+            Optional.of("work"), Optional.of("ride"), ResidentLooks.FALLBACK.appearance().skin(), 1.0F,
+            Map.of("dining", "table_meal"));
+        resident.leisureMotion("dining");
+        helper.assertValueEqual(ResidentAnimation.loop(resident, dining, false), "table_meal",
+            "a seated table meal uses the model's authored dining animation");
+        helper.assertValueEqual(ResidentAnimation.loop(resident, model, false), "ride",
+            "models without a dining clip retain seated legs for the renderer's eating gesture");
+        resident.leisureMotion("");
+        helper.assertValueEqual(ResidentAnimation.loop(resident, dining, false), "ride",
+            "finishing the meal restores the ordinary seated pose");
         resident.stopRiding();
         helper.assertTrue(!ResidentAnimation.seated(resident), "the rider pose must end on dismount");
         helper.assertValueEqual(ResidentAnimation.loop(resident, model, true), "walk", "resume walking on dismount");

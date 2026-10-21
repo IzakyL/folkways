@@ -78,7 +78,7 @@ final class MillstoneWork implements Node, Workload.Within {
         if (generation != bookings.generation(at) || !bookings.free(at)) {
             return Optional.of(CookeryRefusal.STATION_CHANGED);
         }
-        recoveryHold = bookings.hold(at, id());
+        recoveryHold = bookings.hold(at, id(), spec().estimate());
         Optional<RefusalKind> refused = recoveryHold.take();
         if (refused.isEmpty()) { MillstoneStation.keep(colony, at, recoveryGoal, generation); }
         return refused;

@@ -115,7 +115,7 @@ final class BoardWork implements Node, Workload.Within {
         if (generation != bookings.generation(at) || !bookings.free(at) || !owned(level)) {
             return Optional.of(CookeryRefusal.STATION_BUSY);
         }
-        recoveryHold = bookings.hold(at, id());
+        recoveryHold = bookings.hold(at, id(), spec().estimate());
         Optional<RefusalKind> why = recoveryHold.take();
         if (why.isEmpty()) {
             changed.run();

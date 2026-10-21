@@ -113,7 +113,7 @@ final class PotWork implements Node, Workload.Within {
         if (generation != bookings.generation(at) || !bookings.free(at) || current(level).isEmpty()) {
             return Optional.of(CookeryRefusal.STATION_BUSY);
         }
-        recoveryHold = bookings.hold(at, id());
+        recoveryHold = bookings.hold(at, id(), spec().estimate());
         var refused = recoveryHold.take();
         if (refused.isEmpty()) PotStation.rememberRecovery(colony, at, this);
         return refused;

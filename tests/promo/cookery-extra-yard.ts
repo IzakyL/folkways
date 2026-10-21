@@ -14,8 +14,8 @@ function layout(origin: Vec) {
       { animal: "minecraft:sheep", target: 2, shear: true, min: at(-22, 0, -11), max: at(-20, 0, -9) },
     ],
     // Separate output from input; bucket pickup stays on the open north bank of the cow pen.
-    stores: [at(5, 0, -13), at(-24, 0, -14), at(-26, 0, -14), at(-21, 0, -7)],
-    posts: [at(8, 0, -13), at(-25, 0, -13), at(-22, 0, -7)],
+    stores: [at(5, 0, -13), at(-24, 0, -14), at(-26, 0, -14), at(-21, 0, -6)],
+    posts: [at(8, 0, -13), at(-25, 0, -13), at(-22, 0, -6)],
   };
 }
 
@@ -43,16 +43,16 @@ export async function stageExtraYard(
   // Residents use the native doorway goal to open these gates when collecting supplies or leaving a pen.
   for (const x of [-25, -21]) await world.command(server,
     `setblock ${commandPos(at(x, 0, -12))} minecraft:spruce_fence_gate[facing=north,open=false]`);
-  // Restore the two outer corner lights after clearing; neither occupies a casting or herding footing.
-  for (const [x, z] of [[-28, -13], [12, -13]] as const) {
+  // Keep one full empty cell between every pedestal and both the pens and street rails.
+  for (const [x, z] of [[-30, -12], [12, -13]] as const) {
     await world.command(server, `setblock ${commandPos(at(x, 0, z))} minecraft:cut_sandstone`);
     await world.command(server, `setblock ${commandPos(at(x, 1, z))} minecraft:lantern`);
   }
-  // Small feed reserves remain outside the pen fences. No interior block gives animals a step over a rail.
-  // Their south-side positions also leave the north herder post and eastern service barrel unobstructed.
+  // The complete z=-7 row stays empty on the south side of the z=-8 fence.
+  // Feed, water and wool storage sit beyond that aisle, never against the rail.
   for (const x of [-26, -25]) await world.command(server,
-    `setblock ${commandPos(at(x, 0, -7))} minecraft:hay_block`);
-  await world.command(server, `setblock ${commandPos(at(-19, 0, -7))} minecraft:water_cauldron[level=3]`);
+    `setblock ${commandPos(at(x, 0, -6))} minecraft:hay_block`);
+  await world.command(server, `setblock ${commandPos(at(-19, 0, -6))} minecraft:water_cauldron[level=3]`);
   // No cows, sheep, fish, wool or milk are stocked as finished output.
   await world.command(server, `setblock ${commandPos(plan.stores[0])} minecraft:barrel[facing=up]{Items:[{Slot:0b,id:"minecraft:fishing_rod",count:1},{Slot:1b,id:"minecraft:cooked_beef",count:24}]}`);
   await world.command(server, `setblock ${commandPos(plan.stores[2])} minecraft:barrel[facing=up]{Items:[{Slot:0b,id:"minecraft:shears",count:1},{Slot:1b,id:"minecraft:bucket",count:8},{Slot:2b,id:"minecraft:cooked_beef",count:24}]}`);

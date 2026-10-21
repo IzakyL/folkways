@@ -24,6 +24,7 @@
     "bench:overlay": "node --experimental-strip-types tests/bench/film/overlay.ts",
     "promo:take": "npm exec -- playwright test --config tests/promo/playwright.config.ts",
     "promo:cookery": "npm run promo:take -- cookery.take.ts",
+    "promo:cookery:validate": "node --experimental-strip-types tests/promo/validate-cookery.ts",
     "promo:cookery:film": "python3 tests/promo/film/cookery.py"
   },
   "devDependencies": {

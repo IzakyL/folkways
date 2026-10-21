@@ -193,7 +193,7 @@ public final class MillstoneStation implements KitchenStation {
                 int count = (int) produce.runs(site(), List.of(new io.github.izakyl.folkways.core.api.work.Need(job.input(), 1)),
                     yield, Optional.of(WaresContent.trade()), job.capacity());
                 MillstoneWork work = new MillstoneWork(colony, at, stances, job, count, bookings, changed, null);
-                answers.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));
+                answers.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id(), work.spec().estimate())));
             }
             return List.copyOf(answers);
         }

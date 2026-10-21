@@ -163,7 +163,7 @@ public final class PotStation implements KitchenStation {
                         || plan.mode() != PotPlan.Mode.RECIPE && produce.wanted().item().isEmpty()) continue;
                 int runs = (int) produce.runs(site(), plan.perRun(), plan.count(), Optional.of(WaresContent.trade()), Integer.MAX_VALUE);
                 PotWork work = new PotWork(colony, at, stances, plan, runs, bookings, changed);
-                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));
+                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id(), work.spec().estimate())));
             }
             return List.copyOf(options);
         }

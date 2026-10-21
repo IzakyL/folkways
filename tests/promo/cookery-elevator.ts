@@ -30,6 +30,10 @@ export async function buildCookeryElevator(
   for (const y of [5, 9]) {
     await fixed(-3, y, -1, 3, y, -1, "minecraft:stripped_spruce_log[axis=x]");
   }
+  // The upper floor needs a second approach as well as the west doorway. This
+  // fixed north apron lies outside the glued cabin and its entire vertical sweep.
+  // It lets boarders and returning diners pass without blocking each other.
+  await fixed(-5, 5, -7, 2, 5, -7, "minecraft:spruce_planks");
   // Rear service enclosure sits beyond the cabin's z=-2 swept boundary. Its dark cheeks recess
   // the fixed contacts without crossing the west entrances or entering the moving glue volume.
   await fixed(-1, 0, 0, 1, 9, 0, "minecraft:dark_oak_planks");

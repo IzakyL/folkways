@@ -570,6 +570,109 @@ public final class HaulExecutionGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
+    public static void packBlockedWorkCannotEnterAReadinessQueueBeforeRunnableWork(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var resident = PersonBody.RESIDENT.get().create(level);
+        var pack = new io.github.izakyl.folkways.core.api.resident.body.Pack(1);
+        pack.setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SADDLE));
+        var body = runnerBody(resident, pack, io.github.izakyl.folkways.effect.Effects.NONE);
+        var at = WorldPos.of(level, helper.absolutePos(BlockPos.ZERO));
+        var saddle = io.github.izakyl.folkways.core.api.terms.ItemSpec.of(ResourceLocation.withDefaultNamespace("saddle"));
+        var readinessQueue = new java.util.LinkedHashSet<UUID>();
+        var waitingSpec = NodeSpec.of(UUID.randomUUID(), TEST_URGE, new WorkSite.AtBlock(at),
+            Stances.WHEREVER, Workload.Once.of(1)).done();
+        Node waiting = new Node() {
+            public NodeSpec spec() { return waitingSpec; }
+            public boolean ready(ServerLevel world) { return false; }
+            public Outcome commit(ServerLevel world, Worker who) { throw new AssertionError("blocked predecessor cannot run"); }
+        };
+        var blockedSpec = NodeSpec.of(UUID.randomUUID(), TEST_URGE, new WorkSite.AtBlock(at),
+            Stances.WHEREVER, Workload.Once.of(1)).done();
+        Node blocked = new Node() {
+            public NodeSpec spec() { return blockedSpec; }
+            public boolean ready(ServerLevel world) { readinessQueue.add(id()); return true; }
+            public Outcome commit(ServerLevel world, Worker who) { throw new AssertionError("an overflowing step cannot run early"); }
+        };
+        var work = Map.of(waiting.id(), new Vertex(waiting.id(), waiting, new Placement(Set.of(),
+                List.of(new io.github.izakyl.folkways.core.api.work.Amount(saddle, -1)), List.of(), List.of())),
+            blocked.id(), new Vertex(blocked.id(), blocked, new Placement(Set.of(),
+                List.of(new io.github.izakyl.folkways.core.api.work.Amount(saddle, 1)), List.of(), List.of())));
+        var labor = labor(level);
+        var runner = new BodyRunner(body.id());
+        try {
+            PlanningFixture.apply(labor, level, List.of(), Shown.delta(work, List.of(), List.of()));
+            runner.follow(List.of(waiting.id(), blocked.id()));
+            runner.tick(labor, level, body);
+            helper.assertTrue(runner.holding().isEmpty(), "neither waiting nor pack-overflowing work can start");
+            helper.assertTrue(readinessQueue.isEmpty(),
+                "a step rejected by pack safety cannot enter an owner's FIFO and block another resident");
+            helper.assertValueEqual(labor.state(blocked.id()).orElseThrow(), NodeState.PENDING,
+                "a rejected route step is never polled ready speculatively");
+        } finally {
+            labor.close(); resident.discard();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void gatheringCargoDoesNotPollUnrelatedWorkReadiness(GameTestHelper helper) throws ReflectiveOperationException {
+        var level = helper.getLevel();
+        var resident = PersonBody.RESIDENT.get().create(level);
+        var pack = new io.github.izakyl.folkways.core.api.resident.body.Pack(2);
+        var effects = io.github.izakyl.folkways.effect.perk.PerkPool.effects(Map.of(
+            io.github.izakyl.folkways.core.engine.plan.haul.Haul.BATCH, 1));
+        var body = runnerBody(resident, pack, effects);
+        var at = WorldPos.of(level, helper.absolutePos(BlockPos.ZERO));
+        var stash = new io.github.izakyl.folkways.core.api.terms.Stash(at);
+        Node fetch = new io.github.izakyl.folkways.core.engine.plan.haul.TransferNode(UUID.randomUUID(),
+            io.github.izakyl.folkways.core.engine.plan.haul.TransferNode.Endpoint.store(stash),
+            io.github.izakyl.folkways.core.engine.plan.haul.TransferNode.Endpoint.pack(),
+            new io.github.izakyl.folkways.core.engine.plan.Manifest(List.of(
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SADDLE)), List.of()),
+            Stances.WHEREVER, new WorkSite.AtBlock(at));
+        var polled = new AtomicInteger();
+        var spec = NodeSpec.of(UUID.randomUUID(), TEST_URGE, new WorkSite.AtBlock(at),
+            Stances.WHEREVER, Workload.Once.of(1)).done();
+        Node unrelated = new Node() {
+            public NodeSpec spec() { return spec; }
+            public boolean ready(ServerLevel world) { polled.incrementAndGet(); return true; }
+            public Outcome commit(ServerLevel world, Worker who) { throw new AssertionError("a cooking job cannot be gathered as cargo"); }
+        };
+        var labor = labor(level);
+        try {
+            PlanningFixture.apply(labor, level, List.of(), Shown.delta(Map.of(unrelated.id(),
+                new Vertex(unrelated.id(), unrelated, Placement.NOWHERE)), List.of(), List.of()));
+            var runner = new BodyRunner(body.id());
+            runner.follow(List.of(unrelated.id()));
+            var justDone = BodyRunner.class.getDeclaredField("justDone");
+            justDone.setAccessible(true);
+            justDone.set(runner, fetch);
+            var gather = BodyRunner.class.getDeclaredMethod("gather", ColonyLabor.class, ServerLevel.class,
+                io.github.izakyl.folkways.core.api.resident.body.Body.class);
+            gather.setAccessible(true);
+            gather.invoke(runner, labor, level, body);
+            helper.assertValueEqual(polled.get(), 0, "a hauling-only probe cannot take a shared-tool FIFO turn for unrelated work");
+            helper.assertValueEqual(labor.state(unrelated.id()).orElseThrow(), NodeState.PENDING,
+                "the unrelated node is left untouched for ordinary execution selection");
+        } finally {
+            labor.close(); resident.discard();
+        }
+        helper.succeed();
+    }
+
+    private static io.github.izakyl.folkways.core.api.resident.body.Body runnerBody(
+            io.github.izakyl.folkways.plugins.person.ResidentEntity resident,
+            io.github.izakyl.folkways.core.api.resident.body.Pack pack,
+            io.github.izakyl.folkways.effect.Effects effects) {
+        return new io.github.izakyl.folkways.core.api.resident.body.Body() {
+            public net.minecraft.world.entity.Mob mob() { return resident; }
+            public io.github.izakyl.folkways.core.api.resident.ResidentKind kind() { return resident.kind(); }
+            public io.github.izakyl.folkways.core.api.resident.body.Pack pack() { return pack; }
+            public io.github.izakyl.folkways.effect.Effects effects() { return effects; }
+        };
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
     public static void batchPerksGatherRealCommonSourceLoadsWithinRankAndPackLimits(GameTestHelper helper) {
         for (int rank = 0; rank <= 3; rank++) {
             verifyGatheredRoute(helper, rank, 5, rank == 0 ? 1 : rank + 1);

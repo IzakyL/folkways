@@ -1,4 +1,4 @@
-"""Export the complete original Cookery recording and a six-times-speed viewing copy."""
+"""Export the complete original Cookery recording and a two-times-speed viewing copy."""
 import json
 import shutil
 import subprocess

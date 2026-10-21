@@ -5,7 +5,6 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -16,7 +15,7 @@ public final class KitchenBookings {
     private record Station(long generation, boolean allowed) {
     }
 
-    private final Map<WorldPos, LinkedHashSet<UUID>> turns = new LinkedHashMap<>();
+    private final Map<WorldPos, LinkedHashMap<UUID, Long>> turns = new LinkedHashMap<>();
     private final Map<WorldPos, Station> stations = new LinkedHashMap<>();
     private long epoch;
     private long revision;
@@ -40,8 +39,8 @@ public final class KitchenBookings {
     }
 
     public synchronized boolean valid(WorldPos at, UUID turn) {
-        Set<UUID> queue = turns.get(at);
-        return station(at).allowed() && queue != null && queue.contains(turn);
+        Map<UUID, Long> queue = turns.get(at);
+        return station(at).allowed() && queue != null && queue.containsKey(turn);
     }
 
     public synchronized boolean cancelled(WorldPos at, UUID turn) {
@@ -60,12 +59,17 @@ public final class KitchenBookings {
         return !valid(at, turn, generation);
     }
     public synchronized boolean first(WorldPos at, UUID lastNode) {
-        Set<UUID> queue = turns.get(at);
+        Map<UUID, Long> queue = turns.get(at);
         return station(at).allowed() && queue != null && !queue.isEmpty()
-            && queue.iterator().next().equals(lastNode);
+            && queue.keySet().iterator().next().equals(lastNode);
     }
 
     public synchronized Hold hold(WorldPos at, UUID lastNode) {
+        return hold(at, lastNode, 0);
+    }
+
+    public synchronized Hold hold(WorldPos at, UUID lastNode, long estimatedTicks) {
+        long duration = Math.max(0, estimatedTicks);
         long generation = station(at).generation();
         long created = epoch;
         return new Hold() {
@@ -86,14 +90,29 @@ public final class KitchenBookings {
                     if (held) {
                         return Optional.empty();
                     }
-                    LinkedHashSet<UUID> queue = turns.computeIfAbsent(at, ignored -> new LinkedHashSet<>());
-                    if (queue.contains(lastNode)) {
+                    LinkedHashMap<UUID, Long> queue = turns.computeIfAbsent(at, ignored -> new LinkedHashMap<>());
+                    if (queue.containsKey(lastNode)) {
                         return Optional.of(CookeryRefusal.STATION_BUSY);
                     }
-                    after = Set.copyOf(queue);
-                    queue.add(lastNode);
+                    after = Set.copyOf(queue.keySet());
+                    queue.put(lastNode, duration);
                     held = true;
                     return Optional.empty();
+                }
+            }
+
+            @Override
+            public long estimatedWaitTicks() {
+                synchronized (KitchenBookings.this) {
+                    if (!current()) { return 0; }
+                    var queue = turns.get(at);
+                    if (queue == null) { return 0; }
+                    long ticks = 0;
+                    for (var entry : queue.entrySet()) {
+                        if (entry.getKey().equals(lastNode)) { break; }
+                        ticks = entry.getValue() > Long.MAX_VALUE - ticks ? Long.MAX_VALUE : ticks + entry.getValue();
+                    }
+                    return ticks;
                 }
             }
 
@@ -114,7 +133,7 @@ public final class KitchenBookings {
                     if (!current()) {
                         return;
                     }
-                    LinkedHashSet<UUID> queue = turns.get(at);
+                    LinkedHashMap<UUID, Long> queue = turns.get(at);
                     if (queue != null) {
                         queue.remove(lastNode);
                         if (queue.isEmpty()) {

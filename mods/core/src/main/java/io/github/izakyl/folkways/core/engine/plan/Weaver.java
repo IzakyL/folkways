@@ -1104,7 +1104,7 @@ public final class Weaver {
                 if (yieldOf(made, edge.spec()) <= 0) {
                     continue;
                 }
-                long cost = priced(edge, near, offer.from(), made);
+                long cost = priced(edge, near, offer);
                 if (cost == Costs.UNREACHABLE) {
                     continue;
                 }
@@ -1134,7 +1134,13 @@ public final class Weaver {
     // What an offer would cost the edge: its work and inputs, the walk bringing those to it, and the walk on. Work
     // that carries the goods rather than making them costs its own work and the walk bringing them from stock, and is
     // no way at all when no stock holds them.
-    private long priced(Edge edge, WorkSite near, Workshop from, Grown made) {
+    private long priced(Edge edge, WorkSite near, Costs.Offer offer) {
+        return priced(edge, near, offer, waitFor(offer));
+    }
+
+    private long priced(Edge edge, WorkSite near, Costs.Offer offer, long waiting) {
+        Workshop from = offer.from();
+        Grown made = offer.change().replacement();
         long cost;
         if (from.carries()) {
             cost = 0;
@@ -1150,7 +1156,7 @@ public final class Weaver {
             cost = costs.of(made, near, edge.upstream());
         }
         return cost == Costs.UNREACHABLE ? cost
-            : Costs.plus(Costs.plus(cost, walkIn(made)), walkFrom(made, edge.spec(), near));
+            : Costs.plus(Costs.plus(Costs.plus(cost, waiting), walkIn(made)), walkFrom(made, edge.spec(), near));
     }
 
     // Where whoever could do work for the consumer stands: whoever it is already bound to, or else anyone.
@@ -1197,13 +1203,13 @@ public final class Weaver {
             WorkSite near = nodes.get(edge.consumer()).spec().site();
             List<WorldPos> hands = handsFor(edge.consumer());
             Grown taken = grown.making.offer().change().replacement();
-            long current = Costs.plus(priced(edge, near, from, taken), walkTo(hands, taken));
+            long current = Costs.plus(priced(edge, near, grown.making.offer()), walkTo(hands, taken));
             long best = Costs.UNREACHABLE;
             for (Costs.Offer offer : costs.offers(Produce.of(OWNER, near, edge.spec(), Math.max(1, grown.covers),
                     sizing.batching(edge.count())))) {
                 Grown made = offer.change().replacement();
                 if (offer.from().key().equals(from.key()) && yieldOf(made, edge.spec()) > 0) {
-                    best = Math.min(best, Costs.plus(priced(edge, near, from, made), walkTo(hands, made)));
+                    best = Math.min(best, Costs.plus(priced(edge, near, offer), walkTo(hands, made)));
                 }
             }
             if (current != Costs.UNREACHABLE && best != Costs.UNREACHABLE
@@ -1327,7 +1333,11 @@ public final class Weaver {
         holds.addAll(expanded.holds());
         Optional<RefusalKind> turned = take(holds);
         Set<UUID> after = after(holds);
-        if (turned.isEmpty() && (reaches(edge.consumer(), after)
+        // A rejected batch join can restore an old offer, including its node ids. Other live growths may
+        // still order themselves after those ids. Rebooking at the back must not make the restored maker
+        // wait on one of its own successors, even when its consumer has no path to that successor yet.
+        if (turned.isEmpty() && (work.nodes().stream().anyMatch(node -> reaches(node.id(), after))
+                || reaches(edge.consumer(), after)
                 || also.stream().anyMatch(further -> reaches(further.consumer(), after)))) {
             release(holds, Ending.DROPPED);
             turned = Optional.of(LaborRefusal.WAITS_ON_ITSELF);
@@ -1484,10 +1494,15 @@ public final class Weaver {
             }
             WorkSite near = nodes.get(into.serves.consumer()).spec().site();
             Grown before = making.offer().change().replacement();
-            long apart = apart(priced(fed.getFirst(), near, making.offer().from(), before), idle(before),
-                priced(edge, wants, cheapest.from(), cheapest.change().replacement()),
-                idle(cheapest.change().replacement()));
-            boolean waits = idle(before) > 0;
+            // The server can finish queued work while this lane plans. Use one waiting snapshot
+            // per offer so the same wait is included in, and removed from, its quoted cost.
+            long beforeWait = waitFor(making.offer());
+            long otherWait = waitFor(cheapest);
+            long beforeIdle = Costs.plus(idle(before), beforeWait);
+            long otherIdle = Costs.plus(idle(cheapest.change().replacement()), otherWait);
+            long apart = apart(priced(fed.getFirst(), near, making.offer(), beforeWait), beforeIdle,
+                priced(edge, wants, cheapest, otherWait), otherIdle);
+            boolean waits = beforeIdle > 0 || !making.offer().change().holds().isEmpty();
             Costs.Offer bigger = waits ? null : bigger(near, made, total, making.offer().from());
             if (!waits && bigger == null) {
                 into.full = true;
@@ -1505,20 +1520,23 @@ public final class Weaver {
                 bigger = bigger(near, made, total, making.offer().from());
             }
             String refused = bigger == null ? "workshop makes too few at once"
-                : priced(fed.getFirst(), near, bigger.from(), bigger.change().replacement()) > apart
+                : priced(fed.getFirst(), near, bigger) > apart
                     ? "dearer together than apart" : null;
             List<Edge> also = new ArrayList<>(fed.subList(1, fed.size()));
             also.add(edge.covering(left));
             long got = refused == null ? make(fed.getFirst(), fed.getFirst().count(), also, bigger) : 0;
             if (got <= 0) {
-                // Put the making back as it was, from the offer it was taken from, joining nothing onto anything.
+                // Restore the original quantity with a fresh offer. Its old ids may still be predecessors of
+                // other station turns, while a new hold now queues behind them; reviving those ids would loop.
                 Why why = lastWhy;
                 String short_ = madeShort;
                 joinFailed.add(fed.getFirst().id());
                 boolean was = restoring;
                 restoring = true;
                 try {
-                    if (make(fed.getFirst(), fed.getFirst().count(), fed.subList(1, fed.size()), making.offer()) <= 0) {
+                    long original = fed.stream().mapToLong(Edge::count).sum();
+                    Costs.Offer restore = bigger(near, made, original, making.offer().from());
+                    if (restore == null || make(fed.getFirst(), fed.getFirst().count(), fed.subList(1, fed.size()), restore) <= 0) {
                         reopened.addAll(fed);
                     }
                 } finally {
@@ -1567,6 +1585,10 @@ public final class Weaver {
             return Costs.UNREACHABLE;
         }
         return Costs.plus(Costs.plus(one - oneIdle, other - otherIdle), Math.max(oneIdle, otherIdle));
+    }
+
+    private static long waitFor(Costs.Offer offer) {
+        return offer.change().holds().stream().mapToLong(Hold::estimatedWaitTicks).map(ticks -> Math.max(0, ticks)).max().orElse(0);
     }
 
     // The part of the work's reckoned time no hand works through: what it is reckoned at past its wind-up.

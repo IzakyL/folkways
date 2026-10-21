@@ -220,11 +220,26 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
             boolean ownAnimation = entity instanceof ResidentEntity resident
                 && modelOf(resident).map(model -> model.leisureAnimations().containsKey(motion)).orElse(false);
             float age = entity == null ? 0 : entity.tickCount + state.getPartialTick();
+            if (!ownAnimation && motion.equals("dining")) {
+                // Keep the model's seated legs while bringing food to the mouth. Packs without
+                // a dining clip otherwise show only their static ride pose throughout a meal.
+                float wave = Mth.sin(age * 0.09F);
+                for (GeoBone bone : getAnimationProcessor().getRegisteredBones()) {
+                    switch (bone.getName().replace("_", "").toLowerCase(java.util.Locale.ROOT)) {
+                        case "rightarm", "armright" -> bone.setRotX(-1.0F + wave * 0.18F);
+                        case "rightforearm", "forearmright" -> bone.setRotX(-0.9F + wave * 0.12F);
+                        case "leftarm", "armleft" -> bone.setRotX(-0.65F);
+                        case "leftforearm", "forearmleft" -> bone.setRotX(-0.5F);
+                        default -> { }
+                    }
+                }
+            }
             headBone().ifPresent(head -> {
                 head.setRotX(look.headPitch() * Mth.DEG_TO_RAD);
                 head.setRotY(look.netHeadYaw() * Mth.DEG_TO_RAD);
                 if (!ownAnimation && motion.equals("chatting")) { head.setRotX(head.getRotX() + Mth.sin(age * 0.15F) * 0.08F); }
                 if (!ownAnimation && motion.equals("petting")) { head.setRotX(0.5F); }
+                if (!ownAnimation && motion.equals("dining")) { head.setRotX(head.getRotX() + 0.15F); }
             });
         }
 

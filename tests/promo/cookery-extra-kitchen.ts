@@ -2,7 +2,7 @@ import { defineTask, javaTask, world, type MinecraftServer } from "@izakyl/block
 import { MARK_MEMBERS, runColonyTask } from "../shared/colony/colony-tasks";
 import type { Vec } from "../shared/colony/colony-founding";
 import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
-import { licenseCrewFast, setMaintainDemandsFast } from "./fast-setup";
+import { licenseCrewFast } from "./fast-setup";
 
 const K = "kaleidoscope_cookery:";
 
@@ -22,8 +22,8 @@ export async function configureMarketMenu(server: MinecraftServer) {
   return runColonyTask(server, MENU, {});
 }
 
-/** Ordinary maintain orders drive native cutting and the powered rotating spit; tea starts separately.
- * Initial supplies contain no requested products. All work and courtyard tea delivery belong to Folkways. */
+/** Dining requests drive native cutting and the powered rotating spit.
+ * Supplies contain raw ingredients only; there are no separate kitchen stock orders. */
 export async function stageExtraKitchen(
   server: MinecraftServer, player: string, colony_id: string, origin: Vec, workersUUIDs: string[],
 ) {
@@ -57,22 +57,8 @@ export async function stageExtraKitchen(
     player, colony_id, cells: members.flatMap(cell => [cell.x, cell.y, cell.z]),
   });
   const licensed = await licenseCrewFast(server, workersUUIDs.map(uuid => ({ uuid, trades: ["crafting", "hauling"] })));
-  const filters = await runColonyTask(server, FILTER_TARGETS, { colony_id, ...plan });
-  // Start only cutting and roasting here. The director files the twelve-cup tea order
-  // after the native spit has started, so brewing and courtyard delivery happen during the shot.
-  const demands = [
-    { at: plan.targets[0], item: plan.products[0], count: 24, low: 12 },
-    { at: plan.targets[2], item: plan.products[2], count: 8, low: 8 },
-  ];
-  const orders = await setMaintainDemandsFast(server, player, demands);
-  return { ...plan, members, workers: workersUUIDs, prepared, marked, licensed, filters, demands, orders,
-    extraBeds: 3, initialProducts: 0, via: "native-stations-and-maintain-orders" };
-}
-
-/** Start the ordinary tea order after the spit has begun its native cooking cycle. */
-export async function startExtraTea(server: MinecraftServer, player: string, colony_id: string, origin: Vec) {
-  const plan = layout(origin);
-  return setMaintainDemandsFast(server, player, [{ at: plan.targets[1], item: plan.products[1], count: 12, low: 12 }]);
+  return { ...plan, members, workers: workersUUIDs, prepared, marked, licensed,
+    extraBeds: 3, initialProducts: 0, via: "native-stations-and-dining-requests" };
 }
 
 export async function readExtraKitchen(
@@ -103,38 +89,6 @@ if (!excluded.stream().map(ResourceLocation::parse).allMatch(FolkwaysVanillaConf
     throw new IllegalStateException("The filming menu did not exclude competing pot rabbit recipes");
 return Sync.stamp(Map.of("excludedPotRabbitRecipes", excluded, "previousCount", before.size(),
     "currentCount", changed.size(), "scope", "isolated-filming-server", "via", "native-server-recipe-config"));
-` }),
-});
-
-const FILTER_TARGETS = defineTask<Record<string, any>, Record<string, any>>({
-  name: "folkways.promo.extra-kitchen-target-filters", side: "server", timeoutMs: 20_000,
-  source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-    "io.github.izakyl.folkways.front.engine.colony.ColonyViews",
-    "io.github.izakyl.folkways.front.engine.colony.ColonyBoards",
-    "io.github.izakyl.folkways.core.api.terms.ItemFilter",
-    "io.github.izakyl.folkways.plugins.orders.OrdersContent", "net.minecraft.resources.ResourceLocation",
-  ], body: `
-var args = Args.of(ctx);
-var level = ctx.server().overworld();
-var colony = ColonyGround.of(ctx.server(), UUID.fromString(args.string("colony_id"))).orElseThrow();
-var targets = args.list("targets");
-var products = args.strings("products");
-var filtered = new ArrayList<Object>();
-for (int i = 0; i < targets.size(); i++) {
-    var at = Args.of(Map.of("at", targets.get(i)), "target").blockPos("at");
-    var attempt = ColonyBoards.setItemFilters(colony, OrdersContent.ID, Optional.of(at), "filter",
-        List.of(ItemFilter.item(ResourceLocation.parse(products.get(i)))),
-        ColonyViews.forBoard(colony, level, Optional.of(at)))
-        .orElseThrow(() -> new IllegalStateException("No native shelf filter at " + at));
-    if (attempt.refusal().isPresent()) throw new IllegalStateException("Native shelf filter refused: " + attempt.refusal().get().key());
-    // Fresh shelves begin in exclude mode. Use the action exposed by the real container board.
-    var mode = ColonyBoards.act(level, colony, OrdersContent.ID, Optional.of(at), "filter_mode")
-        .orElseThrow(() -> new IllegalStateException("No native shelf filter mode at " + at));
-    if (mode.refusal().isPresent()) throw new IllegalStateException("Native shelf filter mode refused: " + mode.refusal().get().key());
-    filtered.add(Map.of("position", List.of(at.getX(), at.getY(), at.getZ()), "only", products.get(i)));
-}
-return Sync.stamp(Map.of("targets", filtered, "via", "native-shelf-filter"));
 ` }),
 });
 

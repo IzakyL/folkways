@@ -84,6 +84,60 @@ public final class DiningGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void multiFoodMenuKeepsRequestsStableAndChoosesFreshDishesAfterDelivery(GameTestHelper helper) {
+        try (Fixture f = new Fixture(helper)) {
+            f.zone(Items.BREAD, Items.COOKED_BEEF);
+            var seen = new java.util.HashSet<io.github.izakyl.folkways.core.api.terms.ItemSpec>();
+            for (int serving = 0; serving < 32; serving++) {
+                var goals = f.goals();
+                var ids = goals.stream().map(node -> node.spec().id()).toList();
+                var dishes = goals.stream().map(node -> node.spec().needs().getFirst().spec()).toList();
+                helper.assertTrue(dishes.stream().allMatch(spec -> spec.item().isPresent()),
+                    "each empty slot requests one concrete dish, rather than leaving cheapest-food selection to the planner");
+                f.dining.refresh(f.level.getServer());
+                var refreshed = f.goals();
+                helper.assertValueEqual(refreshed.stream().map(node -> node.spec().id()).toList(), ids,
+                    "surveying furniture keeps in-flight production and hauling node identities");
+                helper.assertValueEqual(refreshed.stream().map(node -> node.spec().needs().getFirst().spec()).toList(), dishes,
+                    "replanning keeps the same dish until its serving arrives");
+                var dish = dishes.getFirst();
+                seen.add(dish);
+                var item = BuiltInRegistries.ITEM.get(dish.item().orElseThrow());
+                f.worker.supplied = List.of(new ItemStack(item));
+                helper.assertTrue(goals.getFirst().commit(f.level, f.worker) instanceof Outcome.Done,
+                    "the selected dish can be delivered through the normal node");
+                helper.assertTrue(f.display.getItem(0).is(item), "the requested real dish reaches the physical slot");
+                helper.assertValueEqual(f.goals().size(), 1, "a filled slot does not request another serving");
+                f.display.setItem(0, ItemStack.EMPTY);
+            }
+            helper.assertValueEqual(seen.size(), 2, "successive completed servings use both foods from the menu");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void replacingMenuReturnsOldSelectedDishAndRequestsTheNewFood(GameTestHelper helper) {
+        try (Fixture f = new Fixture(helper)) {
+            f.zone(Items.BREAD, Items.COOKED_BEEF);
+            var old = f.goals().getFirst();
+            var item = BuiltInRegistries.ITEM.get(old.spec().needs().getFirst().spec().item().orElseThrow());
+            f.zone(Items.CARROT);
+            f.worker.supplied = List.of(new ItemStack(item));
+            var cancelled = (Outcome.Done) old.commit(f.level, f.worker);
+            helper.assertValueEqual(cancelled.unused().stream().mapToInt(ItemStack::getCount).sum(), 1,
+                "replacing a menu returns the old requested dish without placing it");
+            helper.assertTrue(f.display.isEmpty(), "the cancelled request cannot fill the new menu");
+            helper.assertTrue(f.goals().stream().allMatch(node -> node.spec().needs().getFirst().spec().item()
+                .filter(BuiltInRegistries.ITEM.getKey(Items.CARROT)::equals).isPresent()),
+                "new requests use the replacement menu exclusively");
+            f.front.erase(f.zone);
+            f.dining.refresh(f.level.getServer());
+            helper.assertTrue(f.goals().isEmpty(), "removing the dining zone removes its pending requests");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void floorOutlineFindsFurnitureAboveItAndRestocksTheTable(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             f.zone(Items.BREAD);
@@ -183,6 +237,45 @@ public final class DiningGameTests {
             Node next = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
             next.ended(f.level, Ending.DROPPED);
             helper.assertTrue(f.living.mood(f.person.getUUID()).dined < 0, "cancelled meals grant no dining mood");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void configuredLongMealConsumesOnlyAtCompletionAndStillCancelsCleanly(GameTestHelper helper) {
+        var setting = (net.neoforged.neoforge.common.ModConfigSpec.IntValue)
+            io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig.SPEC.getValues().get("living.diningMealTicks");
+        int before = setting.get();
+        try {
+            setting.set(400);
+            try (Fixture f = new Fixture(helper)) {
+                f.zone(Items.BREAD);
+                f.display.setItem(0, new ItemStack(Items.BREAD));
+                Node first = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
+                helper.assertValueEqual(((Workload.Once) first.spec().workload()).baseTicks(), 400,
+                    "the real meal workload uses the configured twenty-second duration");
+                for (int tick : List.of(0, 199, 399)) {
+                    first.spec().gesture().perform(f.person, tick, f.at);
+                    helper.assertValueEqual(f.display.getItem(0).getCount(), 1, "the eating gesture leaves its serving on the table");
+                    helper.assertValueEqual(f.living.foodLevelOf(f.person.getUUID()).orElseThrow(), 4,
+                        "a partially completed long meal grants no nourishment");
+                }
+                first.released(f.level, f.worker, Ending.DROPPED);
+                helper.assertValueEqual(f.display.getItem(0).getCount(), 1, "cancelling the long meal preserves its serving");
+                helper.assertValueEqual(f.person.leisureMotion(), "", "cancellation releases the long eating pose");
+                Node retry = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
+                helper.assertTrue(retry != first, "cancellation releases the actual seat and portion for a fresh reservation");
+                helper.assertValueEqual(((Workload.Once) retry.spec().workload()).baseTicks(), 400,
+                    "the replacement meal uses the same configured duration");
+                retry.spec().gesture().perform(f.person, 0, f.at);
+                helper.assertTrue(retry.commit(f.level, f.worker) instanceof Outcome.Done, "finishing the replacement meal commits normally");
+                helper.assertTrue(f.display.isEmpty(), "completion consumes exactly the reserved serving");
+                helper.assertValueEqual(f.living.foodLevelOf(f.person.getUUID()).orElseThrow(), 9,
+                    "a completed bread serving restores its real five nutrition points");
+                helper.assertValueEqual(f.person.leisureMotion(), "", "completion releases the dining pose immediately");
+            }
+        } finally {
+            setting.set(before);
         }
         helper.succeed();
     }
@@ -312,16 +405,19 @@ public final class DiningGameTests {
             colony.keep(LivingContent.ID, Writer.of().children("hunger", List.of(person.getUUID()), id ->
                 Writer.of().uuid("resident", id).integer("FoodLevel", 4).decimal("Saturation", 0).tag()).tag());
             living = new LivingPresence(colony);
-            dining = new Dining(colony, living);
+            dining = new Dining(colony, living, new java.util.Random(0xD1A1A6L));
             worker = new TestWorker(person);
         }
 
-        void zone(Item food) {
+        void zone(Item food, Item... additional) {
             if (zone != null) { front.erase(zone); }
             ColonySettings settings = ColonySettings.empty().with(LivingContent.DINING_SERVINGS.key(), new ColonySettings.Value.Count(2));
             if (food != null) {
-                settings = settings.with(LivingContent.DINING_FOOD.key(), new ColonySettings.Value.Items(List.of(
-                    ItemFilter.item(BuiltInRegistries.ITEM.getKey(food)))));
+                var foods = new java.util.ArrayList<Item>();
+                foods.add(food);
+                foods.addAll(List.of(additional));
+                settings = settings.with(LivingContent.DINING_FOOD.key(), new ColonySettings.Value.Items(foods.stream()
+                    .map(item -> ItemFilter.item(BuiltInRegistries.ITEM.getKey(item))).toList()));
             }
             zone = front.addZone(level, LivingContent.DINING, java.util.Set.of(at, chair), settings).orElseThrow().id();
             dining.refresh(level.getServer());

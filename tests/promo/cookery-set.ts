@@ -55,7 +55,8 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
     await set(x, 2, 3, "minecraft:spruce_trapdoor[facing=south,half=top,open=false]");
   }
   // No rail or ornament crosses the north dining opening: the food, faces and hands must all be visible.
-  await fill(-3, -2, 6, -3, 2, 6, "minecraft:spruce_fence");
+  // A two-block glass boundary meets the tall rear wall without a low rail to climb onto.
+  await fill(-3, -2, 6, -3, 2, 7, "minecraft:glass_pane");
   for (const x of [-17, -4]) await set(x, -6, 9, "minecraft:lantern[hanging=true]");
   // Lamps hang high under the real upper floor, lighting the chefs without covering their faces.
   for (const x of [-13, -9, -5]) await set(x, -2, 4, "minecraft:lantern[hanging=true]");
@@ -68,9 +69,10 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
     cells: [] as Vec[],
     entry: at(-3, -4, 6),
   };
+  // Leave x=-6..-3 clear for the elevator's three-block waiting area.
   // Three small table groups leave two broad service aisles. Diners and each delivered dish
   // remain readable from the north camera; every group has its own inward-facing seats.
-  for (const left of [-15, -11, -7]) {
+  for (const left of [-16, -12, -8]) {
     for (const x of [left, left + 1]) for (const z of [-3, -2]) {
       await set(x, z, 6, K + "table_spruce");
       dining.tables.push(at(x, z, 6));
@@ -92,7 +94,7 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
   // Leave both operator aisles z=-5 and z=-3 open; the gaps become small worktop spaces.
   await fill(-12, -4, 0, -5, -4, 0, "minecraft:bricks");
   for (const x of [-10, -7]) await set(x, -4, 1, "minecraft:smooth_stone_slab[type=bottom]");
-  // The rear preparation counter avoids the mill's entire x=-15..-13,z=0..2 footprint.
+  // The rear preparation counter leaves the central kitchen aisle open; the mill is in the courtyard.
   await fill(-12, 2, 0, -5, 2, 0, "minecraft:polished_andesite");
   await fill(-11, 0, 0, -9, 0, 0, "minecraft:stripped_spruce_log[axis=x]");
   for (const x of [-11, -9]) await set(x, 0, 1, "minecraft:smooth_stone_slab[type=bottom]");
@@ -136,8 +138,9 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
     await fill(from, -14, 0, to, -14, 0, "minecraft:spruce_fence");
   }
   for (const x of [-49, -36, 24, 39, 52]) {
-    await fill(x, -18, 0, x, -18, 1, "minecraft:cobblestone_wall");
-    await set(x, -18, 2, "minecraft:lantern");
+    // Solid three-block posts have no low wall cap reachable from the nearby planting.
+    await fill(x, -18, 0, x, -18, 2, "minecraft:stripped_spruce_log[axis=y]");
+    await set(x, -18, 3, "minecraft:lantern");
     await set(x - 1, -19, 0, "minecraft:flowering_azalea");
   }
   // A second dining area sits between the working stalls and the village street.
@@ -176,7 +179,7 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
   for (const x of [-23, -22]) await set(x, -3, 0, "minecraft:hay_block");
   await set(-21, -3, 0, "minecraft:barrel[facing=up]");
   await set(-21, 1, 2, "minecraft:lantern[hanging=true]");
-  for (const [x, z] of [[-28, -13], [12, -13], [12, 5]] as const) await set(x, z, 0, "minecraft:lantern");
+  for (const [x, z] of [[-30, -12], [12, -13], [12, 5]] as const) await set(x, z, 0, "minecraft:lantern");
 
   // Layer a woodland edge behind the set: low spreading crowns in front, taller spruce
   // further back. The dense lower foliage removes the exposed trunks and empty flat horizon.
@@ -219,16 +222,16 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
     await fill(x - 2, z - 1, 0, x + 2, z + 1, 0, "minecraft:wheat[age=7]");
   }
   // A small enclosed bunkhouse sits behind the inn; its real beds stay out of the foreground.
-  await fill(-18, 7, -1, -3, 24, -1, "minecraft:stone_bricks");
-  await fill(-17, 8, 0, -4, 23, 2, "minecraft:air");
-  await fill(-18, 7, 0, -18, 24, 2, plaster);
-  await fill(-3, 7, 0, -3, 24, 2, plaster);
+  await fill(-18, 7, -1, -3, 42, -1, "minecraft:stone_bricks");
+  await fill(-17, 8, 0, -4, 41, 2, "minecraft:air");
+  await fill(-18, 7, 0, -18, 42, 2, plaster);
+  await fill(-3, 7, 0, -3, 42, 2, plaster);
   await fill(-18, 7, 0, -3, 7, 2, plaster);
-  await fill(-18, 24, 0, -3, 24, 2, plaster);
-  await fill(-18, 7, 3, -3, 24, 3, "minecraft:dark_oak_planks");
+  await fill(-18, 42, 0, -3, 42, 2, plaster);
+  await fill(-18, 7, 3, -3, 42, 3, "minecraft:dark_oak_planks");
   await fill(-18, 9, 0, -18, 9, 1, "minecraft:air");
   await set(-10, 10, 2, "minecraft:lantern[hanging=true]");
-  const beds = [-15, -13, -11, -9, -7, -5, -3].flatMap(x => [at(x - 1, 8), at(x - 1, 11), at(x - 1, 13), at(x - 1, 16), at(x - 1, 19), at(x - 1, 22)]);
+  const beds = [-15, -13, -11, -9, -7, -5, -3].flatMap(x => [at(x - 1, 8), at(x - 1, 11), at(x - 1, 13), at(x - 1, 16), at(x - 1, 19), at(x - 1, 22), at(x - 1, 25), at(x - 1, 28), at(x - 1, 31), at(x - 1, 34), at(x - 1, 37), at(x - 1, 40)]);
   for (const bed of beds) {
     await world.command(server, `setblock ${commandPos(bed)} minecraft:white_bed[part=foot,facing=west]`);
     await world.command(server, `setblock ${commandPos({ ...bed, x: bed.x - 1 })} minecraft:white_bed[part=head,facing=west]`);

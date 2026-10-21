@@ -420,14 +420,13 @@ final class BodyRunner {
         boolean owed = false;
         while (queued.hasNext()) {
             UUID next = queued.next();
-            Optional<Node> ready = labor.takeable(next, level);
-            // Work may be taken ahead of work still waiting before it, but only while the pack holds the route
-            // done in that order: the schedule counted its loads in route order, and a step taken early must not
-            // fill the cells the waiting work needs.
-            if (ready.isPresent() && owed && !labor.fitsAhead(body, next, route)) {
+            // Readiness may enter an owner's execution queue (shared kitchen tools, for example).
+            // Check pack safety first, so work we cannot start never reserves ahead of runnable work.
+            if (owed && labor.onTheGraph(next) && !labor.fitsAhead(body, next, route)) {
                 labor.packBlocked(next);
                 continue;
             }
+            Optional<Node> ready = labor.takeable(next, level);
             if (ready.isPresent()) {
                 queued.remove();
                 stalled = 0;
@@ -467,10 +466,14 @@ final class BodyRunner {
         int checked = 0;
         for (UUID id : List.copyOf(route)) {
             if (++checked > 32) { break; }
-            Optional<Node> ready = labor.takeable(id, level);
-            if (ready.orElse(null) instanceof TransferNode next && next.fetching()
-                    && (next.joins(previous) || labor.sharesDelivery(previous.id(), id, route, body))
-                    && labor.fitsAhead(body, id, route)) {
+            // Inspect only actual compatible fetches. Merely probing a non-hauling node's readiness
+            // can reserve its shared tools even though gathering will never execute that node.
+            if (!(labor.node(id).orElse(null) instanceof TransferNode next) || !next.fetching()
+                    || !(next.joins(previous) || labor.sharesDelivery(previous.id(), id, route, body))
+                    || !labor.fitsAhead(body, id, route)) {
+                continue;
+            }
+            if (labor.takeable(id, level).isPresent()) {
                 route.remove(id);
                 route.addFirst(id);
                 return;

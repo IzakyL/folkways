@@ -150,7 +150,7 @@ public final class TeapotStation implements KitchenStation {
                 if (!Goods.matches(job.output(), produce.wanted())
                         || job.mode() != Mode.RECIPE && produce.wanted().item().isEmpty()) { continue; }
                 TeapotWork work = new TeapotWork(colony, at, stances, job, bookings, changed, null);
-                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));
+                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id(), work.spec().estimate())));
             }
             return List.copyOf(options);
         }

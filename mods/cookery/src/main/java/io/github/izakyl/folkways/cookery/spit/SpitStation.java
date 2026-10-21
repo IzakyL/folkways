@@ -155,7 +155,7 @@ public final class SpitStation implements KitchenStation {
                 int count = (int) produce.runs(site(), List.of(new Need(job.input(), 1)), 1,
                     Optional.of(WaresContent.trade()), 8);
                 SpitWork work = new SpitWork(colony, at, part, stances, job, count, bookings, changed, null);
-                result.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));
+                result.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id(), work.spec().estimate())));
             }
             return List.copyOf(result);
         }

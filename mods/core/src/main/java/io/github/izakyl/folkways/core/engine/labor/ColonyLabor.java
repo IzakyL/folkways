@@ -511,6 +511,10 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         failed(id, why);
     }
 
+    Optional<Node> node(UUID id) {
+        return Optional.ofNullable(graph.vertex(id)).map(Vertex::node);
+    }
+
     Optional<Node> takeable(UUID id, ServerLevel level) {
         if (declined.contains(id)) {
             untaken.put(id, new Untaken("declined", null));
@@ -854,6 +858,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     Collection<String> stalls() {
         untaken.keySet().retainAll(graph.vertices().keySet());
         List<String> lines = new ArrayList<>(readout.stalls(graph.vertices(), phases, runners, this::untakenWhy, this::untakenKey));
+        lines.addAll(readout.unassigned(graph, diagnosis, survey.hands()));
         // The whole route of the first few bodies whose queued work stalled bodies wait on.
         Set<UUID> holders = new LinkedHashSet<>();
         for (BodyRunner runner : runners.all()) {

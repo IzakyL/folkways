@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
@@ -40,10 +41,12 @@ import net.minecraft.world.item.ItemStack;
 final class Dining {
     private final Colony colony;
     private final LivingPresence living;
+    private final java.util.random.RandomGenerator random;
     private volatile List<Table> tables = List.of();
     private final Map<WorldPos, UUID> seats = new ConcurrentHashMap<>();
     private final Map<Portion, UUID> portions = new ConcurrentHashMap<>();
     private final Map<UUID, Meal> meals = new ConcurrentHashMap<>();
+    private final Map<Refill, ItemSpec> refills = new ConcurrentHashMap<>();
 
     record Seat(BlockPos chair, BlockPos approach) { }
     private static final int MAX_TABLE_CELLS = 128;
@@ -52,8 +55,19 @@ final class Dining {
                  Set<BlockPos> tops, List<Seat> seats, List<BlockPos> approaches) { }
     private record Portion(WorldPos at, int slot) { }
     private record Choice(Table table, Seat seat, int slot) { }
+    private record Refill(Portion portion, UUID zone, ItemSpec menu, int target) { }
 
-    Dining(Colony colony, LivingPresence living) { this.colony = colony; this.living = living; }
+    private static Refill refill(Table table, int slot) {
+        return new Refill(new Portion(WorldPos.of(table.level, table.at), slot), table.zone, table.food, table.target);
+    }
+
+    Dining(Colony colony, LivingPresence living) { this(colony, living, new java.util.Random()); }
+
+    Dining(Colony colony, LivingPresence living, java.util.random.RandomGenerator random) {
+        this.colony = colony;
+        this.living = living;
+        this.random = random;
+    }
 
     void refresh(MinecraftServer server) {
         List<Table> found = new ArrayList<>();
@@ -108,6 +122,7 @@ final class Dining {
             }
         }
         tables = List.copyOf(found);
+        refills.keySet().removeIf(refill -> tables.stream().noneMatch(table -> refill.equals(refill(table, refill.portion.slot))));
     }
 
     private static Set<BlockPos> tableCells(ServerLevel level, ZoneView zone) {
@@ -137,19 +152,26 @@ final class Dining {
 
     List<Grown> goals(ColonyView view) {
         List<Grown> wanted = new ArrayList<>();
+        Set<Refill> pending = new HashSet<>();
         for (Table table : tables) {
             if (table.level != view.level() || !valid(table)) { continue; }
             Optional<Container> display = DiningTables.inventory(view.level(), table.at);
             List<ItemSpec> accepted = accepted(table);
             if (accepted.isEmpty()) { continue; }
-            ItemSpec food = ItemSpec.anyOf(accepted);
             int count = display.map(pack -> Math.min(table.target, pack.getContainerSize())).orElse(1);
             for (int slot = 0; slot < count; slot++) {
                 if (display.isPresent() ? !display.get().getItem(slot).isEmpty()
                         : !view.level().getBlockState(table.at.above()).isAir()) { continue; }
+                Refill refill = refill(table, slot);
+                pending.add(refill);
+                // Pick a dish before planning, so cheap recipes cannot monopolize a multi-food menu.
+                // Keep that choice through repeated sweeps until this physical serving is delivered.
+                ItemSpec food = refills.compute(refill, (key, chosen) -> chosen != null && accepted.contains(chosen)
+                    ? chosen : accepted.get(random.nextInt(accepted.size())));
                 wanted.add(Grown.of(new SetTable(table, slot, food)));
             }
         }
+        refills.keySet().removeIf(refill -> refill.portion.at.in(view.level()) && !pending.contains(refill));
         return List.copyOf(wanted);
     }
 
@@ -284,7 +306,7 @@ final class Dining {
         }
     }
 
-    void clear() { List.copyOf(meals.values()).forEach(Meal::finish); tables = List.of(); }
+    void clear() { List.copyOf(meals.values()).forEach(Meal::finish); tables = List.of(); refills.clear(); }
 
     List<Line> lines(ZoneView zone, ColonyView view) {
         List<Table> here = tables.stream().filter(table -> table.zone.equals(zone.id())).toList();
@@ -334,6 +356,7 @@ final class Dining {
                     if (!DiningFoods.place(level, table.at.above(), actual)) { continue; }
                     stack.shrink(1);
                 }
+                refills.remove(refill(table, slot), food);
                 return new Outcome.Done(List.of(), List.of(), Optional.empty(), back.stream().filter(item -> !item.isEmpty()).toList());
             }
             return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);
@@ -350,9 +373,10 @@ final class Dining {
         boolean engaged;
         Meal(UUID token, Worker who, Choice choice) {
             this.token = token; this.who = who; this.choice = choice;
-            expires = choice.table.level.getGameTime() + 600;
+            int duration = FolkwaysVanillaConfig.diningMealTicks();
+            expires = choice.table.level.getGameTime() + 500 + duration;
             spec = NodeSpec.of(token, LivingContent.ID, WorkSite.at(choice.table.level, choice.table.at),
-                Stances.at(choice.table.level, choice.seat.approach), Workload.Once.of(100))
+                Stances.at(choice.table.level, choice.seat.approach), Workload.Once.of(duration))
                 .effort(WorkEffort.NONE).doing(LivingContent.DINING_EATING).focus(choice.table.at)
                 .gesture(new WorkGesture() {
                     @Override public void perform(net.minecraft.world.entity.LivingEntity body, int tick, BlockPos focus) {
