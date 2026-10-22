@@ -64,6 +64,8 @@ public final class LivingContent {
     public static final Schema.Setting DINING_FOOD = new Schema.Setting.Items(
         "food", "folkways.settings.dining.food", ResourceLocation.withDefaultNamespace("cake"),
         vanilla("bread", "cooked_beef", "cake"));
+    public static final Schema.Setting DINING_DRINK = new Schema.Setting.Items(
+        "drink", "folkways.settings.dining.drink", ResourceLocation.withDefaultNamespace("glass_bottle"), List.of());
     public static final Schema.Setting DINING_SERVINGS = new Schema.Setting.Count(
         "servings", "folkways.settings.dining.servings", ResourceLocation.withDefaultNamespace("bowl"), 1, 4, 4);
 
@@ -142,7 +144,7 @@ public final class LivingContent {
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(BED, new Shape.Block(Housing::isBed, Housing::sleepingCell)),
                 new Delegation(RECREATION, new Shape.Volume(4096), ResourceLocation.withDefaultNamespace("poppy")),
-                new Delegation(DINING, new Shape.Volume(4096), new Schema(List.of(DINING_FOOD, DINING_SERVINGS)),
+                new Delegation(DINING, new Shape.Volume(4096), new Schema(List.of(DINING_FOOD, DINING_SERVINGS, DINING_DRINK)),
                     ResourceLocation.withDefaultNamespace("cake"))),
             new Schema(List.of(FOOD_MODE, FOOD_SAFETY, FOOD)), List.of()));
     }

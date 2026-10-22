@@ -1133,10 +1133,11 @@
   "folkways.doing.folkways.setting_table.about": "摆上%s",
   "folkways.doing.folkways.dining_eating": "在餐桌用餐",
   "folkways.settings.dining.food": "餐桌食物",
+  "folkways.settings.dining.drink": "餐桌饮品",
   "folkways.settings.dining.servings": "每格桌面份数",
   "folkways.dining.summary": "%s张餐桌，%s个座位",
   "folkways.dining.furniture": "请在区域内相邻放置餐桌和椅子，并在椅子旁留出过道。",
-  "folkways.dining.help": "相连的桌面视为一张整桌，可从任意一端上菜，所有座位共享桌上食物。普通桌面摆放食物方块；原生餐桌按每格桌面的设定份数补餐。",
+  "folkways.dining.help": "相连的桌面视为一张整桌，可从任意一端上菜，所有座位共享桌上食物。普通桌面摆放食物方块；原生餐桌按每格桌面的设定份数补餐。选择餐桌饮品后，原生餐桌的末格用于饮品；区域内支持的酒柜会自动补酒，并可供居民取酒上桌。",
   "folkways.mood.reason.dining": "惬意的一餐：%s",
   "folkways.dining.no_food": "当前所选食物不适用于这些餐桌。森罗餐桌可摆放可食用物品；普通桌面需要支持的可放置食物，如蛋糕。"
 }

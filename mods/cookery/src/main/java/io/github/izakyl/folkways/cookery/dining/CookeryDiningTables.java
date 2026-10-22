@@ -4,6 +4,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.block.decoration.ChairBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.decoration.TableBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.entity.SitEntity;
 import io.github.izakyl.folkways.plugins.person.living.DiningTables;
+import io.github.izakyl.folkways.plugins.person.living.DiningDrinks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -54,7 +55,7 @@ public final class CookeryDiningTables {
             return true;
         }
         public int getMaxStackSize() { return 1; }
-        public int getMaxStackSize(ItemStack stack) { return edible(stack) ? 1 : 0; }
+        public int getMaxStackSize(ItemStack stack) { return displayable(stack) ? 1 : 0; }
         public ItemStack getItem(int slot) { return table.getItems().getStackInSlot(slot); }
         public ItemStack removeItem(int slot, int count) {
             ItemStack taken = table.getItems().extractItem(slot, count, false);
@@ -63,14 +64,15 @@ public final class CookeryDiningTables {
         }
         public ItemStack removeItemNoUpdate(int slot) { return removeItem(slot, Integer.MAX_VALUE); }
         public void setItem(int slot, ItemStack stack) {
-            if (!stack.isEmpty() && (stack.getCount() > 1 || !edible(stack))) {
-                throw new IllegalArgumentException("dining table display accepts one food per slot");
+            if (!stack.isEmpty() && (stack.getCount() > 1 || !displayable(stack))) {
+                throw new IllegalArgumentException("dining table display accepts one food or registered drink per slot");
             }
             table.getItems().setStackInSlot(slot, stack);
             setChanged();
         }
-        public boolean canPlaceItem(int slot, ItemStack stack) { return edible(stack); }
-        private static boolean edible(ItemStack stack) { return !stack.isEmpty() && stack.getFoodProperties(null) != null; }
+        public boolean canPlaceItem(int slot, ItemStack stack) { return displayable(stack); }
+        private static boolean displayable(ItemStack stack) { return !stack.isEmpty()
+            && (stack.getFoodProperties(null) != null || DiningDrinks.accepts(stack)); }
         public void setChanged() {
             // The native inventory mutation has already settled. A failing notification must not make
             // Commit refund a delivered portion or let an eating action replay its removed food.

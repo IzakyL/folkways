@@ -55,6 +55,13 @@ Hungry residents prefer an available nearby table and return native food contain
 Finishing a table meal grants +6 dining mood for one day. If no suitable table meal is available, they
 can eat their pocket rations. Cancelling a table meal leaves its food untouched and frees the seat.
 
+With Kaleidoscope Tavern installed alongside the Cookery extension, a dining area's Drinks setting
+reserves the last slot of each supported table for a drink. Residents serve it separately from food,
+hold it at the end of the meal, apply its native effects on completion, and return its empty bottle.
+Drinks add no nutrition, and cancelling a meal leaves its drink on the table. Mark a pressing tub and
+a wine barrel with a tap to produce grape wine from grapes, empty buckets and empty bottles. Workers
+jump in the tub, wait for the barrel's native second brewing level, and bottle its actual wine.
+
 ### Resident growth and everyday life
 
 Residents learn automatically. Each completed second of active work earns one experience point;

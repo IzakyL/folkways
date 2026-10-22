@@ -75,6 +75,38 @@ public final class DiningSchedulingGameTests {
             .thenSucceed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 1400)
+    public static void schedulerTakesTableDrinkFromCabinetThenReplenishesTheCabinet(GameTestHelper helper) {
+        var rig = new Rig(helper, Blocks.GOLD_BLOCK.defaultBlockState(), Blocks.OAK_STAIRS.defaultBlockState(), new ItemStack(Items.BREAD));
+        var display = new net.minecraft.world.SimpleContainer(2);
+        DiningGameTests.DISPLAYS.put(WorldPos.of(rig.level, rig.table), display);
+        BlockPos cabinet = rig.table.offset(-2, 0, -1);
+        rig.level.setBlockAndUpdate(cabinet, Blocks.BARREL.defaultBlockState());
+        Container bottles = (Container) rig.level.getBlockEntity(cabinet);
+        for (int slot = 1; slot < bottles.getContainerSize(); slot++) { bottles.setItem(slot, new ItemStack(Items.STONE, 64)); }
+        bottles.setItem(0, new ItemStack(Items.POTION)); bottles.setChanged();
+        var front = ColonyFront.of(rig.colony);
+        var old = front.zonesIn(rig.level).stream().filter(zone -> zone.delegation().equals(LivingContent.DINING)).findFirst().orElseThrow();
+        var settings = old.settings().with(LivingContent.DINING_DRINK.key(),
+            new ColonySettings.Value.Items(List.of(ItemFilter.item(ResourceLocation.withDefaultNamespace("potion")))));
+        front.erase(old.id());
+        front.addZone(rig.level, LivingContent.DINING, Set.of(rig.table, rig.chair, cabinet), settings).orElseThrow();
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(display.getItem(1).is(Items.POTION), "the table can only receive its first real bottle from the marked cabinet"))
+            .thenExecute(() -> {
+                helper.assertTrue(bottles.getItem(0).isEmpty(), "real planned table service actually removes the cabinet bottle");
+                helper.assertTrue(rig.setting, "the resident executes real table-service work after walking to stock");
+                rig.source.setItem(1, new ItemStack(Items.POTION)); rig.source.setChanged();
+            })
+            .thenWaitUntil(() -> helper.assertTrue(bottles.getItem(0).is(Items.POTION), "the missing cabinet bottle is automatically replenished from new real stock"))
+            .thenExecute(() -> {
+                helper.assertTrue(rig.source.getItem(1).isEmpty(), "cabinet replenishment consumes the new stock once");
+                helper.assertTrue(display.getItem(1).is(Items.POTION), "refilling the cabinet preserves the bottle already delivered to the table");
+                DiningGameTests.DISPLAYS.remove(WorldPos.of(rig.level, rig.table));
+                rig.close();
+            }).thenSucceed();
+    }
+
     /** Shared native fixture. GameTestServer suppresses Labor.work, so this drives the complete
      * per-colony planning/execution pipeline once per real tick, using its normal inline lanes. */
     public static final class Rig implements AutoCloseable {
