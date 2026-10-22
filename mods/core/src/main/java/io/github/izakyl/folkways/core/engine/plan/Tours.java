@@ -508,25 +508,29 @@ final class Tours {
     }
 
     // A hand that has been on one piece too long: what it has queued behind that piece should not keep holding
-    // the colony up. Only the work not yet begun is handed back — the piece in hand stays — and no new work is
-    // laid on this hand this schedule, so the rest of the route can go to someone free.
+    // the colony up. Only the work in hand stays — everything else it has queued goes back to the plan, and no new
+    // work is laid on this hand this schedule, so the rest of the route can go to someone free. A hand asleep or
+    // about its own business holds nothing of its route: then the whole queue goes back.
     private boolean handBackQueues(List<Seat> line) {
+        // 没有闲着的手就别抖路线：交还回去也只是换个地方排队。
+        boolean free = line.stream().anyMatch(seat -> seat.route.isEmpty());
+        if (!free) {
+            return false;
+        }
         Deque<UUID> cutting = new ArrayDeque<>();
         List<Seat> busy = new ArrayList<>();
         for (Seat seat : line) {
             if (seat.route.isEmpty()) {
                 continue;
             }
-            UUID head = seat.route.getFirst();
-            if (!seat.hand.id().equals(heldBy.get(head))) {
-                continue;
-            }
-            Placed placed = settled.get(head);
+            // 手里那件活留着（它可能不在队首，也可能根本没有——人在睡觉/办私事）。
+            UUID held = seat.hand.holding().orElse(null);
+            Placed placed = settled.get(seat.route.getFirst());
             if (placed == null || now - placed.start() <= LATE_TICKS) {
                 continue;
             }
             for (UUID id : seat.route) {
-                if (!id.equals(head)) {
+                if (!id.equals(held)) {
                     cutting.add(id);
                 }
             }
