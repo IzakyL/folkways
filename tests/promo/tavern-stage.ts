@@ -1,32 +1,29 @@
 import { defineTask, javaTask, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { MARK_MEMBERS, runColonyTask } from "../shared/colony/colony-tasks";
 import type { Vec } from "../shared/colony/colony-founding";
-import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
+import { commandPos } from "../shared/harness/bw-helpers";
 import { licenseCrewFast } from "./fast-setup";
 
 const T = "kaleidoscope_tavern:";
 
+// Pressing tub on the left, the barrel and its tap on the right, the grapes and the wine store between them.
+// The barrel and the tap face north, toward the camera.
 function layout(origin: Vec) {
   const at = (x: number, y: number, z: number): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
   return {
-    // North of the rear garden, west of the mill's seven-block working square.
-    // Yard staging later clears x=-28..-18,z=-14..-6; no winery cell overlaps it.
-    stations: { tub: at(-31, 0, 4), barrel: at(-27, 0, 7) },
-    tap: at(-27, 1, 5), bottle: at(-27, 0, 5),
-    source: at(-32, 0, 7), target: at(-30, 0, 8),
-    posts: [at(-31, 0, 3), at(-27, 0, 4)],
+    stations: { tub: at(-3, 0, 0), barrel: at(2, 0, 0) },
+    tap: at(2, 1, -2), bottle: at(2, 0, -2),
+    source: at(-5, 0, 1), target: at(-1, 0, 1),
+    posts: [at(-3, 0, -1), at(2, 0, -3)],
   };
 }
 
 /** Raw grapes enter the native pressing, fermentation and tap chain; dining requests supply the demand. */
-export async function stageCookeryTavern(
+export async function stageTavern(
   server: MinecraftServer, player: string, colony_id: string, origin: Vec, workersUUIDs: string[],
 ) {
   if (workersUUIDs.length !== 2) throw new Error("The tavern requires two new workers");
   const plan = layout(origin);
-  const at = (x: number, y: number, z: number): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
-  await tryCommand(server, `fill ${commandPos(at(-33, -1, 3))} ${commandPos(at(-24, -1, 10))} minecraft:smooth_sandstone`);
-  await tryCommand(server, `fill ${commandPos(at(-33, 0, 3))} ${commandPos(at(-24, 4, 10))} minecraft:air`);
   await world.command(server, `setblock ${commandPos(plan.stations.tub)} ${T}pressing_tub`);
   const ingredients: Array<[string, number]> = [
     ...Array.from({ length: 8 }, (): [string, number] => [T + "grape", 64]),
@@ -46,7 +43,7 @@ export async function stageCookeryTavern(
     initialProducts: 0, product: T + "wine", via: "native-pressing-fermentation-and-tap" };
 }
 
-export async function readCookeryTavern(
+export async function readTavern(
   server: MinecraftServer, colony_id: string, origin: Vec, workersUUIDs: string[],
 ) {
   return runColonyTask(server, READ, { colony_id, workers: workersUUIDs, ...layout(origin) });

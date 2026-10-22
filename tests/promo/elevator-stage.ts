@@ -6,10 +6,10 @@ import { commandPos } from "../shared/harness/bw-helpers";
 const RISE = 6;
 
 /** Origin is the garden's ground-floor feet height; the cabin deck is one block below it.
- * Static landings belong to the garden set. Only this five-by-five shaft is assembled here.
+ * The take builds its own landings beside the shaft. Only this five-by-five shaft is assembled here.
  * After delegation, ordinary colony errands decide every call, passenger and destination.
  */
-export async function buildCookeryElevator(
+export async function buildElevator(
   server: MinecraftServer, player: string, colony_id: string, origin: Vec,
 ) {
   const at = (x: number, y: number, z: number): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
@@ -72,10 +72,10 @@ export async function buildCookeryElevator(
   const assembly = await runColonyTask(server, ASSEMBLE, { origin, click: true });
   await tick.sprint(server, 60);
   const delegated = await runColonyTask(server, MARK_MEMBERS, { player, colony_id, cells: [pulley.x, pulley.y, pulley.z] });
-  let state = await readCookeryElevator(server, colony_id, origin);
+  let state = await readElevator(server, colony_id, origin);
   for (let attempt = 0; attempt < 6 && (state.floors.length !== 2 || state.capacity < 1 || !state.controller); attempt++) {
     await tick.sprint(server, 20);
-    state = await readCookeryElevator(server, colony_id, origin);
+    state = await readElevator(server, colony_id, origin);
   }
   const expectedFloors = contacts.map(contact => contact.y);
   // Create deliberately reports getSpeed()==0 while Minecraft ticks are frozen. Sprint restores
@@ -94,7 +94,7 @@ export async function buildCookeryElevator(
 }
 
 /** Read verified standing places on the real Create cabin; nearby landings and dining chairs are excluded. */
-export async function readCookeryElevator(server: MinecraftServer, colony_id: string, origin: Vec) {
+export async function readElevator(server: MinecraftServer, colony_id: string, origin: Vec) {
   return runColonyTask(server, STATUS, { colony_id, origin });
 }
 

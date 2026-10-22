@@ -163,95 +163,21 @@ See the [documentation index](docs/README.md) for the layout and maintenance not
 | `npm run pattern:take` | Lays out each work pattern's gallery and shoots it |
 | `npm run bench:take` | Performance benchmarks on a large colony |
 | `npm run promo:take` | Films the promotional takes |
-| `npm run promo:cookery` | Films one 240-second, real-time inn scene with a working kitchen, Create elevator and two dining areas |
-| `npm run promo:cookery:validate` | Rechecks saved native samples, including pre-roll arrival evidence and recorded meal completions/exits; writes `validation.json` |
-| `npm run promo:cookery:film` | Preserves the complete original, exports a 120-second 2× speed copy with accelerated game audio, and writes model credits; requires FFmpeg with libx264 |
+| `npm run promo:cookery` | Films four short Cookery takes, one feature each: kitchen, dining area, wine with meals, Create elevator |
+| `npm run promo:cookery:film` | Copies every recorded take byte for byte into `tests/out/promo/film/` and writes the Wine Fox model credits |
 
-Run `npm run setup` before filming. `tests/promo/cookery.take.ts` stages a timber-and-plaster
-inn with a layered copper roof, a wooded garden, an open kitchen, three upstairs table
-groups and three courtyard tables. The native Create elevator is the only vertical
-route. There is no chain conveyor or package-delivery network in this take.
+Run `npm run setup` before filming. Each Cookery take stages one small set on bare ground with a handful of
+Wine Fox residents, films it from one fixed camera, and fails unless the feature it shows happens on camera:
 
-Residents walk into the cabin, stand on its moving floor and walk out at the destination.
-The cabin has no seats or rider mounts. Capacity is discovered from usable standing
-places; evidence records physical occupants, active journeys, total capacity and free
-places separately from residents on the landings or seated at dining tables. Route
-estimates do not call the elevator or reserve places. Boarding, alighting and cancellation
-use ordinary movement without teleporting residents to landings.
+- `cookery-kitchen.take.ts`: three cooks take raw ingredients from a pantry, cook in a stockpot and two pots and
+  on a chopping board, and set each dish on the table the dining area beside them wants filled.
+- `cookery-dining.take.ts`: a waiter carries dishes from a larder to one long connected table, and five hungry
+  residents sit at free chairs beside the dishes and eat.
+- `cookery-wine.take.ts`: two vintners press grapes and pour the juice into a barrel (first clip); once the wine
+  is bottled into the bar cabinet, three hungry residents each take a bottle and drink it with their meal (second clip).
+- `create-elevator.take.ts`: four tired residents ride a Create elevator, the only way up, to beds in a loft.
 
-Five kitchen workers prefer crafting over general hauling; four porters support the
-service. Both dining areas select from steamed buns (`baozi`), pepper-pork stir-fry,
-pork-bone soup, sashimi, roast rabbit, sweet-and-sour pork, braised beef and fish-flavoured
-shredded pork. Each empty table slot requests one randomly
-chosen dish and retains that choice until delivery. These dining requests drive native
-production directly, without separate kitchen stock orders, an output-draining hopper
-or pre-stocked finished meals. Appliances use supplied raw ingredients, tools, oil,
-bowls and pot lids. Flour is ground from raw wheat through the native courtyard mill.
-Three skillets, two stockpots and two steamers share a communal cupboard of three spatulas and two knives,
-borrowed and physically returned through the native tool queue. Because pre-roll waits for wine, the kitchen,
-market and winery staff have their tiredness cleared after warmup and again before the camera starts; a cook
-who falls asleep mid-dish would otherwise hold its ingredients and booked skillet through the shot.
-The mill sits in the open west courtyard, with a clear seven-block
-working square for its native circular driver path. Three additional kitchen workers support the courtyard stations;
-a farmer and three yard workers harvest, fish, shear and milk in the courtyard.
-
-Fifty-six visiting diners arrive from both ends of the street in groups of eight,
-with a new group every twelve seconds. Six patrons in each group use the courtyard;
-two take the elevator upstairs. Admissions remain FIFO, with at most four upstairs
-and eighteen courtyard guests in progress, including return journeys. This limit
-reserves room for departing elevator passengers instead of filling the cabin with
-another incoming group. The upstairs tables leave a waiting hall beside the elevator,
-whose upper landing also has a north approach outside the moving cabin.
-
-The Cookery take uses only the compact, unhelmeted MoMo, Tactics and Matured Wine Fox looks.
-Its optional Kaleidoscope Tavern installation adds a courtyard wine workshop with two workers.
-Dining areas select grape wine through their separate Drinks setting; only grapes, empty buckets
-and empty bottles are supplied. Workers physically jump in the pressing tub, ferment four juice
-buckets until the native barrel reaches brewing level two, then use its tap to bottle the wine.
-The last table slot holds wine separately from food. Guests hold their reserved bottle near the
-end of a real seated meal, consume it once on completion and return the native empty bottle.
-Pre-roll waits for food and wine on both floors. Recorded evidence checks sustained upstairs
-seating, actual wine delivery, seated drinking gestures and completed drinking during the shot.
-
-Run the optional wine integration GameTests with
-`./gradlew -PgameTestMod=cookery -PcookeryTests=true -PtavernTests=true runGameTestServer`.
-
-The filming director submits worker-bound native walking and waiting nodes. Courtyard
-patrons choose their meal from the street, outside the upstairs tables' selection
-radius. A guest waits near the assigned entrance until that floor has a suitable real
-serving, accounting for patrons already eating or approaching a claimed meal. Exertion
-then reduces fullness to about ten points through the normal hunger system. A completed
-native table meal triggers the return walk; departed diners rejoin their original wave
-in the next cycle. The filming server sets `living.diningMealTicks` to 1200,
-so the actual meal lasts sixty seconds at twenty ticks per second; ordinary servers
-retain the 100-tick default. Food consumption and dining history still come from the
-native meal completion, and no extra hunger is imposed while a guest eats.
-
-All visible movement, cooking, table service and eating use the game's normal systems.
-Initial blocking takes place by teleport while ticks are frozen; visitors carry no
-cargo or delivery jobs.
-
-The uninterrupted 240-second take is saved as
-`tests/out/promo/takes/cookery/01-kitchen-dining.mp4`. Evidence beside it records the two
-areas' servings and replenishment, kitchen activity, ordered visitor arrivals/meals/exits,
-and occupied elevator travel. Validation separates an actor's current action from its
-`toward` destination: walking toward a stove is travel rather than cooking, and
-walking toward a meal is not seated eating. Seated-meal evidence requires the actual
-dining motion and a table seat, excluding standing elevator passengers. Checks cover
-fresh table service, actual kitchen actions, completed visits with real meal history
-and off-camera departures, and simultaneous seated diners. These are recording
-requirements; inspect the run's saved evidence for measured results. Pre-roll arrivals stay in
-the evidence; counted meal completions and departures must occur in the recorded shot.
-`npm run promo:cookery:validate` runs the same checks against saved evidence without
-launching Minecraft, including at least four distinct served menu dishes. The recording retains
-1080p60 video and original game audio. `npm run promo:cookery:film` copies the whole
-recording byte for byte to `tests/out/promo/film/folkways-cookery-raw.mp4`, without
-trimming, transcoding, overlays or added music. It also exports the entire take at two
-times speed as `tests/out/promo/film/folkways-cookery-2x.mp4`: approximately 120 seconds
-of 1080p60 H.264 video, with the original game audio accelerated by the same factor.
-The viewing copy changes playback speed only; it adds no staged or fabricated movement.
-Wine Fox source and author metadata is
-written beside it in `folkways-cookery-elevator-credits.txt`.
+Clips are written under `tests/out/promo/takes/<take>/`, with each second's samples beside them.
 
 The game suites download Minecraft, NeoForge and the fixture mods on first run, and their
 test servers accept the [Minecraft EULA](https://www.minecraft.net/eula) through
