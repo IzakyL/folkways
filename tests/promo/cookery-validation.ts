@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { summarizeCookeryTakeVisits } from "./cookery-visitor-flow.ts";
+import { summarizeCookeryTakeVisits, summarizeCookeryUpstairs } from "./cookery-visitor-flow.ts";
 
 export const KITCHEN_WORK = new Set(["preparing_food", "chopping_food", "cooking_food", "serving_food", "crafting"]);
 
@@ -37,6 +37,24 @@ export function validateCookeryTake(input: CookeryEvidence, note: (key: string, 
     expect(servedFoods.size, "the random menu must put multiple different real dishes on tables").toBeGreaterThanOrEqual(Math.min(4, TABLE_MENU.length));
     for (const dish of servedFoods) expect(TABLE_MENU, `${dish} must belong to the configured table menu`).toContain(dish);
     for (const area of service) expect(area.replenished, `${area.id} must receive fresh servings during the recording`).toBeGreaterThan(0);
+    const wineService = diningAreas.map(area => ({ id: area.id,
+      served: evidence.some(state => state.diningAreas.find((one: any) => one.id === area.id)
+        .tables.some((table: any) => table.drinks?.includes("kaleidoscope_tavern:wine"))),
+      drinking: evidence.some(state => state.people.some((person: any) => person.drinking && person.seatedAtTable
+        && Math.abs(person.position[1] - state.diningAreas.find((one: any) => one.id === area.id).tables[0].position[1]) < 2)),
+    }));
+    // Consumption is measured from native meal commits, excluding pre-roll meals and held-bottle gestures.
+    const openingDrinks = new Map(evidence[0].people.map((person: any) => [person.uuid, person.tableDrinks ?? 0]));
+    const drunk = evidence.at(-1).people.reduce((count: number, person: any) =>
+      count + Math.max(0, (person.tableDrinks ?? 0) - Number(openingDrinks.get(person.uuid) ?? 0)), 0);
+    run.note("wineService", { areas: wineService, consumedDuringTake: drunk });
+    for (const area of wineService) expect(area.served, `${area.id} must receive real wine from the native tavern chain`).toBe(true);
+    for (const area of wineService) expect(area.drinking, `${area.id} must show an actual seated diner holding wine`).toBe(true);
+    const levels = evidence.flatMap(state => state.diningAreas.flatMap((area: any) =>
+      area.tables.flatMap((table: any) => table.drinkLevels ?? []))) as number[];
+    expect(levels.length, "native wine quality components must reach dining tables").toBeGreaterThan(0);
+    expect(Math.min(...levels), "wine must finish the native wait for brewing level two").toBeGreaterThanOrEqual(2);
+    expect(drunk, "several real table meals must consume wine during the take").toBeGreaterThanOrEqual(4);
     const density = evidence.map(state => ({ seconds: state.seconds,
       cooking: state.people.filter((one: any) => [...cooks, ...marketCrew].includes(one.uuid) && KITCHEN_WORK.has(one.action)).length,
       eating: state.people.filter((one: any) => one.seatedAtTable).length }));
@@ -48,6 +66,11 @@ export function validateCookeryTake(input: CookeryEvidence, note: (key: string, 
       "a real kitchen operation must be visible through most of the shot").toBeGreaterThanOrEqual(0.6);
     expect(density.filter(one => one.eating >= 6).length / density.length,
       "at least six residents must really sit at tables eating in most samples").toBeGreaterThanOrEqual(0.6);
+    const upstairs = summarizeCookeryUpstairs(evidence);
+    run.note("upstairsDensity", upstairs);
+    expect(upstairs.meanEating, "the upstairs restaurant must visibly serve several seated diners throughout the shot").toBeGreaterThanOrEqual(2.3);
+    expect(upstairs.samples.filter(one => one.eating >= 2).length / upstairs.samples.length,
+      "at least two guests must really eat upstairs in most samples").toBeGreaterThanOrEqual(0.65);
     for (let start = 0; start < SECONDS; start += 60) {
       const minute = evidence.filter(state => state.seconds >= start && state.seconds < start + 60);
       expect(minute.some(state => state.people.some((one: any) =>
@@ -57,6 +80,8 @@ export function validateCookeryTake(input: CookeryEvidence, note: (key: string, 
         `minute ${start / 60 + 1} must contain real table replenishment`).toBe(true);
       expect(minute.some(state => state.people.some((one: any) => one.seatedAtTable)),
         `minute ${start / 60 + 1} must contain a seated diner`).toBe(true);
+      expect(upstairs.samples.some(sample => sample.seconds >= start && sample.seconds < start + 60 && sample.eating >= 2),
+        `minute ${start / 60 + 1} must show multiple actual upstairs diners`).toBe(true);
     }
     run.note("farmProgress", evidence.at(-1)?.sideWork);
     expect(evidence.at(-1)?.sideWork.harvested, "the filmed farmer actually picks or harvests initially mature crops").toBeGreaterThan(0);

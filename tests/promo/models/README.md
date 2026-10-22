@@ -37,14 +37,20 @@ Downloader checks run offline with
 The picks are the variants with the most cubes left after stripping; `08_sta` has about 4,500
 cubes upstream, but nearly all of them are its tank.
 
-| Folder                 | Upstream         | Skin            |
-| ---------------------- | ---------------- | --------------- |
-| `wine_fox_wedding`     | `18_wedding`     | `skin.png`      |
-| `wine_fox_magical`     | `05_magical`     | `winefox.png`   |
-| `wine_fox_tactics`     | `16_tactics`     | `tactics.png`   |
-| `wine_fox_survivor`    | `20_survivor`    | `mitao.png`     |
-| `wine_fox_hanfu`       | `06_hanfu`       | `default.png`   |
-| `wine_fox_momo`        | `14_momo`        | `skin_pink.png` |
-| `wine_fox_nine_tailed` | `19_nine_tailed` | `skin.png`      |
-| `wine_fox_saint`       | `21_saint`       | `skin.png`      |
-| `wine_fox_matured`     | `13_matured`     | `default.png`   |
+The Cookery inn casts only `wine_fox_momo`, `wine_fox_tactics` and `wine_fox_matured`.
+These have uncovered heads and compact single-tail silhouettes. The survivor's helmet,
+the nine-tail spread, large wedding dress and other oversized accessories obscure the
+food and neighbouring actors in the crowded dining scene, so those variants remain
+available to the other takes without entering this cast.
+
+| Folder | Upstream | Skin |
+| --- | --- | --- |
+| `wine_fox_wedding` | `18_wedding` | `skin.png` |
+| `wine_fox_magical` | `05_magical` | `winefox.png` |
+| `wine_fox_tactics` | `16_tactics` | `tactics.png` |
+| `wine_fox_survivor` | `20_survivor` | `mitao.png` |
+| `wine_fox_hanfu` | `06_hanfu` | `default.png` |
+| `wine_fox_momo` | `14_momo` | `skin_pink.png` |
+| `wine_fox_nine_tailed` | `19_nine_tailed` | `skin.png` |
+| `wine_fox_saint` | `21_saint` | `skin.png` |
+| `wine_fox_matured` | `13_matured` | `default.png` |

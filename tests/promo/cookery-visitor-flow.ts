@@ -2,23 +2,24 @@ import type { Vec } from "../shared/colony/colony-founding";
 
 export const WAVE_SIZE = 8;
 export const WAVE_SECONDS = 12;
-export const BALCONY_CAPACITY = 2;
+export const BALCONY_CAPACITY = 4;
 export const COURTYARD_CAPACITY = 18;
 
 export function cookeryVisitorPlans(origin: Vec, count: number) {
   const at = (x: number, z: number, y = 0): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
   return Array.from({ length: count }, (_, i) => {
-    const balcony = i % WAVE_SIZE === WAVE_SIZE - 1;
-    const group = Math.floor(i / WAVE_SIZE) % 3;
+    const balcony = i % WAVE_SIZE >= WAVE_SIZE - 2;
+    const group = (Math.floor(i / WAVE_SIZE) + (balcony ? i % 2 : 0)) % 3;
     const left = [-15, -11, -7][group];
     return {
-      // Most patrons use the street terrace; two upstairs visitors at a time
-      // preserve lift journeys without putting the dining stream in its queue.
+      // Two upstairs patrons per wave keep the restaurant in use. Four active
+      // visits leave a spare place in the five-person cabin for returning diners
+      // and table service instead of admitting a whole cabin of inbound guests.
       start: at(i % 2 === 0 ? -35 - (Math.floor(i / 2) % 10) * 2 : 25 + (Math.floor(i / 2) % 10) * 2,
         [-16, -17, -15][Math.floor(i / 20) % 3]),
       // Street diners first choose a real ground-floor meal outside the radius
       // of every upstairs table. Spread each wave between the three table groups.
-      entrance: balcony ? at(-5, -5, 6) : at(left + (i % 2), -20),
+      entrance: balcony ? at(left, -5, 6) : at(left + (i % 2), -20),
       area: balcony ? "balcony" : "courtyard",
       tables: balcony
         ? [-16, -12, -8].flatMap(x => [0, 1].flatMap(dx => [-3, -2].map(z => at(x + dx, z, 6))))
@@ -27,6 +28,15 @@ export function cookeryVisitorPlans(origin: Vec, count: number) {
       release: Math.floor(i / WAVE_SIZE) * WAVE_SECONDS,
     };
   });
+}
+
+/** Count native table seats on the upper floor, never a route target or a lift rider. */
+export function summarizeCookeryUpstairs(samples: Array<{ seconds: number; visitors: any }>) {
+  const density = samples.map(sample => ({ seconds: sample.seconds,
+    eating: sample.visitors.people.filter((person: any) => person.dining && person.seatedAtTable
+      && person.local?.[1] >= 5 && person.local?.[1] <= 7).length }));
+  return { samples: density,
+    meanEating: density.reduce((total, sample) => total + sample.eating, 0) / Math.max(1, density.length) };
 }
 
 export function summarizeCookeryVisitors(samples: Array<{ seconds: number; [key: string]: any }>, workersUUIDs: string[]) {

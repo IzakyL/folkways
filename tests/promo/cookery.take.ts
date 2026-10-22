@@ -14,6 +14,7 @@ import { KITCHEN_WORK, validateCookeryTake } from "./cookery-validation";
 import { dressCookeryGarden } from "./cookery-set";
 import { prepareCookeryModels, WINE_FOX_MODELS, applyCookeryLooks } from "./cookery-cast";
 import { buildCookeryElevator, readCookeryElevator } from "./cookery-elevator";
+import { stageCookeryTavern, readCookeryTavern } from "./cookery-tavern";
 import { cinematicWorld, hideHud, launchPromoPair, promoClip, setFov, setTickRate, sleepMs, take, type PromoPair } from "./promo-kit";
 
 const K = "kaleidoscope_cookery:";
@@ -47,6 +48,8 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
       table: at(-14, -2), board: at(-10, 0, 1), stockpot: at(-12, -4, 1), pot: at(-9, -4, 1),
       steamer: at(-6, -4, 1), mill: at(-23, 1),
       stockpotSecond: at(-11, -4, 1), potSecond: at(-8, -4, 1), steamerSecond: at(-5, -4, 1),
+      // Most table dishes are stir-fried; a third skillet keeps one slow pot from idling the line.
+      potThird: at(-10, -4, 1),
     };
     const set = async (p: Vec, block: string) => world.command(server, `setblock ${commandPos(p)} ${block}`);
     const scenery = await dressCookeryGarden(server, o);
@@ -55,20 +58,20 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     for (let slot = 0; slot < 3; slot++) await world.command(server,
       `item replace block ${commandPos(cells.food)} container.${slot} with minecraft:cooked_beef 64`);
     // Flour is ground from supplied wheat through the working courtyard mill.
-    // Both skillets share a stocked utensil cupboard. Loans still move through the
+    // All three skillets share a stocked utensil cupboard. Loans still move through the
     // normal shared-tool queue and must physically return after every task.
-    for (let slot = 1; slot <= 2; slot++) await world.command(server,
+    for (let slot = 1; slot <= 3; slot++) await world.command(server,
       `item replace block ${commandPos(cells.store)} container.${slot} with ${K}kitchen_shovel`);
-    for (let slot = 3; slot <= 4; slot++) await world.command(server,
+    for (let slot = 4; slot <= 5; slot++) await world.command(server,
       `item replace block ${commandPos(cells.store)} container.${slot} with ${K}iron_kitchen_knife`);
     // Tables request their own randomly chosen dishes. Only raw ingredients are supplied;
     // every opening serving and subsequent refill must pass through the native kitchen.
     await set(cells.source, `folkways:creative_supply_box{all:0b,whitelist:${JSON.stringify(PANTRY_SUPPLIES.map(id => "i" + id))}}`);
     await set(cells.table, "minecraft:crafting_table");
     await set(cells.board, K + "chopping_board");
-    for (const key of ["stockpot", "pot", "steamer", "stockpotSecond", "potSecond", "steamerSecond"] as const) {
+    for (const key of ["stockpot", "pot", "steamer", "stockpotSecond", "potSecond", "steamerSecond", "potThird"] as const) {
       await set({ ...cells[key], y: cells[key].y - 1 }, K + "stove[facing=north,lit=true]");
-      const appliance = key.replace("Second", "");
+      const appliance = key.replace(/Second|Third/, "");
       // The skillet's north handle opens directly onto the one-cell front operator aisle.
       await set(cells[key], K + appliance + (appliance === "pot" ? "[facing=north]" : ""));
     }
@@ -131,6 +134,17 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     const marketCrew = marketNewcomers.map(one => one.uuid);
     run.note("extraKitchen", await stageExtraKitchen(server, name, founded.colony_id, o, marketCrew));
     for (const resident of marketNewcomers) await world.command(server, `data merge entity ${resident.uuid} {Invulnerable:1b}`);
+    for (let i = 0; i < 2; i++) await runColonyTask(server, ADMIT_SETTLERS,
+      { player: name, colony_id: founded.colony_id, count: 1 });
+    const kitchenKnown = new Set(residents.map(one => one.uuid));
+    const vintners = (await world.entities(server, { types: ["folkways:resident"], limit: 128 })).entities
+      .filter(one => !kitchenKnown.has(one.uuid));
+    expect(vintners).toHaveLength(2);
+    residents.push(...vintners);
+    const tavernCrew = vintners.map(one => one.uuid);
+    run.note("tavern", await stageCookeryTavern(server, name, founded.colony_id, o, tavernCrew));
+    const kitchenCrew = [...cooks, ...marketCrew, ...tavernCrew];
+    run.note("kitchenCrew", kitchenCrew);
     // All stations exist before warming the dining requests; no separate kitchen orders.
     let ready = false;
     let lastPortions = 0, lastProgress = Date.now();
@@ -139,14 +153,14 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
     await tick.freeze(server, false);
     try {
       const started = Date.now();
-      while (Date.now() - started < 360_000) {
+      while (Date.now() - started < 600_000) {
         const state = await sample(server, founded.colony_id, residents.map(one => one.uuid), diningAreas, o);
         const kitchen = await readExtraKitchen(server, founded.colony_id, o, marketCrew);
         warmup.push({ ...state, extraKitchen: kitchen });
         if (warmup.length % 10 === 0) run.note("warmup", warmup);
         if (state.portions > lastPortions) { lastPortions = state.portions; lastProgress = Date.now(); }
         if (Date.now() - lastProgress > 90_000) throw new Error("Native kitchen stopped making table progress; inspect warmup.unassigned");
-        if (state.diningAreas.every((area: any) => area.portions >= (area.id === "courtyard" ? 18 : 4))) {
+        if (state.diningAreas.every((area: any) => area.portions >= (area.id === "courtyard" ? 14 : 8) && area.drinks >= 2)) {
           ready = true; break;
         }
         await sleepMs(1500);
@@ -157,6 +171,9 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
       run.note("warmup", warmup);
     }
     expect(ready, "table requests must fill both dining areas before filming").toBe(true);
+    // Waiting for wine makes warmup long enough to tire the kitchen. A cook who sleeps mid-dish keeps its
+    // inputs and its booked skillet, so the staff start pre-roll rested, as they would a fresh shift.
+    run.note("restedAfterWarmup", await runColonyTask(server, REST_CREW, { colony_id: founded.colony_id, uuids: kitchenCrew }));
     // The inn now serves its arriving patrons at the banquet. Existing staff keep
     // their packed rations; new arrivals use the normal dining urge rather than restocking road snacks.
     run.note("tavernMenu", await server.run(TAVERN_MENU, { colony: founded.colony_id }));
@@ -201,10 +218,11 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
         const guests = await stepCookeryVisitors(server, founded.colony_id, o, visitorCrew, visitorSeconds);
         const state = await sample(server, founded.colony_id, residents.map(one => one.uuid), diningAreas, o);
         const eating = state.people.filter((one: any) => one.seatedAtTable).length;
-        const cooking = state.people.filter((one: any) => [...cooks, ...marketCrew].includes(one.uuid) && KITCHEN_WORK.has(one.action)).length;
-        preRoll.push({ seconds: visitorSeconds, eating, cooking, ...state, visitors: guests });
+        const upstairsEating = state.people.filter((one: any) => one.seatedAtTable && one.position[1] >= o.y + 5).length;
+        const cooking = state.people.filter((one: any) => kitchenCrew.includes(one.uuid) && KITCHEN_WORK.has(one.action)).length;
+        preRoll.push({ seconds: visitorSeconds, eating, upstairsEating, cooking, ...state, visitors: guests });
         if (preRoll.length % 10 === 0) run.note("preRoll", preRoll);
-        busy = eating >= 6 && cooking >= 2;
+        busy = eating >= 6 && upstairsEating >= 2 && cooking >= 2;
         if (busy) break;
         await sleepMs(1000);
       }
@@ -212,13 +230,14 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
       await tick.freeze(server, true);
       run.note("preRoll", preRoll);
     }
-    expect(busy, "pre-roll must show six real diners and two active cooks before the camera starts").toBe(true);
+    expect(busy, "pre-roll must show six real diners, including two upstairs, and two active cooks before the camera starts").toBe(true);
+    run.note("restedBeforeCamera", await runColonyTask(server, REST_CREW, { colony_id: founded.colony_id, uuids: kitchenCrew }));
     await run.shot(client, "composition", { subject: "Ground-floor kitchen, upstairs restaurant and the real elevator share one stationary frame",
       worldState: { cells, diningAreas, cooks, diners }, hard: true });
     const evidence: any[] = [];
     await promoClip(run, client, server, "01-kitchen-dining", {
       subject: "One continuous view of the working kitchen, upstairs diners and residents standing in the moving elevator",
-      worldState: { cells, diningAreas, cooks, visitors: visitorCrew, openingServiceStock: {}, openingUtensils: { [K + "kitchen_shovel"]: 2, [K + "iron_kitchen_knife"]: 2 }, openingIngredients: {},
+      worldState: { cells, diningAreas, cooks, visitors: visitorCrew, openingServiceStock: {}, openingUtensils: { [K + "kitchen_shovel"]: 3, [K + "iron_kitchen_knife"]: 2 }, openingIngredients: {},
         tableMenu: TABLE_MENU, kitchenSupplies: PANTRY_SUPPLIES }, seconds: SECONDS,
       during: async () => {
         const started = Date.now();
@@ -236,7 +255,7 @@ test("cookery: one continuous kitchen and dining scene", async ({}, testInfo) =>
       },
     });
     run.note("activity", evidence);
-    validateCookeryTake({ evidence, preRoll, visitors, visitorCrew, cooks, marketCrew, diningAreas,
+    validateCookeryTake({ evidence, preRoll, visitors, visitorCrew, cooks: kitchenCrew, marketCrew, diningAreas,
       TABLE_MENU, SECONDS }, (key, value) => run.note(key, value));
     run.note("shaders", shaderEvidence(clientInstance));
   } catch (error) {
@@ -251,7 +270,8 @@ async function sample(server: MinecraftServer, colony: string, uuids: string[], 
   const activity = await server.run(ACTIVITY, { colony, uuids, areas, origin });
   const lift = await readCookeryElevator(server, colony, origin);
   const standing = new Set(lift.passengers.map((one: any) => one.uuid));
-  return { ...activity, people: activity.people.map((one: any) => ({ ...one,
+  const tavern = await readCookeryTavern(server, colony, origin, []);
+  return { ...activity, tavern, people: activity.people.map((one: any) => ({ ...one,
     inLift: standing.has(one.uuid), seatedAtTable: one.dining && one.mounted && !standing.has(one.uuid),
   })), lift };
 }
@@ -282,9 +302,12 @@ for (var rawArea : args.list("areas")) {
     var menu = area.strings("foods").stream().map(id -> ItemFilter.item(ResourceLocation.parse(id))).toList();
     int servings = area.string("id").equals("courtyard") ? 4 : 1;
     var settings = ColonySettings.empty().with(LivingContent.DINING_SERVINGS.key(), new ColonySettings.Value.Count(servings))
-        .with(LivingContent.DINING_FOOD.key(), new ColonySettings.Value.Items(menu));
+        .with(LivingContent.DINING_FOOD.key(), new ColonySettings.Value.Items(menu))
+        .with(LivingContent.DINING_DRINK.key(), new ColonySettings.Value.Items(
+            List.of(ItemFilter.item(ResourceLocation.parse("kaleidoscope_tavern:wine")))));
     var zone = front.addZone(ctx.server().overworld(), LivingContent.DINING, cells, settings).orElseThrow();
-    zones.add(Map.of("id", area.string("id"), "zone", zone.id().toString(), "servings", servings, "foods", area.strings("foods")));
+    zones.add(Map.of("id", area.string("id"), "zone", zone.id().toString(), "servings", servings, "foods", area.strings("foods"),
+        "drinks", List.of("kaleidoscope_tavern:wine")));
 }
 return Map.of("areas", zones);
 ` }),
@@ -322,31 +345,45 @@ for (var id : args.strings("uuids")) {
         var mood = (net.minecraft.nbt.CompoundTag) raw;
         if (mood.hasUUID("resident") && mood.getUUID("resident").equals(entity.getUUID())) dined = mood.getCompound("times").getLong("dined");
     }
-    people.add(Map.of("uuid", id, "doing", body.doing().map(doing -> doing.toward().orElse(doing.what()).getPath()).orElse("idle"),
+    var personState = new LinkedHashMap<String, Object>(Map.of("uuid", id, "doing", body.doing().map(doing -> doing.toward().orElse(doing.what()).getPath()).orElse("idle"),
         "action", body.doing().map(doing -> doing.what().getPath()).orElse("idle"),
         "dining", entity instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person && person.leisureMotion().equals("dining"),
-        "mounted", entity.isPassenger(), "dined", dined,
+        "mounted", entity.getVehicle() != null && entity.getPersistentData().hasUUID("folkways:dining_seat")
+            && entity.getPersistentData().getUUID("folkways:dining_seat").equals(entity.getVehicle().getUUID()), "dined", dined,
         "pack", java.util.stream.IntStream.range(0, body.pack().getContainerSize()).mapToObj(i -> body.pack().getItem(i).toString()).toList(),
         "position", List.of(entity.getX(), entity.getY(), entity.getZ())));
+    personState.put("tableDrinks", entity.getPersistentData().getInt("folkways:table_drinks"));
+    personState.put("lastTableDrink", entity.getPersistentData().getLong("folkways:last_table_drink"));
+    personState.put("drinking", entity.getPersistentData().getBoolean("folkways:dining_drinking"));
+    people.add(personState);
 }
 int portions = 0;
 var areas = new ArrayList<Object>();
 for (var rawArea : args.list("areas")) {
     var area = Args.of((Map) rawArea, "area");
-    int count = 0;var tables = new ArrayList<Object>();
+    int count = 0, drinkCount = 0;var tables = new ArrayList<Object>();
     for (var raw : area.list("tables")) {
         var at = (Map<?, ?>) raw;
         var pos = new BlockPos(((Number) at.get("x")).intValue(), ((Number) at.get("y")).intValue(), ((Number) at.get("z")).intValue());
         var inventory = DiningTables.inventory(level, pos).orElseThrow();
         var slots = new ArrayList<Boolean>();
         var foods = new ArrayList<String>();
+        var drinks = new ArrayList<String>();
+        var drinkLevels = new ArrayList<Integer>();
         for (int i = 0; i < inventory.getContainerSize(); i++) {
-            boolean filled = !inventory.getItem(i).isEmpty();slots.add(filled);if (filled) { count++;
-                foods.add(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(inventory.getItem(i).getItem()).toString()); }
+            var stack = inventory.getItem(i);
+            var food = stack.getFoodProperties(null);
+            boolean filled = !stack.isEmpty() && food != null && food.nutrition() > 0;
+            slots.add(filled);
+            if (filled) { count++;
+                foods.add(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+            } else if (!stack.isEmpty()) { drinkCount++;
+                drinks.add(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+                drinkLevels.add(com.github.ysbbbbbb.kaleidoscopetavern.item.BottleBlockItem.getBrewLevel(stack)); }
         }
-        tables.add(Map.of("position", List.of(pos.getX(), pos.getY(), pos.getZ()), "slots", slots, "foods", foods));
+        tables.add(Map.of("position", List.of(pos.getX(), pos.getY(), pos.getZ()), "slots", slots, "foods", foods, "drinks", drinks, "drinkLevels", drinkLevels));
     }
-    portions += count;areas.add(Map.of("id", area.string("id"), "portions", count, "tables", tables));
+    portions += count;areas.add(Map.of("id", area.string("id"), "portions", count, "drinks", drinkCount, "tables", tables));
 }
 var origin = args.blockPos("origin");
 var appliances = new ArrayList<Object>();
@@ -398,6 +435,33 @@ for (var waiting : diagnosis.unassigned()) {
 }
 return Map.of("people", people, "portions", portions, "diningAreas", areas, "appliances", appliances,
     "toolDiagnostics", toolDiagnostics, "unassigned", unassigned, "time", level.getGameTime());
+` }),
+});
+
+// Tiredness is the living presence's own book; this only clears it, as a night's sleep would, for the named staff.
+const REST_CREW = defineTask<{ colony_id: string; uuids: string[] }, any>({
+  name: "folkways.promo.cookery-rest-crew", side: "server", timeoutMs: 20_000,
+  source: javaTask({ imports: [
+    "io.github.izakyl.folkways.core.api.colony.Colonies",
+    "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+  ], body: `
+var args = Args.of(ctx);
+var colony = Colonies.of(ctx.server(), UUID.fromString(args.string("colony_id"))).orElseThrow();
+Object presence = colony.service(LivingContent.ID, Object.class).orElseThrow();
+var wearField = presence.getClass().getDeclaredField("wear");
+wearField.setAccessible(true);
+@SuppressWarnings("unchecked")
+Map<UUID, Object> wear = (Map<UUID, Object>) wearField.get(presence);
+var tired = Class.forName("io.github.izakyl.folkways.plugins.person.living.Rest").getDeclaredField("tired");
+tired.setAccessible(true);
+var before = new LinkedHashMap<String, Object>();
+for (var id : args.strings("uuids")) {
+    var rest = wear.get(UUID.fromString(id));
+    if (rest == null) continue;
+    before.put(id, Math.round(tired.getDouble(rest)));
+    tired.setDouble(rest, 0.0D);
+}
+return Sync.stamp(Map.of("tiredBefore", before));
 ` }),
 });
 

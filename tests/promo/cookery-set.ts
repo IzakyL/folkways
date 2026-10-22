@@ -1,8 +1,9 @@
-import { world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
 import type { Vec } from "../shared/colony/colony-founding";
 
 const K = "kaleidoscope_cookery:";
+const T = "kaleidoscope_tavern:";
 
 /** A compact front-cutaway inn: dense kitchen work below, camera-facing diners above, lift beside the dining room. */
 export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
@@ -91,9 +92,9 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
   for (const x of [-16, -10, -5]) await set(x, 2, 6, "minecraft:potted_fern");
 
   // Six real appliances will be installed at x=-12,-11,-9,-8,-6,-5,z=-4 by the take.
-  // Leave both operator aisles z=-5 and z=-3 open; the gaps become small worktop spaces.
+  // Leave both operator aisles z=-5 and z=-3 open; x=-10 holds the third skillet, x=-7 stays a worktop.
   await fill(-12, -4, 0, -5, -4, 0, "minecraft:bricks");
-  for (const x of [-10, -7]) await set(x, -4, 1, "minecraft:smooth_stone_slab[type=bottom]");
+  await set(-7, -4, 1, "minecraft:smooth_stone_slab[type=bottom]");
   // The rear preparation counter leaves the central kitchen aisle open; the mill is in the courtyard.
   await fill(-12, 2, 0, -5, 2, 0, "minecraft:polished_andesite");
   await fill(-11, 0, 0, -9, 0, 0, "minecraft:stripped_spruce_log[axis=x]");
@@ -115,15 +116,39 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
   // Supplies remain on the left at x=-17,z=-4,-2,0,2. Shelves sit two blocks above each real chest.
   for (const z of [-4, -2, 0, 2]) await set(-17, z, 2, "minecraft:spruce_slab[type=bottom]");
 
-  // Keep the farmer's right courtyard open: two real fields x=6..11,z=-6..-3 and z=1..4,
-  // the central pond x=6..8,z=-2..0, and tool/produce barrels at x=5,z=-5/3 belong to cookery-work.ts.
+  // A native grape garden replaces the vegetable beds and pond. Suspended fruit leaves
+  // two blocks of headroom; a three-block central aisle joins both open ends of the rows.
   await fill(4, -7, -1, 12, 5, -1, "minecraft:stone_bricks");
   await fill(5, -6, -1, 11, 4, -1, pale);
-  await fill(5, -3, -2, 9, 1, -1, "minecraft:cut_sandstone");
-  await fill(6, -2, -1, 8, 0, -1, "minecraft:water");
-  await set(7, -1, 0, "minecraft:lily_pad");
-  // The open forecourt has low food stalls in the centre, livestock to the west and a
-  // fishing pond to the east. Nothing tall interrupts the kitchen or restaurant sightline.
+  const vineyard = {
+    vines: [] as Vec[], grapes: [] as Array<{ at: Vec; age: number }>, posts: [] as Vec[],
+    barrels: [at(5, -7), at(11, -7)], lamps: [at(6, -6, 4), at(10, 4, 4)],
+    aisle: { min: at(7, -6), max: at(9, 4, 1) },
+    crop: T + "grape_crop", vine: T + "grapevine_trellis", maximumCropAge: 5,
+  };
+  for (const x of [6, 10]) {
+    for (const z of [-6, 4]) {
+      await set(x, z, -1, "minecraft:rooted_dirt");
+      for (let y = 0; y <= 2; y++) {
+        await set(x, z, y, T + "grapevine_trellis[type=single,age=3,waterlogged=false]");
+        vineyard.posts.push(at(x, z, y));
+      }
+      await set(x, z, 3, T + "grapevine_trellis[type=cross_north_south,age=3,waterlogged=false]");
+      vineyard.vines.push(at(x, z, 3));
+    }
+    for (let z = -5; z <= 3; z++) {
+      await set(x, z, 3, T + "grapevine_trellis[type=north_south,age=3,waterlogged=false]");
+      const age = 3 + ((z + 5 + (x === 10 ? 1 : 0)) % 3);
+      await set(x, z, 2, T + `grape_crop[age=${age}]`);
+      vineyard.vines.push(at(x, z, 3));
+      vineyard.grapes.push({ at: at(x, z, 2), age });
+    }
+  }
+  for (const barrel of vineyard.barrels) await world.command(server,
+    `setblock ${commandPos(barrel)} minecraft:barrel[facing=up]{Items:[]}`);
+  for (const lamp of vineyard.lamps) await world.command(server, `setblock ${commandPos(lamp)} minecraft:lantern`);
+  // The open forecourt keeps low food stalls and terrace tables in front of the inn.
+  // The grape garden sits beside it, away from the kitchen and elevator sightline.
   await fill(-28, -14, -1, 13, -7, -1, "minecraft:stone_bricks");
   await fill(-27, -13, -1, 12, -8, -1, pale);
   await fill(-17, -11, -1, -4, -7, -1, "minecraft:polished_andesite");
@@ -169,14 +194,14 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
   }
   // Little paving insets separate the chopping, tea and roasting bays without walls.
   for (const x of [-14, -10, -6]) await fill(x - 1, -9, -1, x + 1, -7, -1, "minecraft:smooth_sandstone");
-  // A compact left woodshed and grain reserve make the kitchen's supply side read as a working inn.
+  // A compact left woodshed and empty barrel reserve serve the kitchen and winery.
   await fill(-23, -5, -1, -20, 2, -1, "minecraft:stone_bricks");
   for (const [x, z] of [[-23, -5], [-20, -5], [-23, 2], [-20, 2]] as const) {
     await fill(x, z, 0, x, z, 2, "minecraft:stripped_spruce_log[axis=y]");
   }
   await fill(-23, -5, 3, -20, 2, 3, "minecraft:spruce_slab[type=bottom]");
   await fill(-23, 0, 0, -21, 1, 0, "minecraft:spruce_log[axis=z]");
-  for (const x of [-23, -22]) await set(x, -3, 0, "minecraft:hay_block");
+  for (const x of [-23, -22]) await set(x, -3, 0, "minecraft:barrel[facing=north]{Items:[]}");
   await set(-21, -3, 0, "minecraft:barrel[facing=up]");
   await set(-21, 1, 2, "minecraft:lantern[hanging=true]");
   for (const [x, z] of [[-30, -12], [12, -13], [12, 5]] as const) await set(x, z, 0, "minecraft:lantern");
@@ -217,10 +242,6 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
     await set(x, z, 0, "minecraft:flowering_azalea");
     await set(x + 1, z, 0, "minecraft:fern");
   }
-  for (const [x, z] of [[-17, 13], [-9, 13], [1, 13]] as const) {
-    await fill(x - 2, z - 1, -1, x + 2, z + 1, -1, "minecraft:farmland[moisture=7]");
-    await fill(x - 2, z - 1, 0, x + 2, z + 1, 0, "minecraft:wheat[age=7]");
-  }
   // A small enclosed bunkhouse sits behind the inn; its real beds stay out of the foreground.
   await fill(-18, 7, -1, -3, 42, -1, "minecraft:stone_bricks");
   await fill(-17, 8, 0, -4, 41, 2, "minecraft:air");
@@ -237,6 +258,40 @@ export async function dressCookeryGarden(server: MinecraftServer, origin: Vec) {
     await world.command(server, `setblock ${commandPos({ ...bed, x: bed.x - 1 })} minecraft:white_bed[part=head,facing=west]`);
   }
   const diningAreas = [{ id: "balcony", ...dining }, { id: "courtyard", ...courtyardDining }];
-  return { beds, dining, diningAreas, groundEntry, displayFood,
-    theme: "warm timber-and-plaster inn with a layered copper hip roof: open kitchen below three balcony table groups, three street terrace tables, a courtyard lift and a wooded garden" };
+  const vineyardChecked = await server.run(CHECK_VINEYARD, vineyard);
+  return { beds, dining, diningAreas, groundEntry, displayFood, vineyard: { ...vineyard, checked: vineyardChecked },
+    theme: "warm timber-and-plaster tavern with a layered copper hip roof: open kitchen below three balcony table groups, three street terrace tables, a courtyard lift and native grape trellises" };
 }
+
+const CHECK_VINEYARD = defineTask<Record<string, any>, Record<string, any>>({
+  name: "folkways.promo.vineyard-check", side: "server", timeoutMs: 20_000,
+  source: javaTask({ imports: [
+    "com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapeCropBlock",
+    "com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapevineTrellisBlock",
+    "net.minecraft.core.BlockPos",
+  ], body: `
+var args = Args.of(ctx);
+var level = ctx.server().overworld();
+int mature = 0;
+for (var raw : args.list("grapes")) {
+    var grape = Args.of((Map) raw, "grape");
+    var pos = grape.blockPos("at");
+    var state = level.getBlockState(pos);
+    if (!(state.getBlock() instanceof GrapeCropBlock crop) || !state.canSurvive(level, pos))
+        throw new IllegalStateException("Unsupported native vineyard fruit at " + pos);
+    var above = level.getBlockState(pos.above());
+    if (!(above.getBlock() instanceof GrapevineTrellisBlock vine) || !vine.isMaxAge(above))
+        throw new IllegalStateException("Vineyard fruit needs a mature native trellis at " + pos.above());
+    if (crop.isMaxAge(state)) mature++;
+}
+var aisle = args.requireObject("aisle");
+var min = aisle.blockPos("min");
+var max = aisle.blockPos("max");
+for (var pos : BlockPos.betweenClosed(min, max))
+    if (!level.getBlockState(pos).isAir()) throw new IllegalStateException("Blocked vineyard aisle at " + pos);
+int daylight = level.getMaxLocalRawBrightness(min);
+if (daylight < 8) throw new IllegalStateException("The vineyard aisle must remain lit");
+return Sync.stamp(Map.of("supportedClusters", args.list("grapes").size(), "matureClusters", mature,
+    "clearAisleWidth", 3, "clearAisleHeight", 2, "daylight", daylight, "initialFinishedDrinks", 0));
+` }),
+});

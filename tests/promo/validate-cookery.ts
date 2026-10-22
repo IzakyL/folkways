@@ -7,7 +7,7 @@ const saved = JSON.parse(fs.readFileSync(manifest, "utf8"));
 const c = saved.context;
 const notes: Record<string, any> = {};
 validateCookeryTake({ evidence: c.activity, preRoll: c.preRoll, visitors: c.visitors,
-  visitorCrew: c.visitors.visitors, cooks: c.cast.cooks, marketCrew: c.extraKitchen.workers,
+  visitorCrew: c.visitors.visitors, cooks: c.kitchenCrew ?? c.cast.cooks, marketCrew: c.extraKitchen.workers,
   diningAreas: c.dining.areas, TABLE_MENU: c.dining.areas[0].foods, SECONDS: 240,
 }, (key, value) => { notes[key] = value; });
 const report = { passed: true, reviewedAt: new Date().toISOString(), ...notes };

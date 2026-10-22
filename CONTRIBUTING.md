@@ -187,18 +187,34 @@ chosen dish and retains that choice until delivery. These dining requests drive 
 production directly, without separate kitchen stock orders, an output-draining hopper
 or pre-stocked finished meals. Appliances use supplied raw ingredients, tools, oil,
 bowls and pot lids. Flour is ground from raw wheat through the native courtyard mill.
-A communal cupboard holds two spatulas and two knives, borrowed and physically returned through the native tool queue.
+Three skillets, two stockpots and two steamers share a communal cupboard of three spatulas and two knives,
+borrowed and physically returned through the native tool queue. Because pre-roll waits for wine, the kitchen,
+market and winery staff have their tiredness cleared after warmup and again before the camera starts; a cook
+who falls asleep mid-dish would otherwise hold its ingredients and booked skillet through the shot.
 The mill sits in the open west courtyard, with a clear seven-block
 working square for its native circular driver path. Three additional kitchen workers support the courtyard stations;
 a farmer and three yard workers harvest, fish, shear and milk in the courtyard.
 
 Fifty-six visiting diners arrive from both ends of the street in groups of eight,
-with a new group every twelve seconds. Seven patrons in each group use the courtyard;
-one takes the elevator upstairs. Admissions remain FIFO, with at most two upstairs
+with a new group every twelve seconds. Six patrons in each group use the courtyard;
+two take the elevator upstairs. Admissions remain FIFO, with at most four upstairs
 and eighteen courtyard guests in progress, including return journeys. This limit
 reserves room for departing elevator passengers instead of filling the cabin with
 another incoming group. The upstairs tables leave a waiting hall beside the elevator,
 whose upper landing also has a north approach outside the moving cabin.
+
+The Cookery take uses only the compact, unhelmeted MoMo, Tactics and Matured Wine Fox looks.
+Its optional Kaleidoscope Tavern installation adds a courtyard wine workshop with two workers.
+Dining areas select grape wine through their separate Drinks setting; only grapes, empty buckets
+and empty bottles are supplied. Workers physically jump in the pressing tub, ferment four juice
+buckets until the native barrel reaches brewing level two, then use its tap to bottle the wine.
+The last table slot holds wine separately from food. Guests hold their reserved bottle near the
+end of a real seated meal, consume it once on completion and return the native empty bottle.
+Pre-roll waits for food and wine on both floors. Recorded evidence checks sustained upstairs
+seating, actual wine delivery, seated drinking gestures and completed drinking during the shot.
+
+Run the optional wine integration GameTests with
+`./gradlew -PgameTestMod=cookery -PcookeryTests=true -PtavernTests=true runGameTestServer`.
 
 The filming director submits worker-bound native walking and waiting nodes. Courtyard
 patrons choose their meal from the street, outside the upstairs tables' selection

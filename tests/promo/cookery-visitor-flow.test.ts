@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cookeryVisitorPlans, summarizeCookeryVisitors, summarizeCookeryTakeVisits } from "./cookery-visitor-flow.ts";
+import { cookeryVisitorPlans, summarizeCookeryVisitors, summarizeCookeryTakeVisits, summarizeCookeryUpstairs } from "./cookery-visitor-flow.ts";
 
 test("56 patrons arrive in terrace-led waves and fit on the paved off-camera street", () => {
   const plans = cookeryVisitorPlans({ x: 0, y: 64, z: 0 }, 56);
@@ -13,8 +13,9 @@ test("56 patrons arrive in terrace-led waves and fit on the paved off-camera str
   for (let wave = 0; wave < 7; wave++) {
     const patrons = plans.filter(plan => plan.wave === wave);
     assert.equal(patrons.length, 8);
-    assert.equal(patrons.filter(plan => plan.area === "balcony").length, 1);
-    assert.equal(patrons.filter(plan => plan.area === "courtyard").length, 7);
+    assert.equal(patrons.filter(plan => plan.area === "balcony").length, 2);
+    assert.equal(patrons.filter(plan => plan.area === "courtyard").length, 6);
+    assert.equal(new Set(patrons.filter(plan => plan.area === "balcony").map(plan => plan.entrance.x)).size, 2);
     assert.ok(patrons.every(plan => plan.release === wave * 12));
   }
   assert.ok(Math.max(...plans.map(plan => plan.release)) < 120);
@@ -82,6 +83,18 @@ test("walking toward a meal is not counted as seated eating", () => {
   ], ["patron"]);
   assert.equal(visit.diningSamples, 0);
   assert.equal(visit.mealActivitySamples, 1);
+});
+
+test("upstairs density requires an actual table seat on that floor", () => {
+  const upstairs = summarizeCookeryUpstairs([{ seconds: 0, visitors: { people: [
+    person({ dining: true, seatedAtTable: true, local: [-7, 5.95, -3] }),
+    person({ dining: true, seatedAtTable: true, local: [-11, 5.95, -3] }),
+    person({ dining: true, seatedAtTable: true, local: [-7, 0, -12] }),
+    person({ dining: false, seatedAtTable: false, local: [0, 6, -4] }),
+    person({ dining: true, seatedAtTable: false, local: [-7, 6, -3] }),
+  ] } }]);
+  assert.equal(upstairs.meanEating, 2);
+  assert.equal(upstairs.samples[0].eating, 2);
 });
 
 test("pre-roll arrivals count only when their real meal and exit are recorded", () => {

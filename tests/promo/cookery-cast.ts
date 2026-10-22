@@ -6,9 +6,8 @@ import { clientHasModelFile, waitForModelsOnClient } from "../shared/ui/model-fo
 import { sleepMs, type SeededModel } from "./promo-kit";
 
 const MODEL_NAMES = [
-  "wine_fox_wedding", "wine_fox_magical", "wine_fox_tactics",
-  "wine_fox_survivor", "wine_fox_hanfu", "wine_fox_momo",
-  "wine_fox_nine_tailed", "wine_fox_saint", "wine_fox_matured",
+  // Bare heads and compact single-tail silhouettes keep faces, food and nearby workers visible.
+  "wine_fox_momo", "wine_fox_tactics", "wine_fox_matured",
 ] as const;
 
 // Use the existing pinned OpenYSM sources and vendor transform, including their attribution metadata.

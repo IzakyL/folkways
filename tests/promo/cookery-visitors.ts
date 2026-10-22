@@ -260,7 +260,9 @@ for(var uuid:args.strings("workers")){
  one.put("uuid",uuid);one.put("role","visitor");one.put("position",List.of(entity.getX(),entity.getY(),entity.getZ()));one.put("local",List.of(x,y,z));
  one.put("doing",body.doing().map(doing->doing.toward().orElse(doing.what()).getPath()).orElse("idle"));
  boolean dining=entity instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person&&person.leisureMotion().equals("dining");
- one.put("dining",dining);one.put("seatedAtTable",dining&&entity.isPassenger());
+ boolean tableSeat=entity.getVehicle()!=null&&entity.getPersistentData().hasUUID("folkways:dining_seat")
+  &&entity.getPersistentData().getUUID("folkways:dining_seat").equals(entity.getVehicle().getUUID());
+ one.put("dining",dining);one.put("seatedAtTable",dining&&tableSeat);
  one.put("food",food);one.put("dined",dined);one.put("phase",state.getString("phase"));one.put("area",state.getString("area"));
  one.put("wave",state.getInt("wave"));one.put("release",state.getDouble("release"));
  one.put("walkAttempts",state.getInt("walkAttempts"));one.put("walkFailures",state.getInt("walkFailures"));
