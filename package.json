@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prepare": "node .husky/install.mjs",
+    "format:md": "prettier --write \"**/*.md\"",
+    "format:md:check": "prettier --check \"**/*.md\"",
     "build": "gradle build",
     "setup": "node_modules/@izakyl/blockwright-client/dist/blockwright mods sync --config blockwright.toml",
     "setup:promo-models": "python3 tests/promo/models/vendor.py",
@@ -29,7 +32,9 @@
     "@izakyl/blockwright-test": "0.1.0-alpha.1",
     "@izakyl/blockwright-ui": "0.1.0-alpha.1",
     "@playwright/test": "^1.60.0",
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "husky": "9.1.7",
+    "prettier": "3.9.10",
+    "typescript": "^5.0.0"
   }
 }

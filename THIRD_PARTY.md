@@ -8,26 +8,26 @@ that mod's `src/main/resources/META-INF/licenses/`
 ([core](mods/core/src/main/resources/META-INF/licenses/),
 [vanilla](mods/vanilla/src/main/resources/META-INF/licenses/)).
 
-| Component | Version | In | License | Copyright | Source |
-| --- | --- | --- | --- | --- | --- |
-| Starlark (Java) | 4.2.1 | Folkways Vanilla | Apache-2.0 | The Bazel Authors | [bazelbuild/bazel](https://github.com/bazelbuild/bazel), packaged as `com.eed3si9n.starlark:starlark` |
-| Ponder | 1.0.82+mc1.21.1 | Folkways Core | MIT | The Create Team | [Creators-of-Create/Ponder](https://github.com/Creators-of-Create/Ponder) |
-| Flywheel | 1.0.6 | Folkways Core | MIT | Jozufozu | [Engine-Room/Flywheel](https://github.com/Engine-Room/Flywheel) |
+| Component       | Version         | In               | License    | Copyright         | Source                                                                                                |
+| --------------- | --------------- | ---------------- | ---------- | ----------------- | ----------------------------------------------------------------------------------------------------- |
+| Starlark (Java) | 4.2.1           | Folkways Vanilla | Apache-2.0 | The Bazel Authors | [bazelbuild/bazel](https://github.com/bazelbuild/bazel), packaged as `com.eed3si9n.starlark:starlark` |
+| Ponder          | 1.0.82+mc1.21.1 | Folkways Core    | MIT        | The Create Team   | [Creators-of-Create/Ponder](https://github.com/Creators-of-Create/Ponder)                             |
+| Flywheel        | 1.0.6           | Folkways Core    | MIT        | Jozufozu          | [Engine-Room/Flywheel](https://github.com/Engine-Room/Flywheel)                                       |
 
 ## Required or optional at runtime, not bundled
 
 Players install these separately. Folkways only compiles against them.
 
-| Component | License | Use |
-| --- | --- | --- |
-| LDLib2 | see upstream | Required: the UI toolkit for every Folkways screen |
-| Create, Sable, Modular Golems, GeckoLib, JEI, EMI | see upstream | Optional integrations; Create is required by Folkways × Create, and Modular Golems by Folkways × Modular Golems |
-| Kaleidoscope Cookery | code BSD-3-Clause, assets CC BY-NC-SA 4.0 | Required by Folkways × Kaleidoscope Cookery: native appliances, crops and equipment. Models and textures stay in the player-installed mod; none are bundled |
-| Touhou Little Maid | code MIT, assets CC BY-NC-SA 4.0 | Optional: its maid models are drawn on residents straight from the player's own copy of that mod. Folkways ships none of them and a server sends only their ids |
+| Component                                         | License                                   | Use                                                                                                                                                             |
+| ------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LDLib2                                            | see upstream                              | Required: the UI toolkit for every Folkways screen                                                                                                              |
+| Create, Sable, Modular Golems, GeckoLib, JEI, EMI | see upstream                              | Optional integrations; Create is required by Folkways × Create, and Modular Golems by Folkways × Modular Golems                                                 |
+| Kaleidoscope Cookery                              | code BSD-3-Clause, assets CC BY-NC-SA 4.0 | Required by Folkways × Kaleidoscope Cookery: native appliances, crops and equipment. Models and textures stay in the player-installed mod; none are bundled     |
+| Touhou Little Maid                                | code MIT, assets CC BY-NC-SA 4.0          | Optional: its maid models are drawn on residents straight from the player's own copy of that mod. Folkways ships none of them and a server sends only their ids |
 
 ## Repository assets, not shipped in the mod
 
-| Path | License | Notes |
-| --- | --- | --- |
-| `tests/shared/assets/resident-models/` | CC0 | Yes Steve Model built-in models (Steve, Default Boy), used by end-to-end tests |
+| Path                                                      | License         | Notes                                                                                                                                                                                                          |
+| --------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/shared/assets/resident-models/`                    | CC0             | Yes Steve Model built-in models (Steve, Default Boy), used by end-to-end tests                                                                                                                                 |
 | `tests/promo/models/` (downloaded on demand, not tracked) | CC BY-NC-SA 4.0 | Wine Fox models from Yes Steve Model's built-in pack, used only to film promotional footage. Downloads retain each folder's `ysm.json` author credits; see [the folder's README](tests/promo/models/README.md) |

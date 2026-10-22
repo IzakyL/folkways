@@ -23,6 +23,7 @@ jobs:
           path: .blockwright-store
           key: blockwright-mods-${{ hashFiles('blockwright.toml') }}
       - run: npm ci
+      - run: npm run format:md:check
       - run: npm run setup
       - run: ./gradlew build
       - run: npm run typecheck

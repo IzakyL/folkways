@@ -1,0 +1,4 @@
+# Runtime-owned configuration is separate from project documentation.
+.agents/
+.claude/
+.codex/

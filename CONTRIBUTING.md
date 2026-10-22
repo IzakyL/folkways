@@ -1,173 +1,135 @@
-# Contributing
+# Contributing to Folkways
 
-Thanks for helping with Folkways. Issues and pull requests are welcome at
-<https://github.com/IzakyL/folkways>.
+English · [简体中文](CONTRIBUTING.zh-CN.md)
 
-## Environment
+Bug reports, documentation, translations, building patterns and code contributions
+are welcome at [IzakyL/folkways](https://github.com/IzakyL/folkways).
+For installing and playing the mod, start with the [README](README.md).
 
-- Java 21 JDK
-- Node.js 22.14 or newer
-- Linux x64 for the game tests. [Blockwright](https://github.com/IzakyL/blockwright),
-  the harness that drives real Minecraft clients and servers, supports only Linux x64
-  for now. Building the mod works anywhere Gradle does.
-
-```sh
-npm install      # Blockwright, Playwright and TypeScript
-npm run setup    # downloads the integration mods and writes .blockwright/mods.json
-./gradlew build  # the five mod jars, in build/libs/
-```
-
-`npm run setup` must run before the first Gradle build. The build compiles against the
-optional integrations (Create, JEI, EMI, GeckoLib, Modular Golems, Sable, FTB Teams) from the jars it
-downloads, as pinned in `blockwright.toml`.
-
-## Layout
-
-Folkways has four base mods and a Cookery extension, each a Gradle project under `mods/`, all registering under the `folkways` namespace.
-`./gradlew build` builds them and gathers their jars into `build/libs/`.
-
-| Mod | Project | What it is |
-| --- | --- | --- |
-| Folkways Core (`folkways_core`) | `mods/core` | The engine and the screens; on its own it gives residents no work |
-| Folkways Vanilla (`folkways_vanilla`) | `mods/vanilla` | The work residents do among vanilla blocks |
-| Folkways × Create (`folkways_create`) | `mods/create` | What Create adds: rail, dispatch, and Create's side of building (track joints, schematic hand-off) |
-| Folkways × Modular Golems (`folkways_modulargolems`) | `mods/modulargolems` | Modular Golems as a second sort of resident |
-| Folkways × Kaleidoscope Cookery (`folkways_cookery`) | `mods/cookery` | Native Cookery farming, appliances and shared kitchen tools |
-
-An integration whose absence would leave the colony misreading a world that has that mod (Sable's sub-levels,
-Create's contraptions in the way) belongs in the core; one that only adds something when its mod is there is a mod
-of its own.
-
-| Path | What lives there |
-| --- | --- |
-| `mods/core/.../base` | What every layer stands on: the declaration ledger, NBT persistence and the mixin plugin base |
-| `mods/core/.../effect` | Effects on residents (stats, flags, modifiers), with perks as one source of them under `effect/perk` |
-| `mods/core/.../library` | The resource library: data packs and loose files under `<gamedir>/folkways/` |
-| `mods/core/.../core` | The colony engine: residents, planning, labour and travel. `core/api` is the public API; `core/shell` fits the engine to the world, including other mods' structures (Sable, Create) |
-| `mods/core/.../front` | Screens, the colony book, networking and lessons. `front/api` is the public API |
-| `mods/vanilla/.../plugins` | Each feature (farming, pasture, build, …) as a plugin over the two APIs |
-| `mods/create/.../create` | Rail, dispatch and `create/build` |
-| `mods/modulargolems/.../modulargolems` | Golems as residents |
-| `mods/cookery/.../cookery` | Cookery appliances, farming adapters, tools and lessons |
-| `mods/vanilla/src/main/resources/data/folkways/folkways/pattern` | Built-in building patterns (Starlark) |
-| `mods/*/src/gametest` | Mod-owned NeoForge game tests, selected by the root's `runGameTestServer` |
-| `tests/` | Blockwright and Playwright suites, listed below |
-
-## Tests
-
-| Command | What it runs |
-| --- | --- |
-| `npm run test:unit` | Fast Node tests for the TypeScript helpers; no game |
-| `npm run test:i18n` | Language keys, placeholders and notice/refusal coverage; no game or dependencies |
-| `npm run typecheck` | Type checks every TypeScript suite |
-| `./gradlew check` | Compiles everything and lints for tabs and trailing whitespace |
-| `./gradlew runGameTestServer` | NeoForge game tests in every `mods/*/src/gametest`, with the base mods but not Modular Golems or Cookery loaded |
-| `./gradlew -PcookeryTests=true runGameTestServer` | Also loads Cookery and runs its native recipe and lifecycle tests |
-| `./gradlew -PgameTestMod=core runGameTestServer` | Only Core-owned tests in the base environment; also accepts `vanilla` or `create` |
-| `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer` | Core-owned tests with Cookery installed, including `core/src/cookeryTest`; also accepts `vanilla` |
-| `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer` | Only Cookery-owned tests, with Cookery installed |
-| `npm run test:e2e` | End-to-end tests against a real client and server, on the ground |
-| `npm run test:sable` | The same against a [Sable](https://modrinth.com/mod/sable) ship: each twin spec's aboard test, and the ship-only specs |
-| `npm run visual:take` | Screenshots of screens, panels, looks and in-world visuals |
-| `npm run ponder:take` | Films every ponder scene in the colony book |
-| `npm run pattern:take` | Lays out each work pattern's gallery and shoots it |
-| `npm run bench:take` | Performance benchmarks on a large colony |
-| `npm run promo:take` | Films the promotional takes |
-
-The game suites download Minecraft, NeoForge and the fixture mods on first run, and their
-test servers accept the [Minecraft EULA](https://www.minecraft.net/eula) through
-`blockwright.toml`. Run them only if you accept it. Use `--workers=1` to limit resource
-use, for example:
-
-```sh
-npm run test:e2e -- tests/e2e/founding-smoke.spec.ts --workers=1
-```
-
-GameTest ownership is separate from the installed mods: selecting `-PgameTestMod=core`
-runs only Core's tests, but still loads the Vanilla residents and other integrations needed
-by those scenarios. Shared helpers live in Core's `src/gameTestFixtures` source set, so a mod can reuse
-a helper without discovering another mod's tests. Keep tests in the mod that owns the
-behavior, including tests that need package-private internals; use fixtures for shared setup.
-
-CI has one GameTest check per tested mod: Core, Vanilla, Create and Cookery. Core and Vanilla
-each run twice, with Cookery absent and present, preserving optional-integration coverage;
-Create runs in the base environment and Cookery runs with Cookery installed. Core also retains
-the existing LDLib2 dependency tests; the other mod checks do not repeat them. Both environments
-are attempted even if the first fails, and either failure fails that mod's check. Modular
-Golems has no GameTests yet, so it does not get an empty check. The nightly release requires
-all four checks and the real-client smoke check to pass.
-
-Each server invocation has a 50-minute process timeout; a mod's CI job has a 110-minute
-limit to allow both environments. Selected runs use `run/gametest/<mod>/<base|cookery>/`
-for their isolated game directories. Without `gameTestMod`, the combined run still uses
-`run/gametest/`. For a direct Gradle run, accept the Minecraft EULA in the selected game
-directory's `eula.txt` before starting the server.
-
-CI uploads console logs, game logs, crash reports, and a JUnit suite-level result even when
-tests fail. Console logs and JUnit files are written immediately after each invocation under
-`run/gametest/ci/<mod>-<profile>.*`. The JUnit case records whether that GameTestServer
-invocation passed; detailed individual GameTest outcomes remain in the uploaded server logs.
-
-Each suite is a directory under `tests/` (`e2e`, `sable`, `visual`, `ponder`, `pattern`, `bench`, `promo`) with
-its own `playwright.config.ts` and `tsconfig.json`. Code more than one suite uses lives in
-`tests/shared/`; a suite imports from there and from `tests/ldlib2/`, never from another
-suite. Everything the suites write goes to `tests/out/`, which git ignores.
-
-An e2e spec about a colony's blocks runs twice, on the ground in `test:e2e` and on the deck of a
-Sable ship in `test:sable` (`for (const stage of twins()) test(stage.title(...), ...)`,
-from `tests/shared/harness/stage.ts`). Write it in plan coordinates, lay the floor with
-`stage.lay`, and cross into the game through the stage: `stage.at(cell)` for a block a command or
-read addresses, `stage.world(cell)` for where it shows, `stage.stand(at)` to set the player down. The
-specs in `tests/sable/` cover what only a ship has.
-
-The repository's `.mcp.json` exposes the same harness to MCP-capable assistants, with
-the LDLib2 UI adapter in `tests/ldlib2/`.
-
-## Conventions
-
-- Match the surrounding code: its naming, comment density and idiom.
-- No tabs and no trailing whitespace. `./gradlew check` enforces this.
-- Mod-owned player-facing strings go in all four catalogs under `assets/folkways/lang/`:
-  `en_us.json`, `zh_cn.json`, `zh_hk.json` (Hong Kong) and `zh_tw.json` (Taiwan).
-  Pattern-owned strings belong in the pattern's `lang` dictionary. Use each region's
-  Minecraft terminology, not just converted characters.
-- Keep translated text as a `Component` until it reaches the client. Use `Pages.text`
-  / `Pages.readText` for UI sync and `Line.text` for information cards; resolving a name
-  with `getString()` on the server loses the player's language. Translation arguments
-  use `%s` (or indexed `%1$s` when reordered), and a literal percent uses `%%`.
-- Run `npm run test:i18n` after editing translations. It also runs in `test:unit` in CI;
-  it checks catalog keys and arguments, direct translation calls, notice/refusal enums,
-  and the built-in patterns' dictionaries and errors, not every computed Java key.
-- Built-in patterns and shared pattern libraries translate their `lang` dictionaries in all four locales.
-  These dictionaries own their titles, control labels, material names and refusal messages;
-  they do not need matching entries in the mod's language catalogs.
-  Custom patterns fall back per word to another Chinese locale, then to `en_us`;
-  `zh_hk` and `zh_tw` prefer one another before `zh_cn`.
-- A pattern's expected refusal uses `reject("error.key", ...)`, with at most four
-  text or numeric arguments. Both `reject` and `translated("another.key")` resolve
-  keys in the pattern's `lang` dictionary, including words brought by its shared libraries.
-  The pattern's own words override library words for the same locale and key. Use `translated`
-  for an argument such as a material name that also needs translation. Keep ordinary
-  `fail(...)` for script diagnostics in custom patterns.
-- Commit messages follow `type(scope): summary`, for example
-  `fix(plan): keep rations out of cargo` or `feat(draft): add a dock pattern`.
-- Add or update a test for behavioural changes. Prefer a black-box e2e spec for anything
-  a player can see.
+[Report a bug](#reporting-bugs) · [Set up](#development-setup) ·
+[Run checks](#validation) · [Open a pull request](#pull-requests) ·
+[Conventions](#conventions)
 
 ## Reporting bugs
 
-Include the Minecraft, NeoForge and Folkways versions, your mod list, and `latest.log`
-(and the crash report, if there is one).
+Use the [bug report form](https://github.com/IzakyL/folkways/issues/new?template=bug_report.yml)
+and include what you did, what you expected, what happened, and reproduction steps.
+List Minecraft, NeoForge and LDLib2 versions, every installed Folkways jar and
+its version, and your other mods. Attach `logs/latest.log` and the crash report
+from `crash-reports/` if the game crashed.
 
-The Cookery profiles load both `folkways_cookery` and Kaleidoscope Cookery 1.6.0.
-`cookery-native` loads only the native mod to verify that the extension stays optional.
-The complete, millstone, tools, farming, blackbox and Ponder e2e suites run native
-production, interruptions, shared tool stock, flooded dirt through harvest/replanting,
-and all thirteen lessons. `creative-supplies.spec.ts` also runs without Cookery.
+For new capabilities, use the
+[feature request form](https://github.com/IzakyL/folkways/issues/new?template=feature_request.yml)
+and explain the expected behavior, use case and alternatives you considered.
 
-Cookery game tests live in `mods/cookery/src/gametest`. The core and vanilla tests that
-need their own package internals live in `mods/{core,vanilla}/src/cookeryTest` and join
-their owning mod's run only with `-PcookeryTests=true`. The native audit covers all 612
-pinned recipe resources and writes `cookery-recipe-audit.json` in the game directory
-(`run/gametest/cookery/cookery/` for the selected Cookery run). Generate its graph with
-`node tests/shared/cookery/recipe-graph.mjs run/gametest/cookery/cookery/cookery-recipe-audit.json tests/out/cookery-recipe-graph.json`.
+## Development setup
+
+| Tool or platform   | Requirement                                                  |
+| ------------------ | ------------------------------------------------------------ |
+| Java               | JDK 21                                                       |
+| Node.js            | 22.14 or newer                                               |
+| Gradle             | Checked-in wrapper: `./gradlew`, or `gradlew.bat` on Windows |
+| Blockwright client | Windows or Linux; installed with the npm dependencies        |
+
+The [Blockwright](https://github.com/IzakyL/blockwright) client supports Windows
+and Linux. This repository's CI uses Ubuntu 24.04. Run from the repository root:
+
+```sh
+npm ci
+npm run setup
+./gradlew build
+```
+
+`npm ci` installs the locked test dependencies. `npm run setup` downloads fixtures
+pinned in [`blockwright.toml`](blockwright.toml) and writes `.blockwright/mods.json`.
+**Run setup before the first Gradle invocation**; rerun it after changing pinned
+fixtures. Gradle compiles against optional integration jars even when a particular
+test profile does not load them.
+
+The build gathers five mod jars in `build/libs/` and runtime LDLib2 in `build/deps/`.
+See [Architecture](docs/en/architecture.md) for module boundaries and the source map.
+
+In local Git checkouts, `npm ci` also installs the Husky pre-commit hook.
+
+## Validation
+
+Start with checks that do not launch Minecraft:
+
+```sh
+npm run format:md:check
+npm run test:unit
+npm run typecheck
+./gradlew check
+```
+
+Add or update tests for behavioral changes. Prefer a black-box e2e spec for
+behavior a player can observe. Choose the relevant mod, environment and client
+suite from the [testing guide](docs/en/testing.md), including its EULA and platform
+requirements.
+
+CI runs the build checks, per-mod GameTests and a focused real-client founding
+smoke test. It does not run every client or capture suite. The testing guide
+documents the exact matrix, selection flags and failure artifacts.
+
+## Pull requests
+
+1. Make the change in your fork on a focused branch.
+2. Follow the conventions below and update the relevant tests and documentation.
+3. Run the checks and game suites appropriate to the change.
+4. Open a pull request against [IzakyL/folkways](https://github.com/IzakyL/folkways/pulls).
+   Explain the problem, resulting behavior and verification. List checks you
+   could not run and any remaining limitations.
+
+Commit messages follow `type(scope): summary`, for example:
+
+```text
+fix(plan): keep rations out of cargo
+feat(draft): add a dock pattern
+```
+
+## Conventions
+
+### Code and test ownership
+
+- Match the surrounding naming, comment density and idiom.
+- Use no tabs or trailing whitespace; `./gradlew check` checks scaffold formatting.
+- Keep GameTests in the module owning the behavior, including package-private
+  scenarios. Shared setup belongs in Core's `src/gameTestFixtures`, without test
+  registration. See [test ownership](docs/en/architecture.md#lifecycle-and-test-ownership).
+- Shared TypeScript helpers belong in `tests/shared/`. A suite can import from
+  there and `tests/ldlib2/`, but not from another suite.
+
+### Translations and patterns
+
+- Add mod-owned player-facing strings to all four shared catalogs in
+  `mods/core/src/main/resources/assets/folkways/lang/`: `en_us.json`, `zh_cn.json`,
+  `zh_hk.json` (Hong Kong) and `zh_tw.json` (Taiwan). Use each region's Minecraft
+  terminology, rather than converting characters alone.
+- Keep translated text as a `Component` until it reaches the client. Use
+  `Pages.text` / `Pages.readText` for UI sync and `Line.text` for information cards.
+  Calling `getString()` on the server loses the player's language.
+- Arguments use `%s`, or indexed `%1$s` when reordered; a literal percent uses `%%`.
+- Run `npm run test:i18n` after translation changes. It checks keys, arguments,
+  direct translation calls, notice/refusal enums and built-in pattern dictionaries
+  and errors, but not every computed Java key.
+- Pattern-owned titles, controls, materials and refusal messages belong in the
+  pattern's `lang` dictionary. Built-in patterns and shared libraries provide all
+  four locales; matching mod catalog entries are not needed.
+- Custom patterns fall back per word to another Chinese locale, then `en_us`.
+  `zh_hk` and `zh_tw` prefer each other before `zh_cn`.
+- Use `reject("error.key", ...)` for expected refusals, with at most four text
+  or numeric arguments. Both `reject` and `translated("another.key")` resolve
+  pattern and shared library words. The pattern's own words override library
+  words for the same locale and key. Use `translated` for arguments such as
+  material names, and `fail(...)` for script diagnostics in custom patterns.
+
+### Documentation
+
+Run `npm run format:md` before staging Markdown changes. Every commit checks all
+project Markdown and its staged copies; formatting failures block the commit.
+CI also runs `npm run format:md:check`.
+
+Update English and Chinese pages together. Use the game's locale catalogs for UI
+names and keep commands, paths and Java symbols literal. Put detailed gameplay,
+content, testing and architecture material under `docs/en/` and `docs/zh-CN/`.
+See the [documentation index](docs/README.md) for the layout and maintenance notes.
