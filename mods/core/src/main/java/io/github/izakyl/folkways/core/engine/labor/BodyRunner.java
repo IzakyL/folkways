@@ -44,6 +44,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 
 final class BodyRunner {

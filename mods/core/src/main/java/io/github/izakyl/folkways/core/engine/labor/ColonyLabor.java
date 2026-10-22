@@ -66,7 +66,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     private static final long LIVENESS_TICKS = 200L;
 
     // 有手在原地干等这么久，也值得重算一轮：它的队首多半在等别人路线里没开工的节点。
-    private static final long STALLED_TICKS = 200L;
+    private static final int STALLED_TICKS = 200;
 
     private final ColonyData colony;
     private final ResourceKey<Level> dimension;
