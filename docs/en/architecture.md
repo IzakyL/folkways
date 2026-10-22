@@ -51,6 +51,22 @@ Built-in patterns live under
 Integration dependencies and mod IDs are declared in each module's `build.gradle`
 and `src/main/resources/META-INF/neoforge.mods.toml`.
 
+## Display-text search
+
+[`TextSearch`](../../mods/core/src/main/java/io/github/izakyl/folkways/front/api/ui/TextSearch.java)
+is the shared display-text matching entry point for item and folder pickers,
+Workforce and stock. Client setup installs the optional JEC provider when present.
+Literal hits and ASCII-only misses avoid JEC calls. The provider shares JEC's
+dictionary and settings, renewing the calling thread's spelling cache when those
+settings change. JEC and its PinIn library are compile-only inputs, not bundled dependencies.
+
+[`ItemQuery`](../../mods/core/src/main/java/io/github/izakyl/folkways/core/api/terms/ItemQuery.java)
+accepts a `BiPredicate<String, String>` in its display-name search overload, with
+the name first and the lower-case query term second. Only bare words consult
+that matcher. Mod IDs, tags, whole item IDs and wildcard patterns retain their
+registry semantics. Saved rules use the original overload without display names,
+so client language and optional integrations cannot change server filtering.
+
 ## Lifecycle and test ownership
 
 [`ColonyLifecycle`](../../mods/core/src/main/java/io/github/izakyl/folkways/core/api/colony/ColonyLifecycle.java)

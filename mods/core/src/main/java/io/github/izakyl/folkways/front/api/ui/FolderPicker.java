@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 
@@ -213,16 +214,17 @@ public final class FolderPicker {
 
     private List<Leaf> found() {
         String asked = query.toLowerCase(Locale.ROOT);
+        Predicate<String> names = TextSearch.query(asked);
         List<String> named = new ArrayList<>();
         List<IdTree.Folder<Leaf>> walking = new ArrayList<>(IdTree.of(filled, Leaf::filed));
         while (!walking.isEmpty()) {
             IdTree.Folder<Leaf> folder = walking.removeLast();
-            if (naming.apply(folder).getString().toLowerCase(Locale.ROOT).contains(asked)) {
+            if (names.test(naming.apply(folder).getString())) {
                 named.add(folder.prefix());
             }
             walking.addAll(folder.folders());
         }
-        return filled.stream().filter(leaf -> leaf.name().getString().toLowerCase(Locale.ROOT).contains(asked)
+        return filled.stream().filter(leaf -> names.test(leaf.name().getString())
             || leaf.filed().toLowerCase(Locale.ROOT).contains(asked)
             || named.stream().anyMatch(prefix -> IdTree.under(prefix, leaf.filed()))).toList();
     }

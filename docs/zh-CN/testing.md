@@ -37,7 +37,9 @@ Core 会一并运行已有 LDLib2 依赖测试，其他模组不重复运行。
 
 ## Blockwright 套件
 
-[Blockwright](https://github.com/IzakyL/blockwright) 驱动真实 Minecraft 客户端和服务器，客户端支持 Windows 和 Linux。
+[Blockwright](https://github.com/IzakyL/blockwright) 驱动真实 Minecraft 客户端和服务器。
+上游源码已支持原生 Windows，但当前锁定的 npm 发布包早于这次改动。
+使用发布包时需要 Linux x64，Windows 下可使用源码构建的 SDK，见[开发环境](../../CONTRIBUTING.zh-CN.md#开发环境)。
 本仓库的 CI 使用 Ubuntu 24.04。首次运行会下载 Minecraft、NeoForge 和测试模组。
 `blockwright.toml` 为测试服务器设置了 `eula = true`，
 运行这些套件要求接受 Minecraft EULA。
@@ -74,6 +76,16 @@ npm run test:e2e -- tests/e2e/founding-smoke.spec.ts --workers=1
 船舶专属场景放在 `tests/sable/`，完整例子见 [`founding-smoke.spec.ts`](../../tests/e2e/founding-smoke.spec.ts)。
 
 仓库的 `.mcp.json` 向支持 MCP 的助手暴露相同测试框架，LDLib2 界面适配器位于 `tests/ldlib2/`。
+
+### JEC 搜索兼容
+
+```sh
+npm run test:e2e -- tests/e2e/jech-search.spec.ts --workers=1
+```
+
+该场景分别在未安装 JEC 和 `blockwright.toml#jech` 环境运行；后者只在客户端安装 JEC，两组服务器均不安装。
+覆盖物品、目录、居民分工和库存匹配、原有查询运算符，以及复用同一个已准备查询时切换 JEC 模糊音和键盘方案的行为。
+默认测试环境不安装 JEC；CI 的建村冒烟测试不会运行此场景。
 
 ## Cookery 测试环境
 

@@ -58,6 +58,17 @@ url = "https://cdn.modrinth.com/data/u6dRKJwZ/versions/zHNxmOqp/jei-1.21.1-neofo
 sha512 = "27ce1556b304ecfa828f1440b6142d0672f285c860436182328e9dd3e7f8011d0f962109553a59b1944494af70f784b9b16ce626fd011cc9ee54cda39650a0f5"
 target = ["client"]
 
+# Optional display-text matching; compiled against, and installed only by the jech profile.
+[mods.jecharacters]
+url = "https://mediafilez.forgecdn.net/files/9163/765/jecharacters-1.21.1-neoforge-4.5.30.jar"
+sha512 = "e30efe9687d36db5815d5aed7bbe8a143f15e8113310668985d0f26f279096606555e2c58765be56d8af2daa5a324c6db38696ea5933c78f6e29280aab6db3cc"
+target = []
+
+[mods.pinin]
+from = "jecharacters"
+entry = "META-INF/jarjar/PinIn-*.jar"
+target = []
+
 [mods.modulargolems]
 url = "https://cdn.modrinth.com/data/gtGDlsAD/versions/zNXsPDeF/modulargolems-3.1.43.jar"
 sha512 = "7ef533432d5ec91441e449cfadbd78b0e470c90a690c28e1e2cf3ce0de7374bef0a7e44ffcb399752bbef06b8dfa287ea5080e2f14c10ea2a120a493dc4af0d9"
@@ -335,6 +346,9 @@ touhou_little_maid = { target = ["server", "client"] }
 # The e2e pair with Shoulder Surfing Reloaded on the client, for the book's aim under its camera.
 [profile.shoulder.mods]
 shouldersurfing = { target = ["client"] }
+
+[profile.jech.mods]
+jecharacters = { target = ["client"] }
 
 # The e2e pair with Sable on both sides, for the aboard twin of each spec and the Sable-only specs.
 [profile.sable.mods]

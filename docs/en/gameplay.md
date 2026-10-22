@@ -30,6 +30,24 @@ storage. Blacklists and whitelists support items, tags and search rules through
 the shared item picker. These rules apply to residents; players and external
 automation retain their normal access.
 
+## Searching
+
+Install [Just Enough Characters (JEC)](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters)
+on the client to use Pinyin, initials and mixed Chinese/Pinyin input in item and
+folder pickers, Workforce and stock searches. It follows JEC's keyboard and
+fuzzy-spelling settings. JEC is optional and is not bundled with Folkways;
+literal text searches remain available without it.
+
+With Chinese item names and JEC's Quanpin keyboard, `tieding`, `td` and `tie锭`
+find **铁锭** (iron ingot). `@minecraft tieding` limits item results to Minecraft.
+Other keyboard schemes use their own spellings. Searches remain case-insensitive.
+
+Item searches keep the existing `@mod`, `#tag`, item ID and wildcard syntax.
+These terms match registry identifiers. Select an item found by name to add it
+to a filter. A search saved as a filter rule uses IDs and tags; it does not use
+translated names or Pinyin. Its meaning therefore does not depend on a player's
+language or JEC settings.
+
 ## Composting
 
 Register an ordinary composter with the Colony Book. On the colony's

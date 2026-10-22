@@ -64,6 +64,34 @@ public final class ItemQueryGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void displayNameMatchersLeaveRulesAndQueryOperatorsAlone(GameTestHelper helper) {
+        var spelling = (java.util.function.BiPredicate<String, String>) (name, word) ->
+            name.equals("铁锭") && word.equals("tieding");
+        ItemQuery query = ItemQuery.parse("@minecraft TIEDING | minecraft:dirt").orElseThrow();
+        helper.assertTrue(query.matches(Items.IRON_INGOT, "铁锭", spelling),
+            "the display-name matcher receives each folded bare word after parsing");
+        helper.assertTrue(query.matches(Items.DIRT, "泥土", spelling), "an alternative still finds its id");
+        helper.assertFalse(query.matches(Items.IRON_INGOT), "a saved rule never uses display-name matching");
+        helper.assertFalse(query.items().contains(Items.IRON_INGOT), "rule expansion has the same boundary");
+
+        for (String typed : List.of("minecraft:iron_ingot", "minecraft:stone", "@minecraft",
+                "#minecraft:logs", "*_ingot", "*tieding*")) {
+            ItemQuery.parse(typed).orElseThrow().matches(Items.IRON_INGOT, "铁锭", (name, word) -> {
+                throw new AssertionError("a registry-only term searched a display name: " + typed);
+            });
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void missingDisplayNamesNeverReachTheNameMatcher(GameTestHelper helper) {
+        helper.assertFalse(ItemQuery.parse("tieding").orElseThrow().matches(Items.IRON_INGOT, null,
+            (name, word) -> { throw new AssertionError("a rule has no display name to match"); }),
+            "a missing display name is still a registry-only query");
+        helper.succeed();
+    }
+
     // A rule naming one whole item or tag is that item or tag, kept the cheaper way, and the same rule as ticking it.
     @GameTest(template = "empty")
     public static void aLoneIdIsKeptAsItsItemOrTag(GameTestHelper helper) {

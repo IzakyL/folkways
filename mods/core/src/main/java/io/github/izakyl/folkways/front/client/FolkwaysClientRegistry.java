@@ -16,6 +16,7 @@ import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent;
@@ -41,6 +42,9 @@ public final class FolkwaysClientRegistry {
     @SubscribeEvent
     public static void registerPonder(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
+            if (ModList.get().isLoaded("jecharacters")) {
+                JechSearch.install();
+            }
             PonderIntegration.install();
             LonePanel.install(LonePanels::open);
             Placing.install(HeldPlacement.HAND);

@@ -30,6 +30,9 @@ dependencies {
     gametestImplementation sourceSets.gameTestFixtures.output
     compileOnly lib("emi")
     compileOnly lib("jei")
+    compileOnly lib("jecharacters")
+    // JEC supplies this at runtime; only its configuration ticket is used, and nothing is bundled here.
+    compileOnly lib("pinin")
     compileOnly lib("shouldersurfing")
     compileOnly lib("create")
     compileOnly lib("sable"), lib("sable-companion")

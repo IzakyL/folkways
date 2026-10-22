@@ -24,15 +24,18 @@ and explain the expected behavior, use case and alternatives you considered.
 
 ## Development setup
 
-| Tool or platform   | Requirement                                                  |
-| ------------------ | ------------------------------------------------------------ |
-| Java               | JDK 21                                                       |
-| Node.js            | 22.14 or newer                                               |
-| Gradle             | Checked-in wrapper: `./gradlew`, or `gradlew.bat` on Windows |
-| Blockwright client | Windows or Linux; installed with the npm dependencies        |
+| Tool or platform | Requirement                                                  |
+| ---------------- | ------------------------------------------------------------ |
+| Java             | JDK 21                                                       |
+| Node.js          | 22.14 or newer                                               |
+| Gradle           | Checked-in wrapper: `./gradlew`, or `gradlew.bat` on Windows |
+| Blockwright SDK  | Linux x64 via npm; Windows 11 x64 via a source-built SDK     |
 
-The [Blockwright](https://github.com/IzakyL/blockwright) client supports Windows
-and Linux. This repository's CI uses Ubuntu 24.04. Run from the repository root:
+[Blockwright](https://github.com/IzakyL/blockwright) has native Windows support in
+its source tree. This repository pins npm version `0.1.0-alpha.1`, published
+before that implementation; it declares Linux x64 only, so `npm ci` rejects it on
+Windows with `EBADPLATFORM`. This repository's CI uses Ubuntu 24.04. Run the
+published-package setup on Linux x64 from the repository root:
 
 ```sh
 npm ci
@@ -48,6 +51,14 @@ test profile does not load them.
 
 The build gathers five mod jars in `build/libs/` and runtime LDLib2 in `build/deps/`.
 See [Architecture](docs/en/architecture.md) for module boundaries and the source map.
+
+For Windows, prepare a compatible source-built SDK using Blockwright's
+[local build instructions](https://github.com/IzakyL/blockwright/blob/master/CONTRIBUTING.md)
+and [Windows requirements](https://github.com/IzakyL/blockwright/blob/master/docs/environment.md#windows-development-candidate).
+Client tests require a logged-in Windows 11 x64 desktop with an OpenGL-capable GPU;
+use display device `auto` or `gpu`. After preparing `.blockwright/mods.json` with
+that SDK, build with `gradlew.bat`. Record the SDK revision and platform when
+reporting results; local Windows tests and Linux CI are separate validation runs.
 
 In local Git checkouts, `npm ci` also installs the Husky pre-commit hook.
 

@@ -19,6 +19,7 @@ import io.github.izakyl.folkways.front.api.ui.Draw;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Signs;
+import io.github.izakyl.folkways.front.api.ui.TextSearch;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
 import io.github.izakyl.folkways.front.engine.colony.ColonyMetrics;
 import java.util.ArrayList;
@@ -27,6 +28,7 @@ import java.util.BitSet;
 import java.util.Locale;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -203,12 +205,20 @@ public final class MetricsPage implements Draw {
             filterRequest = ++searchSequence + "|0";
             return;
         }
-        String[] words = query.split("\\s+");
+        List<Predicate<String>> words = java.util.Arrays.stream(query.split("\\s+"))
+            .map(TextSearch::query).toList();
         BitSet found = new BitSet();
         for (var item : BuiltInRegistries.ITEM) {
-            String text = (BuiltInRegistries.ITEM.getKey(item) + " " + item.getDescription().getString())
-                .toLowerCase(Locale.ROOT);
-            if (java.util.Arrays.stream(words).allMatch(text::contains)) {
+            String id = BuiltInRegistries.ITEM.getKey(item).toString();
+            String name = item.getDescription().getString().toLowerCase(Locale.ROOT);
+            boolean matches = true;
+            for (Predicate<String> word : words) {
+                if (!word.test(id) && !word.test(name)) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) {
                 found.set(BuiltInRegistries.ITEM.getId(item));
             }
         }

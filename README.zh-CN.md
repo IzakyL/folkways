@@ -73,7 +73,9 @@ Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无�
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                                 | 殖民书沿第三人称相机的准星瞄准                                                                            |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                              | 在容器和物品筛选中使用配方查看器的物品列表                                                                |
 | [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                                      | 创始人可将殖民地交给队伍；队员共同管理，队长持有创始人权限                                                |
+| [Just Enough Characters（JEC）](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                              | 在物品选择器、目录选择器、居民分工和库存页使用全拼、首字母与混合输入搜索；仅需客户端安装                  |
 
+JEC 搜索沿用其键盘方案和模糊音设置。输入示例，以及物品搜索与已保存筛选规则的区别，见[搜索](docs/zh-CN/gameplay.md#搜索)。
 车万女仆扩展模型包的安装方法见[女仆模型包](docs/zh-CN/gameplay.md#女仆模型包)。
 
 ## 文档
@@ -85,7 +87,7 @@ Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无�
 
 ## 从源码构建
 
-准备 **Java 21 JDK** 和 **Node.js 22.14+**，在仓库根目录执行：
+准备 **Java 21 JDK** 和 **Node.js 22.14+**，在 **Linux x64** 上从仓库根目录执行锁定的构建流程：
 
 ```sh
 npm ci
@@ -94,7 +96,9 @@ npm run setup
 ```
 
 Setup 会下载锁定版本的集成依赖，并生成 Gradle 必需的清单。
-五个模组 jar 汇总到 `build/libs/`。Windows 下将 `./gradlew` 替换为 `gradlew.bat`。
+五个模组 jar 汇总到 `build/libs/`。
+Blockwright 源码已支持 Windows，当前锁定的 npm 发布包早于这次改动。
+Windows 下可使用从源码构建的 SDK 和 `gradlew.bat`，详见[开发环境](CONTRIBUTING.zh-CN.md#开发环境)。
 
 开发与 PR 流程见[贡献指南](CONTRIBUTING.zh-CN.md)。
 请在上游[报告问题](https://github.com/IzakyL/folkways/issues/new?template=bug_report.yml)或[提出功能建议](https://github.com/IzakyL/folkways/issues/new?template=feature_request.yml)，

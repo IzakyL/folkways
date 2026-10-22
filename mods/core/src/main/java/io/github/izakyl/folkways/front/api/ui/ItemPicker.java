@@ -346,7 +346,7 @@ public final class ItemPicker {
                 ItemQuery.parse(query).ifPresent(asked -> {
                     List<Item> found = new ArrayList<>();
                     for (Item item : pool) {
-                        if (asked.matches(item, names.get(item))) {
+                        if (asked.matches(item, names.get(item), TextSearch::contains)) {
                             found.add(item);
                         }
                     }
@@ -374,9 +374,9 @@ public final class ItemPicker {
         String label = offer.label().getString().toLowerCase(Locale.ROOT);
         if (offer.filter().kind() == ItemFilter.Kind.ITEM) {
             Item item = BuiltInRegistries.ITEM.get(offer.filter().id());
-            return asked.matches(item, label);
+            return asked.matches(item, label, TextSearch::contains);
         }
-        return label.contains(asked.text().toLowerCase(Locale.ROOT))
+        return TextSearch.contains(label, asked.text())
             || offer.filter().describe().contains(asked.text().toLowerCase(Locale.ROOT));
     }
 

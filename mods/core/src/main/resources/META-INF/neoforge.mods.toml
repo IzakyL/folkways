@@ -73,6 +73,14 @@ versionRange = "[1.1.24,)"
 ordering = "AFTER"
 side = "CLIENT"
 
+[[dependencies.${mod_id}]]
+modId = "jecharacters"
+type = "optional"
+reason = "Display-name searches follow Just Enough Characters' spelling settings. Without it they use literal text matching; saved item rules keep their registry-based meaning."
+versionRange = "[4.5,)"
+ordering = "AFTER"
+side = "CLIENT"
+
 [[mixins]]
 config = "folkways.mixins.json"
 

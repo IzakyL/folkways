@@ -19,15 +19,17 @@
 
 ## 开发环境
 
-| 工具或平台         | 要求                                                 |
-| ------------------ | ---------------------------------------------------- |
-| Java               | JDK 21                                               |
-| Node.js            | 22.14 或更新版本                                     |
-| Gradle             | 使用仓库内的 `./gradlew`，Windows 使用 `gradlew.bat` |
-| Blockwright 客户端 | 支持 Windows 和 Linux，随 npm 依赖安装               |
+| 工具或平台      | 要求                                                     |
+| --------------- | -------------------------------------------------------- |
+| Java            | JDK 21                                                   |
+| Node.js         | 22.14 或更新版本                                         |
+| Gradle          | 使用仓库内的 `./gradlew`，Windows 使用 `gradlew.bat`     |
+| Blockwright SDK | Linux x64 使用 npm 包；Windows 11 x64 使用源码构建的 SDK |
 
-[Blockwright](https://github.com/IzakyL/blockwright) 客户端支持 Windows 和 Linux。
-本仓库的 CI 使用 Ubuntu 24.04。在仓库根目录执行：
+[Blockwright](https://github.com/IzakyL/blockwright) 源码已实现原生 Windows 支持。
+本仓库锁定的 npm 包 `0.1.0-alpha.1` 发布于这次实现之前，仍声明仅支持 Linux x64，
+因此在 Windows 上直接执行 `npm ci` 会因 `EBADPLATFORM` 失败。
+本仓库的 CI 使用 Ubuntu 24.04。使用发布包时，请在 Linux x64 上从仓库根目录执行：
 
 ```sh
 npm ci
@@ -42,6 +44,12 @@ Gradle 编译时需要可选集成的 jar，即使某个测试环境并不加载
 
 五个模组 jar 汇总到 `build/libs/`，运行时使用的 LDLib2 放在 `build/deps/`。
 模块边界与源码位置见[架构说明](docs/zh-CN/architecture.md)。
+
+Windows 下请按 Blockwright 的[本地构建说明](https://github.com/IzakyL/blockwright/blob/master/CONTRIBUTING.md)
+和 [Windows 环境要求](https://github.com/IzakyL/blockwright/blob/master/docs/environment.md#windows-development-candidate)
+准备兼容的源码 SDK。客户端测试需要已登录的 Windows 11 x64 桌面和支持 OpenGL 的 GPU，
+显示设备使用 `auto` 或 `gpu`。通过该 SDK 准备好 `.blockwright/mods.json` 后，使用 `gradlew.bat` 构建。
+报告测试结果时请注明 SDK 版本及平台；本地 Windows 测试与 Linux CI 是不同的验证运行。
 
 在本地 Git 仓库中，`npm ci` 还会安装 Husky 的 pre-commit hook。
 

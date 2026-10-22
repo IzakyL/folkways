@@ -40,8 +40,10 @@ the [Minecraft EULA](https://www.minecraft.net/eula) in that directory's
 ## Blockwright suites
 
 [Blockwright](https://github.com/IzakyL/blockwright) drives real Minecraft clients
-and servers. Its client supports Windows and Linux; this repository's CI uses
-Ubuntu 24.04. The suites download Minecraft, NeoForge and fixture mods on first
+and servers. Its source tree includes native Windows support; the pinned npm
+release predates it. Use Linux x64 with the published packages, or a source-built
+SDK on Windows, as described in [development setup](../../CONTRIBUTING.md#development-setup).
+This repository's CI uses Ubuntu 24.04. The suites download Minecraft, NeoForge and fixture mods on first
 run. `blockwright.toml` sets `eula = true` for their servers; running them requires
 accepting the Minecraft EULA.
 
@@ -82,6 +84,18 @@ in `tests/sable/`. See
 
 The repository's `.mcp.json` exposes the same harness to MCP-capable assistants;
 the LDLib2 UI adapter lives in `tests/ldlib2/`.
+
+### JEC search compatibility
+
+```sh
+npm run test:e2e -- tests/e2e/jech-search.spec.ts --workers=1
+```
+
+This spec runs once with JEC absent and once with `blockwright.toml#jech`, which
+installs JEC only on the client. Both servers run without it. It covers item,
+folder, Workforce and stock matching, existing query operators, and changes to
+JEC's fuzzy spelling and keyboard settings while reusing a prepared query.
+The default profile keeps JEC absent; CI's founding smoke test does not run this spec.
 
 ## Cookery fixtures
 

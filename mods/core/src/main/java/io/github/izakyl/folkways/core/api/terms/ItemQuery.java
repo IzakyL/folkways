@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -99,12 +100,21 @@ public final class ItemQuery {
 
     // Whether a search finds the item, its name in the reader's words among what a bare word is looked for in.
     public boolean matches(Item item, @Nullable String name) {
+        return matches(item, name, String::contains);
+    }
+
+    /**
+     * Searches display names with the supplied matcher (name first, lower-case query second). Only bare
+     * words may search a name; ids, tags, mod names and wildcards retain their registry-based semantics.
+     * Saved rules use {@link #matches(Item)} and never consult this matcher or a translated name.
+     */
+    public boolean matches(Item item, @Nullable String name, BiPredicate<String, String> nameMatcher) {
         Known world = known();
         ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
         for (List<Term> terms : alternatives) {
             boolean all = true;
             for (Term term : terms) {
-                if (!term.test(world, item, id, name)) {
+                if (!term.test(world, item, id, name, nameMatcher)) {
                     all = false;
                     break;
                 }
@@ -156,7 +166,8 @@ public final class ItemQuery {
 
     private sealed interface Term {
 
-        boolean test(Known world, Item item, ResourceLocation id, @Nullable String name);
+        boolean test(Known world, Item item, ResourceLocation id, @Nullable String name,
+            BiPredicate<String, String> nameMatcher);
 
         @Nullable
         static Term of(String word) {
@@ -178,14 +189,16 @@ public final class ItemQuery {
 
     private record Mod(Words words) implements Term {
         @Override
-        public boolean test(Known world, Item item, ResourceLocation id, @Nullable String name) {
+        public boolean test(Known world, Item item, ResourceLocation id, @Nullable String name,
+                BiPredicate<String, String> nameMatcher) {
             return words.find(id.getNamespace(), world.mods()::contains);
         }
     }
 
     private record Tag(Words words) implements Term {
         @Override
-        public boolean test(Known world, Item item, ResourceLocation id, @Nullable String name) {
+        public boolean test(Known world, Item item, ResourceLocation id, @Nullable String name,
+                BiPredicate<String, String> nameMatcher) {
             boolean whole = words.text().contains(":");
             Predicate<String> named = whole ? world.tags()::contains : world.tagPaths()::contains;
             return item.builtInRegistryHolder().tags().map(TagKey::location)
@@ -195,7 +208,8 @@ public final class ItemQuery {
 
     private record Bare(Words words) implements Term {
         @Override
-        public boolean test(Known world, Item item, ResourceLocation id, @Nullable String name) {
+        public boolean test(Known world, Item item, ResourceLocation id, @Nullable String name,
+                BiPredicate<String, String> nameMatcher) {
             if (words.glob() != null) {
                 return words.glob().matcher(words.text().contains(":") ? id.toString() : id.getPath()).matches();
             }
@@ -204,7 +218,7 @@ public final class ItemQuery {
                 return id.toString().equals(words.text());
             }
             return id.getPath().contains(words.text()) || words.text().contains(":") && id.toString()
-                .contains(words.text()) || name != null && name.contains(words.text());
+                .contains(words.text()) || name != null && nameMatcher.test(name, words.text());
         }
     }
 

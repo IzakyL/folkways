@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.front.ui.screen;
 
+import io.github.izakyl.folkways.front.api.ui.TextSearch;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -173,6 +174,6 @@ public final class RosterQuery {
     }
 
     private static boolean has(String haystack, String needle) {
-        return haystack.toLowerCase(Locale.ROOT).contains(needle);
+        return TextSearch.contains(haystack, needle);
     }
 }

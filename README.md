@@ -93,7 +93,10 @@ composting, buildings and resident looks.
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                      | Colony Book aiming follows its third-person crosshair                                                                                                                    |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                   | Item filters open the recipe viewer's ingredient list                                                                                                                    |
 | [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                           | A founder can hand the colony to their party; party members keep it and the party owner holds the founder's rights                                                       |
+| [Just Enough Characters (JEC)](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                    | Pinyin, initials and mixed-input searches in item and folder pickers, Workforce and stock; install on the client only                                                    |
 
+JEC searches follow its keyboard and fuzzy-spelling settings. See [Searching](docs/en/gameplay.md#searching)
+for examples and how item searches differ from saved filter rules.
 For Touhou Little Maid add-on installation, see [Maid model packs](docs/en/gameplay.md#maid-model-packs).
 
 ## Documentation
@@ -105,7 +108,8 @@ For Touhou Little Maid add-on installation, see [Maid model packs](docs/en/gamep
 
 ## Building from source
 
-With a **Java 21 JDK** and **Node.js 22.14+**, run from the repository root:
+With a **Java 21 JDK** and **Node.js 22.14+**, run the locked setup on **Linux x64**
+from the repository root:
 
 ```sh
 npm ci
@@ -115,7 +119,9 @@ npm run setup
 
 Setup downloads the pinned integration dependencies and writes the manifest
 required by Gradle. The five mod jars are collected in `build/libs/`.
-On Windows, use `gradlew.bat` in place of `./gradlew`.
+Blockwright's native Windows support is available in its source tree; the pinned
+npm release predates it. For Windows builds using a source-built SDK and
+`gradlew.bat`, see [development setup](CONTRIBUTING.md#development-setup).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and pull request workflow.
 [Report bugs](https://github.com/IzakyL/folkways/issues/new?template=bug_report.yml)

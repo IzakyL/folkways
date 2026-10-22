@@ -46,6 +46,19 @@ flowchart BT
 内置样式位于 [`mods/vanilla/src/main/resources/data/folkways/folkways/pattern/`](../../mods/vanilla/src/main/resources/data/folkways/folkways/pattern/)。
 集成依赖与模组 ID 以各模组的 `build.gradle` 和 `src/main/resources/META-INF/neoforge.mods.toml` 为准。
 
+## 显示文本搜索
+
+[`TextSearch`](../../mods/core/src/main/java/io/github/izakyl/folkways/front/api/ui/TextSearch.java)
+是物品选择器、目录选择器、居民分工和库存共用的显示文本匹配入口。
+客户端初始化时按需安装 JEC 适配器；文字直接命中和纯 ASCII 文本未命中时都不会调用 JEC。
+适配器复用 JEC 的字典和设置，在设置变化时更新当前线程的拼写缓存。
+JEC 及其 PinIn 库只用于编译，不随 Folkways 内嵌。
+
+[`ItemQuery`](../../mods/core/src/main/java/io/github/izakyl/folkways/core/api/terms/ItemQuery.java)
+的显示名称搜索重载接受 `BiPredicate<String, String>`，参数依次为名称和已转为小写的查询词。
+只有普通查询词使用该匹配器；模组 ID、标签、完整物品 ID 和通配符保留注册标识符语义。
+已保存的规则使用不带显示名称的原有重载，因此客户端语言或可选集成不会改变服务器的筛选行为。
+
 ## 生命周期与测试归属
 
 [`ColonyLifecycle`](../../mods/core/src/main/java/io/github/izakyl/folkways/core/api/colony/ColonyLifecycle.java)
