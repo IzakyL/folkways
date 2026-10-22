@@ -62,6 +62,9 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     private static final long WAYS_ANSWER_TICKS = 20L;
 
+    // 殖民地完全没有路线、却还有活排不上时，多久强制重算一次。
+    private static final long LIVENESS_TICKS = 200L;
+
     private final ColonyData colony;
     private final ResourceKey<Level> dimension;
 
@@ -87,6 +90,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     private long wakeAt = Long.MAX_VALUE;
     private long scheduleWakeAt = Long.MAX_VALUE;
+    private long livenessAt;
     // What each stage last asked of the survey: the weave's whole ask, and whether the schedule wants hands read.
     private Asks weaveAsks = Asks.NONE;
     private boolean scheduleHands;
@@ -212,6 +216,14 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         for (int round = 0; round < MOST_ROUNDS && !pipeline.weaving() && inbox.any(); round++) {
             plan(level);
             answer(level, present);
+        }
+        // 规划器只在有消息时才跑。所有手都闲着、路线上又一件活都没有时，就再也不会产生消息了——
+        // 日志里那次 3.5 分钟一动不动就是这样。每隔一段时间自检一次，给死结一个被重新评估的机会。
+        if (level.getGameTime() >= livenessAt) {
+            livenessAt = level.getGameTime() + LIVENESS_TICKS;
+            if (tours.isEmpty() && !present.isEmpty() && !diagnosis.unassigned().isEmpty()) {
+                inbox.raise(Message.ANSWERED);
+            }
         }
         if (level.getGameTime() >= scheduleWakeAt) {
             scheduleWakeAt = Long.MAX_VALUE;
