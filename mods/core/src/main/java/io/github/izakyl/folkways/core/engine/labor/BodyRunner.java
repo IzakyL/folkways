@@ -52,6 +52,13 @@ final class BodyRunner {
 
     private static final long AWAY_TICKS = 100L;
 
+    // 同一件活连续走不到这么多次，就把人扶到这件活本来就认可的站位上：只换位置，不隔空作业、不改世界。
+    private static final int RESCUE_TRIES = 3;
+
+    private static final int RESCUE_RANGE = 32;
+
+    private static final long RESCUE_COOLDOWN = 200L;
+
     private static final boolean LET_GO_DEBUG = Boolean.getBoolean("folkways.letGoDebug") || true;
 
     private static final int STALL_POLL_TICKS = 4;
@@ -97,6 +104,10 @@ final class BodyRunner {
     private long awaySince = -1L;
     private boolean gone;
     private boolean worked = true;
+    // 连续走不到去处的次数、本件活是否已经扶过一次、上次扶人的时刻。
+    private int noWay;
+    private boolean rescued;
+    private long rescuedAt = -1L;
 
     BodyRunner(UUID resident) {
         this.resident = resident;
@@ -456,6 +467,8 @@ final class BodyRunner {
             Placement plan) {
         busy = 0;
         worked = true;
+        noWay = 0;
+        rescued = false;
         body.clearBalk();
         current = node;
         activeBody = body;
@@ -752,9 +765,66 @@ final class BodyRunner {
     }
 
     private void refuse(ColonyLabor labor, ServerLevel level, Body body, LaborRefusal why) {
+        // 连着几次走不到这件活该在的位置：把工人扶到那儿，再从那儿重新出发（不行就照旧失败）。
+        if (why == LaborRefusal.NO_WAY_THERE && own == null && rescue(level, body)) {
+            setOff(labor, level, body);
+            return;
+        }
         current.spec().gesture().release(body.mob());
         failed(labor, level, body, current, why);
         clear(body);
+    }
+
+    // 连续走不到去处时，把工人直接扶到这件活本来就认可的站位上：只换位置，不换要求。
+    // 不隔空取物、不改世界；最远 RESCUE_RANGE 格，同一件活只扶一次，落地后照常寻路。
+    private boolean rescue(ServerLevel level, Body body) {
+        if (rescued || !(footing instanceof Stances.Cells cells)) {
+            return false;
+        }
+        if (++noWay < RESCUE_TRIES) {
+            return false;
+        }
+        if (rescuedAt >= 0 && level.getGameTime() - rescuedAt < RESCUE_COOLDOWN) {
+            return false;
+        }
+        Mob mob = body.mob();
+        if (mob.isPassenger() || mob.level() != level) {
+            return false;
+        }
+        BlockPos from = mob.blockPosition();
+        BlockPos best = null;
+        double least = Double.MAX_VALUE;
+        for (WorldPos cell : cells.cells()) {
+            if (!cell.in(level)) {
+                continue;
+            }
+            BlockPos at = cell.block(level);
+            if (!level.isLoaded(at) || at.equals(from)) {
+                continue;
+            }
+            double far = at.distSqr(from);
+            if (far > (double) RESCUE_RANGE * RESCUE_RANGE || far >= least) {
+                continue;
+            }
+            if (!level.noCollision(mob, mob.getBoundingBox().move(at.getX() + 0.5D - mob.getX(),
+                    at.getY() - mob.getY(), at.getZ() + 0.5D - mob.getZ()))) {
+                continue;
+            }
+            least = far;
+            best = at;
+        }
+        if (best == null) {
+            return false;
+        }
+        mob.getNavigation().stop();
+        mob.setPos(best.getX() + 0.5D, best.getY(), best.getZ() + 0.5D);
+        mob.getNavigation().stop();
+        rescued = true;
+        rescuedAt = level.getGameTime();
+        noWay = 0;
+        Labor.LOGGER.info("rescued body={} to={} for node={}", resident, best.toShortString(),
+            current == null ? "-" : current.id());
+        return true;
     }
 
     private void ended(ColonyLabor labor, ServerLevel level, Body body, Node node, Ending how) {

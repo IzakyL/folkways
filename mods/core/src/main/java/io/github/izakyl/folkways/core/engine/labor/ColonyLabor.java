@@ -65,6 +65,9 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     // 殖民地完全没有路线、却还有活排不上时，多久强制重算一次。
     private static final long LIVENESS_TICKS = 200L;
 
+    // 有手在原地干等这么久，也值得重算一轮：它的队首多半在等别人路线里没开工的节点。
+    private static final long STALLED_TICKS = 200L;
+
     private final ColonyData colony;
     private final ResourceKey<Level> dimension;
 
@@ -221,7 +224,10 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         // 日志里那次 3.5 分钟一动不动就是这样。每隔一段时间自检一次，给死结一个被重新评估的机会。
         if (level.getGameTime() >= livenessAt) {
             livenessAt = level.getGameTime() + LIVENESS_TICKS;
-            if (tours.isEmpty() && !present.isEmpty() && !diagnosis.unassigned().isEmpty()) {
+            // 没路线又派不出去，或者有人原地干等太久：都值得重算一轮。
+            boolean jammed = tours.isEmpty() && !diagnosis.unassigned().isEmpty()
+                || runners.stalled(STALLED_TICKS);
+            if (!present.isEmpty() && jammed) {
                 inbox.raise(Message.ANSWERED);
             }
         }
