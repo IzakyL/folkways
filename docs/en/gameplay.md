@@ -48,6 +48,21 @@ to a filter. A search saved as a filter rule uses IDs and tags; it does not use
 translated names or Pinyin. Its meaning therefore does not depend on a player's
 language or JEC settings.
 
+## Food safety
+
+Residents skip food with any chance of a harmful status effect, including effects
+stored on suspicious stew. This also applies to food already in their packs;
+safe meals in later slots are still eaten. Beneficial food effects and returned
+bowls or bottles keep their normal behavior.
+
+Food types known to be unsafe are excluded from ration deliveries and pack
+reserves, even when selected in the colony's food settings. Unsafe food already
+carried does not count toward the resident's nourishment when restocking.
+
+Kaleidoscope Cookery's red and green chilies are also refused because eating them
+causes direct damage. Datapacks can add other foods with special harmful eating
+behavior to the `folkways:unsafe_food` item tag.
+
 ## Composting
 
 Register an ordinary composter with the Colony Book. On the colony's

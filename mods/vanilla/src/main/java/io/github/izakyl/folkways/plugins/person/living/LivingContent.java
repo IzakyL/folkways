@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.core.api.participation.Participations;
 import io.github.izakyl.folkways.core.api.participation.Stake;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Fronts;
@@ -21,6 +22,7 @@ import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.notice.Meter;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 
@@ -89,10 +91,14 @@ public final class LivingContent {
         if (!looksAfter(body.resident())) {
             return List.of();
         }
-        return Fronts.of(colony).settings(ID).items(FOOD.key())
+        return food(colony)
             .map(food -> List.of(new Amount(food,
                 LivingPresence.mealsFor(food, LivingPresence.RATION_DAYS * Hunger.FOOD_PER_DAY))))
             .orElse(List.of());
+    }
+
+    static Optional<ItemSpec> food(Colony colony) {
+        return Fronts.of(colony).settings(ID).items(FOOD.key()).flatMap(FoodSafety::allowed);
     }
 
     static boolean looksAfter(Resident resident) {

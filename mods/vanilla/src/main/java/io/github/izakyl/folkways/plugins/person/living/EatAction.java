@@ -51,7 +51,7 @@ final class EatAction implements Node {
         for (int slot = 0; slot < pack.getContainerSize(); slot++) {
             ItemStack stack = pack.getItem(slot);
             FoodProperties food = stack.isEmpty() ? null : stack.getFoodProperties(who.body());
-            if (food == null || !works.wouldEat(who.resident().id(), food)) {
+            if (!works.wouldEat(who.resident().id(), stack, food)) {
                 continue;
             }
             ItemStack remainder = food.usingConvertsTo().map(ItemStack::copy)

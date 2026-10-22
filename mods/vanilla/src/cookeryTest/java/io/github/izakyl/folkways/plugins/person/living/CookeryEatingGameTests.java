@@ -6,6 +6,9 @@ import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.Quality;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.QualityUtils;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.work.Outcome;
+import io.github.izakyl.folkways.core.api.terms.Goods;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
@@ -143,14 +146,68 @@ public final class CookeryEatingGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void chiliStillExecutesItsSpecialEatingBehavior(GameTestHelper helper) {
-        try (EatingFixture meal = new EatingFixture(helper, new ItemStack(ModItems.RED_CHILI.get(), 3), 0)) {
-            float health = meal.body.mob().getHealth();
-            meal.eat();
-            helper.assertTrue(meal.body.mob().getHealth() == health - 2, "red chili still hurts by two points");
-            helper.assertValueEqual(meal.pack.getItem(0).getCount(), 2, "chili is consumed once");
-            helper.assertValueEqual(meal.living.foodLevelOf(meal.body.id()).orElseThrow(), 1,
-                "the special behavior still feeds the resident");
+    public static void chiliIsRefusedBeforeItsSpecialEatingBehaviorCanKillAResident(GameTestHelper helper) {
+        for (var item : List.of(ModItems.RED_CHILI.get(), ModItems.GREEN_CHILI.get())) {
+            try (EatingFixture meal = new EatingFixture(helper, new ItemStack(item, 3), 0)) {
+                helper.assertTrue(meal.pack.getItem(0).getFoodProperties(meal.body.mob()).effects().isEmpty(),
+                    "chili damage is not declared as a food effect");
+                meal.body.mob().setHealth(1.0F);
+                helper.assertFalse(meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
+                    .anyMatch(urge -> urge.id().equals(LivingPresence.EAT)), "chili creates no eating urge");
+                helper.assertTrue(meal.action().commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
+                    "chili is refused before its damage callback");
+                helper.assertTrue(meal.body.mob().isAlive() && meal.body.mob().getHealth() == 1.0F,
+                    "refusing chili protects a resident at one health point");
+                helper.assertValueEqual(meal.pack.getItem(0).getCount(), 3, "chili stays untouched");
+                helper.assertValueEqual(meal.living.foodLevelOf(meal.body.id()).orElseThrow(), 0,
+                    "refusal grants no nutrition");
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void chiliesAreNotReservedAsRationsWithSafeRice(GameTestHelper helper) {
+        try (EatingFixture meal = new EatingFixture(helper, new ItemStack(ModItems.RED_CHILI.get()), 0)) {
+            meal.menu(ModItems.RED_CHILI.get(), ModItems.GREEN_CHILI.get(), ModItems.COOKED_RICE.get());
+            var ration = LivingContent.rations(meal.colony, meal.body).getFirst();
+            helper.assertTrue(Goods.members(ration.spec()).equals(java.util.Set.of(ModItems.COOKED_RICE.get())),
+                "the direct-damage food tag also filters configured rations");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void harmfulCookeryDishesAreRefusedIncludingQualityMeals(GameTestHelper helper) {
+        List<ItemStack> dishes = new ArrayList<>();
+        for (String id : List.of("dark_cuisine", "suspicious_stir_fry", "stargazy_pie")) {
+            var item = BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", id));
+            helper.assertFalse(item == Items.AIR, "the harmful Cookery dish is installed: " + id);
+            dishes.add(new ItemStack(item, 3));
+            if (!id.equals("stargazy_pie")) {
+                continue;
+            }
+            for (Quality quality : List.of(Quality.POOR, Quality.SUPERB)) {
+                ItemStack dish = new ItemStack(item, 3);
+                QualityUtils.setQuality(dish, quality);
+                dishes.add(dish);
+            }
+        }
+        for (ItemStack dish : dishes) {
+            Quality quality = QualityUtils.getQuality(dish);
+            String description = dish.getItem() + " (" + quality + ")";
+            try (EatingFixture meal = new EatingFixture(helper, dish, 0)) {
+                helper.assertFalse(meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
+                    .anyMatch(urge -> urge.id().equals(LivingPresence.EAT)), "no eating urge for " + description);
+                helper.assertTrue(meal.action().commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
+                    "refused even when starving: " + description);
+                helper.assertValueEqual(meal.pack.getItem(0).getCount(), 3, "the dish stays untouched");
+                helper.assertTrue(QualityUtils.getQuality(meal.pack.getItem(0)) == quality,
+                    "refusal preserves the dish's quality");
+                helper.assertTrue(meal.body.mob().getActiveEffects().isEmpty(), "no harmful effects apply");
+                helper.assertValueEqual(meal.living.foodLevelOf(meal.body.id()).orElseThrow(), 0,
+                    "refusal grants no nutrition");
+            }
         }
         helper.succeed();
     }

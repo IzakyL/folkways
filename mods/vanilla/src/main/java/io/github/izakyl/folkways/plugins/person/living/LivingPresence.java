@@ -197,7 +197,7 @@ final class LivingPresence implements Facing {
         for (int slot = 0; slot < pack.getContainerSize(); slot++) {
             ItemStack stack = pack.getItem(slot);
             FoodProperties food = stack.isEmpty() ? null : stack.getFoodProperties(who.body());
-            if (food != null && wouldEat(who.resident().id(), food)) {
+            if (wouldEat(who.resident().id(), stack, food)) {
                 return true;
             }
         }
@@ -219,9 +219,9 @@ final class LivingPresence implements Facing {
         return tired == null ? 1 : tired.ticksToSleepOff();
     }
 
-    boolean wouldEat(UUID resident, FoodProperties food) {
+    boolean wouldEat(UUID resident, ItemStack stack, FoodProperties food) {
         Hunger belly = bellies.get(resident);
-        return belly != null && belly.canEatWithoutWaste(food);
+        return belly != null && FoodSafety.safe(stack, food) && belly.canEatWithoutWaste(food);
     }
 
     void ate(UUID resident, FoodProperties food) {
@@ -250,8 +250,7 @@ final class LivingPresence implements Facing {
     }
 
     public List<Grown> goals(ColonyView view) {
-        Optional<ItemSpec> allowed = Fronts.of(colony).settings(LivingContent.ID)
-            .items(LivingContent.FOOD.key());
+        Optional<ItemSpec> allowed = LivingContent.food(colony);
         if (allowed.isEmpty()) {
             return List.of();
         }
@@ -283,7 +282,7 @@ final class LivingPresence implements Facing {
         for (int slot = 0; slot < pack.getContainerSize(); slot++) {
             ItemStack stack = pack.getItem(slot);
             FoodProperties eaten = stack.isEmpty() ? null : stack.getFoodProperties(body);
-            if (eaten != null && Goods.matches(stack, food)) {
+            if (FoodSafety.safe(stack, eaten) && Goods.matches(stack, food)) {
                 points += eaten.nutrition() * stack.getCount();
             }
         }
@@ -400,9 +399,12 @@ final class LivingPresence implements Facing {
         write();
         SettlerNeed bed = new SettlerNeed(LivingNeed.BED, freeBeds, 1);
         return Fronts.of(colony).settings(LivingContent.ID).items(LivingContent.FOOD.key())
-            .map(food -> List.of(bed, SettlerNeed.counting(LivingNeed.FOOD, food,
-                    FolkwaysVanillaConfig.foodPerResident(), SettlerNeed.Per.RESIDENT)
-                .filled(Fronts.of(colony).stocked(server, food))))
+            .map(configured -> List.of(bed, FoodSafety.allowed(configured)
+                .map(food -> SettlerNeed.counting(LivingNeed.FOOD, food,
+                        FolkwaysVanillaConfig.foodPerResident(), SettlerNeed.Per.RESIDENT)
+                    .filled(Fronts.of(colony).stocked(server, food)))
+                .orElseGet(() -> new SettlerNeed(LivingNeed.FOOD, 0,
+                    FolkwaysVanillaConfig.foodPerResident(), SettlerNeed.Per.RESIDENT, Optional.empty()))))
             .orElseGet(() -> List.of(bed));
     }
 
