@@ -1765,7 +1765,14 @@ public final class Weaver {
     // An idle worker's unclaimed cargo goes into the nearest stores with room.
     private void recover(boolean retry) {
         for (Crew.Hand hand : crew.hands()) {
-            if (!stowing.contains(hand.id()) || !(retry || stowFresh.contains(hand.id()))) {
+            // 一格空位都没有、手上也没有正在做的活：这就是"要空间才动、动了才有空间"的死结现场。
+            // （packCells 是剩余空格，见 Survey.readHand：第 3 个参数取的是 plannableRoom）
+            boolean jammed = hand.packCells() <= 0 && !holding.containsValue(hand.id());
+            // 卡死的手不等 Idle 消息，每次重算都试着存回；其它手仍按原来的时机。
+            if (!(stowing.contains(hand.id()) || jammed)) {
+                continue;
+            }
+            if (!jammed && !(retry || stowFresh.contains(hand.id()))) {
                 continue;
             }
             stowFresh.remove(hand.id());
@@ -1798,8 +1805,10 @@ public final class Weaver {
             Why why = Why.NO_ROOM;
             for (ItemStack carried : hand.cargo()) {
                 ItemSpec spec = Goods.specOf(carried);
-                long used = reserved.computeIfAbsent(spec,
-                    item -> claims.taken(new Resource.Cargo(hand.id(), item)));
+                // 死结时先不认 claim：把货存回仓库，接单的节点下一轮会重新从仓库取料。
+                // 不这么做，这批货既不许存、又占着位置，谁也别想动。
+                long used = jammed ? 0L
+                    : reserved.computeIfAbsent(spec, item -> claims.taken(new Resource.Cargo(hand.id(), item)));
                 int skipped = (int) Math.min(used, carried.getCount());
                 reserved.put(spec, used - skipped);
                 int left = carried.getCount() - skipped;
