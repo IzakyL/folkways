@@ -43,6 +43,8 @@ final class Tours {
     private static final int MOST_DECLINED = 4_096;
     private static final int MAX_FARES = 32_768;
     private static final int TIER_TICKS = 400;
+    // 手里那件活超过这么多 tick 还没干完：后面排的队不再押在这只手上，交还计划另派。
+    private static final int LATE_TICKS = 400;
     private static final int MOST_PENDING_FARES = 12;
     private static final int RIDE_SPEEDUP = 4;
     // How many places earlier on routes one node may be laid out at, when it fits on the end of none.
@@ -195,6 +197,7 @@ final class Tours {
         for (Crew.Hand hand : crew.hands()) {
             line.add(seats.get(hand.id()));
         }
+        moved |= handBackQueues(line);
         waiting.keySet().retainAll(weave.vertices().keySet());
         beyondUntil.keySet().retainAll(waiting.keySet());
 
@@ -502,6 +505,43 @@ final class Tours {
                 }
             }
         }
+    }
+
+    // A hand that has been on one piece too long: what it has queued behind that piece should not keep holding
+    // the colony up. Only the work not yet begun is handed back — the piece in hand stays — and no new work is
+    // laid on this hand this schedule, so the rest of the route can go to someone free.
+    private boolean handBackQueues(List<Seat> line) {
+        Deque<UUID> cutting = new ArrayDeque<>();
+        List<Seat> busy = new ArrayList<>();
+        for (Seat seat : line) {
+            if (seat.route.isEmpty()) {
+                continue;
+            }
+            UUID head = seat.route.getFirst();
+            if (!seat.hand.id().equals(heldBy.get(head))) {
+                continue;
+            }
+            Placed placed = settled.get(head);
+            if (placed == null || now - placed.start() <= LATE_TICKS) {
+                continue;
+            }
+            for (UUID id : seat.route) {
+                if (!id.equals(head)) {
+                    cutting.add(id);
+                }
+            }
+            busy.add(seat);
+        }
+        if (busy.isEmpty()) {
+            return false;
+        }
+        cascade(cutting);
+        for (Seat seat : seats.values()) {
+            repack(seat, cutting);
+        }
+        cascade(cutting);
+        line.removeAll(busy);
+        return true;
     }
 
     // A route's loads were counted when its work was laid, against the pack as it was then and the work before it.
