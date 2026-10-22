@@ -78,7 +78,7 @@ public final class SpitStation implements KitchenStation {
             ? Optional.of(spit) : Optional.empty();
     }
     public Optional<Stances> stances(ServerLevel level, WorldPos at) {
-        return KitchenStation.around(level, slots(level, at));
+        return KitchenStation.super.stances(level, at);
     }
     private record Approach(WorldPos part, Stances stances) { }
     public Optional<Workshop> freeze(UUID key, UUID colony, ServerLevel level, WorldPos at,

@@ -53,14 +53,13 @@ final class Dining {
     private static final int MAX_TABLE_CELLS = 128;
     private static final int MAX_DINING_ZONE_CELLS = 4096;
     record Table(ServerLevel level, UUID zone, BlockPos at, ItemSpec food, int target,
-                 Set<BlockPos> tops, List<Seat> seats, List<BlockPos> approaches, Optional<ItemSpec> drinks) { }
+                 Set<BlockPos> tops, List<Seat> seats, List<BlockPos> approaches) { }
     private record Portion(WorldPos at, int slot) { }
     private record Choice(Table table, Seat seat, int slot) { }
-    private record DrinkChoice(Table table, int slot, ItemStack serving) { }
     private record Refill(Portion portion, UUID zone, ItemSpec menu, int target) { }
 
     private static Refill refill(Table table, int slot) {
-        return new Refill(new Portion(WorldPos.of(table.level, table.at), slot), table.zone, drinkSlot(table, slot) ? table.drinks.orElseThrow() : table.food, table.target);
+        return new Refill(new Portion(WorldPos.of(table.level, table.at), slot), table.zone, table.food, table.target);
     }
 
     Dining(Colony colony, LivingPresence living) { this(colony, living, new java.util.Random()); }
@@ -119,8 +118,7 @@ final class Dining {
                         for (BlockPos at : tops) {
                             seen.add(WorldPos.of(level, at));
                             found.add(new Table(level, zone.id(), at, food.get(),
-                                Math.clamp(zone.settings().count(LivingContent.DINING_SERVINGS.key()), 1, 4), tops, seats, List.copyOf(approaches),
-                                zone.settings().items(LivingContent.DINING_DRINK.key())));
+                                Math.clamp(zone.settings().count(LivingContent.DINING_SERVINGS.key()), 1, 4), tops, seats, List.copyOf(approaches)));
                         }
                     }
                 }
@@ -163,9 +161,8 @@ final class Dining {
             Optional<Container> display = DiningTables.inventory(view.level(), table.at);
             int count = display.map(pack -> pack.getContainerSize()).orElse(1);
             for (int slot = 0; slot < count; slot++) {
-                boolean drink = drinkSlot(table, slot);
-                if (!drink && slot >= foodSlots(table)) { continue; }
-                List<ItemSpec> accepted = drink ? acceptedDrinks(table) : accepted(table);
+                if (slot >= foodSlots(table)) { continue; }
+                List<ItemSpec> accepted = accepted(table);
                 if (accepted.isEmpty()) { continue; }
                 if (display.isPresent() ? !display.get().getItem(slot).isEmpty()
                         : !view.level().getBlockState(table.at.above()).isAir()) { continue; }
@@ -194,7 +191,13 @@ final class Dining {
         List<Choice> available = choices(who, view);
         if (available.isEmpty()) { return Optional.empty(); }
         return Optional.of(new Urge(LivingPresence.EAT, weight, preempts, () -> {
-            for (Choice choice : choices(who, view)) {
+            List<Choice> current = choices(who, view);
+            // With drinks on the area's menu, the diner first collects a bottle from one of its cabinets.
+            if (!current.isEmpty()) {
+                Optional<Node> fetch = supplies.fetch(who, current.getFirst().table.level, current.getFirst().table.zone);
+                if (fetch.isPresent()) { return fetch.get(); }
+            }
+            for (Choice choice : current) {
                 UUID token = UUID.randomUUID();
                 WorldPos seat = WorldPos.of(view.level(), choice.seat.chair);
                 Portion portion = new Portion(WorldPos.of(view.level(), choice.table.at), choice.slot);
@@ -237,7 +240,7 @@ final class Dining {
         if (display.isPresent()) {
             if (slot >= display.get().getContainerSize()) { return Optional.empty(); }
             ItemStack stack = display.get().getItem(slot);
-            FoodProperties food = stack.isEmpty() || drinkSlot(table, slot) ? null : stack.getFoodProperties(who.body());
+            FoodProperties food = stack.isEmpty() ? null : stack.getFoodProperties(who.body());
             return food == null || !Goods.matches(stack, table.food) ? Optional.empty()
                 : Optional.of(new DiningFoods.Serving(stack.copyWithCount(1), food));
         }
@@ -251,7 +254,6 @@ final class Dining {
                 && zone.delegation().equals(LivingContent.DINING) && includes(zone, table.at)
                 && Math.clamp(zone.settings().count(LivingContent.DINING_SERVINGS.key()), 1, 4) == table.target
                 && zone.settings().items(LivingContent.DINING_FOOD.key()).filter(table.food::equals).isPresent()
-                && zone.settings().items(LivingContent.DINING_DRINK.key()).equals(table.drinks)
                 && sameTops(table, zone));
     }
 
@@ -293,45 +295,8 @@ final class Dining {
             .map(stack -> ItemSpec.of(BuiltInRegistries.ITEM.getKey(stack.getItem()))).toList();
     }
 
-    private static boolean drinkSlot(Table table, int slot) {
-        return table.drinks.isPresent() && DiningTables.inventory(table.level, table.at)
-            .filter(display -> display.getContainerSize() > 1 && slot == display.getContainerSize() - 1).isPresent();
-    }
-
     private static int foodSlots(Table table) {
-        return DiningTables.inventory(table.level, table.at)
-            .map(display -> Math.min(table.target, display.getContainerSize() - (table.drinks.isPresent() && display.getContainerSize() > 1 ? 1 : 0)))
-            .orElse(1);
-    }
-
-    private static List<ItemSpec> acceptedDrinks(Table table) {
-        return table.drinks.stream().flatMap(menu -> Goods.members(menu).stream())
-            .map(item -> item.getDefaultInstance()).filter(DiningDrinks::accepts)
-            .map(stack -> ItemSpec.of(BuiltInRegistries.ITEM.getKey(stack.getItem()))).toList();
-    }
-
-    private Optional<DrinkChoice> reserveDrink(Choice choice, UUID token) {
-        for (Table table : tables) {
-            if (table.level != choice.table.level || !table.zone.equals(choice.table.zone)
-                    || !table.tops.equals(choice.table.tops) || !valid(table) || table.drinks.isEmpty()) { continue; }
-            var display = DiningTables.inventory(table.level, table.at).orElse(null);
-            if (display == null) { continue; }
-            int slot = display.getContainerSize() - 1;
-            if (!drinkSlot(table, slot)) { continue; }
-            ItemStack stack = display.getItem(slot);
-            if (stack.isEmpty() || !Goods.matches(stack, table.drinks.get()) || !DiningDrinks.accepts(stack)) { continue; }
-            Portion portion = new Portion(WorldPos.of(table.level, table.at), slot);
-            if (portions.putIfAbsent(portion, token) == null) { return Optional.of(new DrinkChoice(table, slot, stack.copyWithCount(1))); }
-        }
-        return Optional.empty();
-    }
-
-    private boolean drinkPresent(DrinkChoice drink) {
-        if (!valid(drink.table)) { return false; }
-        var display = DiningTables.inventory(drink.table.level, drink.table.at).orElse(null);
-        if (display == null) { return false; }
-        var actual = display.getItem(drink.slot);
-        return !actual.isEmpty() && ItemStack.isSameItemSameComponents(actual, drink.serving);
+        return DiningTables.inventory(table.level, table.at).map(display -> Math.min(table.target, display.getContainerSize())).orElse(1);
     }
 
     private static boolean unsafe(Mob body) {
@@ -389,14 +354,14 @@ final class Dining {
                 return new Outcome.Done(List.of(), List.of(), Optional.empty(), back);
             }
             Optional<Container> display = DiningTables.inventory(level, table.at);
-            if (display.isPresent() ? slot >= display.get().getContainerSize() || !drinkSlot(table, slot) && slot >= foodSlots(table)
+            if (display.isPresent() ? slot >= display.get().getContainerSize() || slot >= foodSlots(table)
                     || !display.get().getItem(slot).isEmpty() : !level.getBlockState(table.at.above()).isAir()) {
                 return new Outcome.Done(List.of(), List.of(), Optional.empty(), back);
             }
             for (ItemStack stack : back) {
                 if (stack.isEmpty() || !Goods.matches(stack, food)) { continue; }
                 if (display.isPresent()) {
-                    if (!(drinkSlot(table, slot) ? DiningDrinks.accepts(stack) : edible(stack, who.body())) || !display.get().canPlaceItem(slot, stack)) { continue; }
+                    if (!edible(stack, who.body()) || !display.get().canPlaceItem(slot, stack)) { continue; }
                     display.get().setItem(slot, stack.copyWithCount(1));
                     display.get().setChanged();
                     stack.shrink(1);
@@ -416,14 +381,12 @@ final class Dining {
         final UUID token;
         final Worker who;
         final Choice choice;
-        final Optional<DrinkChoice> drink;
         final long expires;
         final NodeSpec spec;
         volatile boolean finished;
         boolean engaged;
         Meal(UUID token, Worker who, Choice choice) {
             this.token = token; this.who = who; this.choice = choice;
-            this.drink = reserveDrink(choice, token);
             int duration = FolkwaysVanillaConfig.diningMealTicks();
             expires = choice.table.level.getGameTime() + 500 + duration;
             spec = NodeSpec.of(token, LivingContent.ID, WorkSite.at(choice.table.level, choice.table.at),
@@ -436,10 +399,11 @@ final class Dining {
                         if (!body.isPassenger()) { DiningTables.sit(choice.table.level, choice.seat.chair, who.body()); }
                         if (body instanceof ResidentEntity person) { person.leisureMotion("dining"); }
                         if (tick >= Math.max(0, duration - 40) && !who.body().getPersistentData().getBoolean("folkways:dining_drinking")) {
-                            drink.filter(Dining.this::drinkPresent).ifPresent(serving -> {
+                            supplies.held(who, choice.table.level, choice.table.zone).ifPresent(slot -> {
                                 who.body().getPersistentData().putBoolean("folkways:dining_drinking", true);
+                                ItemStack serving = who.pack().getItem(slot).copyWithCount(1);
                                 io.github.izakyl.folkways.core.api.resident.body.Bodies.of(who.body())
-                                    .ifPresent(actor -> actor.presentHeldItem(serving.serving.copy()));
+                                    .ifPresent(actor -> actor.presentHeldItem(serving));
                             });
                         }
                         who.body().getLookControl().setLookAt(choice.table.at.getX() + 0.5, choice.table.at.getY() + 1, choice.table.at.getZ() + 0.5);
@@ -482,13 +446,12 @@ final class Dining {
                 if (outcome instanceof Outcome.Done done) {
                     living.dined(eater.resident().id(), level.getGameTime());
                     List<ItemStack> made = new ArrayList<>(done.made());
-                    drink.ifPresent(serving -> {
-                        if (!valid(serving.table)) { return; }
-                        var inventory = DiningTables.inventory(level, serving.table.at).orElse(null);
-                        if (inventory == null) { return; }
-                        ItemStack actual = inventory.getItem(serving.slot);
-                        if (ItemStack.isSameItemSameComponents(actual, serving.serving) && !actual.isEmpty()) {
-                            made.addAll(DiningDrinks.consume(level, eater.body(), inventory, serving.slot));
+                    supplies.held(eater, level, choice.table.zone).ifPresent(slot -> {
+                        int before = eater.body().getPersistentData().getInt("folkways:table_drinks");
+                        made.addAll(DiningDrinks.consume(level, eater.body(), eater.pack(), slot));
+                        if (eater.body().getPersistentData().getInt("folkways:table_drinks") > before) {
+                            DiningSupplies.drank(eater.body());
+                            living.drank(eater.resident().id(), level.getGameTime());
                         }
                     });
                     outcome = new Outcome.Done(done.noises(), made, done.xp(), done.unused());
@@ -503,7 +466,6 @@ final class Dining {
             finished = true;
             seats.remove(WorldPos.of(choice.table.level, choice.seat.chair), token);
             portions.remove(new Portion(WorldPos.of(choice.table.level, choice.table.at), choice.slot), token);
-            drink.ifPresent(serving -> portions.remove(new Portion(WorldPos.of(serving.table.level, serving.table.at), serving.slot), token));
             meals.remove(token, this);
             Runnable stand = () -> {
                 DiningTables.stand(who.body());

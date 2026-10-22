@@ -108,7 +108,7 @@ public final class SteamerStation implements KitchenStation {
         return any;
     }
     public Optional<Stances> stances(ServerLevel level, WorldPos at) {
-        return KitchenStation.around(level, parts(level, at));
+        return KitchenStation.super.stances(level, at);
     }
     private record Approach(WorldPos part, Stances stances) { }
     public Optional<Workshop> freeze(UUID key, UUID colony, ServerLevel level, WorldPos at,

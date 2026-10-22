@@ -388,32 +388,39 @@ public final class DiningGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void tableDrinksUseTheirOwnSlotAndSurviveCanceledMeals(GameTestHelper helper) {
+    public static void dinersCollectACabinetBottleAndDrinkItWithTheirMeal(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             f.zone(Items.BREAD);
-            f.drinks(Items.POTION);
-            var goals = f.goals();
-            helper.assertValueEqual(goals.size(), 2, "the two-slot test table has one food slot and one drink slot");
-            for (var goal : goals) {
-                boolean drink = goal.spec().needs().getFirst().spec().item().orElseThrow().equals(ResourceLocation.withDefaultNamespace("potion"));
-                f.worker.supplied = List.of(new ItemStack(drink ? Items.POTION : Items.BREAD));
-                helper.assertTrue(goal.commit(f.level, f.worker) instanceof Outcome.Done, "both food and non-food drink are really delivered");
-            }
-            helper.assertTrue(f.display.getItem(0).is(Items.BREAD), "food remains in the first slot");
-            helper.assertTrue(f.display.getItem(1).is(Items.POTION), "non-nutritious drink occupies its reserved last slot");
+            BlockPos cabinet = f.cabinet(Items.POTION);
+            helper.assertTrue(f.goals().stream().noneMatch(goal -> goal.spec().needs().getFirst().spec().item()
+                .filter(ResourceLocation.withDefaultNamespace("potion")::equals).isPresent()), "tables request food only; the stocked cabinet needs nothing");
+            f.display.setItem(0, new ItemStack(Items.BREAD));
+            Node fetch = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
+            helper.assertValueEqual(fetch.spec().doing(), LivingContent.FETCHING_DRINK,
+                "a diner without a drink first walks to the area's cabinet");
+            f.person.moveTo(cabinet.getX() + 0.5, cabinet.getY(), cabinet.getZ() - 0.5);
+            helper.assertTrue(fetch.commit(f.level, f.worker) instanceof Outcome.Done, "the real bottle is collected");
+            fetch.ended(f.level, Ending.DONE);
+            helper.assertTrue(f.stock(cabinet).getItem(0).isEmpty(), "the bottle physically leaves the cabinet");
+            helper.assertTrue(f.person.pack().getItem(0).is(Items.POTION), "the bottle is carried in the diner's pack");
+            helper.assertTrue(f.goals().stream().anyMatch(goal -> goal.spec().focus().filter(cabinet::equals).isPresent()), "the emptied cabinet slot asks for a refill");
+            f.person.moveTo(f.at.getX() + 2.5, f.at.getY(), f.at.getZ() + 1.5);
             Node canceled = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
+            helper.assertValueEqual(canceled.spec().doing(), LivingContent.DINING_EATING, "a diner holding a bottle goes straight to the table");
             canceled.ended(f.level, Ending.DROPPED);
-            helper.assertTrue(f.display.getItem(1).is(Items.POTION), "canceling a meal does not consume its reserved drink");
+            helper.assertTrue(f.person.pack().getItem(0).is(Items.POTION), "canceling a meal keeps the collected bottle");
             helper.assertValueEqual(f.person.getPersistentData().getInt("folkways:table_drinks"), 0, "canceled drinking has no completion history");
             Node meal = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
             Outcome result = meal.commit(f.level, f.worker);
             helper.assertTrue(result instanceof Outcome.Done, "the real table meal completes");
-            helper.assertTrue(f.display.isEmpty(), "exactly one food and one drink leave the table");
+            helper.assertTrue(f.display.isEmpty() && f.person.pack().getItem(0).isEmpty(), "exactly one food and the carried drink are consumed");
             var done = (Outcome.Done) result;
             helper.assertValueEqual(done.made().stream().filter(stack -> stack.is(Items.GLASS_BOTTLE)).mapToInt(ItemStack::getCount).sum(), 1,
                 "the native dropped empty bottle is returned exactly once through the work outcome");
             helper.assertValueEqual(f.person.getPersistentData().getInt("folkways:table_drinks"), 1, "only actual consumption advances the drink history");
             helper.assertValueEqual(f.living.foodLevelOf(f.person.getUUID()).orElseThrow(), 9, "only bread adds nutrition; a drink is not a meal");
+            helper.assertValueEqual(f.living.mood(f.person.getUUID()).drank, f.level.getGameTime(), "drinking adds its own mood experience");
+            helper.assertTrue(DiningSupplies.kept(f.person).isEmpty(), "a drunk bottle is no longer kept in the pack");
         }
         helper.succeed();
     }
@@ -431,17 +438,18 @@ public final class DiningGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void replacedTableDrinkIsLeftForThePlayer(GameTestHelper helper) {
+    public static void carriedCargoBottlesAreNeverDrunkWithAMeal(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             f.zone(Items.BREAD);
             f.drinks(Items.POTION);
             f.display.setItem(0, new ItemStack(Items.BREAD));
-            f.display.setItem(1, new ItemStack(Items.POTION));
+            f.person.pack().setItem(0, new ItemStack(Items.POTION));
             Node meal = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
-            f.display.setItem(1, new ItemStack(Items.SPLASH_POTION));
+            helper.assertValueEqual(meal.spec().doing(), LivingContent.DINING_EATING,
+                "an area without a cabinet serves meals without a drink");
             var result = (Outcome.Done) meal.commit(f.level, f.worker);
-            helper.assertTrue(f.display.getItem(1).is(Items.SPLASH_POTION), "replacing the reserved bottle prevents drinking the player's new bottle");
-            helper.assertTrue(result.made().isEmpty(), "the replaced bottle creates no empty container");
+            helper.assertTrue(f.person.pack().getItem(0).is(Items.POTION), "a bottle not collected for this meal stays untouched");
+            helper.assertTrue(result.made().isEmpty(), "no empty container is produced");
             helper.assertValueEqual(f.person.getPersistentData().getInt("folkways:table_drinks"), 0, "a skipped drink has no completed history");
         }
         helper.succeed();
@@ -545,6 +553,23 @@ public final class DiningGameTests {
             zone = front.addZone(level, LivingContent.DINING, java.util.Set.of(at, chair), settings).orElseThrow().id();
             dining.refresh(level.getServer());
         }
+
+        // A barrel west of the table stands in for a native cabinet: one drink, other slots blocked.
+        BlockPos cabinet(Item drink) {
+            BlockPos cabinet = at.west();
+            level.setBlockAndUpdate(cabinet, Blocks.BARREL.defaultBlockState());
+            Container stock = stock(cabinet);
+            for (int slot = 1; slot < stock.getContainerSize(); slot++) { stock.setItem(slot, new ItemStack(Items.STONE, 64)); }
+            stock.setItem(0, new ItemStack(drink)); stock.setChanged();
+            var settings = front.zone(zone).orElseThrow().settings().with(LivingContent.DINING_DRINK.key(),
+                new ColonySettings.Value.Items(List.of(ItemFilter.item(BuiltInRegistries.ITEM.getKey(drink)))));
+            front.erase(zone);
+            zone = front.addZone(level, LivingContent.DINING, java.util.Set.of(at, chair, cabinet), settings).orElseThrow().id();
+            dining.refresh(level.getServer());
+            return cabinet;
+        }
+
+        Container stock(BlockPos cabinet) { return (Container) level.getBlockEntity(cabinet); }
 
         List<Node> goals() { return dining.goals(colony.view(level)).stream().flatMap(grown -> grown.nodes().stream()).toList(); }
         public void close() { dining.clear(); person.discard(); DISPLAYS.remove(WorldPos.of(level, at)); colony.raze(); }

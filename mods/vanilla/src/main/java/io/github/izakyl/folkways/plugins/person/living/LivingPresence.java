@@ -308,6 +308,13 @@ final class LivingPresence implements Facing {
         write();
     }
 
+    void drank(UUID resident, long now) {
+        mood(resident).drank = now;
+        sweep.nudge();
+        unwritten = true;
+        write();
+    }
+
     static final TagKey<Item> FINE_MEALS = TagKey.create(
         Registries.ITEM, ResourceLocation.fromNamespaceAndPath("folkways", "fine_meals"));
 
@@ -451,7 +458,7 @@ final class LivingPresence implements Facing {
         List<Component> lines = new ArrayList<>();
         lines.add(Component.translatable("folkways.mood.summary", (int) Math.round(mood.value),
             (int) Math.round(Mood.speed(mood.value) * 100), (int) Math.round(mood.leisure)));
-        for (String reason : List.of("food", "dining", "housing", "rest", "leisure", "social", "safety", "environment")) {
+        for (String reason : List.of("food", "dining", "drink", "housing", "rest", "leisure", "social", "safety", "environment")) {
             int value = mood.reasons.getOrDefault(reason, 0);
             lines.add(Component.translatable("folkways.mood.reason." + reason, (value > 0 ? "+" : "") + value));
         }

@@ -27,6 +27,7 @@ import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.cookery.KitchenStation;
 import io.github.izakyl.folkways.cookery.KitchenDelivery;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.List;
@@ -117,6 +118,7 @@ final class SteamerWork implements Node, Workload.Within {
         changed.run();
     }
     private boolean reachable(ServerLevel level, Worker who, BlockPos target) {
+        if (!KitchenStation.canOperate(level, at, who.body())) { return false; }
         var local = stances instanceof Stances.Cells ? Reach.stanceHolding(who.body(), stances)
             : WorldSpaces.relative(level, part.realm(), who.body().position()).map(net.minecraft.core.BlockPos::containing);
         return local

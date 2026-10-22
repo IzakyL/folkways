@@ -19,6 +19,7 @@ final class Mood {
     long housed = -2L * DAY;
     long fineMeal = -DAY;
     long dined = -DAY;
+    long drank = -DAY;
     long nextBreak;
     long activityDay = -1;
     int housing;
@@ -53,6 +54,7 @@ final class Mood {
         Map<String, Integer> parts = new LinkedHashMap<>();
         parts.put("food", food <= 4 ? -15 : now - fineMeal < DAY ? 8 : meals.size() >= 3 ? 4 : 0);
         parts.put("dining", now - dined < DAY ? 6 : 0);
+        parts.put("drink", now - drank < DAY ? 4 : 0);
         parts.put("housing", now - housed < DAY * 2L ? housing : home);
         parts.put("rest", alertness <= 0 ? -10 : alertness < 400 ? -5 : now - rested < DAY ? 4 : 0);
         parts.put("leisure", leisureMood(leisure));
@@ -90,7 +92,7 @@ final class Mood {
         CompoundTag tag = new CompoundTag();
         tag.putLong("attacked", attacked); tag.putLong("chatted", chatted); tag.putLong("rested", rested);
         tag.putLong("housed", housed); tag.putLong("fineMeal", fineMeal); tag.putLong("nextBreak", nextBreak);
-        tag.putLong("dined", dined);
+        tag.putLong("dined", dined); tag.putLong("drank", drank);
         tag.putLong("activityDay", activityDay); return tag;
     }
 
@@ -102,7 +104,7 @@ final class Mood {
             Reader tag = times;
             attacked = tag.longValue("attacked").orElse(-24000L); chatted = tag.longValue("chatted").orElse(-24000L); rested = tag.longValue("rested").orElse(-24000L);
             housed = tag.longValue("housed").orElse(-48000L); fineMeal = tag.longValue("fineMeal").orElse(-24000L); nextBreak = tag.longValue("nextBreak").orElse(-24000L);
-            dined = tag.longValue("dined").orElse(-24000L);
+            dined = tag.longValue("dined").orElse(-24000L); drank = tag.longValue("drank").orElse(-24000L);
             activityDay = tag.longValue("activityDay").orElse(-24000L);
         });
         for (Reader meal : reader.children("meals")) {

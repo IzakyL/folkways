@@ -76,7 +76,7 @@ public final class DiningSchedulingGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 1400)
-    public static void schedulerTakesTableDrinkFromCabinetThenReplenishesTheCabinet(GameTestHelper helper) {
+    public static void dinerCollectsCabinetBottleDrinksItWithTheMealThenTheCabinetIsRestocked(GameTestHelper helper) {
         var rig = new Rig(helper, Blocks.GOLD_BLOCK.defaultBlockState(), Blocks.OAK_STAIRS.defaultBlockState(), new ItemStack(Items.BREAD));
         var display = new net.minecraft.world.SimpleContainer(2);
         DiningGameTests.DISPLAYS.put(WorldPos.of(rig.level, rig.table), display);
@@ -92,16 +92,25 @@ public final class DiningSchedulingGameTests {
         front.erase(old.id());
         front.addZone(rig.level, LivingContent.DINING, Set.of(rig.table, rig.chair, cabinet), settings).orElseThrow();
         helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(display.getItem(1).is(Items.POTION), "the table can only receive its first real bottle from the marked cabinet"))
+            .thenWaitUntil(() -> helper.assertTrue(display.getItem(0).is(Items.BREAD), "the table is set with food only"))
             .thenExecute(() -> {
-                helper.assertTrue(bottles.getItem(0).isEmpty(), "real planned table service actually removes the cabinet bottle");
-                helper.assertTrue(rig.setting, "the resident executes real table-service work after walking to stock");
+                helper.assertTrue(display.getItem(1).isEmpty(), "no table slot is reserved for a drink");
+                helper.assertTrue(bottles.getItem(0).is(Items.POTION), "table service leaves the cabinet bottle for diners");
+                rig.hungry();
+            })
+            .thenWaitUntil(() -> helper.assertTrue(rig.living.mood(rig.person.getUUID()).dined >= rig.hungryAt,
+                "the hungry resident completes a real table meal"))
+            .thenExecute(() -> {
+                helper.assertTrue(rig.fetching, "the diner walked to the cabinet and collected the bottle first");
+                helper.assertValueEqual(rig.person.getPersistentData().getInt("folkways:table_drinks"), 1, "the collected bottle is drunk with the meal");
+                helper.assertTrue(rig.living.mood(rig.person.getUUID()).drank >= rig.hungryAt, "drinking records its own mood experience");
+                helper.assertTrue(java.util.stream.IntStream.range(0, rig.person.pack().getContainerSize())
+                    .noneMatch(slot -> rig.person.pack().getItem(slot).is(Items.POTION)), "the drunk bottle leaves the diner's pack");
                 rig.source.setItem(1, new ItemStack(Items.POTION)); rig.source.setChanged();
             })
-            .thenWaitUntil(() -> helper.assertTrue(bottles.getItem(0).is(Items.POTION), "the missing cabinet bottle is automatically replenished from new real stock"))
+            .thenWaitUntil(() -> helper.assertTrue(bottles.getItem(0).is(Items.POTION), "the emptied cabinet slot is restocked from ordinary stock"))
             .thenExecute(() -> {
                 helper.assertTrue(rig.source.getItem(1).isEmpty(), "cabinet replenishment consumes the new stock once");
-                helper.assertTrue(display.getItem(1).is(Items.POTION), "refilling the cabinet preserves the bottle already delivered to the table");
                 DiningGameTests.DISPLAYS.remove(WorldPos.of(rig.level, rig.table));
                 rig.close();
             }).thenSucceed();
@@ -121,6 +130,7 @@ public final class DiningSchedulingGameTests {
         public final int startingStock;
         private final net.minecraft.world.item.Item foodItem;
         public boolean setting;
+        public boolean fetching;
         public boolean dining;
         public int mountedTicks;
         public long hungryAt = Long.MAX_VALUE;
@@ -200,6 +210,7 @@ public final class DiningSchedulingGameTests {
                 try { run.invoke(labor, level, inline); }
                 catch (ReflectiveOperationException broken) { throw new IllegalStateException("dining pipeline failed: " + status(), broken); }
                 setting |= person.doing().filter(doing -> doing.what().equals(LivingContent.SETTING_TABLE)).isPresent();
+                fetching |= person.doing().filter(doing -> doing.what().equals(LivingContent.FETCHING_DRINK)).isPresent();
                 dining |= person.leisureMotion().equals("dining");
                 if (person.isPassenger()) mountedTicks++;
             });

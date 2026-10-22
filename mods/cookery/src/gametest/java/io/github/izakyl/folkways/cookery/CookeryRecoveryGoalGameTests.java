@@ -133,7 +133,7 @@ public final class CookeryRecoveryGoalGameTests {
             level = helper.getLevel(); cell = helper.absolutePos(new BlockPos(2, 25, 2)); at = WorldPos.of(level, cell);
             for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) set(cell.offset(x, -1, z), Blocks.STONE.defaultBlockState());
             before.put(cell.above(), level.getBlockState(cell.above()));
-            set(cell, ModBlocks.SHAWARMA_SPIT.get().defaultBlockState());
+            set(cell, ModBlocks.SHAWARMA_SPIT.get().defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.SOUTH));
             level.getBlockState(cell).getBlock().setPlacedBy(level, cell, level.getBlockState(cell), null, new ItemStack(ModItems.SHAWARMA_SPIT.get()));
             power(true);
             actor = PersonBody.RESIDENT.get().create(level); actor.setPos(Vec3.atBottomCenterOf(cell.south())); actor.setNoAi(true); level.addFreshEntity(actor);

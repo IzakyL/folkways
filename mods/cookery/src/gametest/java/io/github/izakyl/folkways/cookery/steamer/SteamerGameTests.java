@@ -273,6 +273,10 @@ public final class SteamerGameTests {
             helper.assertTrue(!Reach.withinReach(edge, rig.cell.above(3)), "the actual top lid remains beyond native reach from the bottom-only footing");
             helper.assertTrue(new SteamerStation().freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at, offered,
                 rig.bookings, () -> {}).isEmpty(), "a native batch cannot be planned without a stance reaching both food slot and top lid");
+            var provider = new SteamerStation();
+            var handle = provider.stances(rig.level, rig.at).orElseThrow();
+            helper.assertTrue(provider.freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at, handle,
+                rig.bookings, () -> {}).isEmpty(), "a four-layer column cannot borrow a remote stance when its adjacent handle cannot see the top lid");
             helper.assertTrue(rig.steamer().getItems().stream().allMatch(ItemStack::isEmpty)
                 && rig.count(ModItems.RAW_DOUGH.get()) == 2, "all original raw dough remains untouched when the lid cannot be reached");
         }
@@ -280,21 +284,22 @@ public final class SteamerGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 1500)
-    public static void fourLayerSteamerPublishesAndRecoversOnlyStancesThatReachFoodAndTopLid(GameTestHelper helper) {
+    public static void threeLayerSteamerPublishesAndRecoversOnlyStancesThatReachFoodAndTopLid(GameTestHelper helper) {
         Rig rig = new Rig(helper, false, false, 2); BlockPos edge = fourLayerBoundary(rig);
-        BlockPos near = rig.cell.south(2); var provider = new SteamerStation();
+        rig.level.setBlockAndUpdate(rig.cell.above(3), Blocks.AIR.defaultBlockState());
+        BlockPos near = rig.cell.south(); var provider = new SteamerStation();
         var published = provider.stances(rig.level, rig.at).orElseThrow();
-        helper.assertTrue(published.cells().contains(WorldPos.of(rig.level, edge))
-            && published.cells().contains(WorldPos.of(rig.level, near)), "the provider's real column approaches include the bottom edge and the common food-and-lid footing");
+        helper.assertTrue(!published.cells().contains(WorldPos.of(rig.level, edge))
+            && published.cells().contains(WorldPos.of(rig.level, near)), "the provider excludes the remote bottom edge and publishes the adjacent handle footing");
         rig.stances = Stances.at(WorldPos.of(rig.level, edge), WorldPos.of(rig.level, near));
         rig.actor.setPos(Vec3.atBottomCenterOf(near));
-        helper.assertTrue(Reach.withinReach(near, rig.cell.above(3))
-            && Reach.inSight(rig.level, near, rig.cell.above(3)), "the common candidate sees and reaches the actual four-layer top lid");
+        helper.assertTrue(Reach.withinReach(near, rig.cell.above(2))
+            && Reach.inSight(rig.level, near, rig.cell.above(2)), "the common candidate sees and reaches the actual three-layer top lid");
         SteamerWork original = rig.plan();
         helper.assertTrue(original.spec().stances().cells().equals(java.util.Set.of(WorldPos.of(rig.level, near))),
             "the actual native batch retains only the stance that performs every required physical operation");
         helper.assertTrue(rig.step(original) instanceof Outcome.Done, "the planned stance actually loads native lower food and closes the real top lid");
-        helper.assertTrue(rig.level.getBlockState(rig.cell.above(3)).getValue(SteamerBlock.HAS_LID), "the real top lid is closed without moving the resident or changing the native clock");
+        helper.assertTrue(rig.level.getBlockState(rig.cell.above(2)).getValue(SteamerBlock.HAS_LID), "the real top lid is closed without moving the resident or changing the native clock");
         rig.hold.release(Ending.DROPPED); rig.hold = null;
         SteamerWork resumed = (SteamerWork) provider.recovery(rig.colony, rig.level, rig.at, rig.stances,
             rig.bookings, () -> {}).getFirst().nodes().getFirst();
@@ -306,14 +311,14 @@ public final class SteamerGameTests {
                 helper.assertTrue(ready.step(resumed) instanceof Outcome.Done, "the safe published approach also performs actual native takeFood and lid restoration");
                 helper.assertValueEqual(ready.count(ModItems.MANTOU.get()), 2L, "both original real buns are collected once");
                 helper.assertValueEqual(ready.count(ModItems.RAW_DOUGH.get()), 0L, "the accepted native dough is never recharged or refunded");
-                helper.assertTrue(!ready.level.getBlockState(ready.cell.above(3)).getValue(SteamerBlock.HAS_LID), "the real top lid returns to its original open state");
+                helper.assertTrue(!ready.level.getBlockState(ready.cell.above(2)).getValue(SteamerBlock.HAS_LID), "the real top lid returns to its original open state");
             } finally { resumed.ended(ready.level, Ending.DONE); }
         });
     }
 
     private static BlockPos fourLayerBoundary(Rig rig) {
         for (int dy = 1; dy <= 3; dy++) {
-            rig.level.setBlockAndUpdate(rig.cell.above(dy), ModBlocks.STEAMER.get().defaultBlockState().setValue(SteamerBlock.HALF, false));
+            rig.level.setBlockAndUpdate(rig.cell.above(dy), ModBlocks.STEAMER.get().defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.EAST).setValue(SteamerBlock.HALF, false));
         }
         for (int x = 0; x <= 4; x++) { for (int z = 0; z <= 2; z++) {
             if (x == 0 && z == 0) { continue; }
@@ -385,8 +390,8 @@ public final class SteamerGameTests {
                 level.setBlockAndUpdate(cell.offset(x, -1, z), Blocks.STONE.defaultBlockState());
             } }
             level.setBlockAndUpdate(cell.below(), Blocks.MAGMA_BLOCK.defaultBlockState());
-            level.setBlockAndUpdate(cell, ModBlocks.STEAMER.get().defaultBlockState().setValue(SteamerBlock.HALF, half));
-            if (stack) { level.setBlockAndUpdate(cell.above(), ModBlocks.STEAMER.get().defaultBlockState()); }
+            level.setBlockAndUpdate(cell, ModBlocks.STEAMER.get().defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.EAST).setValue(SteamerBlock.HALF, half));
+            if (stack) { level.setBlockAndUpdate(cell.above(), ModBlocks.STEAMER.get().defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.EAST)); }
             at = WorldPos.of(level, cell); part = stack ? at.above() : at;
             actor = PersonBody.RESIDENT.get().create(level);
             actor.setPos(Vec3.atBottomCenterOf(cell.south()));

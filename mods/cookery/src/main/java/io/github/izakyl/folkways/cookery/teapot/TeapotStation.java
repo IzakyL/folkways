@@ -62,7 +62,7 @@ public final class TeapotStation implements KitchenStation {
     }
     @Override
     public Optional<Stances> stances(ServerLevel level, WorldPos at) {
-        return KitchenStation.super.stances(level, at).flatMap(offered -> servingStances(level, at, offered));
+        return KitchenStation.operating(level, at, net.minecraft.core.Direction.SOUTH).flatMap(offered -> servingStances(level, at, offered));
     }
     static Optional<Stances> servingStances(ServerLevel level, WorldPos at, Stances offered) {
         var working = new LinkedHashSet<WorldPos>();

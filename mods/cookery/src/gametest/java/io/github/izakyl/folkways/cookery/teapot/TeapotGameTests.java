@@ -196,8 +196,9 @@ public final class TeapotGameTests {
             helper.assertValueEqual(ready.count(ModItems.EMPTY_CUP.get()), 12L, "the task's own cups return after refusal");
             helper.assertValueEqual(ready.pot().getResult().getCount(), 12, "none of the native tea is taken");
             ready.level.setBlockAndUpdate(ready.cell.west(), Blocks.AIR.defaultBlockState());
-            helper.assertTrue(ready.step(work) instanceof Outcome.Done, "freeing one actual cup position resumes the same native finished batch");
-            for (Direction side : List.of(Direction.NORTH, Direction.EAST, Direction.SOUTH))
+            ready.level.setBlockAndUpdate(ready.cell.south(), Blocks.AIR.defaultBlockState());
+            helper.assertTrue(ready.step(work) instanceof Outcome.Done, "freeing the cup position and adjacent operator cell resumes the same native finished batch");
+            for (Direction side : List.of(Direction.NORTH, Direction.EAST))
                 helper.assertTrue(ready.level.getBlockState(ready.cell.relative(side)).is(ModBlocks.EMPTY_CUP.get()), "remaining player cups are never overwritten");
             ready.assertServed();
         });
@@ -436,9 +437,9 @@ public final class TeapotGameTests {
         TeapotWork work = rig.plan(offered);
         helper.assertTrue(!work.spec().stances().cells().contains(WorldPos.of(rig.level, rig.cell.offset(4, 0, 2))),
             "a real pot-reaching edge that cannot reach the only cup position is not published to the planner");
-        helper.assertTrue(work.spec().stances().cells().contains(WorldPos.of(rig.level, rig.cell.west(2))),
+        helper.assertTrue(work.spec().stances().cells().contains(WorldPos.of(rig.level, rig.cell.south().below())),
             "the same real catalogue retains a stance that reaches both physical operations");
-        rig.actor.setPos(Vec3.atBottomCenterOf(rig.cell.west(2)));
+        rig.actor.setPos(Vec3.atBottomCenterOf(rig.cell.south().below()));
         helper.assertTrue(rig.step(work) instanceof Outcome.Done && rig.step(work) instanceof Outcome.Done,
             "the planned safe stance loads the actual bucket and ingredient");
         afterBrewing(rig, ready -> {
@@ -463,20 +464,24 @@ public final class TeapotGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 900)
-    public static void changingThePlayersCupLayoutReplansTheFinishedTeaWithoutReinvestingIngredients(GameTestHelper helper) {
+    public static void changingThePlayersCupLayoutAndHandleCounterReplansFinishedTeaWithoutReinvestingIngredients(GameTestHelper helper) {
         Rig rig = new Rig(helper, "barley_tea");
         edgeGeometry(rig);
         rig.level.setBlockAndUpdate(rig.cell.east().below(), Blocks.STONE.defaultBlockState());
         rig.level.setBlockAndUpdate(rig.cell.west(), ModBlocks.EMPTY_CUP.get().defaultBlockState());
-        TeapotWork work = rig.plan(Stances.at(rig.level, rig.cell.offset(4, 0, 2)));
+        rig.actor.setPos(Vec3.atBottomCenterOf(rig.cell.south().below()));
+        TeapotWork work = rig.plan(Stances.at(rig.level, rig.cell.south().below()));
         helper.assertTrue(rig.step(work) instanceof Outcome.Done && rig.step(work) instanceof Outcome.Done,
             "the first actual cup layout permits the original pot-reaching stance");
         afterBrewing(rig, ready -> {
             ready.level.setBlockAndUpdate(ready.cell.east(), ModBlocks.EMPTY_CUP.get().defaultBlockState());
             ready.level.setBlockAndUpdate(ready.cell.west(), Blocks.AIR.defaultBlockState());
+            // The changed counter blocks the old lower handle footing and exposes the same adjacent column one block higher.
+            ready.level.setBlockAndUpdate(ready.cell.south().below(), Blocks.STONE.defaultBlockState());
+            ready.actor.setPos(Vec3.atBottomCenterOf(ready.cell.offset(4, 0, 2)));
             var before = ready.pot().saveWithoutMetadata(ready.level.registryAccess());
             helper.assertTrue(work.next(ready.level, ready) instanceof Workload.Within.Turn.Leave,
-                "a different available cup position releases the now unsuitable old stance for recovery");
+                "the changed cup layout and handle counter release the now unsuitable old stance for recovery");
             helper.assertTrue(work.commit(ready.level, ready) instanceof Outcome.Failed,
                 "repositioning never pretends the unserved original tea was delivered");
             work.ended(ready.level, Ending.DROPPED);
@@ -507,7 +512,7 @@ public final class TeapotGameTests {
     }
 
     private static Stances edgeGeometry(Rig rig) {
-        BlockPos bad = rig.cell.offset(4, 0, 2), safe = rig.cell.west(2), cup = rig.cell.west();
+        BlockPos bad = rig.cell.offset(4, 0, 2), safe = rig.cell.south().below(), cup = rig.cell.west();
         for (Direction side : Direction.Plane.HORIZONTAL) rig.level.setBlockAndUpdate(rig.cell.relative(side).below(), Blocks.AIR.defaultBlockState());
         for (BlockPos support : List.of(bad.below(), safe.below(), cup.below())) rig.level.setBlockAndUpdate(support, Blocks.STONE.defaultBlockState());
         rig.actor.setPos(Vec3.atBottomCenterOf(bad));
