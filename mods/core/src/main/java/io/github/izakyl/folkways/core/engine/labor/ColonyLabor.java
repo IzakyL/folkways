@@ -68,6 +68,9 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     // 有手在原地干等这么久，也值得重算一轮：它的队首多半在等别人路线里没开工的节点。
     private static final int STALLED_TICKS = 200;
 
+    // 手里还压着钉给自己的货时，非紧急的困/饿最多让它等这么久，再照常去办。
+    private static final long DEFER_URGE_TICKS = 600L;
+
     private final ColonyData colony;
     private final ResourceKey<Level> dimension;
 
@@ -332,6 +335,11 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         if (keenest.isEmpty()) {
             return;
         }
+        // 手里还压着钉给自己的活：非紧急的困/饿先等一等，把货放下再走（最多等一会儿，之后照常）。
+        if (keenest.get().weight() < Urge.NOW && carriesForBound(body, runner)
+                && runner.deferUrge(keenest.get().id(), level.getGameTime(), DEFER_URGE_TICKS)) {
+            return;
+        }
         Node doing;
         try {
             doing = keenest.get().take().get();
@@ -355,6 +363,18 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         runner.letGo(this, level, body, "urge-preempts");
         personalRequests.put(doing.id(), new Personal(body.id(), keenest.get().id()));
         runner.offer(this, level, body, keenest.get(), doing);
+    }
+
+    // 这个人手里或路线头上压着一件钉给他的活吗（货在他身上，别人替不了）。
+    private boolean carriesForBound(Body body, BodyRunner runner) {
+        Optional<UUID> load = runner.holding();
+        if (load.isEmpty()) {
+            List<UUID> queued = runner.queued();
+            load = queued.isEmpty() ? Optional.empty() : Optional.of(queued.getFirst());
+        }
+        return load.filter(graph::has)
+            .map(id -> graph.vertex(id).node().worker().filter(body.id()::equals).isPresent())
+            .orElse(false);
     }
 
     // What the weave changed, applied: work that went or was grown afresh is let go of and ends as the plan says,

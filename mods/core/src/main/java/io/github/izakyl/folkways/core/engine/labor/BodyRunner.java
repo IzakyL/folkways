@@ -109,6 +109,9 @@ final class BodyRunner {
     private int noWay;
     private boolean rescued;
     private long rescuedAt = -1L;
+    // 一条非紧急的个人事务（困/饿）被推迟时，从什么时候开始等、等的是哪一件。
+    private ResourceLocation deferredUrge;
+    private long deferredAt = -1L;
 
     BodyRunner(UUID resident) {
         this.resident = resident;
@@ -205,8 +208,20 @@ final class BodyRunner {
     }
 
     void offer(ColonyLabor labor, ServerLevel level, Body body, Urge urge, Node doing) {
+        // 真的去办这件事了：下一次推迟从头算。
+        deferredUrge = null;
+        deferredAt = -1L;
         this.own = new Own(urge.id());
         begin(labor, level, body, doing, Placement.NOWHERE);
+    }
+
+    // 手里还压着钉给自己的活时，非紧急的个人事务先等一等；最多等 most tick，之后照常去办。
+    boolean deferUrge(ResourceLocation urge, long now, long most) {
+        if (deferredAt < 0 || !urge.equals(deferredUrge)) {
+            deferredUrge = urge;
+            deferredAt = now;
+        }
+        return now - deferredAt < most;
     }
 
     void tick(ColonyLabor labor, ServerLevel level, Body body) {
@@ -468,7 +483,6 @@ final class BodyRunner {
             Placement plan) {
         busy = 0;
         worked = true;
-        noWay = 0;
         rescued = false;
         body.clearBalk();
         current = node;
@@ -579,6 +593,8 @@ final class BodyRunner {
     }
 
     private void startWork(ServerLevel level, Body body) {
+        // 走到地方了：连续走不到的计数从头算。
+        noWay = 0;
         if (own == null && current.spec().workload() instanceof Workload.Within) {
             enter(body);
             return;
