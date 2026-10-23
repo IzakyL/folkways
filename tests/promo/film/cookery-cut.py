@@ -15,19 +15,19 @@ os.makedirs(build.OUT, exist_ok=True)
 
 SHOTS = [
     ("kitchen", "cookery-kitchen/01-kitchen.mp4", [
-        ("kitchen", [(0.0, 38.0, 4.0), (38.0, 54.0, 2.0)]),
+        ("kitchen", [(0.0, 50.0, 5.0), (50.0, 100.0, 3.0)]),
     ], 0.4, "bl"),
     ("vineyard", "cookery-wine/01-vineyard.mp4", [
-        ("tavern", [(0.0, 36.0, 3.0), (36.0, 140.0, 10.0)]),
+        ("tavern", [(0.0, 22.0, 6.0), (22.0, 50.0, 2.0), (50.0, 140.0, 10.0)]),
     ], 0.4, "bl"),
     ("pressing", "cookery-wine/02-pressing-and-fermentation.mp4", [
-        ("tavern_pressing", [(0.0, 30.0, 10.0), (30.0, 65.0, 4.0)]),
+        ("tavern_pressing", [(0.0, 48.0, 12.0), (48.0, 65.0, 3.0)]),
     ], 0.4, "bl"),
     ("bottling", "cookery-wine/03-fermentation-and-bottling.mp4", [
-        ("tavern_bottling", [(0.0, 9.0, 4.0), (9.0, 17.0, 1.5), (17.0, 78.0, 20.0), (78.0, 105.0, 3.0)]),
+        ("tavern_bottling", [(0.0, 22.0, 3.0), (22.0, 86.0, 20.0), (86.0, 128.0, 3.0)]),
     ], 0.4, "bl"),
     ("bar", "cookery-wine/04-drinks-at-the-bar.mp4", [
-        ("tavern_bar", [(0.0, 16.0, 2.0), (16.0, 40.0, 6.0)]),
+        ("tavern_bar", [(0.0, 32.0, 2.0)]),
     ], 0.4, "bl"),
     ("elevator", "create-elevator/01-elevator.mp4", [
         ("elevator", [(0.0, 15.0, 1.0), (15.0, 23.0, 4.0)]),

@@ -53,7 +53,7 @@ test("cookery: cooks make dishes and set them on the table", async ({}, testInfo
     const table = await tableGroup(scene, 7, -4, 8, -2);
     const area = { id: "kitchen-table", cells: areaCells(scene, 5, -6, 10, 0), tables: table.tables, foods: MENU, servings: 2 };
 
-    const cast = await castColony(scene, [...Object.values(stations), pantry, utensils, bench], 8, i => i < 4 ? ["crafting", "hauling"] : [], at(-8, 15));
+    const cast = await castColony(scene, [...Object.values(stations), pantry, utensils, bench], 7, i => i < 4 ? ["crafting", "hauling"] : [], at(-8, 15));
     run.note("cast", cast);
     const cooks = cast.residents.slice(0, 4), diners = cast.residents.slice(4);
     await setVitals(server, cast.colony_id, cast.residents.map(uuid => ({ uuid, food: 20, tired: 0 })));
@@ -71,21 +71,24 @@ test("cookery: cooks make dishes and set them on the table", async ({}, testInfo
     expect(preRoll.ready, "two cooks must be working before the camera rolls").toBe(true);
     const before = (preRoll.state as any).portions;
 
-    let invited = false;
-    const inviteDiners = async () => {
-      // Large dishes may waste a bounded amount; diners need not starve before accepting them.
-      await setVitals(server, cast.colony_id, diners.map(uuid => ({ uuid, food: 6, tired: 0 })));
-      for (const [i, uuid] of diners.entries()) await place(server, uuid, at(6 + i, 1));
-      invited = true;
-    };
+    // The diners get hungry one at a time, seconds apart, and each comes in from somewhere else.
+    const ARRIVALS = [{ from: at(6, 1), after: 0 }, { from: at(9.5, 4), after: 9 }, { from: at(5, 6.5), after: 20 }];
+    let firstServed = 0, invitedCount = 0;
     const cookingAndDining = async () => {
       const state = await sample();
-      if (!invited && state.portions >= 4) await inviteDiners();
+      if (!firstServed && state.portions >= 4) firstServed = Date.now();
+      while (firstServed && invitedCount < diners.length && Date.now() - firstServed >= ARRIVALS[invitedCount].after * 1000) {
+        const uuid = diners[invitedCount];
+        // Large dishes may waste a bounded amount; diners need not starve before accepting them.
+        await setVitals(server, cast.colony_id, [{ uuid, food: 6, tired: 0 }]);
+        await place(server, uuid, ARRIVALS[invitedCount].from);
+        invitedCount++;
+      }
       return state;
     };
     const evidence = await shoot(run, scene, "01-kitchen",
       "Four cooks grind wheat on the millstone, cut dough on the chopping board and cook in the steamer, stockpot and pots, "
-      + "then carry the dishes to the nearby table; hungry residents arrive and eat while cooking continues", SECONDS, 20, cookingAndDining,
+      + "then carry the dishes to the nearby table; three hungry residents drift in one by one and eat while cooking continues", SECONDS, 20, cookingAndDining,
       { stations, menu: MENU, pantry: PANTRY });
     run.note("activity", evidence);
     const served = Math.max(...evidence.map((one: any) => one.portions)) - before;
@@ -95,10 +98,10 @@ test("cookery: cooks make dishes and set them on the table", async ({}, testInfo
     run.note("summary", { before, served, busy });
     expect(served, "dishes must reach the table on camera").toBeGreaterThanOrEqual(4);
     expect(busy, "the kitchen must be at work for most of the shot").toBeGreaterThan(0.5);
-    expect(invited, "freshly cooked dishes must invite the diners during the kitchen shot").toBe(true);
+    expect(invitedCount, "freshly cooked dishes must invite the diners during the kitchen shot").toBe(diners.length);
     const kitchenSeated = new Set(evidence.flatMap((one: any) => one.people.filter((p: any) => diners.includes(p.uuid)
       && p.seated && p.action === "dining_eating").map((p: any) => p.uuid)));
-    expect(kitchenSeated.size, "at least three residents must eat in the kitchen shot itself").toBeGreaterThanOrEqual(3);
+    expect(kitchenSeated.size, "at least two residents must eat in the kitchen shot itself").toBeGreaterThanOrEqual(2);
     const dining = await shoot(run, scene, "02-dining",
       "The same kitchen and table: residents sit down to the dishes the cooks have just made, while cooking and serving continue",
       70, 20, sample, { area });
@@ -107,7 +110,7 @@ test("cookery: cooks make dishes and set them on the table", async ({}, testInfo
     run.note("diningSummary", { sat: [...sat] });
     expect(sat.size, "the residents must eat the freshly cooked dishes on camera").toBeGreaterThanOrEqual(3);
     const finished = dining.at(-1).people.filter((p: any) => diners.includes(p.uuid) && p.lastDined > preRoll.state.time);
-    expect(finished.length, "three residents must finish real table meals, not merely sit").toBeGreaterThanOrEqual(3);
+    expect(finished.length, "residents must finish real table meals, not merely sit").toBeGreaterThanOrEqual(2);
     run.note("summary", { before, served, busy, sat: [...sat], finished: finished.map((p: any) => p.uuid) });
     run.note("shaders", shaderEvidence(scene.pair.clientInstance));
   } catch (error) {

@@ -67,8 +67,9 @@ returns its bottles. Mark a pressing tub and
 a wine barrel with a tap to produce grape wine from grapes, empty buckets and empty bottles. Workers
 jump in the tub, wait for the barrel's native second brewing level, and place, fill and collect bottles
 one at a time. A cancelled bottling job resumes from the bottle left beneath the tap.
-Select grapevines as a farm's crop and supply grapevines plus four trellises per plant: residents build
-the supports, plant the vines and harvest ripe hanging grapes while leaving the vines to regrow.
+Select grapevines as a farm's crop and supply four grapevines plus trellises (three per corner post and one
+per plot cell): residents raise a post at each corner of the plot, roof the whole plot with trellises five
+blocks up, plant a vine at each post and harvest the grapes hanging under the roof while leaving the vines to regrow.
 Tree clearing also collects attached wild grapevines before removing their supporting leaves.
 
 ### Resident growth and everyday life

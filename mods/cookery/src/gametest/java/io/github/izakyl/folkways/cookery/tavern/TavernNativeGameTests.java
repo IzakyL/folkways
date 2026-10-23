@@ -242,25 +242,44 @@ public final class TavernNativeGameTests {
     public static void vineyardBuildsFromRealStockGrowsNativeFruitAndHarvestsWithoutDestroyingVines(GameTestHelper helper) {
         try (Rig r = new Rig(helper, false)) {
             var grape = new TavernGrapes();
-            BlockPos base = helper.absolutePos(new BlockPos(2, 2, 2));
-            r.level.setBlockAndUpdate(base.below(), Blocks.DIRT.defaultBlockState());
+            var plot = new java.util.LinkedHashSet<BlockPos>();
+            for (int x = 1; x <= 4; x++) for (int z = 1; z <= 3; z++) {
+                BlockPos ground = helper.absolutePos(new BlockPos(x, 1, z));
+                r.level.setBlockAndUpdate(ground, Blocks.DIRT.defaultBlockState());
+                plot.add(ground);
+            }
+            var corners = plot.stream().filter(ground -> grape.sowsAt(ground, 0, 0, plot)).toList();
+            helper.assertValueEqual(corners.size(), 4, "a post stands at each corner of the plot");
+            BlockPos base = corners.get(0).above();
+            var frame = grape.frame(r.level, base, plot);
             ItemStack seed = new ItemStack(ModItems.GRAPEVINE.get());
-            ItemStack frames = new ItemStack(ModBlocks.TRELLIS.get(), 3);
-            helper.assertFalse(grape.plant(r.level, r, base, seed, List.of(seed, frames)), "insufficient trellises cannot create a free structure");
-            helper.assertTrue(seed.getCount() == 1 && frames.getCount() == 3 && r.level.getBlockState(base).isAir(), "failed build preserves supplies and world");
+            ItemStack frames = new ItemStack(ModBlocks.TRELLIS.get(), 2 + frame.size());
+            helper.assertFalse(grape.plant(r.level, r, base, seed, List.of(seed, frames), frame), "insufficient trellises cannot create a free structure");
+            helper.assertTrue(seed.getCount() == 1 && r.level.getBlockState(base).isAir(), "failed build preserves supplies and world");
             frames.grow(1);
-            helper.assertTrue(grape.plant(r.level, r, base, seed, List.of(seed, frames)), "resident builds and plants with real vine and four trellises");
-            helper.assertTrue(seed.isEmpty() && frames.isEmpty(), "one vine and exactly four frames are consumed");
-            for (int tick = 0; tick < 24; tick++) {
-                for (BlockPos cell : grape.placementCells(base)) {
+            helper.assertTrue(grape.plant(r.level, r, base, seed, List.of(seed, frames), frame), "resident builds and plants with real vine and trellises");
+            helper.assertTrue(seed.isEmpty() && frames.isEmpty(), "one vine and exactly the post and its roof share are consumed");
+            int laid = frame.size();
+            for (BlockPos corner : corners.subList(1, corners.size())) {
+                BlockPos post = corner.above();
+                var share = grape.frame(r.level, post, plot);
+                laid += share.size();
+                ItemStack vine = new ItemStack(ModItems.GRAPEVINE.get());
+                helper.assertTrue(grape.plant(r.level, r, post, vine, List.of(vine, new ItemStack(ModBlocks.TRELLIS.get(), 3 + share.size())), share), "every corner post is built");
+            }
+            helper.assertValueEqual(laid, plot.size(), "the roof covers every cell of the plot exactly once");
+            BlockPos middle = helper.absolutePos(new BlockPos(2, 2, 2));
+            helper.assertTrue(r.level.getBlockState(middle.above(4)).is(ModBlocks.TRELLIS.get()) && r.level.getBlockState(middle).isAir(), "the roof is five blocks up and the ground under it is open");
+            for (int tick = 0; tick < 40; tick++) {
+                for (BlockPos cell : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(1, 2, 1)), helper.absolutePos(new BlockPos(4, 6, 3)))) {
                     var state = r.level.getBlockState(cell);
-                    if (state.getBlock() instanceof com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapevineTrellisBlock vine) vine.doGrow(r.level, cell, state);
+                    if (state.getBlock() instanceof com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapevineTrellisBlock vine) vine.doGrow(r.level, cell.immutable(), state);
                 }
             }
-            BlockPos fruit = base.above().east();
-            helper.assertTrue(r.level.getBlockState(fruit).is(ModBlocks.GRAPE_CROP.get()), "native growth climbs built frames and produces a hanging bunch");
+            BlockPos fruit = middle.above(3);
+            helper.assertTrue(r.level.getBlockState(fruit).is(ModBlocks.GRAPE_CROP.get()), "native growth climbs the posts, spreads over the roof and hangs bunches in the middle");
             r.level.setBlockAndUpdate(fruit, r.level.getBlockState(fruit).setValue(com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapeCropBlock.AGE, 5));
-            var picked = grape.gather(r.level, r, grape.harvest(r.level, base)).orElseThrow();
+            var picked = grape.gather(r.level, r, grape.harvest(r.level, middle)).orElseThrow();
             helper.assertTrue(picked.worked() == 1 && picked.items().stream().anyMatch(stack -> stack.is(ModItems.GRAPE.get())), "resident harvest returns native grape loot");
             helper.assertTrue(r.level.getBlockState(fruit).isAir() && r.level.getBlockState(fruit.above()).is(ModBlocks.GRAPEVINE_TRELLIS.get()), "fruit is removed while living trellis remains");
             var trellis = (com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapevineTrellisBlock)r.level.getBlockState(fruit.above()).getBlock();

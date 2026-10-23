@@ -196,6 +196,10 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
         return behavior.map(adapted -> adapted.attached(level, cut)).orElseGet(() -> habit.canopy(level, cut));
     }
 
+    List<BlockPos> frameAt(LevelReader level, BlockPos ground, Plot plot) {
+        return behavior.map(adapted -> adapted.frame(level, ground.above(), plot.cells())).orElseGet(List::of);
+    }
+
     List<BlockPos> standAt(BlockPos ground) {
         return habit.stand(ground);
     }
@@ -232,7 +236,8 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
 
     boolean sowsAt(LevelReader level, Plot plot, BlockPos ground) {
         return behavior.map(b -> b.sowsAt(ground, plot.minX(), plot.minZ(), plot.cells())).orElse(true)
-            && habit.sowsAt(plot, ground) && !(inTheWay(level, ground.above()) && plot.aisle(ground));
+            && habit.sowsAt(plot, ground) && !(behavior.map(CropBehavior::aisles).orElse(true)
+                && inTheWay(level, ground.above()) && plot.aisle(ground));
     }
 
     boolean roomAt(LevelReader level, List<BlockPos> stand) {

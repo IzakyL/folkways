@@ -209,7 +209,8 @@ final class Field {
         for (BlockPos ground : stand) {
             sown.add(ground.above());
         }
-        return Optional.of(new Job(WorldPos.of(level, cell), bare, footings.get(), cell));
+        return Optional.of(new Job(WorldPos.of(level, cell), bare, crop.frameAt(level, cell, plot), footings.get(),
+            cell));
     }
 
     private static Node cutOrFell(FarmNode.Chore chore) {

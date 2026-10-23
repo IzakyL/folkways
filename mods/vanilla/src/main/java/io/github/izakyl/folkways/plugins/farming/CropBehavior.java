@@ -31,7 +31,8 @@ public interface CropBehavior {
 
     boolean needsFarmland();
 
-    default List<io.github.izakyl.folkways.core.api.work.Need> plantingMaterials(int plants) {
+    // Besides the seeds: what the plants and the frame still to build around them are made of.
+    default List<io.github.izakyl.folkways.core.api.work.Need> plantingMaterials(int plants, int frame) {
         return List.of();
     }
 
@@ -39,7 +40,19 @@ public interface CropBehavior {
         return true;
     }
 
-    default boolean plant(ServerLevel level, Worker who, BlockPos base, ItemStack seed, List<ItemStack> supplied) {
+    // A stalk in the way keeps the field's aisles bare, unless the crop's own sowsAt already spaces it.
+    default boolean aisles() {
+        return true;
+    }
+
+    // The cells still to build with the stand at this base that are not the stand itself, such as its share of a
+    // pergola roofing the whole plot. The plot is its ground cells.
+    default List<BlockPos> frame(LevelReader level, BlockPos base, java.util.Set<BlockPos> plot) {
+        return List.of();
+    }
+
+    default boolean plant(ServerLevel level, Worker who, BlockPos base, ItemStack seed, List<ItemStack> supplied,
+            List<BlockPos> frame) {
         return plant(level, who, base, seed);
     }
 

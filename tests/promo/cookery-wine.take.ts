@@ -11,8 +11,9 @@ import { stageVineyard, growVineyard } from "./vineyard-stage";
 
 const WINE = T + "wine";
 const BAR = [5, 6, 7, 8, 9, 10];
-// A resident drinks at most once a quarter day. Before the bar shot the drinkers are let off that wait, so the
-// bottles stocked on camera are drunk on camera; no drink, bottle or mood is forged.
+// A resident drinks at most once a quarter day. During the bar shot the two drinkers are let off that wait one after
+// the other, so they come in at their own time and the bottles stocked on camera are drunk on camera; no drink, bottle
+// or mood is forged.
 const THIRSTY = defineTask<{ uuids: string[] }, any>({
   name: "folkways.promo.wine-thirsty", side: "server", timeoutMs: 20_000,
   source: javaTask({ body: `
@@ -45,14 +46,16 @@ test("wine: trellised grapes become wine served at the bar", async ({}, testInfo
     const area = { id: "wine-bar", cells: areaCells(scene, 5, -4, 11, 3), tables: [], cabinets: counters, foods: [], drinks: [WINE] };
 
     // The dorm and its rations stand behind the camera, out of every shot.
-    const cast = await castColony(scene, [], 9, i => i < 3 ? ["hauling"] : i < 5 ? ["farming", "hauling"] : [], at(-12, -32));
+    const cast = await castColony(scene, [], 7, i => i < 3 ? ["hauling"] : i < 5 ? ["farming", "hauling"] : [], at(-12, -32));
     run.note("cast", cast);
     const vintners = cast.residents.slice(0, 2), waiter = cast.residents[2], farmers = cast.residents.slice(3, 5), diners = cast.residents.slice(5);
     const vineyard = await stageVineyard(scene, cast.colony_id);
     for (const [i, uuid] of farmers.entries()) await place(server, uuid, at(-14 + i * 3, 6));
     run.note("tavern", await stageTavern(server, scene.name, cast.colony_id, scene.o, vintners, false));
     await place(server, waiter, at(12, -1));
-    for (const [i, uuid] of diners.entries()) await place(server, uuid, at(13, -3 + i));
+    // The two drinkers wait apart, out at the end of the bar and down by the vineyard path.
+    await place(server, diners[0], at(13, -2));
+    await place(server, diners[1], at(15.5, 2.5));
     run.note("vitals", await setVitals(server, cast.colony_id, cast.residents.map(uuid => ({ uuid, food: 20, tired: 0 }))));
     run.note("diningSetup", await stageDining(server, cast.colony_id, [area], 200));
     // The winery faces north, so the camera stands on that side. One fixed view holds the vineyard, the winery and the
@@ -63,7 +66,8 @@ test("wine: trellised grapes become wine served at the bar", async ({}, testInfo
     const sample = async () => ({ ...await readScene(server, cast.colony_id, everyone, [area]),
       tavern: await readTavern(server, cast.colony_id, scene.o, vintners) });
     const vineyardTake = await shoot(run, scene, "01-vineyard",
-      "Residents build trellises, plant grapevines, harvest the ripe grapes and carry them to the winery. "
+      "Residents raise a trellis post at each corner of the plot, roof it five blocks up, plant grapevines, "
+      + "harvest the grapes hanging under the roof and carry them to the winery. "
       + "Native growth is accelerated between samples; no grapes are supplied or harvested by the script.", 140, 30, async () => {
         const growth = await growVineyard(scene, cast.colony_id);
         return { ...await sample(), vineyard: growth };
@@ -98,11 +102,23 @@ test("wine: trellised grapes become wine served at the bar", async ({}, testInfo
     const stocked = await rollUntil(server, 40, 600_000, sample, (state: any) => state.drinks >= 4);
     run.note("stocked", stocked.log);
     expect(stocked.ready, "bottled wine must reach the bar counters").toBe(true);
-    run.note("thirsty", await server.run(THIRSTY, { uuids: everyone }));
-
+    // Idle residents wander back toward the dorm in the long production shots, so each drinker steps in at an end of
+    // the bar as they are let off the wait. The second comes a while into the shot, so the two do not walk up together.
+    await place(server, diners[0], at(12.5, -2));
+    run.note("thirsty", await server.run(THIRSTY, { uuids: [diners[0]] }));
+    const opened = Date.now();
+    let late = false;
+    const atTheBar = async () => {
+      if (!late && Date.now() - opened > 12_000) {
+        await place(server, diners[1], at(13.5, 1.5));
+        run.note("thirstyLate", await server.run(THIRSTY, { uuids: [diners[1]] }));
+        late = true;
+      }
+      return sample();
+    };
     const dining = await shoot(run, scene, "04-drinks-at-the-bar",
-      "The waiter keeps the long bar stocked with the new wine while residents take the stools "
-      + "and drink in their spare time", 80, 20, sample, { area });
+      "The waiter keeps the long bar stocked with the new wine while two residents come up to the stools "
+      + "one after the other and drink in their spare time", 80, 20, atTheBar, { area });
     run.note("dining", dining);
     const wineOnCamera = [...production, ...dining];
     const drank = new Set(wineOnCamera.flatMap((one: any) => one.people.filter((p: any) => diners.includes(p.uuid)

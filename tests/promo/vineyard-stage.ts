@@ -2,10 +2,10 @@ import { defineTask, javaTask } from "@izakyl/blockwright-minecraft";
 import { runColonyTask, MARK_MEMBERS } from "../shared/colony/colony-tasks";
 import type { Scene } from "./cookery-scene";
 
-/** Supply construction materials and delegate an empty plot. Residents build and plant every vine. */
+/** Supply construction materials and delegate an empty plot. Residents raise the corner posts, roof the plot and plant every vine. */
 export async function stageVineyard(scene: Scene, colony_id: string) {
   const supplies = scene.at(-16, 7);
-  await scene.set(supplies, 'minecraft:chest{Items:[{Slot:0b,id:"kaleidoscope_tavern:grapevine",count:24},{Slot:1b,id:"kaleidoscope_tavern:trellis",count:64}]}');
+  await scene.set(supplies, 'minecraft:chest{Items:[{Slot:0b,id:"kaleidoscope_tavern:grapevine",count:8},{Slot:1b,id:"kaleidoscope_tavern:trellis",count:64},{Slot:2b,id:"kaleidoscope_tavern:trellis",count:64}]}');
   await runColonyTask(scene.server, MARK_MEMBERS, {
     player: scene.name, colony_id, cells: [supplies.x, supplies.y, supplies.z],
   });
@@ -41,10 +41,10 @@ if (phase.equals("delegate")) {
         new ColonySettings.Value.Choice(ResourceLocation.parse("kaleidoscope_tavern:grapevine_trellis")))
         .with(FarmingContent.HARVEST_MODE, new ColonySettings.Value.Choice(HarvestMethods.PICK));
     var zone = ColonyFront.of(colony).addZone(level, FarmingContent.PLOT, cells, settings).orElseThrow();
-    return Map.of("zone", zone.id().toString(), "plants", 12, "grapesSupplied", 0);
+    return Map.of("zone", zone.id().toString(), "plants", 4, "grapesSupplied", 0);
 }
 int vines = 0, ripe = 0;
-for (var pos : BlockPos.betweenClosed(origin.offset(-15, 0, -5), origin.offset(-8, 3, 5))) {
+for (var pos : BlockPos.betweenClosed(origin.offset(-15, 0, -5), origin.offset(-8, 4, 5))) {
     var state = level.getBlockState(pos);
     if (state.getBlock() instanceof GrapevineTrellisBlock vine) {
         vines++;

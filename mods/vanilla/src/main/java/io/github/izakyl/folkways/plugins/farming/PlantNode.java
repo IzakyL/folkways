@@ -32,7 +32,8 @@ final class PlantNode extends FarmNode {
     private static List<Need> materials(Chore chore) {
         List<Need> needs = new ArrayList<>();
         needs.add(new Need(chore.crop().seedSpec(), chore.job().cells().size()));
-        chore.crop().behavior().ifPresent(b -> needs.addAll(b.plantingMaterials(chore.job().cells().size())));
+        chore.crop().behavior().ifPresent(b -> needs.addAll(b.plantingMaterials(chore.job().cells().size(),
+            chore.job().canopy().size())));
         return List.copyOf(needs);
     }
 
@@ -58,7 +59,7 @@ final class PlantNode extends FarmNode {
             }
             ItemStack seed = seeds.stream().filter(stack -> Goods.matches(stack, crop.seedSpec()))
                 .findFirst().orElse(ItemStack.EMPTY);
-            if (seed.isEmpty() || !crop.behavior().map(b -> b.plant(level, who, base, seed, seeds))
+            if (seed.isEmpty() || !crop.behavior().map(b -> b.plant(level, who, base, seed, seeds, job.canopy()))
                     .orElseGet(() -> crop.plant(level, who, base, seed))) {
                 barren = true;
                 continue;
