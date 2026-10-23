@@ -7,7 +7,8 @@ import { licenseCrewFast } from "./fast-setup";
 const T = "kaleidoscope_tavern:";
 
 // Pressing tub on the left, the barrel and its tap on the right, the grapes and the wine store between them.
-// The barrel and the tap face north, toward the camera.
+// The barrel and the tap face north, toward the camera. Juice is poured in through the lid, so the Tavern's own
+// stepladder stands behind the barrel, its high side against it, and the vintner climbs it to the top.
 function layout(origin: Vec) {
   const at = (x: number, y: number, z: number): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
   return {
@@ -15,18 +16,19 @@ function layout(origin: Vec) {
     tap: at(2, 1, -2), bottle: at(2, 0, -2),
     source: at(-5, 0, 1), target: at(-1, 0, 1),
     posts: [at(-3, 0, -1), at(2, 0, -3)],
+    ladder: at(2, 0, 2),
   };
 }
 
 /** Raw grapes enter the native pressing, fermentation and tap chain; dining requests supply the demand. */
 export async function stageTavern(
-  server: MinecraftServer, player: string, colony_id: string, origin: Vec, workersUUIDs: string[],
+  server: MinecraftServer, player: string, colony_id: string, origin: Vec, workersUUIDs: string[], supplyGrapes = true,
 ) {
   if (workersUUIDs.length !== 2) throw new Error("The tavern requires two new workers");
   const plan = layout(origin);
   await world.command(server, `setblock ${commandPos(plan.stations.tub)} ${T}pressing_tub`);
   const ingredients: Array<[string, number]> = [
-    ...Array.from({ length: 8 }, (): [string, number] => [T + "grape", 64]),
+    ...Array.from({ length: supplyGrapes ? 8 : 0 }, (): [string, number] => [T + "grape", 64]),
     ["minecraft:bucket", 16],
     ...Array.from({ length: 4 }, (): [string, number] => [T + "empty_bottle", 16]),
   ];
@@ -34,6 +36,8 @@ export async function stageTavern(
   await world.command(server, `setblock ${commandPos(plan.source)} minecraft:barrel[facing=up]{Items:[${items}]}`);
   await world.command(server, `setblock ${commandPos(plan.target)} minecraft:barrel[facing=up]`);
   const prepared = await runColonyTask(server, PREPARE, { colony_id, workers: workersUUIDs, ...plan });
+  await world.command(server, `setblock ${commandPos(plan.ladder)} ${T}stepladder[facing=south,half=bottom]`);
+  await world.command(server, `setblock ${commandPos({ ...plan.ladder, y: plan.ladder.y + 1 })} ${T}stepladder[facing=south,half=top]`);
   const members = [...Object.values(plan.stations), plan.source, plan.target];
   const marked = await runColonyTask(server, MARK_MEMBERS, {
     player, colony_id, cells: members.flatMap(cell => [cell.x, cell.y, cell.z]),

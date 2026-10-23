@@ -5,11 +5,7 @@ import com.github.ysbbbbbb.kaleidoscopetavern.blockentity.brew.BarCabinetBlockEn
 import com.github.ysbbbbbb.kaleidoscopetavern.init.tag.TagMod;
 import com.github.ysbbbbbb.kaleidoscopetavern.item.BottleBlockItem;
 import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.plugins.person.living.DiningDrinks;
 import java.util.Optional;
-import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -22,12 +18,7 @@ public final class TavernCabinets {
     public static synchronized void register() {
         if (registered) return;
         Containers.register(BarCabinetBlockEntity.class, (level, cabinet) -> Optional.of(inventory(cabinet)));
-        DiningDrinks.registerSupply(ResourceLocation.fromNamespaceAndPath("folkways", "tavern_cabinet"), new DiningDrinks.Supply() {
-            public boolean matches(ServerLevel level, BlockPos at) { return level.getBlockEntity(at) instanceof BarCabinetBlockEntity; }
-            public Container inventory(ServerLevel level, BlockPos at) {
-                return level.getBlockEntity(at) instanceof BarCabinetBlockEntity cabinet ? TavernCabinets.inventory(cabinet) : null;
-            }
-        });
+        TavernCounters.supply();
         registered = true;
     }
 

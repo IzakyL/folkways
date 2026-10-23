@@ -23,7 +23,7 @@ public final class DiningDrinks {
          * An adapter must not return the original drink as a byproduct. */
         ItemStack finishUsing(ServerLevel level, Mob diner, ItemStack serving);
     }
-    /** Native drink cabinets also expose the same inventory through the core Containers adapter. */
+    /** Native drink counters expose the same persistent inventory through core Containers. */
     public interface Supply {
         boolean matches(ServerLevel level, BlockPos at);
         Container inventory(ServerLevel level, BlockPos at);

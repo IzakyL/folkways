@@ -31,20 +31,23 @@ final class TavernWork implements Node, Workload.Within {
     private final Grown recovery;
     private Hold hold;
     private boolean loaded, finished;
+    private int remaining, bottle;
     private RefusalKind failed;
     TavernWork(UUID colony, WorldPos at, Stances stances, KitchenBookings bookings, Runnable changed, boolean barrel, TavernBatch.Batch previous) {
         this.colony = colony; this.at = at; this.stances = stances; this.bookings = bookings; this.changed = changed; this.barrel = barrel;
         recovering = previous != null; loaded = recovering; batch = recovering ? previous.id() : UUID.randomUUID();
         generation = bookings.generation(at);
+        remaining = previous == null ? barrel ? 16 : 1 : previous.remaining();
+        bottle = previous == null ? 0 : previous.bottle();
         var needs = new ArrayList<Need>();
         if (!loaded) needs.add(new Need(input(), barrel ? 4 : 8, true));
-        needs.add(new Need(carrier(), barrel ? 16 : 1, true));
+        if (remaining - (bottle > 0 ? 1 : 0) > 0) needs.add(new Need(carrier(), remaining - (bottle > 0 ? 1 : 0), true));
         var leaves = new ArrayList<Amount>();
-        leaves.add(new Amount(Goods.specOf(TavernStation.output(barrel)), barrel ? 16 : 1));
+        leaves.add(new Amount(Goods.specOf(TavernStation.output(barrel)), remaining));
         if (barrel && !loaded) leaves.add(new Amount(Goods.specOf(new ItemStack(Items.BUCKET)), 4));
         spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, this)
-            .needs(needs).gives(new Amount(Goods.specOf(TavernStation.output(barrel)), barrel ? 16 : 1)).leaves(leaves)
-            .effort(WorkEffort.NONE).vocation(WaresContent.trade()).estimate(barrel ? 3000 : 400)
+            .needs(needs).gives(new Amount(Goods.specOf(TavernStation.output(barrel)), remaining)).leaves(leaves)
+            .effort(WorkEffort.NONE).vocation(WaresContent.trade()).estimate(barrel ? 3600 : 400)
             .doing(CookeryContent.COOKING).done();
         recovery = recovering ? Grown.of(this) : null;
     }
@@ -73,10 +76,14 @@ final class TavernWork implements Node, Workload.Within {
         refusal(level).ifPresent(why -> failed = why);
         if (failed != null || finished) return LEAVE;
         if (!bookings.first(at, id())) return WAIT;
-        if (!loaded) return new Turn.Piece(new Action(true));
-        if (barrel) return TavernStation.barrel(level, at).filter(b -> b.getBrewLevel() >= 2).isPresent() ? new Turn.Piece(new Action(false)) : WAIT;
+        if (!loaded) {
+            var working = barrel ? TavernStation.lid(level, at) : Optional.of(stances);
+            if (working.isEmpty()) { failed = CookeryRefusal.STATION_CHANGED; return LEAVE; }
+            return new Turn.Piece(new Action(true, working.get()));
+        }
+        if (barrel) return bottle > 0 || TavernStation.barrel(level, at).filter(b -> b.getBrewLevel() >= 2).isPresent() ? new Turn.Piece(new Bottle(bottle)) : WAIT;
         return TavernStation.tub(level, at).filter(t -> t.getFluidAmount() == 1000).isPresent()
-            ? new Turn.Piece(new Action(false)) : new Turn.Piece(new Press());
+            ? new Turn.Piece(new Action(false, stances)) : new Turn.Piece(new Press());
     }
     public void ended(ServerLevel level, Node piece, Ending how) { if (how instanceof Ending.Failed f) failed = f.why(); }
     public Outcome commit(ServerLevel level, Worker who) { return finished ? Outcome.done() : Outcome.failed(failed == null ? CookeryRefusal.STATION_CHANGED : failed); }
@@ -85,8 +92,8 @@ final class TavernWork implements Node, Workload.Within {
         if (hold != null) { hold.release(how); hold = null; }
         changed.run();
     }
-    private boolean reachable(ServerLevel level, Worker who, BlockPos target) {
-        return Reach.stanceHolding(who.body(), stances).flatMap(p -> WorldSpaces.storage(level, new WorldPos(at.realm(), p)))
+    private boolean reachable(ServerLevel level, Worker who, Stances working, BlockPos target) {
+        return Reach.stanceHolding(who.body(), working).flatMap(p -> WorldSpaces.storage(level, new WorldPos(at.realm(), p)))
             .filter(p -> Reach.withinReach(p, target) && Reach.inSight(level, p, target)).isPresent();
     }
     private ItemStack supplied(Worker who, ItemSpec wanted, int count) {
@@ -117,22 +124,22 @@ final class TavernWork implements Node, Workload.Within {
     private final class Action implements Node {
         private final boolean load;
         private final NodeSpec spec;
-        Action(boolean load) {
+        Action(boolean load, Stances working) {
             this.load = load;
             var needs = load ? List.of(new Need(input(), barrel ? 4 : 8, true)) : List.of(new Need(carrier(), barrel ? 16 : 1, true));
             var leaves = load ? barrel ? List.of(new Amount(Goods.specOf(new ItemStack(Items.BUCKET)), 4)) : List.<Amount>of()
-                : List.of(new Amount(Goods.specOf(TavernStation.output(barrel)), barrel ? 16 : 1));
-            spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(at), stances, Workload.Once.of(load ? 40 : 100))
+                : List.of(new Amount(Goods.specOf(TavernStation.output(barrel)), remaining));
+            spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(at), working, Workload.Once.of(load ? 40 : 100))
                 .needs(needs).gives(load ? List.of() : leaves).leaves(leaves).vocation(WaresContent.trade())
                 .gesture(WorkGesture.SWING).focus(at.cell()).doing(load ? CookeryContent.PREPARING : CookeryContent.TAKING).done();
         }
         public NodeSpec spec() { return spec; }
         public Optional<RefusalKind> refusal(ServerLevel level) { return TavernWork.this.refusal(level); }
         public Outcome commit(ServerLevel level, Worker who) {
-            BlockPos target = barrel ? TavernStation.tap(level, at).orElse(at.block(level)) : at.block(level);
-            if (refusal(level).isPresent() || !bookings.first(at, TavernWork.this.id()) || !reachable(level, who, target)) return Outcome.failed(CookeryRefusal.STATION_CHANGED);
+            BlockPos target = barrel ? at.block(level).above(2) : at.block(level);
+            if (refusal(level).isPresent() || !bookings.first(at, TavernWork.this.id()) || !reachable(level, who, spec.stances(), target)) return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             if (load) return load(level, who);
-            return barrel ? bottle(level, who) : takeJuice(level, who);
+            return takeJuice(level, who);
         }
         private Outcome load(ServerLevel level, Worker who) {
             ItemStack input = supplied(who, input(), barrel ? 4 : 8);
@@ -172,35 +179,69 @@ final class TavernWork implements Node, Workload.Within {
             finished = true; TavernBatch.clear(level, at); changed.run();
             return new Outcome.Done(List.of(), result.outputs(), Optional.empty());
         }
-        private Outcome bottle(ServerLevel level, Worker who) {
-            ItemStack bottles = supplied(who, carrier(), 16);
-            if (bottles.isEmpty()) return Outcome.failed(CookeryRefusal.NOTHING_TO_WORK_WITH);
+    }
+
+    /** Each commit settles one visible stage. A cancellation leaves the owned bottle in the world. */
+    private final class Bottle implements Node {
+        private final int stage;
+        private final NodeSpec spec;
+        Bottle(int stage) {
+            this.stage = stage;
+            var output = new Amount(Goods.specOf(TavernStation.output(true)), 1);
+            spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(at), stances, Workload.Once.of(20))
+                .needs(stage == 0 ? List.of(new Need(carrier(), 1, true)) : List.of())
+                .gives(stage == 2 ? List.of(output) : List.of()).leaves(stage == 2 ? List.of(output) : List.of())
+                .vocation(WaresContent.trade()).gesture(WorkGesture.SWING).focus(at.cell())
+                .doing(stage == 2 ? CookeryContent.TAKING : CookeryContent.PREPARING).done();
+        }
+        public NodeSpec spec() { return spec; }
+        public Optional<RefusalKind> refusal(ServerLevel level) { return TavernWork.this.refusal(level); }
+        public Outcome commit(ServerLevel level, Worker who) {
+            var tap = TavernStation.tap(level, at).orElse(null);
+            if (stage != bottle || refusal(level).isPresent() || !bookings.first(at, TavernWork.this.id())
+                    || tap == null || !reachable(level, who, stances, tap)) return Outcome.failed(CookeryRefusal.STATION_CHANGED);
+            var display = tap.below();
             var nativeBarrel = TavernStation.barrel(level, at).orElseThrow();
-            BlockPos tap = TavernStation.tap(level, at).orElseThrow(), display = tap.below();
-            if (!reachable(level, who, tap)) return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             var before = nativeBarrel.saveWithoutMetadata(level.registryAccess());
+            var oldState = level.getBlockState(display);
+            var oldEntity = level.getBlockEntity(display);
+            var oldData = oldEntity == null ? null : oldEntity.saveWithoutMetadata(level.registryAccess());
             var products = new ArrayList<ItemStack>();
             try {
-                for (int i = 0; i < 16; i++) {
-                    ItemStack empty = bottles.copyWithCount(1);
+                if (stage == 0) {
+                    ItemStack empty = supplied(who, carrier(), 1);
+                    if (empty.isEmpty() || !oldState.isAir()) return Outcome.failed(CookeryRefusal.NOTHING_TO_WORK_WITH);
                     var hit = new BlockHitResult(Vec3.atCenterOf(display).add(0, -0.5, 0), Direction.UP, display.below(), false);
-                    if (!((BlockItem)empty.getItem()).place(new BlockPlaceContext(level, null, InteractionHand.MAIN_HAND, empty, hit)).consumesAction()
-                            || !nativeBarrel.canTapExtract(level, tap, who.body())) throw new IllegalStateException("Wine bottling carrier changed");
+                    if (!((BlockItem)empty.getItem()).place(new BlockPlaceContext(level, null, InteractionHand.MAIN_HAND, empty, hit)).consumesAction())
+                        throw new IllegalStateException("Wine bottling carrier changed");
+                } else if (stage == 1) {
+                    if (!nativeBarrel.canTapExtract(level, tap, who.body())) throw new IllegalStateException("Wine tap changed");
                     nativeBarrel.doTapExtract(level, tap);
-                    if (!(level.getBlockEntity(display) instanceof DrinkBlockEntity drink)) throw new IllegalStateException("Native wine did not appear");
-                    // Native placed-bottle loot retains all original brew-level components.
-                    var drops = net.minecraft.world.level.block.Block.getDrops(level.getBlockState(display), level, display, drink, who.body(), ItemStack.EMPTY);
-                    if (drops.size() != 1 || !drops.getFirst().is(ModItems.WINE.get()) || drops.getFirst().getCount() != 1) throw new IllegalStateException("Native wine output changed");
+                    if (level.getBlockState(display).getBlock().asItem() != ModItems.WINE.get()
+                            || !(level.getBlockEntity(display) instanceof DrinkBlockEntity)) throw new IllegalStateException("Native wine did not appear");
+                } else {
+                    if (!(oldEntity instanceof DrinkBlockEntity drink)) throw new IllegalStateException("Native wine disappeared");
+                    var drops = net.minecraft.world.level.block.Block.getDrops(oldState, level, display, drink, who.body(), ItemStack.EMPTY);
+                    if (drops.size() != 1 || !drops.getFirst().is(ModItems.WINE.get()) || drops.getFirst().getCount() != 1)
+                        throw new IllegalStateException("Native wine output changed");
                     products.add(drops.getFirst());
-                    level.setBlockAndUpdate(display, Blocks.AIR.defaultBlockState()); bottles.shrink(1);
+                    if (!level.setBlockAndUpdate(display, Blocks.AIR.defaultBlockState())) throw new IllegalStateException("Bottle pickup failed");
                 }
             } catch (RuntimeException | LinkageError broken) {
-                // The synchronous action has not handed any outputs to the engine yet.
                 nativeBarrel.loadWithComponents(before, level.registryAccess()); nativeBarrel.setChanged();
-                level.setBlockAndUpdate(display, Blocks.AIR.defaultBlockState());
+                level.setBlockAndUpdate(display, oldState);
+                if (oldData != null && level.getBlockEntity(display) != null) {
+                    level.getBlockEntity(display).loadWithComponents(oldData, level.registryAccess());
+                    level.getBlockEntity(display).setChanged();
+                }
                 return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             }
-            finished = true; TavernBatch.clear(level, at); changed.run();
+            bottle = (stage + 1) % 3;
+            if (stage == 2) remaining--;
+            finished = remaining == 0;
+            if (finished) TavernBatch.clear(level, at);
+            else TavernBatch.remember(level, at, new TavernBatch.Batch(colony, batch, true, remaining, bottle));
+            changed.run();
             return new Outcome.Done(List.of(), products, Optional.empty());
         }
     }

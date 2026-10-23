@@ -40,11 +40,14 @@ final class Mood {
             : leisure < 70 ? 0 : (leisure - 70) / 6);
     }
 
-    void step(long now, int food, int alertness, int home, boolean safe, boolean uncomfortable) {
-        step(now, food, alertness, home, safe, uncomfortable, 1.0, 0);
+    int step(long now, int food, int alertness, int home, boolean safe, boolean uncomfortable) {
+        return step(now, food, alertness, home, safe, uncomfortable, 1.0, 0);
     }
 
-    void step(long now, int food, int alertness, int home, boolean safe, boolean uncomfortable,
+    // What happened in this step: above zero when a reason rose into a bonus, below when one fell into a penalty.
+    // A bonus wearing off or a penalty healing is no event, leisure and safety's shadow drift rather than happen,
+    // and the first step after a load has nothing to compare against.
+    int step(long now, int food, int alertness, int home, boolean safe, boolean uncomfortable,
               double discomfort, int reassurance) {
         if (lastTick < 0 && chatted < 0) { chatted = now - DAY; }
         long elapsed = lastTick < 0 ? 0 : Math.clamp(now - lastTick, 0, 200);
@@ -65,10 +68,23 @@ final class Mood {
         for (String part : java.util.List.of("food", "housing", "environment")) {
             parts.computeIfPresent(part, (key, value) -> value < 0 ? (int) Math.round(value * discomfort) : value);
         }
+        int shift = 0;
+        if (!reasons.isEmpty()) {
+            for (Map.Entry<String, Integer> part : parts.entrySet()) {
+                int was = reasons.getOrDefault(part.getKey(), 0);
+                int is = part.getValue();
+                if (is > was && is > 0 && !part.getKey().equals("leisure") && !part.getKey().equals("safety")) {
+                    shift += is - Math.max(was, 0);
+                } else if (is < was && is < 0 && !part.getKey().equals("leisure")) {
+                    shift -= Math.min(was, 0) - is;
+                }
+            }
+        }
         reasons = Map.copyOf(parts);
         double target = Math.clamp(60 + parts.values().stream().mapToInt(Integer::intValue).sum(), 0, 100);
         double change = elapsed * 4.0 / 1000;
         value += Math.clamp(target - value, -change, change);
+        return shift;
     }
 
     void enjoyed(String activity, double ticks, double duration, double recovery, long now) {

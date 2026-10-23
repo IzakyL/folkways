@@ -176,8 +176,11 @@ final class LivingPresence implements Facing {
                     boolean rain = level.isRainingAt(living.blockPosition());
                     mood.comfortable = rooms.comfortableAt(level, WorldSpaces.at(living).block(level));
                     Effects traits = view.effectsOf(resident);
-                    mood.step(level.getGameTime(), his.foodLevel(), alertnessOf(resident.id()).orElse(Rest.SPENT),
+                    int shift = mood.step(level.getGameTime(), his.foodLevel(), alertnessOf(resident.id()).orElse(Rest.SPENT),
                         home, safe, rain, traits.value(Stats.DISCOMFORT), Wards.comfort(level, living.blockPosition()));
+                    if (shift != 0) {
+                        MoodSparks.show(level, living, shift > 0);
+                    }
                     unwritten = true;
                 }
             }
@@ -287,8 +290,14 @@ final class LivingPresence implements Facing {
     boolean wouldEat(UUID resident, ItemStack stack, FoodProperties food) {
         Hunger belly = bellies.get(resident);
         return belly != null && FoodSafety.usable(Fronts.of(colony).settings(LivingContent.ID), stack, food)
-            && belly.canEatWithoutWaste(food)
+            && belly.canEatMeal(food)
             && FoodSafety.matches(Fronts.of(colony).settings(LivingContent.ID), stack);
+    }
+
+    // A served table meal is chosen by the dining area's own list, so only the belly decides.
+    boolean wouldEat(UUID resident, FoodProperties food) {
+        Hunger belly = bellies.get(resident);
+        return belly != null && belly.canEatMeal(food);
     }
 
     void ate(UUID resident, FoodProperties food, ItemStack eaten, long now) {
@@ -448,12 +457,16 @@ final class LivingPresence implements Facing {
         List<Line> lines = new ArrayList<>();
         lines.add(Line.gauge(LivingContent.FULLNESS, his.foodLevel(), Hunger.MAX_FOOD_LEVEL));
         lines.add(Line.gauge(LivingContent.ALERTNESS, alertness, Rest.SPENT));
-        Mood mood = mood(resident);
-        lines.add(Line.text(Component.translatable("folkways.mood.summary", (int) Math.round(mood.value),
-            (int) Math.round(Mood.speed(mood.value) * 100), (int) Math.round(mood.leisure))));
-        bedFor(resident).filter(at -> at.in(colony.level())).ifPresent(at ->
-            lines.add(Line.text(rooms.get(colony.level(), at.block(colony.level())).grade().title())));
         return List.copyOf(lines);
+    }
+
+    @Override
+    public Sentence nameMarks(UUID resident, ColonyView colony) {
+        if (!bellies.containsKey(resident)) {
+            return Sentence.EMPTY;
+        }
+        double mood = mood(resident).value;
+        return Sentence.of(Sentence.glyph(mood < 40 ? "mood_sad" : mood >= 70 ? "mood_happy" : "mood_neutral"));
     }
 
     List<Component> details(UUID resident, ColonyView view) {

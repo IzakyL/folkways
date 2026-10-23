@@ -341,12 +341,27 @@ public final class CreateElevatorNetwork implements ElevatorNetwork {
             CabinNavigation.stop(body);
             return false;
         }
-        if (clearOfDeck(lift, body, cabin) && platforms.stream().anyMatch(at -> at.cell().equals(body.blockPosition()))
+        // Any landing at this stop ends the ride. The chosen exit only steers the walk out: a fellow passenger
+        // standing on it must not hold everyone behind them in the cabin.
+        if (clearOfDeck(lift, body, cabin) && available.stream().anyMatch(at -> at.cell().equals(body.blockPosition()))
                 && body.onGround() && Footing.withFeetAt(lift.level(), body.blockPosition())) {
             CabinNavigation.stop(body);
             return true;
         }
-        CabinNavigation.walk(lift.level(), lift.vehicle(), body, platforms.stream().map(WorldPos::cell).collect(java.util.stream.Collectors.toSet()));
+        Set<BlockPos> goals = unoccupied(lift.level(), body, platforms);
+        if (goals.isEmpty()) goals = unoccupied(lift.level(), body, available);
+        if (goals.isEmpty()) goals = platforms.stream().map(WorldPos::cell).collect(java.util.stream.Collectors.toSet());
+        CabinNavigation.walk(lift.level(), lift.vehicle(), body, goals);
         return false;
+    }
+
+    private static Set<BlockPos> unoccupied(ServerLevel level, Mob body, Set<WorldPos> cells) {
+        Set<BlockPos> free = new HashSet<>();
+        for (WorldPos at : cells) {
+            BlockPos cell = at.cell();
+            var space = new net.minecraft.world.phys.AABB(cell.getX(), cell.getY(), cell.getZ(), cell.getX() + 1, cell.getY() + 1, cell.getZ() + 1);
+            if (level.getEntitiesOfClass(LivingEntity.class, space, other -> other != body && other.isAlive()).isEmpty()) free.add(cell);
+        }
+        return free;
     }
 }

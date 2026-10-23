@@ -23,7 +23,7 @@
     "bench:take": "npm exec -- playwright test --config tests/bench/playwright.config.ts",
     "bench:overlay": "node --experimental-strip-types tests/bench/film/overlay.ts",
     "promo:take": "npm exec -- playwright test --config tests/promo/playwright.config.ts",
-    "promo:cookery": "npm run promo:take -- cookery-kitchen.take.ts cookery-dining.take.ts cookery-wine.take.ts create-elevator.take.ts",
+    "promo:cookery": "npm run promo:take -- cookery-kitchen.take.ts cookery-wine.take.ts create-elevator.take.ts",
     "promo:cookery:film": "python3 tests/promo/film/cookery.py"
   },
   "devDependencies": {

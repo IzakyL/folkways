@@ -106,10 +106,13 @@ public final class ColonyFront implements FrontView {
             ColonySettings chosen) {
         Set<WorldPos> covered = new LinkedHashSet<>(cells.size());
         cells.forEach(cell -> covered.add(WorldPos.of(level, cell)));
+        // A caller may name only some settings; the rest take the delegation's declared defaults, as a load does.
+        ColonySettings settled = Enrollments.delegation(delegation).isPresent()
+            ? chosen.conformedTo(ColonySchemas.ofDelegation(delegation)) : chosen;
         return colony.hold(delegation, new Held.Area(covered)).flatMap(holding -> {
-            drawn.put(holding.id(), chosen);
+            drawn.put(holding.id(), settled);
             write();
-            return ColonyZone.in(holding, level, chosen);
+            return ColonyZone.in(holding, level, settled);
         });
     }
 

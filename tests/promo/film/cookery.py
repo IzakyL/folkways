@@ -1,11 +1,17 @@
-"""Copy the recorded Cookery takes, one clip per feature, and write the cast's model credits."""
+"""Assemble the recorded Cookery takes into three films, and write the cast's model credits."""
 import json
 import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PROMO = HERE.parents[2] / "tests" / "out" / "promo"
-TAKES = ["cookery-kitchen", "cookery-dining", "cookery-wine", "create-elevator"]
+TAKES = {
+    "cookery-kitchen": ["01-kitchen", "02-dining"],
+    "cookery-wine": ["01-vineyard", "02-pressing-and-fermentation", "03-fermentation-and-bottling", "04-drinks-at-the-bar"],
+    "create-elevator": ["01-elevator"],
+}
 OUT = PROMO / "film"
 
 
@@ -24,15 +30,22 @@ def write_credits():
 
 
 def main():
-    clips = [clip for take in TAKES for clip in sorted((PROMO / "takes" / take).glob("*.mp4"))]
-    missing = [take for take in TAKES if not any(clip.parent.name == take and clip.stat().st_size for clip in clips)]
+    groups = {take: [PROMO / "takes" / take / f"{name}.mp4" for name in names]
+              for take, names in TAKES.items()}
+    missing = [str(clip) for clips in groups.values() for clip in clips if not clip.exists() or not clip.stat().st_size]
     if missing:
-        raise FileNotFoundError(f"record these Cookery takes first: {', '.join(missing)}")
+        raise FileNotFoundError(f"record these Cookery clips first: {', '.join(missing)}")
     OUT.mkdir(parents=True, exist_ok=True)
-    for clip in clips:
-        # Copy the source bytes, including every frame and the original audio tracks and metadata.
-        destination = OUT / f"folkways-{clip.parent.name}-{clip.name}"
-        shutil.copy2(clip, destination)
+    for take, clips in groups.items():
+        destination = OUT / f"folkways-{take}.mp4"
+        if len(clips) == 1:
+            shutil.copy2(clips[0], destination)
+        else:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt") as listing:
+                listing.write("".join(f"file '{clip.resolve()}'\n" for clip in clips))
+                listing.flush()
+                subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", listing.name,
+                                "-map", "0", "-c", "copy", "-movflags", "+faststart", str(destination)], check=True)
         print(destination, flush=True)
     write_credits()
 

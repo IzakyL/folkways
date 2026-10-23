@@ -1,3 +1,4 @@
+import { defineTask, javaTask, world } from "@izakyl/blockwright-minecraft";
 import { expect, test } from "@playwright/test";
 import { shaderEvidence } from "../shared/capture/shaders";
 import { take, type PromoPair } from "./promo-kit";
@@ -8,7 +9,17 @@ import { buildElevator, readElevator } from "./elevator-stage";
 // cabin is the only way up, so they walk in, stand on its moving floor while it rises and walk out to bed.
 
 const RISE = 6;
-const SECONDS = 40;
+const SECONDS = 50;
+const OUTLINES = defineTask<void, any>({
+  name: "folkways.promo.elevator-outlines", side: "client", timeoutMs: 20_000,
+  source: javaTask({ imports: ["io.github.izakyl.folkways.create.elevator.ElevatorOutlines"], body: `
+return ElevatorOutlines.shown().stream().map(outline -> Map.of(
+    "entity", outline.entityId(), "cabinHeight", outline.cabin().getYsize(),
+    "sweepHeight", outline.sweep().map(box -> box.getYsize()).orElse(0.0),
+    "containsCabin", outline.sweep().map(box -> box.inflate(0.05).minmax(outline.cabin()).equals(box.inflate(0.05))).orElse(false)
+)).toList();
+` }),
+});
 
 test("elevator: tired residents ride a Create elevator up to their beds", async ({}, testInfo) => {
   const run = take("create-elevator");
@@ -32,7 +43,8 @@ test("elevator: tired residents ride a Create elevator up to their beds", async 
     }
     await set(at(-4, -1, RISE + 1), "minecraft:lantern");
 
-    const rations = at(-12, -10);
+    // Behind the camera: the settlers need food in store, the shot does not.
+    const rations = at(-5, -30);
     await set(rations, `minecraft:chest[facing=east]{Items:[{Slot:0b,id:"minecraft:cooked_beef",count:64}]}`);
     const cast = await castColony(scene, [...beds, rations], 4, () => ["hauling"]);
     run.note("cast", cast);
@@ -42,6 +54,12 @@ test("elevator: tired residents ride a Create elevator up to their beds", async 
     // The camera looks at the open north face of the cabin and the loft beside it.
     await fixCamera(scene, at(-5, -22, 9), at(-3, -4, 3), 50);
 
+    await expect.poll(async () => (await scene.client.run(OUTLINES)).length,
+      { message: "the held book must render the detected cabin bounds", timeout: 15_000 }).toBeGreaterThan(0);
+    const outlines = await scene.client.run(OUTLINES);
+    expect(outlines.some((one: any) => one.containsCabin && one.sweepHeight >= one.cabinHeight + RISE - 0.1),
+      "the sweep must cover the cabin through both floors").toBe(true);
+    run.note("outlines", outlines);
     const sample = async () => ({ ...await readScene(server, cast.colony_id, cast.residents, []),
       lift: await readElevator(server, cast.colony_id, scene.o) });
     const evidence = await shoot(run, scene, "01-elevator",
@@ -50,9 +68,14 @@ test("elevator: tired residents ride a Create elevator up to their beds", async 
     run.note("activity", evidence);
     const rode = new Set(evidence.flatMap((one: any) => one.lift.passengers.map((p: any) => p.uuid)));
     const upstairs = Math.max(...evidence.map((one: any) => one.people.filter((p: any) => p.position[1] >= scene.o.y + RISE - 0.5).length));
-    run.note("summary", { rode: [...rode], upstairs });
+    const asleep = Math.max(...evidence.map((one: any) => one.people.filter((p: any) => p.action === "sleeping").length));
+    run.note("summary", { rode: [...rode], upstairs, asleep });
     expect(rode.size, "residents must ride the cabin on camera").toBeGreaterThanOrEqual(2);
     expect(upstairs, "residents must reach the loft on camera").toBeGreaterThanOrEqual(2);
+    expect(asleep, "residents must lie down in the loft beds on camera").toBeGreaterThanOrEqual(2);
+    await world.command(server, `item replace entity ${scene.name} weapon.mainhand with minecraft:air`);
+    await expect.poll(async () => (await scene.client.run(OUTLINES)).length).toBe(0);
+    await world.command(server, `item replace entity ${scene.name} weapon.mainhand with folkways:colony_book`);
     run.note("shaders", shaderEvidence(scene.pair.clientInstance));
   } catch (error) {
     pair?.failing(error);

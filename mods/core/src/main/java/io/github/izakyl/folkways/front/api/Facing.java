@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
 import io.github.izakyl.folkways.front.api.notice.Line;
+import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import java.util.List;
 import java.util.Optional;
@@ -50,6 +51,11 @@ public interface Facing {
 
     default List<Line> lookLines(UUID resident, ColonyView colony) {
         return List.of();
+    }
+
+    // Pictures set after a resident's name on its card, such as how the resident feels.
+    default Sentence nameMarks(UUID resident, ColonyView colony) {
+        return Sentence.EMPTY;
     }
 
     // Lines under a resident's doing row, telling what that doing is about right now.

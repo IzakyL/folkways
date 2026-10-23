@@ -326,12 +326,10 @@ final class Dining {
         List<Table> here = tables.stream().filter(table -> table.zone.equals(zone.id())).toList();
         long count = here.stream().map(Table::tops).distinct().count();
         long chairs = here.stream().flatMap(table -> table.seats.stream()).map(Seat::chair).distinct().count();
-        return List.of(Line.text(Component.translatable("folkways.dining.summary", count, chairs)),
-            Line.text(Component.translatable(here.isEmpty() ? "folkways.dining.furniture"
-                : here.stream().allMatch(table -> accepted(table).isEmpty()) ? "folkways.dining.no_food" : "folkways.dining.help")));
+        return List.of(Line.text(Component.translatable("folkways.dining.summary", count, chairs)));
     }
 
-    /** A cabinet with an adjacent chair is a bar; drinking does not require a food serving. */
+    /** A stocked service counter with an adjacent chair offers drinks independently of meals. */
     Optional<Urge> drinking(Worker who, ColonyView view) {
         Optional<BarDrink> active = drinks.values().stream().filter(drink -> drink.who.body() == who.body()).findFirst();
         if (active.isPresent()) { return Optional.of(new Urge(LivingPresence.EAT, Urge.SPARE, false, active::get)); }

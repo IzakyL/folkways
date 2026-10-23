@@ -52,17 +52,24 @@ native tables accept edible foods and use the area's servings-per-table setting.
 food components, leave manually placed servings alone, and return unused supplies if an area is removed.
 
 Hungry residents prefer an available nearby table and return native food containers after eating.
+Small portions must fit their remaining appetite. Meals worth at least 10 nutrition may overflow by up
+to 30% of their effective nutrition (capped at 6 points), so a large dish need not wait for starvation.
 Finishing a table meal grants +6 dining mood for one day. If no suitable table meal is available, they
 can eat their pocket rations. Cancelling a table meal leaves its food untouched and frees the seat.
 
-With Kaleidoscope Tavern installed alongside the Cookery extension, choose a dining area's Cabinet
-drinks and place bar cabinets inside the area. Residents keep its cabinets stocked with bottles from
-any source: colony storage, the winery or other production. Tables hold only food. A hungry diner
-first collects one bottle from a cabinet in that area, carries it to the table, drinks it at the end
-of the meal with its native effects, and returns the empty bottle. A drink adds no nutrition but grants
-+4 mood for one day. A cancelled meal keeps the bottle for the diner's next meal. Mark a pressing tub and
+With Kaleidoscope Tavern installed alongside the Cookery extension, choose a dining area's Bar
+drinks and place native bar counters and adjacent chairs inside the area. Each counter stores two real
+bottles, preserving their quality and other components across saves. Residents stock counters from
+colony storage or production and visit them for a seated drink independently of hunger. Tables hold
+only food. Drinking applies the bottle's native effects, returns its empty container, and grants +4 mood
+for one day without adding nutrition. Interrupted visits leave the bottle in stock; breaking a counter
+returns its bottles. Mark a pressing tub and
 a wine barrel with a tap to produce grape wine from grapes, empty buckets and empty bottles. Workers
-jump in the tub, wait for the barrel's native second brewing level, and bottle its actual wine.
+jump in the tub, wait for the barrel's native second brewing level, and place, fill and collect bottles
+one at a time. A cancelled bottling job resumes from the bottle left beneath the tap.
+Select grapevines as a farm's crop and supply grapevines plus four trellises per plant: residents build
+the supports, plant the vines and harvest ripe hanging grapes while leaving the vines to regrow.
+Tree clearing also collects attached wild grapevines before removing their supporting leaves.
 
 ### Resident growth and everyday life
 
@@ -215,7 +222,7 @@ composting, buildings and resident looks.
 | [Sable](https://modrinth.com/mod/sable)                                                                                     | Residents path onto and off sub-levels, including Create Aeronautics ships                                                                                               |
 | [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems                           | Golems join the roster and take trades alongside people                                                                                                                  |
 | [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0, with Folkways × Kaleidoscope Cookery | Flooded-rice farming, ingredient preparation, native appliances, shared tools, kitchen racks, grass-seed gathering and thirteen lessons                                  |
-| [Kaleidoscope Tavern](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0, with the Cookery extension | Residents press grapes, ferment and bottle wine, stock dining-area bar cabinets and drink with their meals |
+| [Kaleidoscope Tavern](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0, with the Cookery extension | Residents press grapes, ferment and bottle wine, stock dining-area bar counters and drink at them |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                          | Bedrock-format resident models                                                                                                                                           |
 | [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib                                       | Built-in and installed add-on models become selectable resident looks, individually or by pack                                                                           |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                      | Colony Book aiming follows its third-person crosshair                                                                                                                    |

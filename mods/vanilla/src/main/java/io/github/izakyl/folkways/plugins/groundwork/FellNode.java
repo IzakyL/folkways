@@ -24,7 +24,7 @@ import net.minecraft.world.level.block.state.BlockState;
 // A whole tree felled as a wood lot fells it, logs and the leaves they hold up, and nothing planted back.
 final class FellNode extends GroundNode {
 
-    private static final int CANOPY_KINDS = 3;
+    private static final int CANOPY_KINDS = 5;
 
     FellNode(ServerLevel level, Chores.Chore chore) {
         super(GroundNode.declare(chore, FarmingContent.trade(), Workload.Once.of(
@@ -52,6 +52,13 @@ final class FellNode extends GroundNode {
         List<ItemStack> taken = new ArrayList<>();
         List<WorkNoise> heard = new ArrayList<>();
         Set<Block> voiced = new HashSet<>();
+        for (BlockPos vine : tree.canopy()) {
+            if (!level.isLoaded(vine)) continue;
+            BlockState state = level.getBlockState(vine);
+            if (!Felling.attachment(state)) continue;
+            taken.addAll(take(level, who.body(), vine, state, ItemStack.EMPTY));
+            shed(heard, voiced, vine, state);
+        }
         int cut = 0;
         for (BlockPos log : tree.cells()) {
             BlockState state = level.isLoaded(log) ? level.getBlockState(log) : null;

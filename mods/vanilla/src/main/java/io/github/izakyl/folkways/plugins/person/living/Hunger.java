@@ -56,8 +56,12 @@ final class Hunger {
         saturationLevel = Math.min(saturationLevel + food.saturation(), foodLevel);
     }
 
-    public boolean canEatWithoutWaste(FoodProperties food) {
-        return foodLevel <= MAX_FOOD_LEVEL - Math.min(MAX_FOOD_LEVEL, food.nutrition());
+    public boolean canEatMeal(FoodProperties food) {
+        int nutrition = Math.min(MAX_FOOD_LEVEL, food.nutrition());
+        // Large shared dishes must not require starvation before a resident will eat them.
+        // Ordinary portions still fit exactly; large meals may overflow by at most 30% (six points).
+        int allowance = nutrition >= 10 ? nutrition * 3 / 10 : 0;
+        return foodLevel < MAX_FOOD_LEVEL && foodLevel <= MAX_FOOD_LEVEL - nutrition + allowance;
     }
 
     public float stepVitals(int elapsedTicks, float health, float maxHealth, Difficulty difficulty,

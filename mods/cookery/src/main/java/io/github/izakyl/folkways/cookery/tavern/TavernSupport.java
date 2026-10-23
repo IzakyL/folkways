@@ -17,6 +17,7 @@ public final class TavernSupport {
         KitchenStations.register(new TavernStation.Pressing());
         KitchenStations.register(new TavernStation.Barrel());
         TavernCabinets.register();
+        TavernGrapes.register();
         DiningDrinks.register(ResourceLocation.fromNamespaceAndPath("folkways", "tavern"), new DiningDrinks.Drink() {
             public boolean matches(ItemStack stack) { return stack.getItem() instanceof DrinkBlockItem; }
             public ItemStack finishUsing(ServerLevel level, Mob diner, ItemStack serving) {

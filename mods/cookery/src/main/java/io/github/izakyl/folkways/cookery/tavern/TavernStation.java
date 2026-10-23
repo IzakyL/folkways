@@ -9,7 +9,9 @@ import com.github.ysbbbbbb.kaleidoscopetavern.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopetavern.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopetavern.init.ModRecipes;
 import io.github.izakyl.folkways.core.api.colony.Closing;
+import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.*;
 import io.github.izakyl.folkways.cookery.*;
@@ -57,7 +59,9 @@ public class TavernStation implements KitchenStation {
                 return nativeBarrel.is(ModBlocks.BARREL.get()) && nativeBarrel.getValue(BarrelBlock.FACING) == facing
                     && BarrelBlock.getOriginPos(source, nativeBarrel).equals(center);
             })
-            .filter(p -> level.getBlockState(p.below()).isAir()
+            .filter(p -> (level.getBlockState(p.below()).isAir()
+                || level.getBlockState(p.below()).getBlock().asItem() == ModItems.EMPTY_BOTTLE.get()
+                || level.getBlockState(p.below()).getBlock().asItem() == ModItems.WINE.get())
                 && level.getBlockState(p.below(2)).isFaceSturdy(level, p.below(2), Direction.UP)).findFirst();
     }
     public Optional<Stances> stances(ServerLevel level, WorldPos at) {
@@ -68,10 +72,25 @@ public class TavernStation implements KitchenStation {
                 .filter(t -> level.getBlockState(at.block(level).above()).isAir() && level.getBlockState(at.block(level).above(2)).isAir())
                 .map(t -> Stances.at(at));
         }
-        return tap(level, at).flatMap(tap -> KitchenStation.around(level, List.of(WorldPos.of(level, tap))));
+        return lid(level, at).isPresent() ? spout(level, at) : Optional.empty();
+    }
+    /** Juice goes in through the lid, so the loader stands on the barrel's top layer. */
+    static Optional<Stances> lid(ServerLevel level, WorldPos at) {
+        BlockPos top = at.block(level).above(3);
+        return Stances.of(level, BlockPos.betweenClosedStream(top.offset(-1, 0, -1), top.offset(1, 0, 1)).map(BlockPos::immutable)
+            .filter(feet -> Footing.withFeetAt(level, feet)).toList());
+    }
+    /** Bottles are set, filled and taken right at the tap: in front of the bottle under it, or beside it. */
+    static Optional<Stances> spout(ServerLevel level, WorldPos at) {
+        return tap(level, at).flatMap(tap -> {
+            Direction out = level.getBlockState(tap).getValue(TapBlock.FACING);
+            return Stances.of(level, List.of(out, out.getClockWise(), out.getCounterClockWise()).stream().map(side -> tap.below().relative(side))
+                .filter(feet -> Footing.withFeetAt(level, feet) && Reach.withinReach(feet, tap) && Reach.inSight(level, feet, tap)).toList());
+        });
     }
     static boolean empty(ServerLevel level, WorldPos at, boolean barrel) {
-        return barrel ? barrel(level, at).filter(b -> !b.isBrewing() && b.getFluid().isEmpty() && b.getOutput().getStackInSlot(0).isEmpty()
+        return barrel ? tap(level, at).filter(t -> level.getBlockState(t.below()).isAir()).isPresent()
+            && barrel(level, at).filter(b -> !b.isBrewing() && b.getFluid().isEmpty() && b.getOutput().getStackInSlot(0).isEmpty()
             && java.util.stream.IntStream.range(0, b.getIngredient().getSlots()).allMatch(i -> b.getIngredient().getStackInSlot(i).isEmpty())).isPresent()
             : tub(level, at).filter(t -> t.getFluidAmount() == 0 && t.getItems().getStackInSlot(0).isEmpty()).isPresent();
     }

@@ -49,6 +49,22 @@ public final class LivingEffectsGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void moodEventsAreGainsAndFallsNotExpiries(GameTestHelper helper) {
+        Mood mood = new Mood();
+        mood.chatted = 10L * Mood.DAY; // company throughout, so loneliness does not arrive mid-test
+        helper.assertValueEqual(mood.step(0, 20, 1200, 0, false, false), 0, "the first step has nothing to compare");
+        helper.assertValueEqual(mood.step(100, 20, 1200, 0, false, false), 0, "nothing happened");
+        mood.dined = 200;
+        helper.assertTrue(mood.step(200, 20, 1200, 0, false, false) > 0, "a table meal is a good event");
+        helper.assertValueEqual(mood.step(200 + Mood.DAY, 20, 1200, 0, false, false), 0, "the meal wearing off is no event");
+        mood.attacked = 300 + Mood.DAY;
+        helper.assertTrue(mood.step(300 + Mood.DAY, 20, 1200, 0, false, false) < 0, "an attack is a bad event");
+        helper.assertValueEqual(mood.step(300 + Mood.DAY + 2000, 20, 1200, 0, false, false), 0,
+            "the fright fading is no event");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void bedroomIsInspectedAndOpeningItsRoofInvalidatesIt(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos origin = helper.absolutePos(new BlockPos(2, 2, 2));

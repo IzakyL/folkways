@@ -31,6 +31,18 @@ public interface CropBehavior {
 
     boolean needsFarmland();
 
+    default List<io.github.izakyl.folkways.core.api.work.Need> plantingMaterials(int plants) {
+        return List.of();
+    }
+
+    default boolean sowsAt(BlockPos ground, int minX, int minZ, java.util.Set<BlockPos> plot) {
+        return true;
+    }
+
+    default boolean plant(ServerLevel level, Worker who, BlockPos base, ItemStack seed, List<ItemStack> supplied) {
+        return plant(level, who, base, seed);
+    }
+
     // Native preparation that does not go through a hoe's usual tool action, such as a flooded rice paddy.
     // Planning and work ask the same question without changing the soil or the block above it.
     default Optional<BlockState> tilled(Level level, BlockPos ground, ItemStack hoe) {

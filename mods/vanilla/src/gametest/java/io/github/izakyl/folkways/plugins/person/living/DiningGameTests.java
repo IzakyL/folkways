@@ -522,13 +522,14 @@ public final class DiningGameTests {
         void zone(Item food, Item... additional) {
             if (zone != null) { front.erase(zone); }
             ColonySettings settings = ColonySettings.empty().with(LivingContent.DINING_SERVINGS.key(), new ColonySettings.Value.Count(2));
+            // No food is a list cleared to nothing; a setting left out takes the schema's default foods.
+            var foods = new java.util.ArrayList<Item>();
             if (food != null) {
-                var foods = new java.util.ArrayList<Item>();
                 foods.add(food);
                 foods.addAll(List.of(additional));
-                settings = settings.with(LivingContent.DINING_FOOD.key(), new ColonySettings.Value.Items(foods.stream()
-                    .map(item -> ItemFilter.item(BuiltInRegistries.ITEM.getKey(item))).toList()));
             }
+            settings = settings.with(LivingContent.DINING_FOOD.key(), new ColonySettings.Value.Items(foods.stream()
+                .map(item -> ItemFilter.item(BuiltInRegistries.ITEM.getKey(item))).toList()));
             zone = front.addZone(level, LivingContent.DINING, java.util.Set.of(at, chair), settings).orElseThrow().id();
             dining.refresh(level.getServer());
         }

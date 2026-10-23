@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.cookery.tavern.mixin",
+  "plugin": "io.github.izakyl.folkways.cookery.CookeryMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["BarCounterBlockMixin"],
+  "injectors": {"defaultRequire": 1}
+}

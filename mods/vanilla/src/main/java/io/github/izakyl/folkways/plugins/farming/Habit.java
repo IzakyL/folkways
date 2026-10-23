@@ -212,7 +212,7 @@ sealed interface Habit {
                             continue;
                         }
                         if (leaves.size() >= MAX_CANOPY_CELLS) {
-                            return List.copyOf(leaves);
+                            return Felling.withAttachments(level, cut, leaves);
                         }
                         leaves.add(leaf);
                         next.add(leaf);
@@ -220,7 +220,7 @@ sealed interface Habit {
                 }
                 ring = next;
             }
-            return List.copyOf(leaves);
+            return Felling.withAttachments(level, cut, leaves);
         }
 
         static boolean leaf(BlockState state) {

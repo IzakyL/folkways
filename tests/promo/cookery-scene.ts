@@ -5,7 +5,7 @@ import { runColonyTask } from "../shared/colony/colony-tasks";
 import { commandPos, frames, tryCommand } from "../shared/harness/bw-helpers";
 import { admitPromoSettlersFast, foundPromoColonyFast, licenseCrewFast } from "./fast-setup";
 import { applyCookeryLooks, prepareCookeryModels, WINE_FOX_MODELS } from "./cookery-cast";
-import { cinematicWorld, hideHud, launchPromoPair, promoClip, setFov, setTickRate, sleepMs, type PromoPair } from "./promo-kit";
+import { cinematicWorld, hideHud, hudShown, launchPromoPair, promoClip, setFov, setTickRate, sleepMs, type PromoPair } from "./promo-kit";
 
 // Shared staging for the small Cookery takes: each films one feature on a bare plot with a handful of residents.
 
@@ -68,7 +68,7 @@ export async function castColony(scene: Scene, members: Vec[], count: number, tr
   const looks = await applyCookeryLooks(server, client, residents);
   const licences = await licenseCrewFast(server, residents.map((uuid, i) => ({ uuid, trades: trades(i) })));
   for (const uuid of residents) await world.command(server, `data merge entity ${uuid} {Invulnerable:1b}`);
-  await world.command(server, `item replace entity ${name} weapon.mainhand with minecraft:air`);
+  // Keep the colony book held: world-space resident cards also render with the HUD hidden.
   return { colony_id: founded.colony_id, residents, founded, admitted, looks, licences };
 }
 
@@ -79,6 +79,7 @@ export async function place(server: MinecraftServer, uuid: string, p: Vec) {
 /** Puts the spectating player at a fixed camera and clears the HUD. */
 export async function fixCamera(scene: Scene, feet: Vec, aim: Vec, fov: number) {
   const { server, client, name } = scene;
+  await world.command(server, `item replace entity ${name} weapon.mainhand with folkways:colony_book`);
   await world.command(server, `gamemode spectator ${name}`);
   await setFov(client, fov);
   const look = cameraLookingAt({ x: feet.x + 0.5, y: feet.y + 1.62, z: feet.z + 0.5 },
@@ -87,7 +88,8 @@ export async function fixCamera(scene: Scene, feet: Vec, aim: Vec, fov: number) 
   await tick.sprint(server, 5);
   await player.place(client, look);
   await screen.dismiss(client);
-  await hideHud(client);
+  // hideHud toggles; a second camera in the same take must not bring the HUD back.
+  if (hudShown(client)) await hideHud(client);
   await frames(client, 30);
   return look;
 }
@@ -201,9 +203,10 @@ for (var rawArea : args.list("areas")) {
         cells.add(new BlockPos(((Number) cell.get("x")).intValue(), ((Number) cell.get("y")).intValue(), ((Number) cell.get("z")).intValue()));
     }
     var settings = ColonySettings.empty()
-        .with(LivingContent.DINING_SERVINGS.key(), new ColonySettings.Value.Count((int) area.integer("servings")))
-        .with(LivingContent.DINING_FOOD.key(), new ColonySettings.Value.Items(
-            area.strings("foods").stream().map(id -> ItemFilter.item(ResourceLocation.parse(id))).toList()));
+        .with(LivingContent.DINING_SERVINGS.key(), new ColonySettings.Value.Count((int) area.integer("servings")));
+    // A bar-only area has drinks and no dishes.
+    if (!area.strings("foods").isEmpty()) settings = settings.with(LivingContent.DINING_FOOD.key(), new ColonySettings.Value.Items(
+        area.strings("foods").stream().map(id -> ItemFilter.item(ResourceLocation.parse(id))).toList()));
     if (!area.strings("drinks").isEmpty()) settings = settings.with(LivingContent.DINING_DRINK.key(), new ColonySettings.Value.Items(
         area.strings("drinks").stream().map(id -> ItemFilter.item(ResourceLocation.parse(id))).toList()));
     var zone = front.addZone(ctx.server().overworld(), LivingContent.DINING, cells, settings).orElseThrow();
@@ -292,16 +295,29 @@ const READ_SCENE = defineTask<Record<string, any>, any>({
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.api.resident.body.Bodies", "io.github.izakyl.folkways.plugins.person.living.DiningTables",
     "io.github.izakyl.folkways.core.api.terms.Containers",
+    "io.github.izakyl.folkways.core.api.colony.Colonies",
+    "io.github.izakyl.folkways.plugins.person.living.LivingContent",
     "net.minecraft.core.BlockPos", "net.minecraft.core.registries.BuiltInRegistries",
   ], body: `
 var args = Args.of(ctx);
 var level = ctx.server().overworld();
+var living = Colonies.of(ctx.server(), UUID.fromString(args.string("colony"))).orElseThrow()
+    .service(LivingContent.ID, Object.class).orElseThrow();
+var foodLevel = living.getClass().getDeclaredMethod("foodLevelOf", UUID.class);
+foodLevel.setAccessible(true);
+var moodOf = living.getClass().getDeclaredMethod("mood", UUID.class);
+moodOf.setAccessible(true);
 var people = new ArrayList<Object>();
 for (var id : args.strings("uuids")) {
     var entity = level.getEntity(UUID.fromString(id));
     var body = Bodies.of(entity).orElseThrow();
     var one = new LinkedHashMap<String, Object>();
     one.put("uuid", id);
+    one.put("food", ((Optional<?>) foodLevel.invoke(living, entity.getUUID())).orElseThrow());
+    var mood = moodOf.invoke(living, entity.getUUID());
+    var dined = mood.getClass().getDeclaredField("dined");
+    dined.setAccessible(true);
+    one.put("lastDined", dined.getLong(mood));
     one.put("action", body.doing().map(doing -> doing.what().getPath()).orElse("idle"));
     one.put("toward", body.doing().map(doing -> doing.toward().orElse(doing.what()).getPath()).orElse("idle"));
     boolean dining = entity instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person && (person.leisureMotion().equals("dining") || person.leisureMotion().equals("drinking"));
