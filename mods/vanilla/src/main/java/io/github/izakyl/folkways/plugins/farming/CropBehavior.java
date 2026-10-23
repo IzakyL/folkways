@@ -31,8 +31,7 @@ public interface CropBehavior {
 
     boolean needsFarmland();
 
-    // Besides the seeds: what the plants and the frame still to build around them are made of.
-    default List<io.github.izakyl.folkways.core.api.work.Need> plantingMaterials(int plants, int frame) {
+    default List<io.github.izakyl.folkways.core.api.work.Need> plantingMaterials(int plants) {
         return List.of();
     }
 
@@ -45,14 +44,23 @@ public interface CropBehavior {
         return true;
     }
 
-    // The cells still to build with the stand at this base that are not the stand itself, such as its share of a
-    // pergola roofing the whole plot. The plot is its ground cells.
-    default List<BlockPos> frame(LevelReader level, BlockPos base, java.util.Set<BlockPos> plot) {
+    // What the plot is framed with before it is sown, such as a pergola's posts and roof. The frame goes up a cell
+    // at a time, each cell its own piece of work done from where a body can reach it.
+    default Optional<io.github.izakyl.folkways.core.api.terms.ItemSpec> frame() {
+        return Optional.empty();
+    }
+
+    // The frame cells that can be laid now, each against what already stands. The plot is its ground cells.
+    default List<BlockPos> frameCells(LevelReader level, java.util.Set<BlockPos> plot) {
         return List.of();
     }
 
-    default boolean plant(ServerLevel level, Worker who, BlockPos base, ItemStack seed, List<ItemStack> supplied,
-            List<BlockPos> frame) {
+    // Lays one frame cell from the supplied frame goods, using up exactly what it lays.
+    default boolean lay(ServerLevel level, Worker who, BlockPos at, List<ItemStack> supplied) {
+        return false;
+    }
+
+    default boolean plant(ServerLevel level, Worker who, BlockPos base, ItemStack seed, List<ItemStack> supplied) {
         return plant(level, who, base, seed);
     }
 

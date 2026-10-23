@@ -2,7 +2,7 @@ import { defineTask, javaTask } from "@izakyl/blockwright-minecraft";
 import { runColonyTask, MARK_MEMBERS } from "../shared/colony/colony-tasks";
 import type { Scene } from "./cookery-scene";
 
-/** Supply construction materials and delegate an empty plot. Residents raise the corner posts, roof the plot and plant every vine. */
+/** Supply construction materials and delegate an empty plot. Residents lay the corner posts and the roof a trellis at a time, then plant every vine. */
 export async function stageVineyard(scene: Scene, colony_id: string) {
   const supplies = scene.at(-16, 7);
   await scene.set(supplies, 'minecraft:chest{Items:[{Slot:0b,id:"kaleidoscope_tavern:grapevine",count:8},{Slot:1b,id:"kaleidoscope_tavern:trellis",count:64},{Slot:2b,id:"kaleidoscope_tavern:trellis",count:64}]}');

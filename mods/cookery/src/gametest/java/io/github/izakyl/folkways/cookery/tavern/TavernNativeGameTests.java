@@ -250,26 +250,27 @@ public final class TavernNativeGameTests {
             }
             var corners = plot.stream().filter(ground -> grape.sowsAt(ground, 0, 0, plot)).toList();
             helper.assertValueEqual(corners.size(), 4, "a post stands at each corner of the plot");
-            BlockPos base = corners.get(0).above();
-            var frame = grape.frame(r.level, base, plot);
-            ItemStack seed = new ItemStack(ModItems.GRAPEVINE.get());
-            ItemStack frames = new ItemStack(ModBlocks.TRELLIS.get(), 2 + frame.size());
-            helper.assertFalse(grape.plant(r.level, r, base, seed, List.of(seed, frames), frame), "insufficient trellises cannot create a free structure");
-            helper.assertTrue(seed.getCount() == 1 && r.level.getBlockState(base).isAir(), "failed build preserves supplies and world");
-            frames.grow(1);
-            helper.assertTrue(grape.plant(r.level, r, base, seed, List.of(seed, frames), frame), "resident builds and plants with real vine and trellises");
-            helper.assertTrue(seed.isEmpty() && frames.isEmpty(), "one vine and exactly the post and its roof share are consumed");
-            int laid = frame.size();
-            for (BlockPos corner : corners.subList(1, corners.size())) {
-                BlockPos post = corner.above();
-                var share = grape.frame(r.level, post, plot);
-                laid += share.size();
-                ItemStack vine = new ItemStack(ModItems.GRAPEVINE.get());
-                helper.assertTrue(grape.plant(r.level, r, post, vine, List.of(vine, new ItemStack(ModBlocks.TRELLIS.get(), 3 + share.size())), share), "every corner post is built");
+            helper.assertFalse(grape.canPlant(r.level, corners.get(0).above()), "no vine is planted before its post stands");
+            var first = grape.frameCells(r.level, plot);
+            helper.assertTrue(first.size() == 4 && first.stream().allMatch(at -> corners.contains(at.below())), "the frame starts with one trellis at the foot of each post");
+            ItemStack none = new ItemStack(ModBlocks.TRELLIS.get(), 0);
+            helper.assertFalse(grape.lay(r.level, r, first.get(0), List.of(none)), "no trellis is laid without one supplied");
+            int laid = 0;
+            for (var ready = first; !ready.isEmpty(); ready = grape.frameCells(r.level, plot)) {
+                for (BlockPos at : ready) {
+                    ItemStack one = new ItemStack(ModBlocks.TRELLIS.get());
+                    helper.assertTrue(grape.lay(r.level, r, at, List.of(one)) && one.isEmpty(), "each frame cell takes exactly one trellis");
+                    laid++;
+                }
+                helper.assertTrue(laid <= 4 * 4 + plot.size(), "the frame goes up a cell at a time and ends");
             }
-            helper.assertValueEqual(laid, plot.size(), "the roof covers every cell of the plot exactly once");
+            helper.assertValueEqual(laid, 4 * 4 + plot.size(), "four posts and a roof over every cell of the plot");
             BlockPos middle = helper.absolutePos(new BlockPos(2, 2, 2));
             helper.assertTrue(r.level.getBlockState(middle.above(4)).is(ModBlocks.TRELLIS.get()) && r.level.getBlockState(middle).isAir(), "the roof is five blocks up and the ground under it is open");
+            for (BlockPos corner : corners) {
+                ItemStack vine = new ItemStack(ModItems.GRAPEVINE.get());
+                helper.assertTrue(grape.plant(r.level, r, corner.above(), vine, List.of(vine)) && vine.isEmpty(), "a vine is planted at the foot of every post");
+            }
             for (int tick = 0; tick < 40; tick++) {
                 for (BlockPos cell : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(1, 2, 1)), helper.absolutePos(new BlockPos(4, 6, 3)))) {
                     var state = r.level.getBlockState(cell);

@@ -18,13 +18,13 @@ SHOTS = [
         ("kitchen", [(0.0, 50.0, 5.0), (50.0, 100.0, 3.0)]),
     ], 0.4, "bl"),
     ("vineyard", "cookery-wine/01-vineyard.mp4", [
-        ("tavern", [(0.0, 22.0, 6.0), (22.0, 50.0, 2.0), (50.0, 140.0, 10.0)]),
+        ("tavern", [(0.0, 20.0, 8.0), (20.0, 128.0, 5.0), (128.0, 140.0, 6.0)]),
     ], 0.4, "bl"),
     ("pressing", "cookery-wine/02-pressing-and-fermentation.mp4", [
-        ("tavern_pressing", [(0.0, 48.0, 12.0), (48.0, 65.0, 3.0)]),
+        ("tavern_pressing", [(0.0, 35.0, 12.0), (35.0, 65.0, 3.0)]),
     ], 0.4, "bl"),
     ("bottling", "cookery-wine/03-fermentation-and-bottling.mp4", [
-        ("tavern_bottling", [(0.0, 22.0, 3.0), (22.0, 86.0, 20.0), (86.0, 128.0, 3.0)]),
+        ("tavern_bottling", [(0.0, 14.0, 3.0), (14.0, 77.0, 20.0), (77.0, 118.0, 3.0)]),
     ], 0.4, "bl"),
     ("bar", "cookery-wine/04-drinks-at-the-bar.mp4", [
         ("tavern_bar", [(0.0, 32.0, 2.0)]),

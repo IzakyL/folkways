@@ -5,8 +5,7 @@ import io.github.izakyl.folkways.core.api.work.Stances;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 
-// The canopy is what comes away with the cells, the leaves of a felled tree, or what goes up with them: the frame a
-// sown stand is built with.
+// The canopy is what comes away with the cells: the leaves of a felled tree.
 record Job(WorldPos ground, List<BlockPos> cells, List<BlockPos> canopy, Stances footings, BlockPos storage) {
 
     Job {

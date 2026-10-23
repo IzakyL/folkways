@@ -1,13 +1,14 @@
 package io.github.izakyl.folkways.cookery.tavern;
 
 import com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapeCropBlock;
+import com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapevineTrellisBlock;
 import com.github.ysbbbbbb.kaleidoscopetavern.block.plant.ITrellis;
+import com.github.ysbbbbbb.kaleidoscopetavern.block.plant.TrellisBlock;
 import com.github.ysbbbbbb.kaleidoscopetavern.block.properties.TrellisType;
 import com.github.ysbbbbbb.kaleidoscopetavern.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopetavern.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopetavern.init.tag.TagMod;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.WorkNoise;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.farming.CropBehavior;
@@ -29,8 +30,9 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Real Tavern vines climb a post at each corner of the plot, then spread over a trellis roof covering the whole plot
- * five blocks up and hang fruit under it.
+ * Real Tavern vines climb a trellis post at each corner of the plot, then spread over a trellis roof covering the whole
+ * plot five blocks up and hang fruit under it. Residents lay the frame a trellis at a time, then plant a vine at the
+ * foot of each finished post.
  */
 public final class TavernGrapes implements CropBehavior {
     private static final int POST = 4;
@@ -47,74 +49,61 @@ public final class TavernGrapes implements CropBehavior {
     public boolean needsFarmland() { return false; }
     public int reach() { return ROOF + 1; }
     public boolean aisles() { return false; }
-    public List<Need> plantingMaterials(int plants, int frame) {
-        return List.of(new Need(ItemSpec.of(BuiltInRegistries.ITEM.getKey(ModBlocks.TRELLIS.get().asItem())),
-            plants * (POST - 1) + frame));
-    }
     public boolean sowsAt(BlockPos ground, int minX, int minZ, Set<BlockPos> plot) {
         return corner(ground, plot);
     }
-    public List<BlockPos> placementCells(BlockPos base) {
-        List<BlockPos> post = new ArrayList<>(POST);
-        for (int up = 0; up < POST; up++) post.add(base.above(up));
-        return post;
+    public Optional<ItemSpec> frame() {
+        return Optional.of(ItemSpec.of(BuiltInRegistries.ITEM.getKey(ModBlocks.TRELLIS.get().asItem())));
     }
-    // This post's share of the roof: every cell of the plot nearer to it than to any other corner.
-    public List<BlockPos> frame(LevelReader level, BlockPos base, Set<BlockPos> plot) {
-        BlockPos ground = base.below();
+    // Posts go up from the ground, the roof from the top of a post outward, each cell against one already laid.
+    public List<BlockPos> frameCells(LevelReader level, Set<BlockPos> plot) {
         List<BlockPos> corners = plot.stream().filter(cell -> corner(cell, plot))
             .sorted(Comparator.comparingInt((BlockPos cell) -> cell.getX()).thenComparingInt(cell -> cell.getZ())).toList();
-        List<BlockPos> roof = new ArrayList<>();
-        for (BlockPos cell : plot) {
-            if (!ground.equals(nearest(cell, corners))) continue;
-            BlockPos at = new BlockPos(cell.getX(), base.getY() + ROOF, cell.getZ());
-            if (level.hasChunkAt(at) && level.getBlockState(at).isAir()) roof.add(at);
-        }
-        roof.sort(Comparator.comparingInt((BlockPos at) -> at.distManhattan(base)));
-        return roof;
-    }
-    public boolean canPlant(LevelReader level, BlockPos base) {
-        BlockPos roof = base.above(ROOF);
-        return roof.getY() < level.getMaxBuildHeight()
-            && level.getBlockState(base.below()).is(TagMod.CAN_GROW_GRAPE)
-            && placementCells(base).stream().allMatch(p -> level.hasChunkAt(p) && level.getBlockState(p).isAir())
-            && level.hasChunkAt(roof)
-            && (level.getBlockState(roof).isAir() || level.getBlockState(roof).is(ModBlocks.TRELLIS.get()));
-    }
-    public boolean plant(ServerLevel level, Worker who, BlockPos base, ItemStack seed, List<ItemStack> supplied,
-            List<BlockPos> frame) {
-        if (!seed.is(ModItems.GRAPEVINE.get()) || seed.isEmpty() || !canPlant(level, base)) return false;
-        List<BlockPos> cells = new ArrayList<>(placementCells(base));
-        frame.stream().filter(p -> level.isLoaded(p) && level.getBlockState(p).isAir()).forEach(cells::add);
-        Item trellis = ModBlocks.TRELLIS.get().asItem();
-        int needed = cells.size() - 1;
-        if (supplied.stream().filter(s -> s.is(trellis)).mapToInt(ItemStack::getCount).sum() < needed) return false;
-        List<BlockState> before = cells.stream().map(level::getBlockState).toList();
-        for (int i = 0; i < cells.size(); i++) {
-            BlockState state = i == 0 ? planted() : ModBlocks.TRELLIS.get().defaultBlockState();
-            if (!level.setBlock(cells.get(i), state, Block.UPDATE_ALL)) {
-                for (int j = cells.size() - 1; j >= 0; j--) level.setBlock(cells.get(j), before.get(j), Block.UPDATE_ALL);
-                return false;
+        List<BlockPos> ready = new ArrayList<>();
+        for (BlockPos corner : corners) {
+            for (int up = 1; up <= POST; up++) {
+                BlockPos at = corner.above(up);
+                if (open(level, at) && (up == 1 || framed(level, at.below()))) ready.add(at);
             }
         }
-        // Laid one by one, each frame takes the shape it would have had placed by hand among the finished ones.
-        for (int i = 1; i < cells.size(); i++) {
-            BlockPos at = cells.get(i);
-            level.setBlock(at, level.getBlockState(at).setValue(ITrellis.TYPE, laid(level, at, i < POST)),
-                Block.UPDATE_ALL);
+        for (BlockPos cell : plot) {
+            BlockPos at = new BlockPos(cell.getX(), nearest(cell, corners).getY() + 1 + ROOF, cell.getZ());
+            if (!open(level, at)) continue;
+            boolean against = framed(level, at.below()) && corners.contains(cell);
+            for (Direction side : Direction.Plane.HORIZONTAL) against |= framed(level, at.relative(side));
+            if (against) ready.add(at);
         }
-        int remaining = needed;
-        for (ItemStack stack : supplied) {
-            if (!stack.is(trellis)) continue;
-            int used = Math.min(remaining, stack.getCount());
-            stack.shrink(used);
-            remaining -= used;
+        return ready;
+    }
+    public boolean lay(ServerLevel level, Worker who, BlockPos at, List<ItemStack> supplied) {
+        Item trellis = ModBlocks.TRELLIS.get().asItem();
+        ItemStack stock = supplied.stream().filter(s -> s.is(trellis) && !s.isEmpty()).findFirst().orElse(ItemStack.EMPTY);
+        if (stock.isEmpty() || !level.getBlockState(at).isAir()) return false;
+        BlockState state = ModBlocks.TRELLIS.get().defaultBlockState().setValue(ITrellis.TYPE, laid(level, at));
+        if (!level.setBlock(at, state, Block.UPDATE_ALL)) return false;
+        stock.shrink(1);
+        return true;
+    }
+    // A vine is planted into the foot of a finished post, as a player plants one on a lone trellis.
+    public boolean canPlant(LevelReader level, BlockPos base) {
+        if (!level.getBlockState(base.below()).is(TagMod.CAN_GROW_GRAPE)) return false;
+        for (int up = 0; up < POST; up++) {
+            BlockState post = level.getBlockState(base.above(up));
+            if (!post.is(ModBlocks.TRELLIS.get()) || post.getValue(TrellisBlock.WAXED)) return false;
         }
+        return level.getBlockState(base).getValue(ITrellis.TYPE) == TrellisType.SINGLE;
+    }
+    public boolean plant(ServerLevel level, Worker who, BlockPos base, ItemStack seed, List<ItemStack> supplied) {
+        if (!seed.is(ModItems.GRAPEVINE.get()) || seed.isEmpty() || !canPlant(level, base)) return false;
+        BlockState post = level.getBlockState(base);
+        BlockState vine = planted().setValue(ITrellis.TYPE, post.getValue(ITrellis.TYPE))
+            .setValue(GrapevineTrellisBlock.WATERLOGGED, post.getValue(TrellisBlock.WATERLOGGED));
+        if (!level.setBlock(base, vine, Block.UPDATE_ALL)) return false;
         seed.shrink(1);
         return true;
     }
     public boolean plant(ServerLevel level, Worker who, BlockPos base, ItemStack seed) {
-        return false; // Building requires the separately reserved trellises as well as the vine.
+        return plant(level, who, base, seed, List.of());
     }
     public boolean ripe(LevelReader level, BlockPos base) {
         BlockState state = level.getBlockState(base);
@@ -160,10 +149,20 @@ public final class TavernGrapes implements CropBehavior {
         return best;
     }
 
-    private static TrellisType laid(ServerLevel level, BlockPos at, boolean post) {
+    private static boolean open(LevelReader level, BlockPos at) {
+        return at.getY() < level.getMaxBuildHeight() && level.hasChunkAt(at) && level.getBlockState(at).isAir();
+    }
+
+    private static boolean framed(LevelReader level, BlockPos at) {
+        BlockState state = level.getBlockState(at);
+        return state.getBlock() instanceof ITrellis trellis && trellis.sameType(state);
+    }
+
+    // The shape a trellis takes placed by hand among the ones already standing: a post stands up, a roof lies flat.
+    private static TrellisType laid(ServerLevel level, BlockPos at) {
         boolean x = ITrellis.axisHasTrellis(level, at, Direction.Axis.X);
         boolean y = ITrellis.axisHasTrellis(level, at, Direction.Axis.Y);
         boolean z = ITrellis.axisHasTrellis(level, at, Direction.Axis.Z);
-        return ITrellis.getTypeForPlacement(x, y, z, post ? Direction.Axis.Y : x ? Direction.Axis.X : Direction.Axis.Z);
+        return ITrellis.getTypeForPlacement(x, y, z, x ? Direction.Axis.X : z ? Direction.Axis.Z : Direction.Axis.Y);
     }
 }

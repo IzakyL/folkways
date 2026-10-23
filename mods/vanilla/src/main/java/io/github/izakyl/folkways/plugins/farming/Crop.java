@@ -196,10 +196,6 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
         return behavior.map(adapted -> adapted.attached(level, cut)).orElseGet(() -> habit.canopy(level, cut));
     }
 
-    List<BlockPos> frameAt(LevelReader level, BlockPos ground, Plot plot) {
-        return behavior.map(adapted -> adapted.frame(level, ground.above(), plot.cells())).orElseGet(List::of);
-    }
-
     List<BlockPos> standAt(BlockPos ground) {
         return habit.stand(ground);
     }
