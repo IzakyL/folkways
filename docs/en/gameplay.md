@@ -21,7 +21,7 @@ determines who keeps the colony, and the party owner holds the founder's rights.
 ## Work and storage
 
 Rank each resident's trades on the **Workforce** page. The colony chooses the
-tasks, supplies and order of work. Fields, pens, fisheries and patrol routes
+tasks, supplies and order of work. Fields, pens, apiaries, fisheries and patrol routes
 describe where work happens; stock orders describe what a container should hold.
 
 Each container can allow or refuse residents taking goods and using it for
@@ -208,6 +208,21 @@ neither Cookery nor a straw hat is required. When the Cookery extension is
 installed, its planting materials participate in the same reserve system.
 
 The creative supply box also belongs to Vanilla and works without Cookery.
+
+## Beekeeping
+
+Frame an apiary around bee nests and beehives, then choose **Honey Bottle** or
+**Honeycomb** in its settings. Residents with the Herd trade harvest full hives;
+honey bottles need glass bottles, while honeycomb needs shears. Bees continue
+to pollinate and produce honey through the vanilla mechanics, so provide bees
+and nearby flowers.
+
+For hives without effective campfire smoke, the apiary requests campfire
+construction on the ground beneath them. Builders use colony supplies to fill
+these requests. Harvesting waits until the hive has effective smoke. The apiary
+shows how many hives lack smoke. If there is no suitable ground space or the
+smoke path is blocked, adjust the layout; relight any existing extinguished
+campfires yourself.
 
 ## Buildings
 

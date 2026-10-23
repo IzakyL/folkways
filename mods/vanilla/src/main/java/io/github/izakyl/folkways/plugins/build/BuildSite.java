@@ -228,6 +228,7 @@ final class BuildSite {
     private final Map<UUID, UUID> handed = new HashMap<>();
     private long idleUntil = Long.MIN_VALUE;
     private boolean staffingPending;
+    private boolean scaffoldsAllowed = true;
     private final List<Raised> raised = new ArrayList<>();
     private long accessAt = NEVER;
     private long toldAt = NEVER;
@@ -239,6 +240,11 @@ final class BuildSite {
         this.asks = asks;
         this.target = target;
         this.temporary = temporary;
+    }
+
+    /** Infrastructure work on existing floors never needs temporary access structures. */
+    void withoutScaffolds() {
+        scaffoldsAllowed = false;
     }
 
     UUID order() {
@@ -897,6 +903,9 @@ final class BuildSite {
         if (step.kind() == BuildJob.Kind.RAISE || step.kind() == BuildJob.Kind.LOWER || step.kind() == BuildJob.Kind.JOIN) {
             return node;
         }
+        if (!scaffoldsAllowed) {
+            node.onlyReplaceable();
+        }
         return node.keeping(latched::contains);
     }
 
@@ -1024,6 +1033,9 @@ final class BuildSite {
      * whole connected structures come down, and what they stood on is cleared last.
      */
     private boolean access(ServerLevel level) {
+        if (!scaffoldsAllowed) {
+            return false;
+        }
         long now = level.getGameTime();
         if (now - accessAt < ACCESS_TICKS) {
             return false;
