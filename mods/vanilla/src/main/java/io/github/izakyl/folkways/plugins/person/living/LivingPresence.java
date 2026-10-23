@@ -197,7 +197,7 @@ final class LivingPresence implements Facing {
         for (int slot = 0; slot < pack.getContainerSize(); slot++) {
             ItemStack stack = pack.getItem(slot);
             FoodProperties food = stack.isEmpty() ? null : stack.getFoodProperties(who.body());
-            if (food != null && wouldEat(who.resident().id(), food)) {
+            if (wouldEat(who.resident().id(), stack, food)) {
                 return true;
             }
         }
@@ -219,9 +219,11 @@ final class LivingPresence implements Facing {
         return tired == null ? 1 : tired.ticksToSleepOff();
     }
 
-    boolean wouldEat(UUID resident, FoodProperties food) {
+    boolean wouldEat(UUID resident, ItemStack stack, FoodProperties food) {
         Hunger belly = bellies.get(resident);
-        return belly != null && belly.canEatWithoutWaste(food);
+        return belly != null && FoodSafety.usable(Fronts.of(colony).settings(LivingContent.ID), stack, food)
+            && belly.canEatWithoutWaste(food)
+            && FoodSafety.matches(Fronts.of(colony).settings(LivingContent.ID), stack);
     }
 
     void ate(UUID resident, FoodProperties food) {
@@ -250,8 +252,7 @@ final class LivingPresence implements Facing {
     }
 
     public List<Grown> goals(ColonyView view) {
-        Optional<ItemSpec> allowed = Fronts.of(colony).settings(LivingContent.ID)
-            .items(LivingContent.FOOD.key());
+        Optional<ItemSpec> allowed = LivingContent.food(colony);
         if (allowed.isEmpty()) {
             return List.of();
         }
@@ -278,12 +279,12 @@ final class LivingPresence implements Facing {
     }
 
     // How much the food in the pack nourishes, of the food the colony eats.
-    private static int nourishing(Container pack, ItemSpec food, LivingEntity body) {
+    private int nourishing(Container pack, ItemSpec food, LivingEntity body) {
         int points = 0;
         for (int slot = 0; slot < pack.getContainerSize(); slot++) {
             ItemStack stack = pack.getItem(slot);
             FoodProperties eaten = stack.isEmpty() ? null : stack.getFoodProperties(body);
-            if (eaten != null && Goods.matches(stack, food)) {
+            if (FoodSafety.usable(Fronts.of(colony).settings(LivingContent.ID), stack, eaten) && Goods.matches(stack, food)) {
                 points += eaten.nutrition() * stack.getCount();
             }
         }
@@ -349,6 +350,10 @@ final class LivingPresence implements Facing {
                 Component.translatable(need.kind().nameKey()),
                 Component.literal(need.have() + " / " + need.want(mouths))).told(told(need, mouths)));
         }
+        rows.add(new Board.Row(ItemStack.EMPTY,
+            Component.translatable(LivingContent.FOOD_MODE.nameKey()), Component.empty(),
+            List.of(new Board.Act.Edit(LivingContent.FOOD_MODE.key()),
+                new Board.Act.Edit(LivingContent.FOOD_SAFETY.key()))).wide());
         rows.add(new Board.Row(new ItemStack(BuiltInRegistries.ITEM.get(LivingContent.FOOD.icon())),
             Component.translatable(LivingContent.FOOD.nameKey()),
             Component.empty(),
@@ -399,11 +404,12 @@ final class LivingPresence implements Facing {
         }
         write();
         SettlerNeed bed = new SettlerNeed(LivingNeed.BED, freeBeds, 1);
-        return Fronts.of(colony).settings(LivingContent.ID).items(LivingContent.FOOD.key())
-            .map(food -> List.of(bed, SettlerNeed.counting(LivingNeed.FOOD, food,
+        return List.of(bed, LivingContent.food(colony)
+            .map(food -> SettlerNeed.counting(LivingNeed.FOOD, food,
                     FolkwaysVanillaConfig.foodPerResident(), SettlerNeed.Per.RESIDENT)
-                .filled(Fronts.of(colony).stocked(server, food))))
-            .orElseGet(() -> List.of(bed));
+                .filled(Fronts.of(colony).stocked(server, food)))
+            .orElseGet(() -> new SettlerNeed(LivingNeed.FOOD, 0,
+                FolkwaysVanillaConfig.foodPerResident(), SettlerNeed.Per.RESIDENT, Optional.empty())));
     }
 
     private void write() {

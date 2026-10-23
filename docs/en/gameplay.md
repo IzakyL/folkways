@@ -48,6 +48,24 @@ to a filter. A search saved as a filter rule uses IDs and tags; it does not use
 translated names or Pinyin. Its meaning therefore does not depend on a player's
 language or JEC settings.
 
+## Food lists and safety
+
+Colony settings offer a **Food list mode** switch between whitelist and blacklist. **Food rules** opens the existing item picker, with item, tag and query rules. Switching modes keeps the same rules: a whitelist allows only matching food, and a blacklist refuses matching food. An empty whitelist allows nothing; an empty blacklist allows all safe, nourishing food. These rules govern eating, ration deliveries, pack reserves and new settlers' food requirements. Having no usable food does not waive the food requirement.
+
+The default is a whitelist containing `#folkways:resident_food`, which combines:
+
+- `#folkways:resident_food_vanilla`: the original 15 vanilla ration types, including cooked meat, fish, bread and soups.
+- `#folkways:resident_food_cookery`: Kaleidoscope Cookery rice, noodles, cooked meat and everyday prepared meals.
+- `#folkways:resident_food_farmers_delight`: Farmer's Delight cooked meat, sandwiches, soups, rice, pasta and feast portions.
+
+Mod entries are optional and load safely without those mods installed. Defaults omit raw ingredients, harmful dishes, special-purpose food and feast blocks that must be placed first. Modpacks can extend or replace these tags with a datapack; players can also add other mods' items, tags or queries in the picker. Existing colonies keep their saved food rules in whitelist mode. To adopt the new default list, replace those rules with `#folkways:resident_food`.
+
+The **Always refuse unsafe food** checkbox beside the food list mode is checked by default. While checked, safety checks apply even to whitelisted food. Residents skip food with any chance of a harmful status effect, including effects stored on suspicious stew. Forbidden or harmful food already in their packs is also skipped; allowed meals in later slots are still eaten. Beneficial food effects and returned bowls or bottles keep their normal behavior.
+
+Unchecking it permits unsafe food for eating and ration planning, while still applying the whitelist or blacklist.
+
+With safety enabled, harmful carried food does not count toward nourishment when restocking. Forbidden food never counts. Kaleidoscope Cookery's red and green chilies are also refused because eating them causes direct damage. Datapacks can add other foods with special harmful eating behavior to the `folkways:unsafe_food` item tag.
+
 ## Composting
 
 Register an ordinary composter with the Colony Book. On the colony's
