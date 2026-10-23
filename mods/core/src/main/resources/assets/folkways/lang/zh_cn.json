@@ -48,8 +48,6 @@
   "folkways.book.gesture.box": "书：圈地",
   "folkways.book.gesture.line": "书：画线",
   "folkways.book.gesture.point": "书：点选",
-  "folkways.choice.hint": "选好一项后确认",
-  "folkways.choice.hint.many": "可选多项，选好后确认",
   "folkways.choice.variant.square": "%s（2×2）",
   "folkways.colony.create": "建立殖民地",
   "folkways.tab.members": "成员",

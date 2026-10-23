@@ -48,8 +48,6 @@
   "folkways.book.gesture.box": "Book: marking out ground",
   "folkways.book.gesture.line": "Book: drawing a line",
   "folkways.book.gesture.point": "Book: taking blocks and bodies in",
-  "folkways.choice.hint": "Pick one, then confirm",
-  "folkways.choice.hint.many": "Pick any, then confirm",
   "folkways.choice.variant.square": "%s (2×2)",
   "folkways.colony.create": "Found a colony",
   "folkways.tab.members": "Members",
