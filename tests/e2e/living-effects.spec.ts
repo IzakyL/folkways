@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { reflect, tick, world } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, reflect, tick, world } from "@izakyl/blockwright-minecraft";
 import { foundColonyFast, foundingBox, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { mustCommand } from "../shared/ui/world-ui";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -74,20 +74,34 @@ for (const stage of twins()) test(stage.title("residents use idle activities and
   }
 });
 
+// The resident window's living reading, written out as its lines read.
+const READING = defineTask<{ uuid: string }, { lines: string }>({
+  name: "folkways.living-effects.reading",
+  side: "server",
+  source: javaTask({
+    imports: ["net.minecraft.server.MinecraftServer", "net.minecraft.network.chat.Component",
+      "io.github.izakyl.folkways.core.api.resident.body.Body", "io.github.izakyl.folkways.front.api.ui.Pages",
+      "io.github.izakyl.folkways.plugins.person.living.LivingContent"],
+    body: `
+var level = ((MinecraftServer)ctx.server()).overworld();
+var body = (Body)level.getEntity(UUID.fromString(Args.of(ctx).string("uuid")));
+var read = LivingContent.reading(body);
+var lines = new ArrayList<String>();
+if (read.contains("room")) { lines.add(Pages.readText(level.registryAccess(), read.get("room")).getString()); }
+if (read.contains("advice")) { lines.add(Pages.readText(level.registryAccess(), read.get("advice")).getString()); }
+if (read.contains("mood")) { lines.add(Component.translatable("folkways.mood.title").getString() + " " + read.getInt("mood")); }
+var reasons = read.getCompound("reasons");
+for (var reason : new TreeSet<>(reasons.getAllKeys())) {
+  lines.add(Component.translatable("folkways.mood.reason." + reason, String.valueOf(reasons.getInt(reason))).getString());
+}
+return Map.of("lines", String.join("\\n", lines));
+`,
+  }),
+});
+
 async function details(server: any, uuid: string): Promise<string[]> {
-  const body = await reflect.invoke(server, { target: { kind: "entity", uuid }, method: "mob", returnHandle: true });
-  const lines = await reflect.invoke(server, {
-    target: { kind: "static", className: "io.github.izakyl.folkways.plugins.person.living.LivingContent" },
-    method: "details", args: [{ $handle: body.handle }],
-    argTypes: ["io.github.izakyl.folkways.core.api.resident.body.Body"], returnHandle: true,
-  });
-  const dumped = await reflect.dump(server, { target: { kind: "handle", handle: lines.handle! }, limits: { maxDepth: 1, maxItems: 16, maxNodes: 256 } });
-  const size = Array.isArray(dumped.tree) ? dumped.tree.length : 0;
-  expect(size, "life details should contain translated components").toBeGreaterThan(0);
-  const result: string[] = [];
-  for (let i = 0; i < size; i++) {
-    const line = await reflect.invoke(server, { target: { kind: "handle", handle: lines.handle! }, path: `[${i}]`, method: "getString", returnType: "java.lang.String" });
-    result.push(String(line.returned));
-  }
+  const { lines } = await server.run(READING, { uuid });
+  const result = lines ? lines.split("\n") : [];
+  expect(result.length, "life details should contain translated lines").toBeGreaterThan(0);
   return result;
 }
