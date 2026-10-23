@@ -27,6 +27,9 @@ public final class ElevatorPlugin {
     }
 
     public static void install(IEventBus modBus) {
+        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) {
+            modBus.addListener(ElevatorScene::declare);
+        }
         modBus.addListener(Declaring.class, event -> {
             event.passage(new ElevatorPassage());
             event.colony(ID, scope -> {

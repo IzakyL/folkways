@@ -109,7 +109,7 @@ public final class GolemScene {
 
         golem.ifPresent(body -> body.hold(scene, new ItemStack(Items.IRON_INGOT)));
         scene.overlay().showText(90)
-            .text("Below 60% of its health, a golem carrying something golems are repaired with, such as iron ingots, spends one from its pack to mend itself.")
+            .text("Below 60 percent of its health, a golem carrying something golems are repaired with, such as iron ingots, spends one from its pack to mend itself.")
             .pointAt(util.vector().topOf(2, 2, 5))
             .placeNearTarget()
             .attachKeyFrame();

@@ -29,9 +29,6 @@ public final class HouseholdScene {
 
     private static final int PLATE = 8;
     private static final float FACING_NORTH = 180.0F;
-    private static final float FACING_SOUTH = 0.0F;
-    private static final float FACING_EAST = 270.0F;
-    private static final float FACING_WEST = 90.0F;
 
     private HouseholdScene() {
     }
@@ -39,7 +36,10 @@ public final class HouseholdScene {
     public static void declare(FMLClientSetupEvent event) {
         event.enqueueWork(() -> Scenes.folder(LivingContent.ID, "folkways.page.living",
             ResourceLocation.withDefaultNamespace("red_bed"),
-            Scenes.scene("household", HouseholdScene::program)));
+            Scenes.scene("household", HouseholdScene::program),
+            Scenes.scene("housing", HousingScene::program),
+            Scenes.scene("dining", DiningScene::program),
+            Scenes.scene("recreation", RecreationScene::program)));
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
@@ -74,7 +74,7 @@ public final class HouseholdScene {
         scene.overlay().showOutline(PonderPalette.GREEN, "blue", blueBed, 90);
         scene.overlay()
             .showText(90)
-            .text("A bed joins the colony with the book. Each resident claims a free one as his own, and the Household page lists the beds nobody has yet.")
+            .text("Join beds to the colony with the book. Residents automatically claim a free bed; the Human residents page lists those still unclaimed.")
             .pointAt(util.vector().topOf(redFoot))
             .placeNearTarget()
             .attachKeyFrame();
@@ -86,7 +86,7 @@ public final class HouseholdScene {
         scene.idle(10);
         scene.overlay()
             .showText(90)
-            .text("Walking tires him, and so does standing at work. Tired enough, he goes back to his own bed and sleeps it off. Without a bed of his own he has nowhere to sleep.")
+            .text("Walking tires him, and so does standing at work. Tired enough, he goes back to his own bed and sleeps it off. Without a bed of his own he cannot sleep, and his housing mood is poor.")
             .pointAt(residentA.at().add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();
@@ -114,7 +114,7 @@ public final class HouseholdScene {
         scene.overlay().showOutline(PonderPalette.OUTPUT, "chest", util.select().position(chest), 90);
         scene.overlay()
             .showText(100)
-            .text("The colony keeps a couple of meals from the food list in each resident's pack, and he eats when he is hungry. The list is on the Household page and starts out with the usual cooked meats, bread and stews.")
+            .text("The colony keeps food for three days in each resident's pack, and he eats when hungry. On the Human residents page, choose allowed foods or exclusions and whether food safety filters apply.")
             .pointAt(util.vector().topOf(chest))
             .placeNearTarget()
             .attachKeyFrame();
@@ -124,7 +124,7 @@ public final class HouseholdScene {
         scene.overlay().showOutline(PonderPalette.RED, "chest", util.select().position(chest), 80);
         scene.overlay()
             .showText(80)
-            .text("With nothing from the list in store, his pack stays empty. A starving resident loses health.")
+            .text("With no allowed food in colony stores, his pack stays empty. A starving resident loses health.")
             .pointAt(util.vector().topOf(chest))
             .placeNearTarget()
             .attachKeyFrame();
@@ -138,22 +138,11 @@ public final class HouseholdScene {
             .attachKeyFrame();
         scene.idle(100);
 
-        Vec3 startB = util.vector().topOf(3, 0, 6);
-        Body residentB = PonderScenery.body(scene, PersonBody.RESIDENT.get(), startB, FACING_WEST);
-        scene.idle(10);
-        residentA.walkTo(scene, util.vector().topOf(5, 0, 5));
-        residentA.walkTo(scene, util.vector().topOf(4, 0, 6));
-        residentA.turnTo(scene, FACING_WEST);
-        residentB.turnTo(scene, FACING_EAST);
-        scene.overlay()
-            .showText(90)
-            .text("With nothing to do, a resident wanders over to the nearest neighbour and stands chatting a while, or just loiters about.")
-            .pointAt(util.vector().topOf(3, 0, 6).add(0.5, 1.5, 0.0))
-            .placeNearTarget()
-            .attachKeyFrame();
-        scene.idle(100);
-        residentB.turnTo(scene, FACING_SOUTH);
-        scene.idle(10);
+        scene.overlay().showOutline(PonderPalette.BLUE, "red", redBed, 100);
+        scene.overlay().showText(100)
+            .text("Hold the book to see a card over each colony bed: who sleeps there, its room grade, and advice for improving it.")
+            .pointAt(util.vector().topOf(redFoot)).placeNearTarget().attachKeyFrame();
+        scene.idle(110);
     }
 
     private static BlockState bed(Block block, BedPart part) {

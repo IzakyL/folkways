@@ -34,7 +34,7 @@ public final class CookingPotsScene {
         BlockPos store = util.grid().at(4, 1, 6);
         scene.world().setBlock(pot.below(), HeatScene.litStove(), false);
         scene.world().setBlock(stockpot.below(), HeatScene.litStove(), false);
-        scene.world().setBlock(pot, ModBlocks.POT.get().defaultBlockState(), false);
+        scene.world().setBlock(pot, ModBlocks.POT.get().defaultBlockState().setValue(PotBlock.FACING, Direction.SOUTH), false);
         scene.world().setBlock(stockpot, ModBlocks.STOCKPOT.get().defaultBlockState(), false);
         scene.world().setBlock(store, Blocks.CHEST.defaultBlockState(), false);
         scene.world().showSection(util.select().fromTo(0, 0, 0, 8, 3, 8), Direction.DOWN);
@@ -42,7 +42,7 @@ public final class CookingPotsScene {
         ItemStack book = PonderScenery.book(Shape.Gesture.POINT);
 
         scene.overlay().showControls(util.vector().topOf(pot), Pointing.DOWN, 60).leftClick().withItem(book);
-        scene.overlay().showText(95).text("Register each pot or stockpot as a kitchen station, keep its heat source lit, and leave a reachable working position. Players' existing ingredients and dishes are left alone.")
+        scene.overlay().showText(95).text("Register each pot or stockpot as a kitchen station and keep its heat source lit. Leave the handle side of a stir-fry pot clear: the resident works immediately beside its handle. Players' existing ingredients and dishes are left alone.")
             .pointAt(util.vector().topOf(pot)).placeNearTarget().attachKeyFrame();
         scene.idle(105);
         var resident = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(4, 0, 4), 180);
