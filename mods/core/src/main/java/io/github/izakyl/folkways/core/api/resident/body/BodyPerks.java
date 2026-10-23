@@ -42,7 +42,7 @@ final class BodyPerks implements Perks {
         return XP_LEVELS[Math.clamp(level, 0, 10)];
     }
 
-    public static int maxLevel(ResourceLocation vocation) {
+    public int maxLevel(ResourceLocation vocation) {
         return 10;
     }
 
@@ -98,6 +98,23 @@ final class BodyPerks implements Perks {
 
     public int level(ResourceLocation vocation) {
         return track(vocation).level;
+    }
+
+    public int xp(ResourceLocation vocation) {
+        return track(vocation).xp;
+    }
+
+    public int nextLevelXp(ResourceLocation vocation) {
+        int level = level(vocation);
+        return level < maxLevel(vocation) ? xpForLevel(level + 1) : 0;
+    }
+
+    public Map<String, Integer> ranks(ResourceLocation vocation) {
+        return Map.copyOf(track(vocation).ranks);
+    }
+
+    public Map<String, Integer> globalRanks() {
+        return Map.copyOf(global.ranks);
     }
 
     public int rank(String perkId) {

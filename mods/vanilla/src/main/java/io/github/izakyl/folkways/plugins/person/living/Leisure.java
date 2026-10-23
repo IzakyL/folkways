@@ -10,7 +10,6 @@ import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.*;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -117,11 +116,9 @@ final class Leisure {
                     break;
                 }
             } else {
-                BlockPos at = recreation(view, WorldSpaces.at(who.body()).block(level));
-                boolean designated = at != null;
-                if (at == null) { at = walkTo(level, WorldSpaces.at(who.body()).block(level)); }
+                BlockPos at = walkTo(level, WorldSpaces.at(who.body()).block(level));
                 if (at != null) {
-                    boolean garden = designated || !level.getBlockState(at.below()).isAir()
+                    boolean garden = !level.getBlockState(at.below()).isAir()
                         && BlockPos.betweenClosedStream(at.offset(-2, 0, -2), at.offset(2, 1, 2))
                             .anyMatch(pos -> level.getBlockState(pos).is(BlockTags.FLOWERS));
                     selected = new Session(garden ? "relaxing" : "strolling", 400, garden ? 15 : 8,
@@ -135,26 +132,6 @@ final class Leisure {
         positions.put(WorldPos.of(level, selected.at), id);
         sessions.put(id, selected);
         return new Activity(id, selected, level);
-    }
-
-    private BlockPos recreation(ColonyView view, BlockPos from) {
-        ServerLevel level = view.level();
-        ArrayList<BlockPos> candidates = new ArrayList<>();
-        for (var holding : view.holdings()) {
-            if (!holding.owner().equals(LivingContent.RECREATION)) { continue; }
-            for (var cell : holding.what().cells()) {
-                if (!cell.in(level)) { continue; }
-                BlockPos at = cell.block(level);
-                if (!level.isLoaded(at) || at.distSqr(from) > 16 * 16) { continue; }
-                if (!Footing.withFeetAt(level, at)) { at = at.above(); }
-                if (Footing.withFeetAt(level, at) && level.getFluidState(at).isEmpty()
-                        && !positions.containsKey(WorldPos.of(level, at))) {
-                    candidates.add(at);
-                }
-                if (candidates.size() >= 64) { break; }
-            }
-        }
-        return candidates.isEmpty() ? null : candidates.get(level.random.nextInt(candidates.size()));
     }
 
     private static BlockPos beside(ServerLevel level, BlockPos at) {

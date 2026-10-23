@@ -54,13 +54,44 @@ public final class LivingEffectsGameTests {
         mood.chatted = 10L * Mood.DAY; // company throughout, so loneliness does not arrive mid-test
         helper.assertValueEqual(mood.step(0, 20, 1200, 0, false, false), 0, "the first step has nothing to compare");
         helper.assertValueEqual(mood.step(100, 20, 1200, 0, false, false), 0, "nothing happened");
+        helper.assertTrue(mood.events.isEmpty(), "initial reasons and unchanged steps record no events");
         mood.dined = 200;
         helper.assertTrue(mood.step(200, 20, 1200, 0, false, false) > 0, "a table meal is a good event");
+        helper.assertValueEqual(mood.events.getFirst(), new Mood.Event("dining", 6, 200), "meal reason, amount and time");
         helper.assertValueEqual(mood.step(200 + Mood.DAY, 20, 1200, 0, false, false), 0, "the meal wearing off is no event");
-        mood.attacked = 300 + Mood.DAY;
+        helper.assertValueEqual(mood.events.size(), 1, "bonus expiry does not enter history");
+        mood.attacked(300 + Mood.DAY);
         helper.assertTrue(mood.step(300 + Mood.DAY, 20, 1200, 0, false, false) < 0, "an attack is a bad event");
+        helper.assertValueEqual(mood.events.getFirst(), new Mood.Event("attacked", -12, 300 + Mood.DAY), "attack is newest");
+        helper.assertValueEqual(mood.events.size(), 2, "attack has no duplicate safety entry");
         helper.assertValueEqual(mood.step(300 + Mood.DAY + 2000, 20, 1200, 0, false, false), 0,
             "the fright fading is no event");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void moodHistoryIsBoundedAndSurvivesReload(GameTestHelper helper) {
+        Mood mood = new Mood();
+        mood.chatted = 10L * Mood.DAY;
+        mood.step(0, 20, 1200, 0, false, false);
+        mood.step(10, 4, 1200, 0, false, false);
+        helper.assertValueEqual(mood.events.getFirst(), new Mood.Event("food", -15, 10), "hunger records a penalty");
+        mood.step(20, 20, 1200, 0, false, false);
+        helper.assertValueEqual(mood.events.size(), 1, "healing is no event");
+        mood.step(30, 20, 1200, 6, false, false);
+        helper.assertValueEqual(mood.events.getFirst(), new Mood.Event("housing", 6, 30), "better housing records a bonus");
+        for (int hit = 1; hit <= 10; hit++) { mood.attacked(hit * 1000L); }
+        helper.assertValueEqual(mood.events.size(), 8, "only eight newest events");
+        helper.assertValueEqual(mood.events.getFirst().at(), 10000L, "newest first");
+        helper.assertValueEqual(mood.events.getLast().at(), 3000L, "oldest retained event");
+        mood.attacked(10010);
+        helper.assertValueEqual(mood.events.getFirst().at(), 10000L, "the same hit is not recorded twice");
+        Mood restored = new Mood(); restored.load(Reader.of(mood.save()));
+        helper.assertValueEqual(restored.events, mood.events, "history round trip retains reason, signed amount, time and order");
+        restored.step(10020, 20, 1200, 6, false, false);
+        helper.assertValueEqual(restored.events, mood.events, "first step after reload adds no phantom changes");
+        restored.load(Reader.of(new net.minecraft.nbt.CompoundTag()));
+        helper.assertTrue(restored.events.isEmpty(), "old saves without history load empty");
         helper.succeed();
     }
 

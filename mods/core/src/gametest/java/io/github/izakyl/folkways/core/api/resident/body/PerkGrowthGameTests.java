@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.effect.Stats;
 import io.github.izakyl.folkways.effect.perk.GlobalPerks;
 import io.github.izakyl.folkways.effect.perk.PerkPool;
+import io.github.izakyl.folkways.effect.perk.Perks;
 import io.github.izakyl.folkways.plugins.build.BuildContent;
 import io.github.izakyl.folkways.plugins.farming.FarmingContent;
 import java.util.Map;
@@ -23,6 +24,33 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class PerkGrowthGameTests {
     @SubscribeEvent public static void register(RegisterGameTestsEvent event) { event.register(PerkGrowthGameTests.class); }
+
+    @GameTest(template = "empty")
+    public static void tracksExposeExperienceAndKeepSharedRanksSeparate(GameTestHelper helper) {
+        BodyPerks grown = new BodyPerks();
+        RandomSource random = RandomSource.create(29);
+        grown.addXp(FarmingContent.VOCATION, 1120, random);
+        grown.addXp(BuildContent.VOCATION, 200, random);
+        BodyPerks restored = new BodyPerks(); restored.load(grown.save());
+        Perks perks = restored;
+        helper.assertValueEqual(perks.xp(FarmingContent.VOCATION), 1120, "cumulative trade experience survives reload");
+        helper.assertValueEqual(perks.nextLevelXp(FarmingContent.VOCATION), 1500, "next level's cumulative threshold");
+        helper.assertValueEqual(perks.maxLevel(FarmingContent.VOCATION), 10, "level cap is independent of pool depth");
+        helper.assertValueEqual(perks.ranks(FarmingContent.VOCATION).values().stream().mapToInt(Integer::intValue).sum(), 3, "farm draws only");
+        helper.assertValueEqual(perks.ranks(BuildContent.VOCATION).values().stream().mapToInt(Integer::intValue).sum(), 1, "building draws only");
+        helper.assertValueEqual(perks.globalRanks().values().stream().mapToInt(Integer::intValue).sum(), 1, "shared milestone");
+        helper.assertFalse(perks.ranks(FarmingContent.VOCATION).keySet().stream().anyMatch(PerkPool::global), "no shared ranks in trade");
+        Map<String, Integer> snapshot = perks.ranks(FarmingContent.VOCATION);
+        restored.addXp(FarmingContent.VOCATION, BodyPerks.xpForLevel(10), random);
+        helper.assertValueEqual(snapshot.values().stream().mapToInt(Integer::intValue).sum(), 3, "exposure is a snapshot");
+        helper.assertValueEqual(perks.nextLevelXp(FarmingContent.VOCATION), 0, "capped trade has no next level");
+        Perks fixed = Perks.fixed(Map.of(FarmingContent.QUICK_HANDS, 2, BuildContent.QUICK_HANDS, 1, GlobalPerks.BRISK, 3));
+        helper.assertValueEqual(fixed.ranks(FarmingContent.VOCATION), Map.of(FarmingContent.QUICK_HANDS, 2), "fixed farm ranks follow their pool");
+        helper.assertValueEqual(fixed.globalRanks(), Map.of(GlobalPerks.BRISK, 3), "fixed shared ranks");
+        helper.assertTrue(fixed.xp(FarmingContent.VOCATION) == 0 && fixed.nextLevelXp(FarmingContent.VOCATION) == 0
+            && fixed.maxLevel(FarmingContent.VOCATION) == 0, "fixed ranks do not grow");
+        helper.succeed();
+    }
 
     @GameTest(template = "empty")
     public static void tenOccupationalDrawsAndThreeSharedMilestones(GameTestHelper helper) {

@@ -2,14 +2,19 @@ package io.github.izakyl.folkways.plugins.person.living;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import net.minecraft.nbt.CompoundTag;
 
 // Long-lived experiences, independent of which action currently owns the resident.
 final class Mood {
     static final int DAY = 24000;
+    private static final int RECENT = 8;
+    record Event(String reason, int amount, long at) { }
+    final List<Event> events = new ArrayList<>();
     double value = 60;
     double leisure = 60;
     long lastTick = -1;
@@ -74,9 +79,15 @@ final class Mood {
                 int was = reasons.getOrDefault(part.getKey(), 0);
                 int is = part.getValue();
                 if (is > was && is > 0 && !part.getKey().equals("leisure") && !part.getKey().equals("safety")) {
-                    shift += is - Math.max(was, 0);
+                    int amount = is - Math.max(was, 0);
+                    shift += amount;
+                    record(part.getKey(), amount, now);
                 } else if (is < was && is < 0 && !part.getKey().equals("leisure")) {
-                    shift -= Math.min(was, 0) - is;
+                    int amount = is - Math.min(was, 0);
+                    shift += amount;
+                    if (!part.getKey().equals("safety") || now - attacked >= 100) {
+                        record(part.getKey(), amount, now);
+                    }
                 }
             }
         }
@@ -85,6 +96,19 @@ final class Mood {
         double change = elapsed * 4.0 / 1000;
         value += Math.clamp(target - value, -change, change);
         return shift;
+    }
+
+    void attacked(long now) {
+        if (now - attacked >= 100) {
+            value = Math.max(0, value - 4);
+            record("attacked", -12, now);
+        }
+        attacked = now;
+    }
+
+    private void record(String reason, int amount, long now) {
+        events.addFirst(new Event(reason, amount, now));
+        if (events.size() > RECENT) { events.removeLast(); }
     }
 
     void enjoyed(String activity, double ticks, double duration, double recovery, long now) {
@@ -98,6 +122,8 @@ final class Mood {
     CompoundTag save() {
         return Writer.of().decimal("mood", (float) value).decimal("leisure", (float) leisure)
             .blob("times", times()).integer("housing", housing)
+            .children("events", events, event -> Writer.of().string("reason", event.reason())
+                .integer("amount", event.amount()).longValue("at", event.at()).tag())
             .children("meals", meals.entrySet(), entry -> {
                 CompoundTag tag = new CompoundTag(); tag.putString("kind", entry.getKey()); tag.putLong("at", entry.getValue()); return tag;
             }).children("activities", repetitions.entrySet(), entry -> Writer.of().string("kind", entry.getKey()).integer("count", entry.getValue()).tag())
@@ -113,6 +139,16 @@ final class Mood {
     }
 
     void load(Reader reader) {
+        lastTick = -1;
+        reasons = Map.of();
+        events.clear();
+        meals.clear();
+        repetitions.clear();
+        for (Reader event : reader.children("events")) {
+            if (events.size() >= RECENT) { break; }
+            event.string("reason").ifPresent(reason -> events.add(new Event(reason,
+                event.integer("amount").orElse(0), event.longValue("at").orElse(0L))));
+        }
         value = Math.clamp(reader.decimal("mood").orElse(60F), 0, 100);
         leisure = Math.clamp(reader.decimal("leisure").orElse(60F), 0, 100);
         housing = reader.integer("housing").orElse(0);

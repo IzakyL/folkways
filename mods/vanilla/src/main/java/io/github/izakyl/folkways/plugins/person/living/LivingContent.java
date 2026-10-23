@@ -25,7 +25,7 @@ import io.github.izakyl.folkways.front.api.notice.Meter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.network.chat.Component;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -44,8 +44,6 @@ public final class LivingContent {
 
     public static final ResourceLocation BED =
         ResourceLocation.fromNamespaceAndPath("folkways", "bed");
-
-    public static final ResourceLocation RECREATION = ResourceLocation.fromNamespaceAndPath("folkways", "recreation");
 
     public static final ResourceLocation DINING = ResourceLocation.fromNamespaceAndPath("folkways", "dining");
     public static final ResourceLocation SETTING_TABLE = ResourceLocation.fromNamespaceAndPath("folkways", "setting_table");
@@ -101,11 +99,13 @@ public final class LivingContent {
             .map(living -> living.effects(body.id())).orElse(Effects.NONE);
     }
 
-    public static List<Component> details(Body body) {
-        if (!(body.mob().level() instanceof ServerLevel level)) { return List.of(); }
+    public static CompoundTag reading(Body body) {
+        if (!looksAfter(body.resident()) || !(body.mob().level() instanceof ServerLevel level)) {
+            return new CompoundTag();
+        }
         return body.colonyId().flatMap(id -> Colonies.of(level.getServer(), id))
-            .flatMap(colony -> colony.service(ID, LivingPresence.class).map(living -> living.details(body.id(), colony.view(level))))
-            .orElseGet(List::of);
+            .flatMap(colony -> colony.service(ID, LivingPresence.class).map(living -> living.reading(body.id(), colony.view(level))))
+            .orElseGet(CompoundTag::new);
     }
 
     public static void blockChanged(BlockEvent event) {
@@ -144,7 +144,6 @@ public final class LivingContent {
             .map(value -> (Facing) value));
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(BED, new Shape.Block(Housing::isBed, Housing::sleepingCell)),
-                new Delegation(RECREATION, new Shape.Volume(4096), ResourceLocation.withDefaultNamespace("poppy")),
                 new Delegation(DINING, new Shape.Volume(4096), new Schema(List.of(DINING_FOOD, DINING_SERVINGS, DINING_DRINK)),
                     ResourceLocation.withDefaultNamespace("cake"))),
             new Schema(List.of(FOOD_MODE, FOOD_SAFETY, FOOD)), List.of()));

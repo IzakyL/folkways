@@ -27,10 +27,12 @@ import io.github.izakyl.folkways.effect.Modifier;
 import io.github.izakyl.folkways.effect.Stats;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Fronts;
+import io.github.izakyl.folkways.front.api.Placard;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
+import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.patrol.Wards;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
@@ -47,6 +49,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -59,6 +62,7 @@ import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.block.state.BlockState;
 
 final class LivingPresence implements Facing {
 
@@ -78,6 +82,7 @@ final class LivingPresence implements Facing {
         ResourceLocation.fromNamespaceAndPath("folkways", "delegation/bed");
 
     private static final Notice UNCLAIMED_SAID = new Notice("folkways.page.living.unclaimed", List.of());
+    private static final Notice CLAIMED_SAID = new Notice("folkways.housing.claimed", List.of());
 
     private final Colony colony;
 
@@ -169,8 +174,7 @@ final class LivingPresence implements Facing {
                     int home = bed.isEmpty() ? -12 : rooms.get(level, bed.get().block(level)).grade().mood;
                     if (living.getLastHurtByMob() != null
                             && living.tickCount - living.getLastHurtByMobTimestamp() < VITALS_INTERVAL) {
-                        if (level.getGameTime() - mood.attacked >= 100) { mood.value = Math.max(0, mood.value - 4); }
-                        mood.attacked = level.getGameTime();
+                        mood.attacked(level.getGameTime());
                     }
                     boolean safe = Wards.warded(level, living.blockPosition());
                     boolean rain = level.isRainingAt(living.blockPosition());
@@ -469,27 +473,69 @@ final class LivingPresence implements Facing {
         return Sentence.of(Sentence.glyph(mood < 40 ? "mood_sad" : mood >= 70 ? "mood_happy" : "mood_neutral"));
     }
 
-    List<Component> details(UUID resident, ColonyView view) {
+    CompoundTag reading(UUID resident, ColonyView view) {
         Mood mood = mood(resident);
-        List<Component> lines = new ArrayList<>();
-        lines.add(Component.translatable("folkways.mood.summary", (int) Math.round(mood.value),
-            (int) Math.round(Mood.speed(mood.value) * 100), (int) Math.round(mood.leisure)));
-        for (String reason : List.of("food", "dining", "drink", "housing", "rest", "leisure", "social", "safety", "environment")) {
-            int value = mood.reasons.getOrDefault(reason, 0);
-            lines.add(Component.translatable("folkways.mood.reason." + reason, (value > 0 ? "+" : "") + value));
+        CompoundTag tag = new CompoundTag();
+        tag.putInt("mood", (int) mood.value);
+        tag.putDouble("speed", Math.round(Mood.speed(mood.value) * 100) / 100.0);
+        tag.putInt("alertness", alertnessOf(resident).orElse(Rest.SPENT));
+        CompoundTag reasons = new CompoundTag();
+        mood.reasons.forEach(reasons::putInt);
+        tag.put("reasons", reasons);
+        ListTag events = new ListTag();
+        for (Mood.Event event : mood.events) {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("reason", event.reason());
+            entry.putInt("amount", event.amount());
+            entry.putLong("age", Math.max(0, view.level().getGameTime() - event.at()) / (Mood.DAY / 24) * (Mood.DAY / 24));
+            events.add(entry);
         }
+        tag.put("events", events);
         bedFor(resident).filter(at -> at.in(view.level())).ifPresent(at -> {
             HousingRooms.Room room = rooms.get(view.level(), at.block(view.level()));
-            lines.add(room.description()); lines.add(room.advice());
+            tag.put("room", Pages.text(view.level().registryAccess(), room.description()));
+            tag.put("advice", Pages.text(view.level().registryAccess(), room.advice()));
         });
-        return List.copyOf(lines);
+        return tag;
     }
 
     @Override
     public List<Line> blockLines(BlockPos at, ColonyView view) {
         if (!view.blocks(LivingContent.BED).contains(at)) { return List.of(); }
-        HousingRooms.Room room = rooms.get(view.level(), at);
-        return List.of(Line.text(room.description()), Line.text(room.advice()));
+        ServerLevel level = view.level();
+        List<Line> lines = new ArrayList<>();
+        Optional<UUID> sleeper = beds.sleeperOf(WorldPos.of(level, at));
+        lines.add(sleeper.map(level::getEntity).<Line>map(found -> Line.text(
+                Component.translatable("folkways.housing.sleeper", found.getDisplayName())))
+            .orElseGet(() -> Line.said(sleeper.isPresent() ? CLAIMED_SAID : UNCLAIMED_SAID)));
+        HousingRooms.Room room = rooms.get(level, at);
+        lines.add(Line.text(room.description()));
+        lines.add(Line.text(room.advice()));
+        return List.copyOf(lines);
+    }
+
+    // Over every bed of the colony, a card naming who sleeps there and what its room is worth.
+    @Override
+    public List<Placard> placards(ColonyView view) {
+        ServerLevel level = view.level();
+        List<Placard> placards = new ArrayList<>();
+        for (BlockPos at : view.blocks(LivingContent.BED)) {
+            if (!level.isLoaded(at)) {
+                continue;
+            }
+            BlockState state = level.getBlockState(at);
+            if (!Housing.isBed(state)) {
+                continue;
+            }
+            List<Line> lines = new ArrayList<>();
+            lines.add(Line.said(new Notice(state.getBlock().getDescriptionId(), List.of())));
+            lines.addAll(blockLines(at, view));
+            UUID id = UUID.nameUUIDFromBytes(("folkways:bed/" + level.dimension().location() + "/" + at.asLong())
+                .getBytes(StandardCharsets.UTF_8));
+            placards.add(new Placard(id,
+                new Placard.Outline.Box(at, Housing.pillow(level, at, state).orElse(at)), lines));
+        }
+        return List.copyOf(placards);
     }
 
     @Override
@@ -508,8 +554,9 @@ final class LivingPresence implements Facing {
         }
         rows.add(new Board.Row(ItemStack.EMPTY,
             Component.translatable(LivingContent.FOOD_MODE.nameKey()), Component.empty(),
-            List.of(new Board.Act.Edit(LivingContent.FOOD_MODE.key()),
-                new Board.Act.Edit(LivingContent.FOOD_SAFETY.key()))).wide());
+            List.of(new Board.Act.Edit(LivingContent.FOOD_MODE.key()))).wide());
+        rows.add(new Board.Row(ItemStack.EMPTY, Component.empty(), Component.empty(),
+            List.of(new Board.Act.Edit(LivingContent.FOOD_SAFETY.key()))).wide());
         rows.add(new Board.Row(new ItemStack(BuiltInRegistries.ITEM.get(LivingContent.FOOD.icon())),
             Component.translatable(LivingContent.FOOD.nameKey()),
             Component.empty(),

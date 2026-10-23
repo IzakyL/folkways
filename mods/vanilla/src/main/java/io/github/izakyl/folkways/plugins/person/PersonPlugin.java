@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.library.Shelves;
 import io.github.izakyl.folkways.plugins.person.fear.FearContent;
 import io.github.izakyl.folkways.plugins.person.living.Housing;
 import io.github.izakyl.folkways.plugins.person.living.LivingContent;
+import io.github.izakyl.folkways.plugins.person.living.LivingInlay;
 import io.github.izakyl.folkways.plugins.person.look.LookPool;
 import io.github.izakyl.folkways.plugins.person.look.LookSet;
 import io.github.izakyl.folkways.plugins.person.look.LooksPage;
@@ -52,6 +53,7 @@ public final class PersonPlugin {
             event.page(PersonContent.LOOKS.id(), LooksPage::new);
             event.page(PersonContent.NAMES.id(), NamesPage::new);
             event.inlay(Bay.RESIDENT, LookPool.OWNER, PersonInlay::new);
+            event.inlay(Bay.RESIDENT, LivingContent.ID, LivingInlay::new);
             event.outline(Housing::pillow);
         });
         Shelves.register(ModelLibrary.SHELF, ModelLibrary.SKINS);

@@ -8,20 +8,16 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.front.api.ui.Inlay;
 import io.github.izakyl.folkways.front.api.ui.Nook;
-import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
-import io.github.izakyl.folkways.plugins.person.living.LivingContent;
 import io.github.izakyl.folkways.plugins.person.look.LookPicker;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLooks;
 import io.github.izakyl.folkways.plugins.person.name.ColonyNames;
 import java.util.Optional;
 import java.util.function.Consumer;
-import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 
@@ -63,13 +59,10 @@ public final class PersonInlay implements Inlay {
         change.layout(layout -> layout.flexShrink(0));
         Tokens.name(change, "folkways.resident.look.change");
 
-        Label life = Rows.value(Component.empty());
-        Tokens.name(life, "folkways.resident.life");
-
         UIElement inlay = Rows.page().addChildren(
             Rows.strip().addChildren(caption("folkways.resident.given"), given,
                 caption("folkways.resident.surname"), surname, apply),
-            Rows.strip().addChildren(caption("folkways.resident.look"), look, change), life);
+            Rows.strip().addChildren(caption("folkways.resident.look"), look, change));
         inlay.setDisplay(false);
         LookPicker.Line line = new LookPicker.Line(inlay, (word, what) -> {
             if (word.equals(LookPicker.PICK)) {
@@ -89,8 +82,6 @@ public final class PersonInlay implements Inlay {
                 String showing = read.getString(ID);
                 inlay.setDisplay(!showing.isEmpty());
                 worn = read.getString(LOOK);
-                life.setText(Pages.readText(
-                    Minecraft.getInstance().level.registryAccess(), read.get("life")));
                 if (showing.isEmpty()) {
                     filled = "";
                     if (picking != null) {
@@ -141,12 +132,6 @@ public final class PersonInlay implements Inlay {
         CompoundTag tag = new CompoundTag();
         person(nook).ifPresent(person -> {
             tag.putString(ID, person.getUUID().toString());
-            MutableComponent life = Component.empty();
-            for (Component line : LivingContent.details(person)) {
-                if (!life.getSiblings().isEmpty()) { life.append("\n"); }
-                life.append(line);
-            }
-            tag.put("life", Pages.text(person.level().registryAccess(), life));
             tag.putString(GIVEN, person.givenName());
             tag.putString(SURNAME, person.surname());
             tag.putString(LOOK, person.lookId().map(key -> key.location().toString()).orElse(""));
