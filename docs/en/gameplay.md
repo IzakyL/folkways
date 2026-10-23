@@ -60,9 +60,11 @@ The default is a whitelist containing `#folkways:resident_food`, which combines:
 
 Mod entries are optional and load safely without those mods installed. Defaults omit raw ingredients, harmful dishes, special-purpose food and feast blocks that must be placed first. Modpacks can extend or replace these tags with a datapack; players can also add other mods' items, tags or queries in the picker. Existing colonies keep their saved food rules in whitelist mode. To adopt the new default list, replace those rules with `#folkways:resident_food`.
 
-Safety checks always apply, even to whitelisted food. Residents skip food with any chance of a harmful status effect, including effects stored on suspicious stew. Forbidden or harmful food already in their packs is also skipped; allowed meals in later slots are still eaten. Beneficial food effects and returned bowls or bottles keep their normal behavior.
+The **Always refuse unsafe food** checkbox beside the food list mode is checked by default. While checked, safety checks apply even to whitelisted food. Residents skip food with any chance of a harmful status effect, including effects stored on suspicious stew. Forbidden or harmful food already in their packs is also skipped; allowed meals in later slots are still eaten. Beneficial food effects and returned bowls or bottles keep their normal behavior.
 
-Forbidden or harmful carried food does not count toward nourishment when restocking. Kaleidoscope Cookery's red and green chilies are also refused because eating them causes direct damage. Datapacks can add other foods with special harmful eating behavior to the `folkways:unsafe_food` item tag.
+Unchecking it permits unsafe food for eating and ration planning, while still applying the whitelist or blacklist.
+
+With safety enabled, harmful carried food does not count toward nourishment when restocking. Forbidden food never counts. Kaleidoscope Cookery's red and green chilies are also refused because eating them causes direct damage. Datapacks can add other foods with special harmful eating behavior to the `folkways:unsafe_food` item tag.
 
 ## Composting
 

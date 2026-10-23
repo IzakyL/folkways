@@ -662,6 +662,7 @@
   "folkways.settings.farm.clear_flowers": "清理花",
   "folkways.settings.farm.clear_grass": "清理草",
   "folkways.settings.entries": "已允许 %s 项",
+  "folkways.settings.food_safety": "始终拒绝不安全的食物",
   "folkways.settings.food_mode": "食物名单模式",
   "folkways.choice.folkways.food_whitelist": "白名单（只允许列表内食物）",
   "folkways.choice.folkways.food_blacklist": "黑名单（拒绝列表内食物）",

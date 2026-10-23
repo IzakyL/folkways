@@ -221,7 +221,8 @@ final class LivingPresence implements Facing {
 
     boolean wouldEat(UUID resident, ItemStack stack, FoodProperties food) {
         Hunger belly = bellies.get(resident);
-        return belly != null && FoodSafety.safe(stack, food) && belly.canEatWithoutWaste(food)
+        return belly != null && FoodSafety.usable(Fronts.of(colony).settings(LivingContent.ID), stack, food)
+            && belly.canEatWithoutWaste(food)
             && FoodSafety.matches(Fronts.of(colony).settings(LivingContent.ID), stack);
     }
 
@@ -278,12 +279,12 @@ final class LivingPresence implements Facing {
     }
 
     // How much the food in the pack nourishes, of the food the colony eats.
-    private static int nourishing(Container pack, ItemSpec food, LivingEntity body) {
+    private int nourishing(Container pack, ItemSpec food, LivingEntity body) {
         int points = 0;
         for (int slot = 0; slot < pack.getContainerSize(); slot++) {
             ItemStack stack = pack.getItem(slot);
             FoodProperties eaten = stack.isEmpty() ? null : stack.getFoodProperties(body);
-            if (FoodSafety.safe(stack, eaten) && Goods.matches(stack, food)) {
+            if (FoodSafety.usable(Fronts.of(colony).settings(LivingContent.ID), stack, eaten) && Goods.matches(stack, food)) {
                 points += eaten.nutrition() * stack.getCount();
             }
         }
@@ -349,6 +350,10 @@ final class LivingPresence implements Facing {
                 Component.translatable(need.kind().nameKey()),
                 Component.literal(need.have() + " / " + need.want(mouths))).told(told(need, mouths)));
         }
+        rows.add(new Board.Row(ItemStack.EMPTY,
+            Component.translatable(LivingContent.FOOD_MODE.nameKey()), Component.empty(),
+            List.of(new Board.Act.Edit(LivingContent.FOOD_MODE.key()),
+                new Board.Act.Edit(LivingContent.FOOD_SAFETY.key()))).wide());
         rows.add(new Board.Row(new ItemStack(BuiltInRegistries.ITEM.get(LivingContent.FOOD.icon())),
             Component.translatable(LivingContent.FOOD.nameKey()),
             Component.empty(),

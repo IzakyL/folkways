@@ -44,6 +44,9 @@ public final class LivingContent {
         "food_mode", "folkways.settings.food_mode", ResourceLocation.withDefaultNamespace("cooked_beef"),
         List.of(WHITELIST, BLACKLIST), WHITELIST);
 
+    public static final Schema.Setting FOOD_SAFETY = new Schema.Setting.Flag(
+        "food_safety", "folkways.settings.food_safety", ResourceLocation.withDefaultNamespace("shield"), true);
+
     public static final Schema.Setting FOOD = new Schema.Setting.Items(
         "food", "folkways.settings.food", ResourceLocation.withDefaultNamespace("cooked_beef"),
         List.of(ItemFilter.tag(ResourceLocation.fromNamespaceAndPath("folkways", "resident_food"))));
@@ -78,7 +81,7 @@ public final class LivingContent {
             .map(value -> (io.github.izakyl.folkways.front.api.Facing) value));
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(BED, new Shape.Block(Housing::isBed, Housing::sleepingCell))),
-            new Schema(List.of(FOOD_MODE, FOOD)), List.of()));
+            new Schema(List.of(FOOD_MODE, FOOD_SAFETY, FOOD)), List.of()));
     }
 
     // What one more settler would ask of this colony; nothing, when it does not keep its residents living.
@@ -101,7 +104,8 @@ public final class LivingContent {
 
     static Optional<ItemSpec> food(Colony colony) {
         var settings = Fronts.of(colony).settings(ID);
-        return FoodSafety.allowed(settings.items(FOOD.key()), settings.choice(FOOD_MODE.key()).equals(BLACKLIST));
+        return FoodSafety.allowed(settings.items(FOOD.key()), settings.choice(FOOD_MODE.key()).equals(BLACKLIST),
+            settings.flag(FOOD_SAFETY.key()));
     }
 
     static boolean looksAfter(Resident resident) {

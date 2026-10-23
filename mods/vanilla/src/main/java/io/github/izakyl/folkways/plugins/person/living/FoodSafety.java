@@ -28,6 +28,10 @@ final class FoodSafety {
 
     // Supply plans name item kinds; the actual stack is checked again in the pack and before consumption.
     static Optional<ItemSpec> allowed(Optional<ItemSpec> configured, boolean blacklist) {
+        return allowed(configured, blacklist, true);
+    }
+
+    static Optional<ItemSpec> allowed(Optional<ItemSpec> configured, boolean blacklist, boolean rejectUnsafe) {
         List<ItemSpec> allowed = new ArrayList<>();
         for (Item item : blacklist ? BuiltInRegistries.ITEM : configured.map(Goods::members).orElse(Set.of())) {
             ItemStack stack = item.getDefaultInstance();
@@ -35,7 +39,7 @@ final class FoodSafety {
             if (blacklist && configured.filter(spec -> Goods.matches(stack, spec)).isPresent()) {
                 continue;
             }
-            if (safe(stack, food) && food.nutrition() > 0) {
+            if (food != null && food.nutrition() > 0 && (!rejectUnsafe || safe(stack, food))) {
                 allowed.add(Goods.specOf(stack));
             }
         }
@@ -45,6 +49,10 @@ final class FoodSafety {
     static boolean matches(Settings settings, ItemStack stack) {
         boolean listed = settings.items(LivingContent.FOOD.key()).filter(spec -> Goods.matches(stack, spec)).isPresent();
         return settings.choice(LivingContent.FOOD_MODE.key()).equals(LivingContent.BLACKLIST) != listed;
+    }
+
+    static boolean usable(Settings settings, ItemStack stack, FoodProperties food) {
+        return food != null && (!settings.flag(LivingContent.FOOD_SAFETY.key()) || safe(stack, food));
     }
 
     static boolean safe(ItemStack stack, FoodProperties food) {

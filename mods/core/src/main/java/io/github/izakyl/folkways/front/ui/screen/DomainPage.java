@@ -12,6 +12,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignContent;
 import dev.vfyjxf.taffy.style.AlignItems;
@@ -88,6 +89,7 @@ public final class DomainPage implements Draw {
     private static final String MAX = "max";
     private static final String RAW = "raw";
     private static final String SETTING = "setting";
+    private static final String CHECKED = "checked";
     private static final String CHOSEN = "chosen";
     private static final String PICKS = "picks";
     private static final String HELD = "held";
@@ -238,6 +240,12 @@ public final class DomainPage implements Draw {
             row.acts.add(shown);
             row.presses.add(press);
             element.addChildren(press);
+            Toggle checkbox = Controls.tick();
+            checkbox.setDisplay(false);
+            checkbox.setOnToggleChanged(on -> drawn.carrying.send(index, slot));
+            checkbox.toggleLabel.addEventListener(UIEvents.MOUSE_DOWN, event -> checkbox.setOn(!checkbox.isOn()));
+            row.checkboxes.add(checkbox);
+            element.addChildren(checkbox);
             if (drawn.typesNumbers) {
                 TextField number = Controls.count(0, Integer.MAX_VALUE);
                 number.layout(layout -> layout.height(Rows.ACT_SIZE));
@@ -334,6 +342,10 @@ public final class DomainPage implements Draw {
             if (act instanceof Board.Act.Edit edit) {
                 setting(edit.settingKey()).ifPresent(pair -> {
                     entry.putString(NAME, pair.setting().nameKey());
+                    if (pair.setting() instanceof Schema.Setting.Flag flag) {
+                        entry.putBoolean(CHECKED, SettingsPage.flagOf(
+                            player, new SettingsPage.Scope.AtColony(pair.scope()), flag));
+                    }
                     if (pair.setting() instanceof Schema.Setting.Count count) {
                         entry.putString(SETTING, count.key());
                         entry.putString(RAW, Integer.toString(SettingsPage.countOf(
@@ -561,6 +573,7 @@ public final class DomainPage implements Draw {
         private final List<Label> editLabels = new ArrayList<>();
         private final List<UIElement> editBoxes = new ArrayList<>();
         private final List<UIElement> acts = new ArrayList<>();
+        private final List<Toggle> checkboxes = new ArrayList<>();
         private final List<Button> presses = new ArrayList<>();
         private final List<TextField> numbers = new ArrayList<>();
     }
@@ -817,7 +830,9 @@ public final class DomainPage implements Draw {
                 }
                 acceptTold(row, entry, heading);
                 if (!row.formControls) {
-                    acceptStacked(row, !heading && entry.getBoolean(WHOLE) && !entry.contains(TOLD));
+                    boolean hasCheckbox = entry.getList(ACTS, Tag.TAG_COMPOUND).stream()
+                        .anyMatch(act -> ((CompoundTag) act).contains(CHECKED));
+                    acceptStacked(row, !heading && entry.getBoolean(WHOLE) && !entry.contains(TOLD) && !hasCheckbox);
                 }
                 acceptIcon(registries, row, entry.getCompound(ICON));
                 acceptMeter(row, entry);
@@ -1109,6 +1124,8 @@ public final class DomainPage implements Draw {
                     row.counts[slot] = false;
                     row.editBoxes.get(slot).setDisplay(false);
                     row.presses.get(slot).setDisplay(false);
+                    row.checkboxes.get(slot).setDisplay(false);
+                    Tokens.name(row.checkboxes.get(slot), Tokens.NONE);
                     Tokens.name(row.presses.get(slot), Tokens.NONE);
                     if (number != null) {
                         number.setDisplay(false);
@@ -1131,11 +1148,18 @@ public final class DomainPage implements Draw {
                     ? label : Component.translatable(entry.getString(NAME));
                 row.editLabels.get(slot).setText(caption);
                 row.editBoxes.get(slot).setDisplay(true);
-                row.acts.get(slot).setDisplay(!readable);
-                if (readable) {
+                row.acts.get(slot).setDisplay(!readable && !entry.contains(CHOSEN));
+                if (readable || entry.contains(CHOSEN)) {
                     boolean multipleItems = entry.getBoolean(PICKS) && !entry.getBoolean(SINGLE);
                     Component readableLabel = multipleItems || label.getString().isBlank() ? caption : label;
                     press.enableText().setText(readableLabel);
+                    if (!readable) {
+                        int width = Minecraft.getInstance().font.width(readableLabel) + 12;
+                        press.layout(layout -> layout.width(width).minWidth(SettingsPage.CONTROL_MIN)
+                            .flexShrink(1).paddingHorizontal(4));
+                        press.text.layout(layout -> layout.width(Math.max(1, width - 12)));
+                        press.textStyle(style -> style.adaptiveWidth(false).textWrap(TextWrap.HOVER_ROLL));
+                    }
                 } else {
                     press.noText();
                 }
@@ -1160,12 +1184,23 @@ public final class DomainPage implements Draw {
                 boolean counts = number != null && kinds[index][slot] == KIND_EDIT
                     && entry.contains(RAW);
                 row.counts[slot] = counts;
-                press.setDisplay(!counts);
+                boolean flag = entry.contains(CHECKED) && !readable;
+                Toggle checkbox = row.checkboxes.get(slot);
+                checkbox.setDisplay(flag);
+                if (flag) {
+                    checkbox.enableText().setText(caption);
+                    int width = Minecraft.getInstance().font.width(caption) + 22;
+                    checkbox.layout(layout -> layout.width(width).flexShrink(0));
+                    checkbox.toggleLabel.textStyle(style -> style.adaptiveWidth(true));
+                    checkbox.setOn(entry.getBoolean(CHECKED), false);
+                }
+                Tokens.name(checkbox, flag ? token(kinds[index][slot], index, slot) : Tokens.NONE);
+                press.setDisplay(!counts && !flag);
                 Component tooltip = label.getString().isBlank() ? caption : label;
                 press.style(style -> style.tooltips(tooltip.getString().isBlank()
                     ? new Component[0] : new Component[] {tooltip}));
 
-                Tokens.name(press, counts ? Tokens.NONE : token(kinds[index][slot], index, slot));
+                Tokens.name(press, counts || flag ? Tokens.NONE : token(kinds[index][slot], index, slot));
                 if (number != null) {
                     number.setDisplay(counts);
                     Tokens.name(number, counts ? token(kinds[index][slot], index, slot) : Tokens.NONE);

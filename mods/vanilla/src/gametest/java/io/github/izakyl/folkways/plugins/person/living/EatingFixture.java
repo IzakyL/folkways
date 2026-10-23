@@ -87,6 +87,11 @@ final class EatingFixture implements AutoCloseable {
             "the colony holds the food list mode");
     }
 
+    void rejectUnsafe(boolean reject) {
+        ((ColonyFront) Fronts.of(colony)).setSetting(LivingContent.ID, LivingContent.FOOD_SAFETY.key(),
+            new ColonySettings.Value.Flag(reject));
+    }
+
     void settle() {
         helper.getLevel().addFreshEntity(body.mob());
         colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();

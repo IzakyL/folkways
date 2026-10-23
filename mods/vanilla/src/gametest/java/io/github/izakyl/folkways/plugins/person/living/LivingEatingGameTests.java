@@ -35,6 +35,53 @@ public final class LivingEatingGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void safetyDefaultsOnForOldColoniesAndPersistsWhenDisabled(GameTestHelper helper) {
+        var schema = new io.github.izakyl.folkways.front.api.Schema(
+            List.of(LivingContent.FOOD_MODE, LivingContent.FOOD_SAFETY, LivingContent.FOOD));
+        var migrated = ColonySettings.load(Reader.of(Writer.of().tag())).conformedTo(schema);
+        helper.assertTrue(migrated.flag(LivingContent.FOOD_SAFETY.key()), "old colonies default to safe food");
+        var disabled = migrated.with(LivingContent.FOOD_SAFETY.key(), new ColonySettings.Value.Flag(false));
+        helper.assertFalse(ColonySettings.load(Reader.of(disabled.save())).conformedTo(schema)
+            .flag(LivingContent.FOOD_SAFETY.key()), "disabled safety survives save/load");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void disablingSafetyAllowsListedUnsafeFoodButStillHonorsTheList(GameTestHelper helper) {
+        try (EatingFixture meal = new EatingFixture(helper, new ItemStack(Items.ROTTEN_FLESH, 3), 0)) {
+            helper.assertTrue(Fronts.of(meal.colony).settings(LivingContent.ID)
+                .flag(LivingContent.FOOD_SAFETY.key()), "safety starts enabled");
+            assertRefused(helper, meal);
+            meal.rejectUnsafe(false);
+            helper.assertTrue(Goods.matches(new ItemStack(Items.ROTTEN_FLESH),
+                LivingContent.rations(meal.colony, meal.body).getFirst().spec()), "unsafe food can be reserved");
+            meal.blacklist(true);
+            helper.assertTrue(meal.action().commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
+                "disabling safety does not bypass the blacklist");
+            meal.blacklist(false);
+            meal.eat();
+            helper.assertValueEqual(meal.pack.getItem(0).getCount(), 2, "one listed unsafe meal is consumed");
+            helper.assertValueEqual(meal.living.foodLevelOf(meal.body.id()).orElseThrow(), 4,
+                "the unsafe meal nourishes the resident");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void enablingSafetyBeforeCommitRefusesAPreviouslySelectedUnsafeMeal(GameTestHelper helper) {
+        try (EatingFixture meal = new EatingFixture(helper, new ItemStack(Items.SPIDER_EYE, 3), 0)) {
+            meal.rejectUnsafe(false);
+            var action = meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
+                .filter(urge -> urge.id().equals(LivingPresence.EAT)).findFirst().orElseThrow().take().get();
+            meal.rejectUnsafe(true);
+            helper.assertTrue(action.commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
+                "safety is rechecked when the action commits");
+            helper.assertValueEqual(meal.pack.getItem(0).getCount(), 3, "unsafe meal stays untouched");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void savedFoodSettingsKeepEmptyListsAndMigrateExistingMenus(GameTestHelper helper) {
         var schema = new io.github.izakyl.folkways.front.api.Schema(List.of(LivingContent.FOOD_MODE, LivingContent.FOOD));
         var bread = ItemFilter.item(net.minecraft.resources.ResourceLocation.withDefaultNamespace("bread"));
