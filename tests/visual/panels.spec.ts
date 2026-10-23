@@ -122,7 +122,7 @@ test("panels and item models on camera", async ({}, testInfo) => {
     const expectedWindows = (await panelElements(client)).map(element => element.id)
       .filter((id): id is string => !!id?.startsWith("folkways.window.close."));
     const probe = new LayoutProbe(client);
-    const tabs = await discoverPages(server);
+    const tabs = await discoverPages(server, playerName);
     run.note("discovered_pages", tabs);
     for (const [index, tab] of tabs.entries()) {
       await clickTab(client, tab.token);
