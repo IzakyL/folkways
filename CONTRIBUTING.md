@@ -145,26 +145,26 @@ names and keep commands, paths and Java symbols literal. Put detailed gameplay,
 content, testing and architecture material under `docs/en/` and `docs/zh-CN/`.
 See the [documentation index](docs/README.md) for the layout and maintenance notes.
 
-| Command | What it runs |
-| --- | --- |
-| `npm run test:unit` | Fast Node tests for the TypeScript helpers; no game |
-| `npm run test:i18n` | Language keys, placeholders and notice/refusal coverage; no game or dependencies |
-| `npm run typecheck` | Type checks every TypeScript suite |
-| `./gradlew check` | Compiles everything and lints for tabs and trailing whitespace |
-| `./gradlew runGameTestServer` | NeoForge game tests in every `mods/*/src/gametest`, with the base mods but not Modular Golems or Cookery loaded |
-| `./gradlew -PcookeryTests=true runGameTestServer` | Also loads Cookery and runs its native recipe and lifecycle tests |
-| `./gradlew -PgameTestMod=core runGameTestServer` | Only Core-owned tests in the base environment; also accepts `vanilla` or `create` |
-| `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer` | Core-owned tests with Cookery installed, including `core/src/cookeryTest`; also accepts `vanilla` |
-| `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer` | Only Cookery-owned tests, with Cookery installed |
-| `npm run test:e2e` | End-to-end tests against a real client and server, on the ground |
-| `npm run test:sable` | The same against a [Sable](https://modrinth.com/mod/sable) ship: each twin spec's aboard test, and the ship-only specs |
-| `npm run visual:take` | Screenshots of screens, panels, looks and in-world visuals |
-| `npm run ponder:take` | Films every ponder scene in the colony book |
-| `npm run pattern:take` | Lays out each work pattern's gallery and shoots it |
-| `npm run bench:take` | Performance benchmarks on a large colony |
-| `npm run promo:take` | Films the promotional takes |
-| `npm run promo:cookery` | Films four short Cookery takes, one feature each: kitchen, dining area, wine with meals, Create elevator |
-| `npm run promo:cookery:film` | Copies every recorded take byte for byte into `tests/out/promo/film/` and writes the Wine Fox model credits |
+| Command                                                                 | What it runs                                                                                                           |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `npm run test:unit`                                                     | Fast Node tests for the TypeScript helpers; no game                                                                    |
+| `npm run test:i18n`                                                     | Language keys, placeholders and notice/refusal coverage; no game or dependencies                                       |
+| `npm run typecheck`                                                     | Type checks every TypeScript suite                                                                                     |
+| `./gradlew check`                                                       | Compiles everything and lints for tabs and trailing whitespace                                                         |
+| `./gradlew runGameTestServer`                                           | NeoForge game tests in every `mods/*/src/gametest`, with the base mods but not Modular Golems or Cookery loaded        |
+| `./gradlew -PcookeryTests=true runGameTestServer`                       | Also loads Cookery and runs its native recipe and lifecycle tests                                                      |
+| `./gradlew -PgameTestMod=core runGameTestServer`                        | Only Core-owned tests in the base environment; also accepts `vanilla` or `create`                                      |
+| `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer`    | Core-owned tests with Cookery installed, including `core/src/cookeryTest`; also accepts `vanilla`                      |
+| `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer` | Only Cookery-owned tests, with Cookery installed                                                                       |
+| `npm run test:e2e`                                                      | End-to-end tests against a real client and server, on the ground                                                       |
+| `npm run test:sable`                                                    | The same against a [Sable](https://modrinth.com/mod/sable) ship: each twin spec's aboard test, and the ship-only specs |
+| `npm run visual:take`                                                   | Screenshots of screens, panels, looks and in-world visuals, plus Ponder clips and text keyframes                       |
+| `npm run ponder:take`                                                   | Filtered visual suite: films every base lesson and the Cookery/Tavern folder                                           |
+| `npm run pattern:take`                                                  | Lays out each work pattern's gallery and shoots it                                                                     |
+| `npm run bench:take`                                                    | Performance benchmarks on a large colony                                                                               |
+| `npm run promo:take`                                                    | Films the promotional takes                                                                                            |
+| `npm run promo:cookery`                                                 | Films four short Cookery takes, one feature each: kitchen, dining area, wine with meals, Create elevator               |
+| `npm run promo:cookery:film`                                            | Copies every recorded take byte for byte into `tests/out/promo/film/` and writes the Wine Fox model credits            |
 
 Run `npm run setup` before filming. Each Cookery take stages one small set on bare ground with a handful of
 Wine Fox residents, films it from one fixed camera, and fails unless the feature it shows happens on camera:
@@ -213,7 +213,7 @@ tests fail. Console logs and JUnit files are written immediately after each invo
 `run/gametest/ci/<mod>-<profile>.*`. The JUnit case records whether that GameTestServer
 invocation passed; detailed individual GameTest outcomes remain in the uploaded server logs.
 
-Each suite is a directory under `tests/` (`e2e`, `sable`, `visual`, `ponder`, `pattern`, `bench`, `promo`) with
+Each suite is a directory under `tests/` (`e2e`, `sable`, `visual`, `pattern`, `bench`, `promo`) with
 its own `playwright.config.ts` and `tsconfig.json`. Code more than one suite uses lives in
 `tests/shared/`; a suite imports from there and from `tests/ldlib2/`, never from another
 suite. Everything the suites write goes to `tests/out/`, which git ignores.

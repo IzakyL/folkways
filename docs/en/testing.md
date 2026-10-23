@@ -53,7 +53,7 @@ accepting the Minecraft EULA.
 | `npm run test:sable`    | Aboard variants of twin e2e specs and Sable-only specs           |
 | `npm run test:coverage` | Both e2e suites with coverage, followed by a report              |
 | `npm run visual:take`   | Screenshots of screens, panels, resident looks and world visuals |
-| `npm run ponder:take`   | Recordings of the Colony Book's Ponder scenes                    |
+| `npm run ponder:take`   | Filtered visual suite: Ponder clips and text keyframes           |
 | `npm run pattern:take`  | Building-pattern galleries                                       |
 | `npm run bench:take`    | Large-colony performance benchmarks                              |
 | `npm run promo:take`    | Promotional footage                                              |
@@ -153,3 +153,17 @@ invocation under `run/gametest/ci/<mod>-<profile>.*`; artifact names are
 passed. Individual GameTest details remain in the server logs.
 
 Client smoke uploads `tests/out/` as `client-smoke-results`.
+
+Ponder recording lives in `tests/visual/ponder.spec.ts`; `npm run visual:take` includes it,
+and `npm run ponder:take` selects it with `-g ponder`. Lessons are discovered from
+`Scenes.declared()` and opened by name. The base fixture records every Folkways lesson;
+`blockwright.toml#cookery-tavern` records every lesson in `folkways:cookery`, including
+Tavern. Housing, dining and household are also recorded in `zh_cn`, and farming at GUI scale 3.
+`PONDER_SCENES=housing,tavern npm run ponder:take` records only the named lessons.
+Each scene directory under `tests/out/visual/takes/ponder-<profile>-<locale>-scale-<scale>-<scene>/`
+contains `<scene>.mp4`, `NN-keyframe.png` and `index.json`. The index records the time,
+shown text, English text and translation keys of each frame.
+
+`living-ui.spec.ts` and `resident-detail.spec.ts` capture the new living UI in both
+`en_us` and `zh_cn`; their directories are `living-ui-<locale>` and `resident-detail-<locale>`.
+Filtered reruns refresh their own scopes and preserve other visual takes.

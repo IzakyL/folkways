@@ -50,7 +50,7 @@ Core 会一并运行已有 LDLib2 依赖测试，其他模组不重复运行。
 | `npm run test:sable`    | 成对 e2e 场景的船上版本，以及 Sable 专属场景 |
 | `npm run test:coverage` | 带覆盖率采集运行两套 e2e，然后生成报告       |
 | `npm run visual:take`   | 界面、面板、居民外观和世界画面的截图         |
-| `npm run ponder:take`   | 殖民书 Ponder 教程录制                       |
+| `npm run ponder:take`   | 视觉套件的 Ponder 筛选入口：视频及文字关键帧 |
 | `npm run pattern:take`  | 建筑样式展示                                 |
 | `npm run bench:take`    | 大规模殖民地性能基准                         |
 | `npm run promo:take`    | 宣传素材录制                                 |
@@ -137,3 +137,14 @@ CI 不运行完整 e2e、Sable、界面截图、Ponder、性能基准或宣传�
 JUnit 用例表示本次服务器调用是否通过；单个 GameTest 的详细结果保留在服务器日志中。
 
 客户端冒烟测试将 `tests/out/` 上传为 `client-smoke-results`。
+
+Ponder 录制位于 `tests/visual/ponder.spec.ts`，随 `npm run visual:take` 一起运行；
+`npm run ponder:take` 使用 `-g ponder` 筛选。通过 `Scenes.declared()` 发现课程并按名称打开。
+基础配置录制全部 Folkways 课程；`blockwright.toml#cookery-tavern` 录制
+`folkways:cookery` 文件夹的全部课程，包括酒馆。住房、用餐和生活课程还录制 `zh_cn` 版本，
+农耕课程还检查 GUI 缩放 3。`PONDER_SCENES=housing,tavern npm run ponder:take` 只录制指定课程。每个场景在
+`tests/out/visual/takes/ponder-<profile>-<locale>-scale-<scale>-<scene>/` 下保存
+`<scene>.mp4`、`NN-keyframe.png` 和 `index.json`。索引记录时间、显示文本、英文和翻译键。
+
+`living-ui.spec.ts` 和 `resident-detail.spec.ts` 分别以 `en_us` 和 `zh_cn` 录制生活界面，
+输出目录为 `living-ui-<locale>` 和 `resident-detail-<locale>`。筛选重跑只刷新自己的目录，保留其他视觉输出。

@@ -404,3 +404,9 @@ architectury = { target = ["server", "client"] }
 # Native Cookery alone must not activate the separately installed Folkways extension.
 [profile.cookery-native.mods]
 kaleidoscope_cookery = { target = ["server", "client"] }
+
+# Visual coverage includes every Cookery lesson, including the optional Tavern.
+[profile.cookery-tavern.mods]
+folkways_cookery = { target = ["server", "client"] }
+kaleidoscope_cookery = { target = ["server", "client"] }
+kaleidoscope_tavern = { target = ["server", "client"] }
