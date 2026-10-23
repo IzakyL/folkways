@@ -169,7 +169,7 @@ for (const stage of twins()) test(stage.title("perk system end-to-end: carrying 
       reasons.push(`the surplus cow in the perk arm was never culled (${CULL_TICKS} ticks)`);
     }
     expect(perked.peak_beef, "a culled cow still yields ordinary beef").toBeGreaterThan(0);
-    expect(perked.peak_beef, "butcher III doubles ordinary carcass products").toBeLessThanOrEqual(VANILLA_BEEF_MAX * 2);
+    expect(perked.peak_beef, "butcher III adds at most half again to ordinary carcass products").toBeLessThanOrEqual(Math.ceil(VANILLA_BEEF_MAX * 1.5));
     const stat = await reflect.query(server, {
       root: { kind: "static", className: "io.github.izakyl.folkways.plugins.pasture.PastureContent", path: "CARCASS_YIELD" },
       select: { id: "id().toString()" }, handles: true, limits: { maxDepth: 0, maxNodes: 8 },
@@ -180,7 +180,7 @@ for (const stage of twins()) test(stage.title("perk system end-to-end: carrying 
         target: { kind: "entity", uuid: resident.uuid }, path: "effects()", method: "value",
         args: [{ $handle: stat.tree!.handle }], argTypes: ["io.github.izakyl.folkways.effect.Stat"], returnType: "double",
       });
-      expect(Number(chance.returned), "butcher III doubles ordinary husbandry products").toBeCloseTo(1.0);
+      expect(Number(chance.returned), "butcher III adds half again to ordinary husbandry products").toBeCloseTo(0.5);
     }
 
     await clearCarcassGoods(server);

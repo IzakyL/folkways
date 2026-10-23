@@ -38,7 +38,8 @@ final class ShearNode extends AnimalNode {
         List<ItemStack> cut = shearable.onSheared(null, shears, level, beast.blockPosition());
         for (ItemStack stack : cut) {
             if (stack.is(ItemTags.WOOL)) {
-                stack.grow((int) who.effects().value(PastureContent.EXTRA_WOOL));
+                double extra = who.effects().value(PastureContent.EXTRA_WOOL);
+                stack.grow((int) extra + (level.random.nextDouble() < extra % 1 ? 1 : 0));
                 break;
             }
         }

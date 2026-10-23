@@ -66,16 +66,16 @@ public final class PatrolContent {
 
     private static final VocationSpec SPEC = new VocationSpec(VOCATION,
         List.of(new Perk("patrolling_watchful", 3,
-                rank -> List.of(Modifier.add(WARD_RADIUS, value(rank, 3, 6, 10)),
-                    Modifier.add(WARD_DURATION, value(rank, .25, .5, 1)))),
+                rank -> List.of(Modifier.add(WARD_RADIUS, value(rank, 2, 4, 6)),
+                    Modifier.add(WARD_DURATION, value(rank, .15, .3, .5)))),
             new Perk("patrolling_martial", 3,
-                rank -> List.of(Modifier.add(DAMAGE, value(rank, .2, .4, .7)))),
+                rank -> List.of(Modifier.add(DAMAGE, value(rank, .1, .2, .35)))),
             new Perk("patrolling_stalwart", 3,
-                rank -> List.of(Modifier.add(DEFENCE, value(rank, .1, .2, .35)))),
+                rank -> List.of(Modifier.add(DEFENCE, value(rank, .05, .1, .2)))),
             new Perk("patrolling_alert", 3,
-                rank -> List.of(Modifier.add(ALERT_RANGE, rank * 4))),
+                rank -> List.of(Modifier.add(ALERT_RANGE, rank * 2))),
             new Perk("patrolling_reassuring", 3,
-                rank -> List.of(Modifier.add(COMFORT, value(rank, 3, 6, 10))))),
+                rank -> List.of(Modifier.add(COMFORT, value(rank, 2, 4, 6))))),
         List.of(ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS)));
 
     private PatrolContent() {

@@ -25,12 +25,12 @@ public final class FolkwaysCreateConfig {
         CONDUCTING_HASTE = BUILDER
             .comment("The conductor's quick hands, as a multiplier on the wind-up of boarding and the rest",
                 "of the rail work. One entry per rank, below 1 for faster.")
-            .<Number>defineList("conductingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("conductingHaste", List.of(0.92D, 0.84D, 0.76D, 0.68D), () -> 1.0D, HASTE_STEP);
         DISPATCH_HASTE = BUILDER
             .comment("The courier's quick hands, as a multiplier on the wind-up of collecting a package.",
                 "This ladder is deliberately shallower than the others: a courier's day is mostly walking,",
                 "so a steep one would buy almost nothing. One entry per rank, below 1 for faster.")
-            .<Number>defineList("dispatchHaste", List.of(0.85D, 0.72D, 0.62D, 0.55D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("dispatchHaste", List.of(0.92D, 0.85D, 0.78D, 0.72D), () -> 1.0D, HASTE_STEP);
         BUILDER.pop();
 
         BUILDER.push("labor");

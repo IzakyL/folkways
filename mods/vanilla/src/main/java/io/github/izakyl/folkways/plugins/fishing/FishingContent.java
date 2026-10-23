@@ -61,12 +61,12 @@ public final class FishingContent {
     private static final VocationSpec SPEC = new VocationSpec(VOCATION, List.of(
         new Perk(QUICK_HANDS, 3, Perk.Grant.haste(VOCATION, FolkwaysVanillaConfig::fishingHaste)),
         new Perk(SCHOOL, 3, rank -> List.of(
-            Modifier.add(EXTRA_FISH, new double[] {.25, .45, .7}[rank - 1]),
+            Modifier.add(EXTRA_FISH, new double[] {.15, .25, .4}[rank - 1]),
             Modifier.add(SCHOOL_SIZE, rank == 3 ? 2 : 1))),
-        new Perk(TREASURE, 3, Perk.Grant.added(TREASURE_CHANCE, () -> List.of(.03, .06, .1))),
+        new Perk(TREASURE, 3, Perk.Grant.added(TREASURE_CHANCE, () -> List.of(.02, .04, .06))),
         new Perk(WATER_SENSE, 3, Perk.Grant.perRank(RARE_FISH, 1)),
         new Perk(ROD_CARE, 3, rank -> List.of(new Modifier.Multiply(Stats.TOOL_WEAR,
-            new double[] {.75, .5, .25}[rank - 1], Scope.trade(VOCATION))))),
+            new double[] {.85, .7, .55}[rank - 1], Scope.trade(VOCATION))))),
         List.of(ItemSpec.of(ResourceLocation.withDefaultNamespace("fishing_rod"))));
 
     private static final Workload.Haste HASTE = Workload.Haste.of(VOCATION);

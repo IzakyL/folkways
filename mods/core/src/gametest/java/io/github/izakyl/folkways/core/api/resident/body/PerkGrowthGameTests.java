@@ -132,7 +132,7 @@ public final class PerkGrowthGameTests {
             "speed and replanting are independent");
         helper.assertTrue(PerkPool.effects(Map.of(BuildContent.QUICK_HANDS, 3)).value(Stats.TOOL_WEAR, BuildContent.VOCATION) == 1.0,
             "construction speed does not grant tool care");
-        helper.assertTrue(PerkPool.effects(Map.of(GlobalPerks.LONGARM, 3)).value(Stats.REACH) == 3.0,
+        helper.assertTrue(PerkPool.effects(Map.of(GlobalPerks.LONGARM, 3)).value(Stats.REACH) == 1.5,
             "longarm has substantial reach");
         helper.assertFalse(PerkPool.globalCandidates(Map.of()).contains(GlobalPerks.PACKMULE), "legacy packmule is not drawn again");
         helper.succeed();

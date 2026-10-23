@@ -11,6 +11,7 @@ import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
@@ -18,6 +19,8 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.WorldGenerationContext;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -88,13 +91,28 @@ public final class BuildingPerkGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void materialRefundsUseSpentBlocksAndExcludeMachines(GameTestHelper helper) {
-        Worker worker = worker(PersonBody.RESIDENT.get().create(helper.getLevel()), Effects.of(List.of(
-            new Effects.Part("test", Modifier.add(BuildingPerks.MATERIAL_RETURN, 1)))));
-        var refund = BuildingPerks.refunded(worker, List.of(new ItemStack(Items.STONE, 3)), Blocks.STONE.defaultBlockState());
-        helper.assertTrue(refund.size() == 1 && refund.getFirst().getCount() == 3, "refund is based on actual spent construction blocks");
-        helper.assertTrue(BuildingPerks.refunded(worker, List.of(new ItemStack(Items.FURNACE)), Blocks.FURNACE.defaultBlockState()).isEmpty(), "functional blocks cannot generate free machines");
-        helper.assertTrue(BuildingPerks.refunded(worker, List.of(new ItemStack(Items.DIAMOND)), Blocks.STONE.defaultBlockState()).isEmpty(), "unrelated inputs cannot be duplicated");
+    public static void fortuneLendsItsLevelToTheLootWithoutEnchantingTheRealTool(GameTestHelper helper) {
+        var level = helper.getLevel();
+        Worker worker = worker(PersonBody.RESIDENT.get().create(level), Effects.of(List.of(
+            new Effects.Part("test", Modifier.add(BuildingPerks.FORTUNE, 2)))));
+        var fortune = level.registryAccess().registryOrThrow(Registries.ENCHANTMENT).getHolderOrThrow(Enchantments.FORTUNE);
+        ItemStack pickaxe = new ItemStack(Items.IRON_PICKAXE);
+        ItemStack lucky = BuildingPerks.fortunate(level, worker, pickaxe);
+        helper.assertValueEqual(lucky.getEnchantmentLevel(fortune), 2, "the loot sees the perk's fortune");
+        helper.assertValueEqual(pickaxe.getEnchantmentLevel(fortune), 0, "the resident's own tool is never enchanted");
+        ItemStack better = new ItemStack(Items.IRON_PICKAXE);
+        better.enchant(fortune, 3);
+        helper.assertTrue(BuildingPerks.fortunate(level, worker, better) == better, "a tool with more fortune keeps its own");
+        helper.assertTrue(BuildingPerks.fortunate(level, worker, ItemStack.EMPTY).isEmpty(), "bare hands gain no fortune");
+        var ore = Blocks.DIAMOND_ORE.defaultBlockState();
+        var pos = helper.absolutePos(BlockPos.ZERO);
+        int plain = 0, perked = 0;
+        for (int i = 0; i < 200; i++) {
+            plain += Block.getDrops(ore, level, pos, null, worker.body(), pickaxe).stream().mapToInt(ItemStack::getCount).sum();
+            perked += Block.getDrops(ore, level, pos, null, worker.body(), lucky).stream().mapToInt(ItemStack::getCount).sum();
+        }
+        helper.assertValueEqual(plain, 200, "an ordinary pickaxe yields one diamond each time");
+        helper.assertTrue(perked > plain, "fortune II yields more diamonds than an ordinary pickaxe");
         helper.succeed();
     }
 

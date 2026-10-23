@@ -7,26 +7,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.state.BlockState;
 
 /** The trade's independent abilities; no ability is inferred from another perk's rank. */
 public final class BuildingPerks {
     public static final TagKey<Block> ORDINARY_STONE = TagKey.create(Registries.BLOCK,
         ResourceLocation.fromNamespaceAndPath("folkways", "prospecting_stone"));
-    public static final TagKey<Block> RETURNABLE_MATERIAL = TagKey.create(Registries.BLOCK,
-        ResourceLocation.fromNamespaceAndPath("folkways", "returnable_building_materials"));
     public static final Stat PROSPECTING = stat("building_prospecting", 0, 1);
     public static final Stat SECOND_FIND = stat("building_second_find", 0, 1);
-    public static final Stat MATERIAL_RETURN = stat("building_material_return", 0, 1);
+    public static final Stat FORTUNE = stat("building_fortune", 0, 3);
     public static final Stat QUARRY_MOMENTUM = stat("building_quarry_momentum", 0, 2);
     private record Streak(BlockState stone, long tick, int count) { }
     private static final Map<Mob, Streak> STREAKS = new WeakHashMap<>();
@@ -73,17 +72,16 @@ public final class BuildingPerks {
 
     public static void interrupt(Worker worker) { STREAKS.remove(worker.body()); }
 
-    public static List<ItemStack> refunded(Worker worker, List<ItemStack> drawn, BlockState goal) {
-        List<ItemStack> refunds = new ArrayList<>();
-        if (!goal.is(RETURNABLE_MATERIAL) || goal.hasBlockEntity() || goal.getBlock() instanceof EntityBlock) return refunds;
-        double chance = worker.effects().value(MATERIAL_RETURN);
-        for (ItemStack stack : drawn) {
-            if (!(stack.getItem() instanceof BlockItem item) || item.getBlock() != goal.getBlock()) continue;
-            int count = 0;
-            for (int i = 0; i < stack.getCount(); i++) if (worker.body().getRandom().nextDouble() < chance) count++;
-            if (count > 0) refunds.add(stack.copyWithCount(count));
-        }
-        return refunds;
+    // The loot sees the better of the tool's own fortune and the perk's; the real tool is never enchanted.
+    public static ItemStack fortunate(ServerLevel level, Worker worker, ItemStack tool) {
+        int fortune = (int) worker.effects().value(FORTUNE);
+        if (fortune <= 0 || tool.isEmpty()) return tool;
+        Holder<Enchantment> holder = level.registryAccess().registryOrThrow(Registries.ENCHANTMENT)
+            .getHolderOrThrow(Enchantments.FORTUNE);
+        if (tool.getEnchantmentLevel(holder) >= fortune) return tool;
+        ItemStack lucky = tool.copy();
+        lucky.enchant(holder, fortune);
+        return lucky;
     }
 
     public static List<ItemStack> discoveries(ServerLevel level, Worker worker, BlockPos pos, BlockState stone) {

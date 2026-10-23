@@ -55,11 +55,11 @@ final class LayNode extends BuildNode {
                 heard.add(WorkNoise.broke(cell, state));
             }
         });
-        ItemStack tool = job().broken().map(state -> who.held(new ToolNeed.SuitableFor(state))).orElse(ItemStack.EMPTY);
+        ItemStack tool = BuildingPerks.fortunate(level, who,
+            job().broken().map(state -> who.held(new ToolNeed.SuitableFor(state))).orElse(ItemStack.EMPTY));
         List<ItemStack> made = new ArrayList<>(Rubble.lay(level, who.body(), before, after, shot, at, data(level), tool,
             SchematicPlacement.icon(job().cost()), true));
         BuildingPerks.interrupt(who);
-        made.addAll(BuildingPerks.refunded(who, drawn, goal));
         heard.add(WorkNoise.placed(at, goal));
         for (ItemStack stack : drawn) {
             if (stack.getItem() instanceof BucketItem) {

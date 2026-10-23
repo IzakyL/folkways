@@ -42,12 +42,12 @@ public final class Haul {
 
     public static final VocationSpec SPEC =
         new VocationSpec(Vocations.HAULING, List.of(
-            new Perk(HEAVY, 3, Perk.Grant.multiplied(Stats.PACK_ROOM, () -> List.of(1.5, 2.0, 3.0))),
-            new Perk(SWIFT, 3, Perk.Grant.multiplied(TRAVEL_SPEED, () -> List.of(1.15, 1.30, 1.50))),
-            new Perk(QUICK_HANDS, 3, Perk.Grant.haste(Vocations.HAULING, () -> List.of(0.75, 0.55, 0.35))),
+            new Perk(HEAVY, 3, Perk.Grant.multiplied(Stats.PACK_ROOM, () -> List.of(1.25, 1.5, 2.0))),
+            new Perk(SWIFT, 3, Perk.Grant.multiplied(TRAVEL_SPEED, () -> List.of(1.08, 1.16, 1.25))),
+            new Perk(QUICK_HANDS, 3, Perk.Grant.haste(Vocations.HAULING, () -> List.of(0.85, 0.72, 0.60))),
             new Perk(BATCH, 3, Perk.Grant.added(BATCH_SIZE, () -> List.of(1, 2, 3))),
             new Perk(ENDURANCE, 3, rank -> List.of(new Modifier.Multiply(Stats.FATIGUE,
-                List.of(0.70, 0.45, 0.20).get(rank - 1), Scope.trade(Vocations.HAULING))))));
+                List.of(0.85, 0.70, 0.55).get(rank - 1), Scope.trade(Vocations.HAULING))))));
 
     private static ResourceLocation id(String path) {
         return ResourceLocation.fromNamespaceAndPath("folkways", path);

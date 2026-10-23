@@ -15,9 +15,9 @@ public final class GlobalPerks {
 
     public static final String ASCETIC = "global_ascetic";
 
-    private static final List<Double> REACH_BY_RANK = List.of(1.0, 2.0, 3.0);
+    private static final List<Double> REACH_BY_RANK = List.of(0.5, 1.0, 1.5);
 
-    private static final List<Double> STRIDE_BY_RANK = List.of(1.10, 1.20, 1.30);
+    private static final List<Double> STRIDE_BY_RANK = List.of(1.05, 1.10, 1.15);
 
     private static final List<Double> ROOM_BY_RANK = List.of(1.15, 1.30, 1.45);
 
@@ -31,10 +31,9 @@ public final class GlobalPerks {
             new Perk(PerkPool.STOIC, 1, Grant.flag(Stats.PATIENT)),
             new Perk(LONGARM, 3, Grant.added(Stats.REACH, () -> REACH_BY_RANK)),
             new Perk(BRISK, 3, Grant.multiplied(Stats.MOVE_SPEED, () -> STRIDE_BY_RANK)),
-
             new Perk(ASCETIC, 3, Grant.multiplied(Stats.APPETITE, asceticAppetite)),
-            new Perk("global_tireless", 3, Grant.multiplied(Stats.FATIGUE, () -> List.of(0.85, 0.70, 0.50))),
-            new Perk("global_easygoing", 3, Grant.multiplied(Stats.DISCOMFORT, () -> List.of(0.80, 0.60, 0.40))),
-            new Perk("global_sociable", 3, Grant.multiplied(Stats.SOCIAL_RECOVERY, () -> List.of(1.30, 1.60, 2.0))));
+            new Perk("global_tireless", 3, Grant.multiplied(Stats.FATIGUE, () -> List.of(0.90, 0.80, 0.70))),
+            new Perk("global_easygoing", 3, Grant.multiplied(Stats.DISCOMFORT, () -> List.of(0.85, 0.70, 0.55))),
+            new Perk("global_sociable", 3, Grant.multiplied(Stats.SOCIAL_RECOVERY, () -> List.of(1.15, 1.30, 1.50))));
     }
 }

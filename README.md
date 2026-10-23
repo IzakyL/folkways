@@ -85,24 +85,25 @@ fifteen occupational ranks but only ten draws, so residents develop different co
 
 | Trade | Independent specialities (rank I / II / III defaults) |
 | --- | --- |
-| Building and excavation | Skilled Builder: work speed +25% / 50% / 80%; Prospector: 8% / 14% / 22% mineral finds; Thrifty Builder: 10% / 20% / 30% material refunds; Quarry Momentum: up to +30% / 60% / 100% consecutive stone mining speed; Tool Expert: 25% / 50% / 75% less wear |
-| Farming | Skilled Farmer: speed +25% / 50% / 80%; Chain Harvest: 1 / 3 / 7 additional adjacent mature crops; Bountiful: +20% / 40% / 70% food yield; Replant: automatic replanting with 0% / 25% / 50% seed saving; Care: +20% / 40% / 60% growth for tended age-bearing crops |
-| Husbandry | Skilled Herder: speed +25% / 50% / 80%; Butcher: +25% / 50% / 100% ordinary carcass yield; Fleece: +1 / 2 / 3 wool; Breeder: 10% / 20% / 35% twin births within the pasture target; Nurture: once per baby, feeding additionally shortens remaining growth by 15% / 30% / 50% |
-| Fishing | Skilled Angler: 20% / 35% / 50% shorter waits; School: 25% / 45% / 70% chance of 1 / 1 / 2 extra fish; Treasure: 3% / 6% / 10% extra discoveries; Water Sense: increasingly favors less common local fish; Rod Care: 25% / 50% / 75% less wear |
-| Hauling | Heavy Hauler: capacity +50% / 100% / 200%; Fleet Courier: hauling movement +15% / 30% / 50%; Quick Exchange: 25% / 45% / 65% shorter transfer actions; Along the Way: gather 2 / 3 / 4 compatible loads sharing a source or destination; Long Haul: 30% / 55% / 80% less walking fatigue |
-| Crafting | Quick Hands: manual speed +30% / 60% / 100%; Batch: 2 / 4 / 8 crafts per operation; Frugal: 8% / 15% / 25% ingredient refunds on eligible recipes; Byproducts: 15% / 30% / 50% extra configured byproducts; Furnace Experience: +15% / 30% / 50% cooking speed for the batch loaded by that resident |
-| Patrol | Deterrence: ward radius +3 / 6 / 10 blocks and duration +25% / 50% / 100%; Martial: +20% / 40% / 70% damage against hostiles; Stalwart: 10% / 20% / 35% less damage from hostiles; Alert: detection +4 / 8 / 12 blocks and shared threats; Reassuring: +3 / 6 / 10 ward safety mood and faster recovery from attacks |
+| Building and excavation | Skilled Builder: work speed +10% / 20% / 35%; Prospector: 4% / 7% / 11% mineral finds; Lucky Digger: Fortune I / II / III on blocks broken with a tool; Quarry Momentum: up to +15% / 30% / 50% consecutive stone mining speed; Tool Expert: 15% / 30% / 45% less wear |
+| Farming | Skilled Farmer: speed +10% / 20% / 35%; Chain Harvest: 1 / 2 / 4 additional adjacent mature crops; Bountiful: +10% / 20% / 35% food yield; Replant: automatic replanting with 0% / 15% / 30% seed saving; Care: +10% / 20% / 35% growth for tended age-bearing crops |
+| Husbandry | Skilled Herder: speed +10% / 20% / 35%; Butcher: +15% / 30% / 50% ordinary carcass yield; Fleece: +0.5 / 1 / 1.5 wool on average; Breeder: 5% / 10% / 20% twin births within the pasture target; Nurture: once per baby, feeding additionally shortens remaining growth by 10% / 20% / 30% |
+| Fishing | Skilled Angler: 10% / 20% / 30% shorter waits; School: 15% / 25% / 40% chance of 1 / 1 / 2 extra fish; Treasure: 2% / 4% / 6% extra discoveries; Water Sense: increasingly favors less common local fish; Rod Care: 15% / 30% / 45% less wear |
+| Hauling | Heavy Hauler: capacity +25% / 50% / 100%; Fleet Courier: hauling movement +8% / 16% / 25%; Quick Exchange: 15% / 28% / 40% shorter transfer actions; Along the Way: gather 2 / 3 / 4 compatible loads sharing a source or destination; Long Haul: 15% / 30% / 45% less walking fatigue |
+| Crafting | Quick Hands: manual speed +15% / 30% / 50%; Batch: 2 / 3 / 4 crafts per operation; Frugal: 5% / 10% / 15% ingredient refunds on eligible recipes; Byproducts: 10% / 20% / 30% extra configured byproducts; Furnace Experience: +10% / 20% / 30% cooking speed for the batch loaded by that resident |
+| Patrol | Deterrence: ward radius +2 / 4 / 6 blocks and duration +15% / 30% / 50%; Martial: +10% / 20% / 35% damage against hostiles; Stalwart: 5% / 10% / 20% less damage from hostiles; Alert: detection +2 / 4 / 6 blocks and shared threats; Reassuring: +2 / 4 / 6 ward safety mood and faster recovery from attacks |
 
 Prospector selects minerals from the mined position's actual biome ore features. Relative weights account
 for placement count, rarity, configured vein size, height distribution and replacement targets; vanilla
 uniform and trapezoid height probabilities are calculated exactly. Custom height/count providers use
 cached deterministic sampling. Nonstandard placement modifiers are not simulated. Discoveries use ordinary
-ore loot, without Fortune or Silk Touch; rank III has a 25% chance of a second portion. Placed stone
+ore loot, without Fortune or Silk Touch; rank III has a 15% chance of a second portion. Placed stone
 and repeated mining at the same position are eligible; no placement or prospecting history is stored.
 Ordinary stone and eligible minerals use `folkways:prospecting_stone`
 and `folkways:prospectable_minerals` block tags; the latter includes `c:ores` for modded minerals.
 
-Material refunds use the `folkways:returnable_building_materials` block tag, excluding block entities.
+Lucky Digger lends its Fortune to the loot of blocks broken with a tool; a tool with higher Fortune keeps its own,
+and the tool itself is never enchanted. It does not apply to prospecting finds.
 Chain harvesting stays inside the field and respects other active crop jobs. Crop care persists for a
 plant's lifetime without stacking; it supports age-bearing crops that publish growth events, not saplings.
 Along the Way reorders only ready work whose remaining route still fits the pack, keeping individual
@@ -115,9 +116,9 @@ abilities. Defaults cover selected ordinary recipes; reversible storage and pack
 Fishing discoveries use the `folkways:gameplay/fishing_discoveries` loot table with the actual fishing origin,
 so data packs can condition discoveries on biome and dimension.
 
-Shared perks grant reach +1 / 2 / 3 blocks, movement +10% / 20% / 30%, hunger and fatigue consumption
-reductions of 15% / 30% / 50%, food/housing/weather penalties reduced by 20% / 40% / 60%, and chatting
-recovery increased by 30% / 60% / 100% for both partners. Focused is a single-rank patience perk. Legacy
+Shared perks grant reach +0.5 / 1 / 1.5 blocks, movement +5% / 10% / 15%, hunger and fatigue consumption
+reductions of 10% / 20% / 30%, food/housing/weather penalties reduced by 15% / 30% / 45%, and chatting
+recovery increased by 15% / 30% / 50% for both partners. Focused is a single-rank patience perk. Legacy
 Packmule remains effective for existing residents but leaves the draw pool. Older saves retain their
 levels and independent perks, with excess ranks capped and experience moved to the new level threshold;
 version-two shared ranks are moved back into shared storage. Work-time ladders remain configurable.

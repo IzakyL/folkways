@@ -108,12 +108,12 @@ public final class EffectsGameTests {
         Effects body = PerkPool.effects(Map.of(
             GlobalPerks.PACKMULE, 2, GlobalPerks.BRISK, 3, GlobalPerks.LONGARM, 3, GlobalPerks.ASCETIC, 1));
         near(helper, body.value(Stats.PACK_ROOM), 1.30, "packmule II");
-        near(helper, body.value(Stats.MOVE_SPEED), 1.30, "brisk III");
-        near(helper, body.value(Stats.REACH), 3.0, "longarm III");
+        near(helper, body.value(Stats.MOVE_SPEED), 1.15, "brisk III");
+        near(helper, body.value(Stats.REACH), 1.5, "longarm III");
         near(helper, body.value(Stats.APPETITE), FolkwaysConfig.asceticAppetite().get(0).doubleValue(), "ascetic I");
 
-        near(helper, PerkPool.effects(Map.of(PastureContent.BUTCHER, 3)).value(PastureContent.CARCASS_YIELD), 1.0,
-            "butcher III doubles ordinary products");
+        near(helper, PerkPool.effects(Map.of(PastureContent.BUTCHER, 3)).value(PastureContent.CARCASS_YIELD), 0.5,
+            "butcher III adds half again to ordinary products");
         helper.assertTrue(PerkPool.effects(Map.of(FarmingContent.REPLANT, 1)).has(FarmingContent.REPLANTS),
             "replant grants replanting");
         helper.assertTrue(PerkPool.effects(Map.of(PerkPool.STOIC, 1)).has(Stats.PATIENT), "stoic grants patience");
@@ -138,7 +138,7 @@ public final class EffectsGameTests {
         helper.assertTrue(speed != null, "a dog golem walks");
         double own = speed.getValue();
         body.joinColony(UUID.randomUUID());
-        near(helper, speed.getValue(), own * 1.30, "brisk III while enrolled");
+        near(helper, speed.getValue(), own * 1.15, "brisk III while enrolled");
         body.leaveColony();
         near(helper, speed.getValue(), own, "its own pace once let go");
         golem.discard();

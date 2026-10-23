@@ -90,11 +90,11 @@ public final class FarmingContent {
     private static final VocationSpec SPEC = new VocationSpec(VOCATION,
         List.of(
             new Perk(QUICK_HANDS, 3, Perk.Grant.haste(VOCATION, FolkwaysVanillaConfig::farmingHaste)),
-            new Perk(CHAIN_HARVEST, 3, Perk.Grant.added(CHAIN, () -> List.of(1, 3, 7))),
-            new Perk(BOUNTIFUL, 3, Perk.Grant.added(HARVEST_BONUS, () -> List.of(.2, .4, .7))),
+            new Perk(CHAIN_HARVEST, 3, Perk.Grant.added(CHAIN, () -> List.of(1, 2, 4))),
+            new Perk(BOUNTIFUL, 3, Perk.Grant.added(HARVEST_BONUS, () -> List.of(.1, .2, .35))),
             new Perk(REPLANT, 3, rank -> List.of(Modifier.grant(REPLANTS),
-                Modifier.add(SEED_SAVING, new double[] {0, .25, .5}[rank - 1]))),
-            new Perk(CARE, 3, Perk.Grant.added(GROWTH, () -> List.of(.2, .4, .6)))),
+                Modifier.add(SEED_SAVING, new double[] {0, .15, .3}[rank - 1]))),
+            new Perk(CARE, 3, Perk.Grant.added(GROWTH, () -> List.of(.1, .2, .35)))),
         List.of(ItemSpec.of(ItemTags.HOES)));
 
     private static final Workload.Haste HASTE = Workload.Haste.of(VOCATION);

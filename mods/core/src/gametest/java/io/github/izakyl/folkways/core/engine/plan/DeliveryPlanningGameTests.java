@@ -356,7 +356,7 @@ public final class DeliveryPlanningGameTests {
             var pack = new io.github.izakyl.folkways.core.api.resident.body.Pack(1);
             pack.applyCapacityMultiplier(effects.value(io.github.izakyl.folkways.effect.Stats.PACK_ROOM));
             int cells = pack.getContainerSize();
-            helper.assertTrue(cells == (rank == 0 ? 1 : 3), "the real heavy-hauling perk expands this pack's capacity");
+            helper.assertTrue(cells == (rank == 0 ? 1 : 2), "the real heavy-hauling perk expands this pack's capacity");
             PlanningFixture fixture = new PlanningFixture(helper, cells);
             var level = helper.getLevel();
             level.setBlockAndUpdate(fixture.source.cell(), Blocks.BARREL.defaultBlockState());

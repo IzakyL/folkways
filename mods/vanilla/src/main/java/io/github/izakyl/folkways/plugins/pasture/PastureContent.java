@@ -90,10 +90,10 @@ public final class PastureContent {
     private static final VocationSpec VOCATION =
         new VocationSpec(HERDING, List.of(
                 new Perk(QUICK_HANDS, 3, Perk.Grant.haste(HERDING, FolkwaysVanillaConfig::herdingHaste)),
-                new Perk(BUTCHER, 3, Perk.Grant.added(CARCASS_YIELD, () -> List.of(.25, .5, 1))),
-                new Perk(FLEECE, 3, Perk.Grant.added(EXTRA_WOOL, () -> List.of(1, 2, 3))),
-                new Perk(BREEDER, 3, Perk.Grant.added(TWINS, () -> List.of(.1, .2, .35))),
-                new Perk(NURTURE, 3, Perk.Grant.added(BABY_GROWTH, () -> List.of(.15, .3, .5)))),
+                new Perk(BUTCHER, 3, Perk.Grant.added(CARCASS_YIELD, () -> List.of(.15, .3, .5))),
+                new Perk(FLEECE, 3, Perk.Grant.added(EXTRA_WOOL, () -> List.of(.5, 1, 1.5))),
+                new Perk(BREEDER, 3, Perk.Grant.added(TWINS, () -> List.of(.05, .1, .2))),
+                new Perk(NURTURE, 3, Perk.Grant.added(BABY_GROWTH, () -> List.of(.1, .2, .3)))),
             List.of(ItemSpec.of(ResourceLocation.withDefaultNamespace("shears"))));
 
     private static final Workload.Haste HASTE = Workload.Haste.of(HERDING);

@@ -70,11 +70,11 @@ public final class WaresContent {
 
     private static final VocationSpec VOCATION =
         new VocationSpec(CRAFTING, List.of(
-            new Perk(QUICK_HANDS, 3, Perk.Grant.haste(CRAFTING, () -> List.of(1 / 1.3, 1 / 1.6, .5))),
-            new Perk("crafting_batch", 3, rank -> List.of(Modifier.add(BATCH, value(rank, 1, 3, 7)))),
-            new Perk("crafting_frugal", 3, rank -> List.of(Modifier.add(REFUND, value(rank, .08, .15, .25)))),
-            new Perk("crafting_byproducts", 3, rank -> List.of(Modifier.add(BYPRODUCT, value(rank, .15, .3, .5)))),
-            new Perk("crafting_furnace", 3, rank -> List.of(Modifier.add(FURNACE, value(rank, .15, .3, .5))))));
+            new Perk(QUICK_HANDS, 3, Perk.Grant.haste(CRAFTING, () -> List.of(1 / 1.15, 1 / 1.3, 1 / 1.5))),
+            new Perk("crafting_batch", 3, rank -> List.of(Modifier.add(BATCH, value(rank, 1, 2, 3)))),
+            new Perk("crafting_frugal", 3, rank -> List.of(Modifier.add(REFUND, value(rank, .05, .1, .15)))),
+            new Perk("crafting_byproducts", 3, rank -> List.of(Modifier.add(BYPRODUCT, value(rank, .1, .2, .3)))),
+            new Perk("crafting_furnace", 3, rank -> List.of(Modifier.add(FURNACE, value(rank, .1, .2, .3))))));
 
     private static final Workload.Haste HASTE = Workload.Haste.of(CRAFTING);
 

@@ -47,8 +47,7 @@ final class FillNode extends GroundNode {
             }
             level.setBlock(cell, laid, 3);
             BuildingPerks.interrupt(who);
-            return new Outcome.Done(List.of(WorkNoise.placed(cell, laid)),
-                BuildingPerks.refunded(who, List.of(stack.copyWithCount(1)), laid),
+            return new Outcome.Done(List.of(WorkNoise.placed(cell, laid)), List.of(),
                 Optional.of(new Xp(BuildContent.trade(), 1)), unused(supplied, stack));
         }
         return refuse(GroundRefusal.NOTHING_TO_LAY);

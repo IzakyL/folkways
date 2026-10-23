@@ -42,7 +42,7 @@ final class StripNode extends BuildNode {
                 heard.add(WorkNoise.broke(cell.getKey(), cell.getValue()));
             }
         }
-        ItemStack tool = who.held(new ToolNeed.SuitableFor(standing));
+        ItemStack tool = BuildingPerks.fortunate(level, who, who.held(new ToolNeed.SuitableFor(standing)));
         List<ItemStack> spoil = new ArrayList<>(Rubble.clear(level, who.body(), before, remaining(level, job().after(), false), tool));
         before.forEach((pos, stone) -> {
             if (level.getBlockState(pos).isAir()) {

@@ -55,7 +55,7 @@ public final class FolkwaysConfig {
                 "vanilla exhaustion rate. Below 1 means a smaller appetite and fewer meals; above 1 means",
                 "a hungrier resident. One entry per rank, and a rank past the end of the list counts as no",
                 "change at all.")
-            .<Number>defineList("asceticAppetite", List.of(0.85D, 0.70D, 0.50D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("asceticAppetite", List.of(0.90D, 0.80D, 0.70D), () -> 1.0D, HASTE_STEP);
         BUILDER.pop();
 
         BUILDER.push("labor");

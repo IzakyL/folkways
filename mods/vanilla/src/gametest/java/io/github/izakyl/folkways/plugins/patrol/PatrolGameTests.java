@@ -74,12 +74,12 @@ public final class PatrolGameTests {
             grant(guard, "patrolling_martial", "patrolling_stalwart");
             float before = zombie.getHealth();
             zombie.hurt(level.damageSources().mobAttack(guard.mob()), 4);
-            helper.assertTrue(Math.abs(before - zombie.getHealth() - 6.8) < .01,
-                "martial rank three increases a real hostile hit by seventy percent");
+            helper.assertTrue(Math.abs(before - zombie.getHealth() - 5.4) < .01,
+                "martial rank three increases a real hostile hit by thirty-five percent");
             before = guard.mob().getHealth();
             guard.mob().hurt(level.damageSources().mobAttack(zombie), 4);
-            helper.assertTrue(Math.abs(before - guard.mob().getHealth() - 2.6) < .01,
-                "stalwart rank three reduces a real hostile hit by thirty-five percent");
+            helper.assertTrue(Math.abs(before - guard.mob().getHealth() - 3.2) < .01,
+                "stalwart rank three reduces a real hostile hit by twenty percent");
         } finally { guard.mob().discard(); zombie.discard(); }
         helper.succeed();
     }
@@ -96,20 +96,20 @@ public final class PatrolGameTests {
         Zombie zombie = EntityType.ZOMBIE.create(level);
         place(helper, scout.mob(), new BlockPos(1, 1, 1));
         place(helper, peer.mob(), new BlockPos(1, 1, 2));
-        place(helper, zombie, new BlockPos(19, 1, 1));
+        place(helper, zombie, new BlockPos(17, 1, 1));
         scout.mob().setNoAi(true); peer.mob().setNoAi(true); zombie.setNoAi(true);
         try {
             grant(scout, "patrolling_alert");
-            helper.assertValueEqual((int) scout.effects().value(PatrolContent.ALERT_RANGE), 12,
+            helper.assertValueEqual((int) scout.effects().value(PatrolContent.ALERT_RANGE), 6,
                 "the scout has all three vigilance ranks");
             helper.assertTrue(scout.mob().hasLineOfSight(zombie),
-                "the eighteen-block sight line lies entirely inside the reserved test arena");
+                "the sixteen-block sight line lies entirely inside the reserved test arena");
             PatrolPresence patrol = new PatrolPresence(colony);
             patrol.watched(scout.id(), level.getGameTime());
             patrol.watched(peer.id(), level.getGameTime());
             ItemStack sword = new ItemStack(Items.IRON_SWORD);
             helper.assertTrue(patrol.urges(worker(peer, sword), colony.view(level)).isEmpty(),
-                "ordinary patroller cannot independently discover a threat eighteen blocks away");
+                "ordinary patroller cannot independently discover a threat sixteen blocks away");
             helper.assertFalse(patrol.urges(worker(scout, sword), colony.view(level)).isEmpty(),
                 "vigilance expands actual discovery range");
             helper.assertFalse(patrol.urges(worker(peer, sword), colony.view(level)).isEmpty(),

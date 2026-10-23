@@ -88,7 +88,8 @@ final class BreakNode extends GroundNode {
         if (state.getDestroySpeed(level, cell) < 0.0F || spared.test(cell, state)) {
             return refuse(GroundRefusal.NOTHING_TO_WORK);
         }
-        ItemStack tool = way == Way.CLEAR ? who.held(new ToolNeed.SuitableFor(state)) : ItemStack.EMPTY;
+        ItemStack tool = way == Way.CLEAR
+            ? BuildingPerks.fortunate(level, who, who.held(new ToolNeed.SuitableFor(state))) : ItemStack.EMPTY;
         List<ItemStack> drops = new ArrayList<>(take(level, who.body(), cell, state, tool));
         if (way == Way.CLEAR && level.getBlockState(cell).isAir()) {
             drops.addAll(BuildingPerks.discoveries(level, who, cell, state));
