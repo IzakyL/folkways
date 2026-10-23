@@ -125,15 +125,15 @@ public final class BuildingPerkGameTests {
         var digging = (Workload.Once) strip.spec().workload();
         level.setBlockAndUpdate(pos, stone);
         for (int i = 0; i < 8; i++) BuildingPerks.mined(worker, stone);
-        helper.assertValueEqual(digging.ticksFor(worker), BuildJob.STRIP_TICKS / 2,
+        helper.assertValueEqual(digging.ticksFor(worker), digging.baseTicks() / 2,
             "full quarry momentum halves actual excavation wind-up");
         level.setBlockAndUpdate(pos, Blocks.DEEPSLATE.defaultBlockState());
-        helper.assertValueEqual(digging.ticksFor(worker), BuildJob.STRIP_TICKS,
+        helper.assertValueEqual(digging.ticksFor(worker), digging.baseTicks(),
             "the first block of a different material gets no previous streak bonus");
         helper.assertTrue(BuildingPerks.momentum(worker) == 1, "switching targets clears the old streak before any block is mined");
         for (int i = 0; i < 8; i++) BuildingPerks.mined(worker, stone);
         level.setBlockAndUpdate(pos, Blocks.DIRT.defaultBlockState());
-        helper.assertValueEqual(digging.ticksFor(worker), BuildJob.STRIP_TICKS,
+        helper.assertValueEqual(digging.ticksFor(worker), digging.baseTicks(),
             "a non-stone target also gets no quarry bonus");
         for (int i = 0; i < 8; i++) BuildingPerks.mined(worker, stone);
         var lay = new LayNode(new BuildJob(BuildJob.Kind.LAY, worldPos, Stances.WHEREVER,
@@ -141,7 +141,7 @@ public final class BuildingPerkGameTests {
         ((Workload.Once) lay.spec().workload()).ticksFor(worker);
         helper.assertTrue(BuildingPerks.momentum(worker) == 1, "construction clears the streak at wind-up, before its commit");
         level.setBlockAndUpdate(pos, stone);
-        helper.assertValueEqual(digging.ticksFor(worker), BuildJob.STRIP_TICKS,
+        helper.assertValueEqual(digging.ticksFor(worker), digging.baseTicks(),
             "returning immediately to the original stone after starting construction requires a new streak");
         helper.succeed();
     }
