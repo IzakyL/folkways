@@ -43,14 +43,14 @@ the nine-tail spread, large wedding dress and other oversized accessories obscur
 food and neighbouring actors in the crowded dining scene, so those variants remain
 available to the other takes without entering this cast.
 
-| Folder | Upstream | Skin |
-| --- | --- | --- |
-| `wine_fox_wedding` | `18_wedding` | `skin.png` |
-| `wine_fox_magical` | `05_magical` | `winefox.png` |
-| `wine_fox_tactics` | `16_tactics` | `tactics.png` |
-| `wine_fox_survivor` | `20_survivor` | `mitao.png` |
-| `wine_fox_hanfu` | `06_hanfu` | `default.png` |
-| `wine_fox_momo` | `14_momo` | `skin_pink.png` |
-| `wine_fox_nine_tailed` | `19_nine_tailed` | `skin.png` |
-| `wine_fox_saint` | `21_saint` | `skin.png` |
-| `wine_fox_matured` | `13_matured` | `default.png` |
+| Folder                 | Upstream         | Skin            |
+| ---------------------- | ---------------- | --------------- |
+| `wine_fox_wedding`     | `18_wedding`     | `skin.png`      |
+| `wine_fox_magical`     | `05_magical`     | `winefox.png`   |
+| `wine_fox_tactics`     | `16_tactics`     | `tactics.png`   |
+| `wine_fox_survivor`    | `20_survivor`    | `mitao.png`     |
+| `wine_fox_hanfu`       | `06_hanfu`       | `default.png`   |
+| `wine_fox_momo`        | `14_momo`        | `skin_pink.png` |
+| `wine_fox_nine_tailed` | `19_nine_tailed` | `skin.png`      |
+| `wine_fox_saint`       | `21_saint`       | `skin.png`      |
+| `wine_fox_matured`     | `13_matured`     | `default.png`   |

@@ -87,6 +87,35 @@ npm run test:e2e -- tests/e2e/jech-search.spec.ts --workers=1
 覆盖物品、目录、居民分工和库存匹配、原有查询运算符，以及复用同一个已准备查询时切换 JEC 模糊音和键盘方案的行为。
 默认测试环境不安装 JEC；CI 的建村冒烟测试不会运行此场景。
 
+### Ponder 与界面录制
+
+Ponder 录制位于 `tests/visual/ponder.spec.ts`，随 `npm run visual:take` 一起运行；
+`npm run ponder:take` 使用 `-g ponder` 筛选。通过 `Scenes.declared()` 发现课程并按名称打开。
+基础配置录制全部 Folkways 课程；`blockwright.toml#cookery-tavern` 录制
+`folkways:cookery` 文件夹的全部课程，包括酒馆。住房、用餐和起居课程还录制 `zh_cn` 版本，
+农业课程还检查 GUI 缩放 3。`PONDER_SCENES=housing,tavern npm run ponder:take` 只录制指定课程。每个场景在
+`tests/out/visual/takes/ponder-<profile>-<locale>-scale-<scale>-<scene>/` 下保存
+`<scene>.mp4`、`NN-keyframe.png` 和 `index.json`。索引记录每帧的时间、显示文本、英文和翻译键。
+
+`living-ui.spec.ts` 和 `resident-detail.spec.ts` 分别以 `en_us` 和 `zh_cn` 录制起居界面，
+输出目录为 `living-ui-<locale>` 和 `resident-detail-<locale>`。筛选重跑只刷新自己的目录，保留其他视觉输出。
+
+### 宣传素材
+
+录制前先运行 `npm run setup`；`npm run setup:promo-models` 准备酒狐模型。
+每个 Cookery 片段都在空地上搭一个小场景、放几名酒狐居民，用一个固定机位拍摄；画面里没有发生对应功能时片段判为失败：
+
+| 片段                      | 内容                                                       |
+| ------------------------- | ---------------------------------------------------------- |
+| `cookery-kitchen.take.ts` | 厨师使用汤锅、两口炒锅和砧板，把菜摆上用餐区的餐桌         |
+| `cookery-dining.take.ts`  | 一名居民把菜摆满一张相连的长桌，饥饿的居民找空椅子坐下用餐 |
+| `cookery-wine.take.ts`    | 酿酒师榨葡萄、灌满酒桶；装瓶后，食客佐餐喝酒               |
+| `create-elevator.take.ts` | 疲倦的居民乘坐唯一通往阁楼的机械动力电梯回床睡觉           |
+
+`npm run promo:cookery` 录制厨房、酿酒和电梯三个片段；用餐片段用 `npm run promo:take -- cookery-dining.take.ts` 单独录制。
+片段写入 `tests/out/promo/takes/<take>/`，每秒的采样放在旁边。
+`npm run promo:cookery:film` 把所有已录制片段复制到 `tests/out/promo/film/`，并写出酒狐模型的署名信息。
+
 ## Cookery 测试环境
 
 `blockwright.toml` 的 `cookery` 和 `cookery-sable` 环境同时加载 `folkways_cookery` 与森罗厨房 1.6.0。
@@ -137,14 +166,3 @@ CI 不运行完整 e2e、Sable、界面截图、Ponder、性能基准或宣传�
 JUnit 用例表示本次服务器调用是否通过；单个 GameTest 的详细结果保留在服务器日志中。
 
 客户端冒烟测试将 `tests/out/` 上传为 `client-smoke-results`。
-
-Ponder 录制位于 `tests/visual/ponder.spec.ts`，随 `npm run visual:take` 一起运行；
-`npm run ponder:take` 使用 `-g ponder` 筛选。通过 `Scenes.declared()` 发现课程并按名称打开。
-基础配置录制全部 Folkways 课程；`blockwright.toml#cookery-tavern` 录制
-`folkways:cookery` 文件夹的全部课程，包括酒馆。住房、用餐和生活课程还录制 `zh_cn` 版本，
-农耕课程还检查 GUI 缩放 3。`PONDER_SCENES=housing,tavern npm run ponder:take` 只录制指定课程。每个场景在
-`tests/out/visual/takes/ponder-<profile>-<locale>-scale-<scale>-<scene>/` 下保存
-`<scene>.mp4`、`NN-keyframe.png` 和 `index.json`。索引记录时间、显示文本、英文和翻译键。
-
-`living-ui.spec.ts` 和 `resident-detail.spec.ts` 分别以 `en_us` 和 `zh_cn` 录制生活界面，
-输出目录为 `living-ui-<locale>` 和 `resident-detail-<locale>`。筛选重跑只刷新自己的目录，保留其他视觉输出。
