@@ -47,6 +47,7 @@ final class EatingFixture implements AutoCloseable {
         body = PersonBody.RESIDENT.get().create(helper.getLevel());
         body.mob().setPos(helper.absolutePos(new BlockPos(2, 1, 2)).getCenter());
         pack = new SimpleContainer(food);
+        menu(Arrays.stream(food).map(ItemStack::getItem).toArray(Item[]::new));
         colony.keep(LivingContent.ID, Writer.of().children("hunger", List.of(body.id()),
             id -> Writer.of().uuid("resident", id).integer("FoodLevel", fullness).tag()).tag());
         living = new LivingPresence(colony);
@@ -68,10 +69,22 @@ final class EatingFixture implements AutoCloseable {
     }
 
     void menu(Item... foods) {
-        ColonyFront front = (ColonyFront) Fronts.of(colony);
-        helper.assertTrue(front.setSetting(LivingContent.ID, LivingContent.FOOD.key(),
-            new ColonySettings.Value.Items(Arrays.stream(foods).map(BuiltInRegistries.ITEM::getKey)
-                .map(ItemFilter::item).toList())), "the colony accepts the test food selection");
+        rules(Arrays.stream(foods).map(BuiltInRegistries.ITEM::getKey).map(ItemFilter::item).toArray(ItemFilter[]::new));
+    }
+
+    void rules(ItemFilter... rules) {
+        var wanted = new ColonySettings.Value.Items(List.of(rules));
+        ((ColonyFront) Fronts.of(colony)).setSetting(LivingContent.ID, LivingContent.FOOD.key(), wanted);
+        helper.assertTrue(((ColonySettings) Fronts.of(colony).settings(LivingContent.ID))
+            .valueOf(LivingContent.FOOD.key()).orElseThrow().equals(wanted), "the colony holds the food rules");
+    }
+
+    void blacklist(boolean blacklist) {
+        var wanted = blacklist ? LivingContent.BLACKLIST : LivingContent.WHITELIST;
+        ((ColonyFront) Fronts.of(colony)).setSetting(LivingContent.ID, LivingContent.FOOD_MODE.key(),
+            new ColonySettings.Value.Choice(wanted));
+        helper.assertTrue(Fronts.of(colony).settings(LivingContent.ID).choice(LivingContent.FOOD_MODE.key()).equals(wanted),
+            "the colony holds the food list mode");
     }
 
     void settle() {

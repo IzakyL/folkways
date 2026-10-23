@@ -38,6 +38,24 @@ public final class CookeryEatingGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void defaultCookeryRationsContainPreparedMealsAndNoRawOrSpecialFoods(GameTestHelper helper) {
+        var tag = net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ITEM,
+            ResourceLocation.fromNamespaceAndPath("folkways", "resident_food_cookery"));
+        var members = BuiltInRegistries.ITEM.getTag(tag).orElseThrow();
+        helper.assertValueEqual(members.size(), 40, "the supported Cookery version resolves every curated meal");
+        for (var member : members) {
+            var stack = member.value().getDefaultInstance();
+            var food = stack.getFoodProperties(null);
+            helper.assertTrue(FoodSafety.safe(stack, food) && food.nutrition() > 0,
+                "every default Cookery ration is nourishing and safe: " + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(member.value()));
+        }
+        helper.assertTrue(new ItemStack(ModItems.COOKED_RICE.get()).is(tag), "rice is a default ration");
+        helper.assertTrue(new ItemStack(ModItems.FRIED_EGG.get()).is(tag), "fried eggs are a default ration");
+        helper.assertFalse(new ItemStack(ModItems.RED_CHILI.get()).is(tag), "raw chili is not a default ration");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void teaEggQualityChangesNutritionAndEffectDuration(GameTestHelper helper) {
         ItemStack eggs = new ItemStack(ModItems.TEA_EGG.get(), 3);
         QualityUtils.setQuality(eggs, Quality.SUPERB);

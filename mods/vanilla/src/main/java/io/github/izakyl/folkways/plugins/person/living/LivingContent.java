@@ -20,7 +20,6 @@ import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.notice.Meter;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
@@ -38,13 +37,16 @@ public final class LivingContent {
     public static final ResourceLocation BED =
         ResourceLocation.fromNamespaceAndPath("folkways", "bed");
 
+    public static final ResourceLocation WHITELIST = ResourceLocation.fromNamespaceAndPath("folkways", "food_whitelist");
+    public static final ResourceLocation BLACKLIST = ResourceLocation.fromNamespaceAndPath("folkways", "food_blacklist");
+
+    public static final Schema.Setting FOOD_MODE = new Schema.Setting.Choice(
+        "food_mode", "folkways.settings.food_mode", ResourceLocation.withDefaultNamespace("cooked_beef"),
+        List.of(WHITELIST, BLACKLIST), WHITELIST);
+
     public static final Schema.Setting FOOD = new Schema.Setting.Items(
-        "food",
-        "folkways.settings.food",
-        ResourceLocation.withDefaultNamespace("cooked_beef"),
-        vanilla("cooked_beef", "cooked_porkchop", "cooked_chicken", "cooked_mutton", "cooked_rabbit",
-            "cooked_cod", "cooked_salmon", "baked_potato", "dried_kelp", "bread", "cookie", "pumpkin_pie",
-            "mushroom_stew", "beetroot_soup", "rabbit_stew"));
+        "food", "folkways.settings.food", ResourceLocation.withDefaultNamespace("cooked_beef"),
+        List.of(ItemFilter.tag(ResourceLocation.fromNamespaceAndPath("folkways", "resident_food"))));
 
     // A resident's belly and sleep on his card: the survival HUD's drumstick, and our own moon for rest.
     static final Meter FULLNESS =
@@ -76,7 +78,7 @@ public final class LivingContent {
             .map(value -> (io.github.izakyl.folkways.front.api.Facing) value));
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(BED, new Shape.Block(Housing::isBed, Housing::sleepingCell))),
-            new Schema(List.of(FOOD)), List.of()));
+            new Schema(List.of(FOOD_MODE, FOOD)), List.of()));
     }
 
     // What one more settler would ask of this colony; nothing, when it does not keep its residents living.
@@ -98,14 +100,11 @@ public final class LivingContent {
     }
 
     static Optional<ItemSpec> food(Colony colony) {
-        return Fronts.of(colony).settings(ID).items(FOOD.key()).flatMap(FoodSafety::allowed);
+        var settings = Fronts.of(colony).settings(ID);
+        return FoodSafety.allowed(settings.items(FOOD.key()), settings.choice(FOOD_MODE.key()).equals(BLACKLIST));
     }
 
     static boolean looksAfter(Resident resident) {
         return Participations.between(resident.kind(), Stake.urge(ID)) != Participation.NONE;
-    }
-
-    private static List<ItemFilter> vanilla(String... items) {
-        return Arrays.stream(items).map(ResourceLocation::withDefaultNamespace).map(ItemFilter::item).toList();
     }
 }
