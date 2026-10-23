@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.person.look;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
@@ -155,12 +156,33 @@ public record ModelLibrary(
         }
         String idle = pick(manifest.idleAnimation(), YSM_IDLE, animationNames);
         String walk = pick(manifest.walkAnimation(), YSM_WALK, animationNames);
+        JsonObject authored = JsonParser.parseString(new String(animations, StandardCharsets.UTF_8))
+            .getAsJsonObject().getAsJsonObject("animations");
+        // Some YSM packs leave walk as a controller placeholder and author the actual gait
+        // under walk_slow. Explicit manifest choices always take precedence.
+        if (manifest.walkAnimation().isEmpty() && !hasBones(authored, walk) && hasBones(authored, "walk_slow")) {
+            walk = "walk_slow";
+        }
         Optional<String> work = manifest.workAnimation().isPresent()
             ? manifest.workAnimation()
             : Optional.of(YSM_WORK).filter(animationNames::contains);
         // YSM sit is a floor pose; ride bends the legs for a chair or vehicle seat.
         Optional<String> seated = manifest.seatedAnimation().or(() ->
             java.util.stream.Stream.of(YSM_RIDE, YSM_SIT).filter(animationNames::contains).findFirst());
+        Map<String, String> leisure = new LinkedHashMap<>(manifest.leisureAnimations());
+        for (String motion : List.of("dining", "drinking")) {
+            String named = motion.equals("dining") ? "use_mainhand:eat" : "use_mainhand:drink";
+            String gesture = hasBones(authored, named) ? named : "use_mainhand";
+            if (!leisure.containsKey(motion) && hasBones(authored, gesture)) {
+                leisure.put(motion, gesture);
+                if (seated.isPresent() && hasBones(authored, seated.get())) {
+                    String composed = "folkways." + motion + "_seated";
+                    authored.add(composed, MaidAssets.seatedGesture(authored.getAsJsonObject(seated.get()),
+                        authored.getAsJsonObject(gesture)));
+                    leisure.putIfAbsent(motion + "_seated", composed);
+                }
+            }
+        }
         List<String> textures = texturesIn(contents, label, rejected);
         if (textures.isEmpty()) {
             return;
@@ -170,7 +192,7 @@ public record ModelLibrary(
         ResourceLocation animationsAt = model.withPath("animations/resident_models/" + name + ".animation.json");
         Map<String, byte[]> staged = new TreeMap<>();
         staged.put(packPath(geometryAt), geometry);
-        staged.put(packPath(animationsAt), portableSeatedAnimation(animations, seated));
+        staged.put(packPath(animationsAt), portableAnimations(authored));
         Map<ResourceLocation, ResidentLook> stagedEntries = new LinkedHashMap<>();
         for (String texture : textures) {
             String stem = texture.substring(TEXTURE_DIR.length() + 1, texture.length() - PNG_SUFFIX.length());
@@ -185,7 +207,7 @@ public record ModelLibrary(
                 model.withPath("model/" + name + "/" + stem),
                 new ResidentLook(
                     new ResidentLook.Model(geometryAt, animationsAt, textureAt, idle, walk, work, seated,
-                        manifest.fallback().orElse(ResidentLooks.FALLBACK.appearance().skin()), 1.0F, manifest.leisureAnimations()),
+                        manifest.fallback().orElse(ResidentLooks.FALLBACK.appearance().skin()), 1.0F, leisure),
                     manifest.weight()));
         }
 
@@ -200,27 +222,32 @@ public record ModelLibrary(
         entries.putAll(stagedEntries);
     }
 
-    // A rider animation can carry YSM-only queries (head angle, equipment, etc.). Keep the
-    // portable Molang understood by GeckoLib and give unsupported queries their neutral value.
-    private static byte[] portableSeatedAnimation(byte[] bytes, Optional<String> seated) {
-        if (seated.isEmpty()) {
-            return bytes;
-        }
-        var json = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
-        var animation = json.getAsJsonObject("animations").getAsJsonObject(seated.get());
-        if (animation.has("bones") && animation.get("bones").isJsonObject()) {
-            animation.getAsJsonObject("bones").entrySet().forEach(bone -> {
-                if (bone.getValue().isJsonObject()) {
-                    var channels = bone.getValue().getAsJsonObject();
-                    for (String channel : List.of("rotation", "position", "scale")) {
-                        if (channels.has(channel)) {
-                            channels.add(channel, portableChannel(channels.get(channel)));
+    private static boolean hasBones(JsonObject animations, String name) {
+        return animations.get(name) instanceof JsonObject animation
+            && animation.get("bones") instanceof JsonObject bones && !bones.isEmpty();
+    }
+
+    // YSM-only queries and shorthand conditionals occur in walking and item-use clips too.
+    // Translate every bone channel; an unsupported expression can reject the whole animation file.
+    private static byte[] portableAnimations(JsonObject animations) {
+        animations.entrySet().forEach(entry -> {
+            if (entry.getValue() instanceof JsonObject animation
+                    && animation.get("bones") instanceof JsonObject bones) {
+                bones.entrySet().forEach(bone -> {
+                    if (bone.getValue() instanceof JsonObject channels) {
+                        for (String channel : List.of("rotation", "position", "scale")) {
+                            if (channels.has(channel)) {
+                                channels.add(channel, portableChannel(channels.get(channel)));
+                            }
                         }
                     }
-                }
-            });
-        }
-        return json.toString().getBytes(StandardCharsets.UTF_8);
+                });
+            }
+        });
+        JsonObject written = new JsonObject();
+        written.addProperty("format_version", "1.8.0");
+        written.add("animations", animations);
+        return written.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     private static JsonElement portableChannel(JsonElement value) {

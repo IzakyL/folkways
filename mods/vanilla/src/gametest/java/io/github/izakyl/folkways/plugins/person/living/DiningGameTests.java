@@ -388,39 +388,26 @@ public final class DiningGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void dinersCollectACabinetBottleAndDrinkItWithTheirMeal(GameTestHelper helper) {
+    public static void dinersDrinkDirectlyAtTheCabinetWithoutFoodOrPackSpace(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             f.zone(Items.BREAD);
             BlockPos cabinet = f.cabinet(Items.POTION);
-            helper.assertTrue(f.goals().stream().noneMatch(goal -> goal.spec().needs().getFirst().spec().item()
-                .filter(ResourceLocation.withDefaultNamespace("potion")::equals).isPresent()), "tables request food only; the stocked cabinet needs nothing");
-            f.display.setItem(0, new ItemStack(Items.BREAD));
-            Node fetch = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
-            helper.assertValueEqual(fetch.spec().doing(), LivingContent.FETCHING_DRINK,
-                "a diner without a drink first walks to the area's cabinet");
-            f.person.moveTo(cabinet.getX() + 0.5, cabinet.getY(), cabinet.getZ() - 0.5);
-            helper.assertTrue(fetch.commit(f.level, f.worker) instanceof Outcome.Done, "the real bottle is collected");
-            fetch.ended(f.level, Ending.DONE);
-            helper.assertTrue(f.stock(cabinet).getItem(0).isEmpty(), "the bottle physically leaves the cabinet");
-            helper.assertTrue(f.person.pack().getItem(0).is(Items.POTION), "the bottle is carried in the diner's pack");
-            helper.assertTrue(f.goals().stream().anyMatch(goal -> goal.spec().focus().filter(cabinet::equals).isPresent()), "the emptied cabinet slot asks for a refill");
-            f.person.moveTo(f.at.getX() + 2.5, f.at.getY(), f.at.getZ() + 1.5);
-            Node canceled = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
-            helper.assertValueEqual(canceled.spec().doing(), LivingContent.DINING_EATING, "a diner holding a bottle goes straight to the table");
+            for (int slot = 0; slot < f.person.pack().getContainerSize(); slot++) { f.person.pack().setItem(slot, new ItemStack(Items.STONE, 64)); }
+            Node canceled = f.dining.drinking(f.worker, f.colony.view(f.level)).orElseThrow().take().get();
+            helper.assertValueEqual(canceled.spec().doing(), LivingContent.DINING_DRINKING, "a bar visit is independent of table food");
             canceled.ended(f.level, Ending.DROPPED);
-            helper.assertTrue(f.person.pack().getItem(0).is(Items.POTION), "canceling a meal keeps the collected bottle");
-            helper.assertValueEqual(f.person.getPersistentData().getInt("folkways:table_drinks"), 0, "canceled drinking has no completion history");
-            Node meal = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
-            Outcome result = meal.commit(f.level, f.worker);
-            helper.assertTrue(result instanceof Outcome.Done, "the real table meal completes");
-            helper.assertTrue(f.display.isEmpty() && f.person.pack().getItem(0).isEmpty(), "exactly one food and the carried drink are consumed");
-            var done = (Outcome.Done) result;
-            helper.assertValueEqual(done.made().stream().filter(stack -> stack.is(Items.GLASS_BOTTLE)).mapToInt(ItemStack::getCount).sum(), 1,
-                "the native dropped empty bottle is returned exactly once through the work outcome");
-            helper.assertValueEqual(f.person.getPersistentData().getInt("folkways:table_drinks"), 1, "only actual consumption advances the drink history");
-            helper.assertValueEqual(f.living.foodLevelOf(f.person.getUUID()).orElseThrow(), 9, "only bread adds nutrition; a drink is not a meal");
-            helper.assertValueEqual(f.living.mood(f.person.getUUID()).drank, f.level.getGameTime(), "drinking adds its own mood experience");
-            helper.assertTrue(DiningSupplies.kept(f.person).isEmpty(), "a drunk bottle is no longer kept in the pack");
+            helper.assertTrue(f.stock(cabinet).getItem(0).is(Items.POTION), "canceling leaves the bottle in the cabinet");
+            Node drink = f.dining.drinking(f.worker, f.colony.view(f.level)).orElseThrow().take().get();
+            f.person.moveTo(f.chair.getX() + .5, f.chair.getY(), f.chair.getZ() + .5);
+            Outcome result = drink.commit(f.level, f.worker);
+            helper.assertTrue(result instanceof Outcome.Done, "a seated drink consumes directly from the cabinet even with a full pack");
+            helper.assertTrue(f.stock(cabinet).getItem(0).isEmpty(), "one real cabinet serving is consumed");
+            helper.assertValueEqual(((Outcome.Done) result).made().stream().filter(stack -> stack.is(Items.GLASS_BOTTLE)).mapToInt(ItemStack::getCount).sum(), 1,
+                "the native empty bottle is returned exactly once");
+            helper.assertValueEqual(f.person.getPersistentData().getInt("folkways:table_drinks"), 1, "only consumption advances drinking history");
+            helper.assertValueEqual(f.living.mood(f.person.getUUID()).drank, f.level.getGameTime(), "drinking records its own mood experience");
+            helper.assertTrue(f.goals().stream().anyMatch(goal -> goal.spec().focus().filter(cabinet::equals).isPresent()), "the emptied slot requests replenishment");
+            helper.assertTrue(f.dining.drinking(f.worker, f.colony.view(f.level)).isEmpty(), "a completed drink has a cooldown");
         }
         helper.succeed();
     }
@@ -556,7 +543,7 @@ public final class DiningGameTests {
 
         // A barrel west of the table stands in for a native cabinet: one drink, other slots blocked.
         BlockPos cabinet(Item drink) {
-            BlockPos cabinet = at.west();
+            BlockPos cabinet = chair.west();
             level.setBlockAndUpdate(cabinet, Blocks.BARREL.defaultBlockState());
             Container stock = stock(cabinet);
             for (int slot = 1; slot < stock.getContainerSize(); slot++) { stock.setItem(slot, new ItemStack(Items.STONE, 64)); }

@@ -6,12 +6,12 @@ import { readTavern, stageTavern } from "./tavern-stage";
 
 // A small winery beside a dining table. Two vintners press grapes in the tub, pour the juice into the barrel and,
 // once it has fermented, bottle wine from the tap; the bottles go to the bar cabinet in the dining area. Then three
-// hungry residents each take a bottle from the cabinet, sit down to a dish and drink with the meal.
+// residents eat at the table, then sit on chairs beside the cabinets to drink in their spare time.
 
-const DISHES: Array<[string, number]> = [[K + "braised_beef", 16], [K + "sweet_and_sour_pork", 16]];
+const DISHES: Array<[string, number]> = [[K + "dongpo_pork", 16], [K + "spicy_chicken", 16]];
 const WINE = T + "wine";
 
-test("wine: vintners press and bottle wine that diners take with their meal", async ({}, testInfo) => {
+test("wine: vintners stock cabinets where residents sit to drink", async ({}, testInfo) => {
   const run = take("cookery-wine");
   let pair: PromoPair | undefined;
   try {
@@ -24,7 +24,10 @@ test("wine: vintners press and bottle wine that diners take with their meal", as
     const table = await tableGroup(scene, 7, -1, 8, 0);
     // A bar cabinet holds two bottles; two of them keep a bottle for each diner.
     const cabinets = [at(6, -3), at(10, -3)];
-    for (const cabinet of cabinets) await set(cabinet, T + "bar_cabinet[facing=north]");
+    for (const cabinet of cabinets) {
+      await set(cabinet, T + "bar_cabinet[facing=north]");
+      await set({ ...cabinet, z: cabinet.z - 1 }, K + "chair_spruce[facing=south]");
+    }
     const larder = at(12, 1);
     await set(larder, `minecraft:chest[facing=west]{Items:[${DISHES.map(([id, count], slot) => `{Slot:${slot}b,id:"${id}",count:${count}}`).join(",")}]}`);
     const area = { id: "wine-table", cells: areaCells(scene, 5, -4, 11, 3), tables: table.tables, cabinets,
@@ -57,14 +60,18 @@ test("wine: vintners press and bottle wine that diners take with their meal", as
     expect(stocked.ready, "bottled wine must reach the bar cabinet and dishes the table").toBe(true);
     run.note("hungry", await setVitals(server, cast.colony_id, diners.map(uuid => ({ uuid, food: 6, tired: 0 }))));
 
-    const dining = await shoot(run, scene, "02-wine-with-meal",
-      "The same view later: wine is bottled at the tap, and three hungry residents each take a bottle from the bar "
-      + "cabinet, sit at the table beside a dish and drink with their meal", 70, 20, sample, { area });
+    const dining = await shoot(run, scene, "02-drinks-at-the-bar",
+      "The same view later: wine is bottled at the tap, and residents eat at the table, then sit on the chairs "
+      + "beside the bar cabinets to drink in their spare time", 110, 20, sample, { area });
     run.note("dining", dining);
     const drank = new Set(dining.flatMap((one: any) => one.people.filter((p: any) => diners.includes(p.uuid)
       && (p.drinking || p.tableDrinks > 0)).map((p: any) => p.uuid)));
-    run.note("summary", { drank: [...drank] });
-    expect(drank.size, "diners must drink wine at the table on camera").toBeGreaterThanOrEqual(2);
+    const seatedAtBar = dining.some((one: any) => one.people.some((p: any) => diners.includes(p.uuid)
+      && p.drinking && p.seated && cabinets.some(cabinet =>
+        Math.hypot(p.position[0] - cabinet.x, p.position[2] - cabinet.z) <= 2)));
+    expect(seatedAtBar, "drinking must take place seated beside a cabinet").toBe(true);
+    run.note("summary", { drank: [...drank], seatedAtBar });
+    expect(drank.size, "residents must drink wine at the bar on camera").toBeGreaterThanOrEqual(2);
     run.note("shaders", shaderEvidence(scene.pair.clientInstance));
   } catch (error) {
     pair?.failing(error);

@@ -63,6 +63,30 @@ public final class MaidLookGameTests {
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void maidMealsKeepAuthoredSeatedLegsAndUseTheItemGesture(GameTestHelper helper) {
+        MaidLooks.Maid maid = new MaidLooks.Maid(ResourceLocation.fromNamespaceAndPath("geckolib", "winefox"), true,
+            "model.json", List.of(), STEVE, 1.0F);
+        JsonObject source = json("""
+            {"chair":{"loop":true,"animation_length":1,"bones":{
+                "LeftLeg":{"rotation":[-80,0,0]},"RightArm":{"position":[1,0,0],"rotation":[0,0,0]}}},
+             "use_mainhand:eat":{"animation_length":0.5,"bones":{"RightArm":{"rotation":[-70,0,0]}}},
+             "use_mainhand:drink":{"animation_length":0.75,"bones":{"RightArm":{"rotation":[-100,0,0]}}}}
+            """);
+        JsonObject played = MaidAssets.animations(maid, source).getAsJsonObject("animations");
+        JsonObject eating = played.getAsJsonObject(maid.animation("dining_seated")).getAsJsonObject("bones");
+        helper.assertTrue(eating.has("LeftLeg"), "a meal retains the chair's authored leg pose");
+        helper.assertTrue(eating.getAsJsonObject("RightArm").has("position"), "the chair's arm position survives");
+        helper.assertValueEqual(eating.getAsJsonObject("RightArm").getAsJsonArray("rotation").get(0).getAsInt(), -70,
+            "the eating gesture overrides the chair's arm rotation");
+        helper.assertTrue(played.has(maid.animation("drinking_seated")), "drinking has its own seated gesture");
+        ResidentLook.Model look = (ResidentLook.Model) maid.asLook().appearance();
+        helper.assertValueEqual(look.seatedAnimation(), Optional.of(maid.animation("chair")), "the chair clip is mapped");
+        helper.assertValueEqual(look.leisureAnimations().get("drinking"), maid.animation("use_mainhand:drink"),
+            "the core's drinking state selects the drink clip");
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
     public static void aLegacyMaidBecomesCurrentGeometryWithoutItsOccasionalBones(GameTestHelper helper) {
         JsonObject model = json(LEGACY);
         List<String> bones = MaidAssets.boneNames(model);

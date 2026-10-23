@@ -67,3 +67,6 @@ config = "folkways-cookery-steamer.mixins.json"
 
 [[mixins]]
 config = "folkways-cookery-tray.mixins.json"
+
+[[mixins]]
+config = "folkways-cookery-dining.mixins.json"

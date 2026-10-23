@@ -40,7 +40,7 @@ public final class MaidLooks {
     private static final String WALK = "walk";
     private static final String WORK = "swing_hand";
     // The motions a resident plays, by the names Touhou Little Maid's GeckoLib models give them.
-    static final List<String> PLAYED = List.of(IDLE, WALK, WORK);
+    static final List<String> PLAYED = List.of(IDLE, WALK, WORK, "chair", "use_mainhand:eat", "use_mainhand:drink");
 
     private static volatile List<Maid> maids;
 
@@ -94,7 +94,12 @@ public final class MaidLooks {
             return new ResidentLook(
                 new ResidentLook.Model(geometryAt(), animationsAt(), texture,
                     animation(IDLE), animation(WALK), Optional.of(animation(WORK)),
-                    ResidentLooks.FALLBACK.appearance().skin(), scale),
+                    gecko ? Optional.of(animation("chair")) : Optional.empty(),
+                    ResidentLooks.FALLBACK.appearance().skin(), scale,
+                    gecko ? Map.of("dining", animation("use_mainhand:eat"),
+                        "drinking", animation("use_mainhand:drink"),
+                        "dining_seated", animation("dining_seated"),
+                        "drinking_seated", animation("drinking_seated")) : Map.of()),
                 1);
         }
     }

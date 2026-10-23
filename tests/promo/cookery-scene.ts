@@ -304,7 +304,7 @@ for (var id : args.strings("uuids")) {
     one.put("uuid", id);
     one.put("action", body.doing().map(doing -> doing.what().getPath()).orElse("idle"));
     one.put("toward", body.doing().map(doing -> doing.toward().orElse(doing.what()).getPath()).orElse("idle"));
-    boolean dining = entity instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person && person.leisureMotion().equals("dining");
+    boolean dining = entity instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person && (person.leisureMotion().equals("dining") || person.leisureMotion().equals("drinking"));
     one.put("seated", dining && entity.getVehicle() != null);
     one.put("drinking", entity.getPersistentData().getBoolean("folkways:dining_drinking"));
     one.put("tableDrinks", entity.getPersistentData().getInt("folkways:table_drinks"));

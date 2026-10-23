@@ -13,9 +13,14 @@ final class ResidentAnimation {
     }
 
     static String loop(ResidentEntity resident, ResidentLook.Model model, boolean moving) {
-        String leisure = model.leisureAnimations().get(resident.leisureMotion());
+        String motion = resident.leisureMotion();
+        String leisure = seated(resident)
+            ? model.leisureAnimations().getOrDefault(motion + "_seated", model.leisureAnimations().get(motion))
+            : model.leisureAnimations().get(motion);
         if (leisure != null) { return leisure; }
+        // Remote entities may move by interpolation while their local velocity is zero. Vanilla
+        // still updates the stride from displacement, so do not let GeckoLib keep them in idle.
         return seated(resident) ? model.seatedAnimation().orElse(model.idleAnimation())
-            : moving ? model.walkAnimation() : model.idleAnimation();
+            : (moving || resident.walkAnimation.speed() > 0.01F) ? model.walkAnimation() : model.idleAnimation();
     }
 }

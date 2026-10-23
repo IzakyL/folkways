@@ -63,7 +63,6 @@ public final class PersonPlugin {
         NeoForge.EVENT_BUS.addListener(LivingContent::exerted);
         NeoForge.EVENT_BUS.addListener(LivingContent::petRemoved);
         PackKeeps.add(LivingContent::rations);
-        PackKeeps.add(LivingContent::fetchedDrink);
         NeoForge.EVENT_BUS.addListener(BlockEvent.BreakEvent.class, LivingContent::blockChanged);
         NeoForge.EVENT_BUS.addListener(BlockEvent.EntityPlaceEvent.class, LivingContent::blockChanged);
         NeoForge.EVENT_BUS.addListener(ResidentModelPackets::onPlayerLoggedIn);

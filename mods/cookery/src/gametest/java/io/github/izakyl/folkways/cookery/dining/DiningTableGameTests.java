@@ -31,6 +31,23 @@ public final class DiningTableGameTests {
     @SubscribeEvent public static void register(RegisterGameTestsEvent event) { event.register(DiningTableGameTests.class); }
 
     @GameTest(template = "empty")
+    public static void tableSelectsPlacedDishWithoutReplacingTheRealServing(GameTestHelper helper) {
+        var dishId = com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry.DARK_CUISINE;
+        ItemStack serving = com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry
+            .getItem(dishId).getDefaultInstance();
+        serving.set(DataComponents.CUSTOM_NAME, Component.literal("original serving"));
+        var before = serving.copy();
+        var modelState = TableFoodModels.placedDish(serving);
+        helper.assertTrue(modelState != null && modelState.is(
+            com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry.getBlock(dishId)),
+            "the native dish uses its placed block instead of its generated item icon");
+        helper.assertTrue(ItemStack.matches(serving, before), "model selection preserves the actual serving and components");
+        helper.assertTrue(TableFoodModels.placedDish(new ItemStack(Items.COOKED_BEEF)) == null,
+            "food without a placed dish keeps its original item model");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void nativeDiningTableHasFourRealSingleFoodSlotsAndPreservesComponents(GameTestHelper helper) {
         CookeryDiningTables.register();
         var level = helper.getLevel();

@@ -217,7 +217,10 @@ final class LivingPresence implements Facing {
         List<Urge> felt = new ArrayList<>();
         eating(who, colony).ifPresent(felt::add);
         sleeping(who, colony).ifPresent(felt::add);
-        if (felt.isEmpty() && this.colony.residents().contains(who.resident())) { leisure.urge(who, colony).ifPresent(felt::add); }
+        if (felt.isEmpty() && this.colony.residents().contains(who.resident())) {
+            dining.drinking(who, colony).ifPresent(felt::add);
+            if (felt.isEmpty()) { leisure.urge(who, colony).ifPresent(felt::add); }
+        }
         return List.copyOf(felt);
     }
 

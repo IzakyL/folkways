@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.cookery.dining.mixin",
+  "plugin": "io.github.izakyl.folkways.cookery.CookeryMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["TableBlockEntityRenderMixin"],
+  "injectors": {"defaultRequire": 1}
+}

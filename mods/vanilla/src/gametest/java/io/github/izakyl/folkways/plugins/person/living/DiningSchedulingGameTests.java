@@ -76,11 +76,11 @@ public final class DiningSchedulingGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 1400)
-    public static void dinerCollectsCabinetBottleDrinksItWithTheMealThenTheCabinetIsRestocked(GameTestHelper helper) {
+    public static void residentEatsThenDrinksAtTheBarAndTheCabinetIsRestocked(GameTestHelper helper) {
         var rig = new Rig(helper, Blocks.GOLD_BLOCK.defaultBlockState(), Blocks.OAK_STAIRS.defaultBlockState(), new ItemStack(Items.BREAD));
         var display = new net.minecraft.world.SimpleContainer(2);
         DiningGameTests.DISPLAYS.put(WorldPos.of(rig.level, rig.table), display);
-        BlockPos cabinet = rig.table.offset(-2, 0, -1);
+        BlockPos cabinet = rig.chair.west();
         rig.level.setBlockAndUpdate(cabinet, Blocks.BARREL.defaultBlockState());
         Container bottles = (Container) rig.level.getBlockEntity(cabinet);
         for (int slot = 1; slot < bottles.getContainerSize(); slot++) { bottles.setItem(slot, new ItemStack(Items.STONE, 64)); }
@@ -90,7 +90,7 @@ public final class DiningSchedulingGameTests {
         var settings = old.settings().with(LivingContent.DINING_DRINK.key(),
             new ColonySettings.Value.Items(List.of(ItemFilter.item(ResourceLocation.withDefaultNamespace("potion")))));
         front.erase(old.id());
-        front.addZone(rig.level, LivingContent.DINING, Set.of(rig.table, rig.chair, cabinet), settings).orElseThrow();
+        front.addZone(rig.level, LivingContent.DINING, Set.of(rig.table, rig.chair, cabinet), old.settings()).orElseThrow();
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(display.getItem(0).is(Items.BREAD), "the table is set with food only"))
             .thenExecute(() -> {
@@ -101,8 +101,15 @@ public final class DiningSchedulingGameTests {
             .thenWaitUntil(() -> helper.assertTrue(rig.living.mood(rig.person.getUUID()).dined >= rig.hungryAt,
                 "the hungry resident completes a real table meal"))
             .thenExecute(() -> {
-                helper.assertTrue(rig.fetching, "the diner walked to the cabinet and collected the bottle first");
-                helper.assertValueEqual(rig.person.getPersistentData().getInt("folkways:table_drinks"), 1, "the collected bottle is drunk with the meal");
+                var marked = front.zonesIn(rig.level).stream().filter(zone -> zone.delegation().equals(LivingContent.DINING)).findFirst().orElseThrow();
+                front.erase(marked.id());
+                front.addZone(rig.level, LivingContent.DINING, Set.of(rig.table, rig.chair, cabinet), settings).orElseThrow();
+            })
+            .thenWaitUntil(() -> helper.assertTrue(rig.person.getPersistentData().getInt("folkways:table_drinks") == 1,
+                "the fed resident completes an independent seated bar visit"))
+            .thenExecute(() -> {
+                helper.assertTrue(rig.fetching, "the resident performed the drinking action at the cabinet");
+                helper.assertValueEqual(rig.person.getPersistentData().getInt("folkways:table_drinks"), 1, "exactly one cabinet bottle is drunk");
                 helper.assertTrue(rig.living.mood(rig.person.getUUID()).drank >= rig.hungryAt, "drinking records its own mood experience");
                 helper.assertTrue(java.util.stream.IntStream.range(0, rig.person.pack().getContainerSize())
                     .noneMatch(slot -> rig.person.pack().getItem(slot).is(Items.POTION)), "the drunk bottle leaves the diner's pack");
@@ -210,7 +217,7 @@ public final class DiningSchedulingGameTests {
                 try { run.invoke(labor, level, inline); }
                 catch (ReflectiveOperationException broken) { throw new IllegalStateException("dining pipeline failed: " + status(), broken); }
                 setting |= person.doing().filter(doing -> doing.what().equals(LivingContent.SETTING_TABLE)).isPresent();
-                fetching |= person.doing().filter(doing -> doing.what().equals(LivingContent.FETCHING_DRINK)).isPresent();
+                fetching |= person.doing().filter(doing -> doing.what().equals(LivingContent.DINING_DRINKING)).isPresent();
                 dining |= person.leisureMotion().equals("dining");
                 if (person.isPassenger()) mountedTicks++;
             });

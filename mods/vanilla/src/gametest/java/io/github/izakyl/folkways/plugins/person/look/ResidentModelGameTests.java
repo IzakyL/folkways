@@ -47,6 +47,32 @@ public final class ResidentModelGameTests {
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void wineFoxControllerPlaceholdersAndItemGesturesAreAdapted(GameTestHelper helper) {
+        // The promo tactics pack leaves walk empty and authors walk_slow. Matured's gait
+        // uses short conditionals and ysm.has_offhand; both must survive the shared importer.
+        DataPack files = new DataPack();
+        files.model("fox", """
+            {"animations":{"idle":{},"walk":{"loop":true},
+             "walk_slow":{"loop":true,"bones":{"RightArm":{"rotation":["ysm.has_offhand ? 0 : 20",0,0]}}},
+             "ride":{"bones":{"LeftLeg":{"rotation":[-80,0,0]}}},
+             "use_mainhand":{"animation_length":0.5,"bones":{"RightArm":{"rotation":[-70,0,0]}}}}}
+            """, "main");
+        ModelLibrary library = ModelLibrary.read(files.held);
+        ResidentLook.Model model = onlyModel(helper, library);
+        helper.assertValueEqual(model.walkAnimation(), "walk_slow", "use the authored gait instead of its empty controller");
+        helper.assertValueEqual(model.leisureAnimations().get("dining"), "use_mainhand", "map YSM's item-use gesture");
+        helper.assertValueEqual(model.leisureAnimations().get("drinking_seated"), "folkways.drinking_seated",
+            "compose a seated drink clip");
+        String carried = new String(library.assets().get(
+            "assets/folkways/animations/resident_models/fox.animation.json"), StandardCharsets.UTF_8);
+        helper.assertTrue(!carried.contains("ysm.has_offhand"), "walking expressions must be portable too");
+        var animations = com.google.gson.JsonParser.parseString(carried).getAsJsonObject().getAsJsonObject("animations");
+        var meal = animations.getAsJsonObject("folkways.dining_seated").getAsJsonObject("bones");
+        helper.assertTrue(meal.has("LeftLeg") && meal.has("RightArm"), "seated item use keeps legs and hand gesture");
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
     public static void everyTextureInAModelFolderIsItsOwnEntry(GameTestHelper helper) {
         DataPack files = new DataPack();
         files.model("ranger", YSM_ANIMATIONS, "green", "red");

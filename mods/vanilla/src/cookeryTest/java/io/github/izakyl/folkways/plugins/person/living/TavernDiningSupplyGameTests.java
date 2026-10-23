@@ -33,11 +33,11 @@ public final class TavernDiningSupplyGameTests {
         private static final ResourceLocation CABINET = ResourceLocation.fromNamespaceAndPath("kaleidoscope_tavern", "bar_cabinet");
 
         @GameTest(template = "empty", templateNamespace = "folkways")
-        public static void nativeCabinetsRestockFromAnySourceAndDinersCollectOnlyFromTheirOwnArea(GameTestHelper helper) {
+        public static void nativeCabinetsRestockAndOfferIndependentSeatedDrinks(GameTestHelper helper) {
             try (var f = new DiningGameTests.Fixture(helper, ModBlocks.TABLE_OAK.get().defaultBlockState())) {
                 f.zone(Items.BREAD);
                 f.drinks(BuiltInRegistries.ITEM.get(WINE));
-                BlockPos cabinet = f.at.west(2), other = f.at.east(2);
+                BlockPos cabinet = f.chair.west(), other = f.at.east(2);
                 f.level.setBlockAndUpdate(cabinet, BuiltInRegistries.BLOCK.get(CABINET).defaultBlockState());
                 f.level.setBlockAndUpdate(other, BuiltInRegistries.BLOCK.get(CABINET).defaultBlockState());
                 var settings = f.front.zone(f.zone).orElseThrow().settings();
@@ -62,9 +62,23 @@ public final class TavernDiningSupplyGameTests {
                 meal.ended(f.level, Ending.DROPPED);
                 var own = Containers.at(f.level, cabinet).orElseThrow();
                 own.setItem(0, new ItemStack(BuiltInRegistries.ITEM.get(WINE))); own.setChanged();
-                Node fetch = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
-                helper.assertValueEqual(fetch.spec().doing(), LivingContent.FETCHING_DRINK, "a stocked cabinet in the diner's own area supplies the drink");
-                helper.assertTrue(fetch.spec().focus().filter(cabinet::equals).isPresent(), "the diner walks to their own area's cabinet");
+                Node food = f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).orElseThrow().take().get();
+                helper.assertValueEqual(food.spec().doing(), LivingContent.DINING_EATING, "a meal no longer fetches wine to the food table");
+                food.ended(f.level, Ending.DROPPED);
+                f.display.clearContent();
+                Node drink = f.dining.drinking(f.worker, f.colony.view(f.level)).orElseThrow().take().get();
+                helper.assertTrue(drink.spec().focus().filter(cabinet::equals).isPresent(), "a bar visit focuses the cabinet without requiring food");
+                helper.assertTrue(f.dining.drinking(f.worker, f.colony.view(f.level)).orElseThrow().take().get() == drink,
+                    "the active drink retains its reserved chair");
+                f.dining.refresh(f.level.getServer());
+                helper.assertTrue(drink.refusal(f.level).isEmpty(), "a refresh preserves an active bar visit");
+                drink.ended(f.level, Ending.DROPPED);
+                helper.assertValueEqual(own.getItem(0).getCount(), 1, "an interrupted visit never consumes the bottle");
+                Node retry = f.dining.drinking(f.worker, f.colony.view(f.level)).orElseThrow().take().get();
+                helper.assertTrue(retry != drink, "interruption releases the seat and serving reservation");
+                retry.ended(f.level, Ending.DROPPED);
+                f.worker.body().getPersistentData().putLong("folkways:last_table_drink", f.level.getGameTime());
+                helper.assertTrue(f.dining.drinking(f.worker, f.colony.view(f.level)).isEmpty(), "drinking has a cooldown independent of hunger");
             }
             helper.succeed();
         }

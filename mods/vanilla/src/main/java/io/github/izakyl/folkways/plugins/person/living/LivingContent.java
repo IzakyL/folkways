@@ -50,7 +50,7 @@ public final class LivingContent {
     public static final ResourceLocation DINING = ResourceLocation.fromNamespaceAndPath("folkways", "dining");
     public static final ResourceLocation SETTING_TABLE = ResourceLocation.fromNamespaceAndPath("folkways", "setting_table");
     public static final ResourceLocation DINING_EATING = ResourceLocation.fromNamespaceAndPath("folkways", "dining_eating");
-    public static final ResourceLocation FETCHING_DRINK = ResourceLocation.fromNamespaceAndPath("folkways", "fetching_drink");
+    public static final ResourceLocation DINING_DRINKING = ResourceLocation.fromNamespaceAndPath("folkways", "dining_drinking");
 
     public static final ResourceLocation WHITELIST = ResourceLocation.fromNamespaceAndPath("folkways", "food_whitelist");
     public static final ResourceLocation BLACKLIST = ResourceLocation.fromNamespaceAndPath("folkways", "food_blacklist");
@@ -172,11 +172,6 @@ public final class LivingContent {
         var settings = Fronts.of(colony).settings(ID);
         return FoodSafety.allowed(settings.items(FOOD.key()), settings.choice(FOOD_MODE.key()).equals(BLACKLIST),
             settings.flag(FOOD_SAFETY.key()));
-    }
-
-    // A bottle a diner collected from a dining cabinet stays in their pack until the meal that drinks it.
-    public static List<Amount> fetchedDrink(Colony colony, Body body) {
-        return DiningSupplies.kept(body.mob());
     }
 
     static boolean looksAfter(Resident resident) {

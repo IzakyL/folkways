@@ -1132,6 +1132,8 @@
   "folkways.doing.folkways.setting_table": "Setting the table",
   "folkways.doing.folkways.setting_table.about": "Setting the table with %s",
   "folkways.doing.folkways.dining_eating": "Eating at a table",
+  "folkways.doing.folkways.dining_drinking": "Drinking at the bar",
+  "folkways.doing.folkways.dining_drinking.about": "Drinking %s at the bar",
   "folkways.doing.folkways.fetching_drink": "Fetching a drink",
   "folkways.doing.folkways.fetching_drink.about": "Fetching %s from a cabinet",
   "folkways.settings.dining.food": "Table food",
@@ -1139,7 +1141,7 @@
   "folkways.settings.dining.servings": "Servings per tabletop block",
   "folkways.dining.summary": "%s tables, %s seats",
   "folkways.dining.furniture": "Place adjacent tables and chairs inside the area, with an aisle beside each chair.",
-  "folkways.dining.help": "Adjacent tabletops form one table. Residents can serve from any edge and share its food across seats. Basic tabletops support placeable foods; native tables replenish the configured servings per block. With table drinks selected, native tables reserve their last slot for a drink. Supported drink cabinets inside the area are stocked automatically and supply table service.",
+  "folkways.dining.help": "Adjacent tabletops form one table. Residents can serve from any edge and share its food across seats. Basic tabletops support placeable foods; native tables replenish the configured servings per block. Supported drink cabinets inside the area are stocked automatically. Place a chair beside a cabinet with an aisle next to it so residents can sit and drink in their spare time.",
   "folkways.mood.reason.dining": "A pleasant meal: %s",
   "folkways.mood.reason.drink": "A good drink: %s",
   "folkways.dining.no_food": "The selected food does not suit these tables. Kaleidoscope Cookery tables display edible items; basic tabletops need supported placeable foods, such as cake."
