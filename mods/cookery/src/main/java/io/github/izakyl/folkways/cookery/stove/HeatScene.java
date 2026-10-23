@@ -41,7 +41,7 @@ public final class HeatScene {
         scene.idle(15);
         ItemStack book = PonderScenery.book(Shape.Gesture.POINT);
         scene.overlay().showControls(util.vector().topOf(stove), Pointing.DOWN, 60).leftClick().withItem(book);
-        scene.overlay().showText(80).text("Mark the stove as a kitchen appliance. The colony tends its ignition separately from the food cooking above it.")
+        scene.overlay().showText(80).text("Mark the stove as a kitchen station. The colony tends its ignition separately from the food cooking above it.")
             .pointAt(util.vector().centerOf(stove)).placeNearTarget().attachKeyFrame();
         scene.idle(90);
         var resident = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(1, 0, 5), 180);

@@ -43,7 +43,7 @@ public final class RecreationScene {
             .pointAt(first.at().add(0, 1.5, 0)).placeNearTarget().attachKeyFrame();
         scene.idle(120);
         scene.overlay().showText(120)
-            .text("Pets may visit once at least 3 residents have beds in rooms graded dormitory or better. Every half-day brings a chance, with mob spawning enabled and a safe place nearby; a visit is not guaranteed.")
+            .text("Pets may visit once at least three residents have beds in rooms graded suitable dormitory or better. Every half-day brings a chance, with mob spawning enabled and a safe place nearby; a visit is not guaranteed.")
             .pointAt(util.vector().topOf(2, 0, 4)).placeNearTarget().attachKeyFrame();
         scene.idle(130);
         PonderScenery.body(scene, EntityType.CAT, util.vector().topOf(2, 0, 4), 270);
@@ -54,7 +54,7 @@ public final class RecreationScene {
             if (resident.getX() < 4) { resident.leisureMotion("petting"); }
         });
         scene.overlay().showText(120)
-            .text("The colony can attract one pet per 3 housed residents: cats at 3, wolves join the pool at 6, parrots at 10. They arrive untamed. Residents also enjoy healthy pets tamed by colony members.")
+            .text("The colony can attract one pet per three well-housed residents: cats at three, wolves join the pool at six, parrots at ten. They arrive untamed. Residents also enjoy healthy pets tamed by colony members.")
             .pointAt(util.vector().topOf(2, 0, 4)).placeNearTarget().attachKeyFrame();
         scene.idle(130);
     }

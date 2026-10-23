@@ -97,7 +97,7 @@ public final class ResidentsScene {
 
         scene.overlay()
             .showText(100)
-            .text("Someone must also be waiting. Newcomers gather over time, more slowly as the colony grows, and only a few wait at once. Let one in on the Residents page brings the next, unless the server has switched arrivals off.")
+            .text("Someone must also be waiting. Newcomers gather over time, more slowly as the colony grows, and only a few wait at once. Let one in on the Human residents page brings the next, unless the server has switched arrivals off.")
             .pointAt(spawnA.add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();
@@ -127,7 +127,7 @@ public final class ResidentsScene {
 
         scene.overlay()
             .showText(100)
-            .text("Working a trade earns experience. Each level draws a trade perk; levels 3, 6 and 10 also draw a shared perk, such as a brisker walk or a bigger pack. Open the resident's window to read his vocations, levels and perks.")
+            .text("Working a trade earns experience. Each level draws a trade perk; levels 3, 6 and 10 also draw a shared perk, such as a brisker walk or a bigger pack. Open the resident's window to read his trades, levels and perks.")
             .pointAt(util.vector().topOf(harvested))
             .placeNearTarget()
             .attachKeyFrame();

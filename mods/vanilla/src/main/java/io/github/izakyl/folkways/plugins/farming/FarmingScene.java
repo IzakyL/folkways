@@ -193,7 +193,7 @@ public final class FarmingScene {
         resident.hold(scene, new ItemStack(Items.WHEAT, 4));
         scene.overlay().showOutline(PonderPalette.GREEN, wheatCrop, wheatCrop, 90);
         scene.overlay().showText(90)
-            .text("A farmer with the Replanter perk resows as they harvest, using a seed from what the crop just dropped. It only works for crops cut down whole, like wheat, not for cane, fruit or trees.")
+            .text("A farmer with the Replant perk resows as they harvest, using a seed from what the crop just dropped. It only works for crops cut down whole, like wheat, not for cane, fruit or trees.")
             .pointAt(util.vector().topOf(2, 1, 1))
             .placeNearTarget()
             .attachKeyFrame();

@@ -78,7 +78,7 @@ public final class DispatchScene {
         scene.overlay().showControls(util.vector().topOf(desk), Pointing.DOWN, 50).leftClick().withItem(book);
         scene.idle(10);
         scene.overlay().showText(100)
-            .text("With the book pointing, left-click the stock link or the Stock Ticker: the colony takes the network on. Left-click a frogport or a chain conveyor: the colony takes that whole chain net on. Left-click a postbox: the colony takes that postbox on, and sends by it only aboard trains it has taken on. The same click gives each back. The network orders only once what it ships on is the colony's too.")
+            .text("With the book pointing, left click the stock link or the Stock Ticker: the colony takes the network on. Left-click a frogport or a chain conveyor: the colony takes that whole chain net on. Left-click a postbox: the colony takes that postbox on, and sends by it only aboard trains it has taken on. The same click gives each back. The network orders only once what it ships on is the colony's too.")
             .pointAt(util.vector().blockSurface(desk, Direction.NORTH))
             .placeNearTarget()
             .attachKeyFrame();

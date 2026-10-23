@@ -76,7 +76,7 @@ public final class CookeryScenes {
         scene.world().showSection(util.select().fromTo(0, 0, 0, 6, 3, 6), Direction.DOWN);
         scene.idle(15);
         scene.overlay().showText(95)
-            .text("Mark the kitchen appliances, a crafting table and storage with the colony book. Keep a reachable place to stand beside each appliance.")
+            .text("Mark the kitchen stations, a crafting table and storage with the colony book. Keep a reachable place to stand beside each appliance.")
             .pointAt(util.vector().topOf(board)).placeNearTarget().attachKeyFrame();
         scene.idle(105);
         scene.overlay().showControls(util.vector().topOf(store), Pointing.DOWN, 80).rightClick()

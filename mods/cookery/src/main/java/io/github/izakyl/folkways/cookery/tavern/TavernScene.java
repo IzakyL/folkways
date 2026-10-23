@@ -35,7 +35,7 @@ public final class TavernScene {
             scene.world().setBlock(util.grid().at(x, 5, z), tavern("trellis", "type", "cross_up_down"), false);
         }
         scene.overlay().showText(130)
-            .text("Mark a rectangular grape plot and choose grapevines. Supply trellises and grapevine plants: residents build four corner posts, each 4 blocks high, then a pergola over the plot 5 blocks above the soil.")
+            .text("Mark a rectangular grape plot and choose grapevines. Supply trellises and grapevine plants: residents build four corner posts, each four blocks high, then a pergola over the plot five blocks above the soil.")
             .pointAt(util.vector().topOf(4, 1, 4)).placeNearTarget().attachKeyFrame();
         scene.idle(140);
         for (int x : new int[] {2, 4}) for (int z : new int[] {2, 4}) {
@@ -46,7 +46,7 @@ public final class TavernScene {
         var resident = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(3, 0, 6), 180);
         resident.walkTo(scene, util.vector().topOf(3, 0, 5));
         scene.overlay().showText(110)
-            .text("Residents plant the vines at the feet of the finished posts. Native vines grow over the pergola and hang grapes underneath; residents pick the ripe grapes. Leave room around the plot to work.")
+            .text("Residents plant the vines at the feet of the finished posts. The vines grow over the pergola and hang grapes underneath; residents pick the ripe grapes. Leave room around the plot to work.")
             .pointAt(util.vector().centerOf(grapes)).placeNearTarget().attachKeyFrame();
         scene.idle(120);
         scene.world().destroyBlock(grapes);
@@ -64,7 +64,7 @@ public final class TavernScene {
         scene.world().setBlock(tap, tavern("tap", "facing", "south"), false);
         resident.walkTo(scene, util.vector().topOf(1, 0, 3));
         scene.overlay().showText(120)
-            .text("Register a pressing tub and a Tavern barrel as kitchen stations, allow the crafting trade and order wine. Residents press 8 grapes into a juice bucket. Supply buckets and empty wine bottles as well.")
+            .text("Register a pressing tub and a Tavern barrel as kitchen stations, allow the crafting trade and order wine. Residents press eight grapes into a juice bucket. Supply buckets and empty wine bottles as well.")
             .pointAt(util.vector().topOf(tub)).placeNearTarget().attachKeyFrame();
         scene.idle(130);
         scene.world().setBlock(util.grid().at(6, 1, 2), tavern("stepladder", "facing", "west", "half", "bottom"), false);
@@ -80,7 +80,7 @@ public final class TavernScene {
         resident.walkTo(scene, util.vector().topOf(5, 3, 2));
         resident.lookAt(scene, util.vector().topOf(barrel.above(2)));
         scene.overlay().showText(135)
-            .text("The barrel takes 4 juice buckets through its top. Build a route onto it, such as a stepladder. Keep a closed tap on its side and solid ground beneath the bottle spot; after fermentation residents set, fill and collect real bottles.")
+            .text("The barrel takes four juice buckets through its top. Build a route onto it, such as a stepladder. Keep a closed tap on its side and solid ground beneath the bottle spot; after fermentation residents set out, fill and collect the bottles one at a time.")
             .pointAt(util.vector().topOf(barrel.above(2))).placeNearTarget().attachKeyFrame();
         scene.idle(145);
         resident.hold(scene, ItemStack.EMPTY);
@@ -95,7 +95,7 @@ public final class TavernScene {
         scene.world().modifyBlockEntity(cabinet, BarCabinetBlockEntity.class, bottles -> bottles.setLeftItem(wine.copy()));
         scene.world().modifyBlockEntity(counter, TavernCounterBlockEntity.class, bottles -> bottles.setItem(0, wine.copy()));
         scene.overlay().showText(125)
-            .text("Bar cabinets hold real bottles and can be stocked through delivery orders when registered as storage. Bar counters in a dining area are stocked automatically from its drink list. Choose wine there and keep the counter reachable.")
+            .text("Bar cabinets hold the bottles themselves and can be stocked through delivery orders when registered as storage. Bar counters in a dining area are stocked automatically from its drink list. Choose wine there and keep the counter reachable.")
             .pointAt(util.vector().topOf(counter)).placeNearTarget().attachKeyFrame();
         scene.idle(135);
         resident.walkTo(scene, util.vector().topOf(4, 0, 3));
@@ -103,7 +103,7 @@ public final class TavernScene {
         scene.world().modifyBlockEntity(counter, TavernCounterBlockEntity.class, bottles -> bottles.setItem(0, ItemStack.EMPTY));
         resident.hold(scene, wine);
         scene.overlay().showText(115)
-            .text("After a table meal, a diner can fetch a bottle from the counter. A chair beside the counter also lets a resident sit for a drink. The bottle is consumed with its native effects, leaving its empty container.")
+            .text("After a table meal, a diner can fetch a bottle from the counter. A chair beside the counter also lets a resident sit for a drink. Drinking gives the wine's own effects and leaves the empty bottle behind.")
             .pointAt(resident.at().add(0, 1.5, 0)).placeNearTarget().attachKeyFrame();
         scene.idle(125);
     }

@@ -60,7 +60,7 @@ public final class ElevatorScene {
         scene.overlay().showControls(util.vector().centerOf(pulley), Pointing.DOWN, 60)
             .leftClick().withItem(PonderScenery.book(Shape.Gesture.POINT));
         scene.overlay().showText(110)
-            .text("With the book pointing, left-click the elevator pulley to delegate it. Residents can then plan routes between its floors, even while the cabin is elsewhere.")
+            .text("With the book pointing, left click the elevator pulley to take it into the colony. Residents can then plan routes between its floors, even while the cabin is elsewhere.")
             .pointAt(util.vector().topOf(5, 1, 3)).placeNearTarget().attachKeyFrame();
         scene.idle(120);
         var rider = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(7, 1, 3), 90);

@@ -45,7 +45,7 @@ public final class HousingScene {
         scene.world().showSection(util.select().fromTo(0, 0, 0, 7, 4, 7), Direction.DOWN);
         scene.idle(15);
         scene.overlay().showText(125)
-            .text("Enclose the beds under a roof, with a door residents can walk through. Every open floor cell needs light of at least 8. Without these, or with less than 4 floor blocks per bed, the room is exposed.")
+            .text("Enclose the beds under a roof, with a door residents can walk through. Every open floor cell needs light of at least 8. Without these, or with fewer than four floor blocks per bed, it is only a basic bed.")
             .pointAt(util.vector().centerOf(door)).placeNearTarget().attachKeyFrame();
         scene.idle(135);
         // Open a cutaway after showing the enclosure.
@@ -57,20 +57,20 @@ public final class HousingScene {
         scene.world().setBlock(util.grid().at(2, 1, 2), Blocks.CHEST.defaultBlockState(), false);
         scene.world().setBlock(util.grid().at(4, 1, 3), Blocks.RED_CARPET.defaultBlockState(), false);
         scene.overlay().showText(115)
-            .text("A dormitory has at least 4 floor blocks per bed. For a comfortable room, allow 6 per bed, no more than 4 beds, and at least 2 furnishing kinds.")
+            .text("A suitable dormitory has at least four floor blocks per bed. For comfortable housing, allow six per bed, no more than four beds, and at least two furnishing kinds.")
             .pointAt(util.vector().topOf(3, 0, 3)).placeNearTarget().attachKeyFrame();
         scene.idle(125);
         scene.world().setBlocks(util.select().fromTo(3, 1, 4, 3, 1, 5), Blocks.AIR.defaultBlockState(), false);
         scene.world().setBlock(util.grid().at(5, 1, 2), Blocks.BOOKSHELF.defaultBlockState(), false);
         scene.overlay().showOutline(PonderPalette.GREEN, "room", util.select().fromTo(2, 0, 2, 5, 0, 5), 140);
         scene.overlay().showText(140)
-            .text("A private room allows up to 2 beds, with 9 floor blocks per bed and at least 3 furnishing kinds. Storage, carpet, decoration and tables are the four kinds; extra copies of one kind do not count again.")
+            .text("An excellent bedroom allows up to two beds, with nine floor blocks per bed and at least three furnishing kinds. Storage, carpet, decoration and tables are the four kinds; extra copies of one kind do not count again.")
             .pointAt(util.vector().topOf(3, 0, 3)).placeNearTarget().attachKeyFrame();
         scene.idle(150);
         scene.world().setBlock(util.grid().at(5, 1, 3), Blocks.FURNACE.defaultBlockState(), false);
         scene.overlay().showOutline(PonderPalette.RED, "furnace", util.select().position(5, 1, 3), 110);
         scene.overlay().showText(110)
-            .text("Keep production blocks out of a private room. A crafting table or furnace bars the top grade even when there is enough space and furniture. Hold the book to read each bed's grade and advice.")
+            .text("Keep production blocks out of an excellent bedroom. A crafting table or furnace bars the top grade even when there is enough space and furniture. Hold the book to read each bed's grade and advice.")
             .pointAt(util.vector().topOf(5, 1, 3)).placeNearTarget().attachKeyFrame();
         scene.idle(120);
         scene.world().setBlock(util.grid().at(5, 1, 3), Blocks.AIR.defaultBlockState(), false);

@@ -41,7 +41,7 @@ public final class DiningScene {
         scene.idle(15);
         scene.overlay().showOutline(PonderPalette.BLUE, "area", util.select().fromTo(1, 0, 1, 6, 2, 5), 120);
         scene.overlay().showText(120)
-            .text("With the book marking out, delegate a dining area around tables and adjacent chairs. Top slabs make tables and bottom stairs make chairs. Include the chairs in the area and leave a clear aisle beside them.")
+            .text("With the book marking out, frame a dining area around tables and adjacent chairs. Top slabs make tables and bottom stairs make chairs. Include the chairs in the area and leave a clear aisle beside them.")
             .pointAt(util.vector().topOf(3, 1, 4)).placeNearTarget().attachKeyFrame();
         scene.idle(130);
         scene.overlay().showOutline(PonderPalette.GREEN, "table", util.select().fromTo(2, 1, 3, 4, 1, 3), 100);
