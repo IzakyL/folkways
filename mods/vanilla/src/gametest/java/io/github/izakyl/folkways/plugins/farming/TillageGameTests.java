@@ -20,6 +20,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoublePlantBlock;
+import net.minecraft.world.level.block.SnowLayerBlock;
+import net.minecraft.world.level.block.SnowyDirtBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -65,7 +67,7 @@ public final class TillageGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
         for (Block obstacle : List.of(Blocks.STONE, Blocks.WHEAT,
-                Blocks.OAK_SAPLING, Blocks.WATER)) {
+                Blocks.OAK_SAPLING, Blocks.WATER, Blocks.SNOW_BLOCK, Blocks.POWDER_SNOW)) {
             place(level, ground, Blocks.DIRT.defaultBlockState());
             place(level, ground.above(), obstacle.defaultBlockState());
             helper.assertFalse(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
@@ -74,6 +76,100 @@ public final class TillageGameTests {
             helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "blocked soil is left alone");
             helper.assertTrue(level.getBlockState(ground.above()).is(obstacle), "the obstacle is left alone");
         }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void snowIsClearedBeforeTillingEvenWhenPlantsAreKept(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        for (Tillage.Clearing clearing : List.of(Tillage.Clearing.ALL, new Tillage.Clearing(true, false),
+                new Tillage.Clearing(false, true), new Tillage.Clearing(false, false))) {
+            for (BlockState soil : List.of(Blocks.DIRT.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState(),
+                    Blocks.GRASS_BLOCK.defaultBlockState().setValue(SnowyDirtBlock.SNOWY, true),
+                    Blocks.DIRT_PATH.defaultBlockState())) {
+                for (int layers = 1; layers <= 8; layers++) {
+                    BlockState snow = Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, layers);
+                    place(level, ground, soil);
+                    place(level, ground.above(), snow);
+                    Outcome outcome = till(level, ground, new ItemStack(Items.WOODEN_HOE), clearing);
+                    helper.assertTrue(outcome instanceof Outcome.Done done && done.xp().isPresent()
+                        && done.noises().size() == 2, "snow clearing and tilling finish as one piece of work: "
+                            + soil + ", " + layers + " layers, " + clearing);
+                    helper.assertTrue(level.getBlockState(ground).is(Blocks.FARMLAND), "the soil is tilled");
+                    helper.assertTrue(level.getBlockState(ground.above()).isAir(), "all snow layers are removed");
+                }
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void snowOverUntillableSoilOrWithoutAHoeIsLeftAlone(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        for (Block soil : List.of(Blocks.STONE, Blocks.FARMLAND, Blocks.COARSE_DIRT, Blocks.ROOTED_DIRT)) {
+            place(level, ground, soil.defaultBlockState());
+            place(level, ground.above(), Blocks.SNOW.defaultBlockState());
+            helper.assertFalse(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+                Tillage.Clearing.ALL), "snow does not make untillable soil eligible for work");
+            till(level, ground, new ItemStack(Items.WOODEN_HOE));
+            helper.assertTrue(level.getBlockState(ground).is(soil), "untillable soil is left alone");
+            helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SNOW), "the snow is left alone");
+        }
+        place(level, ground, Blocks.DIRT.defaultBlockState());
+        for (ItemStack tool : List.of(ItemStack.EMPTY, new ItemStack(Items.STICK),
+                new ItemStack(Items.WOODEN_SHOVEL))) {
+            till(level, ground, tool);
+            helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "tilling still requires a hoe");
+            helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SNOW),
+                "a worker without a hoe does not clear the snow");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void snowyGroundIsCheckedAgainBeforeWork(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        place(level, ground, Blocks.DIRT.defaultBlockState());
+        place(level, ground.above(), Blocks.SNOW.defaultBlockState());
+        helper.assertTrue(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+            Tillage.Clearing.ALL), "the snow-covered cell starts out tillable");
+
+        place(level, ground, Blocks.STONE.defaultBlockState());
+        till(level, ground, new ItemStack(Items.WOODEN_HOE));
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.STONE), "work rechecks the soil");
+        helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SNOW), "snow over changed soil stays");
+
+        place(level, ground, Blocks.DIRT.defaultBlockState());
+        place(level, ground.above(), Blocks.SNOW_BLOCK.defaultBlockState());
+        till(level, ground, new ItemStack(Items.WOODEN_HOE));
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "blocked soil is left alone");
+        helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SNOW_BLOCK),
+            "a solid snow block that replaced the snow layers stays");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void snowyGrassThatTurnsToDirtAfterPlanningIsStillTilled(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        BlockState snowyGrass = Blocks.GRASS_BLOCK.defaultBlockState().setValue(SnowyDirtBlock.SNOWY, true);
+        BlockState snow = Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, 8);
+        place(level, ground, snowyGrass);
+        place(level, ground.above(), snow);
+        helper.assertTrue(Tillage.canTill(level, ground, snowyGrass, Tillage.PLAIN_HOE,
+            new Tillage.Clearing(false, false)), "snowy grass is planned without changing the world");
+        helper.assertTrue(level.getBlockState(ground).equals(snowyGrass)
+            && level.getBlockState(ground.above()).equals(snow), "planning leaves the snowy grass and snow intact");
+
+        level.getBlockState(ground).randomTick(level, ground, level.random);
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT),
+            "vanilla replaces grass under thick snow with dirt before the worker arrives");
+        till(level, ground, new ItemStack(Items.WOODEN_HOE), new Tillage.Clearing(false, false));
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.FARMLAND)
+            && level.getBlockState(ground.above()).isAir(), "the changed soil is cleared and tilled using its live state");
         helper.succeed();
     }
 

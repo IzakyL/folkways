@@ -188,7 +188,7 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 300)
+    @GameTest(template = "empty_large", batch = "cookery_grass_travel", timeoutTicks = 1200)
     public static void anAdoptedGrassSourceRemainsWantedWhileItsResidentTravelsAcrossRepeatedSweeps(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos travellingFeet = helper.absolutePos(new BlockPos(10, 1, 10)).offset(-41, 1, 0);
@@ -196,11 +196,10 @@ public final class GrassSourcesGameTests {
         // The 24-block template does not load this distant resident. Keep the real colony view live.
         boolean forced = !level.getForcedChunks().contains(travellingChunk.toLong())
             && level.setChunkForced(travellingChunk.x, travellingChunk.z, true);
-        helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(level.isPositionEntityTicking(travellingFeet),
-                "the travelling resident's real chunk ticks before the sweep starts"))
-            .thenExecute(() -> {
+        afterEntityTicking(helper, travellingFeet, 1000, () -> {
             try {
+                helper.assertTrue(level.isPositionEntityTicking(travellingFeet),
+                    "the travelling resident's real chunk ticks before the sweep starts");
                 for (boolean restore : List.of(false, true)) {
                     try (Fixture rig = new Fixture(helper)) {
                         rig.mark(restore); rig.wearHat();
@@ -255,6 +254,16 @@ public final class GrassSourcesGameTests {
                 if (forced) level.setChunkForced(travellingChunk.x, travellingChunk.z, false);
             }
         });
+    }
+
+    // A forced ticket requests asynchronous loading; elapsed test ticks do not prove entity ticking.
+    // Keep the original real-ticking assertion and cleanup at the bounded deadline if it never loads.
+    private static void afterEntityTicking(GameTestHelper helper, BlockPos feet, int remaining, Runnable ready) {
+        if (helper.getLevel().isPositionEntityTicking(feet) || remaining == 0) {
+            ready.run();
+        } else {
+            helper.runAfterDelay(1, () -> afterEntityTicking(helper, feet, remaining - 1, ready));
+        }
     }
 
     @GameTest(template = "empty_large")
