@@ -237,6 +237,14 @@ final class BuildPresence implements Facing {
         return filed;
     }
 
+    Optional<BlueprintBuildOrder> fileOnce(ServerLevel level, Blueprint blueprint, BlockPos anchor) {
+        if (book.full()) {
+            return Optional.empty();
+        }
+        book.singleUse(blueprint.id());
+        return file(level, blueprint, anchor, "", Optional.empty(), "");
+    }
+
     Optional<BlueprintBuildOrder> file(ServerLevel level, Blueprint blueprint, BlockPos anchor, String typed,
             Optional<UUID> playerId, String playerName, ResourceLocation pattern, Hint hint) {
         Optional<BlueprintBuildOrder> filed = place(level, blueprint, anchor, siteName(typed), playerId, playerName);

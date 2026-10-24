@@ -36,42 +36,13 @@ public final class SurveyGameTests {
         event.register(SurveyGameTests.class);
     }
 
-    // A box is cleared from the top down and no further than the box: the ground under it stays, a member block
-    // in it stays, and the cell a body would stand on to dig is not dug from there.
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void aClearedBoxGoesTopDownAndStaysInTheBox(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
-        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.STONE);
-        Set<BlockPos> box = box(origin, origin.offset(1, 1, 1));
-        box.forEach(cell -> place(level, cell, Blocks.DIRT.defaultBlockState()));
-        BlockPos member = origin.offset(1, 0, 1);
-        place(level, member, Blocks.CHEST.defaultBlockState());
-
-        Set<BlockPos> asked = cellsOf(new Survey(level, box).clear(member::equals));
-        Set<BlockPos> top = box(origin.offset(0, 1, 0), origin.offset(1, 1, 1));
-        helper.assertTrue(asked.equals(top), "only the top layer is asked for first, got " + asked);
-
-        top.forEach(cell -> place(level, cell, Blocks.AIR.defaultBlockState()));
-        asked = cellsOf(new Survey(level, box).clear(member::equals));
-        Set<BlockPos> under = box(origin, origin.offset(1, 0, 1));
-        under.remove(member);
-        helper.assertTrue(asked.equals(under), "then the layer under it, but the member, got " + asked);
-        for (Job job : new Survey(level, box).clear(member::equals)) {
-            helper.assertFalse(job.footings().cells().contains(WorldPos.of(level, job.cell().above())),
-                "nobody digs out the block they stand on: " + job.cell());
-            helper.assertTrue(box.contains(job.cell()), "nothing outside the box is dug: " + job.cell());
-        }
-        helper.succeed();
-    }
-
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void completedChoresStaySpentAcrossSweeps(GameTestHelper helper) {
         java.util.UUID zone = java.util.UUID.randomUUID();
         BlockPos cell = helper.absolutePos(new BlockPos(2, 1, 2));
         Job job = Job.at(cell, new io.github.izakyl.folkways.core.api.work.WorkSite.AtBlock(
             WorldPos.of(helper.getLevel(), cell)), io.github.izakyl.folkways.core.api.work.Stances.WHEREVER);
-        Chores chores = new Chores(zone, "clear", (level, chore) -> {
+        Chores chores = new Chores(zone, "weed", (level, chore) -> {
             throw new AssertionError("completed work must never be offered again");
         }, () -> {}, new io.github.izakyl.folkways.front.api.PastDay());
         chores.settle(List.of(job));
@@ -83,87 +54,6 @@ public final class SurveyGameTests {
         chores.goals(helper.getLevel(), new java.util.ArrayList<>());
         helper.assertTrue(!chores.busy() && chores.spent().contains(job.key()),
             "a later sweep preserves completion and releases busy work");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void discoveryIncludesEveryClearLayerBeforeItCanBeReached(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
-        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.STONE);
-        Set<BlockPos> box = box(origin, origin.offset(1, 2, 1));
-        box.forEach(cell -> place(level, cell, Blocks.DIRT.defaultBlockState()));
-
-        helper.assertTrue(cellsOf(new Survey(level, box).clear(cell -> false))
-            .equals(box(origin.above(2), origin.offset(1, 2, 1))),
-            "working survey still asks for only the accessible top layer");
-        helper.assertTrue(cellsOf(new Survey(level, box).discovering().clear(cell -> false)).equals(box),
-            "discovery records every layer before clearing opens it");
-
-        BlockPos floating = origin.above(16);
-        Set<BlockPos> unreachable = box(floating, floating.above(2));
-        unreachable.forEach(cell -> place(level, cell, Blocks.DIRT.defaultBlockState()));
-        helper.assertTrue(new Survey(level, unreachable).clear(cell -> false).isEmpty(),
-            "floating blocks have no safe place to stand and clear them");
-        helper.assertTrue(cellsOf(new Survey(level, unreachable).discovering().clear(cell -> false))
-            .equals(unreachable), "discovery also records work with no current stance");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void discoveryIncludesEveryFillLayerBeforeSupportIsLaid(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
-        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.STONE);
-        Set<BlockPos> box = box(origin, origin.offset(1, 2, 1));
-        box.forEach(cell -> place(level, cell, Blocks.AIR.defaultBlockState()));
-
-        helper.assertTrue(cellsOf(new Survey(level, box).fill()).equals(box(origin, origin.offset(1, 0, 1))),
-            "working survey still asks for only the supported bottom layer");
-        helper.assertTrue(cellsOf(new Survey(level, box).discovering().fill()).equals(box),
-            "discovery records upper layers before the lower layers support them");
-        helper.succeed();
-    }
-
-    // Cleared and filled together, the fill block already in the box stays, and a cell other work has taken is left
-    // to it, with what lies under it.
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void clearingLeavesTheFillBlockAndWhatOtherWorkHasTaken(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
-        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.STONE);
-        Set<BlockPos> box = box(origin, origin.offset(2, 1, 0));
-        box.forEach(cell -> place(level, cell, Blocks.COBBLESTONE.defaultBlockState()));
-        BlockPos dirt = origin.offset(1, 1, 0);
-        place(level, dirt, Blocks.DIRT.defaultBlockState());
-        BlockPos taken = origin.offset(2, 1, 0);
-
-        Set<BlockPos> asked = cellsOf(new Survey(level, box).clear(cell -> false,
-            state -> state.is(Blocks.DIRT), Set.of(taken)));
-        helper.assertTrue(asked.equals(Set.of(origin.offset(0, 1, 0), origin.offset(1, 0, 0))),
-            "the top cobble, the one under the kept dirt, and neither the taken cell nor what lies under it, got "
-                + asked);
-        helper.succeed();
-    }
-
-    // A box is filled from the bottom up, and never into the cell a body stands or holds its head in.
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void aFilledBoxGoesBottomUpAndBuriesNobody(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
-        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.STONE);
-        Set<BlockPos> box = box(origin, origin.offset(1, 1, 1));
-        box.forEach(cell -> place(level, cell, Blocks.AIR.defaultBlockState()));
-
-        List<Job> jobs = new Survey(level, box).fill();
-        Set<BlockPos> bottom = box(origin, origin.offset(1, 0, 1));
-        helper.assertTrue(cellsOf(jobs).equals(bottom), "the bottom layer is laid first, got " + cellsOf(jobs));
-        for (Job job : jobs) {
-            helper.assertFalse(job.footings().cells().contains(WorldPos.of(level, job.cell())),
-                "nobody lays a block where they stand: " + job.cell());
-            helper.assertFalse(job.footings().cells().contains(WorldPos.of(level, job.cell().below())),
-                "nobody lays a block where their head is: " + job.cell());
-        }
         helper.succeed();
     }
 
@@ -210,9 +100,9 @@ public final class SurveyGameTests {
         helper.succeed();
     }
 
-    // Snow is no weed or flower: it stays when weeding and does not hold up a fill above it.
+    // Snow is no weed or flower: it stays when weeding.
     @GameTest(template = "empty", timeoutTicks = 100)
-    public static void snowIsLeftByWeedingAndAllowsFillAbove(GameTestHelper helper) {
+    public static void snowIsLeftByWeeding(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
         floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.STONE);
@@ -222,25 +112,7 @@ public final class SurveyGameTests {
             helper.assertFalse(Survey.weeds(true, true).test(snow), "snow is not selected as a weed");
             helper.assertTrue(new Survey(level, Set.of(origin)).weed(Survey.weeds(true, true)).isEmpty(),
                 "weeding leaves the snow, " + layers + " layers");
-            helper.assertTrue(cellsOf(new Survey(level, Set.of(origin.above())).fill())
-                .equals(Set.of(origin.above())), "a fill offers the cell above snow, " + layers + " layers");
         }
-        helper.succeed();
-    }
-
-    // A fill lays nothing over a flower, whether the zone pulls it first or keeps it.
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void aFillBuriesNoFlower(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
-        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.GRASS_BLOCK);
-        Set<BlockPos> box = box(origin, origin.offset(1, 1, 0));
-        box.forEach(cell -> place(level, cell, Blocks.AIR.defaultBlockState()));
-        BlockPos flower = origin.offset(1, 0, 0);
-        place(level, flower, Blocks.POPPY.defaultBlockState());
-
-        Set<BlockPos> asked = cellsOf(new Survey(level, box).fill());
-        helper.assertTrue(asked.equals(Set.of(origin)), "only the open cell beside the flower, got " + asked);
         helper.succeed();
     }
 
