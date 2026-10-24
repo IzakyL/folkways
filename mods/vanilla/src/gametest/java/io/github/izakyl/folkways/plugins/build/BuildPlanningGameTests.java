@@ -480,7 +480,7 @@ public final class BuildPlanningGameTests {
         SiteRig pouring = SiteRig.start(level, target(level, Map.of(pour, Blocks.WATER.defaultBlockState())));
         Node poured = pouring.node(pour);
         helper.assertValueEqual(poured.spec().needs(),
-            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("water_bucket")), 1)),
+            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("water_bucket")), 1).replacing()),
             "pouring water asks for a water bucket");
         Outcome outcome = Commit.run(level, poured, worker);
         helper.assertTrue(outcome instanceof Outcome.Done done
@@ -633,7 +633,7 @@ public final class BuildPlanningGameTests {
             "both halves are one step");
         Node lay = building.node(upper);
         helper.assertValueEqual(lay.spec().needs(),
-            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("oak_door")), 1)), "one door is asked for");
+            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("oak_door")), 1).replacing()), "one door is asked for");
         long doors = Goods.countIn(worker.pack(), ItemSpec.of(ResourceLocation.withDefaultNamespace("oak_door")));
         helper.assertTrue(Commit.run(level, lay, worker) instanceof Outcome.Done, "the door is laid");
         helper.assertValueEqual(Goods.countIn(worker.pack(), ItemSpec.of(ResourceLocation.withDefaultNamespace("oak_door"))),
@@ -685,7 +685,7 @@ public final class BuildPlanningGameTests {
         SiteRig building = SiteRig.start(level, target);
         Node lay = building.node(foot);
         helper.assertValueEqual(lay.spec().needs(),
-            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("red_bed")), 1)), "one bed is asked for");
+            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("red_bed")), 1).replacing()), "one bed is asked for");
         helper.assertTrue(Commit.run(level, lay, worker) instanceof Outcome.Done, "the bed is laid");
         helper.assertTrue(BuildPlanner.complete(level, target), "both halves stand");
         helper.succeed();
@@ -716,10 +716,10 @@ public final class BuildPlanningGameTests {
             candles, Blocks.CANDLE.defaultBlockState().setValue(BlockStateProperties.CANDLES, 3)
                 .setValue(BlockStateProperties.LIT, true))));
         helper.assertValueEqual(costs.node(slab).spec().needs(),
-            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("stone_slab")), 2)),
+            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("stone_slab")), 2).replacing()),
             "a double slab takes two slabs");
         helper.assertValueEqual(costs.node(candles).spec().needs(),
-            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("candle")), 1)),
+            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("candle")), 1).replacing()),
             "the cannon asks one candle for a cluster of three");
 
         BlockPos left = at(helper, 8, 1, 14);
@@ -732,7 +732,7 @@ public final class BuildPlanningGameTests {
         for (BlockPos half : List.of(left, right)) {
             Node layHalf = pairing.node(half);
             helper.assertValueEqual(layHalf.spec().needs(),
-                List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("chest")), 1)),
+                List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("chest")), 1).replacing()),
                 "each half is a shot of its own, one chest each");
             helper.assertTrue(Commit.run(level, layHalf, worker) instanceof Outcome.Done, "the half is laid");
         }
@@ -756,7 +756,7 @@ public final class BuildPlanningGameTests {
         SiteRig laying = SiteRig.start(level, target);
         Node lay = laying.node(cell);
         helper.assertValueEqual(lay.spec().needs(),
-            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("stone_stairs")), 1)),
+            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("stone_stairs")), 1).replacing()),
             "only the block is paid for: the cannon brings no water");
         helper.assertTrue(Commit.run(level, lay, worker) instanceof Outcome.Done, "the stairs are laid");
         laying.end(lay, io.github.izakyl.folkways.core.api.work.Ending.DONE);
@@ -830,7 +830,7 @@ public final class BuildPlanningGameTests {
         SiteRig site = SiteRig.start(level, target);
         for (BlockPos cell : List.of(stem, stem.above())) {
             helper.assertValueEqual(site.node(cell).spec().needs(),
-                List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("big_dripleaf")), 1)),
+                List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("big_dripleaf")), 1).replacing()),
                 "one dripleaf for each, as the cannon reckons it");
         }
         helper.assertTrue(site.pieceAt(stem) != site.pieceAt(stem.above()), "two pieces of work");

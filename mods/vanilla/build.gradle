@@ -42,3 +42,8 @@ dependencies {
 
 // The recipe audit is one fixture shared by native kitchen and vanilla crafting tests in their own modules.
 sourceSets.cookeryTest.resources.srcDir(rootProject.file("mods/cookery/src/gametest/resources"))
+
+// Resource scenarios exercise package-private consumers in their owning module.
+dependencies {
+    resourcesTestImplementation project(":resources")
+}

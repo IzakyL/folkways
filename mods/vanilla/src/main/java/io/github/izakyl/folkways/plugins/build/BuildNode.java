@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.plugins.build;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
+import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
@@ -49,7 +50,7 @@ abstract class BuildNode implements Node {
                     ? BuildContent.haste(worker) / BuildingPerks.momentum(worker,
                         worker.body().level().getBlockState(job.focus().block(worker.body().level())))
                     : BuildingPerks.constructionHaste(worker)))
-            .needs(job.feed())
+            .needs(job.feed().stream().map(Need::replacing).toList())
             .leaves(job.leaves())
             .tools(job.tools())
             .vocation(BuildContent.trade())

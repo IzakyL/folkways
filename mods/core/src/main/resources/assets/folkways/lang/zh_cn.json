@@ -1199,5 +1199,14 @@
   "folkways.refusal.pasture.hive_taken": "已经有人在处理这个蜂箱",
   "folkways.refusal.pasture.hive_not_ready": "那个蜂箱还不能采收",
   "folkways.refusal.pasture.hive_not_smoked": "营火烟气没有到达那个蜂箱",
-  "folkways.apiary.status.smoke_missing": "%s 个蜂箱缺少营火烟气"
+  "folkways.apiary.status.smoke_missing": "%s 个蜂箱缺少营火烟气",
+  "item.folkways.wood_resource": "木材资源",
+  "item.folkways.stone_resource": "石材资源",
+  "item.folkways.sapling_resource": "树苗资源",
+  "item.folkways.seed_resource": "种子资源",
+  "folkways.page.resources": "资源",
+  "folkways.resources.explanation": "居民直接携带资源到工地、填地区域和农田。蓝图或农田决定放置的方块或作物，优先使用库存中相符的材料。",
+  "folkways.resources.stock": "仓库库存： %s 份",
+  "folkways.resources.substitutes": "可替代：%s",
+  "folkways.resources.cost": "每份材料消耗 %s 份资源"
 }

@@ -25,7 +25,7 @@ jobs:
       - run: npm ci
       - run: npm run format:md:check
       - run: npm run setup
-      - run: ./gradlew build
+      - run: ./gradlew --no-daemon build
       - run: npm run typecheck
       - run: npm run test:unit
       - uses: actions/upload-artifact@v6
@@ -42,13 +42,15 @@ jobs:
       matrix:
         include:
           - mod: core
-            profiles: base cookery
+            profiles: base cookery resources
           - mod: vanilla
-            profiles: base cookery
+            profiles: base cookery resources
           - mod: create
             profiles: base
           - mod: cookery
             profiles: cookery
+          - mod: resources
+            profiles: resources
     name: GameTests (${{ matrix.mod }})
     steps:
       - uses: actions/checkout@v5
@@ -84,8 +86,11 @@ jobs:
             if [[ "$profile" == cookery ]]; then
               gradle_args+=(-PcookeryTests=true)
             fi
+            if [[ "$profile" == resources ]]; then
+              gradle_args+=(-PresourcesTests=true)
+            fi
             status=failure
-            if timeout --signal=TERM --kill-after=60s 50m ./gradlew "${gradle_args[@]}" --console=plain runGameTestServer 2>&1 | tee "run/gametest/ci/$GAME_TEST_MOD-$profile.log"; then
+            if timeout --signal=TERM --kill-after=60s 50m ./gradlew --no-daemon "${gradle_args[@]}" --console=plain runGameTestServer 2>&1 | tee "run/gametest/ci/$GAME_TEST_MOD-$profile.log"; then
               status=success
             else
               failed=1
@@ -172,6 +177,7 @@ jobs:
 
           Install **folkways-core** and **folkways-vanilla**, plus LDLib2. Add **folkways-create** only with Create,
           **folkways-modulargolems** only with Modular Golems, and **folkways-cookery** only with Kaleidoscope Cookery 1.6.0.
+          Add **folkways-resources** to enable optional flat resources for construction and planting.
           All Folkways jars must come from the same build.
           EOF
           gh release create nightly jars/*.jar --prerelease --target "$GITHUB_SHA" \

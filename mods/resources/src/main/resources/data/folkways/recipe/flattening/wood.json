@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "tag": "folkways:flattening/wood/sources"
+    }
+  ],
+  "result": {
+    "id": "folkways:wood_resource",
+    "count": 1
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "resource": "folkways:seed_resource",
+  "members": "folkways:flattening/seed/targets",
+  "default_item": "minecraft:wheat_seeds",
+  "cost": 1
+}

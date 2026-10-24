@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "tag": "folkways:flattening/seed/sources"
+    }
+  ],
+  "result": {
+    "id": "folkways:seed_resource",
+    "count": 1
+  }
+}

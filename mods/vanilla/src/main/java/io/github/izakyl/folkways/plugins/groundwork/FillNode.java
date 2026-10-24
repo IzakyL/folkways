@@ -25,7 +25,7 @@ final class FillNode extends GroundNode {
     FillNode(Chores.Chore chore, ItemSpec with) {
         super(GroundNode.declare(chore, BuildContent.trade(),
                 Workload.Once.of(GroundworkContent.CELL_TICKS, BuildingPerks::constructionHaste))
-            .needs(new Need(with, 1))
+            .needs(new Need(with, 1).replacing())
             .doing(GroundworkContent.FILLING, with).done(), chore);
     }
 

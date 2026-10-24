@@ -24,11 +24,13 @@ java {
 sourceSets {
     gametest
     cookeryTest
+    resourcesTest
 }
 
 neoForge {
     version = project.neoforge_version
     addModdingDependenciesTo sourceSets.gametest
+    addModdingDependenciesTo sourceSets.resourcesTest
     addModdingDependenciesTo sourceSets.cookeryTest
 }
 
@@ -36,6 +38,9 @@ configurations {
     gametestCompileOnly.extendsFrom compileOnly
     gametestImplementation.extendsFrom implementation
     gametestRuntimeOnly.extendsFrom runtimeOnly
+    resourcesTestCompileOnly.extendsFrom gametestCompileOnly
+    resourcesTestImplementation.extendsFrom gametestImplementation
+    resourcesTestRuntimeOnly.extendsFrom gametestRuntimeOnly
     cookeryTestCompileOnly.extendsFrom gametestCompileOnly
     cookeryTestImplementation.extendsFrom gametestImplementation
     cookeryTestRuntimeOnly.extendsFrom gametestRuntimeOnly
@@ -54,6 +59,7 @@ ext.lib = { String name ->
 // Optional integration tests reuse their own mod's tests; cross-mod helpers have a separate fixtures output.
 dependencies {
     gametestImplementation sourceSets.main.output
+    resourcesTestImplementation sourceSets.main.output
     cookeryTestImplementation sourceSets.main.output
     cookeryTestImplementation sourceSets.gametest.output
 }

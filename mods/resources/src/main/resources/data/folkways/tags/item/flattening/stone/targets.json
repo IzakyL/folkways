@@ -1,0 +1,41 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "#c:stones",
+      "required": false
+    },
+    {
+      "id": "#c:cobblestones",
+      "required": false
+    },
+    {
+      "id": "#c:bricks/stone",
+      "required": false
+    },
+    "minecraft:stone_bricks",
+    "minecraft:stone_stairs",
+    "minecraft:stone_slab",
+    "minecraft:cobblestone_stairs",
+    "minecraft:cobblestone_slab",
+    "minecraft:cobblestone_wall",
+    "minecraft:stone_brick_stairs",
+    "minecraft:stone_brick_slab",
+    "minecraft:stone_brick_wall",
+    "minecraft:polished_andesite",
+    "minecraft:polished_diorite",
+    "minecraft:polished_granite",
+    "minecraft:stone",
+    "minecraft:cobblestone",
+    "minecraft:andesite",
+    "minecraft:diorite",
+    "minecraft:granite",
+    "minecraft:deepslate",
+    "minecraft:cobbled_deepslate",
+    "minecraft:blackstone",
+    "minecraft:tuff",
+    "minecraft:calcite",
+    "minecraft:end_stone",
+    "minecraft:smooth_stone"
+  ]
+}

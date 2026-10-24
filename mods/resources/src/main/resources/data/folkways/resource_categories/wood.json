@@ -1,0 +1,6 @@
+{
+  "resource": "folkways:wood_resource",
+  "members": "folkways:flattening/wood/targets",
+  "default_item": "minecraft:oak_planks",
+  "cost": 1
+}

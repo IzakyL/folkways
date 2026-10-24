@@ -212,7 +212,7 @@ public final class SchematicannonParityGameTests {
         BuildTarget target = new BuildTarget(WorldPos.of(level, cell).realm(),
             Map.of(cell, Blocks.WATER.defaultBlockState()));
         SiteRig rig = SiteRig.start(level, target);
-        helper.assertValueEqual(rig.node(cell).spec().needs(), List.of(need("water_bucket", 1)), "poured from a bucket");
+        helper.assertValueEqual(rig.node(cell).spec().needs(), List.of(need("water_bucket", 1).replacing()), "poured from a bucket");
         Worker worker = worker(helper, cell.offset(-3, 0, 0), new ItemStack(Items.WATER_BUCKET));
         helper.assertTrue(Commit.run(level, rig.node(cell), worker) instanceof Outcome.Done done
             && done.made().stream().anyMatch(stack -> stack.is(Items.BUCKET)), "the empty bucket comes back");

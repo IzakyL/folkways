@@ -10,26 +10,31 @@ def modProjects = [
     folkways_create: ":create",
     folkways_modulargolems: ":modulargolems",
     folkways_cookery: ":cookery",
+    folkways_resources: ":resources",
 ]
 modProjects.values().each { evaluationDependsOn(it) }
 
 // The game tests run without Modular Golems, so its Folkways mod stays out of that run.
 def cookeryTests = providers.gradleProperty("cookeryTests").map { it.toBoolean() }.getOrElse(false)
+def resourcesTests = providers.gradleProperty("resourcesTests").map { it.toBoolean() }.getOrElse(false)
 def tavernTests = providers.gradleProperty("tavernTests").map { it.toBoolean() }.getOrElse(false)
 if (tavernTests && !cookeryTests) {
     throw new GradleException("Tavern GameTests require -PcookeryTests=true")
 }
-def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" && (path != ":cookery" || cookeryTests) }
+def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" && (path != ":cookery" || cookeryTests) && (path != ":resources" || resourcesTests) }
 def gameTestMod = providers.gradleProperty("gameTestMod").getOrElse("")
-if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery"])) {
-    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create or cookery")
+if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "resources"])) {
+    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create, cookery or resources")
 }
 if (gameTestMod == "cookery" && !cookeryTests) {
     throw new GradleException("Cookery GameTests require -PcookeryTests=true")
 }
+if (gameTestMod == "resources" && !resourcesTests) {
+    throw new GradleException("Resources GameTests require -PresourcesTests=true")
+}
 def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gameTestMod}" }
 def gameTestDirectory = gameTestMod
-    ? "run/gametest/${gameTestMod}/${cookeryTests ? 'cookery' : 'base'}"
+    ? "run/gametest/${gameTestMod}/${resourcesTests ? 'resources' : cookeryTests ? 'cookery' : 'base'}"
     : "run/gametest"
 
 repositories {
@@ -58,6 +63,9 @@ neoForge {
                 sourceSet mod.sourceSets.main
                 if (path == ":core") {
                     sourceSet mod.sourceSets.gameTestFixtures
+                }
+                if (resourcesTests && path == ":vanilla" && (!gameTestMod || gameTestMod in ["vanilla", "resources"])) {
+                    sourceSet mod.sourceSets.resourcesTest
                 }
                 if (suiteMods.containsKey(id)) {
                     sourceSet mod.sourceSets.gametest
@@ -93,6 +101,9 @@ dependencies {
         runtimeOnly project(path).sourceSets.main.output
     }
     runtimeOnly core.sourceSets.gameTestFixtures.output
+    if (resourcesTests && (!gameTestMod || gameTestMod in ["vanilla", "resources"])) {
+        runtimeOnly project(":vanilla").sourceSets.resourcesTest.output
+    }
     suiteMods.values().each { path ->
         runtimeOnly project(path).sourceSets.gametest.output
         if (cookeryTests && path in [":core", ":vanilla"]) {
@@ -165,5 +176,6 @@ tasks.register("lintScaffold") {
 tasks.named("check") {
     dependsOn "lintScaffold"
     modProjects.values().each { dependsOn "${it}:check", "${it}:compileGametestJava" }
+    if (resourcesTests) { dependsOn ":vanilla:compileResourcesTestJava" }
     if (cookeryTests) { dependsOn ":core:compileCookeryTestJava", ":vanilla:compileCookeryTestJava" }
 }
