@@ -63,15 +63,6 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     private static final long WAYS_ANSWER_TICKS = 20L;
 
-    // 殖民地完全没有路线、却还有活排不上时，多久强制重算一次。
-    private static final long LIVENESS_TICKS = 200L;
-
-    // 有手在原地干等这么久，也值得重算一轮：它的队首多半在等别人路线里没开工的节点。
-    private static final int STALLED_TICKS = 200;
-
-    // 手里还压着钉给自己的货时，非紧急的困/饿最多让它等这么久，再照常去办。
-    private static final long DEFER_URGE_TICKS = 600L;
-
     private final ColonyData colony;
     private final ResourceKey<Level> dimension;
 
@@ -97,10 +88,10 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     private long wakeAt = Long.MAX_VALUE;
     private long scheduleWakeAt = Long.MAX_VALUE;
-    private long livenessAt;
     // What each stage last asked of the survey: the weave's whole ask, and whether the schedule wants hands read.
     private Asks weaveAsks = Asks.NONE;
     private boolean scheduleHands;
+    private Set<UUID> overloaded = Set.of();
     private List<Shortfall> shortfalls = List.of();
     private List<Refused> refused = List.of();
     private boolean waysAnswered;
@@ -224,17 +215,6 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             plan(level);
             answer(level, present);
         }
-        // 规划器只在有消息时才跑。所有手都闲着、路线上又一件活都没有时，就再也不会产生消息了——
-        // 日志里那次 3.5 分钟一动不动就是这样。每隔一段时间自检一次，给死结一个被重新评估的机会。
-        if (level.getGameTime() >= livenessAt) {
-            livenessAt = level.getGameTime() + LIVENESS_TICKS;
-            // 没路线又派不出去，或者有人原地干等太久：都值得重算一轮。
-            boolean jammed = tours.isEmpty() && !diagnosis.unassigned().isEmpty()
-                || runners.stalled(STALLED_TICKS);
-            if (!present.isEmpty() && jammed) {
-                inbox.raise(Message.ANSWERED);
-            }
-        }
         if (level.getGameTime() >= scheduleWakeAt) {
             scheduleWakeAt = Long.MAX_VALUE;
             pipeline.wake(lanes.schedule(), level.getGameTime(), this::laid);
@@ -336,11 +316,6 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         if (keenest.isEmpty()) {
             return;
         }
-        // 手里还压着钉给自己的活：非紧急的困/饿先等一等，把货放下再走（最多等一会儿，之后照常）。
-        if (keenest.get().weight() < Urge.NOW && carriesForBound(body, runner)
-                && runner.deferUrge(keenest.get().id(), level.getGameTime(), DEFER_URGE_TICKS)) {
-            return;
-        }
         Node doing;
         try {
             doing = keenest.get().take().get();
@@ -364,18 +339,6 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         runner.letGo(this, level, body, "urge-preempts");
         personalRequests.put(doing.id(), new Personal(body.id(), keenest.get().id()));
         runner.offer(this, level, body, keenest.get(), doing);
-    }
-
-    // 这个人手里或路线头上压着一件钉给他的活吗（货在他身上，别人替不了）。
-    private boolean carriesForBound(Body body, BodyRunner runner) {
-        Optional<UUID> load = runner.holding();
-        if (load.isEmpty()) {
-            List<UUID> queued = runner.queued();
-            load = queued.isEmpty() ? Optional.empty() : Optional.of(queued.getFirst());
-        }
-        return load.filter(graph::has)
-            .map(id -> graph.vertex(id).node().worker().filter(body.id()::equals).isPresent())
-            .orElse(false);
     }
 
     // What the weave changed, applied: work that went or was grown afresh is let go of and ends as the plan says,
@@ -513,6 +476,14 @@ public final class ColonyLabor implements ColonyWorks.Listening {
                 weaveAsks.wakeAt()));
         }
         scheduleWakeAt = laid.wakeAt();
+        // Work bound to a full pack waits for it to be emptied, and only putting the cargo away empties it: asked
+        // again each time the resident newly keeps work waiting so.
+        for (UUID resident : laid.overloaded()) {
+            if (!overloaded.contains(resident)) {
+                idle(resident);
+            }
+        }
+        overloaded = laid.overloaded();
     }
 
     private static UUID about(Message message) {

@@ -43,8 +43,6 @@ final class Tours {
     private static final int MOST_DECLINED = 4_096;
     private static final int MAX_FARES = 32_768;
     private static final int TIER_TICKS = 400;
-    // 手里那件活超过这么多 tick 还没干完：后面排的队不再押在这只手上，交还计划另派。
-    private static final int LATE_TICKS = 400;
     private static final int MOST_PENDING_FARES = 12;
     private static final int RIDE_SPEEDUP = 4;
     // How many places earlier on routes one node may be laid out at, when it fits on the end of none.
@@ -103,6 +101,7 @@ final class Tours {
     private final Set<UUID> laidNow = new HashSet<>();
     private int beyondTried;
     private final Map<UUID, byte[]> fits = new HashMap<>();
+    private final Set<UUID> overloaded = new LinkedHashSet<>();
 
     // What a route carries is counted per kind of goods, so many small loads of one thing share their stacks.
     private record Placed(int start, int finish, Stand at, int base, Map<ItemSpec, Long> held) {
@@ -197,7 +196,6 @@ final class Tours {
         for (Crew.Hand hand : crew.hands()) {
             line.add(seats.get(hand.id()));
         }
-        moved |= handBackQueues(line);
         waiting.keySet().retainAll(weave.vertices().keySet());
         beyondUntil.keySet().retainAll(waiting.keySet());
 
@@ -221,13 +219,34 @@ final class Tours {
             }
         }
         List<Unassigned> unassigned = new ArrayList<>(waiting.size());
+        overloaded.clear();
         for (UUID id : order) {
             Unassigned nobody = waiting.get(id);
             if (nobody != null) {
                 unassigned.add(nobody);
+                if (nobody.why() == Unassigned.Reason.PACK_BUSY) {
+                    packedBy(id, line);
+                }
             }
         }
         return new Schedule(tours, unassigned);
+    }
+
+    // The hands with no route whose packs are too full for work waiting on them. Nothing on a route will ever empty
+    // such a pack, so the work would wait for good unless they are asked to put their cargo away.
+    Set<UUID> overloaded() {
+        return Set.copyOf(overloaded);
+    }
+
+    private void packedBy(UUID id, List<Seat> line) {
+        UUID mustBe = boundWorker(id);
+        List<Amount> carried = fixed(id).plan().carrying();
+        for (Seat seat : line) {
+            if ((mustBe == null || mustBe.equals(seat.hand.id())) && seat.route.isEmpty()
+                    && seat.base + cells(seat.with(carried)) > seat.hand.packCapacity()) {
+                overloaded.add(seat.hand.id());
+            }
+        }
     }
 
     // Work is handed out a wave at a time, each the work most hangs on among what waits on nothing unlaid, as much of
@@ -505,47 +524,6 @@ final class Tours {
                 }
             }
         }
-    }
-
-    // A hand that has been on one piece too long: what it has queued behind that piece should not keep holding
-    // the colony up. Only the work in hand stays — everything else it has queued goes back to the plan, and no new
-    // work is laid on this hand this schedule, so the rest of the route can go to someone free. A hand asleep or
-    // about its own business holds nothing of its route: then the whole queue goes back.
-    private boolean handBackQueues(List<Seat> line) {
-        // 没有闲着的手就别抖路线：交还回去也只是换个地方排队。
-        boolean free = line.stream().anyMatch(seat -> seat.route.isEmpty());
-        if (!free) {
-            return false;
-        }
-        Deque<UUID> cutting = new ArrayDeque<>();
-        List<Seat> busy = new ArrayList<>();
-        for (Seat seat : line) {
-            if (seat.route.isEmpty()) {
-                continue;
-            }
-            // 手里那件活留着（它可能不在队首，也可能根本没有——人在睡觉/办私事）。
-            UUID held = seat.hand.holding().orElse(null);
-            Placed placed = settled.get(seat.route.getFirst());
-            if (placed == null || now - placed.start() <= LATE_TICKS) {
-                continue;
-            }
-            for (UUID id : seat.route) {
-                if (!id.equals(held)) {
-                    cutting.add(id);
-                }
-            }
-            busy.add(seat);
-        }
-        if (busy.isEmpty()) {
-            return false;
-        }
-        cascade(cutting);
-        for (Seat seat : seats.values()) {
-            repack(seat, cutting);
-        }
-        cascade(cutting);
-        line.removeAll(busy);
-        return true;
     }
 
     // A route's loads were counted when its work was laid, against the pack as it was then and the work before it.

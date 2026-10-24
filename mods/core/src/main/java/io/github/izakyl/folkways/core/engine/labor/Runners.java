@@ -54,16 +54,6 @@ final class Runners {
         return Map.copyOf(held);
     }
 
-    // 有没有一只手在原地干等太久：它队首的活一直拿不到（多半在等别人路线里还没开工的节点）。
-    boolean stalled(int ticks) {
-        for (BodyRunner runner : byResident.values()) {
-            if (runner.stalledTicks() >= ticks) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     void letGo(ColonyLabor labor, Set<UUID> nodes) {
         for (BodyRunner runner : byResident.values()) {
             if (runner.holding().filter(nodes::contains).isPresent()) {
