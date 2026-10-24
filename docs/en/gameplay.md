@@ -233,6 +233,22 @@ the **Blueprints** page; Create schematics require Folkways × Create.
 
 To add your own patterns and structures, see [Custom content](custom-content.md).
 
+## Damage control
+
+Frame a **Damage control** volume with the Colony Book and enable the **Damage control** trade for its residents. Workers inspect their zones as ordinary work. For two minutes after an inspection they respond to fires, interrupting ordinary work; fleeing danger retains priority. Overlapping zones share each fire and its responder. Campfires and decorative or industrial flames are preserved.
+
+The zone settings are **Watch this zone**, **Put out fires**, **Restore missing blocks** and **Borrow and refill firefighting tools**. Repairs start disabled. On the Damage Control page, choose **Record baseline** while the whole zone is loaded, then enable repairs on its zone card. The page shows fires, missing cells, conflicts, unavailable recorded blocks, workers and extinguisher water. Point back to the zone to change its switches.
+
+A baseline records ordinary vanilla building blocks. Containers, crops, fluids, machines and blocks in `#folkways:damage_control_excluded` are excluded. The target is confirmed once through the construction printer and stored with its palette, relative coordinates, revision and Minecraft DataVersion. Existing colonies have no baseline until one is recorded. Unknown blocks are skipped and reported. A zone spanning several structures cannot record a single baseline.
+
+Residents restore only missing cells, using the builder's material requirements and placement adapter. Different blocks are reported and preserved; changing a door's open state does not request repairs. Whole missing doors are placed as one group. A partial group waits rather than resetting a surviving part. Active construction keeps its cells. Fire response takes precedence over repairs. After remodelling, record the baseline again. Baselines do not restore inventories or residents.
+
+Vanilla workers smother nearby fire and soul fire by hand without placing water. With **Folkways × FireFighting Additions**, they borrow a real portable extinguisher from colony stores. Water is consumed through the addon's spray drain API: five mB per two-tick pulse, at its four-block range, with a clear line of sight. Only the selected fire cell inside a watched zone receives the addon's block callback. Other spray effects and fluids are outside this integration's first version.
+
+Refill uses fluid capabilities at colony stores, including water buckets. Workers can also gather source water inside an enabled refill zone, using a real empty bucket from colony stores. The source is consumed and the bucket returned after filling. Supply discovery shares the zone scan budget. A bucket is emptied only when its whole contents fit; tanks can transfer smaller quantities. Empty tools fall back to hand smothering until refilled. Tools return to ordinary cargo when their owner stops damage control, dies, unloads, or the colony closes. The hydrant hose, cabinet binding and hose rendering are not implemented yet. Moving-structure firefighting has not been verified in a client.
+
+Server settings under `damageControl` cap a zone at 32,768 cells by default, share 512 scan cells per colony per tick, and allow four simultaneous responders. A fire survey keeps at most 4,096 pending fire addresses. The construction printer also limits a baseline's longest edge to 1,024 blocks.
+
 ## Elevators
 
 With Folkways × Create, residents ride Create elevators. Build and power the

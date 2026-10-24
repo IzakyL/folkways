@@ -16,6 +16,7 @@ building a sixth mod.
 | `:create` → `mods/create`               | `folkways_create`        | Rail, dispatch, elevators, track joints and schematic hand-off                         |
 | `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | Golems as residents                                                                    |
 | `:cookery` → `mods/cookery`             | `folkways_cookery`       | Native Cookery farming, appliances, shared tools, Kaleidoscope Tavern wine and lessons |
+| `:firefighting` → `mods/firefighting`   | `folkways_firefighting`  | Damage control tools for Create: FireFighting Additions 0.2.5-beta-fix2                |
 
 ```mermaid
 flowchart BT
@@ -23,6 +24,8 @@ flowchart BT
     Create --> Vanilla
     ModularGolems[Modular Golems] --> Vanilla
     Cookery --> Vanilla
+    Firefighting --> Vanilla
+    Firefighting --> Create
 ```
 
 Core handles integrations needed to read an existing world correctly, such as

@@ -19,23 +19,26 @@ Complete the [development setup](../../CONTRIBUTING.md#development-setup) first.
 
 Choose a test owner and environment:
 
-| Command                                                                 | Scope                                                                        |
-| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `./gradlew runGameTestServer`                                           | Combined Core, Vanilla and Create tests in the base environment              |
-| `./gradlew -PcookeryTests=true runGameTestServer`                       | Combined tests with Cookery, including Core and Vanilla's `src/cookeryTest`  |
-| `./gradlew -PgameTestMod=core runGameTestServer`                        | Core-owned tests in the base environment; also accepts `vanilla` or `create` |
-| `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer`    | Core-owned tests with Cookery; also accepts `vanilla`                        |
-| `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer` | Cookery-owned tests with Cookery installed                                   |
+| Command                                                                           | Scope                                                                        |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `./gradlew runGameTestServer`                                                     | Combined Core, Vanilla and Create tests in the base environment              |
+| `./gradlew -PcookeryTests=true runGameTestServer`                                 | Combined tests with Cookery, including Core and Vanilla's `src/cookeryTest`  |
+| `./gradlew -PgameTestMod=core runGameTestServer`                                  | Core-owned tests in the base environment; also accepts `vanilla` or `create` |
+| `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer`              | Core-owned tests with Cookery; also accepts `vanilla`                        |
+| `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer`           | Cookery-owned tests with Cookery installed                                   |
+| `./gradlew runGameTestServer -PgameTestMod=firefighting -PfirefightingTests=true` | Portable extinguisher spray, fluid conservation, refill and interruption     |
 
 Ownership is separate from installed mods: selecting Core still loads Vanilla's
 residents and the integrations its scenarios require. Modular Golems is not
 loaded in these runs and has no GameTests. Core also runs the existing LDLib2
 dependency tests; other owners do not repeat them.
 
-Selected game directories are `run/gametest/<mod>/<base|cookery>/`. Combined runs
+Selected game directories are `run/gametest/<mod>/<base|cookery|firefighting>/`. Combined runs
 use `run/gametest/`. Before launching a server directly through Gradle, accept
 the [Minecraft EULA](https://www.minecraft.net/eula) in that directory's
 `eula.txt`. Only do so if you accept it.
+
+The optional `firefighting` Blockwright profile installs the pinned addon and integration. Run `npm run setup` after updating its jar or checksum. `-PfirefightingTests=true` without `gameTestMod` runs the whole suite with the addon loaded.
 
 ## Blockwright suites
 
