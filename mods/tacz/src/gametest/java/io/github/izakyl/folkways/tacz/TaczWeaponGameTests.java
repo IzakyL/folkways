@@ -346,11 +346,13 @@ public final class TaczWeaponGameTests {
         gun.setCurrentAmmoCount(stack, Math.max(0, count - 1)); gun.setBulletInBarrel(stack, count > 0);
         stack.set(DataComponents.CUSTOM_NAME, Component.literal("actual TACZ gun")); return stack;
     }
-    static Worker worker(ResidentEntity body) {
+    static Worker worker(ResidentEntity body) { return worker(body, List.of()); }
+    static Worker worker(ResidentEntity body, List<ItemStack> supplied) {
         return new Worker() {
             public Resident resident() { return body.resident(); }
             public Mob body() { return body; }
             public Container pack() { return body.pack(); }
+            public List<ItemStack> supplied() { return supplied; }
             public List<Store> within() { return List.of(); }
             public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
             public void spill(ItemStack stack) { body.spawnAtLocation(stack); }

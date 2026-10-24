@@ -38,6 +38,9 @@ final class TaczLoadouts implements LoadoutProvider {
             }).toList();
     }
     @Override public ItemSpec weapon(CompoundTag options) { return TaczGuns.weapon(gun(options)); }
+    @Override public boolean acceptsWeapon(ItemStack stack, CompoundTag options) {
+        return LoadoutProvider.super.acceptsWeapon(stack, options) && TaczGuns.supported(stack);
+    }
     @Override public List<Amount> ammunition(CompoundTag options) {
         return List.of(new Amount(TaczGuns.ammunition(TaczGuns.index(gun(options)).orElseThrow().getGunData().getAmmoId()), TaczConfig.rounds()));
     }
@@ -59,7 +62,9 @@ final class TaczLoadouts implements LoadoutProvider {
                 ? "folkways.tacz.missing_pack" : "folkways.tacz.unsupported");
         }
         ItemSpec gun = weapon(options);
-        Optional<ItemStack> stack = LoadoutRegistry.carried(body).stream().filter(item -> Goods.matches(item, gun)).findFirst();
+        List<ItemStack> carried = LoadoutRegistry.carried(body);
+        Optional<ItemStack> stack = carried.stream().filter(item -> acceptsWeapon(item, options)).findFirst()
+            .or(() -> carried.stream().filter(item -> Goods.matches(item, gun)).findFirst());
         if (stack.isEmpty()) { return Component.translatable("folkways.tacz.missing_pack"); }
         if (!TaczGuns.supported(stack.get())) { return Component.translatable("folkways.tacz.unsupported"); }
         long rounds = Goods.countIn(body.pack(), ammunition(options).getFirst().spec());

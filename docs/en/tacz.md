@@ -11,6 +11,8 @@ server's available equipment choices. Residents collect the matching physical
 gun and caliber from registered storage within 32 blocks. Giving a resident a
 gun by hand also infers its ammunition needs. Loaded magazines and chambers count
 toward the total. Guns are optional equipment, not mandatory patrol tools.
+Replenishment counts only usable physical guns, including when several variants
+share the same gun ID. Unusable copies cannot occupy the usable gun's retention allowance.
 Existing colonies keep their tool permissions: allow the TACZ gun item in the
 colony's tool settings before requesting a stored gun if it was not permitted.
 
@@ -29,8 +31,11 @@ Allied residents, players and colony pets crossing the firing corridor cause the
 resident to hold fire. Stray colony rounds stop on blocks without breaking glass
 or activating blocks. Explosive, incendiary, fuel, virtual/infinite ammunition,
 charge weapons and unknown gun scripts are unsupported. Conventional built-in
-reload and bolt scripts are allowed explicitly. Other resident body kinds are
-outside this version.
+reload and bolt scripts are allowed explicitly. Installed attachments and runtime
+bullet effects are checked too; explosive or incendiary conversions remain unavailable.
+Each script invocation may load only rounds it actually extracted from the pack or
+moved out of the magazine, so delayed reload updates cannot manufacture ammunition.
+Other resident body kinds are outside this version.
 
 The extension provides aiming arms for player skins and common Geo/maid arm bone
 names, plus a held item for those Geo arms. It does not provide TACZ player-only

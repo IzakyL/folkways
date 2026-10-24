@@ -144,6 +144,99 @@ public final class TaczSupplyGameTests {
             }).thenSucceed();
     }
 
+    @GameTest(batch = "tacz_native", template = "empty_large", timeoutTicks = 800)
+    public static void unusableCarriedAndStoredGunsDoNotHideTheAcceptedPhysicalGun(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        ResidentEntity body = scene.person(2);
+        body.pack().insert(virtualGun());
+        scene.store.setItem(0, virtualGun());
+        scene.store.setItem(1, TaczWeaponGameTests.gun("m1911", FireMode.SEMI, 2));
+        scene.store.setItem(2, TaczWeaponGameTests.ammo("45acp", 40));
+        scene.supplies.loadout(body, TaczLoadouts.selection(TaczWeaponGameTests.id("m1911")));
+        scene.guard(body); scene.run();
+        helper.startSequence().thenWaitUntil(() -> helper.assertValueEqual(scene.rounds(body), 32,
+                "unusable copies do not satisfy the requested equipment: " + scene.supplies.status(body.id())))
+            .thenExecute(() -> {
+                helper.assertTrue(scene.reached, "accepted gun is collected on site");
+                helper.assertValueEqual(scene.store.getItem(0).getCount(), 1, "virtual-ammo warehouse gun remains untouched");
+                helper.assertTrue(scene.store.getItem(1).isEmpty(), "ordinary warehouse gun is withdrawn");
+                helper.assertValueEqual(body.pack().count(ModItems.MODERN_KINETIC_GUN.get()), 2, "player-given unusable gun is preserved");
+                ItemStack accepted = LoadoutRegistry.carried(body).stream().filter(TaczGuns::supported).findFirst().orElseThrow();
+                var kept = scene.supplies.keeps(body);
+                helper.assertTrue(kept.stream().anyMatch(amount -> Goods.matches(accepted, amount.spec())), "accepted weapon is retained");
+                helper.assertFalse(kept.stream().anyMatch(amount -> Goods.matches(virtualGun(), amount.spec())), "unusable gun cannot take its retention allowance");
+                var session = io.github.izakyl.folkways.plugins.combat.weapon.Weapons.open(TaczWeaponGameTests.worker(body)).orElseThrow();
+                helper.assertTrue(TaczGuns.supported(body.getMainHandItem()), "selection equips the actual accepted gun");
+                session.close();
+            }).thenSucceed();
+    }
+
+    @GameTest(batch = "tacz_native", template = "empty_large", timeoutTicks = 250)
+    public static void onlyUnusableGunsReportAStockoutInsteadOfReady(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        ResidentEntity body = scene.person(2); body.pack().insert(virtualGun());
+        scene.store.setItem(0, virtualGun()); scene.store.setItem(1, TaczWeaponGameTests.ammo("45acp", 40));
+        scene.supplies.loadout(body, TaczLoadouts.selection(TaczWeaponGameTests.id("m1911")));
+        scene.guard(body); scene.run();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(scene.supplies.status(body.id()).state() == PatrolSupplies.State.NO_STOCK,
+                "unsupported physical copies remain a real weapon deficit"))
+            .thenIdle(30).thenExecute(() -> {
+                helper.assertValueEqual(scene.supplies.status(body.id()).state(), PatrolSupplies.State.NO_STOCK, "unusable equipment never reports ready");
+                helper.assertValueEqual(scene.store.getItem(0).getCount(), 1, "unusable stock was not collected");
+                helper.assertValueEqual(scene.stockRounds(), 40, "weapon deficit takes priority over ammunition");
+                helper.assertFalse(body.hasWeaponSession(), "no unusable gun is equipped");
+            }).thenSucceed();
+    }
+
+    @GameTest(batch = "tacz_native", template = "empty_large", timeoutTicks = 900)
+    public static void gunBecomingUnusableDuringTravelIsRecheckedBeforeWithdrawal(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        ResidentEntity body = scene.person(2);
+        scene.store.setItem(0, TaczWeaponGameTests.gun("m1911", FireMode.SEMI, 2));
+        scene.store.setItem(1, TaczWeaponGameTests.ammo("45acp", 40));
+        scene.supplies.loadout(body, TaczLoadouts.selection(TaczWeaponGameTests.id("m1911")));
+        scene.guard(body); scene.run();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(scene.supplies.status(body.id()).state() == PatrolSupplies.State.FETCHING,
+                "accepted gun creates a real supply trip"))
+            .thenExecute(() -> ((IGun) scene.store.getItem(0).getItem()).setDummyAmmoAmount(scene.store.getItem(0), 100))
+            .thenWaitUntil(() -> helper.assertTrue(scene.supplies.status(body.id()).state() == PatrolSupplies.State.NO_STOCK,
+                "arrival rejects equipment that changed after preview"))
+            .thenExecute(() -> {
+                helper.assertValueEqual(body.pack().count(ModItems.MODERN_KINETIC_GUN.get()), 0, "changed gun never leaves storage");
+                helper.assertValueEqual(scene.store.getItem(0).getCount(), 1, "failed collection keeps one actual gun");
+                scene.store.setItem(0, TaczWeaponGameTests.gun("m1911", FireMode.SEMI, 2));
+            }).thenWaitUntil(() -> helper.assertValueEqual(scene.rounds(body), 32, "fresh acceptable stock allows a bounded retry"))
+            .thenSucceed();
+    }
+
+    @GameTest(batch = "tacz_native", template = "empty_large")
+    public static void stagedGunBecomingUnusableCannotCommitAndRollsBackOnce(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        ResidentEntity body = scene.person(17);
+        scene.store.setItem(0, TaczWeaponGameTests.gun("m1911", FireMode.SEMI, 2));
+        scene.supplies.loadout(body, TaczLoadouts.selection(TaczWeaponGameTests.id("m1911"))); scene.guard(body);
+        var worker = TaczWeaponGameTests.worker(body);
+        var node = scene.supplies.urges(worker, scene.commands.current(body.id()), 0, 0).getFirst().take().get();
+        var staged = (io.github.izakyl.folkways.core.api.work.Staged) node;
+        var taken = (io.github.izakyl.folkways.core.api.work.Staged.Taken) staged.draw(helper.getLevel(), worker);
+        ItemStack actual = taken.goods().getFirst();
+        ((IGun) actual.getItem()).setDummyAmmoAmount(actual, 100);
+        var carrying = TaczWeaponGameTests.worker(body, taken.goods());
+        helper.assertTrue(node.commit(helper.getLevel(), carrying) instanceof io.github.izakyl.folkways.core.api.work.Outcome.Failed,
+            "settlement rechecks the physical item after extraction");
+        staged.restore(helper.getLevel(), carrying, taken.goods());
+        staged.restore(helper.getLevel(), carrying, taken.goods());
+        helper.assertValueEqual(scene.store.countItem(ModItems.MODERN_KINETIC_GUN.get()), 1, "rollback returns the actual changed gun exactly once");
+        helper.assertValueEqual(body.pack().count(ModItems.MODERN_KINETIC_GUN.get()), 0, "failed settlement never satisfies the loadout");
+        helper.succeed();
+    }
+
+    private static ItemStack virtualGun() {
+        ItemStack gun = TaczWeaponGameTests.gun("m1911", FireMode.SEMI, 2);
+        ((IGun) gun.getItem()).setDummyAmmoAmount(gun, 100);
+        return gun;
+    }
+
     static final class Scene implements GameTestListener {
         final GameTestHelper helper;
         final Colony colony;

@@ -48,7 +48,13 @@ public final class PatrolSupplies {
 
     public enum State { INACTIVE, READY, FETCHING, NO_STOCK, NO_ROOM, FAILED, CANCELLED, TIMED_OUT }
     public record Status(State state, String reason, long missing, Optional<WorldPos> source, long retryAt) { }
-    record Demand(ItemSpec goods, int target, boolean weapon) { }
+    record Demand(ItemSpec goods, int target, boolean weapon, Optional<LoadoutRegistry.Selection> loadout) {
+        Demand(ItemSpec goods, int target, boolean weapon) { this(goods, target, weapon, Optional.empty()); }
+        boolean matches(ItemStack stack) {
+            return Goods.matches(stack, goods) && (!weapon || loadout.map(selection -> selection.provider()
+                .map(provider -> provider.acceptsWeapon(stack, selection.options())).orElse(false)).orElse(true));
+        }
+    }
     record Authority(ResidentEntity body, ResidentCommands.Order order, long duty, long until, long revision) { }
 
     private final Colony colony;
@@ -157,7 +163,10 @@ public final class PatrolSupplies {
         if (selected == null || selected.provider().isEmpty()) { return List.of(); }
         LoadoutProvider provider = selected.provider().orElseThrow();
         List<Amount> kept = new ArrayList<>();
-        kept.add(new Amount(provider.weapon(selected.options()), 1));
+        ItemSpec retainedWeapon = LoadoutRegistry.carried(person).stream()
+            .filter(stack -> provider.acceptsWeapon(stack, selected.options())).findFirst().map(ItemSpec::exact)
+            .orElseGet(() -> provider.weapon(selected.options()));
+        kept.add(new Amount(retainedWeapon, 1));
         kept.addAll(provider.ammunition(selected.options()));
         return List.copyOf(kept);
     }
@@ -265,15 +274,19 @@ public final class PatrolSupplies {
                 take(free, claim.goods(), (int) Math.min(Integer.MAX_VALUE, claim.count()), false);
             }
         }
-        return take(free, demand.goods(), count, demand.weapon());
+        return take(free, demand, count);
     }
 
     private List<ItemStack> take(Container source, ItemSpec goods, int count, boolean weapon) {
+        return take(source, new Demand(goods, count, weapon), count);
+    }
+
+    private List<ItemStack> take(Container source, Demand demand, int count) {
         List<ItemStack> taken = new ArrayList<>();
         int left = count;
         while (left > 0) {
-            ItemStack stack = Containers.extract(source, item -> Goods.matches(item, goods)
-                && (!weapon || KitRules.allows(colony, item.getItem())), left);
+            ItemStack stack = Containers.extract(source, item -> demand.matches(item)
+                && (!demand.weapon() || KitRules.allows(colony, item.getItem())), left);
             if (stack.isEmpty()) { break; }
             taken.add(stack); left -= stack.getCount();
         }
@@ -300,7 +313,7 @@ public final class PatrolSupplies {
         LoadoutRegistry.Selection selected = selected(body);
         if (selected == null || selected.provider().isEmpty()) { return null; }
         LoadoutProvider provider = selected.provider().orElseThrow();
-        Demand arm = new Demand(provider.weapon(selected.options()), 1, true);
+        Demand arm = new Demand(provider.weapon(selected.options()), 1, true, Optional.of(selected));
         if (loadouts.containsKey(body.id()) && missing(body, arm) > 0) { return arm; }
         for (Amount ammunition : provider.ammunition(selected.options())) {
             Demand ammo = new Demand(ammunition.spec(), (int) ammunition.count(), false);
@@ -311,8 +324,7 @@ public final class PatrolSupplies {
     }
 
     int missing(ResidentEntity body, Demand demand) {
-        long carried = Goods.countIn(body.pack(), demand.goods());
-        if (body.hasWeaponSession() && Goods.matches(body.getMainHandItem(), demand.goods())) { carried += body.getMainHandItem().getCount(); }
+        long carried = LoadoutRegistry.carried(body).stream().filter(demand::matches).mapToLong(ItemStack::getCount).sum();
         if (!demand.weapon()) {
             for (ItemStack weapon : LoadoutRegistry.carried(body)) {
                 carried += LoadoutRegistry.infer(List.of(weapon)).flatMap(LoadoutRegistry.Selection::provider)
@@ -323,7 +335,7 @@ public final class PatrolSupplies {
     }
 
     static boolean prefers(LoadoutRegistry.Selection loadout, ItemStack stack) {
-        return loadout.provider().map(provider -> Goods.matches(stack, provider.weapon(loadout.options()))).orElse(false);
+        return loadout.provider().map(provider -> provider.acceptsWeapon(stack, loadout.options())).orElse(false);
     }
 
     public net.minecraft.network.chat.Component detail(ResidentEntity body) {
