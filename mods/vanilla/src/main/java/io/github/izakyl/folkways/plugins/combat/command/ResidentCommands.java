@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.combat.command;
 
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.Reach;
@@ -10,6 +11,7 @@ import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,12 +19,14 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
 /** Server-side orders executed exclusively by Core's existing labour runner. */
 public final class ResidentCommands {
+    private static final String MOUNT = "folkways:command_mount";
 
     public enum Mode { MOVE, HOLD, RETREAT, GUARD }
     public enum Status { MOVING, HOLDING, ARRIVED, RELEASED, FAILED }
@@ -77,12 +81,17 @@ public final class ResidentCommands {
             dismount();
             if (!body.mob().startRiding(vehicle)) { return false; }
             mount = vehicle;
+            CompoundTag loan = new CompoundTag();
+            loan.putInt("version", 1); loan.putUUID("vehicle", vehicle.getUUID()); loan.putUUID("order", id);
+            body.mob().getPersistentData().put(MOUNT, loan);
             return true;
         }
         public boolean operating() { return mount != null && body.mob().getVehicle() == mount; }
         public void dismount() {
             requireServerThread();
             if (operating()) { body.mob().stopRiding(); }
+            net.minecraft.nbt.CompoundTag loan = body.mob().getPersistentData().getCompound(MOUNT);
+            if (loan.hasUUID("order") && loan.getUUID("order").equals(id)) { body.mob().getPersistentData().remove(MOUNT); }
             mount = null;
         }
         public void close() { release(this); }
@@ -140,7 +149,7 @@ public final class ResidentCommands {
 
     private Order issue(Body body, WorldPos destination, Mode mode, Optional<Vec3> facing) {
         validate(body, destination);
-        if (body.mob() instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person) { person.stopWeaponSession(); }
+        if (body.mob() instanceof ResidentEntity person) { person.stopWeaponSession(); }
         Order next = new Order(body, destination, mode, facing);
         Order previous = active.put(body.id(), next);
         if (previous != null) { previous.dismount(); previous.status = Status.RELEASED; }
@@ -150,7 +159,7 @@ public final class ResidentCommands {
     public void release(Order order) {
         requireServerThread();
         if (active.remove(order.resident(), order)) {
-            if (order.body.mob() instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person) { person.stopWeaponSession(); }
+            if (order.body.mob() instanceof ResidentEntity person) { person.stopWeaponSession(); }
             order.dismount();
             order.status = Status.RELEASED;
         }
@@ -160,7 +169,7 @@ public final class ResidentCommands {
         requireServerThread();
         Order order = active.remove(resident);
         if (order != null) {
-            if (order.body.mob() instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person) { person.stopWeaponSession(); }
+            if (order.body.mob() instanceof ResidentEntity person) { person.stopWeaponSession(); }
             order.dismount();
             order.status = Status.RELEASED;
         }
@@ -242,6 +251,20 @@ public final class ResidentCommands {
             && (!body.mob().isPassenger() || Optional.ofNullable(active.get(body.id())).filter(Order::operating).isPresent())
             && body.colonyId().filter(colony.id()::equals).isPresent()
             && colony.holdingOf(body.id()).isPresent();
+    }
+
+    /** Unmarked older saves retain their ordinary riding behavior; a saved command loan never resumes. */
+    static void restoreMount(ResidentEntity body) {
+        if (!(body.level() instanceof ServerLevel level) || !body.getPersistentData().contains(MOUNT)) { return; }
+        var loan = body.getPersistentData().getCompound(MOUNT);
+        var order = body.colonyId().flatMap(id -> Colonies.of(level.getServer(), id))
+            .flatMap(colony -> colony.service(CommandContent.ID, ResidentCommands.class)).flatMap(commands -> commands.current(body.id()));
+        if (order.filter(current -> current.boundTo(body) && current.operating() && loan.hasUUID("order")
+                && current.id().equals(loan.getUUID("order"))).isPresent()) { return; }
+        if (body.getVehicle() != null && loan.hasUUID("vehicle") && body.getVehicle().getUUID().equals(loan.getUUID("vehicle"))) {
+            body.stopRiding();
+        }
+        body.getPersistentData().remove(MOUNT);
     }
 
     private void requireServerThread() {

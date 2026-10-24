@@ -9,11 +9,13 @@ import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
+import net.neoforged.neoforge.event.tick.EntityTickEvent;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID)
 public final class CommandContent {
@@ -33,6 +35,14 @@ public final class CommandContent {
             scope.tick(commands::tick);
             scope.closed(why -> commands.clear());
         });
+    }
+
+    @SubscribeEvent
+    public static void ticked(EntityTickEvent.Post event) {
+        // Passengers have been attached by the time their first entity tick runs.
+        if (event.getEntity() instanceof ResidentEntity body) {
+            ResidentCommands.restoreMount(body);
+        }
     }
 
     @SubscribeEvent

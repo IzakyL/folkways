@@ -376,6 +376,31 @@ public final class ResidentCommandGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void restoredCommandSeatSnapshotsReleaseTheirStaleLoanAfterPassengersLoad(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body original = f.resident(new BlockPos(2, 1, 2)); original.mob().setNoAi(true);
+        var seat = EntityType.BOAT.create(f.level); seat.moveTo(original.mob().position()); f.level.addFreshEntity(seat);
+        ResidentCommands.Order guard = f.commands.guard(original, f.at(2, 1, 2), new Vec3(1, 0, 0));
+        helper.assertTrue(guard.mount(seat), "the command owns the original seat");
+        CompoundTag snapshot = new CompoundTag();
+        helper.assertTrue(seat.save(snapshot), "save the running vehicle and all of its passengers");
+        original.mob().remove(Entity.RemovalReason.UNLOADED_TO_CHUNK); seat.discard();
+        Entity restored = EntityType.loadEntityRecursive(snapshot, f.level, entity -> entity);
+        Body passenger = (Body) restored.getFirstPassenger();
+        f.bodies.add(passenger); f.level.addFreshEntityWithPassengers(restored);
+        helper.assertTrue(passenger.mob().getVehicle() == restored, "the snapshot restores the riding relation before cleanup");
+        helper.assertTrue(f.commands.current(passenger.id()).isEmpty(), "the in-memory order was not restored");
+        helper.runAfterDelay(5, () -> {
+            try {
+                helper.assertFalse(passenger.mob().isPassenger(), "the saved loan marker releases an orphaned mount");
+                ResidentCommands.Order retreat = f.commands.retreat(passenger, f.at(3, 1, 2));
+                helper.assertTrue(retreat.status() == ResidentCommands.Status.MOVING, "a restored operator accepts new commands");
+            } finally { restored.discard(); }
+            helper.succeed();
+        });
+    }
+
     private static final class Job implements Node {
         final AtomicBoolean working = new AtomicBoolean();
         final AtomicBoolean finish = new AtomicBoolean();
