@@ -78,3 +78,15 @@ Core 的 `src/gameTestFixtures` 提供不注册测试的共享辅助代码，因
 筛选参数和 CI 环境见[测试指南](testing.md)。
 
 [Folkways × 卓越前线](warfare.md) 在 `mods/warfare` 中适配 SBW 枪械与炮位；装备方案注册、补给和命令座位归属留在 Vanilla。
+
+## 可选枪械装备
+
+Vanilla 负责 `LoadoutRegistry` / `LoadoutProvider`、战斗页和实际补给往返。
+扩展以稳定 ID 注册不可变的 `Selection` 选项、武器物品需求、备弹目标、低水位、装弹计数和界面选项。
+`LoadoutProvider.acceptsWeapon(stack, options)` 默认使用原有物品匹配，既有实现无需修改。
+扩展可以覆写此方法，在库存预览、领取、结算和缺额统计时统一筛选可用实物。
+背包保留名额按已携带的可用武器的完整组件身份计算。
+旧版 `MELEE/BOW/CROSSBOW` 偏好会迁移为 `folkways:melee/bow/crossbow`。
+未安装的扩展 ID 和选项仍会保存，但暂不启用。
+`WeaponSession.continuousEngagement()` 默认关闭；启用后，`StrikeNode` 在交战期间保留主手借用。
+替换或解除命令会立即关闭会话。`WeaponAdapter` 的默认重载允许按选中的实物计算射程并开启会话。

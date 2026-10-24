@@ -89,3 +89,18 @@ Core's tests. Selecting a GameTest owner does not remove the other runtime mods
 its scenarios need. See [Testing](testing.md) for selection flags and CI profiles.
 
 [Folkways × Superb Warfare](warfare.md) owns SBW weapon and emplacement APIs under `mods/warfare`; loadout registration, supply and mount ownership stay in Vanilla.
+
+## Optional firearm loadouts
+
+Vanilla owns `LoadoutRegistry` / `LoadoutProvider`, the combat page and physical
+supply trips. Providers register stable IDs and immutable `Selection` options,
+weapon goods, ammunition targets, low water marks, loaded counts and UI choices.
+`LoadoutProvider.acceptsWeapon(stack, options)` defaults to the existing goods
+match, so existing providers remain compatible. Overrides refine physical variant
+acceptance during stock preview, withdrawal, settlement and deficit counting.
+The accepted carried weapon's exact components determine its retention allowance.
+Version-one `MELEE/BOW/CROSSBOW` preferences migrate to `folkways:melee/bow/crossbow`.
+Unknown extension IDs and options remain saved but inactive while their mod is absent.
+`WeaponSession.continuousEngagement()` defaults to false. Opting in retains the
+hand loan within `StrikeNode`; replacing or releasing an order closes it immediately.
+`WeaponAdapter` can open and range the exact selected stack through its default overloads.

@@ -103,7 +103,7 @@ final class PatrolSupplyNode implements Node, Staged {
                 long before = sameCount(borrowed, wanted);
                 ItemStack actual;
                 try {
-                    actual = Containers.extract(borrowed, stack -> ItemStack.isSameItemSameComponents(stack, wanted), wanted.getCount());
+                    actual = Containers.extract(borrowed, stack -> demand.matches(stack) && ItemStack.isSameItemSameComponents(stack, wanted), wanted.getCount());
                 } catch (RuntimeException | LinkageError broken) {
                     // removeItem/setChanged can throw after the physical mutation but before returning
                     // its stack. The missing component-identical units still belong to this transaction.
@@ -129,7 +129,7 @@ final class PatrolSupplyNode implements Node, Staged {
     @Override
     public Outcome commit(ServerLevel level, Worker who) {
         if (!ready(level) || borrowed == null || who.body() != authority.body() || who.pack() != authority.body().pack()
-                || !withinReach(level) || supplies.source(level, source).isEmpty()) {
+                || !withinReach(level) || supplies.source(level, source).isEmpty() || who.supplied().stream().anyMatch(stack -> !demand.matches(stack))) {
             failure = PatrolSupplies.State.CANCELLED;
             return Outcome.failed(LaborRefusal.GOODS_GONE);
         }
