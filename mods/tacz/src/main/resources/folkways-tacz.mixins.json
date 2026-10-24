@@ -3,6 +3,6 @@
   "minVersion": "0.8",
   "package": "io.github.izakyl.folkways.tacz.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["ModernKineticGunScriptMixin", "KineticBulletAccessor"],
+  "mixins": ["ModernKineticGunScriptMixin", "KineticBulletAccessor", "GunScriptAmmoMixin"],
   "injectors": { "defaultRequire": 1 }
 }
