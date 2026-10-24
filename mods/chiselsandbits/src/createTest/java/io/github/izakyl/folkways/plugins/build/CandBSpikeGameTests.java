@@ -24,6 +24,7 @@ import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -132,9 +133,30 @@ public final class CandBSpikeGameTests {
         printPair(helper, Rotation.CLOCKWISE_90, Mirror.FRONT_BACK);
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 240)
+    public static void aHundredBitsFromOneChestMatchTheResidentCharge(GameTestHelper helper) throws Exception {
+        printPair(helper, Rotation.NONE, Mirror.NONE, hundredBits(), 1);
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 240)
+    public static void aHundredBitsAcrossTwoChestsMatchTheResidentCharge(GameTestHelper helper) throws Exception {
+        printPair(helper, Rotation.NONE, Mirror.NONE, hundredBits(), 2);
+    }
+
+    private static mod.chiselsandbits.api.block.storage.StateEntryStorage hundredBits() {
+        var storage = new mod.chiselsandbits.api.block.storage.StateEntryStorage();
+        for (int bit = 0; bit < 100; bit++) storage.setBlockInformation(bit % 16, bit / 16, 0,
+            new mod.chiselsandbits.api.blockinformation.BlockInformation(Blocks.STONE.defaultBlockState(), java.util.Optional.empty()));
+        return storage;
+    }
+
     private static void printPair(GameTestHelper helper, Rotation rotation, Mirror mirror) throws Exception {
+        printPair(helper, rotation, mirror, sculpture(), 1);
+    }
+
+    private static void printPair(GameTestHelper helper, Rotation rotation, Mirror mirror,
+            mod.chiselsandbits.api.block.storage.StateEntryStorage storage, int containers) throws Exception {
         var level = helper.getLevel();
-        var storage = sculpture();
         var turned = storage.createSnapshot();
         CandBStructureCodec.turn(turned, mirror, rotation);
         CompoundTag data = CandBStructureCodec.encode(storage);
@@ -151,20 +173,32 @@ public final class CandBSpikeGameTests {
         var fixture = new PlanningFixture(helper, 4);
         fixture.worker.body().setPos(residentPos.getX() + 2.5, residentPos.getY(), residentPos.getZ() + 0.5);
         List<ItemStack> bits = CandBMaterials.of(storage);
-        for (int i = 0; i < bits.size(); i++) fixture.worker.pack().setItem(i, bits.get(i).copy());
+        List<ItemStack> supplied = new ArrayList<>();
+        for (ItemStack bit : bits) {
+            int count = bit.getCount();
+            while (count > 0) {
+                supplied.add(bit.copyWithCount(Math.min(bit.getMaxStackSize(), count)));
+                count -= supplied.getLast().getCount();
+            }
+        }
+        int remainder = bits.size() == 1 && bits.getFirst().getCount() == 100 ? 28 : 0;
+        if (remainder != 0) supplied.getLast().grow(remainder);
+        for (int i = 0; i < supplied.size(); i++) fixture.worker.pack().setItem(i, supplied.get(i).copy());
         BuildTarget target = new BuildTarget(WorldPos.of(level, residentPos).realm(), Map.of(residentPos, state()),
             Set.of(), List.of(), BlockPos.ZERO, Map.of(residentPos, resolved.blocks().getFirst().data()));
         Node node = BuildNode.of(Step.lay(level, new Footprint(residentPos, Map.of(residentPos, state())))
             .job(level, target, Stances.at(level, residentPos.east(2))), (done, how) -> { }, new TemporaryScaffolds(() -> { }));
         helper.assertTrue(Commit.run(level, node, fixture.worker) instanceof Outcome.Done, "resident commits its normal build node");
-        helper.assertTrue(fixture.worker.pack().isEmpty(), "resident consumes exactly seven supplied bits");
+        int residentRemaining = java.util.stream.IntStream.range(0, fixture.worker.pack().getContainerSize())
+            .map(slot -> fixture.worker.pack().getItem(slot).getCount()).sum();
+        helper.assertValueEqual(residentRemaining, remainder, "resident consumes the decoded total and leaves excess bits");
         fixture.worker.body().discard();
 
         String file = "folkways-spike-" + UUID.randomUUID() + ".nbt";
         Path directory = CreatePaths.UPLOADED_SCHEMATICS_DIR.resolve("folkways-tests");
         Files.createDirectories(directory);
         Path path = directory.resolve(file);
-        CandBTestData.sameVoxels(helper, sculpture(), CandBStructureCodec.decode(data), "raw source before save");
+        CandBTestData.sameVoxels(helper, storage, CandBStructureCodec.decode(data), "raw source before save");
         NbtIo.writeCompressed(structure(data), path);
         ItemStack schematic = SchematicItem.create(level, file, "folkways-tests");
         schematic.set(AllDataComponents.SCHEMATIC_DEPLOYED, true);
@@ -187,10 +221,16 @@ public final class CandBSpikeGameTests {
         cannon.state = SchematicannonBlockEntity.State.RUNNING;
         level.setBlock(cannonPos.west(), Blocks.CHEST.defaultBlockState(), Block.UPDATE_ALL);
         var stock = (net.minecraft.world.Container) level.getBlockEntity(cannonPos.west());
-        for (int i = 0; i < bits.size(); i++) stock.setItem(i, bits.get(i).copy());
+        List<net.minecraft.world.Container> stocks = new ArrayList<>(List.of(stock));
+        if (containers == 2) {
+            level.setBlock(cannonPos.east(), Blocks.CHEST.defaultBlockState(), Block.UPDATE_ALL);
+            stocks.add((net.minecraft.world.Container) level.getBlockEntity(cannonPos.east()));
+        }
+        for (int i = 0; i < supplied.size(); i++) stocks.get(i % containers).setItem(i / containers, supplied.get(i).copy());
         cannon.findInventories();
         cannon.neighbourCheckCooldown = 1000;
         helper.succeedWhen(() -> {
+            cannon.saveWithFullMetadata(level.registryAccess());
             helper.assertTrue(level.getBlockEntity(printedPos) instanceof ChiseledBlockEntity,
                 "real cannon projectile reaches its target: " + cannon.statusMsg + " missing=" + cannon.missingItem
                     + " inventories=" + cannon.attachedInventories.size() + " stock=" + stock.getItem(0));
@@ -204,8 +244,9 @@ public final class CandBSpikeGameTests {
             CandBTestData.sameVoxels(helper, turned, printed.payload().storage(), "final cannon print");
             helper.assertValueEqual(printed.createSnapshot().createNewShapeIdentifier(),
                 resident.createSnapshot().createNewShapeIdentifier(), "same voxel layout after real placement");
-            helper.assertTrue(stock.getItem(0).isEmpty() && stock.getItem(1).isEmpty(),
-                "cannon consumes exactly the same material bits");
+            int cannonRemaining = stocks.stream().mapToInt(container -> java.util.stream.IntStream
+                .range(0, container.getContainerSize()).map(slot -> container.getItem(slot).getCount()).sum()).sum();
+            helper.assertValueEqual(cannonRemaining, residentRemaining, "cannon consumes exactly the same material bits");
             try { Files.deleteIfExists(path); } catch (java.io.IOException failure) { throw new IllegalStateException(failure); }
         });
     }

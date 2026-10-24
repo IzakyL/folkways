@@ -29,8 +29,7 @@ final class CreateBridge {
                     try {
                         List<ItemRequirement.StackRequirement> bits = CandBMaterials.of(
                             CandBSchematicBridge.checked(entity).payload().storage()).stream()
-                            .<ItemRequirement.StackRequirement>map(stack -> new ItemRequirement.StrictNbtStackRequirement(
-                                stack, ItemRequirement.ItemUseType.CONSUME)).toList();
+                            .<ItemRequirement.StackRequirement>map(BitRequirement::new).toList();
                         return new ItemRequirement(bits);
                     } catch (RuntimeException invalid) {
                         return refused();

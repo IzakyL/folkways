@@ -7,7 +7,7 @@ import java.util.Set;
 public final class CandBMixinPlugin extends FolkwaysMixinPlugin {
     @Override
     protected Set<String> createOnly() {
-        return Set.of("SchematicPrinterMixin");
+        return Set.of("SchematicPrinterMixin", "SchematicannonMixin");
     }
 
     @Override
