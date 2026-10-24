@@ -468,22 +468,28 @@ final class BuildPresence implements Facing {
 
     @Nullable
     private BuildSite openCompatible(ServerLevel level, BlueprintBuildOrder order) {
-        Optional<Blueprint> drawing = cancelled.contains(order.id()) ? Optional.empty() : book.target(level, order.blueprintId());
-        BuildTarget target = cancelled.contains(order.id()) || drawing.isEmpty()
-            ? new BuildTarget(order.anchor().realm(), Map.of())
-            : BuildTarget.of(order, drawing.get()).in(level);
-        if (!loaded(level, target)) {
-            return null;
+        try (var processing = StructureCompat.processing()) {
+            Optional<Blueprint> drawing = cancelled.contains(order.id()) ? Optional.empty() : book.target(level, order.blueprintId());
+            drawing.ifPresent(blueprint -> {
+                for (BlueprintBlock block : blueprint.blocks()) StructureCompat.inspect(block.state(),
+                    new io.github.izakyl.folkways.core.api.structure.StructurePayload(block.data().tag()));
+            });
+            BuildTarget target = cancelled.contains(order.id()) || drawing.isEmpty()
+                ? new BuildTarget(order.anchor().realm(), Map.of())
+                : BuildTarget.of(order, drawing.get()).in(level);
+            if (!loaded(level, target)) {
+                return null;
+            }
+            var workArea = growing.values().stream().filter(one -> one.order().filter(order.id()::equals).isPresent())
+                .map(one -> one.growth().reach().moved(one.hint().anchor().getX(), one.hint().anchor().getY(),
+                    one.hint().anchor().getZ())).findFirst().orElse(null);
+            BuildSite site = new BuildSite(order.id(), asks, target, scaffoldsOf(order.id()), workArea);
+            sites.put(order.id(), site);
+            site.start(level, met.getOrDefault(order.id(), Set.of()), joined.getOrDefault(order.id(), Set.of()));
+            untallied.add(order.id());
+            tallyOne(level, order, site);
+            return site;
         }
-        var workArea = growing.values().stream().filter(one -> one.order().filter(order.id()::equals).isPresent())
-            .map(one -> one.growth().reach().moved(one.hint().anchor().getX(), one.hint().anchor().getY(),
-                one.hint().anchor().getZ())).findFirst().orElse(null);
-        BuildSite site = new BuildSite(order.id(), asks, target, scaffoldsOf(order.id()), workArea);
-        sites.put(order.id(), site);
-        site.start(level, met.getOrDefault(order.id(), Set.of()), joined.getOrDefault(order.id(), Set.of()));
-        untallied.add(order.id());
-        tallyOne(level, order, site);
-        return site;
     }
 
     private static boolean loaded(ServerLevel level, BuildTarget target) {
@@ -572,16 +578,30 @@ final class BuildPresence implements Facing {
 
     @Override
     public List<Ghost> ghosts(ColonyView view) {
+        return ghosts(view, 2048, BlockPos.ZERO);
+    }
+
+    @Override
+    public List<Ghost> ghosts(ColonyView view, int most, BlockPos near) {
         ServerLevel level = view.level();
         List<Ghost> owed = new ArrayList<>();
-        for (BlueprintBuildOrder order : book.allBuildOrders()) {
-            if (cancelled.contains(order.id()) || !order.anchor().in(level)) {
-                continue;
+        int payloadBytes = 256 * 1024;
+        try (var processing = StructureCompat.processing()) {
+            for (BlueprintBuildOrder order : book.allBuildOrders()) {
+                if (owed.size() >= most) break;
+                if (cancelled.contains(order.id()) || !order.anchor().in(level)) {
+                    continue;
+                }
+                BuildSite site = sites.get(order.id());
+                if (site != null) {
+                    var nearby = BuildOrderView.pending(level, site.target(), site.metCells(), site.metJoints(),
+                        most - owed.size(), near, payloadBytes);
+                    for (Ghost ghost : nearby) payloadBytes -= ghost.payload().bytes();
+                    owed.addAll(nearby);
+                }
             }
-            BuildSite site = sites.get(order.id());
-            if (site != null) {
-                owed.addAll(BuildOrderView.pending(level, site.target(), site.metCells(), site.metJoints()));
-            }
+        } catch (StructureCompat.Failure limited) {
+            // A preview never restarts the budget to finish farther-away orders.
         }
         return List.copyOf(owed);
     }

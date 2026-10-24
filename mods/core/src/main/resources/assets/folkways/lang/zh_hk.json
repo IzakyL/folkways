@@ -1213,5 +1213,6 @@
   "folkways.blueprints.capture.hint": "把圈地內的方塊存入伺服器的藍圖庫和範本庫。新檔案名稱使用小寫字母、數字或底線。",
   "folkways.blueprints.capture.name_invalid": "檔案名稱使用小寫字母、數字或底線。",
   "folkways.blueprints.capture.saved": "已儲存藍圖和範本：%s",
-  "folkways.blueprints.capture.failed": "未能儲存。把圈地縮小至已載入的範圍，並換一個未用過的檔案名稱。"
+  "folkways.blueprints.capture.failed": "未能儲存。把圈地縮小至已載入的範圍，並換一個未用過的檔案名稱。",
+  "folkways.refusal.build.structure_budget": "這份藍圖一次處理的內容過多，拆成較小的藍圖後再用。"
 }

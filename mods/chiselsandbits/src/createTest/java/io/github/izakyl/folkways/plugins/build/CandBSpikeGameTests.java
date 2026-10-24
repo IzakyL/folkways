@@ -228,6 +228,7 @@ public final class CandBSpikeGameTests {
         }
         for (int i = 0; i < supplied.size(); i++) stocks.get(i % containers).setItem(i / containers, supplied.get(i).copy());
         cannon.findInventories();
+        helper.assertValueEqual(cannon.attachedInventories.size(), containers, "the requested number of stock containers");
         cannon.neighbourCheckCooldown = 1000;
         helper.succeedWhen(() -> {
             cannon.saveWithFullMetadata(level.registryAccess());
@@ -278,6 +279,51 @@ public final class CandBSpikeGameTests {
                 && cannon.statusMsg.equals("schematicErrored"), "bad data refuses the actual cannon before any shot");
             helper.assertTrue(cannon.flyingBlocks.isEmpty() && level.getBlockState(target).isAir(), "no free creative print");
         } finally {
+            Files.deleteIfExists(path);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 40)
+    public static void aWholeBlueprintBudgetStopsTheRealCannonBeforeAnyShot(GameTestHelper helper) throws Exception {
+        var level = helper.getLevel();
+        BlockPos at = helper.absolutePos(new BlockPos(2, 2, 2));
+        var file = structure(CandBStructureCodec.encode(sculpture()));
+        var size = new net.minecraft.nbt.ListTag();
+        size.add(net.minecraft.nbt.IntTag.valueOf(2));
+        size.add(net.minecraft.nbt.IntTag.valueOf(1));
+        size.add(net.minecraft.nbt.IntTag.valueOf(1));
+        file.put("size", size);
+        var cells = file.getList("blocks", net.minecraft.nbt.Tag.TAG_COMPOUND);
+        var second = cells.getCompound(0).copy();
+        second.getList("pos", net.minecraft.nbt.Tag.TAG_INT).set(0, net.minecraft.nbt.IntTag.valueOf(1));
+        cells.add(second);
+        String name = "folkways-budget-" + UUID.randomUUID() + ".nbt";
+        Path directory = CreatePaths.UPLOADED_SCHEMATICS_DIR.resolve("folkways-tests");
+        Files.createDirectories(directory);
+        Path path = directory.resolve(name);
+        int limit = io.github.izakyl.folkways.chiselsandbits.CandBConfig.BLUEPRINT_READS.get();
+        try {
+            NbtIo.writeCompressed(file, path);
+            ItemStack schematic = SchematicItem.create(level, name, "folkways-tests");
+            schematic.set(AllDataComponents.SCHEMATIC_DEPLOYED, true);
+            schematic.set(AllDataComponents.SCHEMATIC_ANCHOR, at.offset(4, 0, 4));
+            var registry = net.minecraft.core.registries.BuiltInRegistries.BLOCK;
+            level.setBlock(at, registry.get(net.minecraft.resources.ResourceLocation.parse("create:schematicannon"))
+                .defaultBlockState(), Block.UPDATE_ALL);
+            level.setBlock(at.west(), registry.get(net.minecraft.resources.ResourceLocation.parse("create:creative_crate"))
+                .defaultBlockState(), Block.UPDATE_ALL);
+            var cannon = (SchematicannonBlockEntity) level.getBlockEntity(at);
+            cannon.inventory.setStackInSlot(0, schematic);
+            cannon.state = SchematicannonBlockEntity.State.RUNNING;
+            io.github.izakyl.folkways.chiselsandbits.CandBConfig.BLUEPRINT_READS.set(1);
+            cannon.tick();
+            helper.assertTrue(cannon.printer.isErrored() || cannon.statusMsg.equals("schematicErrored"),
+                "the real printer refuses the whole operation");
+            helper.assertTrue(cannon.flyingBlocks.isEmpty() && level.getBlockState(at.offset(4, 0, 4)).isAir(),
+                "the excessive blueprint never launches a free shot");
+        } finally {
+            io.github.izakyl.folkways.chiselsandbits.CandBConfig.BLUEPRINT_READS.set(limit);
             Files.deleteIfExists(path);
         }
         helper.succeed();

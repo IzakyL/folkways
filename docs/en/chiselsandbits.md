@@ -43,6 +43,9 @@ Uploaded cached statistics never determine the charge.
 The sidebar lists bit materials separately. Planning, reservations, hauling and
 consumption retain the component identities. Missing one material prevents the
 shot and restores any goods already drawn for that attempt.
+The cannon draws the outstanding amount across slots and containers, including
+requirements above one stack; two stacks of 64 can pay for 100 bits and leave 28.
+Its projectile and missing-material icons remain ordinary, persistable stacks.
 
 The schematicannon's state-only completion rule remains: a cell already containing
 the target block state is skipped, even if its carving differs. Remove the old
@@ -73,14 +76,30 @@ or sending world updates. Its safe writer compensates for C&B's additional half
 turn in `setPlacedBy` when the cannon supplies no player. Marked schematic placement
 also decodes synchronously inside the existing placement call. Statistics are
 recomputed with primary-state world changes suppressed during the read.
+Ordinary chunk restoration keeps C&B's queued loading path. If a synchronous
+schematic entity later joins a real level, its statistics are rebuilt then before
+the attachment returns, so the carving is not treated as empty.
 A corrupt schematic is marked errored before a real cannon can print it, including
 when a creative crate bypasses material checks.
 
 `folkways_chiselsandbits-server.toml` limits decompressed bytes, distinct materials
-and processing time per cell. Defaults are 1 MiB, 256 materials and 1000 ms.
+and processing time per cell, including decompression and NBT reads. Defaults are
+1 MiB, 256 materials and 1000 ms. Legacy `data` / `compressed` wrappers are unfolded
+up to sixteen layers with one shared decompression/allocation limit.
+
+The whole capture, confirmation, template drawing, material quote or cannon load
+also shares `blueprintReads` (4096 voxel read/count operations), `blueprintBytes`
+(16 MiB) and `blueprintMillis` (500 ms). Nested calls share that budget; cache hits
+still count towards read and decoded-byte limits. Excessive orders stay pending
+with a refusal instead of being partly confirmed. A private snapshot and its
+verified material counts are reused in a cache bounded to 128 entries and an
+estimated 16 MiB; mutating an entity invalidates its remembered counts.
+
 Palette indices are checked before counting. Existing structure volume and upload
-limits still apply. Colony ghost packets budget 256 KiB of payloads; nearby ghosts
-are retained within that limit.
+limits still apply. Colony previews select nearby candidates and apply both the
+requested count and 256 KiB payload limit before quoting their materials. All
+orders in one preview share the processing budget, and retain only the checked
+nearby ghosts when that budget runs out.
 
 C&B 21.1.33 bundles Saecularia Core with `FMLModType: MOD` but no mod descriptor,
 causing [upstream issue #1343](https://github.com/ChiselsAndBits/Chisels-and-Bits/issues/1343).

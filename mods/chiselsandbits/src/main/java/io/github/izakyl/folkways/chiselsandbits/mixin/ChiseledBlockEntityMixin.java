@@ -1,10 +1,12 @@
 package io.github.izakyl.folkways.chiselsandbits.mixin;
 
-import io.github.izakyl.folkways.chiselsandbits.CandBStructureCodec;
 import io.github.izakyl.folkways.chiselsandbits.CandBSchematicBridge;
+import io.github.izakyl.folkways.chiselsandbits.CandBStructureCodec;
 import io.github.izakyl.folkways.chiselsandbits.SchematicBits;
 import io.github.izakyl.folkways.chiselsandbits.SchematicStatistics;
+import java.util.Map;
 import mod.chiselsandbits.api.block.storage.StateEntryStorage;
+import mod.chiselsandbits.api.blockinformation.BlockInformation;
 import mod.chiselsandbits.block.entities.ChiseledBlockEntity;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -37,6 +39,7 @@ abstract class ChiseledBlockEntityMixin extends BlockEntity implements Schematic
     @Shadow private Tag lastTag;
     @Unique private boolean folkways$valid;
     @Unique private boolean folkways$pendingStatistics;
+    @Unique private Map<BlockInformation, Integer> folkways$counts = Map.of();
 
     @Inject(method = "setLevel", at = @At("RETURN"))
     private void folkways$finishStatistics(net.minecraft.world.level.Level level, CallbackInfo ci) {
@@ -52,6 +55,8 @@ abstract class ChiseledBlockEntityMixin extends BlockEntity implements Schematic
     private void folkways$noSchematicUpdates(CallbackInfo ci) {
         if (getLevel() != null && CandBSchematicBridge.schematic(getLevel())) {
             ci.cancel();
+        } else {
+            folkways$counts = Map.of();
         }
     }
 
@@ -70,6 +75,11 @@ abstract class ChiseledBlockEntityMixin extends BlockEntity implements Schematic
         return folkways$valid;
     }
 
+    @Override
+    public Map<BlockInformation, Integer> folkways$counts() {
+        return folkways$counts;
+    }
+
     @Inject(method = "loadAdditional", at = @At("HEAD"), cancellable = true)
     private void folkways$readSchematic(CompoundTag tag, HolderLookup.Provider registries, CallbackInfo ci) {
         BlockEntity self = (BlockEntity) (Object) this;
@@ -78,8 +88,11 @@ abstract class ChiseledBlockEntityMixin extends BlockEntity implements Schematic
             return;
         }
         folkways$valid = false;
+        folkways$counts = Map.of();
         try {
-            storage = CandBStructureCodec.decode(tag);
+            var decoded = CandBStructureCodec.validated(tag);
+            storage = decoded.storage();
+            folkways$counts = decoded.counts();
             var empty = new ChiseledBlockEntity(self.getBlockPos(), self.getBlockState()).payload();
             if (self.getLevel() != null && !CandBSchematicBridge.schematic(self.getLevel())) {
                 ((SchematicStatistics) (Object) empty.mutableStatistics())
@@ -87,9 +100,10 @@ abstract class ChiseledBlockEntityMixin extends BlockEntity implements Schematic
             }
             folkways$pendingStatistics = self.getLevel() == null || CandBSchematicBridge.schematic(self.getLevel());
             receivePayload(new ChiseledBlockEntity.Payload(storage, empty.mutableStatistics()));
-            lastTag = CandBStructureCodec.encode(storage).get("data");
+            lastTag = CandBStructureCodec.encode(decoded).get("data");
             folkways$valid = true;
         } catch (RuntimeException invalid) {
+            if (invalid instanceof io.github.izakyl.folkways.core.api.structure.StructureCompat.Failure budget) throw budget;
             // Keep the invalid payload so neither printer silently turns it into an empty, free block.
             lastTag = tag.get("data");
         }

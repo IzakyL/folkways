@@ -1213,5 +1213,6 @@
   "folkways.blueprints.capture.hint": "Save the marked blocks to the server’s blueprints and templates. Use a new name with lowercase letters, numbers or underscores.",
   "folkways.blueprints.capture.name_invalid": "Use a new name with lowercase letters, numbers or underscores.",
   "folkways.blueprints.capture.saved": "Saved blueprint and template: %s",
-  "folkways.blueprints.capture.failed": "Could not save. Choose a smaller loaded area and an unused file name."
+  "folkways.blueprints.capture.failed": "Could not save. Choose a smaller loaded area and an unused file name.",
+  "folkways.refusal.build.structure_budget": "This blueprint needs too much work at once. Split it into smaller blueprints."
 }

@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.front.api.Schema;
@@ -267,7 +268,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
         if (!missing.isEmpty()) {
             return Drawn.refused(DraftRefusal.UNKNOWN_BLOCK, named(missing));
         }
-        try (Mutability mutability = Mutability.create("draw", id)) {
+        try (Mutability mutability = Mutability.create("draw", id); var processing = StructureCompat.processing()) {
             StarlarkThread thread = new StarlarkThread(mutability, SEMANTICS);
             thread.setPrintHandler((printing, message) -> LOGGER.info("{}: {}", id, message));
             long began = System.nanoTime();

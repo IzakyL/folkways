@@ -45,6 +45,10 @@ public record BlockData(CompoundTag tag, List<UnloadedBlock.Turn> turns) {
         return !tag.isEmpty();
     }
 
+    int bytes() {
+        return tag.sizeInBytes();
+    }
+
     BlockData turned(Mirror mirror, Rotation rotation) {
         if (!present()) {
             return this;

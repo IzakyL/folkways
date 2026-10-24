@@ -43,6 +43,13 @@ public final class StructureCompat {
         default Component name() {
             return Component.translatable("folkways.structure." + id().getPath());
         }
+
+        default Processing processing() {
+            return () -> { };
+        }
+
+        default void inspect(StructurePayload payload) {
+        }
         BlockEntity detached(HolderLookup.Provider registries, BlockPos pos, BlockState state, StructurePayload payload);
 
         CompoundTag capture(BlockEntity entity);
@@ -54,6 +61,11 @@ public final class StructureCompat {
         StructurePayload transformed(StructurePayload payload, Mirror mirror, Rotation rotation);
 
         void turn(BlockEntity entity, Mirror mirror, Rotation rotation);
+    }
+
+    public interface Processing extends AutoCloseable {
+        @Override
+        void close();
     }
 
     private static final Map<Block, Handler> HANDLERS = new IdentityHashMap<>();
@@ -69,6 +81,24 @@ public final class StructureCompat {
 
     public static Optional<Handler> of(BlockState state) {
         return Optional.ofNullable(HANDLERS.get(state.getBlock()));
+    }
+
+    public static Processing processing() {
+        var scopes = HANDLERS.values().stream().distinct().map(Handler::processing).toList();
+        return () -> {
+            for (int index = scopes.size() - 1; index >= 0; index--) scopes.get(index).close();
+        };
+    }
+
+    public static void inspect(BlockState state, StructurePayload payload) {
+        validate(payload);
+        try {
+            of(state).ifPresent(handler -> handler.inspect(payload));
+        } catch (Failure failed) {
+            throw failed;
+        } catch (RuntimeException failed) {
+            throw invalid();
+        }
     }
 
     public static void validate(StructurePayload payload) {

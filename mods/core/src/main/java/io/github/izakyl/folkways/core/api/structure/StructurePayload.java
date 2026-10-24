@@ -18,4 +18,8 @@ public record StructurePayload(CompoundTag tag) {
     public boolean present() {
         return !tag.isEmpty();
     }
+
+    public int bytes() {
+        return tag.sizeInBytes();
+    }
 }
