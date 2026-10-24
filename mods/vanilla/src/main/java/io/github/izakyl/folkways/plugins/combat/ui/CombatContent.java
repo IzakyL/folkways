@@ -5,6 +5,8 @@ import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
+import io.github.izakyl.folkways.front.api.ui.OverheadTools;
+import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.RegisteringUi;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
@@ -23,6 +25,10 @@ public final class CombatContent {
             scope.closed(why -> desk.close());
         }));
         bus.addListener(Registering.class, event -> event.enrollment(ID, new Enrollment(List.of(), Schema.none(), List.of(PAGE))));
-        bus.addListener(RegisteringUi.class, event -> event.page(PAGE.id(), CombatPage::new));
+        bus.addListener(RegisteringUi.class, event -> {
+            event.page(PAGE.id(), CombatPage::new);
+            event.tool(new OverheadTools.Tool(ID, PAGE.nameKey(), PAGE.icon(), OverheadTools.Camera.TACTICAL,
+                "folkways.combat.open_commands", () -> Pages.open(PAGE.id())));
+        });
     }
 }
