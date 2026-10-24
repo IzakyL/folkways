@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -95,11 +96,16 @@ final class VanillaSchematics implements SchematicPlacement.Adapter {
 
     @Override
     public void turn(BlockEntity entity, Mirror mirror, Rotation rotation) {
+        StructureCompat.of(entity.getBlockState()).ifPresent(handler -> handler.turn(entity, mirror, rotation));
     }
 
     @Nullable
     @Override
     public CompoundTag prepare(ServerLevel level, BlockState state, @Nullable BlockEntity entity) {
+        var handler = StructureCompat.of(state);
+        if (handler.isPresent() && entity != null) {
+            return handler.get().safe(entity);
+        }
         if (entity == null || !state.is(BlockTags.BANNERS) && !state.is(BlockTags.ALL_SIGNS)) {
             return null;
         }
@@ -137,6 +143,14 @@ final class VanillaSchematics implements SchematicPlacement.Adapter {
 
     @Override
     public Costs.Quote requirement(BlockState state, @Nullable BlockEntity entity) {
+        var handler = StructureCompat.of(state);
+        if (handler.isPresent()) {
+            try {
+                return Costs.Quote.of(handler.get().materials(entity));
+            } catch (IllegalArgumentException invalid) {
+                return Costs.Quote.unsupported();
+            }
+        }
         Block block = state.getBlock();
         if (block == Blocks.AIR) {
             return Costs.Quote.of(List.of());

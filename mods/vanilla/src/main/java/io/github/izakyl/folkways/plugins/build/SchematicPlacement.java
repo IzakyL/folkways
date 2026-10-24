@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.plugins.build;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -167,7 +168,8 @@ public final class SchematicPlacement {
                 for (UnloadedBlock.Turn turn : cell.data().turns()) {
                     rules.turn(entity, turn.mirror(), turn.rotation());
                 }
-                CompoundTag saved = entity.saveWithFullMetadata(level.registryAccess());
+                CompoundTag saved = StructureCompat.of(read).map(handler -> handler.capture(entity))
+                    .orElseGet(() -> entity.saveWithFullMetadata(level.registryAccess()));
                 data.put(pos, BlockData.of(saved));
             }
         }
@@ -235,10 +237,7 @@ public final class SchematicPlacement {
             return null;
         }
         CompoundTag prepared = adapter.prepare(level, state, stored);
-        BlockEntity fresh = BlockData.EMPTY.entity(level, pos, state);
-        if (fresh != null && prepared != null) {
-            fresh.loadWithComponents(prepared, level.registryAccess());
-        }
+        BlockEntity fresh = prepared == null ? null : BlockData.of(prepared).entity(level, pos, state);
         return fresh;
     }
 
