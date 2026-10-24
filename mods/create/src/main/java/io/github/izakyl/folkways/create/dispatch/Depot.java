@@ -18,10 +18,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 
 /**
  * One package network as the colony draws on it, answering for everything the network holds: its goods taken by hand
@@ -118,11 +116,10 @@ record Depot(UUID key, WorkSite site, Tally tally, List<Dock> docks, List<Shelf>
     }
 
     private Optional<CollectNode> adrift(Produce produce, Dock dock) {
-        Set<Item> wanted = Goods.members(produce.wanted());
         return tally.collecting().values().stream()
             .filter(node -> node.adrift() && node.port().equals(dock.at())
                 && node.network().filter(network()::equals).isPresent()
-                && wanted.containsAll(Goods.members(node.goods())) && Goods.overlap(produce.wanted(), node.goods())
+                && Goods.includes(produce.wanted(), node.goods())
                 && produce.batching().runs(site, List.of(), node.count(), Optional.empty(), 1) >= 1)
             .min(Comparator.comparingLong(CollectNode::placedAt));
     }
