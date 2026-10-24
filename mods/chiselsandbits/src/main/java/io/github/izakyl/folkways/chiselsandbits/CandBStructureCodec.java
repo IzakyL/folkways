@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.chiselsandbits;
 
-import com.mojang.serialization.Codec;
-import com.mojang.serialization.DataResult;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.FilterInputStream;
+import java.io.InputStream;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import mod.chiselsandbits.api.block.storage.StateEntryStorage;
@@ -22,51 +22,100 @@ import net.minecraft.world.level.block.Rotation;
 import net.jpountz.lz4.LZ4FrameInputStream;
 
 public final class CandBStructureCodec {
-    // Read storage alone: uploaded statistics are never evidence of the materials present.
-    private static final Codec<StateEntryStorage> CODEC = StorageEngineBuilder.<StateEntryStorage>create()
-        .with(compressed(false).fieldOf("payload"))
-        .fallback(compressed(true).fieldOf("data"))
-        .build();
+    private static final int MAX_LAYERS = 16;
 
     private CandBStructureCodec() {
     }
 
-    private static Codec<StateEntryStorage> compressed(boolean legacy) {
-        return Codec.BYTE_BUFFER.comapFlatMap(bytes -> {
-            if (bytes.remaining() > CandBConfig.DECODE_BYTES.get()) {
-                return DataResult.error(() -> "Schematic cell exceeds the decode limit");
+    private static final class Read {
+        private final long started = System.nanoTime();
+        private long bytes;
+        private long heap;
+
+        void check() {
+            if (System.nanoTime() - started > CandBConfig.PROCESSING_MILLIS.get() * 1_000_000L) {
+                throw new IllegalArgumentException("Voxel processing budget exceeded");
             }
-            byte[] compressed = new byte[bytes.remaining()];
-            bytes.get(compressed);
-            try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(new ByteArrayInputStream(compressed)))) {
-                NbtAccounter limit = NbtAccounter.create(CandBConfig.DECODE_BYTES.get());
-                Tag read = legacy ? NbtIo.read(input, limit) : NbtIo.readAnyTag(input, limit);
-                if (!(read instanceof CompoundTag tag)) {
-                    return DataResult.error(() -> "Missing voxel storage");
-                }
-                return (legacy ? StateEntryStorage.LEGACY_CODEC : StateEntryStorage.CODEC)
-                    .parse(NbtOps.INSTANCE, tag.get(legacy ? "chiseledData" : "storage"));
-            } catch (IOException | RuntimeException failure) {
-                return DataResult.error(() -> "Invalid voxel storage: " + failure.getMessage());
+        }
+
+        CompoundTag inflate(byte[] compressed, boolean legacy) {
+            check();
+            int maximum = CandBConfig.DECODE_BYTES.get();
+            if (compressed.length > maximum || heap >= maximum) {
+                throw new IllegalArgumentException("Schematic cell exceeds the decode limit");
             }
-        }, storage -> {
-            throw new UnsupportedOperationException("Schematic storage is written as a complete C&B payload");
-        });
+            NbtAccounter quota = NbtAccounter.create(maximum - heap);
+            try (InputStream lz4 = new LZ4FrameInputStream(new ByteArrayInputStream(compressed));
+                    DataInputStream input = new DataInputStream(new FilterInputStream(lz4) {
+                        private void used(int count) {
+                            if (count > 0) bytes += count;
+                            if (bytes > maximum) throw new IllegalArgumentException("Cumulative voxel decode limit exceeded");
+                            check();
+                        }
+
+                        @Override
+                        public int read() throws IOException {
+                            int result = in.read();
+                            used(result < 0 ? 0 : 1);
+                            return result;
+                        }
+
+                        @Override
+                        public int read(byte[] buffer, int offset, int length) throws IOException {
+                            int result = in.read(buffer, offset, length);
+                            used(result);
+                            return result;
+                        }
+                    })) {
+                Tag read = legacy ? NbtIo.read(input, quota) : NbtIo.readAnyTag(input, quota);
+                heap += quota.getUsage();
+                check();
+                if (read instanceof CompoundTag compound) return compound;
+                throw new IllegalArgumentException("Missing voxel storage");
+            } catch (IOException failure) {
+                throw new IllegalArgumentException("Invalid voxel storage", failure);
+            }
+        }
     }
 
     public static StateEntryStorage decode(CompoundTag tag) {
+        Read read = new Read();
         Tag data = tag.get("data");
-        if (data == null) {
-            throw new IllegalArgumentException("Missing voxel data");
+        for (int layer = 0; layer < MAX_LAYERS; layer++) {
+            read.check();
+            if (data instanceof CompoundTag compound) {
+                if (compound.contains("version")) {
+                    if (compound.getInt("version") != 0 || !(compound.get("payload") instanceof net.minecraft.nbt.ByteArrayTag packed)) {
+                        throw new IllegalArgumentException("Unknown voxel storage version");
+                    }
+                    CompoundTag payload = read.inflate(packed.getAsByteArray(), false);
+                    StateEntryStorage storage = StateEntryStorage.CODEC.parse(NbtOps.INSTANCE, payload.get("storage")).getOrThrow();
+                    counts(storage, read);
+                    return storage;
+                }
+                if (compound.contains("chiseledData")) {
+                    // Legacy statistics are cached hints too; only the actual voxels determine materials.
+                    StateEntryStorage storage = StateEntryStorage.LEGACY_CODEC.parse(NbtOps.INSTANCE,
+                        compound.get("chiseledData")).getOrThrow();
+                    counts(storage, read);
+                    return storage;
+                }
+                data = compound.get("data");
+            } else if (data instanceof net.minecraft.nbt.ByteArrayTag packed) {
+                data = read.inflate(packed.getAsByteArray(), true);
+            } else {
+                throw new IllegalArgumentException("Missing voxel data");
+            }
         }
-        StateEntryStorage storage = CODEC.parse(NbtOps.INSTANCE, data).getOrThrow();
-        counts(storage);
-        return storage;
+        throw new IllegalArgumentException("Too many legacy voxel wrappers");
     }
 
     public static Map<BlockInformation, Integer> counts(StateEntryStorage storage) {
+        return counts(storage, new Read());
+    }
+
+    private static Map<BlockInformation, Integer> counts(StateEntryStorage storage, Read read) {
         Map<BlockInformation, Integer> counts = new LinkedHashMap<>();
-        long started = System.nanoTime();
         int size = storage.getSize();
         int paletteSize = storage.palette().paletteEntries().size();
         int width = paletteSize <= 1 ? 0 : 32 - Integer.numberOfLeadingZeros(paletteSize - 1);
@@ -78,9 +127,7 @@ public final class CandBStructureCodec {
             throw new IllegalArgumentException("Unsupported voxel resolution");
         }
         for (int x = 0; x < size; x++) {
-            if (System.nanoTime() - started > CandBConfig.PROCESSING_MILLIS.get() * 1_000_000L) {
-                throw new IllegalArgumentException("Voxel processing budget exceeded");
-            }
+            read.check();
             for (int y = 0; y < size; y++) {
                 for (int z = 0; z < size; z++) {
                     int index = mod.chiselsandbits.api.util.ByteArrayUtils.getValueAt(indices, width,

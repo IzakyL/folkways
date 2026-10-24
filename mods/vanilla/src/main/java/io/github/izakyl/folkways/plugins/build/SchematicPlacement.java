@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -288,7 +289,14 @@ public final class SchematicPlacement {
             block.put("pos", ints(cell.offset().getX(), cell.offset().getY(), cell.offset().getZ()));
             block.putInt("state", index);
             if (cell.data().present()) {
-                block.put("nbt", cell.data().tag());
+                CompoundTag payload = cell.data().tag();
+                var handler = StructureCompat.of(cell.state());
+                if (handler.isPresent()) {
+                    // Canonical configuration also lets detached printer entities load without a real level.
+                    payload = handler.get().capture(handler.get().detached(level.registryAccess(), cell.offset(),
+                        cell.state(), new StructurePayload(payload)));
+                }
+                block.put("nbt", payload);
             }
             blocks.add(block);
         }

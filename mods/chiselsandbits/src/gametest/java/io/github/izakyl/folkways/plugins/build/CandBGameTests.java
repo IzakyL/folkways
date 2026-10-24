@@ -416,6 +416,83 @@ public final class CandBGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 40)
+    public static void legacyWrappersDecodeAndMigrateWithoutUsingCachedCounts(GameTestHelper helper) throws Exception {
+        CompoundTag payload = new CompoundTag();
+        payload.put("chiseledData", legacyStorage(sculpture()));
+        payload.put("statistics", new CompoundTag());
+        CompoundTag wrapped = legacyPacked(payload);
+        for (int depth = 0; depth < 4; depth++) {
+            CompoundTag outer = new CompoundTag();
+            outer.put("data", wrapped);
+            wrapped = outer;
+        }
+        CompoundTag data = new CompoundTag();
+        data.put("data", wrapped);
+        CandBTestData.sameVoxels(helper, sculpture(), CandBStructureCodec.decode(data));
+        Blueprint source = new Blueprint(UUID.randomUUID(), "legacy", List.of(new BlueprintBlock(BlockPos.ZERO, state(),
+            BlockData.of(data))), List.of(), List.of(), BlueprintVolume.of(1, 1, 1).orElseThrow(), 0, true);
+        CompoundTag old = source.save(helper.getLevel().registryAccess());
+        old.remove("payloadVersion");
+        Blueprint migrated = Blueprint.load(Reader.of(old), helper.getLevel().registryAccess()).orElseThrow().confirm(helper.getLevel());
+        var entity = migrated.blocks().getFirst().data().entity(helper.getLevel(), BlockPos.ZERO, state());
+        helper.assertValueEqual(new io.github.izakyl.folkways.chiselsandbits.CandBSchematicBridge().materials(entity)
+            .stream().mapToLong(Need::count).sum(), 7L, "legacy orders resume with the decoded voxel price");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 40)
+    public static void legacyWrappersShareDepthAndDecompressionLimits(GameTestHelper helper) throws Exception {
+        CompoundTag payload = new CompoundTag();
+        payload.put("chiseledData", legacyStorage(sculpture()));
+        CompoundTag tooDeep = legacyPacked(payload);
+        for (int depth = 0; depth < 20; depth++) {
+            CompoundTag outer = new CompoundTag();
+            outer.put("data", tooDeep);
+            tooDeep = outer;
+        }
+        CompoundTag data = new CompoundTag();
+        data.put("data", tooDeep);
+        refuses(helper, () -> CandBStructureCodec.decode(data));
+        int maximum = CandBConfig.DECODE_BYTES.get();
+        try {
+            CandBConfig.DECODE_BYTES.set(16384);
+            payload.putByteArray("padding", new byte[9000]);
+            CompoundTag nested = legacyPacked(payload);
+            nested.putByteArray("padding", new byte[9000]);
+            data.put("data", legacyPacked(nested));
+            refuses(helper, () -> CandBStructureCodec.decode(data));
+        } finally {
+            CandBConfig.DECODE_BYTES.set(maximum);
+        }
+        helper.succeed();
+    }
+
+    private static CompoundTag legacyPacked(CompoundTag payload) throws Exception {
+        ByteArrayOutputStream packed = new ByteArrayOutputStream();
+        try (DataOutputStream output = new DataOutputStream(new LZ4FrameOutputStream(packed))) {
+            NbtIo.write(payload, output);
+        }
+        CompoundTag wrapper = new CompoundTag();
+        wrapper.putBoolean("compressed", true);
+        wrapper.putByteArray("data", packed.toByteArray());
+        return wrapper;
+    }
+
+    private static CompoundTag legacyStorage(StateEntryStorage storage) {
+        CompoundTag data = new CompoundTag();
+        var palette = new net.minecraft.nbt.ListTag();
+        for (var entry : storage.palette().paletteEntries()) {
+            CompoundTag material = new CompoundTag();
+            material.putString("state", mod.chiselsandbits.api.util.BlockStateSerializationUtils.serialize(
+                entry.blockInformation().blockState()));
+            palette.add(material);
+        }
+        data.put("palette", palette);
+        data.putLongArray("data", storage.getRawData());
+        return data;
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 40)
     public static void wholeBlueprintTransformsKeepVoxelsAndTheirExactCosts(GameTestHelper helper) {
         Blueprint source = blueprint(helper);
         for (Rotation rotation : Rotation.values()) {
