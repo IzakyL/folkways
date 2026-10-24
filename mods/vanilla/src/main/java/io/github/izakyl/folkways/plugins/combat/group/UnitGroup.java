@@ -249,33 +249,36 @@ public final class UnitGroup {
     }
 
     private void issue(List<Body> bodies, List<WorldPos> cells, Phase next, ResidentCommands.Mode mode) {
+        List<ResidentCommands.Target> targets = new ArrayList<>();
+        for (int n = 0; n < bodies.size(); n++) {
+            Body body = bodies.get(n);
+            WorldPos target = next == Phase.COLUMN && n > 0 ? WorldSpaces.at(body.mob()) : cells.get(n);
+            targets.add(target(body, target, mode));
+        }
+        List<ResidentCommands.Order> replacements = owner.commands.replace(targets);
         orders.values().forEach(ResidentCommands.Order::close);
         orders.clear();
         column = next == Phase.COLUMN ? List.copyOf(cells) : List.of();
         if (next != Phase.COLUMN) { adjustedColumn = false; }
         columnAt = 0;
-        for (int n = 0; n < bodies.size(); n++) {
-            Body body = bodies.get(n);
-            // Followers hold clear of the approach until their predecessor reaches its column slot.
-            WorldPos target = next == Phase.COLUMN && n > 0 ? WorldSpaces.at(body.mob()) : cells.get(n);
-            orders.put(body.id(), order(body, target, mode));
-        }
+        replacements.forEach(order -> orders.put(order.resident(), order));
         phase = next;
         changed = false;
         assembledSince = Long.MIN_VALUE;
     }
 
     private ResidentCommands.Order order(Body body, WorldPos destination, ResidentCommands.Mode mode) {
+        return owner.commands.replace(List.of(target(body, destination, mode))).getFirst();
+    }
+
+    private ResidentCommands.Target target(Body body, WorldPos destination, ResidentCommands.Mode mode) {
         ServerLevel level = (ServerLevel) body.mob().level();
         var point = deployment.left();
         Vec3 from = WorldSpaces.world(level, point).orElseThrow();
         var offset = net.minecraft.core.BlockPos.containing(Vec3.atLowerCornerOf(point.cell()).add(deployment.front().scale(10)));
         Vec3 front = WorldSpaces.world(level, point.at(offset)).orElseThrow().subtract(from).normalize();
-        return switch (mode) {
-            case GUARD -> owner.commands.guard(body, destination, front);
-            case RETREAT -> owner.commands.retreat(body, destination);
-            default -> owner.commands.hold(body, destination, front);
-        };
+        return new ResidentCommands.Target(body, destination, mode,
+            mode == ResidentCommands.Mode.RETREAT ? Optional.empty() : Optional.of(front));
     }
 
     private void validate(List<Body> bodies, List<WorldPos> cells) {
@@ -285,6 +288,24 @@ public final class UnitGroup {
             owner.commands.validate(body, cell);
             if (!Footing.withFeetAt(body.mob().level(), cell.block(body.mob().level()))) {
                 throw new IllegalArgumentException("a formation slot has no standing room");
+            }
+        }
+    }
+
+    void validateSelection(List<Body> bodies, List<Deployment> route) {
+        for (Deployment stop : route) {
+            List<WorldPos> cells = stop.line(bodies.size());
+            validate(bodies, cells);
+            for (int n = 0; n < bodies.size(); n++) {
+                Body body = bodies.get(n);
+                var level = body.mob().level();
+                var feet = cells.get(n).block(level);
+                if (!level.hasChunksAt(feet.offset(-1, -1, -1), feet.offset(1, 2, 1))
+                        || !level.getFluidState(feet).isEmpty() || !level.getFluidState(feet.above()).isEmpty()
+                        || WalkNodeEvaluator.getPathTypeStatic(new PathfindingContext(level, body.mob()), feet.mutable())
+                            != PathType.WALKABLE) {
+                    throw new IllegalArgumentException("a selection formation slot is unsafe");
+                }
             }
         }
     }

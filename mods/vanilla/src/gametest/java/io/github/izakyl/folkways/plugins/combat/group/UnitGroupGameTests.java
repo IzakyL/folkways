@@ -508,6 +508,77 @@ public final class UnitGroupGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty_large")
+    public static void twelveSelectedResidentsReceiveEveryCompactSlot(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(12);
+        for (int n = 0; n < people.size(); n++) {
+            BlockPos cell = scene.at(2 + n / 5 * 2, 1, 3 + n % 5 * 2).block(scene.level);
+            people.get(n).mob().moveTo(cell.getX() + .5, cell.getY(), cell.getZ() + .5);
+        }
+        Deployment compact = new Deployment(scene.at(16, 1, 7), scene.at(16, 1, 13),
+            new Vec3(1, 0, 0), new Deployment.Formation(2, 4));
+        UnitGroup group = scene.groups.commandSelection(people, List.of(compact), false);
+        helper.assertValueEqual(group.members().size(), 12, "selection membership is never truncated to eight");
+        helper.assertTrue(group.members().equals(new HashSet<>(people.stream().map(Body::id).toList())),
+            "the group contains precisely all selected residents");
+        helper.assertValueEqual(new HashSet<>(compact.line(12)).size(), 12, "all compact formation slots are distinct");
+        helper.assertTrue(people.stream().allMatch(body -> scene.groups.ofResident(body.id()).orElseThrow() == group
+                && scene.commands.current(body.id()).isPresent()), "every selected resident has actual membership and a runner order");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large")
+    public static void selectionAcrossTwoGroupsTransfersOnlyTheSelectedMembers(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(4);
+        UnitGroup first = scene.groups.create(people.subList(0, 2));
+        UnitGroup second = scene.groups.create(people.subList(2, 4));
+        first.hold(scene.line(8));
+        second.hold(scene.line(10));
+        ResidentCommands.Order firstRemaining = scene.commands.current(people.get(1).id()).orElseThrow();
+        ResidentCommands.Order secondRemaining = scene.commands.current(people.get(3).id()).orElseThrow();
+        List<Body> selected = List.of(people.get(0), people.get(2));
+        Deployment compact = new Deployment(scene.at(16, 1, 8), scene.at(16, 1, 10),
+            new Vec3(1, 0, 0), new Deployment.Formation(2, 2));
+        UnitGroup combined = scene.groups.commandSelection(selected, List.of(compact), false);
+        helper.assertTrue(combined.members().equals(Set.of(people.get(0).id(), people.get(2).id()))
+                && first.members().equals(Set.of(people.get(1).id())) && second.members().equals(Set.of(people.get(3).id())),
+            "only the selected members leave their previous actual groups");
+        helper.assertTrue(scene.commands.current(people.get(1).id()).orElseThrow() == firstRemaining
+                && scene.commands.current(people.get(3).id()).orElseThrow() == secondRemaining,
+            "unselected members retain their current handles during the transfer");
+        var transferred = selected.stream().map(body -> scene.commands.current(body.id()).orElseThrow()).toList();
+        scene.groups.tick(scene.level.getServer());
+        first.release();
+        second.release();
+        helper.assertTrue(transferred.stream().allMatch(order -> scene.commands.current(order.resident()).orElseThrow() == order),
+            "old group ticks and releases cannot close the new group's selected handles");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large")
+    public static void rejectedSelectionRoutePreservesAllOriginalMembershipAndCommands(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(4);
+        UnitGroup original = scene.groups.create(people);
+        original.hold(scene.line(12));
+        var handles = people.stream().map(body -> scene.commands.current(body.id()).orElseThrow()).toList();
+        helper.setBlock(new BlockPos(18, 1, 7), Blocks.STONE);
+        for (List<Deployment> route : List.of(List.of(scene.line(18)), List.of(scene.line(4), scene.line(18)))) {
+            try {
+                scene.groups.commandSelection(people, route, route.size() > 1);
+                helper.fail("a blocked selection target must reject the complete command before regrouping");
+            } catch (IllegalArgumentException expected) {
+                helper.assertTrue(people.stream().allMatch(body -> scene.groups.ofResident(body.id()).orElseThrow() == original),
+                    "rejection preserves every original membership index");
+                helper.assertTrue(handles.stream().allMatch(order -> scene.commands.current(order.resident()).orElseThrow() == order),
+                    "rejection preserves every original command handle including later-stop failures");
+            }
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = "empty_large", timeoutTicks = 2000)
     public static void unreachableDeploymentReleasesControlAndCanBeRetriedAfterOpeningAPath(GameTestHelper helper) {
         Scene scene = new Scene(helper);

@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -27,6 +28,7 @@ public final class ResidentCommands {
 
     public enum Mode { MOVE, HOLD, RETREAT, GUARD }
     public enum Status { MOVING, HOLDING, ARRIVED, RELEASED, FAILED }
+    public record Target(Body body, WorldPos destination, Mode mode, Optional<Vec3> facing) { }
 
     /** A handle can release only its own order, including after a replacement was issued. */
     public final class Order implements AutoCloseable {
@@ -122,10 +124,26 @@ public final class ResidentCommands {
     }
 
     private Order issue(Body body, WorldPos destination, Mode mode, Optional<Vec3> facing) {
-        validate(body, destination);
-        Order next = new Order(body, destination, mode, facing);
-        Order previous = active.put(body.id(), next);
-        if (previous != null) { previous.status = Status.RELEASED; }
+        return replace(List.of(new Target(body, destination, mode, facing))).getFirst();
+    }
+
+    /** Prepare every replacement before changing any runner-owned handle. */
+    public List<Order> replace(List<Target> targets) {
+        requireServerThread();
+        var seen = new HashSet<UUID>();
+        List<Order> next = targets.stream().map(target -> {
+            validate(target.body(), target.destination());
+            Objects.requireNonNull(target.mode());
+            if (!seen.add(target.body().id()) || target.facing().filter(front ->
+                    !Double.isFinite(front.lengthSqr()) || front.horizontalDistanceSqr() < .01).isPresent()) {
+                throw new IllegalArgumentException("invalid batch command");
+            }
+            return new Order(target.body(), target.destination(), target.mode(), target.facing().map(Vec3::normalize));
+        }).toList();
+        for (Order order : next) {
+            Order previous = active.put(order.resident(), order);
+            if (previous != null) { previous.status = Status.RELEASED; }
+        }
         return next;
     }
 

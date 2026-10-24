@@ -11,9 +11,10 @@ import net.minecraft.world.phys.Vec3;
 /** Vanilla deployment intent that a future War controller can submit without steering entities. */
 public record Deployment(WorldPos left, WorldPos right, Vec3 front, Formation formation) {
 
-    public record Formation(double spacing) {
+    public record Formation(double spacing, int columns) {
+        public Formation(double spacing) { this(spacing, 0); }
         public Formation {
-            if (!Double.isFinite(spacing) || spacing < 2 || spacing > 8) {
+            if (!Double.isFinite(spacing) || spacing < 2 || spacing > 8 || columns < 0) {
                 throw new IllegalArgumentException("formation spacing must be between two and eight blocks");
             }
         }
@@ -36,16 +37,19 @@ public record Deployment(WorldPos left, WorldPos right, Vec3 front, Formation fo
     }
 
     public List<WorldPos> line(int count) {
-        if (count < 1 || count > 8) { throw new IllegalArgumentException("groups have one to eight members"); }
+        if (count < 1) { throw new IllegalArgumentException("groups require members"); }
         Vec3 a = Vec3.atBottomCenterOf(left.cell());
         Vec3 b = Vec3.atBottomCenterOf(right.cell());
-        if (a.distanceTo(b) + .001 < (count - 1) * formation.spacing()) {
+        int columns = formation.columns() == 0 ? count : Math.min(count, formation.columns());
+        if (a.distanceTo(b) + .001 < (columns - 1) * formation.spacing()) {
             throw new IllegalArgumentException("the deployment line is too short for its members");
         }
         List<WorldPos> cells = new ArrayList<>();
         for (int n = 0; n < count; n++) {
-            double fraction = count == 1 ? .5 : n / (double) (count - 1);
-            cells.add(left.at(BlockPos.containing(a.lerp(b, fraction))));
+            int row = n / columns;
+            int inRow = Math.min(columns, count - row * columns);
+            double fraction = columns == 1 ? .5 : (n % columns + (columns - inRow) / 2.0) / (columns - 1);
+            cells.add(left.at(BlockPos.containing(a.lerp(b, fraction).subtract(front.scale(row * formation.spacing())))));
         }
         if (new HashSet<>(cells).size() != cells.size()) { throw new IllegalArgumentException("formation cells overlap"); }
         return List.copyOf(cells);

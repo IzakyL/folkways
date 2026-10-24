@@ -146,7 +146,7 @@ public final class CombatDesk {
     private UnitGroup ownedGroup(UUID id) {
         require(id != null, "group");
         UnitGroup group = UnitGroups.of(colony).group(id).orElseThrow(() -> new IllegalArgumentException("folkways.combat.error.group"));
-        require(!group.members().isEmpty() && group.members().size() <= 8 && group.members().stream()
+        require(!group.members().isEmpty() && group.members().stream()
             .allMatch(member -> colony.residents().stream().anyMatch(resident -> resident.id().equals(member)
                 && resident.kind().equals(PersonBody.ID)) && colony.holdingOf(member).isPresent()), "group");
         return group;

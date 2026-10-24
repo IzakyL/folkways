@@ -35,7 +35,7 @@ public final class UnitGroups {
             saved.uuid("id").filter(id -> !groups.containsKey(id)).ifPresent(id -> {
                 UnitGroup group = new UnitGroup(this, id);
                 saved.uuids("members").stream().filter(roster::contains).filter(member -> !membership.containsKey(member))
-                    .limit(8).forEach(member -> { group.members.add(member); membership.put(member, group); });
+                    .forEach(member -> { group.members.add(member); membership.put(member, group); });
                 if (!group.members.isEmpty()) { groups.put(id, group); }
             });
         }
@@ -48,7 +48,7 @@ public final class UnitGroups {
     public UnitGroup create(Collection<? extends Body> residents) {
         requireServerThread();
         List<? extends Body> distinct = residents.stream().distinct().toList();
-        if (distinct.isEmpty() || distinct.size() > 8) { throw new IllegalArgumentException("groups have one to eight members"); }
+        if (distinct.isEmpty()) { throw new IllegalArgumentException("groups require members"); }
         distinct.forEach(this::validate);
         UnitGroup group = new UnitGroup(this, UUID.randomUUID());
         groups.put(group.id(), group);
@@ -59,12 +59,42 @@ public final class UnitGroups {
     public Optional<UnitGroup> group(UUID id) { requireServerThread(); return Optional.ofNullable(groups.get(id)); }
     public Optional<UnitGroup> ofResident(UUID resident) { requireServerThread(); return Optional.ofNullable(membership.get(resident)); }
 
+    /** A client selection becomes actual membership only after its complete command is accepted. */
+    public UnitGroup commandSelection(Collection<? extends Body> residents, List<Deployment> route, boolean patrol) {
+        requireServerThread();
+        List<Body> people = residents.stream().map(body -> (Body) body).distinct().toList();
+        if (people.isEmpty() || route.isEmpty() || (!patrol && route.size() != 1)
+                || (patrol && (route.size() < 2 || route.size() > 16))) {
+            throw new IllegalArgumentException("invalid selection route");
+        }
+        people.forEach(this::validate);
+        UnitGroup group = new UnitGroup(this, UUID.randomUUID());
+        people.forEach(body -> group.members.add(body.id()));
+        group.validateSelection(people, route);
+        groups.put(group.id(), group);
+        try {
+            if (patrol) { group.patrol(route); }
+            else { group.move(route.getFirst()); }
+        } catch (IllegalArgumentException | IllegalStateException rejected) {
+            groups.remove(group.id(), group);
+            throw rejected;
+        }
+        // New handles already own only the selected residents. Closing an old handle cannot
+        // cancel its replacement, and the old group's unselected members keep their handles.
+        for (Body body : people) {
+            UnitGroup previous = membership.put(body.id(), group);
+            if (previous != null) {
+                previous.removeMember(body.id());
+                if (previous.members.isEmpty()) { groups.remove(previous.id(), previous); }
+            }
+        }
+        save();
+        return group;
+    }
+
     void add(UnitGroup group, Body body) {
         requireGroup(group);
         validate(body);
-        if (!group.members.contains(body.id()) && group.members.size() >= 8) {
-            throw new IllegalArgumentException("a group already has eight members");
-        }
         UnitGroup previous = membership.get(body.id());
         if (previous == group) { return; }
         if (previous != null) { remove(previous, body.id()); }
