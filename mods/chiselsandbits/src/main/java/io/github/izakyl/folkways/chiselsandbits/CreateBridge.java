@@ -27,8 +27,7 @@ final class CreateBridge {
             if (block instanceof ChiseledBlock) {
                 SchematicRequirementRegistries.BLOCKS.register(block, (state, entity) -> {
                     try {
-                        List<ItemRequirement.StackRequirement> bits = CandBMaterials.of(
-                            CandBSchematicBridge.checked(entity).payload().storage()).stream()
+                        List<ItemRequirement.StackRequirement> bits = CandBMaterials.of(CandBSchematicBridge.checked(entity)).stream()
                             .<ItemRequirement.StackRequirement>map(BitRequirement::new).toList();
                         return new ItemRequirement(bits);
                     } catch (RuntimeException invalid) {

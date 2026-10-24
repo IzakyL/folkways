@@ -21,6 +21,16 @@ public final class CandBSchematicBridge implements StructureCompat.Handler {
     public net.minecraft.resources.ResourceLocation id() {
         return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways", "chiselsandbits");
     }
+
+    @Override
+    public StructureCompat.Processing processing() {
+        return CandBStructureCodec.processing();
+    }
+
+    @Override
+    public void inspect(StructurePayload payload) {
+        CandBStructureCodec.validated(payload.tag());
+    }
     public static boolean schematic(Level level) {
         return ModList.get().isLoaded("create") && CreateBridge.schematic(level);
     }
@@ -32,7 +42,7 @@ public final class CandBSchematicBridge implements StructureCompat.Handler {
             throw StructureCompat.invalid();
         }
         try {
-            CandBStructureCodec.counts(chiseled.payload().storage());
+            if (((SchematicBits) chiseled).folkways$counts().isEmpty()) CandBStructureCodec.counts(chiseled.payload().storage());
         } catch (RuntimeException invalid) {
             throw StructureCompat.invalid();
         }
@@ -64,7 +74,7 @@ public final class CandBSchematicBridge implements StructureCompat.Handler {
 
     @Override
     public List<Need> materials(BlockEntity entity) {
-        return CandBMaterials.of(checked(entity).payload().storage()).stream()
+        return CandBMaterials.of(checked(entity)).stream()
             .map(stack -> new Need(ItemSpec.exact(stack), stack.getCount())).toList();
     }
 

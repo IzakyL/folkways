@@ -62,8 +62,11 @@ public record Blueprint(UUID id, String name, List<BlueprintBlock> blocks, List<
      * it. A target is resolved once; reloading, placing or building it never resolves it again.
      */
     public Blueprint confirm(ServerLevel level) {
-        compatible();
-        return confirmed ? this : SchematicPlacement.resolve(level, this);
+        try (var processing = StructureCompat.processing()) {
+            compatible();
+            for (BlueprintBlock block : blocks) StructureCompat.inspect(block.state(), new StructurePayload(block.data().tag()));
+            return confirmed ? this : SchematicPlacement.resolve(level, this);
+        }
     }
 
     public void compatible() {

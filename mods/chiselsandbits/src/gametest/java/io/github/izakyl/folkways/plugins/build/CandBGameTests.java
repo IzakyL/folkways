@@ -493,6 +493,147 @@ public final class CandBGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 40)
+    public static void repeatedPayloadsShareTheWholeBlueprintReadBudget(GameTestHelper helper) {
+        CompoundTag data = CandBStructureCodec.encode(sculpture());
+        CandBStructureCodec.validated(data);
+        Blueprint repeated = new Blueprint(UUID.randomUUID(), "repeated", java.util.stream.IntStream.range(0, 20)
+            .mapToObj(x -> new BlueprintBlock(new BlockPos(x, 0, 0), state(), BlockData.of(data))).toList(),
+            BlueprintVolume.of(20, 1, 1).orElseThrow(), 0);
+        int limit = CandBConfig.BLUEPRINT_READS.get();
+        try {
+            CandBConfig.BLUEPRINT_READS.set(4);
+            refusesBudget(helper, () -> repeated.confirm(helper.getLevel()));
+            // Failure releases the whole-operation scope, including when its close check refuses too.
+            CandBStructureCodec.validated(data);
+        } finally {
+            CandBConfig.BLUEPRINT_READS.set(limit);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 40)
+    public static void cachedPayloadsStillShareTheCumulativeDecodeBudget(GameTestHelper helper) {
+        var payload = new CompoundTag();
+        payload.put("storage", StateEntryStorage.CODEC.encodeStart(NbtOps.INSTANCE, sculpture()).getOrThrow());
+        payload.putByteArray("padding", new byte[6000]);
+        CompoundTag data = new CompoundTag();
+        data.put("data", currentPacked(payload));
+        CandBStructureCodec.validated(data);
+        int limit = CandBConfig.BLUEPRINT_BYTES.get();
+        try {
+            CandBConfig.BLUEPRINT_BYTES.set(16384);
+            refusesBudget(helper, () -> {
+                try (var processing = StructureCompat.processing()) {
+                    for (int cell = 0; cell < 8; cell++) CandBStructureCodec.validated(data);
+                }
+            });
+        } finally {
+            CandBConfig.BLUEPRINT_BYTES.set(limit);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 40)
+    public static void processingTimeSpansTheWholeOperation(GameTestHelper helper) {
+        CompoundTag data = CandBStructureCodec.encode(sculpture());
+        CandBStructureCodec.validated(data);
+        int limit = CandBConfig.BLUEPRINT_MILLIS.get();
+        try {
+            CandBConfig.BLUEPRINT_MILLIS.set(10);
+            refusesBudget(helper, () -> {
+                try (var processing = StructureCompat.processing()) {
+                    CandBStructureCodec.validated(data);
+                    long until = System.nanoTime() + 25000000L;
+                    while (System.nanoTime() < until) Thread.onSpinWait();
+                    CandBStructureCodec.validated(data);
+                }
+            });
+        } finally {
+            CandBConfig.BLUEPRINT_MILLIS.set(limit);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 40)
+    public static void validatedStorageAndMaterialCountsAreReusedWithoutMutableAliases(GameTestHelper helper) {
+        CompoundTag data = CandBStructureCodec.encode(sculpture());
+        var first = CandBStructureCodec.validated(data);
+        var second = CandBStructureCodec.validated(data.copy());
+        helper.assertTrue(first == second, "identical payloads reuse one bounded cache entry");
+        first.storage().clear();
+        CandBTestData.sameVoxels(helper, sculpture(), second.storage());
+        helper.assertValueEqual(second.counts().values().stream().mapToInt(Integer::intValue).sum(), 7,
+            "caller mutations cannot change verified material counts");
+        var bridge = new io.github.izakyl.folkways.chiselsandbits.CandBSchematicBridge();
+        var entity = (ChiseledBlockEntity) bridge.detached(helper.getLevel().registryAccess(), BlockPos.ZERO, state(),
+            new StructurePayload(data));
+        entity.payload().storage().setBlockInformation(8, 0, 0,
+            new BlockInformation(Blocks.STONE.defaultBlockState(), Optional.empty()));
+        entity.setChanged();
+        helper.assertValueEqual(bridge.materials(entity).stream().mapToLong(Need::count).sum(), 8L,
+            "a changed entity no longer uses its earlier counts");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 40)
+    public static void previewCountAndPayloadLimitsApplyBeforeMaterialQuotes(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos near = helper.absolutePos(new BlockPos(4, 2, 4));
+        var cells = new java.util.LinkedHashMap<BlockPos, net.minecraft.world.level.block.state.BlockState>();
+        var data = new java.util.LinkedHashMap<BlockPos, BlockData>();
+        CompoundTag valid = CandBStructureCodec.encode(sculpture());
+        cells.put(near, state());
+        data.put(near, BlockData.of(valid));
+        for (int cell = 1; cell < 30; cell++) {
+            cells.put(near.east(cell), state());
+            data.put(near.east(cell), BlockData.of(valid));
+        }
+        BuildTarget target = new BuildTarget(WorldPos.of(level, near).realm(), cells, Set.of(), List.of(), BlockPos.ZERO, data);
+        int limit = CandBConfig.BLUEPRINT_READS.get();
+        try {
+            CandBConfig.BLUEPRINT_READS.set(10);
+            try (var processing = StructureCompat.processing()) {
+                var ghosts = BuildOrderView.pending(level, target, Set.of(), Set.of(), 1, near, 256 * 1024);
+                helper.assertTrue(ghosts.size() == 1 && ghosts.getFirst().pos().equals(near), "only the nearest cell is quoted");
+                CandBStructureCodec.validated(valid);
+            }
+            CandBConfig.BLUEPRINT_READS.set(1);
+            try (var processing = StructureCompat.processing()) {
+                helper.assertTrue(BuildOrderView.pending(level, target, Set.of(), Set.of(), 1, near, 0).isEmpty(),
+                    "a payload outside the packet budget is never quoted");
+                CandBStructureCodec.validated(valid);
+            }
+        } finally {
+            CandBConfig.BLUEPRINT_READS.set(limit);
+        }
+        helper.succeed();
+    }
+
+    private static CompoundTag currentPacked(CompoundTag payload) {
+        try {
+            ByteArrayOutputStream packed = new ByteArrayOutputStream();
+            try (DataOutputStream output = new DataOutputStream(new LZ4FrameOutputStream(packed))) {
+                NbtIo.writeAnyTag(payload, output);
+            }
+            CompoundTag versioned = new CompoundTag();
+            versioned.putInt("version", 0);
+            versioned.putByteArray("payload", packed.toByteArray());
+            return versioned;
+        } catch (java.io.IOException failure) {
+            throw new IllegalStateException(failure);
+        }
+    }
+
+    private static void refusesBudget(GameTestHelper helper, Runnable action) {
+        try {
+            action.run();
+            helper.fail("the whole-blueprint budget must refuse excessive work");
+        } catch (StructureCompat.Failure expected) {
+            helper.assertTrue(expected.getMessage().endsWith("structure_budget"), "an explicit whole-blueprint refusal");
+        }
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 40)
     public static void wholeBlueprintTransformsKeepVoxelsAndTheirExactCosts(GameTestHelper helper) {
         Blueprint source = blueprint(helper);
         for (Rotation rotation : Rotation.values()) {

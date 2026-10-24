@@ -20,24 +20,26 @@ final class BlueprintMaterials {
     }
 
     static List<Component> describe(CompoundTag file, HolderLookup.Provider registries) {
-        Blueprint blueprint = StructureNbt.toBlueprint(file, registries, UUID.randomUUID(), "preview", 0,
-            StructureNbt.AirMeaning.UNCONSTRAINED, BlueprintBook.maxCaptureBlocks()).orElseThrow(StructureCompat::invalid);
-        blueprint.compatible();
-        Map<ItemSpec, Long> counted = new LinkedHashMap<>();
-        Map<ResourceLocation, Component> integrations = new LinkedHashMap<>();
-        for (BlueprintBlock block : blueprint.blocks()) {
-            var handler = StructureCompat.of(block.state());
-            if (handler.isEmpty()) continue;
-            integrations.put(handler.get().id(), handler.get().name());
-            var entity = handler.get().detached(registries, block.offset(), block.state(), new StructurePayload(block.data().tag()));
-            handler.get().materials(entity).forEach(need -> counted.merge(need.spec(), need.count(), Long::sum));
+        try (var processing = StructureCompat.processing()) {
+            Blueprint blueprint = StructureNbt.toBlueprint(file, registries, UUID.randomUUID(), "preview", 0,
+                StructureNbt.AirMeaning.UNCONSTRAINED, BlueprintBook.maxCaptureBlocks()).orElseThrow(StructureCompat::invalid);
+            blueprint.compatible();
+            Map<ItemSpec, Long> counted = new LinkedHashMap<>();
+            Map<ResourceLocation, Component> integrations = new LinkedHashMap<>();
+            for (BlueprintBlock block : blueprint.blocks()) {
+                var handler = StructureCompat.of(block.state());
+                if (handler.isEmpty()) continue;
+                integrations.put(handler.get().id(), handler.get().name());
+                var entity = handler.get().detached(registries, block.offset(), block.state(), new StructurePayload(block.data().tag()));
+                handler.get().materials(entity).forEach(need -> counted.merge(need.spec(), need.count(), Long::sum));
+            }
+            List<Component> lines = new ArrayList<>();
+            integrations.values().forEach(name -> lines.add(Component.translatable("folkways.blueprint.requires", name)));
+            counted.entrySet().stream().limit(8).forEach(entry -> lines.add(Component.translatable(
+                "folkways.blueprint.micro.material", Goods.display(entry.getKey()).getHoverName(), entry.getValue())));
+            if (counted.size() > 8) lines.add(Component.translatable("folkways.blueprint.micro.more", counted.size() - 8));
+            if (!counted.isEmpty()) lines.add(Component.translatable("folkways.blueprint.micro.same_state"));
+            return List.copyOf(lines);
         }
-        List<Component> lines = new ArrayList<>();
-        integrations.values().forEach(name -> lines.add(Component.translatable("folkways.blueprint.requires", name)));
-        counted.entrySet().stream().limit(8).forEach(entry -> lines.add(Component.translatable(
-            "folkways.blueprint.micro.material", Goods.display(entry.getKey()).getHoverName(), entry.getValue())));
-        if (counted.size() > 8) lines.add(Component.translatable("folkways.blueprint.micro.more", counted.size() - 8));
-        if (!counted.isEmpty()) lines.add(Component.translatable("folkways.blueprint.micro.same_state"));
-        return List.copyOf(lines);
     }
 }

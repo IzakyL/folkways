@@ -20,8 +20,9 @@ final class CandBModels {
     static void setup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> BuiltInRegistries.BLOCK.stream().filter(block -> block instanceof ChiseledBlock)
             .forEach(block -> StructureModels.register(block, (view, ghost) -> {
-                var storage = CandBStructureCodec.decode(ghost.payload().tag());
-                var counts = CandBStructureCodec.counts(storage);
+                var decoded = CandBStructureCodec.validated(ghost.payload().tag());
+                var storage = decoded.storage();
+                var counts = decoded.counts();
                 var primary = counts.entrySet().stream().max(java.util.Map.Entry.comparingByValue()).orElseThrow().getKey();
                 var snapshot = MultiStateSnapshotUtils.createFromStorage(storage);
                 var models = new LinkedHashMap<RenderType, BakedModel>();
