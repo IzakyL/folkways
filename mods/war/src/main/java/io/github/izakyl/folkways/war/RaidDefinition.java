@@ -18,7 +18,7 @@ public record RaidDefinition(List<Wave> waves, Limits limits, String snapshot) {
     private static final Set<EntityType<?>> SUPPORTED = Set.of(EntityType.ZOMBIE, EntityType.HUSK,
         EntityType.SKELETON, EntityType.STRAY, EntityType.PILLAGER, EntityType.VINDICATOR, EntityType.CREEPER, EntityType.RAVAGER, EntityType.WITCH);
 
-    public record Limits(int brokenBlocks, double hardness) { }
+    public record Limits(int brokenBlocks, double hardness, int fireSources, int firesPerRaider, int spreadBlocks, int burnedBlocks) { }
 
     public record Entry(EntityType<?> entity, String role, int count, Map<EquipmentSlot, Item> equipment) {
         public Entry { equipment = Map.copyOf(equipment); }
@@ -61,7 +61,17 @@ public record RaidDefinition(List<Wave> waves, Limits limits, String snapshot) {
         if (breaks < 0 || breaks > 4096 || !Double.isFinite(hardness) || hardness < 0 || hardness >= 50) {
             throw new IllegalArgumentException("Invalid raid damage limits");
         }
-        return new RaidDefinition(waves, new Limits(breaks, hardness), root.toString());
+        int fires = limit(limits, "fireSourcesPerWave", 12);
+        int perRaider = limit(limits, "fireSourcesPerRaider", 3);
+        int spread = limit(limits, "fireSpreadBlocks", 192);
+        int burned = limit(limits, "burnedBlocks", 96);
+        return new RaidDefinition(waves, new Limits(breaks, hardness, fires, perRaider, spread, burned), root.toString());
+    }
+
+    private static int limit(JsonObject limits, String key, int fallback) {
+        int value = GsonHelper.getAsInt(limits, key, fallback);
+        if (value < 0 || value > 4096) { throw new IllegalArgumentException("Invalid " + key); }
+        return value;
     }
 
     private static int bounded(JsonObject object, String key, int min, int max) {

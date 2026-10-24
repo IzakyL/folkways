@@ -18,6 +18,10 @@ public final class WarConfig {
         "disabledDimensions", List.of("minecraft:the_end"), () -> "minecraft:the_end", value -> value instanceof String);
     static final ModConfigSpec.IntValue BREAKS = BUILDER.defineInRange("maximumBrokenBlocks", 96, 0, 4096);
     static final ModConfigSpec.DoubleValue HARDNESS = BUILDER.defineInRange("maximumBreachHardness", 5D, 0D, 49D);
+    static final ModConfigSpec.IntValue FIRE_SOURCES = BUILDER.defineInRange("maximumFireSourcesPerWave", 12, 0, 256);
+    static final ModConfigSpec.IntValue FIRE_PER_RAIDER = BUILDER.defineInRange("maximumFireSourcesPerRaider", 3, 0, 64);
+    static final ModConfigSpec.IntValue FIRE_SPREAD = BUILDER.defineInRange("maximumFireSpreadBlocks", 192, 0, 4096);
+    static final ModConfigSpec.IntValue BURNED = BUILDER.defineInRange("maximumBurnedBlocks", 96, 0, 4096);
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private WarConfig() { }

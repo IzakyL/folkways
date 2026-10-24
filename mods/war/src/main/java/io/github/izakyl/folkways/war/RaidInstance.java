@@ -24,6 +24,8 @@ final class RaidInstance {
     int wait;
     int elapsed;
     int broken;
+    int fires;
+    int waveFires;
     boolean paused;
 
     RaidInstance(UUID id, long seed, WorldPos target, WorldPos origin, RaidDefinition definition, int warning) {
@@ -46,7 +48,7 @@ final class RaidInstance {
         tag.putUUID("id", id); tag.putLong("seed", seed);
         tag.put("target", target.save()); tag.put("origin", origin.save());
         tag.putString("definition", definition.snapshot()); tag.putString("phase", phase.name());
-        tag.putInt("wave", wave); tag.putInt("wait", wait); tag.putInt("elapsed", elapsed); tag.putInt("broken", broken);
+        tag.putInt("wave", wave); tag.putInt("wait", wait); tag.putInt("elapsed", elapsed); tag.putInt("broken", broken); tag.putInt("fires", fires); tag.putInt("waveFires", waveFires);
         ListTag saved = new ListTag();
         for (Member member : members) {
             CompoundTag row = new CompoundTag();
@@ -63,6 +65,7 @@ final class RaidInstance {
             WorldPos.load(Reader.of(tag.getCompound("origin"))).orElseThrow(),
             RaidDefinition.parse(tag.getString("definition")), 0);
         raid.phase = Phase.valueOf(tag.getString("phase"));
+        raid.fires = Math.max(0, tag.getInt("fires")); raid.waveFires = Math.max(0, tag.getInt("waveFires"));
         raid.broken = Math.max(0, tag.getInt("broken"));
         raid.wave = tag.getInt("wave"); raid.wait = Math.max(0, tag.getInt("wait")); raid.elapsed = Math.max(0, tag.getInt("elapsed"));
         if (raid.wave < 0 || raid.wave > raid.definition.waves().size()) { throw new IllegalArgumentException("Invalid saved raid wave"); }

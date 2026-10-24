@@ -236,6 +236,69 @@ public final class RaidGameTests {
         });
     }
 
+    @GameTest(batch = "war", template = "empty_large")
+    public static void realFireIsAttributedPersistedAndBoundedPerWave(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        scene.begin(RaidDefinition.parse(definition("zombie", 1).snapshot().replace("\"waves\":", "\"limits\":{\"fireSourcesPerWave\":1},\"waves\":")));
+        scene.director.advance(true); Mob mob = scene.director.loaded().getFirst();
+        BlockPos at = mob.blockPosition().east(); helper.getLevel().setBlockAndUpdate(at.below(), Blocks.NETHERRACK.defaultBlockState());
+        var rule = helper.getLevel().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOFIRETICK); boolean before = rule.get();
+        try {
+            rule.set(true, helper.getLevel().getServer());
+            helper.assertTrue(AttributedFires.ignite(mob, at), "the raider places real fire");
+            helper.assertTrue(helper.getLevel().getBlockState(at).is(Blocks.FIRE), "damage control can scan Blocks.FIRE");
+            helper.assertTrue(AttributedFires.of(helper.getLevel()).attributed(at), "the source records raid provenance");
+            helper.assertFalse(AttributedFires.ignite(mob, at.north()), "per-wave source cap applies");
+            CompoundTag saved = AttributedFires.of(helper.getLevel()).save(new CompoundTag(), helper.getLevel().registryAccess());
+            helper.assertTrue(AttributedFires.load(saved, helper.getLevel().registryAccess()).attributed(at), "provenance persists independently of the colony");
+        } finally { rule.set(before, helper.getLevel().getServer()); }
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void fireGamerulesAndPlacementCancellationPreventIgnition(GameTestHelper helper) {
+        Scene scene = new Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); BlockPos at = mob.blockPosition().east();
+        var fire = helper.getLevel().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOFIRETICK);
+        var grief = helper.getLevel().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_MOBGRIEFING);
+        boolean oldFire = fire.get(); boolean oldGrief = grief.get();
+        java.util.function.Consumer<net.neoforged.neoforge.event.level.BlockEvent.EntityPlaceEvent> deny = event -> { if (event.getPos().equals(at)) { event.setCanceled(true); } };
+        try {
+            fire.set(false, helper.getLevel().getServer()); helper.assertFalse(AttributedFires.ignite(mob, at), "doFireTick=false prevents ignition");
+            fire.set(true, helper.getLevel().getServer()); grief.set(false, helper.getLevel().getServer());
+            helper.assertFalse(AttributedFires.ignite(mob, at), "mobGriefing=false prevents ignition");
+            grief.set(true, helper.getLevel().getServer()); net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(deny);
+            helper.assertFalse(AttributedFires.ignite(mob, at), "NeoForge placement cancellation is authoritative");
+            helper.assertTrue(helper.getLevel().getBlockState(at).isAir(), "cancelled fire placement restores the actual cell");
+            helper.assertValueEqual(scene.director.raid().fires, 0, "denied fire spends no source allowance");
+        } finally {
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(deny); fire.set(oldFire, helper.getLevel().getServer()); grief.set(oldGrief, helper.getLevel().getServer());
+        }
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void attributedVanillaFireKeepsItsBurnBudgetAfterTheRaidEnds(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        scene.begin(RaidDefinition.parse(definition("zombie", 1).snapshot().replace("\"waves\":", "\"limits\":{\"burnedBlocks\":2,\"fireSpreadBlocks\":2},\"waves\":")));
+        scene.director.advance(true); Mob mob = scene.director.loaded().getFirst();
+        BlockPos at = helper.absolutePos(new BlockPos(8, 1, 8)); mob.moveTo(at.getX() - 1, at.getY(), at.getZ());
+        helper.getLevel().setBlockAndUpdate(at.below(), Blocks.NETHERRACK.defaultBlockState());
+        for (int x = -2; x <= 2; x++) { for (int z = -2; z <= 2; z++) { if (x != 0 || z != 0) { helper.getLevel().setBlockAndUpdate(at.offset(x, 0, z), Blocks.OAK_PLANKS.defaultBlockState()); } } }
+        var rule = helper.getLevel().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOFIRETICK); boolean before = rule.get();
+        try {
+            rule.set(true, helper.getLevel().getServer()); helper.assertTrue(AttributedFires.ignite(mob, at), "source fire is placed"); scene.director.stop();
+            var random = net.minecraft.util.RandomSource.create(42);
+            for (int tick = 0; tick < 512; tick++) { helper.getLevel().getBlockState(at).tick(helper.getLevel(), at, random); }
+            int burned = AttributedFires.of(helper.getLevel()).burned(scene.director.raid().id);
+            helper.assertTrue(burned > 0 && burned <= 2, "vanilla fire burns real timber within its persistent budget after withdrawal");
+            for (BlockPos pos : BlockPos.betweenClosed(at.offset(-2, 0, -2), at.offset(2, 4, 2))) {
+                if (helper.getLevel().getBlockState(pos).is(Blocks.FIRE)) { helper.assertTrue(AttributedFires.of(helper.getLevel()).attributed(pos), "every descendant keeps provenance"); }
+            }
+        } finally { rule.set(before, helper.getLevel().getServer()); }
+        helper.succeed();
+    }
+
     static final class Scene implements GameTestListener {
         final GameTestHelper helper;
         final Colony colony;

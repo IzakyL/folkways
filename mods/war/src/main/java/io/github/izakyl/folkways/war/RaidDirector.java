@@ -176,7 +176,7 @@ public final class RaidDirector {
             save();
             if (!level.addFreshEntity(mob)) { finish(RaidInstance.Phase.WITHDRAWN); return false; }
         }
-        raid.phase = RaidInstance.Phase.WAVES; raid.wave++;
+        raid.phase = RaidInstance.Phase.WAVES; raid.wave++; raid.waveFires = 0;
         raid.wait = raid.wave < raid.definition.waves().size() ? raid.definition.waves().get(raid.wave).delayTicks() : 0;
         tell("folkways.raid.wave"); save();
         return true;

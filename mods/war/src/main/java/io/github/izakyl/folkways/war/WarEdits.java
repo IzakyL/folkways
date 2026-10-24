@@ -31,6 +31,23 @@ public final class WarEdits {
         return !NeoForge.EVENT_BUS.post(new BlockEvent.BreakEvent(level, at, state, FakePlayerFactory.get(level, GRIEFER))).isCanceled();
     }
 
+    static boolean fireRules(ServerLevel level) {
+        return level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)
+            && level.getGameRules().getBoolean(GameRules.RULE_DOFIRETICK);
+    }
+
+    static boolean placeFire(ServerLevel level, BlockPos at, Mob actor) {
+        if (!fireRules(level) || !level.getBlockState(at).isAir() || !level.isLoaded(at)
+                || !net.minecraft.world.level.block.Blocks.FIRE.defaultBlockState().canSurvive(level, at)
+                || !permits(level, at, actor, false, 0)) { return false; }
+        var snapshot = net.neoforged.neoforge.common.util.BlockSnapshot.create(level.dimension(), level, at);
+        if (!level.setBlock(at, net.minecraft.world.level.block.Blocks.FIRE.defaultBlockState(), 3)) { return false; }
+        if (net.neoforged.neoforge.event.EventHooks.onBlockPlace(actor, snapshot, net.minecraft.core.Direction.UP)) {
+            snapshot.restore(); return false;
+        }
+        return true;
+    }
+
     static boolean reserve(Mob mob, BlockPos at, boolean explosion) {
         var director = RaidMembers.director(mob).filter(d -> d.owns(mob) && !d.raid().paused);
         if (director.isEmpty() || !(mob.level() instanceof ServerLevel level)) { return false; }

@@ -54,6 +54,7 @@ public final class RaidMembers {
         if (mob.goalSelector.getAvailableGoals().stream().noneMatch(goal -> goal.getGoal() instanceof Approach)) {
             mob.goalSelector.addGoal(5, new Approach(mob));
             mob.goalSelector.addGoal(1, new RaidBreachGoal(mob));
+            mob.goalSelector.addGoal(2, new RaidIgniteGoal(mob));
         }
     }
 

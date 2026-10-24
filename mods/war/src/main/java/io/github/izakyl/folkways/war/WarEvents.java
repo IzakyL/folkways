@@ -22,6 +22,7 @@ public final class WarEvents {
     public static void tick(ServerTickEvent.Post event) {
         if (event.getServer() instanceof net.minecraft.gametest.framework.GameTestServer) { return; }
         if (event.getServer().getTickCount() % 20 != 0) { return; }
+        if (event.getServer().getTickCount() % 200 == 0) { event.getServer().getAllLevels().forEach(level -> AttributedFires.of(level).prune(level)); }
         for (var colony : Colonies.all(event.getServer())) { RaidDirector.of(colony).ifPresent(RaidDirector::tick); }
     }
 
