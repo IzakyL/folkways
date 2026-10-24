@@ -135,7 +135,7 @@ public final class Weaver {
     private final Set<UUID> grownNow = new LinkedHashSet<>();
     private final List<Expansion> madeNow = new ArrayList<>();
     private Situation now;
-    private long substitutionsAt = -1;
+    private InputSubstitutions.Snapshot substitutions;
     private Crew crew;
     private Costs costs;
     private List<Workshop> costedFor = List.of();
@@ -240,9 +240,9 @@ public final class Weaver {
     public void know(Situation now, Crew crew) {
         this.now = now;
         this.crew = crew;
-        long revision = InputSubstitutions.revision();
-        if (substitutionsAt != revision) {
-            if (substitutionsAt >= 0) {
+        InputSubstitutions.Snapshot next = InputSubstitutions.snapshot();
+        if (substitutions != next) {
+            if (substitutions != null) {
                 for (var entry : List.copyOf(answering.entrySet())) {
                     Request request = asked.get(entry.getKey());
                     if (request != null && request.work.nodes().stream().anyMatch(node ->
@@ -252,7 +252,7 @@ public final class Weaver {
                     }
                 }
             }
-            substitutionsAt = revision;
+            substitutions = next;
         }
         this.sizing = new PackSizing(crew);
         List<Able> able = crew.hands().stream().map(Able::of).toList();
@@ -278,6 +278,20 @@ public final class Weaver {
     }
 
     public WeaveDelta grow(boolean retry) {
+        while (true) {
+            weave(retry);
+            // Reload and publication use the same lock; a stale round never reaches the schedule.
+            synchronized (InputSubstitutions.class) {
+                if (substitutions == InputSubstitutions.snapshot()) return publish();
+            }
+            rollBack();
+            know(now, crew);
+            reask();
+            retry = true;
+        }
+    }
+
+    private void weave(boolean retry) {
         if (weaving) {
             rollBack();
         }
@@ -344,7 +358,6 @@ public final class Weaver {
         if (fills > 2_000 && !joinsWent.isEmpty()) {
             LOGGER.info("weave fed {} open edges; joining like demands went {}", fills, joinsWent);
         }
-        return publish();
     }
 
     private void rollBack() {
@@ -765,7 +778,7 @@ public final class Weaver {
             for (ItemSpec spec : put) {
                 for (Claim handed : claims.on(new Resource.Handed(carrier, spec))) {
                     claims.drop(handed);
-                    claims.take(new Claim(new Resource.Cargo(hand, spec), handed.owner(), handed.amount()));
+                    claims.take(new Claim(new Resource.Cargo(hand, spec), handed.owner(), handed.amount(), handed.input()));
                 }
             }
         }
@@ -777,7 +790,7 @@ public final class Weaver {
             for (Claim draw : grown.claims) {
                 if (left > 0 && next.contains(draw.owner()) && draw.on().equals(new Resource.Lot(where, spec))) {
                     long passed = Math.min(left, draw.amount());
-                    claims.take(new Claim(put.on(), draw.owner(), passed));
+                    claims.take(new Claim(put.on(), draw.owner(), passed, draw.input()));
                     left -= passed;
                 }
             }
@@ -1029,7 +1042,7 @@ public final class Weaver {
     }
 
     private long feed(Edge edge) {
-        List<InputSubstitutions.Choice> choices = InputSubstitutions.choices(edge.need());
+        List<InputSubstitutions.Choice> choices = substitutions.choices(edge.need());
         if (choices.isEmpty()) return feedExact(edge, true);
         long left = feedExact(edge, false);
         for (InputSubstitutions.Choice choice : choices) {
@@ -1988,7 +2001,10 @@ public final class Weaver {
         if (amount <= 0) {
             return;
         }
-        Claim claim = new Claim(on, owner, amount);
+        Edge input = grown.serves != null && grown.serves.consumer().equals(owner) ? grown.serves
+            : grown.also.stream().filter(edge -> edge.consumer().equals(owner)).findFirst().orElse(null);
+        Claim claim = new Claim(on, owner, amount, input == null ? Optional.empty()
+            : Optional.of(new Placement.Input(input.requested().spec(), input.unit())));
         claims.take(claim);
         grown.claims.add(claim);
     }
@@ -2298,11 +2314,11 @@ public final class Weaver {
         for (Claim claim : claims.since(node, 0)) {
             switch (claim.on()) {
                 case Resource.Lot(Stash where, ItemSpec spec) ->
-                    draws.add(new Placement.Draw(Optional.of(where), spec, claim.amount()));
+                    draws.add(new Placement.Draw(Optional.of(where), spec, claim.amount(), Optional.empty(), Optional.empty(), claim.input()));
                 case Resource.Cargo(UUID resident, ItemSpec spec) ->
-                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount(), Optional.of(resident), Optional.empty()));
+                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount(), Optional.of(resident), Optional.empty(), claim.input()));
                 case Resource.Handed(UUID by, ItemSpec spec) ->
-                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount(), Optional.empty(), Optional.of(by)));
+                    draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount(), Optional.empty(), Optional.of(by), claim.input()));
                 case Resource.Space space -> {
                 }
             }

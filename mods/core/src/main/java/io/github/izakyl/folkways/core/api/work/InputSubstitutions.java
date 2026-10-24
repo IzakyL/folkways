@@ -23,21 +23,30 @@ public final class InputSubstitutions {
     public record Choice(ItemSpec payment, ItemSpec target, int cost) { }
 
     private static final Map<ResourceLocation, List<Rule>> owners = new LinkedHashMap<>();
-    private static volatile long revision;
-    private static volatile List<Rule> rules = List.of();
+    private static volatile Snapshot current = new Snapshot(0, List.of());
+
+    public record Snapshot(long revision, List<Rule> rules) {
+        public Snapshot { rules = List.copyOf(rules); }
+
+        public List<Choice> choices(Need need) { return InputSubstitutions.choices(need, rules); }
+    }
 
     private InputSubstitutions() { }
 
-    public static long revision() { return revision; }
+    public static long revision() { return current.revision(); }
+
+    public static Snapshot snapshot() { return current; }
 
     public static synchronized void replace(ResourceLocation owner, List<Rule> replacement) {
         if (replacement.isEmpty()) owners.remove(owner);
         else owners.put(owner, List.copyOf(replacement));
-        rules = owners.values().stream().flatMap(List::stream).sorted(Comparator.comparing(Rule::id)).toList();
-        revision++;
+        current = new Snapshot(current.revision() + 1, owners.values().stream().flatMap(List::stream)
+            .sorted(Comparator.comparing(Rule::id)).toList());
     }
 
-    public static List<Choice> choices(Need need) {
+    public static List<Choice> choices(Need need) { return current.choices(need); }
+
+    private static List<Choice> choices(Need need, List<Rule> rules) {
         if (!need.substitutable()) return List.of();
         List<Choice> choices = new ArrayList<>();
         for (Rule rule : rules) {

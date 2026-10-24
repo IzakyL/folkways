@@ -15,8 +15,15 @@ public record Placement(Set<Stand> stands, List<Amount> carrying, List<Stash> fr
 
     // Goods the plan has set aside for this work, and where they are taken from: a store, or the worker's pack
     // when `from` is empty. The work's needs are drawn from these and nowhere else.
+    // The logical demand and its reserved payment ratio survive hauling and rule reloads.
+    public record Input(ItemSpec requested, int cost) { }
+
     public record Draw(Optional<Stash> from, ItemSpec spec, long count, Optional<UUID> resident,
-                       Optional<UUID> producer) {
+                       Optional<UUID> producer, Optional<Input> input) {
+        public Draw(Optional<Stash> from, ItemSpec spec, long count, Optional<UUID> resident, Optional<UUID> producer) {
+            this(from, spec, count, resident, producer, Optional.empty());
+        }
+
         public Draw(Optional<Stash> from, ItemSpec spec, long count) {
             this(from, spec, count, Optional.empty(), Optional.empty());
         }

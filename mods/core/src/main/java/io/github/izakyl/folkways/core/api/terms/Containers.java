@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -105,6 +106,11 @@ public final class Containers {
     }
 
     public static ItemStack extract(Container from, Predicate<ItemStack> which, int max) {
+        return extract(from, which, max, stack -> { });
+    }
+
+    // Report each removal before merging stacks or notifying the container, so callers can undo a partial draw.
+    public static ItemStack extract(Container from, Predicate<ItemStack> which, int max, Consumer<ItemStack> removed) {
         ItemStack taken = ItemStack.EMPTY;
         for (int slot = 0; slot < from.getContainerSize() && taken.getCount() < max; slot++) {
             ItemStack stack = from.getItem(slot);
@@ -118,6 +124,7 @@ public final class Containers {
             if (moved.isEmpty()) {
                 continue;
             }
+            removed.accept(moved);
             if (taken.isEmpty()) {
                 taken = moved;
             } else {
