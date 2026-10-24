@@ -26,6 +26,7 @@ public final class Weapons {
     public static final WeaponAdapter BOW = new NativeAdapter(NativeWeaponSession.Kind.BOW, 15);
     public static final WeaponAdapter CROSSBOW = new NativeAdapter(NativeWeaponSession.Kind.CROSSBOW, 8);
     public static final WeaponAdapter MELEE = new NativeAdapter(NativeWeaponSession.Kind.MELEE, 4.5);
+    private record Candidate(WeaponAdapter adapter, ItemStack stack) { }
     private record Registered(ResourceLocation id, WeaponAdapter adapter) { }
     private static volatile List<Registered> registered = List.of(
         new Registered(ResourceLocation.withDefaultNamespace("bow"), BOW),
@@ -56,20 +57,20 @@ public final class Weapons {
 
     public static boolean ranged(Worker worker) {
         if (!(worker.body() instanceof ResidentEntity)) { return false; }
-        return adapter(worker).filter(WeaponAdapter::ranged).isPresent();
+        return adapter(worker).filter(candidate -> candidate.adapter().ranged()).isPresent();
     }
 
     public static double range(Worker worker) {
         if (!(worker.body() instanceof ResidentEntity)) { return 4.5; }
-        return adapter(worker).map(WeaponAdapter::range).orElse(4.5);
+        return adapter(worker).map(candidate -> candidate.adapter().range(worker, candidate.stack())).orElse(4.5);
     }
 
     public static Optional<WeaponSession> open(Worker worker) {
         // Other ResidentKinds retain Core ToolUse combat until their own native hand ownership is adapted.
         if (!(worker.body() instanceof ResidentEntity)) { return Optional.empty(); }
-        Optional<WeaponAdapter> adapter = adapter(worker);
+        Optional<Candidate> adapter = adapter(worker);
         if (adapter.isPresent()) {
-            return adapter.get().open(worker);
+            return adapter.get().adapter().open(worker, adapter.get().stack());
         }
         return barehanded(worker) ? Optional.of(NativeWeaponSession.barehanded(worker)) : Optional.empty();
     }
@@ -78,21 +79,22 @@ public final class Weapons {
         return ResidentKinds.barehanded(worker.resident().kind(), Optional.of(Vocations.required(PATROLLING)));
     }
 
-    private static Optional<WeaponAdapter> adapter(Worker worker) {
+    private static Optional<Candidate> adapter(Worker worker) {
         if (worker.body() instanceof ResidentEntity resident && resident.hasWeaponSession()) {
             return registered.stream().map(Registered::adapter)
-                .filter(adapter -> adapter.usable(worker, resident.getMainHandItem())).findFirst();
+                .filter(adapter -> adapter.usable(worker, resident.getMainHandItem()))
+                .map(adapter -> new Candidate(adapter, resident.getMainHandItem())).findFirst();
         }
         if (worker.body() instanceof ResidentEntity resident && resident.level() instanceof ServerLevel level) {
-            Optional<PatrolSupplies.Loadout> preference = resident.colonyId()
+            Optional<LoadoutRegistry.Selection> preference = resident.colonyId()
                 .flatMap(id -> Colonies.of(level.getServer(), id)).flatMap(PatrolContent::suppliesOf)
                 .flatMap(supplies -> supplies.preference(resident.id()));
             if (preference.isPresent()) {
                 for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
                     ItemStack stack = worker.pack().getItem(slot);
                     if (!PatrolSupplies.prefers(preference.get(), stack)) { continue; }
-                    Optional<WeaponAdapter> preferred = registered.stream().map(Registered::adapter)
-                        .filter(adapter -> adapter.usable(worker, stack)).findFirst();
+                    Optional<Candidate> preferred = registered.stream().map(Registered::adapter)
+                        .filter(adapter -> adapter.usable(worker, stack)).map(adapter -> new Candidate(adapter, stack)).findFirst();
                     if (preferred.isPresent()) { return preferred; }
                 }
             }
@@ -100,8 +102,8 @@ public final class Weapons {
         // Keep pack order: a resident deliberately carrying a sword before a bow uses its sword.
         for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
             ItemStack stack = worker.pack().getItem(slot);
-            Optional<WeaponAdapter> found = registered.stream().map(Registered::adapter)
-                .filter(adapter -> adapter.usable(worker, stack)).findFirst();
+            Optional<Candidate> found = registered.stream().map(Registered::adapter)
+                .filter(adapter -> adapter.usable(worker, stack)).map(adapter -> new Candidate(adapter, stack)).findFirst();
             if (found.isPresent()) {
                 return found;
             }

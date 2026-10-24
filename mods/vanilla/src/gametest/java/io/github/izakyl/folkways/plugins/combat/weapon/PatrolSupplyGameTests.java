@@ -91,7 +91,7 @@ public final class PatrolSupplyGameTests {
         helper.assertTrue(front.setSetting(CoreSettings.CORE, CoreSettings.TOOL_KEY, new ColonySettings.Value.Items(forbidden)),
             "the player explicitly removes the bow permission");
         scene.store.setItem(0, new ItemStack(Items.BOW)); scene.store.setItem(1, new ItemStack(Items.ARROW, 8));
-        scene.supplies.loadout(scene.body, PatrolSupplies.Loadout.BOW); scene.guard();
+        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW); scene.guard();
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(scene.supplyState() == PatrolSupplies.State.NO_STOCK,
                 "the explicit tool ban prevents collection" + scene.debug()))
@@ -120,7 +120,7 @@ public final class PatrolSupplyGameTests {
         ItemStack arrows = new ItemStack(Items.ARROW, 16);
         arrows.set(DataComponents.CUSTOM_NAME, Component.literal("warehouse ammunition"));
         scene.store.setItem(0, bow); scene.store.setItem(1, arrows);
-        scene.supplies.loadout(scene.body, PatrolSupplies.Loadout.BOW);
+        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
         Zombie enemy = scene.enemy(7);
         scene.guard();
         helper.startSequence()
@@ -173,7 +173,7 @@ public final class PatrolSupplyGameTests {
     public static void aNewIndividualOrderCancelsTheOldSupplyGeneration(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         scene.store.setItem(0, new ItemStack(Items.BOW)); scene.store.setItem(1, new ItemStack(Items.ARROW, 16));
-        scene.supplies.loadout(scene.body, PatrolSupplies.Loadout.BOW);
+        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
         scene.guard();
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(scene.supplyState() == PatrolSupplies.State.FETCHING && scene.body.getX() > scene.at(3, 1, 3).cell().getX(),
@@ -197,7 +197,7 @@ public final class PatrolSupplyGameTests {
             scene.body.pack().setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
         }
         scene.store.setItem(0, new ItemStack(Items.BOW)); scene.store.setItem(1, new ItemStack(Items.ARROW, 8));
-        scene.supplies.loadout(scene.body, PatrolSupplies.Loadout.BOW); scene.guard();
+        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW); scene.guard();
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(scene.supplyState() == PatrolSupplies.State.NO_ROOM, "full-pack refusal is observable" + scene.debug()))
             .thenIdle(30)
@@ -221,7 +221,7 @@ public final class PatrolSupplyGameTests {
         ItemStack sword = new ItemStack(Items.IRON_SWORD); sword.setDamageValue(13);
         scene.body.pack().insert(sword);
         scene.store.setItem(0, new ItemStack(Items.BOW));
-        scene.supplies.loadout(scene.body, PatrolSupplies.Loadout.BOW); scene.guard();
+        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW); scene.guard();
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(scene.supplyState() == PatrolSupplies.State.FETCHING, "the supply trip begins" + scene.debug()))
             .thenExecute(() -> scene.body.hurt(scene.level.damageSources().genericKill(), 1000))

@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.plugins.combat.group.Deployment;
 import io.github.izakyl.folkways.plugins.combat.group.UnitGroup;
 import io.github.izakyl.folkways.plugins.combat.group.UnitGroups;
 import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -119,23 +120,30 @@ public final class CombatDesk {
                     UnitGroup group = ownedGroup(draft.group);
                     group.release();
                 }
-                case "loadout_melee", "loadout_bow", "loadout_crossbow" -> {
+                case "loadout" -> {
                     UnitGroup group = ownedGroup(draft.group);
                     List<Body> people = group.members().stream().map(id -> body(player, id)).toList();
-                    String choice = action.substring("loadout_".length());
-                    PatrolSupplies.Loadout loadout = PatrolSupplies.Loadout.valueOf(choice.toUpperCase(java.util.Locale.ROOT));
+                    LoadoutRegistry.Selection loadout = choices().get(Integer.parseInt(value));
                     people.forEach(body -> PatrolSupplies.of(colony).loadout(body, loadout));
                 }
                 default -> throw new IllegalArgumentException("folkways.combat.error.rejected");
             }
             draft.message = Component.translatable("folkways.combat.saved");
             return true;
-        } catch (IllegalArgumentException | IllegalStateException rejected) {
+        } catch (IllegalArgumentException | IllegalStateException | IndexOutOfBoundsException rejected) {
             String key = rejected.getMessage();
             draft.message = Component.translatable(key != null && key.startsWith("folkways.combat.error.")
                 ? key : "folkways.combat.error.rejected");
             return false;
         }
+    }
+
+    private static List<LoadoutRegistry.Selection> choices() {
+        List<LoadoutRegistry.Selection> choices = new ArrayList<>();
+        LoadoutRegistry.entries().forEach((id, provider) -> provider.choices().stream()
+            .filter(choice -> provider.valid(choice.options()))
+            .forEach(choice -> choices.add(new LoadoutRegistry.Selection(id, choice.options()))));
+        return List.copyOf(choices);
     }
 
     void close() { drafts.clear(); groupNumbers.clear(); nextGroupNumber = 1; }
@@ -214,6 +222,10 @@ public final class CombatDesk {
                 row.put("detail", Pages.text(player.registryAccess(), Component.translatable("folkways.combat.resident_status",
                     (int) Math.ceil(body.mob().getHealth()), (int) Math.ceil(body.mob().getMaxHealth()), command,
                     Component.translatable("folkways.combat.stock." + stock.name().toLowerCase(java.util.Locale.ROOT)))));
+                if (body instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person) {
+                    row.put("detail", Pages.text(player.registryAccess(), Pages.readText(player.registryAccess(), row.get("detail"))
+                        .copy().append(" · ").append(PatrolSupplies.of(colony).detail(person))));
+                }
                 row.putBoolean("selected", draft.picked.contains(body.id())); people.add(row);
             } catch (IllegalArgumentException unavailable) { /* The page lists only currently controllable people. */ }
         });
@@ -235,12 +247,23 @@ public final class CombatDesk {
             group == null ? 0 : group.members().size(), group == null ? Component.empty()
                 : Component.translatable("folkways.combat.phase." + group.phase().name().toLowerCase(java.util.Locale.ROOT)))));
         tag.put("points", Pages.text(player.registryAccess(), Component.translatable("folkways.combat.points", draft.points.size(), mode)));
-        Set<String> preferences = new LinkedHashSet<>();
+        Set<LoadoutRegistry.Selection> preferences = new LinkedHashSet<>();
         if (group != null) { group.members().forEach(member -> preferences.add(PatrolSupplies.of(colony).preference(member)
-            .map(choice -> choice.name().toLowerCase(java.util.Locale.ROOT)).orElse("auto"))); }
-        String preference = preferences.isEmpty() ? "auto" : preferences.size() == 1 ? preferences.iterator().next() : "mixed";
+            .orElse(null))); }
+        LoadoutRegistry.Selection preference = preferences.size() == 1 ? preferences.iterator().next() : null;
+        Component preferenceName = preferences.size() > 1 ? Component.translatable("folkways.combat.loadout.mixed")
+            : preference == null ? Component.translatable("folkways.combat.loadout.auto") : LoadoutRegistry.label(preference);
         tag.put("loadout", Pages.text(player.registryAccess(), Component.translatable("folkways.combat.preference",
-            Component.translatable("folkways.combat.loadout." + preference))));
+            preferenceName)));
+        ListTag loadoutChoices = new ListTag();
+        LoadoutRegistry.entries().forEach((id, provider) -> provider.choices().forEach(choice -> {
+            if (provider.valid(choice.options())) {
+                CompoundTag row = new CompoundTag();
+                row.put("label", Pages.text(player.registryAccess(), choice.label()));
+                loadoutChoices.add(row);
+            }
+        }));
+        tag.put("loadouts", loadoutChoices);
         tag.put("message", Pages.text(player.registryAccess(), draft.message));
         StringBuilder locations = new StringBuilder();
         for (int n = 0; n < draft.points.size(); n++) {

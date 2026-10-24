@@ -122,6 +122,7 @@ public final class ResidentCommands {
 
     private Order issue(Body body, WorldPos destination, Mode mode, Optional<Vec3> facing) {
         validate(body, destination);
+        if (body.mob() instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person) { person.stopWeaponSession(); }
         Order next = new Order(body, destination, mode, facing);
         Order previous = active.put(body.id(), next);
         if (previous != null) { previous.status = Status.RELEASED; }
@@ -130,13 +131,19 @@ public final class ResidentCommands {
 
     public void release(Order order) {
         requireServerThread();
-        if (active.remove(order.resident(), order)) { order.status = Status.RELEASED; }
+        if (active.remove(order.resident(), order)) {
+            if (order.body.mob() instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person) { person.stopWeaponSession(); }
+            order.status = Status.RELEASED;
+        }
     }
 
     public void release(UUID resident) {
         requireServerThread();
         Order order = active.remove(resident);
-        if (order != null) { order.status = Status.RELEASED; }
+        if (order != null) {
+            if (order.body.mob() instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person) { person.stopWeaponSession(); }
+            order.status = Status.RELEASED;
+        }
     }
 
     List<Urge> urges(Worker who) {

@@ -369,10 +369,10 @@ public final class WeaponSessionGameTests {
         bow.setDamageValue(7); bow.set(DataComponents.CUSTOM_NAME, Component.literal("preferred real bow"));
         body.pack().insert(bow); body.pack().insert(new ItemStack(Items.ARROW, 3));
         PatrolSupplies supplies = PatrolSupplies.of(colony);
-        supplies.loadout(body, PatrolSupplies.Loadout.BOW);
+        supplies.loadout(body, LoadoutRegistry.BOW);
         WeaponSession session = Weapons.open(worker(body)).orElseThrow();
         helper.assertTrue(body.getMainHandItem().is(Items.BOW), "the usable explicitly preferred bow takes precedence over a sword earlier in the pack");
-        helper.assertTrue(supplies.preference(body.id()).orElseThrow() == PatrolSupplies.Loadout.BOW, "the explicit preference is observable without mutating it");
+        helper.assertTrue(supplies.preference(body.id()).orElseThrow() == LoadoutRegistry.BOW, "the explicit preference is observable without mutating it");
         helper.assertTrue(session.fire(fixture.target()), "the selected actual bow starts a native shot");
         AtomicInteger seen = ticking(helper, fixture, session);
         helper.runAfterDelay(40, () -> {
@@ -399,14 +399,14 @@ public final class WeaponSessionGameTests {
         bow.setDamageValue(7); bow.set(DataComponents.CUSTOM_NAME, Component.literal("cancelled preferred bow"));
         body.pack().insert(bow); body.pack().insert(new ItemStack(Items.ARROW, 2));
         PatrolSupplies supplies = PatrolSupplies.of(colony);
-        supplies.loadout(body, PatrolSupplies.Loadout.BOW);
+        supplies.loadout(body, LoadoutRegistry.BOW);
         WeaponSession session = Weapons.open(worker(body)).orElseThrow();
         helper.assertTrue(session.fire(fixture.target()), "the preferred bow begins drawing");
         AtomicInteger seen = ticking(helper, fixture, session);
         helper.runAfterDelay(10, () -> {
-            supplies.loadout(body, PatrolSupplies.Loadout.BOW);
+            supplies.loadout(body, LoadoutRegistry.BOW);
             helper.assertValueEqual(session.state(), WeaponSession.State.FIRING, "reapplying the same preference does not cancel an active draw");
-            supplies.loadout(body, PatrolSupplies.Loadout.MELEE);
+            supplies.loadout(body, LoadoutRegistry.MELEE);
             helper.assertValueEqual(session.state(), WeaponSession.State.CLOSED, "an actual preference change closes the old local session immediately");
             helper.assertTrue(!body.hasWeaponSession() && body.getMainHandItem().isEmpty(), "normal closure returns the old actual weapon before reselection");
             helper.assertValueEqual(body.pack().count(Items.BOW), 1, "the cancelled bow returns once");
@@ -416,7 +416,7 @@ public final class WeaponSessionGameTests {
             for (int slot = 0; slot < body.pack().getContainerSize(); slot++) {
                 if (body.pack().getItem(slot).is(Items.ARROW)) { body.pack().removeItemNoUpdate(slot); }
             }
-            supplies.loadout(body, PatrolSupplies.Loadout.BOW);
+            supplies.loadout(body, LoadoutRegistry.BOW);
             WeaponSession fallback = Weapons.open(worker(body)).orElseThrow();
             helper.assertTrue(body.getMainHandItem().is(Items.IRON_SWORD), "an empty preferred bow still falls back to a usable carried sword");
             fallback.close();
