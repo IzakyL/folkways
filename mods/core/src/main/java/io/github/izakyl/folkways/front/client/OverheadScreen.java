@@ -38,6 +38,8 @@ final class OverheadScreen extends Screen {
     private static final int STATUS = 0xFFF0EEE6;
     private static final int BED = 0x80000000;
 
+    static int hintsTop() { return MARGIN + 2 * Chip.HEIGHT + 2 * GAP + STATUS_HEIGHT + 4; }
+
     private long lastFrameMs = Util.getMillis();
     private Laid laid;
     private enum Drag { NONE, BLOCKED, LEGACY, PAN, ORBIT }
@@ -207,6 +209,7 @@ final class OverheadScreen extends Screen {
         lastFrameMs = now;
 
         handler().ifPresent(handler -> handler.render(graphics, mouseX, mouseY, partialTick));
+        KeyHints.renderOverhead(graphics);
 
         status().ifPresent(status -> {
             int textWidth = font.width(status);
@@ -226,8 +229,7 @@ final class OverheadScreen extends Screen {
     private Optional<Component> status() {
         Optional<OverheadTools.Tool> tool = OverheadTools.selected();
         if (tool.isPresent()) {
-            return Optional.of(Component.translatable(Overhead.tacticalControls()
-                ? "folkways.overhead.camera.tactical" : tool.get().nameKey()));
+            return Optional.of(Component.translatable(tool.get().nameKey()));
         }
         if (laid.gesture() == Shape.Gesture.BOX) {
             return ZoneSelection.status();
@@ -329,17 +331,16 @@ final class OverheadScreen extends Screen {
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (toolKeys.contains(keyCode)) { return true; }
+        if (keyCode == InputConstants.KEY_TAB) {
+            toolKeys.add(keyCode);
+            cycleGestureOrTool();
+            return true;
+        }
         if (getFocused() == null && handler().filter(handler -> handler.keyPressed(keyCode, scanCode, modifiers)).isPresent()) {
             toolKeys.add(keyCode);
             return true;
         }
         switch (keyCode) {
-            case InputConstants.KEY_TAB -> {
-                OverheadTools.deselect();
-                HeldBook.bound(minecraft.player).ifPresent(book -> PacketDistributor.sendToServer(
-                    new SetBookGesturePacket(book.hand(), BookGestures.next(book.gesture()))));
-                return true;
-            }
             case InputConstants.KEY_BACKSPACE, InputConstants.KEY_DELETE -> {
                 if (OverheadTools.selected().isPresent()) { return true; }
                 if (HeldPlacement.holding()) {
@@ -355,6 +356,49 @@ final class OverheadScreen extends Screen {
                 return super.keyPressed(keyCode, scanCode, modifiers);
             }
         }
+    }
+
+    /** Tab walks the book's gestures and then each registered overhead tool before returning to the first gesture. */
+    private void cycleGestureOrTool() {
+        cancelDraftsForCycle();
+        Optional<HeldBook> held = HeldBook.bound(minecraft.player);
+        if (held.isEmpty()) {
+            OverheadTools.deselect();
+            return;
+        }
+        List<Shape.Gesture> gestures = BookGestures.offered();
+        List<OverheadTools.Tool> tools = OverheadTools.tools();
+        Optional<OverheadTools.Tool> selected = OverheadTools.selected();
+        if (selected.isPresent()) {
+            int at = tools.indexOf(selected.get());
+            if (at >= 0 && at + 1 < tools.size()) {
+                OverheadTools.select(tools.get(at + 1).id());
+                return;
+            }
+            OverheadTools.deselect();
+            setGesture(held.get(), gestures.get(0));
+            return;
+        }
+
+        int at = gestures.indexOf(held.get().gesture());
+        if (at >= 0 && at + 1 < gestures.size()) {
+            setGesture(held.get(), gestures.get(at + 1));
+        } else if (!tools.isEmpty()) {
+            OverheadTools.select(tools.get(0).id());
+        } else {
+            setGesture(held.get(), gestures.get(0));
+        }
+    }
+
+    private static void cancelDraftsForCycle() {
+        if (HeldPlacement.holding()) { HeldPlacement.discard(); }
+        if (ZoneSelection.drafting()) { ZoneSelection.discard(); }
+        if (PathSelection.drafting()) { PathSelection.discard(); }
+    }
+
+    private static void setGesture(HeldBook book, Shape.Gesture gesture) {
+        OverheadTools.deselect();
+        PacketDistributor.sendToServer(new SetBookGesturePacket(book.hand(), gesture));
     }
 
     @Override

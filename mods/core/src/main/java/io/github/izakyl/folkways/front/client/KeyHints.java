@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.front.client;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.front.api.ui.Cue;
+import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
 import io.github.izakyl.folkways.front.ui.screen.Desk;
 import java.util.ArrayList;
@@ -33,7 +34,7 @@ public final class KeyHints {
     @SubscribeEvent
     public static void onHud(RenderGuiEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (Overhead.screened(minecraft) || minecraft.player == null || minecraft.options.hideGui) {
+        if (Overhead.on() || Overhead.screened(minecraft) || minecraft.player == null || minecraft.options.hideGui) {
             return;
         }
         Optional<HeldBook> book = HeldBook.any(minecraft.player);
@@ -43,6 +44,41 @@ public final class KeyHints {
         List<Cue> cues = inHand(minecraft, book.get());
         GuiGraphics graphics = event.getGuiGraphics();
         draw(graphics, cues, (graphics.guiHeight() - cues.size() * CueLines.LINE) / 2);
+    }
+
+    /** The overhead screen owns these hints so its tool overlay and reserved bottom controls cannot cover them. */
+    static void renderOverhead(GuiGraphics graphics) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!Overhead.activeScreen() || minecraft.player == null || minecraft.options.hideGui) {
+            return;
+        }
+        Optional<HeldBook> book = HeldBook.any(minecraft.player);
+        if (book.isEmpty()) {
+            return;
+        }
+        List<Cue> cues = inHand(minecraft, book.get());
+        if (cues.isEmpty()) {
+            return;
+        }
+        int height = graphics.guiHeight();
+        int bottomInset = OverheadTools.selectedHandler().map(OverheadTools.Handler::bottomInset).orElse(0);
+        int top = OverheadScreen.hintsTop();
+        int available = Math.max(0, height - Math.max(0, bottomInset) - top - MARGIN);
+        int cueHeight = cues.size() * CueLines.LINE;
+        float scale = Math.min(1.0F, available / (float) cueHeight);
+        if (scale <= 0.0F) {
+            return;
+        }
+
+        Font font = minecraft.font;
+        int width = CueLines.width(font, cues);
+        int bottom = cues.size() * CueLines.LINE - (CueLines.LINE - KeyGlyph.HEIGHT);
+        graphics.pose().pushPose();
+        graphics.pose().translate(MARGIN, top, 0.0F);
+        graphics.pose().scale(scale, scale, 1.0F);
+        graphics.fill(-PADDING, -PADDING, width + PADDING, bottom + PADDING, BED);
+        CueLines.draw(graphics, font, cues, 0, 0);
+        graphics.pose().popPose();
     }
 
     @SubscribeEvent
@@ -75,10 +111,16 @@ public final class KeyHints {
         } else if (HeldPlacement.holding()) {
             placing(cues);
         } else {
-            switch (book.gesture()) {
-                case POINT -> pointing(minecraft, cues);
-                case BOX -> marking(minecraft, cues);
-                case LINE -> lining(minecraft, cues);
+            List<Cue> toolCues = Overhead.on()
+                ? OverheadTools.selectedHandler().map(OverheadTools.Handler::cues).orElse(List.of()) : List.of();
+            if (!toolCues.isEmpty()) {
+                cues.addAll(toolCues);
+            } else {
+                switch (book.gesture()) {
+                    case POINT -> pointing(minecraft, cues);
+                    case BOX -> marking(minecraft, cues);
+                    case LINE -> lining(minecraft, cues);
+                }
             }
         }
         cues.add(Overhead.on() ? Cue.of("folkways.keys.gesture", Cue.Key.TAB)
@@ -87,7 +129,12 @@ public final class KeyHints {
             cues.add(Cue.of("folkways.keys.overhead.fly", Cue.Key.WALK));
             cues.add(Cue.of("folkways.keys.overhead.up", Cue.Key.JUMP));
             cues.add(Cue.of("folkways.keys.overhead.down", Cue.Key.SNEAK));
-            cues.add(Cue.of("folkways.keys.overhead.turn", Cue.Key.DRAG));
+            if (Overhead.tacticalControls()) {
+                cues.add(Cue.of("folkways.keys.overhead.pan", Cue.Key.DRAG));
+                cues.add(Cue.of("folkways.keys.overhead.orbit", Cue.Key.ALTERNATE, Cue.Key.DRAG));
+            } else {
+                cues.add(Cue.of("folkways.keys.overhead.turn", Cue.Key.DRAG));
+            }
             cues.add(Cue.of("folkways.keys.overhead.near", Cue.Key.WHEEL));
             cues.add(Cue.of("folkways.keys.overhead.leave", Cue.Key.OVERHEAD));
         } else if (book.colonyId() != null) {

@@ -124,15 +124,24 @@ The page also provides retreat, release and melee/bow/crossbow preferences. Acti
 
 Core exposes generic OverheadTools.Handler callbacks and Overhead.screenRay(); Vanilla owns CombatPackets, SelectionOrders and UnitGroups.commandSelection(). Optional folkways_war installs the interaction handler onto Vanilla's existing combat tool and never owns navigation. Without War, the previous book action remains available.
 
-| Input                     | Result                                                                                            |
-| ------------------------- | ------------------------------------------------------------------------------------------------- |
-| LMB drag / click          | Select loaded colony residents by their projected screen rectangles / select one                  |
-| Ctrl+1–9 / 1–9            | Save the exact current selection / recall currently available members                             |
-| RMB ground                | Submit one move intent for the whole selection, with compact ranks based on its actual size       |
-| Ctrl+RMB                  | Add draft waypoints; after two distinct points, click the first marker to close and submit patrol |
-| Backspace / Esc or Delete | Undo the last point / cancel the draft                                                            |
+| Input                     | Result                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------- |
+| LMB drag / click          | Select loaded colony residents by their projected screen rectangles / select one               |
+| Ctrl+1–9 / 1–9            | Save the exact current selection / recall currently available members                          |
+| RMB ground                | Move the logical captain to the clicked point while the whole squad advances around it         |
+| RMB nonfriendly mob       | Order the selection to attack that explicit target; residents, allies and players are excluded |
+| Ctrl+RMB                  | Mark mandatory waypoints; click any earlier marker to run the prefix then loop from that point |
+| Backspace / Esc or Delete | Undo the last point / cancel the draft                                                         |
 
 Shortcut sets can overlap and do not alter actual membership or labour. They last for this client session and clear on colony/realm change or logout. Drafts do not issue orders until closure; selection changes, missing members and leaving the tool or screen cancel them. MMB camera movement retains the route draft. Consumed shortcuts are latched until key release, preventing repeats and hotbar changes. The existing page remains available for guard posts, retreat, release and loadouts.
+
+Marking A, B, C, D, then B submits `[A,B,C,D]` with `cycleStart=1`: visit A, then loop B→C→D→B. Every designated stop assembles present members and waits 20 ticks. A separate transient PointRoute uses a logical captain with no extra entity, connected dry nearby slots and shared advances of at most three blocks; everyone assembles before the next advance. Slots tolerate two blocks of local rise/drop. Explicit Deployment endpoints retain their previous meaning. Unsafe progress or a 2400-tick leg timeout releases control; existing missing/death/unload handling remains in effect.
+
+Core's Urge.Priority.CONTROL separates deliberate control from ordinary numeric needs. Move, hold, retreat and explicit attack preempt through the same safe BodyRunner, preserving tool and material settlement. New point-patrol GUARD orders use Order.deliberateGuard(), yielding only for actual combat or wounded danger; legacy autonomous guards retain their previous rules. Extension stun and lifecycle locks remain authoritative.
+
+Handler.cues() supplies one mode-aware hint panel with LMB selection, RMB move/attack, MMB pan and Alt+MMB orbit. The bottom inset reserves room for numbered shortcut cards and selected residents' face/health cards, with selection clicks and pagination. Faces use each appearance's declared skin or geometry fallback instead of rerendering every entity. Tab cycles book gestures and registered tools in both directions of the loop, discarding unfinished drawings when switching.
+
+Explicit attacks approach and fire through the same runner and a real WeaponSession. Authority, target identity, alliances, life and pursuit bounds are continually checked: 600 ticks, 64 blocks from the target's initial point and 128 blocks from commander and resident. WeaponSession.explicitTarget(target, authorized) is an opt-in, revocable, single-target contract; unsupported extensions reject it. Autonomous neutrality and patrol hostility are unchanged, and player PvP is excluded.
 
 The client obtains an authorized roster instead of inferring enrollment from unsynchronized Body attachments. Commands carry an explicit colony ID, resident UUIDs and WorldPos points. The server checks authority, every selected resident, every stop and every final slot before replacing control. Selected members may come from multiple groups; unselected members retain their original group intent, and old handles cannot close replacement orders. Packet safety limits are 256 selected residents and 16 stops, rejecting the whole request on overflow rather than selecting only eight. These limits do not establish large-group performance or terrain reliability.
 

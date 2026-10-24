@@ -19,6 +19,10 @@ public final class OverheadTools {
      * Install implementations during client setup only. Tools without a handler retain their old behavior.
      */
     public interface Handler {
+        /** Key hints for this tool while it is selected in the overhead view. */
+        default List<Cue> cues() { return List.of(); }
+        /** Space reserved at the bottom of the overhead view for this tool's controls. */
+        default int bottomInset() { return 0; }
         default boolean mouseClicked(double mouseX, double mouseY, int button) { return false; }
         default boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
             return false;

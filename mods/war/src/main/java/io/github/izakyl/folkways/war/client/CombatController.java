@@ -2,10 +2,12 @@ package io.github.izakyl.folkways.war.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.izakyl.folkways.core.api.colony.Books;
+import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.front.api.ui.Cue;
 import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.client.Overhead;
 import io.github.izakyl.folkways.plugins.combat.net.CombatPackets;
@@ -25,10 +27,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -40,9 +43,8 @@ import org.lwjgl.glfw.GLFW;
 final class CombatController implements OverheadTools.Handler {
     private static final int SELECTED = 0xFF8FEAC3;
     private static final int DRAFT = 0xFFFFDC7A;
-    private static final int TEXT = 0xFFF0EEE6;
-    private static final int BED = 0xB0000000;
     private static final int CLOSE_RADIUS = 12;
+    private final CombatCards cards = new CombatCards();
     private final LinkedHashSet<UUID> selected = new LinkedHashSet<>();
     private final Map<Integer, List<UUID>> shortcuts = new HashMap<>();
     private final Map<UUID, ResidentEntity> residents = new LinkedHashMap<>();
@@ -53,6 +55,8 @@ final class CombatController implements OverheadTools.Handler {
     private double startX, startY, endX, endY;
     private Component notice = Component.empty();
     private long noticeUntil;
+    private WorldPos moveMarker;
+    private long markerUntil;
 
     private record Context(UUID player, UUID colony, Realm realm) { }
 
@@ -91,8 +95,33 @@ final class CombatController implements OverheadTools.Handler {
     }
 
     @Override
+    public List<Cue> cues() {
+        return List.of(Cue.of("folkways.keys.combat.select", Cue.Key.CLICK),
+            Cue.of("folkways.keys.combat.order", Cue.Key.ALT_CLICK),
+            Cue.of("folkways.keys.combat.route", Cue.Key.MODIFIER, Cue.Key.ALT_CLICK));
+    }
+
+    @Override
+    public int bottomInset() { return CombatCards.HEIGHT; }
+
+    @Override
     public boolean mouseClicked(double x, double y, int button) {
-        if (y >= Minecraft.getInstance().getWindow().getGuiScaledHeight() - 58) { return true; }
+        if (y >= cards.top()) {
+            if (button == InputConstants.MOUSE_BUTTON_LEFT && ready()) {
+                CombatCards.Action action = cards.clicked(x, y);
+                if (action != null) {
+                    switch (action.kind()) {
+                        case GROUP -> shortcut(action.slot());
+                        case UNIT -> {
+                            if (residents.containsKey(action.resident())) { replaceSelection(Set.of(action.resident())); }
+                        }
+                        case PREVIOUS -> cards.page(false, selected.size());
+                        case NEXT -> cards.page(true, selected.size());
+                    }
+                }
+            }
+            return true;
+        }
         if (button == InputConstants.MOUSE_BUTTON_LEFT) {
             dragging = true; startX = endX = x; startY = endY = y; return true;
         }
@@ -101,11 +130,22 @@ final class CombatController implements OverheadTools.Handler {
         // Always consume RMB here: even an invalid command must not fall through to opening the book.
         if (!ready()) { return true; }
         if (selected.isEmpty()) { tell("folkways.war.select_first"); return true; }
-        if (Screen.hasControlDown() && route.size() >= 2 && nearFirst(x, y)) {
-            if (CombatPackets.submit(List.copyOf(selected), List.copyOf(route), true)) {
+        int closing = Screen.hasControlDown() ? nearWaypoint(x, y) : -1;
+        if (closing >= 0) {
+            if (closing >= route.size() - 1) { tell("folkways.war.cycle_too_short"); return true; }
+            if (CombatPackets.submit(List.copyOf(selected), List.copyOf(route), closing)) {
                 route.clear(); tell("folkways.war.patrol_sent", selected.size());
             } else { tell("folkways.war.syncing"); }
             return true;
+        }
+        if (!Screen.hasControlDown()) {
+            Optional<Mob> target = target(x, y);
+            if (target.isPresent()) {
+                if (CombatPackets.attack(List.copyOf(selected), target.get().getUUID())) {
+                    route.clear(); tell("folkways.war.attack_sent", selected.size(), target.get().getDisplayName());
+                } else { tell("folkways.war.syncing"); }
+                return true;
+            }
         }
         Optional<WorldPos> point = ground(x, y);
         if (point.isEmpty()) { tell("folkways.war.ground_required"); return true; }
@@ -113,11 +153,19 @@ final class CombatController implements OverheadTools.Handler {
             if (!route.isEmpty() && !route.getFirst().sameRealm(point.get())) {
                 tell("folkways.war.ground_required"); return true;
             }
-            if (route.contains(point.get())) { tell("folkways.war.close_route"); return true; }
+            int repeated = route.indexOf(point.get());
+            if (repeated >= 0) {
+                if (repeated >= route.size() - 1) { tell("folkways.war.cycle_too_short"); return true; }
+                if (CombatPackets.submit(List.copyOf(selected), List.copyOf(route), repeated)) {
+                    route.clear(); tell("folkways.war.patrol_sent", selected.size());
+                } else { tell("folkways.war.syncing"); }
+                return true;
+            }
             if (route.size() >= CombatPackets.MAX_POINTS) { tell("folkways.war.route_full", CombatPackets.MAX_POINTS); return true; }
             route.add(point.get()); tell("folkways.war.waypoint_added", route.size());
         } else {
-            if (CombatPackets.submit(List.copyOf(selected), List.of(point.get()), false)) {
+            if (CombatPackets.submit(List.copyOf(selected), List.of(point.get()), -1)) {
+                moveMarker = point.get(); markerUntil = Util.getMillis() + 3000;
                 route.clear(); tell("folkways.war.move_sent", selected.size());
             } else { tell("folkways.war.syncing"); }
         }
@@ -169,15 +217,7 @@ final class CombatController implements OverheadTools.Handler {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode >= GLFW.GLFW_KEY_1 && keyCode <= GLFW.GLFW_KEY_9) {
             if (!ready()) { return true; }
-            int slot = keyCode - GLFW.GLFW_KEY_0;
-            if (Screen.hasControlDown()) {
-                shortcuts.put(slot, List.copyOf(selected));
-                tell("folkways.war.group_saved", slot, selected.size());
-            } else {
-                List<UUID> saved = shortcuts.getOrDefault(slot, List.of());
-                replaceSelection(new LinkedHashSet<>(saved.stream().filter(residents::containsKey).toList()));
-                tell("folkways.war.group_recalled", slot, selected.size(), saved.size());
-            }
+            shortcut(keyCode - GLFW.GLFW_KEY_0);
             return true;
         }
         if ((keyCode == GLFW.GLFW_KEY_ESCAPE || keyCode == GLFW.GLFW_KEY_DELETE
@@ -193,7 +233,42 @@ final class CombatController implements OverheadTools.Handler {
         if (next.size() > CombatPackets.MAX_MEMBERS) { tell("folkways.war.selection_limit", CombatPackets.MAX_MEMBERS); return; }
         if (!selected.equals(next)) { route.clear(); }
         selected.clear(); selected.addAll(next);
+        cards.reset();
         tell("folkways.war.selected", selected.size());
+    }
+
+    private void shortcut(int slot) {
+        if (Screen.hasControlDown()) {
+            shortcuts.put(slot, List.copyOf(selected));
+            tell("folkways.war.group_saved", slot, selected.size());
+        } else {
+            List<UUID> saved = shortcuts.getOrDefault(slot, List.of());
+            replaceSelection(new LinkedHashSet<>(saved.stream().filter(residents::containsKey).toList()));
+            tell("folkways.war.group_recalled", slot, selected.size(), saved.size());
+        }
+    }
+
+    private Optional<Mob> target(double x, double y) {
+        Minecraft minecraft = Minecraft.getInstance();
+        return Overhead.screenRay(x, y).flatMap(ray -> {
+            Vec3 end = ray.origin().add(ray.direction().scale(512));
+            BlockHitResult obstruction = minecraft.level.clip(new ClipContext(ray.origin(), end,
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, minecraft.player));
+            double nearest = obstruction.getLocation().distanceToSqr(ray.origin());
+            Mob aimed = null;
+            for (Entity entity : minecraft.level.entitiesForRendering()) {
+                if (!(entity instanceof Mob mob) || !mob.isAlive() || mob.isRemoved() || !mob.isPickable()
+                    || Bodies.of(mob).isPresent() || mob.isAlliedTo(minecraft.player) || minecraft.player.isAlliedTo(mob)
+                    || selected.stream().map(residents::get).filter(java.util.Objects::nonNull)
+                        .anyMatch(friend -> mob.isAlliedTo(friend) || friend.isAlliedTo(mob))
+                    || mob instanceof TamableAnimal pet && pet.isOwnedBy(minecraft.player)) { continue; }
+                Optional<Vec3> hit = mob.getBoundingBox().inflate(.15).clip(ray.origin(), end);
+                if (hit.isPresent() && hit.get().distanceToSqr(ray.origin()) < nearest) {
+                    nearest = hit.get().distanceToSqr(ray.origin()); aimed = mob;
+                }
+            }
+            return Optional.ofNullable(aimed);
+        });
     }
 
     private Optional<WorldPos> ground(double x, double y) {
@@ -201,7 +276,7 @@ final class CombatController implements OverheadTools.Handler {
         return Overhead.screenRay(x, y).flatMap(ray -> {
             BlockHitResult hit = minecraft.level.clip(new ClipContext(ray.origin(), ray.origin().add(ray.direction().scale(512)),
                 ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, minecraft.player));
-            if (hit.getType() != HitResult.Type.BLOCK || hit.getDirection() != Direction.UP) { return Optional.empty(); }
+            if (hit.getType() != HitResult.Type.BLOCK) { return Optional.empty(); }
             BlockPos feet = hit.getBlockPos().above();
             if (!minecraft.level.hasChunkAt(feet) || !Footing.withFeetAt(minecraft.level, feet)
                 || !minecraft.level.getFluidState(feet).isEmpty() || !minecraft.level.getFluidState(feet.above()).isEmpty()) {
@@ -212,11 +287,20 @@ final class CombatController implements OverheadTools.Handler {
         });
     }
 
-    private boolean nearFirst(double x, double y) {
+    private int nearWaypoint(double x, double y) {
         Minecraft minecraft = Minecraft.getInstance();
-        return WorldSpaces.world(minecraft.level, route.getFirst()).flatMap(world ->
-            new CombatProjection(minecraft).point(world.add(0, 0.12, 0)))
-            .filter(pixel -> Math.hypot(pixel.x() - x, pixel.y() - y) <= CLOSE_RADIUS).isPresent();
+        CombatProjection projection = new CombatProjection(minecraft);
+        double nearest = CLOSE_RADIUS;
+        int found = -1;
+        for (int index = 0; index < route.size(); index++) {
+            Optional<CombatProjection.Pixel> pixel = WorldSpaces.world(minecraft.level, route.get(index))
+                .flatMap(world -> projection.point(world.add(0, .12, 0)));
+            if (pixel.isPresent()) {
+                double distance = Math.hypot(pixel.get().x() - x, pixel.get().y() - y);
+                if (distance <= nearest) { nearest = distance; found = index; }
+            }
+        }
+        return found;
     }
 
     @Override
@@ -236,38 +320,28 @@ final class CombatController implements OverheadTools.Handler {
             outline(graphics, area, SELECTED);
         }
         drawRoute(graphics, projection, mouseX, mouseY);
-        int width = minecraft.getWindow().getGuiScaledWidth();
-        int top = minecraft.getWindow().getGuiScaledHeight() - 55;
-        graphics.fill(5, top - 3, width - 5, top + 51, BED);
-        graphics.enableScissor(7, top - 1, width - 7, top + 50);
-        graphics.drawString(minecraft.font, Component.translatable("folkways.war.selected", selected.size()), 9, top, SELECTED, true);
-        graphics.drawString(minecraft.font, Component.translatable("folkways.war.controls"), 9, top + 11, TEXT, true);
-        graphics.drawString(minecraft.font, Component.translatable("folkways.war.path_controls"), 9, top + 22, TEXT, true);
+        if (moveMarker != null && Util.getMillis() <= markerUntil) {
+            WorldSpaces.world(minecraft.level, moveMarker).flatMap(projection::point).ifPresent(pixel ->
+                outline(graphics, new CombatProjection.Rect(pixel.x() - 5, pixel.y() - 5, pixel.x() + 5, pixel.y() + 5), SELECTED));
+        }
         Component status = Util.getMillis() <= noticeUntil ? notice : !rosterReady()
-            ? Component.translatable("folkways.war.syncing") : Component.translatable("folkways.war.shortcut_lifetime");
-        graphics.drawString(minecraft.font, status, 9, top + 35, DRAFT, true);
-        StringBuilder groups = new StringBuilder();
-        for (int slot = 1; slot <= 9; slot++) {
-            if (shortcuts.containsKey(slot)) { groups.append(slot).append(':').append(shortcuts.get(slot).size()).append("  "); }
-        }
-        if (!groups.isEmpty()) {
-            Component label = Component.translatable("folkways.war.groups").append(groups.toString());
-            graphics.drawString(minecraft.font, label, Math.max(9, width - minecraft.font.width(label) - 9), top, TEXT, true);
-        }
-        graphics.disableScissor();
+            ? Component.translatable("folkways.war.syncing") : Component.empty();
+        cards.render(graphics, mouseX, mouseY, selected, residents, shortcuts, route.size(), status);
     }
 
     private void drawRoute(GuiGraphics graphics, CombatProjection projection, int mouseX, int mouseY) {
         Minecraft minecraft = Minecraft.getInstance();
         CombatProjection.Pixel previous = null;
+        int closing = Screen.hasControlDown() ? nearWaypoint(mouseX, mouseY) : -1;
         for (int index = 0; index < route.size(); index++) {
             Optional<Vec3> world = WorldSpaces.world(minecraft.level, route.get(index));
             Optional<CombatProjection.Pixel> point = world.flatMap(at -> projection.point(at.add(0, 0.12, 0)));
             if (point.isEmpty()) { previous = null; continue; }
             CombatProjection.Pixel at = point.get();
             if (previous != null) { segment(graphics, previous.x(), previous.y(), at.x(), at.y(), DRAFT); }
-            int radius = index == 0 ? CLOSE_RADIUS : 4;
-            outline(graphics, new CombatProjection.Rect(at.x() - radius, at.y() - radius, at.x() + radius, at.y() + radius), DRAFT);
+            int radius = 6;
+            int color = closing == index && index < route.size() - 1 ? SELECTED : DRAFT;
+            outline(graphics, new CombatProjection.Rect(at.x() - radius, at.y() - radius, at.x() + radius, at.y() + radius), color);
             graphics.drawString(minecraft.font, Integer.toString(index + 1), (int) at.x() + 6, (int) at.y() - 4, DRAFT, true);
             previous = at;
         }
@@ -303,8 +377,9 @@ final class CombatController implements OverheadTools.Handler {
     public void cancelPointer() { dragging = false; }
 
     void reset() {
-        cancel(); selected.clear(); shortcuts.clear(); residents.clear(); context = null; requestIn = 0;
+        cancel(); selected.clear(); shortcuts.clear(); residents.clear(); cards.reset(); context = null; requestIn = 0;
         CombatPackets.clearRoster();
+        moveMarker = null; markerUntil = 0;
         notice = Component.empty(); noticeUntil = 0;
     }
 }

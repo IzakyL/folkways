@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -36,7 +36,9 @@ function constantsOf(text: string, enumName: string): string[] {
   return [...listed.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)].map((m) => m[1]);
 }
 
-const javaFiles = readdirSync(MODS).flatMap((mod) => walk(path.join(MODS, mod, "src/main/java")));
+// A branch switch can leave only ignored build output for an optional module.
+const javaFiles = readdirSync(MODS).map((mod) => path.join(MODS, mod, "src/main/java"))
+  .filter(existsSync).flatMap((java) => walk(java));
 
 // The refusal tables churn with every new RefusalKind; keep this a local check so it never holds up the nightly build.
 const skip = process.env.CI ? "local only: refusal tables change too often to gate CI" : false;
