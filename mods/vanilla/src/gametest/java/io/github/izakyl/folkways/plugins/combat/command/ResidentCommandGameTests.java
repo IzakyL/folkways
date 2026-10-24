@@ -348,6 +348,34 @@ public final class ResidentCommandGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty_large")
+    public static void guardMountsKeepCommandAuthorityAndReplacementReleasesOnlyTheirSeat(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body body = f.resident(new BlockPos(2, 1, 2));
+        var seat = EntityType.BOAT.create(f.level);
+        var other = EntityType.BOAT.create(f.level);
+        seat.moveTo(body.mob().position()); other.moveTo(body.mob().position());
+        f.level.addFreshEntity(seat); f.level.addFreshEntity(other);
+        try {
+            ResidentCommands.Order guard = f.commands.guard(body, f.at(2, 1, 2), new Vec3(1, 0, 0));
+            helper.assertTrue(guard.mount(seat), "the current guard owns the real mount");
+            f.commands.tick(f.level.getServer());
+            helper.assertTrue(f.commands.current(body.id()).orElseThrow() == guard && guard.operating(),
+                "an owned mount preserves the guard command");
+            ResidentCommands.Order retreat = f.commands.retreat(body, f.at(3, 1, 2));
+            helper.assertFalse(body.mob().isPassenger(), "retreat releases its predecessor's seat immediately");
+            helper.assertFalse(guard.mount(seat), "a replaced handle cannot mount again");
+            helper.assertFalse(retreat.mount(seat), "only guard orders may operate a seat");
+            Body replacement = f.resident(new BlockPos(4, 1, 2));
+            ResidentCommands.Order next = f.commands.guard(replacement, f.at(4, 1, 2), new Vec3(1, 0, 0));
+            helper.assertTrue(next.mount(seat), "another guard may operate the released seat");
+            replacement.mob().stopRiding(); replacement.mob().startRiding(other, true);
+            next.dismount();
+            helper.assertTrue(replacement.mob().getVehicle() == other, "closing a stale loan preserves an unrelated seat");
+        } finally { body.mob().stopRiding(); seat.discard(); other.discard(); }
+        helper.succeed();
+    }
+
     private static final class Job implements Node {
         final AtomicBoolean working = new AtomicBoolean();
         final AtomicBoolean finish = new AtomicBoolean();

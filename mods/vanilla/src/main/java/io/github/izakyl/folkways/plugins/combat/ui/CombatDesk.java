@@ -163,7 +163,8 @@ public final class CombatDesk {
         Body body = java.util.Optional.ofNullable(player.serverLevel().getEntity(id)).flatMap(Bodies::of)
             .orElseThrow(() -> new IllegalArgumentException("folkways.combat.error.members"));
         require(body.kind().id().equals(PersonBody.ID) && body.mob().isAlive() && !body.mob().isRemoved()
-            && !body.mob().isPassenger() && body.colonyId().filter(colony.id()::equals).isPresent()
+            && (!body.mob().isPassenger() || ResidentCommands.of(colony).current(id)
+                .filter(ResidentCommands.Order::operating).isPresent()) && body.colonyId().filter(colony.id()::equals).isPresent()
             && colony.holdingOf(id).isPresent() && WorldSpaces.at(body.mob()).sameRealm(WorldSpaces.at(player)), "members");
         return body;
     }

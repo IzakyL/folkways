@@ -46,6 +46,22 @@ public final class PatrolSupplies {
     static final int TRIP_TICKS = 200;
     private static final int STORE_RANGE = 32;
 
+    private record Supply(ResourceLocation id, java.util.function.BiFunction<Colony, Body, List<Amount>> needs) { }
+    private static volatile List<Supply> extraSupplies = List.of();
+
+    /** Extra duty equipment uses the same physical, reservation-aware collection trips as personal loadouts. */
+    public static synchronized void registerSupply(ResourceLocation id,
+            java.util.function.BiFunction<Colony, Body, List<Amount>> needs) {
+        java.util.Objects.requireNonNull(id);
+        java.util.Objects.requireNonNull(needs);
+        if (extraSupplies.stream().anyMatch(entry -> entry.id().equals(id))) {
+            throw new IllegalArgumentException("patrol supply already registered: " + id);
+        }
+        List<Supply> next = new ArrayList<>(extraSupplies);
+        next.add(new Supply(id, needs));
+        extraSupplies = List.copyOf(next);
+    }
+
     public enum State { INACTIVE, READY, FETCHING, NO_STOCK, NO_ROOM, FAILED, CANCELLED, TIMED_OUT }
     public record Status(State state, String reason, long missing, Optional<WorldPos> source, long retryAt) { }
     record Demand(ItemSpec goods, int target, boolean weapon) { }
@@ -154,11 +170,13 @@ public final class PatrolSupplies {
     public List<Amount> keeps(Body body) {
         if (!(body.mob() instanceof ResidentEntity person)) { return List.of(); }
         LoadoutRegistry.Selection selected = selected(person);
-        if (selected == null || selected.provider().isEmpty()) { return List.of(); }
-        LoadoutProvider provider = selected.provider().orElseThrow();
         List<Amount> kept = new ArrayList<>();
-        kept.add(new Amount(provider.weapon(selected.options()), 1));
-        kept.addAll(provider.ammunition(selected.options()));
+        if (selected != null && selected.provider().isPresent()) {
+            LoadoutProvider provider = selected.provider().orElseThrow();
+            kept.add(new Amount(provider.weapon(selected.options()), 1));
+            kept.addAll(provider.ammunition(selected.options()));
+        }
+        for (Supply supply : extraSupplies) { kept.addAll(supply.needs().apply(colony, body)); }
         return List.copyOf(kept);
     }
 
@@ -295,6 +313,12 @@ public final class PatrolSupplies {
     }
 
     private Demand wanted(ResidentEntity body) {
+        for (Supply supply : extraSupplies) {
+            for (Amount amount : supply.needs().apply(colony, body)) {
+                Demand demand = new Demand(amount.spec(), Math.toIntExact(amount.count()), false);
+                if (missing(body, demand) > 0) { return demand; }
+            }
+        }
         LoadoutRegistry.Selection selected = selected(body);
         if (selected == null || selected.provider().isEmpty()) { return null; }
         LoadoutProvider provider = selected.provider().orElseThrow();

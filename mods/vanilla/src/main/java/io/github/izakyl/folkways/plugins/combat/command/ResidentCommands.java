@@ -37,6 +37,7 @@ public final class ResidentCommands {
         private long movingSince = server.overworld().getGameTime();
         private long engagedUntil = Long.MIN_VALUE;
         private boolean yielded;
+        private net.minecraft.world.entity.Entity mount;
         private volatile Status status = Status.MOVING;
         private volatile RefusalKind failure;
 
@@ -67,6 +68,23 @@ public final class ResidentCommands {
             }
         }
         public Optional<RefusalKind> failure() { return Optional.ofNullable(failure); }
+        /** Only this guard handle may lend its body to an emplacement seat. */
+        public boolean mount(net.minecraft.world.entity.Entity vehicle) {
+            requireServerThread();
+            if (mode != Mode.GUARD || active.get(resident()) != this || !valid(body)
+                    || vehicle.level() != body.mob().level() || !vehicle.isAlive()) { return false; }
+            if (body.mob().getVehicle() == vehicle && mount == vehicle) { return true; }
+            dismount();
+            if (!body.mob().startRiding(vehicle)) { return false; }
+            mount = vehicle;
+            return true;
+        }
+        public boolean operating() { return mount != null && body.mob().getVehicle() == mount; }
+        public void dismount() {
+            requireServerThread();
+            if (operating()) { body.mob().stopRiding(); }
+            mount = null;
+        }
         public void close() { release(this); }
     }
 
@@ -125,7 +143,7 @@ public final class ResidentCommands {
         if (body.mob() instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person) { person.stopWeaponSession(); }
         Order next = new Order(body, destination, mode, facing);
         Order previous = active.put(body.id(), next);
-        if (previous != null) { previous.status = Status.RELEASED; }
+        if (previous != null) { previous.dismount(); previous.status = Status.RELEASED; }
         return next;
     }
 
@@ -133,6 +151,7 @@ public final class ResidentCommands {
         requireServerThread();
         if (active.remove(order.resident(), order)) {
             if (order.body.mob() instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person) { person.stopWeaponSession(); }
+            order.dismount();
             order.status = Status.RELEASED;
         }
     }
@@ -142,6 +161,7 @@ public final class ResidentCommands {
         Order order = active.remove(resident);
         if (order != null) {
             if (order.body.mob() instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person) { person.stopWeaponSession(); }
+            order.dismount();
             order.status = Status.RELEASED;
         }
     }
@@ -159,7 +179,7 @@ public final class ResidentCommands {
 
     boolean active(Order order) {
         boolean activeNow = active.get(order.resident()) == order && valid(order.body);
-        if (activeNow && order.status == Status.HOLDING
+        if (activeNow && !order.operating() && order.status == Status.HOLDING
                 && !Reach.standingAt(order.body.mob().position(), order.destination.block(order.body.mob().level()))) {
             order.status = Status.MOVING;
             order.movingSince = server.overworld().getGameTime();
@@ -182,6 +202,7 @@ public final class ResidentCommands {
 
     void ended(Order order, Ending how) {
         if (how instanceof Ending.Failed failed && active.remove(order.resident(), order)) {
+            order.dismount();
             order.failure = failed.why();
             order.status = Status.FAILED;
         } else if (active.get(order.resident()) == order && order.mode == Mode.GUARD) {
@@ -197,12 +218,13 @@ public final class ResidentCommands {
         for (Order order : List.copyOf(active.values())) {
             if (!valid(order.body)) {
                 release(order);
-            } else if (order.mode == Mode.GUARD && (order.engaged() || order.yielded)
+            } else if (order.mode == Mode.GUARD && (order.engaged() || order.yielded || order.operating())
                     && order.status == Status.MOVING) {
                 // Combat and fear borrow this same runner. Only time owned by the command is travel time.
                 order.movingSince++;
             } else if (order.status == Status.MOVING && server.overworld().getGameTime() - order.movingSince >= 1200) {
                 active.remove(order.resident(), order);
+                order.dismount();
                 order.status = Status.FAILED;
             }
             if (active.get(order.resident()) == order) { active(order); }
@@ -210,14 +232,14 @@ public final class ResidentCommands {
     }
 
     void clear() {
-        active.values().forEach(order -> order.status = Status.RELEASED);
+        active.values().forEach(order -> { order.dismount(); order.status = Status.RELEASED; });
         active.clear();
     }
 
     private boolean valid(Body body) {
         return body.mob().level() instanceof ServerLevel level && level.getServer() == server
             && body.mob().isAlive() && !body.mob().isRemoved()
-            && !body.mob().isPassenger()
+            && (!body.mob().isPassenger() || Optional.ofNullable(active.get(body.id())).filter(Order::operating).isPresent())
             && body.colonyId().filter(colony.id()::equals).isPresent()
             && colony.holdingOf(body.id()).isPresent();
     }
