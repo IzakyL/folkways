@@ -272,6 +272,14 @@ public class ResidentEntity extends PathfinderMob implements Body {
         }
     }
 
+    /** Server-side control changes stop the one actual hand owner through its normal return lifecycle. */
+    public void stopWeaponSession() {
+        if (!(level() instanceof ServerLevel level) || !level.getServer().isSameThread()) {
+            throw new IllegalStateException("resident weapon control belongs to the server thread");
+        }
+        closeWeaponSession();
+    }
+
     @Override
     public ItemStack getProjectile(ItemStack weapon) {
         if (weaponSession != null && weapon.getItem() instanceof ProjectileWeaponItem projectile) {

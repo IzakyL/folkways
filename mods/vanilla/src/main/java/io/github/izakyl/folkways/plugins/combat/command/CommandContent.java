@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.api.participation.Participation;
 import io.github.izakyl.folkways.core.api.participation.Participations;
 import io.github.izakyl.folkways.core.api.participation.Stake;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.minecraft.resources.ResourceLocation;
@@ -23,6 +24,8 @@ public final class CommandContent {
 
     public static void declare(Declaring declaring) {
         Participations.register(PersonBody.ID, Stake.urge(ID), Participation.ALWAYS);
+        KitRules.supplyPolicy(ID, (colony, body) -> colony.service(ID, ResidentCommands.class)
+            .map(commands -> commands.current(body.id()).filter(commands::active).isEmpty()).orElse(true));
         declaring.colony(ID, scope -> {
             ResidentCommands commands = new ResidentCommands(scope.colony(), scope.server());
             scope.share(commands);

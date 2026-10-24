@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.Threats;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.core.api.colony.Asking;
 import io.github.izakyl.folkways.core.api.colony.Cadence;
@@ -82,6 +83,7 @@ final class PatrolPresence implements Facing {
     }
 
     private final Colony colony;
+    private final PatrolSupplies supplies;
 
     private final Asking asking;
 
@@ -103,11 +105,13 @@ final class PatrolPresence implements Facing {
 
     PatrolPresence(Colony colony) {
         this.colony = colony;
+        this.supplies = new PatrolSupplies(colony);
         this.asking = new Asking(colony, PatrolContent.ID, this::ended);
         this.cron = Cadence.claim(colony, PERIOD);
     }
 
     public void tick(MinecraftServer server) {
+        supplies.tick(server);
         if (!swept || cron.due(server)) {
             swept = true;
             refresh(server);
@@ -117,6 +121,8 @@ final class PatrolPresence implements Facing {
             asking.offer(server, this::goals);
         }
     }
+
+    PatrolSupplies supplies() { return supplies; }
 
     void refresh(MinecraftServer server) {
         Map<UUID, List<Stop>> found = new LinkedHashMap<>();
@@ -234,17 +240,21 @@ final class PatrolPresence implements Facing {
         if (!(body.level() instanceof ServerLevel level)) {
             return List.of();
         }
-        Optional<ResidentCommands.Order> guard = ResidentCommands.of(colony).current(who.resident().id())
-            .filter(order -> order.mode() == ResidentCommands.Mode.GUARD);
+        Optional<ResidentCommands.Order> order = ResidentCommands.of(colony).current(who.resident().id());
+        List<Urge> supply = supplies.urges(who, order,
+            lastWatch.getOrDefault(who.resident().id(), Long.MIN_VALUE),
+            dutyUntil.getOrDefault(who.resident().id(), Long.MIN_VALUE));
+        Optional<ResidentCommands.Order> guard = order
+            .filter(current -> current.mode() == ResidentCommands.Mode.GUARD);
         Optional<Mob> foe = guard.isPresent() || onDuty(who.resident().id(), level.getGameTime())
             ? nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE), guard)
             : attacker(body);
         if (foe.isEmpty() || !Weapons.armed(who)) {
-            return List.of();
+            return supply;
         }
         Optional<Stances> reach = battleStances(level, who, foe.get(), guard);
         if (reach.isEmpty()) {
-            return List.of();
+            return supply;
         }
         boolean standsGround = body.getHealth() > body.getMaxHealth() * WOUNDED;
         double weight = standsGround ? STAND_GROUND : Urge.NOW;
@@ -343,6 +353,7 @@ final class PatrolPresence implements Facing {
     }
 
     public void closed(Closing why) {
+        supplies.close();
         routes = Map.of();
         laps.clear();
         lastWatch.clear();

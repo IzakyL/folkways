@@ -2,6 +2,8 @@ package io.github.izakyl.folkways.plugins.combat.weapon;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
+import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Placement;
@@ -11,6 +13,7 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -355,6 +358,89 @@ public final class WeaponSessionGameTests {
             } finally { fixture.close(); }
             helper.succeed();
         });
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void anExplicitBowPreferenceFiresTheUsableBowAfterAnEarlierSword(GameTestHelper helper) {
+        Fixture fixture = fixture(helper, Items.IRON_SWORD, 3);
+        Colony colony = enroll(helper, fixture.body());
+        ResidentEntity body = fixture.body();
+        ItemStack bow = new ItemStack(Items.BOW);
+        bow.setDamageValue(7); bow.set(DataComponents.CUSTOM_NAME, Component.literal("preferred real bow"));
+        body.pack().insert(bow); body.pack().insert(new ItemStack(Items.ARROW, 3));
+        PatrolSupplies supplies = PatrolSupplies.of(colony);
+        supplies.loadout(body, PatrolSupplies.Loadout.BOW);
+        WeaponSession session = Weapons.open(worker(body)).orElseThrow();
+        helper.assertTrue(body.getMainHandItem().is(Items.BOW), "the usable explicitly preferred bow takes precedence over a sword earlier in the pack");
+        helper.assertTrue(supplies.preference(body.id()).orElseThrow() == PatrolSupplies.Loadout.BOW, "the explicit preference is observable without mutating it");
+        helper.assertTrue(session.fire(fixture.target()), "the selected actual bow starts a native shot");
+        AtomicInteger seen = ticking(helper, fixture, session);
+        helper.runAfterDelay(40, () -> {
+            try {
+                helper.assertTrue(seen.get() > 0 && fixture.target().getHealth() < fixture.target().getMaxHealth(),
+                    "preference selection produces a real arrow and real target damage");
+                helper.assertValueEqual(body.pack().count(Items.ARROW), 2, "the preferred shot consumes one actual arrow");
+                session.close();
+                helper.assertValueEqual(find(body, Items.BOW).getDamageValue(), 8, "the preferred real bow receives native wear");
+                helper.assertValueEqual(find(body, Items.IRON_SWORD).getDamageValue(), 3, "the preceding actual sword remains untouched");
+                helper.assertValueEqual(body.pack().count(Items.BOW), 1, "the preferred weapon returns once");
+                helper.assertValueEqual(body.pack().count(Items.IRON_SWORD), 1, "selection does not remove the player's other weapon");
+            } finally { fixture.close(); colony.raze(); }
+            helper.succeed();
+        });
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void changingPreferenceStopsTheOldDrawAndAnEmptyPreferredBowFallsBackToASword(GameTestHelper helper) {
+        Fixture fixture = fixture(helper, Items.IRON_SWORD, 3);
+        Colony colony = enroll(helper, fixture.body());
+        ResidentEntity body = fixture.body();
+        ItemStack bow = new ItemStack(Items.BOW);
+        bow.setDamageValue(7); bow.set(DataComponents.CUSTOM_NAME, Component.literal("cancelled preferred bow"));
+        body.pack().insert(bow); body.pack().insert(new ItemStack(Items.ARROW, 2));
+        PatrolSupplies supplies = PatrolSupplies.of(colony);
+        supplies.loadout(body, PatrolSupplies.Loadout.BOW);
+        WeaponSession session = Weapons.open(worker(body)).orElseThrow();
+        helper.assertTrue(session.fire(fixture.target()), "the preferred bow begins drawing");
+        AtomicInteger seen = ticking(helper, fixture, session);
+        helper.runAfterDelay(10, () -> {
+            supplies.loadout(body, PatrolSupplies.Loadout.BOW);
+            helper.assertValueEqual(session.state(), WeaponSession.State.FIRING, "reapplying the same preference does not cancel an active draw");
+            supplies.loadout(body, PatrolSupplies.Loadout.MELEE);
+            helper.assertValueEqual(session.state(), WeaponSession.State.CLOSED, "an actual preference change closes the old local session immediately");
+            helper.assertTrue(!body.hasWeaponSession() && body.getMainHandItem().isEmpty(), "normal closure returns the old actual weapon before reselection");
+            helper.assertValueEqual(body.pack().count(Items.BOW), 1, "the cancelled bow returns once");
+            WeaponSession melee = Weapons.open(worker(body)).orElseThrow();
+            helper.assertTrue(body.getMainHandItem().is(Items.IRON_SWORD), "the changed preference selects the actual melee weapon");
+            melee.close();
+            for (int slot = 0; slot < body.pack().getContainerSize(); slot++) {
+                if (body.pack().getItem(slot).is(Items.ARROW)) { body.pack().removeItemNoUpdate(slot); }
+            }
+            supplies.loadout(body, PatrolSupplies.Loadout.BOW);
+            WeaponSession fallback = Weapons.open(worker(body)).orElseThrow();
+            helper.assertTrue(body.getMainHandItem().is(Items.IRON_SWORD), "an empty preferred bow still falls back to a usable carried sword");
+            fallback.close();
+        });
+        helper.runAfterDelay(40, () -> {
+            try {
+                helper.assertValueEqual(seen.get(), 0, "the old cancelled draw creates no projectile after the preference changed");
+                helper.assertValueEqual(fixture.target().getHealth(), fixture.target().getMaxHealth(), "preference switching never finishes the pending shot");
+                helper.assertValueEqual(find(body, Items.BOW).getDamageValue(), 7, "the cancelled original keeps its durability");
+                helper.assertValueEqual(find(body, Items.BOW).get(DataComponents.CUSTOM_NAME), Component.literal("cancelled preferred bow"),
+                    "preference switching preserves the original components");
+                helper.assertValueEqual(body.pack().count(Items.BOW), 1, "multiple preference changes retain one actual bow");
+                helper.assertValueEqual(body.pack().count(Items.IRON_SWORD), 1, "multiple selections retain one actual sword");
+            } finally { fixture.close(); colony.raze(); }
+            helper.succeed();
+        });
+    }
+
+    private static Colony enroll(GameTestHelper helper, ResidentEntity body) {
+        Colony colony = Colonies.mint(helper.getLevel().getServer());
+        colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+        body.joinColony(colony.id());
+        colony.entered(body);
+        return colony;
     }
 
     private static AtomicInteger ticking(GameTestHelper helper, Fixture fixture, WeaponSession session) {

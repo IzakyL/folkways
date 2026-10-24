@@ -1,10 +1,12 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
+import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -80,6 +82,20 @@ public final class Weapons {
         if (worker.body() instanceof ResidentEntity resident && resident.hasWeaponSession()) {
             return registered.stream().map(Registered::adapter)
                 .filter(adapter -> adapter.usable(worker, resident.getMainHandItem())).findFirst();
+        }
+        if (worker.body() instanceof ResidentEntity resident && resident.level() instanceof ServerLevel level) {
+            Optional<PatrolSupplies.Loadout> preference = resident.colonyId()
+                .flatMap(id -> Colonies.of(level.getServer(), id)).flatMap(PatrolContent::suppliesOf)
+                .flatMap(supplies -> supplies.preference(resident.id()));
+            if (preference.isPresent()) {
+                for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
+                    ItemStack stack = worker.pack().getItem(slot);
+                    if (!PatrolSupplies.prefers(preference.get(), stack)) { continue; }
+                    Optional<WeaponAdapter> preferred = registered.stream().map(Registered::adapter)
+                        .filter(adapter -> adapter.usable(worker, stack)).findFirst();
+                    if (preferred.isPresent()) { return preferred; }
+                }
+            }
         }
         // Keep pack order: a resident deliberately carrying a sword before a bow uses its sword.
         for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
