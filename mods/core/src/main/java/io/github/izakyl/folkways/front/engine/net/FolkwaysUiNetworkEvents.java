@@ -57,12 +57,15 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 @EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
 public final class FolkwaysUiNetworkEvents {
+    // Canonical UI traversal changes LDLib2's positional IDs. Reject older peers before opening a screen.
+    private static final String UI_NETWORK_VERSION = FolkwaysMod.NETWORK_VERSION + "-stable-ui-1";
+
     private FolkwaysUiNetworkEvents() {
     }
 
     @SubscribeEvent
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar(FolkwaysMod.NETWORK_VERSION);
+        PayloadRegistrar registrar = event.registrar(UI_NETWORK_VERSION);
         registrar.playToServer(RequestColonyOverviewPacket.TYPE, RequestColonyOverviewPacket.STREAM_CODEC,
             asPlayer((packet, player) -> ColonyAuthority.ofHeldBook(player, packet.colonyId())
                 .ifPresent(authority -> PacketDistributor.sendToPlayer(player,

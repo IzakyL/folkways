@@ -677,12 +677,13 @@ export async function admitSettlers(
   if (residents >= target) return residents;
 
   await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
-  await softly(() => clickElement(client, { id: SETTLERS_TAB }));
+  // Canonical plugin ordering can put Household below the navigation viewport.
+  await clickElement(client, { id: SETTLERS_TAB }, { scrollIntoView: true });
 
   for (let round = 0; round < rounds && residents < target; round++) {
     const before = residents;
     const act = await admitAct(server, client);
-    const press = await softly(() => clickElement(client, { id: act.id }));
+    const press = await clickElement(client, { id: act.id }, { scrollIntoView: true });
     residents = await sprintUntilResidentCountRises(server, before);
     if (residents === before) {
       await tryCommand(server, `time add ${TICKS_PER_DAY}`);
