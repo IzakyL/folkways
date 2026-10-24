@@ -227,13 +227,13 @@ final class PatrolPresence implements Facing {
     // A patroller on duty - one who stood watch while its last ward still holds - goes for monsters near it.
     public List<Urge> urges(Worker who, ColonyView view) {
         Mob body = who.body();
-        if (!(body.level() instanceof ServerLevel level) || !armed(who)) {
+        if (!(body.level() instanceof ServerLevel level)) {
             return List.of();
         }
         Optional<Mob> foe = onDuty(who.resident().id(), level.getGameTime())
             ? nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE))
             : attacker(body);
-        if (foe.isEmpty()) {
+        if (foe.isEmpty() || !armed(who)) {
             return List.of();
         }
         Optional<Stances> reach = Stances.of(level, Reach.workableCells(level, cellOf(level, foe.get())));
