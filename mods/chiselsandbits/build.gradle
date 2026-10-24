@@ -1,0 +1,40 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_chiselsandbits"
+ext.modName = "folkways-chiselsandbits"
+apply from: rootProject.file("gradle/mod.gradle")
+evaluationDependsOn(":core")
+evaluationDependsOn(":vanilla")
+
+dependencies {
+    api project(":vanilla")
+    compileOnly lib("chiselsandbits")
+    compileOnly lib("chiselsandbits-api")
+    compileOnly lib("chiselsandbits-core")
+    compileOnly lib("scena")
+    compileOnly lib("scena-core")
+    compileOnly lib("create")
+    compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
+        transitive = false
+    }
+    gametestImplementation project(":core").sourceSets.gameTestFixtures.output
+}
+
+// C&B 21.1.33 bundles this library as MOD without a mod descriptor, so NeoForge discards it (#1343 upstream).
+// Keep its pinned bytes and license; only the library manifest changes so the required class can be loaded.
+def saeculariaRuntime = tasks.register("saeculariaRuntime", Jar) {
+    archiveFileName = "folkways-saecularia-runtime.jar"
+    destinationDirectory = layout.buildDirectory.dir("runtime")
+    from({ zipTree(lib("saecularia-core").singleFile) }) {
+        exclude "META-INF/MANIFEST.MF"
+    }
+    manifest.attributes("FMLModType": "GAMELIBRARY", "Automatic-Module-Name": "folkways_saecularia_runtime")
+}
+
+tasks.named("processResources") {
+    from(saeculariaRuntime) { into "META-INF/jarjar" }
+}

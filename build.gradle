@@ -10,6 +10,7 @@ def modProjects = [
     folkways_create: ":create",
     folkways_modulargolems: ":modulargolems",
     folkways_cookery: ":cookery",
+    folkways_chiselsandbits: ":chiselsandbits",
     folkways_rts: ":rts",
     folkways_warfare: ":warfare",
     folkways_tacz: ":tacz",
@@ -24,21 +25,23 @@ def cookeryTests = providers.gradleProperty("cookeryTests").map { it.toBoolean()
 def warfareTests = providers.gradleProperty("warfareTests").map { it.toBoolean() }.getOrElse(false)
 def taczTests = providers.gradleProperty("taczTests").map { it.toBoolean() }.getOrElse(false)
 def rtsTests = providers.gradleProperty("rtsTests").map { it.toBoolean() }.getOrElse(false)
+def chiselsTests = providers.gradleProperty("chiselsTests").map { it.toBoolean() }.getOrElse(false)
 def tavernTests = providers.gradleProperty("tavernTests").map { it.toBoolean() }.getOrElse(false)
 if (tavernTests && !cookeryTests) {
     throw new GradleException("Tavern GameTests require -PcookeryTests=true")
 }
 def testedMods = modProjects.findAll { id, path -> (path != ":modulargolems" || modularGolemsTests)
     && (path != ":cookery" || cookeryTests)
+    && (path != ":chiselsandbits" || chiselsTests)
     && (path != ":rts" || rtsTests)
     && (path != ":warfare" || warfareTests)
     && (path != ":tacz" || taczTests)
     && (path != ":firefighting" || firefightingTests) }
 def gameTestMod = providers.gradleProperty("gameTestMod").getOrElse("")
 if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "modulargolems",
-    "rts", "warfare", "tacz", "firefighting"])) {
+    "rts", "warfare", "tacz", "firefighting", "chiselsandbits"])) {
     throw new GradleException("Unknown GameTest mod '${gameTestMod}'; "
-        + "choose core, vanilla, create, cookery, modulargolems, rts, warfare, tacz or firefighting")
+        + "choose core, vanilla, create, cookery, modulargolems, rts, warfare, tacz, firefighting or chiselsandbits")
 }
 if (gameTestMod == "modulargolems" && !modularGolemsTests) {
     throw new GradleException("Modular Golems GameTests require -PmodularGolemsTests=true")
@@ -58,10 +61,14 @@ if (gameTestMod == "tacz" && !taczTests) {
 if (gameTestMod == "firefighting" && !firefightingTests) {
     throw new GradleException("Firefighting GameTests require -PfirefightingTests=true")
 }
+if (gameTestMod == "chiselsandbits" && !chiselsTests) {
+    throw new GradleException("Chisels & Bits GameTests require -PchiselsTests=true")
+}
 def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gameTestMod}" }
 // Every installed-mod combination owns its world, including Tavern's extra registries.
 def gameTestSuites = [cookery: cookeryTests, modulargolems: modularGolemsTests, tavern: tavernTests,
-    rts: rtsTests, warfare: warfareTests, tacz: taczTests, firefighting: firefightingTests]
+    rts: rtsTests, warfare: warfareTests, tacz: taczTests, firefighting: firefightingTests,
+    chiselsandbits: chiselsTests]
     .findAll { suite, enabled -> enabled }.keySet().join("-") ?: "base"
 def gameTestDirectory = "run/gametest/${gameTestMod ?: 'all'}/${gameTestSuites}"
 
@@ -93,7 +100,11 @@ neoForge {
                     sourceSet mod.sourceSets.gameTestFixtures
                 }
                 if (warfareTests && path == ":vanilla") { sourceSet mod.sourceSets.warfareTest }
-                if (suiteMods.containsKey(id)) {
+                // Same-package construction tests belong to Vanilla's Java module.
+                if (path == ":vanilla" && chiselsTests && (!gameTestMod || gameTestMod == "chiselsandbits")) {
+                    sourceSet project(":chiselsandbits").sourceSets.gametest
+                }
+                if (suiteMods.containsKey(id) && path != ":chiselsandbits") {
                     sourceSet mod.sourceSets.gametest
                     if (rtsTests && path == ":vanilla") { sourceSet mod.sourceSets.rtsTest }
                     if (cookeryTests && path in [":core", ":vanilla"]) {
@@ -141,6 +152,7 @@ dependencies {
     // Maid expression regressions bake and evaluate the converted clips with the real GeckoLib parser.
     if (!gameTestMod || gameTestMod == "vanilla") { runtimeOnly core.lib("geckolib") }
     if (taczTests) { runtimeOnly core.lib("tacz") }
+    if (chiselsTests) { runtimeOnly core.lib("chiselsandbits") }
     if (cookeryTests) { runtimeOnly core.lib("kaleidoscope_cookery") }
     if (firefightingTests) { runtimeOnly core.lib("createfirefightingadd") }
     if (tavernTests) { runtimeOnly core.lib("kaleidoscope_tavern") }

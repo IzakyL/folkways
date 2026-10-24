@@ -1,0 +1,16 @@
+{
+  "jars": [
+    {
+      "identifier": {
+        "group": "io.github.izakyl.folkways",
+        "artifact": "saecularia-runtime"
+      },
+      "version": {
+        "range": "[21.1.11]",
+        "artifactVersion": "21.1.11"
+      },
+      "path": "META-INF/jarjar/folkways-saecularia-runtime.jar",
+      "isObfuscated": false
+    }
+  ]
+}
