@@ -70,6 +70,7 @@ public final class HoseSessions {
         if (event.getLevel().isClientSide()) {
             return;
         }
+        Hydrants.unload((ServerLevel) event.getLevel(), event.getChunk().getPos());
         for (HoseSession session : new ArrayList<>(ACTIVE.values())) {
             if (session.actor().level() == event.getLevel()
                     && (new ChunkPos(session.cabinet().getBlockPos()).equals(event.getChunk().getPos())
@@ -83,6 +84,7 @@ public final class HoseSessions {
         if (event.getLevel().isClientSide()) {
             return;
         }
+        Hydrants.unload((ServerLevel) event.getLevel());
         for (HoseSession session : new ArrayList<>(ACTIVE.values())) {
             if (session.actor().level() == event.getLevel()) {
                 session.close(false);

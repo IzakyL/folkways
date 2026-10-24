@@ -13,7 +13,6 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.damagecontrol.SuppressionMethod;
 import io.github.izakyl.folkways.plugins.damagecontrol.SuppressionSession;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -39,24 +38,17 @@ final class HoseAdapter implements SuppressionMethod {
         List<FireHydrantCabinetBlockEntity> found = new ArrayList<>();
         int radius = (int) Math.ceil(range() + HandheldNozzleBindingApi.MAX_BINDING_DISTANCE + 2);
         BlockPos fire = target.block(level);
-        for (int x = (fire.getX() - radius) >> 4; x <= (fire.getX() + radius) >> 4; x++) {
-            for (int z = (fire.getZ() - radius) >> 4; z <= (fire.getZ() + radius) >> 4; z++) {
-                var chunk = level.getChunkSource().getChunkNow(x, z);
-                if (chunk == null) {
-                    continue;
-                }
-                for (var entity : chunk.getBlockEntities().values()) {
-                    if (entity instanceof FireHydrantCabinetBlockEntity cabinet && !cabinet.isRemoved()
-                            && cabinet.canServeHandheldNozzle() && !cabinet.hasActiveBinding() && cabinet.getFluid().is(Fluids.WATER)
-                            && !HandheldNozzleControllerEntity.hasActiveBinding(level.dimension(), cabinet.getBlockPos(), cabinet.getHydrantId())
-                            && Vec3.atCenterOf(cabinet.getBlockPos()).distanceToSqr(Vec3.atCenterOf(fire))
-                                <= Math.pow(HandheldNozzleBindingApi.MAX_BINDING_DISTANCE + NativeSprayBridge.hoseRange(cabinet.getNozzleType()) + 2, 2)) {
-                        found.add(cabinet);
-                    }
+        for (FireHydrantCabinetBlockEntity cabinet : Hydrants.nearby(level, fire, radius)) {
+            if (cabinet.canServeHandheldNozzle() && !cabinet.hasActiveBinding() && cabinet.getFluid().is(Fluids.WATER)
+                    && !HandheldNozzleControllerEntity.hasActiveBinding(level.dimension(), cabinet.getBlockPos(), cabinet.getHydrantId())
+                    && Vec3.atCenterOf(cabinet.getBlockPos()).distanceToSqr(Vec3.atCenterOf(fire))
+                        <= Math.pow(HandheldNozzleBindingApi.MAX_BINDING_DISTANCE + NativeSprayBridge.hoseRange(cabinet.getNozzleType()) + 2, 2)) {
+                found.add(cabinet);
+                if (found.size() == 4) {
+                    break;
                 }
             }
         }
-        found.sort(Comparator.comparingDouble(cabinet -> cabinet.getBlockPos().distSqr(target.block(level))));
         return found;
     }
 
@@ -77,7 +69,7 @@ final class HoseAdapter implements SuppressionMethod {
 
     @Override
     public Set<BlockPos> footings(ServerLevel level, Worker who, WorldPos target) {
-        for (FireHydrantCabinetBlockEntity cabinet : candidates(level, who, target).stream().limit(4).toList()) {
+        for (FireHydrantCabinetBlockEntity cabinet : candidates(level, who, target)) {
             Set<BlockPos> cells = new LinkedHashSet<>();
             BlockPos standing = who.body().blockPosition();
             if (Footing.withFeetAt(level, standing) && serves(level, cabinet, standing, target.block(level), who.body().getEyeHeight())) {

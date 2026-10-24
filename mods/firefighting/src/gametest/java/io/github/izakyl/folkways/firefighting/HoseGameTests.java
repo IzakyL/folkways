@@ -20,14 +20,18 @@ import io.github.izakyl.folkways.plugins.damagecontrol.SuppressionMethods;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
@@ -189,6 +193,7 @@ public final class HoseGameTests {
             rig.open();
             HoseSessions.chunkUnloaded(new ChunkEvent.Unload(rig.level.getChunkAt(rig.cabinet.getBlockPos())));
             helper.assertFalse(rig.cabinet.hasActiveBinding(), "chunk unload clears ownership without loading another chunk");
+            FireHydrantCabinetBlockEntity.tick(rig.level, rig.cabinet.getBlockPos(), rig.cabinet.getBlockState(), rig.cabinet);
             rig.open();
             HoseSessions.closeColony(rig.colony.id());
             helper.assertFalse(rig.cabinet.hasActiveBinding(), "closing the colony releases the hose");
@@ -336,6 +341,68 @@ public final class HoseGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void aSameTickStopKeepsTheLastBurstUntilItFinishes(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            long now = rig.level.getGameTime();
+            HoseSession session = rig.open();
+            session.suppress(rig.level, rig.fire);
+            session.close();
+            helper.assertFalse(rig.cabinet.hasActiveBinding(), "visual tails never prolong cabinet ownership");
+            helper.assertValueEqual(rig.cabinet.getFluid().getAmount(), 90, "the visual tail costs no more water");
+            SprayTail tail = SprayTail.start(now).stop(now);
+            helper.assertTrue(tail.hose(now), "start and stop received in one frame still show the hose");
+            helper.assertFalse(tail.finished(now, true), "even a burst without projectiles gets a short visible hose");
+            helper.assertFalse(tail.hose(now + 4), "the disconnected hose disappears after four client ticks");
+            helper.assertFalse(tail.finished(now + 4, false), "already emitted native projectiles keep ticking");
+            helper.assertTrue(tail.finished(now + 40, true), "the view retires only after its projectiles finish");
+            helper.assertValueEqual(tail.stop(now + 3), tail, "duplicate stops do not extend the visual tail");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void cabinetDiscoveryUsesTicksAndForgetsUnloadedChunks(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            helper.assertTrue(Hydrants.nearby(rig.level, rig.fire, 4).contains(rig.cabinet),
+                "the real cabinet tick registers it in the shared index");
+            Hydrants.unload(rig.level, new ChunkPos(rig.cabinet.getBlockPos()));
+            helper.assertFalse(Hydrants.nearby(rig.level, rig.fire, 4).contains(rig.cabinet), "unloaded cabinet entries are discarded");
+            FireHydrantCabinetBlockEntity.tick(rig.level, rig.cabinet.getBlockPos(), rig.cabinet.getBlockState(), rig.cabinet);
+            helper.assertTrue(Hydrants.nearby(rig.level, rig.fire, 4).contains(rig.cabinet), "a loaded cabinet announces itself again");
+            rig.level.removeBlock(rig.cabinet.getBlockPos(), false);
+            helper.assertFalse(Hydrants.nearby(rig.level, rig.fire, 4).contains(rig.cabinet), "removed cabinet entries are pruned without binding");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void cabinetDiscoveryRotatesThroughBoundedBatches(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(0, 128, 0));
+        origin = new BlockPos((origin.getX() >> 4) << 4, origin.getY(), (origin.getZ() >> 4) << 4);
+        List<FireHydrantCabinetBlockEntity> cabinets = new ArrayList<>();
+        try {
+            for (int i = 0; i < 80; i++) {
+                BlockPos pos = origin.offset(i % 10, 0, i / 10);
+                level.setBlock(pos, CreateFireFightingAdd.FIRE_HYDRANT_CABINET.get().defaultBlockState(), 2);
+                var cabinet = (FireHydrantCabinetBlockEntity) level.getBlockEntity(pos);
+                FireHydrantCabinetBlockEntity.tick(level, pos, cabinet.getBlockState(), cabinet);
+                cabinets.add(cabinet);
+            }
+            Set<FireHydrantCabinetBlockEntity> seen = new LinkedHashSet<>();
+            for (int i = 0; i < 4; i++) {
+                var batch = Hydrants.nearby(level, origin, 0);
+                helper.assertTrue(batch.size() <= 64, "a cabinet lookup checks at most 64 indexed entries");
+                seen.addAll(batch);
+            }
+            helper.assertTrue(seen.containsAll(cabinets), "later cabinets are not hidden by the first full batch");
+        } finally {
+            cabinets.forEach(cabinet -> level.removeBlock(cabinet.getBlockPos(), false));
+        }
+        helper.succeed();
+    }
+
     private static final class Rig implements AutoCloseable {
         final ServerLevel level;
         final Colony colony;
@@ -359,6 +426,7 @@ public final class HoseGameTests {
             cabinet.getItemStackHandler().setStackInSlot(FireHydrantCabinetBlockEntity.SLOT_NOZZLE,
                 new ItemStack(CreateFireFightingAdd.CONE_NOZZLE_ITEM.get()));
             cabinet.getFluidHandler(null).fill(new FluidStack(Fluids.WATER, 100), FluidAction.EXECUTE);
+            FireHydrantCabinetBlockEntity.tick(level, pos, cabinet.getBlockState(), cabinet);
             fire = pos.east(4);
             level.setBlock(fire.below(), Blocks.NETHERRACK.defaultBlockState(), 2);
             level.setBlock(fire, Blocks.FIRE.defaultBlockState(), 2);

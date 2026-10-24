@@ -29,10 +29,11 @@ import net.neoforged.neoforge.common.NeoForge;
 // The addon's public renderer accepts Player. Feed its existing projectile state and hose renderer resident anchors instead.
 @OnlyIn(Dist.CLIENT)
 final class ResidentSprayVisuals {
-    private record View(Level level, ResidentSprayPacket packet, Object nativeState, long seen) { }
+    private record View(Level level, ResidentSprayPacket packet, Object nativeState, SprayTail tail) { }
 
     private static final Map<UUID, View> ACTIVE = new LinkedHashMap<>();
     private static final RandomSource RANDOM = RandomSource.create();
+    private static long ticks;
     private static final Constructor<?> STATE;
     private static final Field PROJECTILES;
     private static final Field BEHAVIOR;
@@ -89,7 +90,11 @@ final class ResidentSprayVisuals {
 
     static void accept(ResidentSprayPacket packet) {
         if (!packet.active()) {
-            ACTIVE.remove(packet.resident());
+            View old = ACTIVE.get(packet.resident());
+            if (old != null && old.packet().hydrant().equals(packet.hydrant())) {
+                ACTIVE.put(packet.resident(), new View(old.level(), old.packet(), old.nativeState(),
+                    old.tail().stop(ticks)));
+            }
             return;
         }
         Level level = Minecraft.getInstance().level;
@@ -98,11 +103,11 @@ final class ResidentSprayVisuals {
         }
         try {
             View old = ACTIVE.get(packet.resident());
-            Object state = old != null && old.level() == level && old.packet().hydrant().equals(packet.hydrant())
+            Object state = old != null && old.level() == level
                 ? old.nativeState() : STATE.newInstance();
             BEHAVIOR.set(state, NativeSprayBridge.waterBehavior());
             TRAILS.setInt(state, packet.nozzle() == HandheldNozzleType.FLAT ? 4 : 3);
-            View view = new View(level, packet, state, level.getGameTime());
+            View view = new View(level, packet, state, SprayTail.start(ticks));
             ACTIVE.put(packet.resident(), view);
             SPAWN.invoke(null, PROJECTILES.get(state), packet.origin(), packet.direction(), NativeSprayBridge.hoseShape(packet.nozzle()),
                 Config.serverProjectilesPerTick, LIFETIME.invoke(null, packet.nozzle()), SPEED.invoke(null, packet.nozzle()),
@@ -115,22 +120,25 @@ final class ResidentSprayVisuals {
         }
     }
 
-    private static boolean valid(View view) {
-        Level level = Minecraft.getInstance().level;
-        if (level == null || level != view.level() || level.getGameTime() - view.seen() > 20) {
-            return false;
-        }
-        var actor = level.getEntity(view.packet().actor());
+    private static boolean connected(View view) {
+        var actor = view.level().getEntity(view.packet().actor());
         return actor != null && actor.isAlive() && actor.getUUID().equals(view.packet().resident())
-            && level.getBlockEntity(view.packet().cabinet()) instanceof FireHydrantCabinetBlockEntity cabinet
+            && view.level().getBlockEntity(view.packet().cabinet()) instanceof FireHydrantCabinetBlockEntity cabinet
             && cabinet.getHydrantId().equals(view.packet().hydrant());
     }
 
     private static void tick(ClientTickEvent.Post event) {
-        ACTIVE.values().removeIf(view -> !valid(view));
-        for (View view : ACTIVE.values()) {
+        ticks++;
+        Level level = Minecraft.getInstance().level;
+        ACTIVE.values().removeIf(view -> level == null || level != view.level());
+        var cursor = ACTIVE.values().iterator();
+        while (cursor.hasNext()) {
+            View view = cursor.next();
             try {
                 TICK.invoke(null, view.level(), view.nativeState());
+                if (view.tail().finished(ticks, ((List<?>) PROJECTILES.get(view.nativeState())).isEmpty())) {
+                    cursor.remove();
+                }
             } catch (ReflectiveOperationException failure) {
                 throw new IllegalStateException("FireFighting Additions resident spray tick failed", failure);
             }
@@ -143,7 +151,7 @@ final class ResidentSprayVisuals {
         }
         Minecraft mc = Minecraft.getInstance();
         for (View view : ACTIVE.values()) {
-            if (!valid(view)) {
+            if (!view.tail().hose(ticks) || !connected(view)) {
                 continue;
             }
             var cabinet = (FireHydrantCabinetBlockEntity) view.level().getBlockEntity(view.packet().cabinet());

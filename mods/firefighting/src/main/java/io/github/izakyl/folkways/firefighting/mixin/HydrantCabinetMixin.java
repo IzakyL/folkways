@@ -2,11 +2,15 @@ package io.github.izakyl.folkways.firefighting.mixin;
 
 import com.mikoalopex.createfirefightingadd.content.equipment.handheld.FireHydrantCabinetBlockEntity;
 import io.github.izakyl.folkways.firefighting.HoseSessions;
+import io.github.izakyl.folkways.firefighting.Hydrants;
 import io.github.izakyl.folkways.firefighting.ResidentHydrantBinding;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -21,6 +25,12 @@ public abstract class HydrantCabinetMixin implements ResidentHydrantBinding {
 
     @Shadow public abstract boolean isDoorOpen();
     @Shadow private void updateDoorState(boolean wasOpen) { throw new AssertionError(); }
+
+    @Inject(method = "tick", at = @At("HEAD"))
+    private static void folkways$observed(Level level, BlockPos pos, BlockState state,
+            FireHydrantCabinetBlockEntity cabinet, CallbackInfo ci) {
+        Hydrants.observe(level, pos, cabinet);
+    }
 
     @Override
     public boolean folkways$bindResident(UUID resident) {
