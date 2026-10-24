@@ -12,6 +12,8 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import io.github.izakyl.folkways.FolkwaysClientConfig;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.core.api.vocation.Vocation;
+import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
@@ -25,6 +27,7 @@ import io.github.izakyl.folkways.front.engine.colony.ColonySchemas;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.front.engine.colony.ColonyZone;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -65,12 +68,10 @@ public final class SettingsPage implements Draw {
     @Override
     public UIElement build(Player player) {
         UIElement table = Rows.table();
-        for (Schema.Setting setting : CoreSettings.schema().settings()) {
-            UIElement row = Rows.row().addChildren(Rows.icon(iconOf(setting.icon())), Rows.name(setting.name()));
-            if (setting instanceof Schema.Setting.Count count) {
-                row.addChildren(Controls.range(count.min(), count.max()));
-            }
-            table.addChildren(row.addChildren(control(player, CoreSettings.CORE, setting)));
+        table.addChildren(Rows.note(Component.translatable("folkways.settings.tools.by_vocation")));
+        for (var vocation : Vocations.all().stream()
+                .sorted(Comparator.comparing(trade -> trade.id().toString())).toList()) {
+            table.addChildren(tools(player, vocation));
         }
 
         Button resetLayout = new Button()
@@ -117,6 +118,25 @@ public final class SettingsPage implements Draw {
         UIElement page = Rows.page().addChildren(scroller, razing.confirmation(player, scroller));
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
         return page;
+    }
+
+    public static UIElement tools(Player player, Vocation vocation) {
+        return tools(player, vocation, "");
+    }
+
+    static UIElement tools(Player player, Vocation vocation, String context) {
+        Schema.Setting.Items items = CoreSettings.tool(vocation);
+        UIElement editor = opener(player, vocation.id(), items);
+        Tokens.name(editor, "folkways.settings.open.tool." + Tokens.of(vocation.id()) + context);
+        Button reset = new Button().setText(Component.translatable("folkways.settings.tools.reset"))
+            .setOnServerClick(event -> Pages.colonyOf(player)
+                .ifPresent(colony -> ColonyFront.of(colony).resetTool(vocation)));
+        Tokens.name(reset, "folkways.settings.reset.tool." + Tokens.of(vocation.id()) + context);
+        Label hint = Rows.note(Component.empty());
+        hint.bind(DataBindingBuilder.componentS2C(() -> itemsOf(player, new Scope.AtColony(vocation.id()), items).isEmpty()
+            ? Component.translatable("folkways.settings.tools.empty") : Component.empty()).build());
+        return Rows.page().addChildren(Rows.row().addChildren(Rows.icon(iconOf(items.icon())),
+            Rows.name(Component.translatable("folkways.vocation." + Tokens.of(vocation.id()))), editor, reset), hint);
     }
 
     static UIElement control(Player player, ResourceLocation scope, Schema.Setting setting) {
@@ -195,8 +215,15 @@ public final class SettingsPage implements Draw {
                 setItems(player, where, items, filters);
             }
         });
-        press.setOnClick(event -> openItems(press, items.name(), items.single(), items.blocks(),
-            ItemPicker.decode(current[0]), filters -> sending.send(items.key(), filters)));
+        press.setOnClick(event -> {
+            if (items.key().equals(CoreSettings.TOOL_KEY) && Vocations.of(scope).isPresent()) {
+                ItemPicker.many(press, items.name(), ItemPicker.decode(current[0]), items.blocks(), true,
+                    filters -> sending.send(items.key(), filters));
+            } else {
+                openItems(press, items.name(), items.single(), items.blocks(), ItemPicker.decode(current[0]),
+                    filters -> sending.send(items.key(), filters));
+            }
+        });
         return press;
     }
 
@@ -242,13 +269,13 @@ public final class SettingsPage implements Draw {
         if (wanted == null) {
             return;
         }
-        put(player, where, count, count.key(), new ColonySettings.Value.Count(
+        put(player, where, count.key(), new ColonySettings.Value.Count(
             Math.max(count.min(), Math.min(count.max(), wanted))));
     }
 
     static void setChoice(Player player, Scope where, Schema.Setting.Choice choice, ResourceLocation option) {
         if (choice.options().contains(option)) {
-            put(player, where, choice, choice.key(), new ColonySettings.Value.Choice(option));
+            put(player, where, choice.key(), new ColonySettings.Value.Choice(option));
         }
     }
 
@@ -262,7 +289,7 @@ public final class SettingsPage implements Draw {
         if (items.single() && kept.size() != 1) {
             return;
         }
-        put(player, where, items, items.key(), new ColonySettings.Value.Items(kept));
+        put(player, where, items.key(), new ColonySettings.Value.Items(kept));
     }
 
     static List<ItemFilter> keptItems(Schema.Setting.Items items, List<ItemFilter> filters) {
@@ -294,25 +321,16 @@ public final class SettingsPage implements Draw {
     }
 
     static void setFlag(Player player, Scope where, Schema.Setting.Flag flag, boolean on) {
-        put(player, where, flag, flag.key(), new ColonySettings.Value.Flag(on));
+        put(player, where, flag.key(), new ColonySettings.Value.Flag(on));
     }
 
-    private static void put(Player player, Scope where, Schema.Setting setting, String key,
+    private static void put(Player player, Scope where, String key,
             ColonySettings.Value value) {
         ColonySettings held = filled(player, where).orElse(null);
-        if (held == null || value.equals(current(held, setting))) {
+        if (held == null || value.equals(held.valueOf(key).orElse(null))) {
             return;
         }
         Pages.colonyOf(player).ifPresent(colony -> write(colony, where, key, value));
-    }
-
-    private static ColonySettings.Value current(ColonySettings held, Schema.Setting setting) {
-        return switch (setting) {
-            case Schema.Setting.Flag flag -> new ColonySettings.Value.Flag(flagOf(held, flag));
-            case Schema.Setting.Count count -> new ColonySettings.Value.Count(countOf(held, count));
-            case Schema.Setting.Choice choice -> new ColonySettings.Value.Choice(choiceOf(held, choice));
-            case Schema.Setting.Items items -> new ColonySettings.Value.Items(itemsOf(held, items));
-        };
     }
 
     static int countOf(Player player, Scope where, Schema.Setting.Count count) {

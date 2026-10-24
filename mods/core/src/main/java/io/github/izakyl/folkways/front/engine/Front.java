@@ -1,9 +1,6 @@
 package io.github.izakyl.folkways.front.engine;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
-import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.api.ui.Pages;
@@ -21,27 +18,22 @@ import io.github.izakyl.folkways.front.ui.screen.ColonyShell;
 import io.github.izakyl.folkways.front.ui.screen.PageKinds;
 import java.util.Optional;
 import net.minecraft.world.item.CreativeModeTabs;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModList;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
+import net.neoforged.neoforge.event.TagsUpdatedEvent;
 
 public final class Front {
 
     private Front() {
     }
 
-    // The colony's tool list, from its settings page; a tool off the list is not taken up.
-    private static boolean toolAllowed(Colony colony, Item tool) {
-        return ColonyFront.of(colony).settings(CoreSettings.CORE).items(CoreSettings.TOOL_KEY)
-            .map(allowed -> Goods.matches(new ItemStack(tool), allowed))
-            .orElse(false);
-    }
-
     public static void install(IEventBus modBus) {
         Fronts.install(ColonyFront::of);
-        KitRules.install(Front::toolAllowed);
+        KitRules.install(colony -> ColonyFront.of(colony).toolRules());
+        NeoForge.EVENT_BUS.addListener(
+            (TagsUpdatedEvent event) -> ColonyFront.toolsReloaded());
         Pages.install(player -> ColonyAuthority.of(player, Optional.empty()).map(ColonyAuthority::colony));
         FilterStacks.install(new FilterStackCodec());
         FrontLifecycle.install();

@@ -38,7 +38,7 @@ public final class FishingContent {
         ResourceLocation.fromNamespaceAndPath("folkways", "fish");
 
     private static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.fish",
-        ResourceLocation.withDefaultNamespace("fishing_rod"));
+        ResourceLocation.withDefaultNamespace("fishing_rod")).tools(VOCATION);
 
     public static final String QUICK_HANDS = "fishing_quick_hands";
 

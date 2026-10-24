@@ -118,7 +118,7 @@ public final class ColonyPanelScene {
         scene.idle(10);
         scene.overlay()
             .showText(100)
-            .text("Under Preferences, Settings holds the colony's Tools list. Residents only take up tools on it, and an empty list allows none. It starts out with every tool some work asks for.")
+            .text("Under Preferences, Settings holds a Tools list for each vocation. Work uses only tools on its vocation's list. Each list starts with that vocation's tools; an empty list allows none.")
             .pointAt(minerHead)
             .placeNearTarget()
             .attachKeyFrame();

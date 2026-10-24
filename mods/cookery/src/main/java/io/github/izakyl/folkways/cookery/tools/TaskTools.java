@@ -22,6 +22,7 @@ import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Workshop;
+import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -85,9 +86,9 @@ public final class TaskTools {
 
     public static void register() {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(LoanClothing::joined);
-        Tools.shared(new ToolNeed.Tagged(TagMod.KITCHEN_KNIFE), ItemSpec.of(TagMod.KITCHEN_KNIFE));
-        Tools.shared(new ToolNeed.Tagged(TagMod.KITCHEN_SHOVEL), ItemSpec.of(TagMod.KITCHEN_SHOVEL));
-        Tools.shared(io.github.izakyl.folkways.cookery.stove.StoveWorkshops.IGNITION, ItemSpec.of(TagMod.LIT_STOVE));
+        Tools.shared(WaresContent.CRAFTING, new ToolNeed.Tagged(TagMod.KITCHEN_KNIFE), ItemSpec.of(TagMod.KITCHEN_KNIFE));
+        Tools.shared(WaresContent.CRAFTING, new ToolNeed.Tagged(TagMod.KITCHEN_SHOVEL), ItemSpec.of(TagMod.KITCHEN_SHOVEL));
+        Tools.shared(WaresContent.CRAFTING, io.github.izakyl.folkways.cookery.stove.StoveWorkshops.IGNITION, ItemSpec.of(TagMod.LIT_STOVE));
     }
 
     public Workshop decorate(Workshop original) {

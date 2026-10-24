@@ -39,7 +39,7 @@ public final class PatrolContent {
         ResourceLocation.fromNamespaceAndPath("folkways", "fighting");
 
     private static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.patrol",
-        ResourceLocation.withDefaultNamespace("iron_sword"));
+        ResourceLocation.withDefaultNamespace("iron_sword")).tools(VOCATION);
 
     // Any melee weapon will do; other mods list theirs under the common tag.
     static final ToolNeed WEAPON = new ToolNeed.Tagged(Tags.Items.MELEE_WEAPON_TOOLS);

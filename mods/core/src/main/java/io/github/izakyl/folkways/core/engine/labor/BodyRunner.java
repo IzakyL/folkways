@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.core.api.work.Balk;
 import io.github.izakyl.folkways.core.api.work.Doing;
 import io.github.izakyl.folkways.core.api.work.Doings;
@@ -19,6 +20,7 @@ import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.ToolUse;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Urge;
@@ -204,7 +206,7 @@ final class BodyRunner {
     void tick(ColonyLabor labor, ServerLevel level, Body body) {
         if (within != null && (own == null || own.urge() == null)) {
             try {
-                ((Workload.Within) within.spec().workload()).tick(level, labor.hands(body, withinPlan));
+                ((Workload.Within) within.spec().workload()).tick(level, labor.hands(body, withinPlan, within.spec()));
             } catch (RuntimeException | LinkageError broken) {
                 Labor.LOGGER.error("node {} threw during its presentation", within.id(), broken);
             }
@@ -326,7 +328,7 @@ final class BodyRunner {
         Workload.Within shift = (Workload.Within) within.spec().workload();
         Workload.Within.Turn turn;
         try {
-            turn = shift.next(level, labor.hands(body, withinPlan));
+            turn = shift.next(level, labor.hands(body, withinPlan, within.spec()));
         } catch (RuntimeException | LinkageError broken) {
             Labor.LOGGER.error("node {} threw asked for its next piece", within.id(), broken);
             turn = Workload.Within.LEAVE;
@@ -353,7 +355,7 @@ final class BodyRunner {
         Node node = current;
         Outcome outcome;
         try {
-            outcome = node.commit(level, labor.hands(body, placement));
+            outcome = node.commit(level, labor.hands(body, placement, current.spec()));
         } catch (RuntimeException | LinkageError broken) {
             Labor.LOGGER.error("node {} threw on commit", node.id(), broken);
             refuse(labor, level, body, LaborRefusal.WORK_BROKE);
@@ -498,7 +500,7 @@ final class BodyRunner {
         switch (spec.workload()) {
             case Workload.Once once -> {
                 ongoing = null;
-                windupTicks = Math.max(0, once.ticksFor(labor.hands(body, plan)));
+                windupTicks = Math.max(0, once.ticksFor(labor.hands(body, plan, node.spec())));
             }
             case Workload.Continuous condition -> {
                 ongoing = condition;
@@ -523,7 +525,7 @@ final class BodyRunner {
             if (joining) {
                 windupTicks = 0;
             }
-            startWork(level, body);
+            startWork(labor, level, body);
             return;
         }
         Optional<Trip> trip = setOut(labor, level, body);
@@ -570,13 +572,13 @@ final class BodyRunner {
     private void carry(ColonyLabor labor, ServerLevel level, Body body) {
         if (standing(body)) {
             putDown(body);
-            startWork(level, body);
+            startWork(labor, level, body);
             return;
         }
         switch (carrying.step(level, body.mob(), footings())) {
             case Going.Arrived ignored -> {
                 putDown(body);
-                startWork(level, body);
+                startWork(labor, level, body);
             }
             case Going.Failed(RefusalKind why) -> {
                 if (LET_GO_DEBUG) {
@@ -599,7 +601,7 @@ final class BodyRunner {
         carrying = null;
     }
 
-    private void startWork(ServerLevel level, Body body) {
+    private void startWork(ColonyLabor labor, ServerLevel level, Body body) {
         if (own == null && current.spec().workload() instanceof Workload.Within) {
             enter(body);
             return;
@@ -608,7 +610,7 @@ final class BodyRunner {
         windup = 0;
         body.mob().getNavigation().stop();
         beats = beatsOf(level, body);
-        present(body);
+        present(labor, body);
         NodeSpec spec = current.spec();
         if (ongoing != null) {
             body.setDoing(Doing.open(spec.doing()).about(spec.about()).with(current.wares()));
@@ -628,8 +630,16 @@ final class BodyRunner {
     }
 
     private void hold(ColonyLabor labor, ServerLevel level, Body body) {
+        Worker who = labor.hands(body, placement, current.spec());
+        if (!ResidentKinds.barehanded(body.kind().id(), current.spec().vocation())
+                && current.spec().tools().stream().anyMatch(use ->
+                    !(use.need() instanceof ToolNeed.None)
+                        && who.held(use.need()).isEmpty())) {
+            refuse(labor, level, body, LaborRefusal.NO_ONE_FIT);
+            return;
+        }
         perform(body);
-        if (!ongoing.holds(level, labor.hands(body, placement))) {
+        if (!ongoing.holds(level, labor.hands(body, placement, current.spec()))) {
             commit(labor, level, body);
             return;
         }
@@ -725,7 +735,7 @@ final class BodyRunner {
     private void commit(ColonyLabor labor, ServerLevel level, Body body) {
         committing = true;
         Node node = current;
-        Worker who = labor.hands(body, placement);
+        Worker who = labor.hands(body, placement, current.spec());
         Outcome outcome;
         try {
             outcome = Commit.run(level, node, who);
@@ -797,7 +807,7 @@ final class BodyRunner {
         // Use actual active progress, not wall time spent travelling, waiting or unloaded.
         reportEffort(body, node);
         try {
-            node.released(level, labor.hands(body, placement), how);
+            node.released(level, labor.hands(body, placement, node.spec()), how);
         } catch (RuntimeException | LinkageError broken) {
             Labor.LOGGER.error("node {} threw ending as {}", node.id(), how, broken);
         }
@@ -814,11 +824,12 @@ final class BodyRunner {
 
 
 
-    private void present(Body body) {
+    private void present(ColonyLabor labor, Body body) {
         NodeSpec spec = current.spec();
         List<ToolUse> uses = ResidentKinds.barehanded(body.kind().id(), spec.vocation()) ? List.of() : spec.tools();
         for (ToolUse use : uses) {
-            ItemStack tool = Tools.from(body.pack().contents(), use.need()).orElse(ItemStack.EMPTY);
+            ItemStack tool = Tools.from(body.pack().contents(), use.need(),
+                item -> KitRules.allows(labor.colony(), spec.vocation(), item)).orElse(ItemStack.EMPTY);
             if (!tool.isEmpty()) {
                 body.presentHeldItem(tool.copy());
                 break;

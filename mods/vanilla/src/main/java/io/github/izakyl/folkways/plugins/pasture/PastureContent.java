@@ -93,7 +93,7 @@ public final class PastureContent {
         true);
 
     private static final PageKind PAGE = PageKind.boarded(PASTURE, "folkways.page.pasture",
-        ResourceLocation.withDefaultNamespace("lead"));
+        ResourceLocation.withDefaultNamespace("lead")).tools(HERDING);
 
     private static final VocationSpec VOCATION =
         new VocationSpec(HERDING, List.of(

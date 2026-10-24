@@ -146,7 +146,7 @@ final class ClothingWork implements Node, Workload.Within {
             if (loans.isEmpty() && !reserveGroup(level, who)) return WAIT;
             for (ItemSpec family : families) {
                 ToolStock.Source source = sources.get(family);
-                if (source != null) return new Turn.Piece(new ToolAction.Borrow(service, loans.get(family), source));
+                if (source != null) return new Turn.Piece(new ToolAction.Borrow(service, loans.get(family), source, Optional.empty()));
             }
             Map<EquipmentSlot, KitchenTools.Lease> slots = new LinkedHashMap<>();
             garments.forEach((slot, family) -> {
