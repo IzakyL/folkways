@@ -38,6 +38,7 @@ public final class WarfareWeapons {
         }
         public Component label() { return Component.translatable("folkways.combat.loadout.warfare.firearm"); }
         public boolean valid(CompoundTag options) { return adapter(options).isPresent(); }
+        public boolean acceptsWeapon(ItemStack stack, CompoundTag options) { return adapter(options).map(weapon -> weapon.accepts(stack)).orElse(false); }
         public ItemSpec weapon(CompoundTag options) { return adapter(options).orElseThrow().weapon(); }
         public List<Amount> ammunition(CompoundTag options) { return List.of(new Amount(adapter(options).orElseThrow().ammunition(), 16)); }
         public Optional<CompoundTag> infer(ItemStack stack) { return ALL.stream().filter(weapon -> weapon.accepts(stack)).findFirst().map(WarfareWeapons::options); }

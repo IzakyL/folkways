@@ -3,6 +3,13 @@
   "minVersion": "0.8.5",
   "package": "io.github.izakyl.folkways.warfare.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["VehicleFireMixin", "MortarFireMixin"],
-  "injectors": {"defaultRequire": 1}
+  "mixins": [
+    "VehicleFireMixin",
+    "MortarFireMixin",
+    "CustomExplosionMixin",
+    "ExplosionStartMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

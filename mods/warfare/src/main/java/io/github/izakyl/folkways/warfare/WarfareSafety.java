@@ -3,10 +3,10 @@ package io.github.izakyl.folkways.warfare;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import java.util.ArrayList;
-import java.util.List;
 import io.github.izakyl.folkways.plugins.combat.Threats;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
@@ -18,11 +18,6 @@ import net.minecraft.world.phys.Vec3;
 
 final class WarfareSafety {
     private WarfareSafety() { }
-
-    static boolean clear(ServerLevel level, ResidentEntity body, Vec3 from, Vec3 to, double blast) {
-        if (!segment(level, body, from, to, .65)) { return false; }
-        return blast <= 0 || impact(level, body, to, blast);
-    }
 
     static boolean segment(ServerLevel level, ResidentEntity body, Vec3 from, Vec3 to, double margin) {
         AABB corridor = new AABB(from, to).inflate(margin);
@@ -41,14 +36,15 @@ final class WarfareSafety {
         return level.clip(new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, body)).getType() == HitResult.Type.MISS;
     }
 
-    static boolean impact(ServerLevel level, ResidentEntity body, Vec3 at, double radius) {
-        AABB area = new AABB(at, at).inflate(radius);
+    static boolean impact(ServerLevel level, ResidentEntity body, Vec3 at, double entityRadius, double blockRadius) {
+        AABB area = new AABB(at, at).inflate(entityRadius);
+        AABB blocks = new AABB(at, at).inflate(blockRadius);
         if (!loaded(level, area.getMinPosition(), area.getMaxPosition())) { return false; }
         if (!level.getEntitiesOfClass(LivingEntity.class, area,
                 entity -> entity != body && friendly(entity, body)).isEmpty() || body.getBoundingBox().intersects(area)) { return false; }
         return body.colonyId().flatMap(id -> Colonies.of(level.getServer(), id)).isPresent()
-            && owned(level, body).stream().filter(cell -> cell.in(level)).noneMatch(cell -> WorldSpaces.world(level, cell)
-                .filter(point -> area.inflate(1).contains(point) && !level.getBlockState(cell.block(level)).isAir()).isPresent());
+            && (blockRadius <= 0 || owned(level, body).stream().filter(cell -> cell.in(level)).noneMatch(cell -> WorldSpaces.world(level, cell)
+                .filter(point -> blocks.inflate(1).contains(point) && !level.getBlockState(cell.block(level)).isAir()).isPresent()));
     }
 
     private static List<WorldPos> owned(ServerLevel level, ResidentEntity body) {

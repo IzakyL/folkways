@@ -51,7 +51,7 @@ final class WarfareSession implements WeaponSession {
     private boolean permitted(LivingEntity target) {
         return target instanceof Mob mob && target.level() == body.level() && Threats.hostile(mob, body)
             && body.distanceToSqr(target) <= adapter.range() * adapter.range() && body.hasLineOfSight(target)
-            && WarfareSafety.clear((ServerLevel) body.level(), body, body.getEyePosition(), target.getBoundingBox().getCenter(), 0);
+            && WarfareSafety.segment((ServerLevel) body.level(), body, body.getEyePosition(), target.getBoundingBox().getCenter(), .65);
     }
     private boolean valid() {
         return body.level() instanceof ServerLevel level && level.getServer().isSameThread()

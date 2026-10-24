@@ -1,10 +1,15 @@
 package io.github.izakyl.folkways.warfare;
 
+import com.atsuishio.superbwarfare.data.CustomData;
+import com.atsuishio.superbwarfare.data.gun.GunData;
+import com.atsuishio.superbwarfare.data.gun.GunProp;
 import com.atsuishio.superbwarfare.data.gun.ShootParameters;
 import com.atsuishio.superbwarfare.data.vehicle.subdata.EngineType;
 import com.atsuishio.superbwarfare.data.vehicle.subdata.VehicleType;
 import com.atsuishio.superbwarfare.entity.vehicle.Fh77bwEntity;
 import com.atsuishio.superbwarfare.entity.vehicle.MortarEntity;
+import com.atsuishio.superbwarfare.entity.vehicle.TowEntity;
+import com.atsuishio.superbwarfare.init.ModItems;
 import com.atsuishio.superbwarfare.entity.vehicle.base.VehicleEntity;
 import io.github.izakyl.folkways.core.api.Declaring;
 import io.github.izakyl.folkways.core.api.colony.Colony;
@@ -73,7 +78,7 @@ public final class WarfareStations {
                 && vehicle.getDeltaMovement().horizontalDistanceSqr() < .001
                 && vehicle.getPassengers().stream().allMatch(passenger -> passenger == person)
                 && (!ACTIVE.containsKey(vehicle) || ACTIVE.get(vehicle).body() == person))
-            .stream().filter(vehicle -> weaponName(vehicle) != null)
+            .stream().filter(vehicle -> weaponName(vehicle) != null && automatic(vehicle))
             .sorted(Comparator.comparingDouble((VehicleEntity vehicle) -> vehicle.distanceToSqr(person))
                 .thenComparing(vehicle -> vehicle.getUUID().toString())).findFirst();
     }
@@ -81,6 +86,27 @@ public final class WarfareStations {
     static String weaponName(VehicleEntity vehicle) {
         if (vehicle instanceof MortarEntity) { return "Main"; }
         return vehicle.getGunName(vehicle.getTurretControllerIndex());
+    }
+
+    static boolean automatic(VehicleEntity station) {
+        var data = station.getGunData(weaponName(station));
+        if (data == null || station instanceof TowEntity) { return false; }
+        for (var type : GunData.PERK_TYPES) {
+            if (!data.perk.getInstances(type).isEmpty()) { return false; }
+        }
+        if (!Double.isFinite(data.get(GunProp.VELOCITY)) || data.get(GunProp.VELOCITY) <= 0
+                || !Double.isFinite(data.get(GunProp.GRAVITY)) || data.get(GunProp.GRAVITY) < 0
+                || !Double.isFinite(data.get(GunProp.EXPLOSION_RADIUS)) || data.get(GunProp.EXPLOSION_RADIUS) < 0
+                || !Double.isFinite(data.get(GunProp.SPREAD)) || data.get(GunProp.SPREAD) < 0
+                || data.get(GunProp.PROJECTILE_AMOUNT) != 1) { return false; }
+        if (station instanceof MortarEntity mortar) {
+            ItemStack shell = mortar.getItem(0);
+            return shell.isEmpty() || shell.is(ModItems.MORTAR_SHELL.get());
+        }
+        var projectile = data.get(GunProp.PROJECTILE);
+        return projectile.getItemId().equals("superbwarfare:cannon_shell") && projectile.data == null
+            && !CustomData.LAUNCHABLE_ENTITY.containsKey(projectile.getItemId())
+            && data.get(GunProp.SHELL_TYPE).equals("HE");
     }
 
     static ItemSpec ammunition(VehicleEntity vehicle) {

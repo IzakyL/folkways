@@ -6,6 +6,9 @@ Folkways Core, Folkways Vanilla, Superb Warfare 0.8.9.2 and Kotlin for Forge 5.1
 Choose **Firearm (Superb Warfare)** on the colony book's combat page. Residents
 collect an actual gun and compatible loose rounds from registered colony stores.
 Guards also operate supported emplacements inside their guard post's area.
+Use ordinary guns without perks, ordinary mortar shells, or select HE for supported
+cannons. AP, wire-guided TOW and unpredictable gun/projectile effects are refused.
+Automatic explosions honor mob griefing and cancellable protection events.
 
 See [gameplay and integration details](../../docs/en/warfare.md) and
 [简体中文](../../docs/zh-CN/warfare.md).

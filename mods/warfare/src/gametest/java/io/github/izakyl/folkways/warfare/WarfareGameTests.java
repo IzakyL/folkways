@@ -189,10 +189,10 @@ public final class WarfareGameTests {
     @GameTest(batch = "warfare", template = "warfare_range")
     public static void onlyEmplacementsInsideTheGuardAreaAreDetected(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
-        VehicleEntity outside = f.station(ModEntities.TOW.get(), 20, 10);
+        VehicleEntity outside = f.station(ModEntities.MK_42.get(), 20, 10);
         f.guard();
         helper.assertTrue(WarfareStations.find(f.colony, f.body).isEmpty(), "a nearby station beyond the guard area is ignored");
-        VehicleEntity inside = f.station(ModEntities.TOW.get(), 6, 10);
+        VehicleEntity inside = f.station(ModEntities.MK_42.get(), 6, 10);
         helper.assertTrue(WarfareStations.find(f.colony, f.body).orElse(null) == inside, "the post selects the contained station");
         helper.assertFalse(WarfareStations.emplacement(f.station(ModEntities.LAV_150.get(), 7, 14)), "ordinary combat vehicles are excluded");
         helper.assertTrue(WarfareStations.emplacement(f.station(ModEntities.FH_77BW.get(), 7, 17)), "the requested howitzer is supported as a stopped weapon station");
@@ -202,9 +202,9 @@ public final class WarfareGameTests {
     @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 350)
     public static void guardWalksMountsAimsFiresThenDismountsOnRetreat(GameTestHelper helper) {
         Scene f = new Scene(helper, true);
-        VehicleEntity station = f.station(ModEntities.TOW.get(), 8, 10);
-        f.body.pack().insert(new ItemStack(ModItems.MEDIUM_ANTI_GROUND_MISSILE.get(), 2));
-        f.enemy(23, 10); f.guard();
+        VehicleEntity station = f.station(ModEntities.MK_42.get(), 8, 10);
+        f.body.pack().insert(new ItemStack(ModItems.LARGE_SHELL_HE.get(), 2));
+        f.enemy(44, 10); f.guard();
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(f.body.getVehicle() == station, "the labour runner walks to the actual weapon seat " + f.debug()))
             .thenWaitUntil(() -> helper.assertTrue(f.shots.get() > 0, "the mounted operator aims and uses SBW's native vehicle fire " + f.debug()))
@@ -219,12 +219,12 @@ public final class WarfareGameTests {
     public static void stationShellsAreCollectedByNormalLogistics(GameTestHelper helper) {
         Scene f = new Scene(helper, true);
         VehicleEntity station = f.station(ModEntities.MK_42.get(), 8, 10);
-        f.store.setItem(0, new ItemStack(ModItems.LARGE_SHELL_AP.get(), 2)); f.guard();
+        f.store.setItem(0, new ItemStack(ModItems.LARGE_SHELL_HE.get(), 2)); f.guard();
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(f.store.isEmpty() && f.body.getVehicle() == station,
                 "real shells travel from the registered colony store to the operator " + f.debug()))
             .thenExecute(() -> {
-                int ammo = station.getAmmoCount("Main") + station.getItems().stream().filter(stack -> stack.is(ModItems.LARGE_SHELL_AP.get())).mapToInt(ItemStack::getCount).sum()
-                    + f.body.pack().count(ModItems.LARGE_SHELL_AP.get());
+                int ammo = station.getAmmoCount("Main") + station.getItems().stream().filter(stack -> stack.is(ModItems.LARGE_SHELL_HE.get())).mapToInt(ItemStack::getCount).sum()
+                    + f.body.pack().count(ModItems.LARGE_SHELL_HE.get());
                 helper.assertValueEqual(ammo, 2, "warehouse, pack and native magazine conserve the two shells");
             }).thenSucceed();
     }
@@ -269,15 +269,15 @@ public final class WarfareGameTests {
     @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 240)
     public static void friendlyImpactAreaAndOwnedBlocksPreventStationFire(GameTestHelper helper) {
         Scene f = new Scene(helper, true);
-        f.station(ModEntities.TOW.get(), 8, 10); f.body.pack().insert(new ItemStack(ModItems.MEDIUM_ANTI_GROUND_MISSILE.get(), 2));
-        Zombie enemy = f.enemy(23, 10);
-        var wolf = EntityType.WOLF.create(f.level); wolf.setNoAi(true); f.place(wolf, 23, 13); f.level.addFreshEntity(wolf); f.entities.add(wolf);
+        f.station(ModEntities.MK_42.get(), 8, 10); f.body.pack().insert(new ItemStack(ModItems.LARGE_SHELL_HE.get(), 2));
+        Zombie enemy = f.enemy(44, 10);
+        var wolf = EntityType.WOLF.create(f.level); wolf.setNoAi(true); f.place(wolf, 44, 13); f.level.addFreshEntity(wolf); f.entities.add(wolf);
         f.guard();
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(f.body.isPassenger(), "the guard reaches its seat"))
             .thenIdle(60).thenExecute(() -> {
                 helper.assertValueEqual(f.shots.get(), 0, "a pet in the predicted blast area prevents firing"); wolf.discard();
-                f.block(new BlockPos(23, 1, 13), Blocks.BARREL);
-                f.colony.stores(WarfareStations.ID, f.level.dimension(), List.of(f.at(3, 1, 4), f.at(23, 1, 13)));
+                f.block(new BlockPos(44, 1, 13), Blocks.BARREL);
+                f.colony.stores(WarfareStations.ID, f.level.dimension(), List.of(f.at(3, 1, 4), f.at(44, 1, 13)));
             }).thenIdle(60).thenExecute(() -> helper.assertValueEqual(f.shots.get(), 0, "colony-owned blocks in the impact area prevent firing"))
             .thenSucceed();
     }
@@ -425,6 +425,175 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
+    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 550)
+    public static void unsafePhysicalGunVariantsCannotReplaceOrReserveTheUsableLoadout(GameTestHelper helper) {
+        Scene f = new Scene(helper, true);
+        ItemStack unsafe = new ItemStack(ModItems.GLOCK_17.get());
+        GunData he = GunData.from(unsafe); he.perk.set(com.atsuishio.superbwarfare.perk.ammo.HEBullet.INSTANCE, (short) 1); he.save();
+        f.body.pack().insert(unsafe.copy()); f.store.setItem(0, unsafe.copy());
+        ItemStack unusable = new ItemStack(ModItems.GLOCK_17.get());
+        GunData empty = GunData.from(unusable); empty.propertyOverrideString.set("{\"Magazine\":0}"); empty.save();
+        f.store.setItem(1, unusable);
+        ItemStack usable = new ItemStack(ModItems.GLOCK_17.get()); usable.set(DataComponents.CUSTOM_NAME, Component.literal("safe gun"));
+        f.store.setItem(2, usable); f.store.setItem(3, new ItemStack(ModItems.HANDGUN_AMMO.get(), 2));
+        f.supplies.loadout(f.body, WarfareWeapons.FIREARM); f.guard();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(f.body.pack().contents().stream()
+                .anyMatch(stack -> Component.literal("safe gun").equals(stack.get(DataComponents.CUSTOM_NAME))),
+                "normal logistics ignore unusable carried and stored guns " + f.debug()))
+            .thenExecute(() -> {
+                helper.assertTrue(!f.store.getItem(0).isEmpty() && !f.store.getItem(1).isEmpty(), "unusable stock is never withdrawn");
+                helper.assertTrue(f.supplies.keeps(f.body).stream().filter(amount -> Goods.matches(usable, amount.spec()))
+                    .allMatch(amount -> !Goods.matches(unsafe, amount.spec())), "the usable component identity owns the retention slot");
+                f.enemy(10, 10);
+            }).thenWaitUntil(() -> helper.assertValueEqual(f.shots.get(), 2, "the accepted loadout fires only the two physical rounds"))
+            .thenSucceed();
+    }
+
+    @GameTest(batch = "warfare", template = "warfare_range")
+    public static void explosiveOrAlteredGunComponentsRevokeEvenAnOpenHandLoan(GameTestHelper helper) {
+        Scene f = new Scene(helper, false);
+        f.body.pack().insert(new ItemStack(ModItems.GLOCK_17.get())); f.body.pack().insert(new ItemStack(ModItems.HANDGUN_AMMO.get(), 2));
+        Zombie target = f.enemy(10, 10);
+        WeaponSession session = Weapons.open(worker(f.body)).orElseThrow(); f.sessions.add(session);
+        helper.assertTrue(session.fire(target), "a plain gun accepts the target");
+        GunData data = GunData.from(f.body.getMainHandItem());
+        data.perk.set(com.atsuishio.superbwarfare.perk.ammo.HEBullet.INSTANCE, (short) 1); data.save();
+        helper.assertTrue(data.get(com.atsuishio.superbwarfare.data.gun.GunProp.EXPLOSION_DAMAGE) > 0, "the test uses the native HE trait");
+        session.tick();
+        helper.assertTrue(session.state() == WeaponSession.State.CLOSED, "an unsafe component change closes the actual loan before discharge");
+        helper.assertValueEqual(f.shots.get(), 0, "no explosive bullet is fired");
+        helper.assertValueEqual(f.body.pack().count(ModItems.HANDGUN_AMMO.get()), 2, "rejection preserves physical ammo");
+        var provider = WarfareWeapons.FIREARM.provider().orElseThrow();
+        for (String override : List.of("invalid JSON", "{\"AmmoCostPerShoot\":0}", "{\"Magazine\":0}", "{\"AutoReload\":true}", "{\"BypassesArmor\":1}",
+                "{\"Projectile\":\"superbwarfare:wire_guide_missile\"}", "{\"ExplosionRadius\":5}")) {
+            ItemStack gun = new ItemStack(ModItems.GLOCK_17.get());
+            GunData variant = GunData.from(gun); variant.propertyOverrideString.set(override); variant.save();
+            helper.assertFalse(provider.acceptsWeapon(gun, WarfareWeapons.FIREARM.options()), "unusable or unpredictable component override is rejected: " + override);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 450)
+    public static void friendsOutsideTheOldBlastMarginStillPreventHighExplosiveFire(GameTestHelper helper) {
+        Scene f = new Scene(helper, true);
+        VehicleEntity station = f.station(ModEntities.MK_42.get(), 8, 10);
+        f.body.pack().insert(new ItemStack(ModItems.LARGE_SHELL_HE.get(), 2)); f.enemy(44, 10);
+        ResidentEntity friend = PersonBody.RESIDENT.get().create(f.level); friend.setNoAi(true);
+        f.block(new BlockPos(44, 0, 25), Blocks.STONE); f.place(friend, 44, 25); f.level.addFreshEntity(friend); f.entities.add(friend);
+        helper.assertValueEqual(station.getGunData("Main").get(com.atsuishio.superbwarfare.data.gun.GunProp.EXPLOSION_RADIUS), 10.0,
+            "Mk42 HE has a configured radius of ten and an entity damage radius of twenty");
+        f.guard();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(f.body.getVehicle() == station, "the operator reaches the HE seat"))
+            .thenIdle(90).thenExecute(() -> {
+                helper.assertValueEqual(f.shots.get(), 0, "a friend fifteen blocks beside the impact prevents fire");
+                helper.assertValueEqual(friend.getHealth(), friend.getMaxHealth(), "the friend is unharmed"); friend.discard();
+            }).thenWaitUntil(() -> helper.assertTrue(f.shots.get() > 0, "removing the friend permits the same HE weapon to fire"))
+            .thenSucceed();
+    }
+
+    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 120)
+    public static void armorPiercingAndWireGuidedStationsAreNeverAutomaticallyOperated(GameTestHelper helper) {
+        Scene f = new Scene(helper, true);
+        VehicleEntity cannon = f.station(ModEntities.MK_42.get(), 8, 10);
+        cannon.modifyGunData("Main", data -> data.changeAmmoConsumer(0, null));
+        f.station(ModEntities.TOW.get(), 8, 17);
+        f.body.pack().insert(new ItemStack(ModItems.LARGE_SHELL_AP.get(), 2));
+        f.body.pack().insert(new ItemStack(ModItems.MEDIUM_ANTI_GROUND_MISSILE.get(), 2));
+        f.enemy(44, 10); f.block(new BlockPos(45, 1, 10), Blocks.STONE);
+        f.block(new BlockPos(60, 1, 10), Blocks.BARREL);
+        f.colony.stores(WarfareStations.ID, f.level.dimension(), List.of(f.at(3, 1, 4), f.at(60, 1, 10)));
+        f.guard();
+        helper.assertTrue(WarfareStations.find(f.colony, f.body).isEmpty(), "AP and TOW cannot offer an automatic duty");
+        helper.runAfterDelay(60, () -> {
+            helper.assertValueEqual(f.shots.get(), 0, "neither a penetrating shell nor a guided missile is launched");
+            helper.assertFalse(f.body.isPassenger(), "unsafe stations do not claim a seat");
+            helper.assertValueEqual(f.body.pack().count(ModItems.LARGE_SHELL_AP.get()), 2, "AP ammunition is untouched");
+            helper.assertTrue(f.level.getBlockState(f.at(60, 1, 10).block(f.level)).is(Blocks.BARREL), "blocks behind the first wall stay intact");
+            helper.succeed();
+        });
+    }
+
+    @net.minecraft.gametest.framework.BeforeBatch(batch = "warfare_rules")
+    public static void beforeRules(ServerLevel level) { before(level); }
+    @net.minecraft.gametest.framework.AfterBatch(batch = "warfare_rules")
+    public static void afterRules(ServerLevel level) { after(level); }
+
+    @GameTest(batch = "warfare_rules", template = "warfare_range", timeoutTicks = 350)
+    public static void mobGriefingStopsAutomaticShellsBeforeDischarge(GameTestHelper helper) {
+        Scene f = new Scene(helper, true);
+        f.station(ModEntities.MK_42.get(), 8, 10);
+        f.body.pack().insert(new ItemStack(ModItems.LARGE_SHELL_HE.get(), 2)); f.enemy(44, 10); f.guard();
+        boolean previous = f.level.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_MOBGRIEFING);
+        helper.testInfo.addListener(new GameTestListener() {
+            public void testStructureLoaded(GameTestInfo info) { }
+            public void testPassed(GameTestInfo info, GameTestRunner runner) { restore(); }
+            public void testFailed(GameTestInfo info, GameTestRunner runner) { restore(); }
+            public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) { }
+            void restore() { f.level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_MOBGRIEFING).set(previous, f.level.getServer()); }
+        });
+        f.level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_MOBGRIEFING).set(false, f.level.getServer());
+        helper.startSequence().thenIdle(100).thenExecute(() -> {
+                helper.assertValueEqual(f.shots.get(), 0, "mobGriefing=false forbids destructive automatic discharge");
+                f.level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_MOBGRIEFING).set(true, f.level.getServer());
+            }).thenWaitUntil(() -> helper.assertTrue(f.shots.get() > 0, "restoring griefing permits this otherwise safe HE shot"))
+            .thenSucceed();
+    }
+
+    @GameTest(batch = "warfare_rules", template = "warfare_range")
+    public static void nativeResidentExplosionsHonorRuleChangesCancellationAndProtectedBlockLists(GameTestHelper helper) {
+        Scene f = new Scene(helper, false);
+        var shell = new com.atsuishio.superbwarfare.entity.projectile.MortarShellEntity(ModEntities.MORTAR_SHELL.get(), f.level);
+        shell.setOwner(f.body); f.place(shell, 44, 10); f.level.addFreshEntity(shell); f.entities.add(shell);
+        BlockPos at = f.at(44, 1, 10).block(f.level); f.level.setBlockAndUpdate(at, Blocks.DIRT.defaultBlockState());
+        Zombie target = f.enemy(45, 10);
+        Runnable explode = () -> new com.atsuishio.superbwarfare.tools.CustomExplosion.Builder(shell).attacker(f.body)
+            .position(Vec3.atCenterOf(at)).damage(120).radius(3).explode();
+        var rule = f.level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_MOBGRIEFING);
+        boolean previous = rule.get(); AtomicInteger starts = new AtomicInteger();
+        Consumer<net.neoforged.neoforge.event.level.ExplosionEvent.Start> cancel = event -> {
+            if (event.getExplosion().getDirectSourceEntity() == shell) { starts.incrementAndGet(); event.setCanceled(true); }
+        };
+        Consumer<net.neoforged.neoforge.event.level.ExplosionEvent.Detonate> protect = event -> {
+            if (event.getExplosion().getDirectSourceEntity() == shell) { event.getAffectedBlocks().clear(); }
+        };
+        try {
+            rule.set(false, f.level.getServer()); explode.run();
+            helper.assertTrue(f.level.getBlockState(at).is(Blocks.DIRT), "a rule change before impact prevents native block damage");
+            helper.assertValueEqual(target.getHealth(), target.getMaxHealth(), "a refused explosion deals no entity damage");
+            rule.set(true, f.level.getServer()); NeoForge.EVENT_BUS.addListener(cancel); explode.run();
+            helper.assertValueEqual(starts.get(), 1, "Start is cancellable before damage and is posted only once");
+            helper.assertTrue(f.level.getBlockState(at).is(Blocks.DIRT), "cancellation preserves the block");
+            helper.assertValueEqual(target.getHealth(), target.getMaxHealth(), "cancellation preserves nearby entities");
+            NeoForge.EVENT_BUS.unregister(cancel); NeoForge.EVENT_BUS.addListener(protect); explode.run();
+            helper.assertTrue(f.level.getBlockState(at).is(Blocks.DIRT), "Detonate block protection runs before native tier destruction");
+            NeoForge.EVENT_BUS.unregister(protect); explode.run();
+            helper.assertTrue(f.level.getBlockState(at).isAir(), "without a protection veto the same native explosion still destroys ordinary blocks");
+        } finally { NeoForge.EVENT_BUS.unregister(cancel); NeoForge.EVENT_BUS.unregister(protect); rule.set(previous, f.level.getServer()); }
+        helper.succeed();
+    }
+
+    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 100)
+    public static void restoredNativeStationSnapshotsReleaseTheSavedPassengerAndAcceptRetreat(GameTestHelper helper) {
+        Scene f = new Scene(helper, false);
+        VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10); f.guard();
+        f.body.moveTo(station.position().add(-2, 0, 0)); StationNode node = f.node(station); node.commit(f.level, worker(f.body));
+        helper.assertTrue(f.body.getVehicle() == station, "the original native duty owns the seat");
+        net.minecraft.nbt.CompoundTag snapshot = new net.minecraft.nbt.CompoundTag();
+        helper.assertTrue(station.save(snapshot), "save the complete native vehicle while its operator is mounted");
+        f.body.remove(Entity.RemovalReason.UNLOADED_TO_CHUNK); station.discard();
+        VehicleEntity restored = (VehicleEntity) EntityType.loadEntityRecursive(snapshot, f.level, entity -> entity);
+        ResidentEntity operator = (ResidentEntity) restored.getFirstPassenger();
+        f.entities.add(restored); f.entities.add(operator); f.level.addFreshEntityWithPassengers(restored);
+        helper.assertTrue(operator.getVehicle() == restored, "native riding and seat data are present in the snapshot");
+        helper.runAfterDelay(5, () -> {
+            helper.assertTrue(restored.getPassengers().isEmpty(), "the stale persisted loan releases the native seat");
+            helper.assertTrue(f.commands.current(operator.id()).isEmpty(), "no transient guard order survived the snapshot");
+            f.commands.retreat(operator, f.at(3, 1, 5));
+            helper.assertTrue(f.commands.current(operator.id()).isPresent(), "the restored operator can be commanded immediately");
+            helper.succeed();
+        });
+    }
+
     private static Worker worker(ResidentEntity body) {
         return new Worker() {
             public Resident resident() { return body.resident(); }
@@ -467,7 +636,7 @@ public final class WarfareGameTests {
                 level.getChunkSource().addRegionTicket(TICKING, chunk, 2, ticket, true);
                 chunks.add(chunk);
             } }
-            for (int x = 0; x < 32; x++) { for (int z = 0; z < 24; z++) { block(new BlockPos(x, 0, z), Blocks.STONE); } }
+            for (int x = 0; x < 96; x++) { for (int z = 0; z < 24; z++) { block(new BlockPos(x, 0, z), Blocks.STONE); } }
             colony = Colonies.mint(level.getServer()); commands = ResidentCommands.of(colony); supplies = PatrolSupplies.of(colony);
             body = PersonBody.RESIDENT.get().create(level); body.setNoAi(!simulate); place(body, 3, 10);
             colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow(); body.joinColony(colony.id()); level.addFreshEntity(body);
@@ -488,7 +657,11 @@ public final class WarfareGameTests {
             level.addFreshEntity(enemy); entities.add(enemy); return enemy;
         }
         VehicleEntity station(EntityType<? extends VehicleEntity> type, int x, int z) {
-            VehicleEntity vehicle = type.create(level); place(vehicle, x, z); level.addFreshEntity(vehicle); entities.add(vehicle); return vehicle;
+            VehicleEntity vehicle = type.create(level); place(vehicle, x, z);
+            if (vehicle instanceof com.atsuishio.superbwarfare.entity.vehicle.Mk42Entity) {
+                vehicle.modifyGunData("Main", data -> data.changeAmmoConsumer(1, null));
+            }
+            level.addFreshEntity(vehicle); entities.add(vehicle); return vehicle;
         }
         void guard() { commands.guard(body, at(3, 1, 10), new Vec3(1, 0, 0)); }
         StationNode node(VehicleEntity station) {

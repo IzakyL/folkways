@@ -3,7 +3,6 @@ package io.github.izakyl.folkways.warfare;
 import com.atsuishio.superbwarfare.data.gun.GunData;
 import com.atsuishio.superbwarfare.data.gun.GunProp;
 import com.atsuishio.superbwarfare.entity.vehicle.MortarEntity;
-import com.atsuishio.superbwarfare.entity.vehicle.TowEntity;
 import com.atsuishio.superbwarfare.entity.vehicle.base.ArtilleryEntity;
 import com.atsuishio.superbwarfare.entity.vehicle.base.VehicleEntity;
 import com.atsuishio.superbwarfare.tools.TrajectoryCalculator;
@@ -111,7 +110,7 @@ final class StationNode implements Node {
             .stream().sorted(Comparator.comparingDouble(station::distanceToSqr)).filter(foe -> aim(foe, data)).findFirst().orElse(null);
         if (target == null || direction == null) { return Outcome.done(); }
         aimStation();
-        if (!safe() || level.getGameTime() < nextShot || !aligned()) { return Outcome.done(); }
+        if (!safe() || !WarfareExplosions.mayFire(level, body) || level.getGameTime() < nextShot || !aligned()) { return Outcome.done(); }
         if (station instanceof MortarEntity mortar) {
             if (mortar.getItem(0).isEmpty()) { return Outcome.done(); }
             mortar.vehicleShoot(body, weapon, target.getBoundingBox().getCenter());
@@ -133,15 +132,6 @@ final class StationNode implements Node {
             if (!shell.isEmpty()) { mortar.getItems().set(0, shell); }
         } else {
             if (data.hasEnoughAmmoToShoot(station.getAmmoSupplier()) || data.reloading()) { return; }
-            if (station instanceof TowEntity tow && tow.getReloadCooldown() > 0) { return; }
-            // TOW has no cargo slots; its interaction reloads directly from the operator.
-            if (station instanceof TowEntity tow) {
-                if (data.countBackupAmmoItem(body) > 0) {
-                    station.modifyGunData(weapon, gun -> { gun.cachedBackupAmmo = -1; gun.reloadAmmo(body); });
-                    tow.setLoaded(data.ammo.get() > 0);
-                }
-                return;
-            }
             ItemStack round = Containers.extract(body.pack(), stack -> Goods.matches(stack, ammo), 1);
             if (round.isEmpty()) { return; }
             ItemStack remaining = net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(station.getInventory(), round, false);
@@ -153,9 +143,6 @@ final class StationNode implements Node {
     private boolean aim(Mob foe, GunData data) {
         Vec3 from = muzzle();
         Vec3 at = foe.getBoundingBox().getCenter();
-        // Submunitions and incendiary clouds have no bounded single impact footprint.
-        if (data.get(GunProp.SHELL_TYPE).equals("CM") || data.get(GunProp.SHELL_TYPE).equals("WP")
-                || station instanceof MortarEntity mortar && mortar.getItem(0).is(com.atsuishio.superbwarfare.init.ModItems.MORTAR_SHELL_WP.get())) { return false; }
         double gravity = station.getProjectileGravity(weapon);
         double velocity = station.getProjectileVelocity(weapon);
         for (boolean depressed : new boolean[] {true, false}) {
@@ -196,11 +183,12 @@ final class StationNode implements Node {
                 || !Threats.hostile(target, body) || !aligned()) { return false; }
         GunData data = station.getGunData(weapon);
         if (data == null) { return false; }
-        double radius = Math.max(0, data.get(GunProp.EXPLOSION_RADIUS)) + 2;
+        double radius = Math.max(0, data.get(GunProp.EXPLOSION_RADIUS));
+        double entityRadius = radius * 2;
+        // SBW's block search is flattened and bounded by 0.6 times its configured radius.
+        double blockRadius = radius * .6;
         Vec3 from = muzzle();
         Vec3 actual = (station instanceof MortarEntity ? station.getLookAngle() : station.getShootVec(weapon, 1)).normalize();
-        if (station instanceof TowEntity && !WarfareSafety.clear(level, body,
-                from.subtract(actual.scale(1)), from.subtract(actual.scale(8)), 0)) { return false; }
         double speed = station.getProjectileVelocity(weapon);
         double gravity = station.getProjectileGravity(weapon);
         Vec3 velocity = actual.scale(speed);
@@ -217,14 +205,11 @@ final class StationNode implements Node {
             if (!WarfareSafety.segment(level, body, at, end.subtract(end.subtract(at).normalize().scale(.01)), spread)) { return false; }
             if (target.getBoundingBox().inflate(.2).clip(at, end).isPresent()) {
                 reached = true;
-                if (!WarfareSafety.impact(level, body, target.getBoundingBox().getCenter(), radius + spread)) { return false; }
+                if (!WarfareSafety.impact(level, body, target.getBoundingBox().getCenter(), entityRadius + spread, blockRadius + spread)) { return false; }
             }
             if (hit.getType() != HitResult.Type.MISS) {
-                return (reached || end.distanceToSqr(target.position()) < (radius + 3) * (radius + 3))
-                    && WarfareSafety.impact(level, body, end, radius + spread);
-            }
-            if (station instanceof TowEntity && at.distanceToSqr(target.position()) < speed * speed) {
-                return WarfareSafety.impact(level, body, target.getBoundingBox().getCenter(), radius + spread);
+                return (reached || end.distanceToSqr(target.position()) < (entityRadius + 3) * (entityRadius + 3))
+                    && WarfareSafety.impact(level, body, end, entityRadius + spread, blockRadius + spread);
             }
             at = next;
             velocity = velocity.add(0, -gravity, 0);

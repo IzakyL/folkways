@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.warfare;
 
 import com.atsuishio.superbwarfare.api.event.ShootEvent;
 import com.atsuishio.superbwarfare.data.gun.AmmoConsumer;
+import com.atsuishio.superbwarfare.data.CustomData;
 import com.atsuishio.superbwarfare.data.gun.GunData;
 import com.atsuishio.superbwarfare.data.gun.GunProp;
 import com.atsuishio.superbwarfare.data.gun.ShootParameters;
@@ -47,7 +48,24 @@ public final class WarfareWeapon implements WeaponAdapter {
     public ItemSpec ammunition() { return ItemSpec.of(ammo); }
     @Override public double range() { return range; }
     @Override public boolean accepts(ItemStack stack) {
-        return !stack.isEmpty() && stack.getItem() instanceof GunItem && BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(gun);
+        if (stack.isEmpty() || !(stack.getItem() instanceof GunItem) || !BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(gun)) { return false; }
+        GunData data = GunData.from(stack);
+        if (!data.propertyOverrideString.get().isBlank()) { return false; }
+        // Perks can alter projectiles or add effects outside the computed explosion properties.
+        for (var type : GunData.PERK_TYPES) {
+            if (!data.perk.getInstances(type).isEmpty()) { return false; }
+        }
+        var consumer = data.selectedAmmoConsumer();
+        var projectile = data.get(GunProp.PROJECTILE);
+        return projectile.getItemId().equals("superbwarfare:projectile") && projectile.data == null
+            && !CustomData.LAUNCHABLE_ENTITY.containsKey(projectile.getItemId())
+            && data.get(GunProp.BYPASSES_ARMOR) < 1 && data.get(GunProp.EXPLOSION_DAMAGE) == 0 && data.get(GunProp.EXPLOSION_RADIUS) == 0
+            && data.get(GunProp.PROJECTILE_AMOUNT) > 0 && data.get(GunProp.AMMO_COST_PER_SHOOT) == 1
+            && Double.isFinite(data.get(GunProp.VELOCITY)) && data.get(GunProp.VELOCITY) > 0
+            && Double.isFinite(data.get(GunProp.GRAVITY)) && data.get(GunProp.GRAVITY) >= 0
+            && !Boolean.TRUE.equals(data.get(GunProp.AUTO_RELOAD)) && !data.useBackpackAmmo() && data.ammo.get() >= 0 && data.ammo.get() < Integer.MAX_VALUE
+            && consumer.getType() == AmmoConsumer.AmmoConsumeType.PLAYER_AMMO && consumer.getLoadAmount() == 1
+            && consumer.getPlayerAmmoType() != null && BuiltInRegistries.ITEM.getKey(consumer.getPlayerAmmoType().getItem()).equals(ammo);
     }
     @Override public boolean usable(Worker worker, ItemStack stack) {
         return accepts(stack) && Goods.countIn(worker.pack(), ammunition()) > 0;
@@ -83,11 +101,8 @@ public final class WarfareWeapon implements WeaponAdapter {
 
     // Lend one supplied round to the native firing transaction. Player-loaded rounds remain in the magazine.
     boolean shoot(ServerLevel level, Worker who, LivingEntity target, ItemStack weapon) {
+        if (!accepts(weapon) || !ready(level, (ResidentEntity) who.body())) { return false; }
         GunData data = GunData.from(weapon);
-        var consumer = data.selectedAmmoConsumer();
-        if (consumer.getType() != AmmoConsumer.AmmoConsumeType.PLAYER_AMMO || consumer.getPlayerAmmoType() == null
-                || !BuiltInRegistries.ITEM.getKey(consumer.getPlayerAmmoType().getItem()).equals(ammo)
-                || data.get(GunProp.AMMO_COST_PER_SHOOT) != 1 || data.useBackpackAmmo() || !ready(level, (ResidentEntity) who.body())) { return false; }
         int slot = -1;
         for (int n = 0; n < who.pack().getContainerSize(); n++) {
             if (Goods.matches(who.pack().getItem(n), ammunition())) { slot = n; break; }
