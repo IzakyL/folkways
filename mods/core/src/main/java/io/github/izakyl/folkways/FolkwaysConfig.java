@@ -102,8 +102,10 @@ public final class FolkwaysConfig {
             .comment("Write the per-colony planning and pathfinding heartbeat to the server log. One line",
                 "per colony per heartbeat, plus two server-wide lines. Turn it off on a busy server that",
                 "does not need the readout; the counters are drained either way, so turning it back on",
-                "reports the window since then rather than everything since start.")
-            .define("logPlanHeartbeat", true);
+                "reports the window since then rather than everything since start.",
+                "Defaults to on only in development builds with Spark installed; release/rc/beta/alpha",
+                "versions default to off. Saved preferences take priority.")
+            .define("logPlanHeartbeat", BuildChannel::automaticDiagnostics);
         HEARTBEAT_CYCLES = BUILDER
             .comment("Heartbeats come once every this many twenty-tick cycles of simulation.")
             .defineInRange("heartbeatCycles", 10, 1, 600);

@@ -159,6 +159,41 @@ public final class UrgePreemptionGameTests {
         return ResourceLocation.fromNamespaceAndPath("folkways_test", path);
     }
 
+    @GameTest(template = "empty")
+    public static void interruptionAndPathFailureReportBeforeTheNextHeartbeat(GameTestHelper helper) throws Exception {
+        try (Harness h = new Harness(helper)) {
+            java.util.ArrayList<LaborIncident> events = new java.util.ArrayList<>();
+            java.util.function.Consumer<LaborIncident> listener = event -> {
+                if (event.colony().equals(h.colony.id())) events.add(event);
+            };
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(listener);
+            try {
+                h.body.mob().setCustomName(net.minecraft.network.chat.Component.literal("Pickup witness"));
+                Node job = h.node(Workload.Once.of(1000), true, new AtomicInteger());
+                h.start(job);
+                Urge flee = h.urge("flee", 2, true);
+                h.offers(flee);
+                h.interrupt();
+                helper.assertValueEqual(events.size(), 1, "preemption reports on the same server call");
+                helper.assertTrue(events.getFirst().key().contains("urge-preempts/" + flee.id())
+                        && events.getFirst().message().getString().contains("Pickup witness")
+                        && events.getFirst().message().getString().contains(job.id().toString().substring(0, 8)),
+                    "the report identifies the worker, interrupted node and actual preempting urge");
+                var failed = BodyRunner.class.getDeclaredMethod("failed", ColonyLabor.class, ServerLevel.class,
+                    Body.class, Node.class, io.github.izakyl.folkways.core.api.terms.RefusalKind.class);
+                failed.setAccessible(true);
+                failed.invoke(h.runner, h.labor, h.level, h.body, h.runner.interruptedWork().orElseThrow(),
+                    LaborRefusal.NO_WAY_THERE);
+                helper.assertTrue(events.size() == 2
+                        && events.getLast().key().contains(LaborRefusal.NO_WAY_THERE.translationKey()),
+                    "a real runner refusal reports immediately without polling a heartbeat");
+            } finally {
+                net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(listener);
+            }
+        }
+        helper.succeed();
+    }
+
     private static final class Harness implements AutoCloseable {
         final ServerLevel level;
         final Colony colony;

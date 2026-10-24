@@ -37,6 +37,7 @@ public final class GroundworkContent {
 
     public static final ResourceLocation CLEARING = ResourceLocation.fromNamespaceAndPath("folkways", "clearing");
     public static final ResourceLocation FILLING = ResourceLocation.fromNamespaceAndPath("folkways", "filling");
+    public static final ResourceLocation STEPPING_ASIDE = ResourceLocation.fromNamespaceAndPath("folkways", "stepping_aside");
     public static final ResourceLocation WEEDING = ResourceLocation.fromNamespaceAndPath("folkways", "weeding");
     public static final ResourceLocation FELLING = ResourceLocation.fromNamespaceAndPath("folkways", "felling");
     public static final ResourceLocation PICKING_UP = ResourceLocation.fromNamespaceAndPath("folkways", "picking_up");

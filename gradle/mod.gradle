@@ -1,7 +1,7 @@
 // What every Folkways mod project shares. A project sets modId and modName before applying this.
 
 group = project.maven_group
-version = project.mod_version
+version = rootProject.buildVersion
 
 base {
     archivesName = "${project.modName}-neoforge-${project.minecraft_version}"
@@ -77,6 +77,8 @@ def expanded = [
     "minecraft_requirement": project.minecraft_requirement,
     "neoforge_requirement": project.neoforge_requirement,
     "ldlib_requirement": project.ldlib_requirement,
+    "diagnostics_mixins": (project.modId == "folkways_core" && rootProject.diagnosticsBuild
+        ? '[[mixins]]\nconfig = "folkways-diagnostics.mixins.json"' : ""),
 ]
 
 processResources {

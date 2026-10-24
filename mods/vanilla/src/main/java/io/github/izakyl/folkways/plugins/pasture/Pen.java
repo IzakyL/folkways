@@ -16,9 +16,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
@@ -39,18 +41,47 @@ record Pen(UUID zone, Livestock keeps, int target, boolean shear, WorldPos ancho
     static List<Pen> markedOut(ColonyView colony, FrontView front) {
         List<Pen> found = new ArrayList<>();
         for (ZoneView zone : front.zonesIn(colony.level())) {
-            if (!zone.delegation().equals(PastureContent.PASTURE)) {
-                continue;
-            }
-            Settings filled = zone.settings();
-            Optional<Livestock> keeps = Livestock.named(filled.choice(PastureContent.ANIMAL.key()));
-            if (keeps.isEmpty()) {
-                continue;
-            }
-            found.add(of(zone, keeps.get(),
-                filled.count(PastureContent.TARGET.key()), filled.flag(PastureContent.SHEAR.key())));
+            marked(zone).ifPresent(found::add);
         }
         return List.copyOf(found);
+    }
+
+    // Read only the current zone at commit time: a target edit or an erased pen invalidates old work.
+    static Optional<Pen> find(ColonyView colony, FrontView front, UUID id) {
+        return front.zonesIn(colony.level()).stream().filter(zone -> zone.id().equals(id))
+            .findFirst().flatMap(Pen::marked);
+    }
+
+    private static Optional<Pen> marked(ZoneView zone) {
+        if (!zone.delegation().equals(PastureContent.PASTURE) || zone.cells().isEmpty()) {
+            return Optional.empty();
+        }
+        Settings filled = zone.settings();
+        return Livestock.named(filled.choice(PastureContent.ANIMAL.key())).map(keeps -> of(zone, keeps,
+            filled.count(PastureContent.TARGET.key()), filled.flag(PastureContent.SHEAR.key())));
+    }
+
+    List<Animal> stock(ServerLevel level) {
+        return level.getEntitiesOfClass(Animal.class, reach(level), this::keeps);
+    }
+
+    boolean keeps(Animal beast) {
+        return beast.isAlive() && !beast.isRemoved()
+            && BuiltInRegistries.ENTITY_TYPE.getKey(beast.getType()).equals(keeps.type()) && holds(beast);
+    }
+
+    int surplus(List<Animal> stock) {
+        return Math.max(0, (int) stock.stream().filter(beast -> !beast.isBaby()).count() - target);
+    }
+
+    // At the target one calf is wanted, not another whole round of pairs. Pairs already in love
+    // reserve their births until they breed or their love ends, including between parallel commits.
+    int feedings(List<Animal> stock) {
+        if (target <= 0 || stock.size() > target) {
+            return 0;
+        }
+        int pending = (int) stock.stream().filter(beast -> !beast.isBaby() && beast.isInLove()).count() / 2;
+        return Math.max(0, Math.max(1, target - stock.size()) - pending);
     }
 
     boolean holds(Entity animal) {

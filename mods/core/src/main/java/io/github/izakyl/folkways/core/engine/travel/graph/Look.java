@@ -1,9 +1,11 @@
 package io.github.izakyl.folkways.core.engine.travel.graph;
 
 import io.github.izakyl.folkways.core.api.resident.Search;
+import io.github.izakyl.folkways.core.api.resident.Locomotion;
 import io.github.izakyl.folkways.core.api.terms.Closures;
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.Structures;
+import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.engine.travel.PathfindingLoad;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -13,10 +15,36 @@ import java.util.function.LongPredicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.PathNavigationRegion;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.level.pathfinder.NodeEvaluator;
+import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.pathfinder.PathfindingContext;
 
 final class Look {
 
     private Look() {
+    }
+
+    // This is only a definite native BLOCKED result, not a generic human-footing rule. In
+    // particular OPEN can be valid for flight, and entity congestion is not terrain evidence.
+    static boolean blocked(ServerLevel level, WorldPos cell, Locomotion moving, Mob body) {
+        Ground ground = Ground.of(level, cell.realm()).orElse(null);
+        Bulk bulk = Bulk.of(body);
+        if (ground == null || bulk.width() < 1 || bulk.height() < 1 || bulk.width() > 16 || bulk.height() > 16) return false;
+        BlockPos at = ground.toStorage(cell.cell());
+        if (ground.toLocal(at).filter(cell.cell()::equals).isEmpty()) return false;
+        BlockPos from = at.offset(-8, -8, -8);
+        BlockPos to = at.offset(bulk.width() + 8, bulk.height() + 8, bulk.width() + 8);
+        if (!level.hasChunksAt(from, to)) return false;
+        PathNavigationRegion region = Structures.region(level, from, to);
+        NodeEvaluator evaluator = moving.newEvaluator(Search.from(at));
+        evaluator.prepare(region, body);
+        try {
+            return evaluator.getPathTypeOfMob(new PathfindingContext(region, body), at.getX(), at.getY(), at.getZ(), body)
+                == PathType.BLOCKED;
+        } finally {
+            evaluator.done();
+        }
     }
 
     static Optional<Reading> at(ServerLevel level, Realm realm, Roamer roamer, long from,

@@ -65,8 +65,8 @@ public final class BlockSweep {
             if (declaring == null) {
                 continue;
             }
-            BlockPos anchor = ((Shape.Block) declaring.shape()).anchor().of(level, cell).immutable();
-            if (seen.add(anchor) && level.getBlockEntity(anchor) != null) {
+            BlockPos anchor = ColonySites.anchor(declaring.shape()).of(level, cell).immutable();
+            if (seen.add(anchor) && (!(declaring.shape() instanceof Shape.Block) || level.getBlockEntity(anchor) != null)) {
                 found.computeIfAbsent(declaring, any -> new ArrayList<>()).add(anchor);
             }
         }

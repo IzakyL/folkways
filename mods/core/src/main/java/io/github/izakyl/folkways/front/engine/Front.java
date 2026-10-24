@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.front.engine.authority.ColonyAuthority;
 import io.github.izakyl.folkways.front.engine.charter.FtbTeams;
 import io.github.izakyl.folkways.front.engine.charter.Teams;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.front.engine.colony.LaborDebug;
 import io.github.izakyl.folkways.front.engine.item.BookLookup;
 import io.github.izakyl.folkways.front.engine.item.FilterStackCodec;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysDataComponents;
@@ -45,6 +46,7 @@ public final class Front {
         Pages.install(player -> ColonyAuthority.of(player, Optional.empty()).map(ColonyAuthority::colony));
         FilterStacks.install(new FilterStackCodec());
         FrontLifecycle.install();
+        LaborDebug.install();
         BookLookup.install();
         if (ModList.get().isLoaded(FtbTeams.MOD_ID)) {
             Teams.install(new FtbTeams());

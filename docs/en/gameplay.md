@@ -48,6 +48,41 @@ to a filter. A search saved as a filter rule uses IDs and tags; it does not use
 translated names or Pinyin. Its meaning therefore does not depend on a player's
 language or JEC settings.
 
+If residents stop working, enable **Debug logs** on the Colony Book's **Settings**
+page. Every ten seconds, your chat shows the current planning duration, idle
+residents, task counts, recent blockers and whether the route optimizer used its
+fallback. Blockers and task samples describe the last completed schedule; they can
+be older than the live resident counts while planning is busy. Only the player
+who enabled the option receives these messages. Closing the book keeps it enabled;
+disconnecting disables it.
+
+With the same option enabled, task interruptions, work and path failures, planning
+exceptions and optimizer fallbacks appear as they happen. Work messages identify
+the resident, task, position and target; pickup messages also name the dropped
+item and its entity ID. Interruptions name the preempting behavior and the observed
+combat target and recent damage source. These are clues, not proof of what triggered
+the behavior. Events cover the colony across dimensions. Repeats are grouped for
+five seconds and bursts are limited to four messages per two seconds; queued
+occurrences retain their counts, with an overflow summary for larger bursts.
+Turning the option off discards that reader's pending messages.
+
+Route optimization has a work budget and, in the normal planning mode, a
+100-millisecond deadline. If either is exhausted, the scheduler restores and
+publishes its initial valid assignment so residents can work while further
+improvement waits for another schedule.
+
+## Pastures
+
+The target is the number of grown animals to retain. Residents breed ready adult
+pairs while the total is below or at the target. At the target, one additional
+birth is allowed; feeding waits while surplus young grow. Only adults above the
+retained count are culled, so a newborn does not replace a breeding adult.
+
+For example, retain two cows: two adults breed, their calf grows, then one of
+the three adults is culled and the cycle can repeat after the normal breeding
+cooldown. A target of zero disables breeding and culls all adults. One animal
+has no breeding partner; keep at least two for continued meat production.
+
 ## Trades, levels and perks
 
 Residents learn automatically. Each completed second of active work earns one
@@ -208,6 +243,37 @@ neither Cookery nor a straw hat is required. When the Cookery extension is
 installed, its planting materials participate in the same reserve system.
 
 The creative supply box also belongs to Vanilla and works without Cookery.
+
+## Groundwork clearing
+
+Clearing follows support dependencies. Side attachments have first priority,
+followed by blocks that need support below or above, including falling blocks,
+then ordinary blocks. A support waits until its dependents have been removed;
+ordinary blocks still come down from the top. Residents check dependencies again
+before breaking a block, and return products directly through colony logistics.
+
+Clearing stays inside the marked box. Attachments outside it, or attachments the
+settings preserve, also prevent their supports from being removed. Adjust the box
+or remove those attachments first. Paired structures such as doors and beds must
+be entirely inside the selection. Ordinary clearing dismantles scaffolds one cell
+at a time, taking side decks before their supports to avoid a chain collapse.
+
+## Groundwork
+
+Before issuing fill work, residents check a plan that finishes every remaining
+target and returns the builder to stable safe ground. The plan can use newly
+filled ground as a work surface, and includes how to close the last opening.
+Each block is checked again before placement. Changed terrain or people blocking
+a passage can make the zone wait while the plan is checked or rebuilt.
+
+A plan uses one builder in order; other residents can haul supplies and step
+aside. The builder's final retreat is part of finishing the zone and survives a
+normal save and reload. Players and other bystanders must move themselves.
+
+This planning currently supports known stable solid blocks and air. It does not
+build temporary scaffolds. If the allowed ground has no usable entrance or exit,
+provide a safe route or steps. Large or unsupported areas may remain waiting;
+reaching the calculation budget leaves planning unfinished and resumes it later.
 
 ## Buildings
 

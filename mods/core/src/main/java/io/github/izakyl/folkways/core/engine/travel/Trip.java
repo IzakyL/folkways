@@ -31,18 +31,22 @@ public final class Trip implements Conveyance {
     }
 
     private final List<Stage> stages;
+    private final Locomotion moving;
+    private final Resident who;
     private int at;
     private long setOutAt = -1L;
 
-    private Trip(List<Stage> stages) {
+    private Trip(List<Stage> stages, Locomotion moving, Resident who) {
         this.stages = stages;
+        this.moving = moving;
+        this.who = who;
     }
 
     public static Optional<Trip> afoot(Locomotion moving, Set<WorldPos> footings, double speed,
             RefusalKind lost) {
         return footings.isEmpty()
             ? Optional.empty()
-            : Optional.of(new Trip(List.of(new Stage(moving.along(speed, lost), footings, Optional.empty(), false))));
+            : Optional.of(new Trip(List.of(new Stage(moving.along(speed, lost), footings, Optional.empty(), false)), moving, null));
     }
 
     public static Optional<Trip> to(Supplier<Ways> ways, Resident who, Locomotion moving, Mob body,
@@ -56,14 +60,14 @@ public final class Trip implements Conveyance {
             return Optional.empty();
         }
         return switch (ways.get().journey(who, Feet.of(body), footings, urgency)) {
-            case Faring.Yes(Journey journey) -> following(journey, moving, footings, speed, lost);
+            case Faring.Yes(Journey journey) -> following(journey, who, moving, footings, speed, lost);
             case Faring.Later ignored -> Optional.of(new Trip(List.of(new Stage(
-                new Awaiting(ways, who, moving, speed, lost, urgency), footings, Optional.empty(), false))));
+                new Awaiting(ways, who, moving, speed, lost, urgency), footings, Optional.empty(), false)), moving, who));
             case Faring.No ignored -> Optional.empty();
         };
     }
 
-    private static Optional<Trip> following(Journey best, Locomotion moving,
+    private static Optional<Trip> following(Journey best, Resident who, Locomotion moving,
             Set<WorldPos> footings, double speed, RefusalKind lost) {
         List<Leg> legs = ridden(best.legs());
         List<Stage> stages = new ArrayList<>(legs.size());
@@ -89,7 +93,7 @@ public final class Trip implements Conveyance {
                 : leg + 1 >= legs.size() - 1 ? footings : legs.get(leg + 1).to();
             stages.add(new Stage(ran.get().aboard(hop.get()), onward, Optional.empty(), false));
         }
-        return Optional.of(new Trip(stages));
+        return Optional.of(new Trip(stages, moving, who));
     }
 
     private record Passing(Conveyance walking) implements Conveyance {
@@ -158,7 +162,7 @@ public final class Trip implements Conveyance {
                     case Faring.Later ignored -> { return Going.UNDERWAY; }
                     case Faring.No ignored -> { return new Going.Failed(lost); }
                     case Faring.Yes(Journey journey) -> {
-                        resolved = following(journey, moving, to, speed, lost).orElse(null);
+                        resolved = following(journey, who, moving, to, speed, lost).orElse(null);
                         if (resolved == null) {
                             return new Going.Failed(lost);
                         }
@@ -251,7 +255,11 @@ public final class Trip implements Conveyance {
             Going going = stage.carrying().step(level, body, toward);
             if (going instanceof Going.Failed && stage.from().isPresent()) {
                 for (WorldPos goal : toward) {
-                    ColonyWays.wrongEdge(level, stage.from().get(), goal);
+                    if (stage.passing() && who != null) {
+                        ColonyWays.wrongEdge(level, who, moving, body, stage.from().get(), goal);
+                    } else {
+                        ColonyWays.wrongEdge(level, stage.from().get(), goal);
+                    }
                 }
             }
             if (!(going instanceof Going.Arrived)) {

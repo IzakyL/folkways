@@ -49,6 +49,16 @@ public final class Trackways implements Keepouts.Keepout {
         return here != null && here.contains(BlockPos.asLong(x, y, z));
     }
 
+    @Override
+    public void refresh(Level level) {
+        MinecraftServer server = level.getServer();
+        if (server != null && server.isSameThread()) {
+            // A final placement check must see track or train changes made earlier in this same tick.
+            checkedAt = -1;
+            refresh(server);
+        }
+    }
+
     private void refresh(MinecraftServer server) {
         if (server == null || !server.isSameThread() || server.getTickCount() == checkedAt) {
             return;
@@ -69,6 +79,7 @@ public final class Trackways implements Keepouts.Keepout {
             trace(graph.getValue(), widest.getOrDefault(graph.getKey(), 0.0D), traced);
         }
         cells = Map.copyOf(traced);
+        Keepouts.changed();
     }
 
     private static Map<UUID, Double> widest(GlobalRailwayManager railways) {

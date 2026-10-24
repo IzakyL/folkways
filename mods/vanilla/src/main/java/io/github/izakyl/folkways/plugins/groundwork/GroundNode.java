@@ -9,7 +9,10 @@ import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.WorkGesture;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -77,6 +80,35 @@ abstract class GroundNode implements Node {
             return List.of();
         }
         state.spawnAfterBreak(level, cell, tool, true);
+        return drops;
+    }
+
+    // A reciprocal pair must both be gone before shape updates notice either half missing. Its loot is read
+    // while both halves still exist, and returned once, without spawning and finding ground items.
+    static List<ItemStack> take(ServerLevel level, LivingEntity body, List<BlockPos> cells, ItemStack tool) {
+        if (cells.size() == 1) {
+            BlockPos cell = cells.getFirst();
+            return take(level, body, cell, level.getBlockState(cell), tool);
+        }
+        Map<BlockPos, BlockState> before = new LinkedHashMap<>();
+        List<ItemStack> drops = new ArrayList<>();
+        for (BlockPos cell : cells) {
+            BlockState state = level.getBlockState(cell);
+            if (!state.isAir()) {
+                before.put(cell, state);
+                drops.addAll(Block.getDrops(state, level, cell, level.getBlockEntity(cell), body, tool));
+            }
+        }
+        before.forEach((cell, state) -> level.setBlock(cell, state.getFluidState().createLegacyBlock(),
+            Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE));
+        before.forEach((cell, state) -> {
+            level.updateNeighborsAt(cell, state.getBlock());
+            state.updateIndirectNeighbourShapes(level, cell, Block.UPDATE_ALL);
+            BlockState left = level.getBlockState(cell);
+            left.updateNeighbourShapes(level, cell, Block.UPDATE_ALL);
+            left.updateIndirectNeighbourShapes(level, cell, Block.UPDATE_ALL);
+            state.spawnAfterBreak(level, cell, tool, true);
+        });
         return drops;
     }
 }

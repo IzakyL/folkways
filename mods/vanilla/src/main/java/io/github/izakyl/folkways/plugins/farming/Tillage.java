@@ -30,13 +30,14 @@ final class Tillage {
     static final TagKey<Block> FLOWERS = tag("flowers");
     static final TagKey<Block> TILLABLE_UNDER_WEEDS = tag("tillable_under_weeds");
 
-    // What a plot lets its residents pull up: flowers are often planted on purpose, so each is the plot's own choice.
+    // Snow is cleared for tilling regardless of which plants a plot keeps.
+    // Flowers are often planted on purpose, so each is the plot's own choice.
     record Clearing(boolean grass, boolean flowers) {
 
         static final Clearing ALL = new Clearing(true, true);
 
         boolean clears(BlockState state) {
-            return grass && state.is(WEEDS) || flowers && state.is(FLOWERS);
+            return state.is(Blocks.SNOW) || grass && state.is(WEEDS) || flowers && state.is(FLOWERS);
         }
     }
 

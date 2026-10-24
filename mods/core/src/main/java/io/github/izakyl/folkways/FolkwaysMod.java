@@ -67,6 +67,7 @@ public final class FolkwaysMod {
     private final Labor labor = new Labor();
 
     public FolkwaysMod(IEventBus modBus, ModContainer container) {
+        NightlyDiagnostics.install();
         container.registerConfig(ModConfig.Type.SERVER, FolkwaysConfig.SPEC);
         container.registerConfig(ModConfig.Type.CLIENT, FolkwaysClientConfig.SPEC);
         fitTheShell(modBus);
