@@ -19,21 +19,24 @@
 
 选择测试所属模组和运行环境：
 
-| 命令                                                                    | 范围                                                               |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `./gradlew runGameTestServer`                                           | 基础环境中的 Core、Vanilla、Create 合并测试                        |
-| `./gradlew -PcookeryTests=true runGameTestServer`                       | 加载 Cookery 的合并测试，包含 Core 和 Vanilla 的 `src/cookeryTest` |
-| `./gradlew -PgameTestMod=core runGameTestServer`                        | 基础环境中的 Core 测试；也支持 `vanilla` 或 `create`               |
-| `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer`    | 加载 Cookery 的 Core 测试；也支持 `vanilla`                        |
-| `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer` | 加载 Cookery，仅运行 Cookery 所属测试                              |
+| 命令                                                                              | 范围                                                               |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `./gradlew runGameTestServer`                                                     | 基础环境中的 Core、Vanilla、Create 合并测试                        |
+| `./gradlew -PcookeryTests=true runGameTestServer`                                 | 加载 Cookery 的合并测试，包含 Core 和 Vanilla 的 `src/cookeryTest` |
+| `./gradlew -PgameTestMod=core runGameTestServer`                                  | 基础环境中的 Core 测试；也支持 `vanilla` 或 `create`               |
+| `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer`              | 加载 Cookery 的 Core 测试；也支持 `vanilla`                        |
+| `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer`           | 加载 Cookery，仅运行 Cookery 所属测试                              |
+| `./gradlew runGameTestServer -PgameTestMod=firefighting -PfirefightingTests=true` | 消防水带绑定、距离、清理、喷射，以及便携灭火器补液                 |
 
 测试归属与已安装模组分开：选择 Core 时仍会加载 Vanilla 居民和相关集成。
 这些运行环境不加载 Modular Golems，它也暂时没有 GameTests。
 Core 会一并运行已有 LDLib2 依赖测试，其他模组不重复运行。
 
-按模组选中的游戏目录为 `run/gametest/<mod>/<base|cookery>/`，合并运行使用 `run/gametest/`。
+按模组选中的游戏目录为 `run/gametest/<mod>/<base|cookery|firefighting>/`，合并运行使用 `run/gametest/`。
 直接通过 Gradle 启动服务器前，需要先在对应目录的 `eula.txt` 中接受 [Minecraft EULA](https://www.minecraft.net/eula)。
 仅在同意其条款后执行。
+
+可选的 `firefighting` Blockwright 配置会安装固定版本的消防附加组件与整合模组。更新 jar 或校验和后运行 `npm run setup`。仅传入 `-PfirefightingTests=true` 可在加载消防附加组件时运行整套测试。
 
 ## Blockwright 套件
 

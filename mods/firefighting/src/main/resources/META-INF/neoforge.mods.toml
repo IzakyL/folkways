@@ -1,0 +1,68 @@
+modLoader = "javafml"
+loaderVersion = "${loader_version_range}"
+license = "MIT"
+issueTrackerURL = "https://github.com/IzakyL/folkways/issues"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${version}"
+displayName = "Folkways × Create: FireFighting Additions"
+displayURL = "https://github.com/IzakyL/folkways"
+description = "Residents fight fires with hydrant hoses and refill portable extinguishers."
+authors = "IzakyL"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neoforge_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "folkways_core"
+type = "required"
+reason = "The colony engine and screens used by this extension are provided by Folkways Core."
+versionRange = "[${version}]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "folkways_vanilla"
+type = "required"
+reason = "Firefighting extends damage control from Folkways Vanilla."
+versionRange = "[${version}]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "folkways_create"
+type = "required"
+versionRange = "[${version}]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "create"
+type = "required"
+versionRange = "[6.0.10,6.1.0)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+# Its block factories read Create's registered blocks, but the addon declares no ordering of its own.
+# Core -> Create -> this bridge -> addon keeps those factories behind Create without patching the jar.
+modId = "createfirefightingadd"
+type = "required"
+versionRange = "[0.2.5-beta-fix2]"
+ordering = "BEFORE"
+side = "BOTH"
+
+[[mixins]]
+config = "folkways-firefighting.mixins.json"

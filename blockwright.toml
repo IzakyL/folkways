@@ -410,3 +410,17 @@ kaleidoscope_cookery = { target = ["server", "client"] }
 folkways_cookery = { target = ["server", "client"] }
 kaleidoscope_cookery = { target = ["server", "client"] }
 kaleidoscope_tavern = { target = ["server", "client"] }
+
+# The firefighting extension is opt-in, beside the pinned addon and Create.
+[mods.folkways_firefighting]
+path = "build/libs/folkways-firefighting-*.jar"
+target = []
+
+[mods.createfirefightingadd]
+url = "https://cdn.modrinth.com/data/tlmPPRct/versions/nRSRtbX2/createfirefightingadd-0.2.5-beta-fix2.jar"
+sha512 = "f0d4cb80163efd03f17c2791c235600cbadfca294f7d33d2b05256044239a449a3342e9dc0c6d9daa93a0a8a5dfeba8db86a091d5b08ad2bfb09106ee6692dcc"
+target = []
+
+[profile.firefighting.mods]
+folkways_firefighting = { target = ["server", "client"] }
+createfirefightingadd = { target = ["server", "client"] }

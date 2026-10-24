@@ -10,27 +10,32 @@ def modProjects = [
     folkways_create: ":create",
     folkways_modulargolems: ":modulargolems",
     folkways_cookery: ":cookery",
+    folkways_firefighting: ":firefighting",
 ]
 modProjects.values().each { evaluationDependsOn(it) }
 
 // The game tests run without Modular Golems, so its Folkways mod stays out of that run.
+def firefightingTests = providers.gradleProperty("firefightingTests").map { it.toBoolean() }.getOrElse(false)
 def cookeryTests = providers.gradleProperty("cookeryTests").map { it.toBoolean() }.getOrElse(false)
 def tavernTests = providers.gradleProperty("tavernTests").map { it.toBoolean() }.getOrElse(false)
 if (tavernTests && !cookeryTests) {
     throw new GradleException("Tavern GameTests require -PcookeryTests=true")
 }
-def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" && (path != ":cookery" || cookeryTests) }
+def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" && (path != ":cookery" || cookeryTests) && (path != ":firefighting" || firefightingTests) }
 def gameTestMod = providers.gradleProperty("gameTestMod").getOrElse("")
-if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery"])) {
-    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create or cookery")
+if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "firefighting"])) {
+    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create, cookery or firefighting")
 }
 if (gameTestMod == "cookery" && !cookeryTests) {
     throw new GradleException("Cookery GameTests require -PcookeryTests=true")
 }
+if (gameTestMod == "firefighting" && !firefightingTests) {
+    throw new GradleException("Firefighting GameTests require -PfirefightingTests=true")
+}
 def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gameTestMod}" }
 def gameTestDirectory = gameTestMod
-    ? "run/gametest/${gameTestMod}/${cookeryTests ? 'cookery' : 'base'}"
-    : "run/gametest"
+    ? "run/gametest/${gameTestMod}/${firefightingTests ? 'firefighting' : cookeryTests ? 'cookery' : 'base'}"
+    : firefightingTests ? "run/gametest/firefighting" : "run/gametest"
 
 repositories {
     mavenCentral()
@@ -102,6 +107,7 @@ dependencies {
     runtimeOnly ldlib2Coordinate
     runtimeOnly core.lib("create")
     if (cookeryTests) { runtimeOnly core.lib("kaleidoscope_cookery") }
+    if (firefightingTests) { runtimeOnly core.lib("createfirefightingadd") }
     if (tavernTests) { runtimeOnly core.lib("kaleidoscope_tavern") }
     additionalRuntimeClasspath("com.eed3si9n.starlark:starlark:${project.starlark_version}") {
         transitive = false
@@ -166,4 +172,15 @@ tasks.named("check") {
     dependsOn "lintScaffold"
     modProjects.values().each { dependsOn "${it}:check", "${it}:compileGametestJava" }
     if (cookeryTests) { dependsOn ":core:compileCookeryTestJava", ":vanilla:compileCookeryTestJava" }
+}
+
+if (firefightingTests) {
+    tasks.named("runGameTestServer") {
+        doLast {
+            def log = file("${gameTestDirectory}/logs/latest.log")
+            if (!log.isFile() || !(log.text =~ /All [1-9][0-9]* required tests passed/).find()) {
+                throw new GradleException("The firefighting GameTest server did not finish its required tests; see ${log}")
+            }
+        }
+    }
 }

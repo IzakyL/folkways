@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:piston", "minecraft:sticky_piston", "minecraft:piston_head", "minecraft:moving_piston",
+    "minecraft:observer", "minecraft:tnt", "minecraft:sugar_cane", "minecraft:cactus", "minecraft:cocoa",
+    "minecraft:kelp", "minecraft:kelp_plant", "minecraft:twisting_vines", "minecraft:twisting_vines_plant",
+    "minecraft:weeping_vines", "minecraft:weeping_vines_plant", "minecraft:cave_vines", "minecraft:cave_vines_plant"
+  ]
+}

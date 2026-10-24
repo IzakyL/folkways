@@ -233,6 +233,24 @@ the **Blueprints** page; Create schematics require Folkways × Create.
 
 To add your own patterns and structures, see [Custom content](custom-content.md).
 
+## Damage control
+
+Frame a **Damage control** volume with the Colony Book and enable the **Damage control** trade for its residents. Workers inspect their zones as ordinary work. For two minutes after an inspection they respond to fires, interrupting ordinary work; fleeing danger retains priority. Overlapping zones share each fire and its responder. Campfires and decorative or industrial flames are preserved.
+
+The zone settings are **Watch this zone**, **Put out fires**, **Restore missing blocks** and **Borrow and refill firefighting tools**. Repairs start disabled. On the Damage Control page, choose **Record baseline** while the whole zone is loaded, then enable repairs on its zone card. The page shows fires, missing cells, conflicts, unavailable recorded blocks, workers and extinguisher water. Point back to the zone to change its switches.
+
+A baseline records ordinary vanilla building blocks. Containers, crops, fluids, machines and blocks in `#folkways:damage_control_excluded` are excluded. The target is confirmed once through the construction printer and stored with its palette, relative coordinates, revision and Minecraft DataVersion. Existing colonies have no baseline until one is recorded. Unknown blocks are skipped and reported. A zone spanning several structures cannot record a single baseline.
+
+Residents restore only missing cells, using the builder's material requirements and placement adapter. Different blocks are reported and preserved; changing a door's open state does not request repairs. Whole missing doors are placed as one group. A partial group waits rather than resetting a surviving part. Active construction keeps its cells. Fire response takes precedence over repairs. After remodelling, record the baseline again. Baselines do not restore inventories or residents.
+
+Vanilla workers smother nearby fire and soul fire by hand without placing water. With **Folkways × Create: FireFighting Additions**, they prefer a nearby hydrant cabinet containing a hose, a cone or flat nozzle, and water. The cabinet is shared exclusively with one resident or player. A resident stays within the addon's 32-block connection limit; nozzle range follows the addon's settings. Each spray tick draws up to ten mB from the cabinet, including its final partial amount. Player takeover, removing equipment or the cabinet, interruption, death and unloading release the connection and stop sound immediately. After a spray ends, its hose remains visible for four client ticks and emitted water finishes its flight without consuming more fluid. Residents use the addon's spray particles and hose renderer.
+
+When no cabinet can serve the fire, residents borrow a portable extinguisher from colony stores. Water is consumed through the addon's spray drain API: five mB per two-tick pulse, at its four-block range, with a clear line of sight. Only the selected fire cell inside a watched zone receives the addon's block callback. Other spray effects and fluids are outside this integration's first version.
+
+Refill uses fluid capabilities at colony stores, including water buckets. Workers can also gather source water inside an enabled refill zone, using an empty bucket from colony stores. The source is consumed and the bucket returned after filling. Supply discovery shares the zone scan budget. A bucket is emptied only when its whole contents fit; tanks can transfer smaller quantities. Empty tools fall back to hand smothering until refilled. Tools return to ordinary cargo when their owner stops damage control, dies, unloads, or the colony closes. Only water is used by automated firefighting. Moving-structure firefighting has not been verified in a client.
+
+Server settings under `damageControl` cap a zone at 32,768 cells by default, share 512 scan cells per colony per tick, and allow four simultaneous responders. Residents share the surveyed fire list and a per-tick allowance for target footing searches equal to the responder limit. Each selection considers up to 128 rotating fire addresses; unreachable targets wait a second before retrying. Scan allowance rotates between dimensions even when it is only one cell. A fire survey keeps at most 4,096 pending fire addresses. Nearby cabinets announce themselves on their own ticks; each indexed lookup checks up to 64 cabinets and rotates through larger lists, without enumerating unrelated block entities. Partial repairs also rotate, and disabling a zone lets an enabled overlapping zone take over its repairs. The construction printer also limits a baseline's longest edge to 1,024 blocks.
+
 ## Elevators
 
 With Folkways × Create, residents ride Create elevators. Build and power the

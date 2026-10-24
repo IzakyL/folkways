@@ -21,6 +21,9 @@ public final class FolkwaysVanillaConfig {
     private static final ModConfigSpec.IntValue FOOD_PER_RESIDENT;
     private static final ModConfigSpec.IntValue SETTLER_INTERVAL_TICKS;
     private static final ModConfigSpec.IntValue MAX_WAITING_SETTLERS;
+    private static final ModConfigSpec.IntValue MAX_DAMAGE_CONTROL_CELLS;
+    private static final ModConfigSpec.IntValue DAMAGE_CONTROL_SCAN_BUDGET;
+    private static final ModConfigSpec.IntValue DAMAGE_CONTROL_CONCURRENCY;
     private static final ModConfigSpec.IntValue MAX_FISH_CELLS;
     private static final ModConfigSpec.IntValue MAX_PASTURE_CELLS;
     private static final ModConfigSpec.IntValue MAX_FARM_CELLS;
@@ -61,6 +64,15 @@ public final class FolkwaysVanillaConfig {
             .comment("How many settlers may stand waiting at one colony. Nothing gathers past it, so a",
                 "world left running does not hand back a crowd.")
             .defineInRange("maxWaitingSettlers", 5, 1, 64);
+        BUILDER.pop();
+
+        BUILDER.push("damageControl");
+        MAX_DAMAGE_CONTROL_CELLS = BUILDER.comment("Largest damage control zone, in cells.")
+            .defineInRange("maxZoneCells", 32_768, 1, 262_144);
+        DAMAGE_CONTROL_SCAN_BUDGET = BUILDER.comment("Cells inspected per colony per tick, shared by its zones.")
+            .defineInRange("scanBudget", 512, 1, 16_384);
+        DAMAGE_CONTROL_CONCURRENCY = BUILDER.comment("Most residents suppressing fires at once in one colony.")
+            .defineInRange("concurrency", 4, 1, 64);
         BUILDER.pop();
 
         BUILDER.push("zones");
@@ -189,6 +201,18 @@ public final class FolkwaysVanillaConfig {
 
     public static int maxWaitingSettlers() {
         return read(MAX_WAITING_SETTLERS);
+    }
+
+    public static int maxDamageControlCells() {
+        return read(MAX_DAMAGE_CONTROL_CELLS);
+    }
+
+    public static int damageControlScanBudget() {
+        return read(DAMAGE_CONTROL_SCAN_BUDGET);
+    }
+
+    public static int damageControlConcurrency() {
+        return read(DAMAGE_CONTROL_CONCURRENCY);
     }
 
     public static long maxFishCells() {
