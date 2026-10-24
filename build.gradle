@@ -13,23 +13,28 @@ def modProjects = [
 ]
 modProjects.values().each { evaluationDependsOn(it) }
 
-// The game tests run without Modular Golems, so its Folkways mod stays out of that run.
+// Optional integrations enter the test server only when their fixtures are requested.
+def modularGolemsTests = providers.gradleProperty("modularGolemsTests").map { it.toBoolean() }.getOrElse(false)
 def cookeryTests = providers.gradleProperty("cookeryTests").map { it.toBoolean() }.getOrElse(false)
 def tavernTests = providers.gradleProperty("tavernTests").map { it.toBoolean() }.getOrElse(false)
 if (tavernTests && !cookeryTests) {
     throw new GradleException("Tavern GameTests require -PcookeryTests=true")
 }
-def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" && (path != ":cookery" || cookeryTests) }
+def testedMods = modProjects.findAll { id, path -> (path != ":modulargolems" || modularGolemsTests)
+    && (path != ":cookery" || cookeryTests) }
 def gameTestMod = providers.gradleProperty("gameTestMod").getOrElse("")
-if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery"])) {
-    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create or cookery")
+if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "modulargolems"])) {
+    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create, cookery or modulargolems")
+}
+if (gameTestMod == "modulargolems" && !modularGolemsTests) {
+    throw new GradleException("Modular Golems GameTests require -PmodularGolemsTests=true")
 }
 if (gameTestMod == "cookery" && !cookeryTests) {
     throw new GradleException("Cookery GameTests require -PcookeryTests=true")
 }
 def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gameTestMod}" }
 def gameTestDirectory = gameTestMod
-    ? "run/gametest/${gameTestMod}/${cookeryTests ? 'cookery' : 'base'}"
+    ? "run/gametest/${gameTestMod}/${cookeryTests ? 'cookery' : modularGolemsTests ? 'modulargolems' : 'base'}"
     : "run/gametest"
 
 repositories {
@@ -103,6 +108,9 @@ dependencies {
     runtimeOnly core.lib("create")
     if (cookeryTests) { runtimeOnly core.lib("kaleidoscope_cookery") }
     if (tavernTests) { runtimeOnly core.lib("kaleidoscope_tavern") }
+    if (modularGolemsTests) {
+        runtimeOnly core.lib("modulargolems"), core.lib("l2library"), core.lib("l2core"), core.lib("l2serial")
+    }
     additionalRuntimeClasspath("com.eed3si9n.starlark:starlark:${project.starlark_version}") {
         transitive = false
     }
