@@ -66,6 +66,37 @@ public final class SchedulingRecoveryGameTests {
     public static void register(RegisterGameTestsEvent event) { event.register(SchedulingRecoveryGameTests.class); }
 
     @GameTest(template = "empty", timeoutTicks = 100)
+    public static void failedBackgroundSchedulesReportOnlyWhenAppliedOnTheServer(GameTestHelper helper) {
+        var data = new io.github.izakyl.folkways.core.engine.colony.ColonyData();
+        ColonyLabor labor = new ColonyLabor(data, helper.getLevel().dimension());
+        List<LaborIncident> events = new ArrayList<>();
+        Consumer<LaborIncident> listener = event -> {
+            if (event.colony().equals(data.colonyId())) {
+                helper.assertTrue(helper.getLevel().getServer().isSameThread(), "chat incidents belong to the server thread");
+                events.add(event);
+            }
+        };
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(listener);
+        LaborIncident.subscriptions(Set.of(data.colonyId()));
+        try {
+            Fixture scene = new Fixture(helper, 1, null, Placement.NOWHERE, null, labor);
+            scene.enqueue(scene.initial(), scene.crew);
+            scene.pipeline.applyReady(helper.getLevel());
+            events.clear();
+            scene.enqueue(scene.changed(), scene.crew);
+            helper.assertTrue(events.isEmpty(), "the worker lane must not send chat directly");
+            scene.pipeline.applyReady(helper.getLevel());
+            helper.assertTrue(events.size() == 1 && events.getFirst().key().contains("planning/schedule"),
+                "the next simulation publication reports the fault without waiting for a heartbeat");
+        } finally {
+            LaborIncident.subscriptions(Set.of());
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(listener);
+            labor.close();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
     public static void aPartialLayoutRetriesWithoutMessagesAndKeepsItsPublishedDiff(GameTestHelper helper) {
         Fixture scene = new Fixture(helper, 3, null, Placement.NOWHERE, null);
         scene.begin();

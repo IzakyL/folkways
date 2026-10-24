@@ -33,6 +33,7 @@ final class Pipeline {
     private final Inbox inbox;
     private final Planner planner;
     private final Scheduler scheduler;
+    private final BiConsumer<String, String> problem;
 
     private final Queue<Runnable> made = new ConcurrentLinkedQueue<>();
     private final Queue<Scheduler.Input> laying = new ConcurrentLinkedQueue<>();
@@ -55,9 +56,14 @@ final class Pipeline {
     private record Retry(Executor thread, Consumer<Scheduler.Scheduled> laid, long at) { }
 
     Pipeline(Inbox inbox, Planner planner, Scheduler scheduler) {
+        this(inbox, planner, scheduler, (stage, error) -> { });
+    }
+
+    Pipeline(Inbox inbox, Planner planner, Scheduler scheduler, BiConsumer<String, String> problem) {
         this.inbox = inbox;
         this.planner = planner;
         this.scheduler = scheduler;
+        this.problem = problem;
     }
 
     boolean weaving() {
@@ -92,6 +98,7 @@ final class Pipeline {
                 made.add(() -> {
                     inbox.giveBack();
                     weaving = false;
+                    problem.accept("weave", broken.getClass().getSimpleName());
                 });
                 return;
             }
@@ -155,7 +162,10 @@ final class Pipeline {
                     scheduleFailures = Math.min(scheduleFailures + 1, 6);
                     long delay = Math.min(20, 1L << (scheduleFailures - 1));
                     retrying = true;
-                    made.add(() -> retry = new Retry(scheduleThread, laid, now + delay));
+                    made.add(() -> {
+                        retry = new Retry(scheduleThread, laid, now + delay);
+                        problem.accept("schedule", broken.getClass().getSimpleName());
+                    });
                     break;
                 } finally {
                     scheduleBegan = 0;
@@ -164,10 +174,11 @@ final class Pipeline {
                 long finished = Util.getNanos();
                 if (FolkwaysConfig.logPlanHeartbeat() && finished - began >= SLOW_NANOS) {
                     Labor.LOGGER.info("schedule timing tick={} changes={} apply_us={} schedule_us={} total_us={}"
-                            + " nodes={} tours={} unassigned={}",
+                            + " nodes={} tours={} unassigned={} improvement_work={} limited={}",
                         result.tick(), inputs.size(), result.timing().applyNanos() / 1000,
                         result.timing().scheduleNanos() / 1000, (finished - began) / 1000, scheduler.size(),
-                        result.all().size(), result.unassigned().size());
+                        result.all().size(), result.unassigned().size(), result.timing().improvementWork(),
+                        result.timing().limited());
                 }
                 tours = result.all();
                 // The lane has no asynchronous child layouts. Successful publications remain ordered across
