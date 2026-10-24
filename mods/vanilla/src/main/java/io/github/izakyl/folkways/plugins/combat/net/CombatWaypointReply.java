@@ -12,8 +12,9 @@ import net.minecraft.resources.ResourceLocation;
 
 /** Route markers represent committed server orders, never an unsubmitted client draft. */
 public record CombatWaypointReply(long request, UUID colonyId, WorldPos at, List<UUID> residents,
-        List<WorldPos> points, int cycleStart, boolean open, boolean accepted, Intent intent) implements CustomPacketPayload {
-    public enum Intent { MOVE, ATTACK, WAYPOINT }
+        List<WorldPos> points, int cycleStart, boolean open, boolean accepted, Intent intent,
+        CombatOrderState state) implements CustomPacketPayload {
+    public enum Intent { MOVE, ATTACK, WAYPOINT, STOP }
     public static final Type<CombatWaypointReply> TYPE = new Type<>(
         ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "combat_waypoint_reply"));
     public static final StreamCodec<RegistryFriendlyByteBuf, CombatWaypointReply> STREAM_CODEC =
@@ -26,6 +27,7 @@ public record CombatWaypointReply(long request, UUID colonyId, WorldPos at, List
         }
     }
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    public boolean attackMove() { return state.attackMove(); }
     private void encode(RegistryFriendlyByteBuf buffer) {
         buffer.writeVarLong(request);
         buffer.writeUUID(colonyId);
@@ -37,6 +39,7 @@ public record CombatWaypointReply(long request, UUID colonyId, WorldPos at, List
         buffer.writeBoolean(open);
         buffer.writeBoolean(accepted);
         buffer.writeEnum(intent);
+        state.write(buffer);
     }
     private static CombatWaypointReply decode(RegistryFriendlyByteBuf buffer) {
         long request = buffer.readVarLong();
@@ -48,6 +51,6 @@ public record CombatWaypointReply(long request, UUID colonyId, WorldPos at, List
         List<WorldPos> points = new ArrayList<>(count);
         for (int index = 0; index < count; index++) { points.add(WorldPos.read(buffer)); }
         return new CombatWaypointReply(request, colony, at, residents, points, buffer.readVarInt(),
-            buffer.readBoolean(), buffer.readBoolean(), buffer.readEnum(Intent.class));
+            buffer.readBoolean(), buffer.readBoolean(), buffer.readEnum(Intent.class), CombatOrderState.read(buffer));
     }
 }

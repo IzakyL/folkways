@@ -13,7 +13,7 @@ import net.minecraft.resources.ResourceLocation;
 /** Only the requesting player's authoritative selection and nine shortcuts are returned. */
 public record CombatControlReply(long request, UUID colonyId, WorldPos at, long revision,
         List<UUID> selection, List<List<UUID>> groups, List<WorldPos> points, int cycleStart, boolean open,
-        boolean accepted) implements CustomPacketPayload {
+        boolean accepted, CombatControlPacket.Operation operation, CombatOrderState state) implements CustomPacketPayload {
     public static final Type<CombatControlReply> TYPE = new Type<>(
         ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "combat_control_reply"));
     public static final StreamCodec<RegistryFriendlyByteBuf, CombatControlReply> STREAM_CODEC =
@@ -30,6 +30,7 @@ public record CombatControlReply(long request, UUID colonyId, WorldPos at, long 
         }
     }
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    public boolean attackMove() { return state.attackMove(); }
     private void encode(RegistryFriendlyByteBuf buffer) {
         buffer.writeVarLong(request);
         buffer.writeUUID(colonyId);
@@ -42,6 +43,8 @@ public record CombatControlReply(long request, UUID colonyId, WorldPos at, long 
         buffer.writeVarInt(cycleStart);
         buffer.writeBoolean(open);
         buffer.writeBoolean(accepted);
+        buffer.writeEnum(operation);
+        state.write(buffer);
     }
     private static CombatControlReply decode(RegistryFriendlyByteBuf buffer) {
         long request = buffer.readVarLong();
@@ -58,6 +61,7 @@ public record CombatControlReply(long request, UUID colonyId, WorldPos at, long 
         List<WorldPos> points = new ArrayList<>(count);
         for (int index = 0; index < count; index++) { points.add(WorldPos.read(buffer)); }
         return new CombatControlReply(request, colony, at, revision, selection, groups, points,
-            buffer.readVarInt(), buffer.readBoolean(), buffer.readBoolean());
+            buffer.readVarInt(), buffer.readBoolean(), buffer.readBoolean(), buffer.readEnum(CombatControlPacket.Operation.class),
+            CombatOrderState.read(buffer));
     }
 }

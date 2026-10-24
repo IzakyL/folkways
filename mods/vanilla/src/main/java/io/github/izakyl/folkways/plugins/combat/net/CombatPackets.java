@@ -31,7 +31,7 @@ public final class CombatPackets {
     public static final int MAX_MEMBERS = 256;
     public static final int MAX_POINTS = 16;
     // Selection leases, shortcut operations and immediate waypoint acknowledgements must match on both sides.
-    private static final String NETWORK_VERSION = "3";
+    private static final String NETWORK_VERSION = "4";
     private record Snapshot(UUID colony, WorldPos at, Set<UUID> residents) { }
     private static volatile Snapshot snapshot;
     private static long requested;
@@ -39,6 +39,7 @@ public final class CombatPackets {
     private static volatile long revision;
     private static volatile CombatControlReply control;
     private static volatile CombatWaypointReply route;
+    private static volatile CombatOrderState status = CombatOrderState.NONE;
     private static long requestedControl, receivedControl, requestedRoute, receivedRoute;
     private static long lastControlMutation;
     private static volatile long controlRevision, routeRevision;
@@ -53,11 +54,15 @@ public final class CombatPackets {
     }
 
     public static boolean submit(List<UUID> residents, List<WorldPos> points, int cycleStart) {
+        return submit(residents, points, cycleStart, false);
+    }
+
+    public static boolean submit(List<UUID> residents, List<WorldPos> points, int cycleStart, boolean attackMove) {
         Snapshot current = snapshot;
         if (current == null || current.colony() == null || residents.isEmpty() || residents.size() > MAX_MEMBERS
                 || points.isEmpty() || points.size() > MAX_POINTS
                 || !SelectionOrders.validCycle(points.size(), cycleStart) || !selected(residents)) { return false; }
-        PacketDistributor.sendToServer(new CombatSelectionPacket(current.colony(), residents, points, cycleStart, ++requestedRoute));
+        PacketDistributor.sendToServer(new CombatSelectionPacket(current.colony(), residents, points, cycleStart, ++requestedRoute, attackMove));
         return true;
     }
 
@@ -70,12 +75,31 @@ public final class CombatPackets {
     }
 
     public static boolean append(List<UUID> residents, WorldPos point) {
+        return append(residents, point, false);
+    }
+
+    public static boolean append(List<UUID> residents, WorldPos point, boolean attackMove) {
         Snapshot current = snapshot;
         if (current == null || current.colony() == null || residents.isEmpty()
                 || residents.size() > MAX_MEMBERS || !selected(residents)) { return false; }
-        PacketDistributor.sendToServer(new CombatWaypointPacket(++requestedRoute, current.colony(), residents, point));
+        PacketDistributor.sendToServer(new CombatWaypointPacket(++requestedRoute, current.colony(), residents, point, attackMove));
         return true;
     }
+
+    public static boolean stop(List<UUID> residents) {
+        Snapshot current = snapshot;
+        if (current == null || current.colony() == null || residents.isEmpty()
+                || residents.size() > MAX_MEMBERS || !selected(residents)) { return false; }
+        PacketDistributor.sendToServer(new CombatStopPacket(++requestedRoute, current.colony(), residents));
+        return true;
+    }
+
+    public static boolean release(List<UUID> residents) {
+        return !residents.isEmpty() && selected(residents)
+            && control(CombatControlPacket.Operation.RELEASE, 0, residents);
+    }
+
+    public static CombatOrderState state() { return status; }
 
     private static boolean selected(List<UUID> residents) {
         CombatControlReply current = control;
@@ -106,6 +130,8 @@ public final class CombatPackets {
     public static long controlRevision() { return controlRevision; }
     public static Optional<CombatWaypointReply> route() { return Optional.ofNullable(route); }
     public static long routeRevision() { return routeRevision; }
+    /** Correlates one sent order with its acknowledgement without inventing a second client counter. */
+    public static long lastRouteRequest() { return requestedRoute; }
     public static boolean routePending() { return requestedRoute > receivedRoute; }
     public static void clearRoute() {
         receivedRoute = requestedRoute;
@@ -120,6 +146,7 @@ public final class CombatPackets {
         if (snapshot != null) { snapshot = null; revision++; }
         receivedControl = requestedControl;
         control = null;
+        status = CombatOrderState.NONE;
         controlRevision++;
         clearRoute();
     }
@@ -135,7 +162,7 @@ public final class CombatPackets {
                 context.enqueueWork(() -> {
                     if (context.player() instanceof ServerPlayer player) {
                         boolean accepted = fresh(waypointRequests, player, packet.request())
-                            && SelectionOrders.submit(player, packet.colonyId(), packet.residents(), packet.points(), packet.cycleStart());
+                            && SelectionOrders.submit(player, packet.colonyId(), packet.residents(), packet.points(), packet.cycleStart(), packet.attackMove());
                         replyRoute(player, packet.request(), packet.colonyId(), packet.residents(), accepted, CombatWaypointReply.Intent.MOVE);
                         player.displayClientMessage(Component.translatable(accepted ? "folkways.combat.saved" : "folkways.combat.error.rejected"), true);
                     }
@@ -149,6 +176,15 @@ public final class CombatPackets {
                         player.displayClientMessage(Component.translatable(accepted ? "folkways.combat.saved" : "folkways.combat.error.rejected"), true);
                     }
                 }))
+            .playToServer(CombatStopPacket.TYPE, CombatStopPacket.STREAM_CODEC, (packet, context) ->
+                context.enqueueWork(() -> {
+                    if (context.player() instanceof ServerPlayer player) {
+                        boolean accepted = fresh(waypointRequests, player, packet.request())
+                            && SelectionOrders.stop(player, packet.colonyId(), packet.residents());
+                        replyRoute(player, packet.request(), packet.colonyId(), packet.residents(), accepted, CombatWaypointReply.Intent.STOP);
+                        if (!accepted) { player.displayClientMessage(Component.translatable("folkways.combat.error.rejected"), true); }
+                    }
+                }))
             .playToServer(CombatControlPacket.TYPE, CombatControlPacket.STREAM_CODEC, (packet, context) ->
                 context.enqueueWork(() -> {
                     if (context.player() instanceof ServerPlayer player) { control(player, packet); }
@@ -158,13 +194,14 @@ public final class CombatPackets {
                     if (packet.request() <= receivedControl || packet.request() > requestedControl) { return; }
                     receivedControl = packet.request();
                     control = packet;
+                    status = packet.state();
                     controlRevision++;
                 }))
             .playToServer(CombatWaypointPacket.TYPE, CombatWaypointPacket.STREAM_CODEC, (packet, context) ->
                 context.enqueueWork(() -> {
                     if (context.player() instanceof ServerPlayer player) {
                         boolean fresh = fresh(waypointRequests, player, packet.request());
-                        boolean accepted = fresh && SelectionOrders.append(player, packet.colonyId(), packet.residents(), packet.point());
+                        boolean accepted = fresh && SelectionOrders.append(player, packet.colonyId(), packet.residents(), packet.point(), packet.attackMove());
                         replyRoute(player, packet.request(), packet.colonyId(), packet.residents(), accepted, CombatWaypointReply.Intent.WAYPOINT);
                         if (!accepted) { player.displayClientMessage(Component.translatable("folkways.combat.error.rejected"), true); }
                     }
@@ -174,15 +211,19 @@ public final class CombatPackets {
                     if (packet.request() <= receivedRoute || packet.request() > requestedRoute) { return; }
                     receivedRoute = packet.request();
                     route = packet;
+                    status = packet.state();
                     routeRevision++;
                 }))
             .playToServer(RequestRoster.TYPE, RequestRoster.STREAM_CODEC, (packet, context) ->
                 context.enqueueWork(() -> {
                     if (context.player() instanceof ServerPlayer player) {
                         var colony = Books.heldColony(player).flatMap(id -> SelectionOrders.authorized(player, id));
+                        CombatOrderState state = colony.flatMap(found -> SelectionOrders.route(player, found.id(),
+                            CombatSelectionOwnership.of(found).snapshot(player).selection()))
+                            .map(CombatOrderState::of).orElse(CombatOrderState.NONE);
                         PacketDistributor.sendToPlayer(player, new RosterReply(packet.request(),
                             colony.map(found -> found.id()).orElse(null), WorldSpaces.at(player),
-                            colony.map(found -> SelectionOrders.roster(player, found)).orElse(Set.of())));
+                            colony.map(found -> SelectionOrders.roster(player, found)).orElse(Set.of()), state));
                     }
                 }))
             .playToClient(RosterReply.TYPE, RosterReply.STREAM_CODEC, (packet, context) ->
@@ -192,6 +233,7 @@ public final class CombatPackets {
                     if (packet.request() <= received || packet.request() > requested) { return; }
                     received = packet.request();
                     snapshot = new Snapshot(packet.colony(), packet.at(), packet.residents());
+                    status = packet.state();
                     revision++;
                 }));
     }
@@ -217,6 +259,7 @@ public final class CombatPackets {
                 case RECALL -> ownership.recallGroup(player, packet.slot() - 1);
                 case HEARTBEAT -> ownership.heartbeat(player);
                 case CLEAR -> { ownership.clearContext(player); yield true; }
+                case RELEASE -> ownership.releaseSelected(player, packet.residents());
             };
             state = ownership.snapshot(player);
         } else if (colony.isPresent()) {
@@ -225,7 +268,8 @@ public final class CombatPackets {
         Optional<UnitGroup> group = SelectionOrders.route(player, packet.colonyId(), state.selection());
         PacketDistributor.sendToPlayer(player, new CombatControlReply(packet.request(), packet.colonyId(),
             WorldSpaces.at(player), state.revision(), state.selection(), state.groups(), group.map(UnitGroup::pointRoute).orElse(List.of()),
-            group.map(UnitGroup::cycleStart).orElse(-1), group.map(UnitGroup::pointQueueOpen).orElse(false), accepted));
+            group.map(UnitGroup::cycleStart).orElse(-1), group.map(UnitGroup::pointQueueOpen).orElse(false), accepted,
+            packet.operation(), group.map(CombatOrderState::of).orElse(CombatOrderState.NONE)));
         if (!accepted && packet.operation() != CombatControlPacket.Operation.HEARTBEAT) {
             player.displayClientMessage(Component.translatable("folkways.combat.error.rejected"), true);
         }
@@ -236,7 +280,8 @@ public final class CombatPackets {
         Optional<UnitGroup> group = SelectionOrders.route(player, colony, residents);
         PacketDistributor.sendToPlayer(player, new CombatWaypointReply(request, colony, WorldSpaces.at(player), residents,
             group.map(UnitGroup::pointRoute).orElse(List.of()), group.map(UnitGroup::cycleStart).orElse(-1),
-            group.map(UnitGroup::pointQueueOpen).orElse(false), accepted, intent));
+            group.map(UnitGroup::pointQueueOpen).orElse(false), accepted, intent,
+            group.map(CombatOrderState::of).orElse(CombatOrderState.NONE)));
     }
 
     public record RequestRoster(long request) implements CustomPacketPayload {
@@ -246,10 +291,14 @@ public final class CombatPackets {
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 
-    public record RosterReply(long request, UUID colony, WorldPos at, Set<UUID> residents) implements CustomPacketPayload {
+    public record RosterReply(long request, UUID colony, WorldPos at, Set<UUID> residents,
+            CombatOrderState state) implements CustomPacketPayload {
         static final Type<RosterReply> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "combat_roster"));
         static final StreamCodec<RegistryFriendlyByteBuf, RosterReply> STREAM_CODEC = StreamCodec.ofMember(RosterReply::encode, RosterReply::decode);
         public RosterReply { residents = Set.copyOf(residents); }
+        public RosterReply(long request, UUID colony, WorldPos at, Set<UUID> residents) {
+            this(request, colony, at, residents, CombatOrderState.NONE);
+        }
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
         private void encode(RegistryFriendlyByteBuf buffer) {
             buffer.writeVarLong(request);
@@ -257,12 +306,14 @@ public final class CombatPackets {
             if (colony != null) { buffer.writeUUID(colony); }
             at.write(buffer);
             CombatSelectionPacket.writeIds(buffer, residents);
+            state.write(buffer);
         }
         private static RosterReply decode(RegistryFriendlyByteBuf buffer) {
             long request = buffer.readVarLong();
             UUID colony = buffer.readBoolean() ? buffer.readUUID() : null;
             WorldPos at = WorldPos.read(buffer);
-            return new RosterReply(request, colony, at, Set.copyOf(CombatSelectionPacket.readIds(buffer)));
+            Set<UUID> residents = Set.copyOf(CombatSelectionPacket.readIds(buffer));
+            return new RosterReply(request, colony, at, residents, CombatOrderState.read(buffer));
         }
     }
 }
