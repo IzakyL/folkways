@@ -29,6 +29,7 @@ final class BreakNode extends GroundNode {
 
     enum Way {
         CLEAR,
+        FALLEN,
         WEED;
 
         Vocation by() {
@@ -36,7 +37,8 @@ final class BreakNode extends GroundNode {
         }
 
         ResourceLocation doing() {
-            return this == CLEAR ? GroundworkContent.CLEARING : GroundworkContent.WEEDING;
+            return this == CLEAR ? GroundworkContent.CLEARING
+                : this == FALLEN ? GroundworkContent.FELLING : GroundworkContent.WEEDING;
         }
 
         Workload.Haste haste(Chores.Chore chore) {
@@ -51,19 +53,22 @@ final class BreakNode extends GroundNode {
     // What the zone leaves standing, read again when the block is taken: it may have joined the colony since.
     private final BiPredicate<BlockPos, BlockState> spared;
 
-    BreakNode(Chores.Chore chore, Way way, BlockState seen, Predicate<BlockState> taken,
+    BreakNode(ServerLevel level, Chores.Chore chore, Way way, BlockState seen, Predicate<BlockState> taken,
             BiPredicate<BlockPos, BlockState> spared) {
-        super(declared(chore, way, seen), chore);
+        super(declared(level, chore, way, seen), chore);
         this.way = way;
         this.taken = taken;
         this.spared = spared;
     }
 
-    private static NodeSpec declared(Chores.Chore chore, Way way,
+    private static NodeSpec declared(ServerLevel level, Chores.Chore chore, Way way,
             BlockState seen) {
+        List<BlockState> blocks = new ArrayList<>();
+        blocks.add(seen);
+        chore.job().canopy().forEach(cell -> blocks.add(level.getBlockState(cell)));
         var spec = GroundNode.declare(chore, way.by(), Workload.Once.of(ticksFor(way, seen), way.haste(chore)))
-            .leaves(Leaves.ofBlocks(List.of(seen)));
-        if (way == Way.CLEAR && seen.requiresCorrectToolForDrops()) {
+            .leaves(Leaves.ofBlocks(blocks));
+        if (way != Way.WEED && seen.requiresCorrectToolForDrops()) {
             spec.tools(new ToolUse(new ToolNeed.SuitableFor(seen), 1));
         }
         return spec.doing(way.doing(), seen.getBlock()).done();
@@ -88,14 +93,32 @@ final class BreakNode extends GroundNode {
         if (state.getDestroySpeed(level, cell) < 0.0F || spared.test(cell, state)) {
             return refuse(GroundRefusal.NOTHING_TO_WORK);
         }
-        ItemStack tool = way == Way.CLEAR
-            ? BuildingPerks.fortunate(level, who, who.held(new ToolNeed.SuitableFor(state))) : ItemStack.EMPTY;
-        List<ItemStack> drops = new ArrayList<>(take(level, who.body(), cell, state, tool));
+        for (BlockPos decoration : job.canopy()) {
+            if (!level.isLoaded(decoration) || spared.test(decoration, level.getBlockState(decoration))) {
+                return refuse(GroundRefusal.NOTHING_TO_WORK);
+            }
+        }
+        ItemStack tool = way == Way.WEED ? ItemStack.EMPTY : who.held(new ToolNeed.SuitableFor(state));
+        if (way == Way.CLEAR) {
+            tool = BuildingPerks.fortunate(level, who, tool);
+        }
+        List<ItemStack> drops = new ArrayList<>();
+        List<WorkNoise> noises = new ArrayList<>();
+        // Collect decorations before removing their support, so neighbor updates cannot discard their loot.
+        for (BlockPos decoration : job.canopy()) {
+            BlockState plant = level.getBlockState(decoration);
+            if (FallenLogs.decoration(plant)) {
+                drops.addAll(take(level, who.body(), decoration, plant, tool));
+                noises.add(WorkNoise.broke(decoration, plant));
+            }
+        }
+        drops.addAll(take(level, who.body(), cell, state, tool));
+        noises.add(WorkNoise.broke(cell, state));
         if (way == Way.CLEAR && level.getBlockState(cell).isAir()) {
             drops.addAll(BuildingPerks.discoveries(level, who, cell, state));
             BuildingPerks.mined(who, state);
         }
-        return new Outcome.Done(List.of(WorkNoise.broke(cell, state)), drops,
+        return new Outcome.Done(noises, drops,
             Optional.of(new Xp(way.by(), 1)));
     }
 }

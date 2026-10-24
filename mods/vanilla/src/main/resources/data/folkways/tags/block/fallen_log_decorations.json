@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:moss_carpet",
+    "minecraft:vine",
+    "minecraft:brown_mushroom",
+    "minecraft:red_mushroom",
+    "minecraft:fern"
+  ]
+}

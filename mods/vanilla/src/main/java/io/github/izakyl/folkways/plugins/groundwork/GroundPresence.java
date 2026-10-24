@@ -87,22 +87,34 @@ final class GroundPresence implements Facing {
             // is pulled before a block is laid over it.
             Set<BlockPos> claimed = new HashSet<>();
             if (settings.flag(GroundworkContent.FELL)) {
-                List<Job> trees = survey.fell();
+                List<Job> trees = new ArrayList<>(survey.fell());
                 trees.forEach(tree -> {
                     claimed.addAll(tree.cells());
                     claimed.addAll(tree.canopy());
                 });
-                settle(GroundworkContent.FELL, (at, chore) -> new FellNode(at, chore), trees);
+                List<Job> fallen = survey.fallen(member, kept, claimed);
+                fallen.forEach(log -> {
+                    claimed.addAll(log.cells());
+                    claimed.addAll(log.canopy());
+                });
+                trees.addAll(fallen);
+                settle(GroundworkContent.FELL, (at, chore) -> chore.job().key().startsWith("fallen:")
+                    ? new BreakNode(at, chore, BreakNode.Way.FALLEN, at.getBlockState(chore.job().cell()),
+                        FallenLogs::horizontal, (cell, state) -> member.test(cell) || kept.test(state)
+                            || FallenLogs.horizontal(state)
+                                && !new FallenLogs(at, member).at(cell))
+                    : new FellNode(at, chore), trees);
             }
             if (grass || flowers) {
                 Predicate<BlockState> pulled = Survey.weeds(grass, flowers);
-                List<Job> weeds = survey.weed(pulled);
+                List<Job> weeds = survey.weed(pulled).stream()
+                    .filter(weed -> !claimed.contains(weed.cell())).toList();
                 weeds.forEach(weed -> {
                     claimed.add(weed.cell());
                     claimed.add(weed.cell().above());
                 });
                 settle(GroundworkContent.WEED,
-                    (at, chore) -> new BreakNode(chore, BreakNode.Way.WEED, at.getBlockState(chore.job().cell()),
+                    (at, chore) -> new BreakNode(at, chore, BreakNode.Way.WEED, at.getBlockState(chore.job().cell()),
                         pulled, (cell, state) -> false),
                     weeds);
             }
@@ -112,7 +124,7 @@ final class GroundPresence implements Facing {
                 digging = clear.stream().anyMatch(job -> !initialized.contains(zone)
                     || targets.getOrDefault(GroundworkContent.CLEAR, Set.of()).contains(job.key()));
                 settle(GroundworkContent.CLEAR,
-                    (at, chore) -> new BreakNode(chore, BreakNode.Way.CLEAR, at.getBlockState(chore.job().cell()),
+                    (at, chore) -> new BreakNode(at, chore, BreakNode.Way.CLEAR, at.getBlockState(chore.job().cell()),
                         state -> true, (cell, state) -> member.test(cell) || kept.test(state)),
                     clear);
             }

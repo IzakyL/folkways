@@ -72,13 +72,40 @@ final class Survey {
     // has taken is left to it, and what lies under it waits for that work too.
     List<Job> clear(Predicate<BlockPos> member, Predicate<BlockState> kept, Set<BlockPos> claimed) {
         Predicate<BlockPos> wanted = toClear(member, kept);
+        FallenLogs fallen = new FallenLogs(level, member);
         List<Job> jobs = new ArrayList<>();
         for (BlockPos cell : sorted(DOWNWARD)) {
             if (!wanted.test(cell) || claimed.contains(cell)
                 || !discovering && cells.contains(cell.above()) && wanted.test(cell.above())) {
                 continue;
             }
-            stances(cell, Set.of(cell.above())).ifPresent(where -> jobs.add(Job.at(cell, site(cell), where)));
+            List<BlockPos> decorations = FallenLogs.horizontal(level.getBlockState(cell)) && fallen.at(cell)
+                ? fallen.decorations(cell) : List.of();
+            if (decorations.stream().anyMatch(at -> member.test(at) || kept.test(level.getBlockState(at)))) {
+                continue;
+            }
+            stances(cell, Set.of(cell.above())).ifPresent(where -> jobs.add(new Job(Job.keyOf(cell), site(cell),
+                cell, List.of(cell), decorations, where)));
+        }
+        return jobs;
+    }
+
+    // Fallen wood needs no canopy. Only its marked logs go; their small decorations come away first.
+    List<Job> fallen(Predicate<BlockPos> member, Predicate<BlockState> kept, Set<BlockPos> claimed) {
+        Predicate<BlockPos> spared = cell -> member.test(cell) || kept.test(level.getBlockState(cell));
+        FallenLogs fallen = new FallenLogs(level, member);
+        List<Job> jobs = new ArrayList<>();
+        for (BlockPos cell : sorted(UPWARD)) {
+            if (claimed.contains(cell) || !level.isLoaded(cell) || !FallenLogs.horizontal(level.getBlockState(cell))
+                || spared.test(cell) || !fallen.at(cell)) {
+                continue;
+            }
+            List<BlockPos> decorations = fallen.decorations(cell);
+            if (decorations.stream().anyMatch(spared)) {
+                continue;
+            }
+            stances(cell, Set.of(cell.above())).ifPresent(where -> jobs.add(new Job("fallen:" + Job.keyOf(cell), site(cell),
+                cell, List.of(cell), decorations, where)));
         }
         return jobs;
     }
@@ -129,7 +156,7 @@ final class Survey {
                 continue;
             }
             List<BlockPos> canopy = Felling.canopy(level, tree);
-            if (canopy.isEmpty()) {
+            if (canopy.stream().noneMatch(leaf -> Felling.leaf(level.getBlockState(leaf)))) {
                 continue;
             }
             Optional<Stances> where = stances(cell, Set.of());
