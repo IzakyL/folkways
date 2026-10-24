@@ -6,6 +6,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.AbstractSkeleton;
 import net.minecraft.world.entity.monster.Zombie;
@@ -32,7 +33,7 @@ public final class NativeHostility {
     }
 
     static void install(Mob mob) {
-        if (!(mob instanceof Zombie || mob instanceof AbstractSkeleton)) {
+        if (!(mob instanceof Zombie || mob instanceof AbstractSkeleton) || mob instanceof NeutralMob) {
             return;
         }
         // An entity can re-enter the level; neither a duplicate target goal nor a stale
@@ -41,7 +42,8 @@ public final class NativeHostility {
             .anyMatch(goal -> goal.getGoal() instanceof ResidentTargetGoal)) {
             return;
         }
-        mob.targetSelector.addGoal(3, new ResidentTargetGoal(mob));
+        // Keep retaliation, players, villagers, golems and baby turtles ahead of residents.
+        mob.targetSelector.addGoal(6, new ResidentTargetGoal(mob));
     }
 
     static boolean eligible(LivingEntity target) {
@@ -49,10 +51,17 @@ public final class NativeHostility {
             && Bodies.of(target).flatMap(body -> body.colonyId()).isPresent();
     }
 
-    private static final class ResidentTargetGoal extends NearestAttackableTargetGoal<LivingEntity> {
+    private static final class ResidentTargetGoal extends NearestAttackableTargetGoal<Mob> {
 
         private ResidentTargetGoal(Mob mob) {
-            super(mob, LivingEntity.class, 10, true, false, NativeHostility::eligible);
+            super(mob, Mob.class, 10, true, false, NativeHostility::eligible);
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            // TargetGoal only checks combat eligibility, not our enrollment predicate.
+            // Leaving a colony must end this pursuit as well as prevent a new one.
+            return mob.getTarget() != null && eligible(mob.getTarget()) && super.canContinueToUse();
         }
     }
 }

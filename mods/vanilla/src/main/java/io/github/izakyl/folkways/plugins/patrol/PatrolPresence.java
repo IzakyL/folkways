@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.plugins.combat.Threats;
 import io.github.izakyl.folkways.core.api.colony.Asking;
 import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Closing;
@@ -40,7 +41,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -227,11 +227,12 @@ final class PatrolPresence implements Facing {
     // A patroller on duty - one who stood watch while its last ward still holds - goes for monsters near it.
     public List<Urge> urges(Worker who, ColonyView view) {
         Mob body = who.body();
-        if (!(body.level() instanceof ServerLevel level) || !onDuty(who.resident().id(), level.getGameTime())
-                || !armed(who)) {
+        if (!(body.level() instanceof ServerLevel level) || !armed(who)) {
             return List.of();
         }
-        Optional<Mob> foe = nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE));
+        Optional<Mob> foe = onDuty(who.resident().id(), level.getGameTime())
+            ? nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE))
+            : attacker(body);
         if (foe.isEmpty()) {
             return List.of();
         }
@@ -258,10 +259,19 @@ final class PatrolPresence implements Facing {
             || !who.held(PatrolContent.WEAPON).isEmpty();
     }
 
+    // An armed resident away from patrol may defend itself, without becoming a roaming hunter.
+    private static Optional<Mob> attacker(Mob body) {
+        return Optional.ofNullable(body.getLastHurtByMob())
+            .filter(Mob.class::isInstance).map(Mob.class::cast)
+            .filter(mob -> body.tickCount - body.getLastHurtByMobTimestamp() <= 100
+                && Threats.hostile(mob, body) && body.distanceToSqr(mob) <= ENGAGE_RANGE * ENGAGE_RANGE
+                && body.hasLineOfSight(mob));
+    }
+
     private Optional<Mob> nearestFoe(ServerLevel level, Mob body, double range) {
         alerts.values().removeIf(until -> until < level.getGameTime());
         List<Mob> near = level.getEntitiesOfClass(Mob.class, body.getBoundingBox().inflate(Math.max(range, 24)),
-            mob -> mob instanceof Enemy && mob.isAlive() && !mob.isRemoved()
+            mob -> Threats.hostile(mob, body)
                 && (body.distanceToSqr(mob) <= range * range
                     || alerts.containsKey(mob.getUUID()) && body.distanceToSqr(mob) <= 24 * 24));
         near.sort(Comparator.comparingDouble(body::distanceToSqr));

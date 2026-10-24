@@ -35,6 +35,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.entity.monster.EnderMan;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -307,6 +308,91 @@ public final class PatrolGameTests {
             }
             helper.succeed();
         });
+    }
+
+    @GameTest(template = "empty")
+    public static void anArmedResidentDefendsItselfOffDutyAndYieldsWhenWounded(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 6; x++) {
+            for (int z = 0; z < 3; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE); }
+        }
+        Colony colony = Colonies.mint(level.getServer());
+        Body guard = PersonBody.RESIDENT.get().create(level);
+        Zombie zombie = EntityType.ZOMBIE.create(level);
+        place(helper, guard.mob(), new BlockPos(1, 1, 1));
+        place(helper, zombie, new BlockPos(3, 1, 1));
+        guard.mob().setNoAi(true);
+        zombie.setNoAi(true);
+        try {
+            PatrolPresence patrol = new PatrolPresence(colony);
+            ItemStack sword = new ItemStack(Items.IRON_SWORD);
+            helper.assertTrue(patrol.urges(worker(guard, sword), colony.view(level)).isEmpty(),
+                "an off-duty resident does not seek out an unengaged monster");
+            guard.mob().hurt(level.damageSources().mobAttack(zombie), 1);
+            helper.assertTrue(patrol.urges(worker(guard, ItemStack.EMPTY), colony.view(level)).isEmpty(),
+                "an unarmed resident leaves defence to fear");
+            List<Urge> defence = patrol.urges(worker(guard, sword), colony.view(level));
+            helper.assertTrue(defence.size() == 1 && defence.getFirst().weight() > Urge.DIRE,
+                "an armed healthy resident may stand its ground against its attacker off duty");
+            guard.presentHeldItem(sword.copy());
+            float before = zombie.getHealth();
+            defence.getFirst().take().get().commit(level, worker(guard, sword));
+            helper.assertTrue(zombie.getHealth() < before, "self-defence reuses a real patrol strike");
+            guard.mob().setHealth(guard.mob().getMaxHealth() * .25F);
+            helper.assertTrue(patrol.urges(worker(guard, sword), colony.view(level)).getFirst().weight() < Urge.DIRE,
+                "a wounded defender yields to the existing fear urge");
+        } finally { guard.mob().discard(); zombie.discard(); colony.raze(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void patrolDoesNotProvokeANeutralEnderman(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 6; x++) {
+            for (int z = 0; z < 3; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE); }
+        }
+        Colony colony = Colonies.mint(level.getServer());
+        Body guard = PersonBody.RESIDENT.get().create(level);
+        EnderMan enderman = EntityType.ENDERMAN.create(level);
+        place(helper, guard.mob(), new BlockPos(1, 1, 1));
+        place(helper, enderman, new BlockPos(4, 1, 1));
+        enderman.setNoAi(true);
+        try {
+            PatrolPresence patrol = new PatrolPresence(colony);
+            patrol.watched(guard.id(), level.getGameTime());
+            Worker armed = worker(guard, new ItemStack(Items.IRON_SWORD));
+            helper.assertTrue(patrol.urges(armed, colony.view(level)).isEmpty(), "neutral enderman is left alone");
+            enderman.setTarget(guard.mob());
+            helper.assertFalse(patrol.urges(armed, colony.view(level)).isEmpty(),
+                "an enderman that is already attacking may be opposed");
+            enderman.setTarget(null);
+            enderman.stopBeingAngry();
+            float before = enderman.getHealth();
+            new StrikeNode(level, enderman, Stances.WHEREVER).commit(level, armed);
+            helper.assertValueEqual(enderman.getHealth(), before, "a queued strike rechecks restored neutrality");
+        } finally { guard.mob().discard(); enderman.discard(); colony.raze(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aStrikeCannotHitThroughASolidWall(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Colony colony = Colonies.mint(level.getServer());
+        Body guard = PersonBody.RESIDENT.get().create(level);
+        Zombie zombie = EntityType.ZOMBIE.create(level);
+        place(helper, guard.mob(), new BlockPos(1, 1, 1));
+        place(helper, zombie, new BlockPos(3, 1, 1));
+        guard.mob().setNoAi(true);
+        zombie.setNoAi(true);
+        try {
+            helper.setBlock(new BlockPos(2, 1, 1), Blocks.STONE);
+            helper.setBlock(new BlockPos(2, 2, 1), Blocks.STONE);
+            guard.presentHeldItem(new ItemStack(Items.IRON_SWORD));
+            float before = zombie.getHealth();
+            new StrikeNode(level, zombie, Stances.WHEREVER).commit(level, worker(guard, guard.mob().getMainHandItem()));
+            helper.assertValueEqual(zombie.getHealth(), before, "a solid wall stops the strike at commit time");
+        } finally { guard.mob().discard(); zombie.discard(); colony.raze(); }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")

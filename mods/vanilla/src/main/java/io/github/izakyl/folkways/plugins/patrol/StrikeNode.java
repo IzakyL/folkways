@@ -11,6 +11,7 @@ import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Xp;
+import io.github.izakyl.folkways.plugins.combat.Threats;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -59,7 +60,8 @@ final class StrikeNode implements Node {
     public Outcome commit(ServerLevel level, Worker who) {
         LivingEntity target = standing(level);
         Mob body = who.body();
-        if (target == null || body.distanceTo(target) > STRIKE_REACH + target.getBbWidth()) {
+        if (!(target instanceof Mob mob) || !Threats.hostile(mob, body) || !body.hasLineOfSight(target)
+                || body.distanceTo(target) > STRIKE_REACH + target.getBbWidth()) {
             return Outcome.done();
         }
         body.getLookControl().setLookAt(target);
