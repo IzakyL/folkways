@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.plugins.combat.control.CombatSelectionOwnership;
 import io.github.izakyl.folkways.plugins.combat.group.Deployment;
 import io.github.izakyl.folkways.plugins.combat.group.UnitGroup;
 import io.github.izakyl.folkways.plugins.combat.group.UnitGroups;
@@ -78,7 +79,7 @@ public final class CombatDesk {
                 }
                 case "group" -> {
                     UUID id = UUID.fromString(value);
-                    ownedGroup(id);
+                    ownedGroup(player, id);
                     draft.group = id;
                 }
                 case "add_point", "add_aim" -> {
@@ -97,7 +98,7 @@ public final class CombatDesk {
                 }
                 case "clear_points" -> draft.points.clear();
                 case "execute" -> {
-                    UnitGroup group = ownedGroup(draft.group);
+                    UnitGroup group = ownedGroup(player, draft.group);
                     List<Body> people = group.members().stream().map(id -> body(player, id)).toList();
                     require(!draft.points.isEmpty(), "points");
                     List<Deployment> route = draft.points.stream().map(point -> formation(point, people.size())).toList();
@@ -106,7 +107,7 @@ public final class CombatDesk {
                     else { group.patrol(route); }
                 }
                 case "retreat" -> {
-                    UnitGroup group = ownedGroup(draft.group);
+                    UnitGroup group = ownedGroup(player, draft.group);
                     List<Body> people = group.members().stream().map(id -> body(player, id)).toList();
                     WorldPos at = WorldSpaces.at(player);
                     validPoint(player, at);
@@ -116,11 +117,11 @@ public final class CombatDesk {
                     group.retreat(destination);
                 }
                 case "release" -> {
-                    UnitGroup group = ownedGroup(draft.group);
+                    UnitGroup group = ownedGroup(player, draft.group);
                     group.release();
                 }
                 case "loadout_melee", "loadout_bow", "loadout_crossbow" -> {
-                    UnitGroup group = ownedGroup(draft.group);
+                    UnitGroup group = ownedGroup(player, draft.group);
                     List<Body> people = group.members().stream().map(id -> body(player, id)).toList();
                     String choice = action.substring("loadout_".length());
                     PatrolSupplies.Loadout loadout = PatrolSupplies.Loadout.valueOf(choice.toUpperCase(java.util.Locale.ROOT));
@@ -143,12 +144,13 @@ public final class CombatDesk {
     private static void require(boolean allowed, String reason) {
         if (!allowed) { throw new IllegalArgumentException("folkways.combat.error." + reason); }
     }
-    private UnitGroup ownedGroup(UUID id) {
+    private UnitGroup ownedGroup(ServerPlayer player, UUID id) {
         require(id != null, "group");
         UnitGroup group = UnitGroups.of(colony).group(id).orElseThrow(() -> new IllegalArgumentException("folkways.combat.error.group"));
         require(!group.members().isEmpty() && group.members().stream()
             .allMatch(member -> colony.residents().stream().anyMatch(resident -> resident.id().equals(member)
                 && resident.kind().equals(PersonBody.ID)) && colony.holdingOf(member).isPresent()), "group");
+        require(group.members().stream().allMatch(member -> CombatSelectionOwnership.of(colony).availableOnPage(player, member)), "group");
         return group;
     }
     private Body body(ServerPlayer player, UUID id) {
@@ -157,6 +159,7 @@ public final class CombatDesk {
         require(body.kind().id().equals(PersonBody.ID) && body.mob().isAlive() && !body.mob().isRemoved()
             && !body.mob().isPassenger() && body.colonyId().filter(colony.id()::equals).isPresent()
             && colony.holdingOf(id).isPresent() && WorldSpaces.at(body.mob()).sameRealm(WorldSpaces.at(player)), "members");
+        require(CombatSelectionOwnership.of(colony).availableOnPage(player, id), "members");
         return body;
     }
     private void validPoint(ServerPlayer player, WorldPos point) {
@@ -220,6 +223,7 @@ public final class CombatDesk {
         ListTag groups = new ListTag();
         var manager = UnitGroups.of(colony);
         colony.residents().stream().map(resident -> manager.ofResident(resident.id())).flatMap(java.util.Optional::stream)
+            .filter(group -> group.members().stream().allMatch(member -> CombatSelectionOwnership.of(colony).availableOnPage(player, member)))
             .distinct().sorted(Comparator.comparing(group -> group.id().toString())).forEach(group -> {
                 CompoundTag row = new CompoundTag(); row.putUUID("id", group.id()); row.putInt("number", number(group.id()));
                 row.putInt("members", group.members().size());

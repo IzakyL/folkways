@@ -99,6 +99,28 @@ public final class UnitGroups {
         List<Body> people = residents.stream().distinct().toList();
         people.forEach(this::validate);
         PointRoute route = new PointRoute(this, people, points, cycleStart);
+        return startSelectionPoints(people, route);
+    }
+
+    /** Each Ctrl click is committed immediately; only the exact actual squad can extend its queue. */
+    public boolean appendSelectionPoint(List<Body> residents, WorldPos point) {
+        requireServerThread();
+        List<Body> people = residents.stream().distinct().toList();
+        if (people.isEmpty()) { throw new IllegalArgumentException("point queues require members"); }
+        people.forEach(this::validate);
+        UnitGroup existing = membership.get(people.getFirst().id());
+        Set<UUID> selected = people.stream().map(Body::id).collect(Collectors.toSet());
+        if (existing != null && existing.hasPointQueue() && existing.members.equals(selected)
+                && people.stream().allMatch(body -> membership.get(body.id()) == existing)) {
+            existing.appendPoint(people, point);
+            return true;
+        }
+        // A changed selection or legacy formation begins a fresh queue. All
+        // footing and member validation precedes installing or releasing any command handle.
+        return startSelectionPoints(people, new PointRoute(this, people, List.of(point), -1, true));
+    }
+
+    private boolean startSelectionPoints(List<Body> people, PointRoute route) {
         UnitGroup group = new UnitGroup(this, UUID.randomUUID());
         people.forEach(body -> group.members.add(body.id()));
         groups.put(group.id(), group);

@@ -59,7 +59,14 @@ public final class UnitGroup {
     public int patrolStop() { return points == null ? patrolAt : points.stop(); }
     /** Mandatory click points, including any one-time prefix before the cycle. */
     public List<WorldPos> pointRoute() { return points == null ? List.of() : points.points; }
+    /** One authored point command, stable across appended points and internally replaced leg handles. */
+    public Optional<UUID> pointCommandId() { return Optional.ofNullable(points).map(route -> route.commandId); }
     public int cycleStart() { return points == null ? -1 : points.cycleStart; }
+    /** An accepted live queue can wait indefinitely at its last point for another click. */
+    public boolean pointQueueOpen() {
+        return points != null && points.appendable && !points.loops()
+            && phase != Phase.IDLE && phase != Phase.FAILED;
+    }
     public Optional<WorldPos> captain() { return Optional.ofNullable(points).map(PointRoute::captain); }
     public Set<UUID> missing() {
         owner.requireGroup(this);
@@ -188,6 +195,21 @@ public final class UnitGroup {
         patrolAt = -1;
     }
 
+    boolean hasPointQueue() { return points != null && (points.appendable || points.points.size() == 1); }
+
+    void appendPoint(List<Body> bodies, WorldPos point) {
+        owner.requireGroup(this);
+        if (!hasPointQueue() || points.loops() || phase == Phase.IDLE || phase == Phase.FAILED
+                || bodies.size() != members.size()
+                || bodies.stream().anyMatch(body -> !members.contains(body.id())
+                    || owner.commands.current(body.id()).filter(order -> order == orders.get(body.id())
+                        && order.boundTo(body) && order.status() != ResidentCommands.Status.FAILED
+                        && order.status() != ResidentCommands.Status.RELEASED).isEmpty())) {
+            throw new IllegalArgumentException("point queue no longer owns the complete selection");
+        }
+        points.append(bodies, point);
+    }
+
     void removeMember(UUID member) {
         members.remove(member);
         ResidentCommands.Order order = orders.remove(member);
@@ -290,6 +312,7 @@ public final class UnitGroup {
             return;
         }
         if (mode == ResidentCommands.Mode.GUARD && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)) {
+            points.waiting();
             assembledSince = Long.MIN_VALUE;
             return;
         }
@@ -301,7 +324,7 @@ public final class UnitGroup {
         try {
             if (points.atStop()) {
                 phase = Phase.HOLDING;
-                if (!points.loops()) { return; }
+                if (!points.loops() && !points.appendable) { return; }
                 if (mode != ResidentCommands.Mode.GUARD) {
                     // Travel is deliberate player control. A fully assembled patrol can fight
                     // during its stop, then every survivor must reform before the dwell starts.
@@ -312,6 +335,7 @@ public final class UnitGroup {
                 long now = owner.server.overworld().getGameTime();
                 if (assembledSince == Long.MIN_VALUE) { assembledSince = now; }
                 if (now - assembledSince < PATROL_PAUSE) { return; }
+                if (!points.hasNext()) { return; }
                 points.nextStop();
             }
             // Every advance waits for all available members. No member receives the distant final

@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.PathfindingContext;
@@ -19,20 +20,28 @@ import net.minecraft.world.phys.Vec3;
 
 /** Transient logical captain. Only the existing command runner moves residents. */
 final class PointRoute {
+    final UUID commandId = UUID.randomUUID();
     private static final int ADVANCE = 3;
-    final List<WorldPos> points;
-    final int cycleStart;
+    private static final int MAX_POINTS = 16;
+    List<WorldPos> points;
+    int cycleStart;
+    boolean appendable;
     private final UnitGroups owner;
     private WorldPos captain;
     private int stop;
     private long travellingSince;
 
     PointRoute(UnitGroups owner, List<Body> bodies, List<WorldPos> points, int cycleStart) {
+        this(owner, bodies, points, cycleStart, false);
+    }
+
+    PointRoute(UnitGroups owner, List<Body> bodies, List<WorldPos> points, int cycleStart, boolean appendable) {
         this.owner = owner;
         this.points = List.copyOf(points);
         this.cycleStart = cycleStart;
+        this.appendable = appendable;
         travellingSince = owner.server.overworld().getGameTime();
-        if (bodies.isEmpty() || points.isEmpty() || points.size() > 16
+        if (bodies.isEmpty() || points.isEmpty() || points.size() > MAX_POINTS
                 || (cycleStart == -1 ? points.size() != 1 : cycleStart < 0 || cycleStart >= points.size() - 1)
                 || new HashSet<>(points).size() != points.size()) {
             throw new IllegalArgumentException("invalid point route or cycle");
@@ -60,11 +69,35 @@ final class PointRoute {
     int stop() { return stop; }
     boolean atStop() { return captain.equals(points.get(stop)); }
     boolean loops() { return cycleStart >= 0; }
+    boolean hasNext() { return stop + 1 < points.size() || loops(); }
     List<WorldPos> slots(List<Body> bodies) { return slots(bodies, captain); }
+
+    /** Validate first; appending must never reassemble or rewind an already travelling squad. */
+    void append(List<Body> bodies, WorldPos point) {
+        if (loops() || bodies.isEmpty()) {
+            throw new IllegalArgumentException("this point queue is not open");
+        }
+        if (!points.getFirst().sameRealm(point)) { throw new IllegalArgumentException("route crosses realms"); }
+        int existing = points.indexOf(point);
+        if (existing >= 0 && existing >= points.size() - 1) {
+            throw new IllegalArgumentException("a cycle requires at least two distinct points");
+        }
+        if (existing < 0 && points.size() >= MAX_POINTS) {
+            throw new IllegalArgumentException("point queues allow at most sixteen distinct points");
+        }
+        slots(bodies, point);
+        if (existing >= 0) { cycleStart = existing; }
+        else {
+            List<WorldPos> next = new ArrayList<>(points);
+            next.add(point);
+            points = List.copyOf(next);
+        }
+        appendable = true;
+    }
 
     /** Compute without changing the captain; commit only after a complete command batch is accepted. */
     WorldPos advance(List<Body> bodies) {
-        if (owner.server.overworld().getGameTime() - travellingSince >= 2400) {
+        if (travellingTicks() >= 2400) {
             throw new IllegalArgumentException("captain route leg timed out");
         }
         WorldPos goal = points.get(stop);
@@ -88,8 +121,11 @@ final class PointRoute {
     }
 
     void advanced(WorldPos next) { captain = next; }
+    long travellingTicks() { return owner.server.overworld().getGameTime() - travellingSince; }
+    /** An unavailable squad or an active combat lease owns none of this route's travel budget. */
     void waiting() { travellingSince++; }
     void nextStop() {
+        if (!hasNext()) { throw new IllegalStateException("point queue is waiting for another point"); }
         stop = stop + 1 < points.size() ? stop + 1 : cycleStart;
         travellingSince = owner.server.overworld().getGameTime();
     }

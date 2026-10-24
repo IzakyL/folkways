@@ -10,6 +10,8 @@ import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.plugins.combat.Threats;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.plugins.combat.control.CombatSelectionOwnership;
+import io.github.izakyl.folkways.plugins.combat.group.UnitGroup;
 import io.github.izakyl.folkways.plugins.combat.group.UnitGroups;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.LinkedHashSet;
@@ -51,12 +53,43 @@ public final class SelectionOrders {
             }
             // Duplicate identifiers are harmless; every distinct selected person is retained.
             List<Body> people = new LinkedHashSet<>(residents).stream()
-                .map(id -> body(player, colony, id).orElseThrow(() -> new IllegalArgumentException("unavailable"))).toList();
+                .map(id -> selectedBody(player, colony, id)).toList();
             points.forEach(point -> validPoint(player, point));
-            return UnitGroups.of(colony).commandSelectionPoints(people, points, cycleStart);
+            boolean accepted = UnitGroups.of(colony).commandSelectionPoints(people, points, cycleStart);
+            if (accepted) { trackGroup(player, colony, people); }
+            return accepted;
         } catch (IllegalArgumentException | IllegalStateException rejected) {
             return false;
         }
+    }
+
+    /** Each click commits one waypoint without restarting any already accepted part of the route. */
+    public static boolean append(ServerPlayer player, UUID colonyId, List<UUID> residents, WorldPos point) {
+        try {
+            Colony colony = authorized(player, colonyId).orElseThrow(() -> new IllegalArgumentException("unauthorized"));
+            if (residents.isEmpty() || residents.size() > CombatPackets.MAX_MEMBERS) { return false; }
+            List<Body> people = new LinkedHashSet<>(residents).stream().map(id -> selectedBody(player, colony, id)).toList();
+            validPoint(player, point);
+            boolean accepted = UnitGroups.of(colony).appendSelectionPoint(people, point);
+            if (accepted) { trackGroup(player, colony, people); }
+            return accepted;
+        } catch (IllegalArgumentException | IllegalStateException rejected) {
+            return false;
+        }
+    }
+
+    /** A reply can only expose the exact squad that is still selected by this player. */
+    static Optional<UnitGroup> route(ServerPlayer player, UUID colonyId, List<UUID> residents) {
+        if (residents.isEmpty() || residents.size() > CombatPackets.MAX_MEMBERS) { return Optional.empty(); }
+        return authorized(player, colonyId).flatMap(colony -> {
+            Set<UUID> members = new LinkedHashSet<>(residents);
+            if (members.stream().anyMatch(id -> body(player, colony, id)
+                    .filter(person -> CombatSelectionOwnership.of(colony).selected(player, person)).isEmpty())) {
+                return Optional.empty();
+            }
+            return UnitGroups.of(colony).ofResident(residents.getFirst())
+                .filter(group -> group.members().equals(members));
+        });
     }
 
     /** Players are deliberately outside this command's PvP scope; only a loaded nonfriendly Mob is accepted. */
@@ -67,22 +100,34 @@ public final class SelectionOrders {
                     || !(player.serverLevel().getEntity(targetId) instanceof Mob target)
                     || player.distanceToSqr(target) > 128 * 128) { return false; }
             List<Body> people = new LinkedHashSet<>(residents).stream()
-                .map(id -> body(player, colony, id).orElseThrow(() -> new IllegalArgumentException("unavailable"))).toList();
+                .map(id -> selectedBody(player, colony, id)).toList();
             if (people.stream().anyMatch(body -> !Threats.explicitlyAttackable(target, body.mob(), player))) { return false; }
-            ResidentCommands.of(colony).attack(people, target, player);
+            List<ResidentCommands.Order> issued = ResidentCommands.of(colony).attack(people, target, player);
             UnitGroups.of(colony).releaseSelection(people);
+            CombatSelectionOwnership.of(colony).trackAttack(player, issued);
             return true;
         } catch (IllegalArgumentException | IllegalStateException rejected) {
             return false;
         }
     }
 
+    private static void trackGroup(ServerPlayer player, Colony colony, List<Body> people) {
+        UnitGroup group = UnitGroups.of(colony).ofResident(people.getFirst().id()).orElseThrow();
+        CombatSelectionOwnership.of(colony).trackGroup(player, group);
+    }
+
     static Set<UUID> roster(ServerPlayer player, Colony colony) {
         Set<UUID> result = new LinkedHashSet<>();
         for (var resident : colony.residents()) {
-            body(player, colony, resident.id()).ifPresent(body -> result.add(body.id()));
+            body(player, colony, resident.id()).filter(body -> CombatSelectionOwnership.of(colony).canSelect(player, body))
+                .ifPresent(body -> result.add(body.id()));
         }
         return Set.copyOf(result);
+    }
+
+    private static Body selectedBody(ServerPlayer player, Colony colony, UUID id) {
+        return body(player, colony, id).filter(body -> CombatSelectionOwnership.of(colony).selected(player, body))
+            .orElseThrow(() -> new IllegalArgumentException("resident is not selected by this player"));
     }
 
     private static Optional<Body> body(ServerPlayer player, Colony colony, UUID id) {

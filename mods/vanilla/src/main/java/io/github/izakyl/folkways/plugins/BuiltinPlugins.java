@@ -31,6 +31,8 @@ public final class BuiltinPlugins {
             io.github.izakyl.folkways.plugins.combat.command.CommandContent::declare);
         modBus.addListener(io.github.izakyl.folkways.core.api.Declaring.class,
             io.github.izakyl.folkways.plugins.combat.group.GroupContent::declare);
+        modBus.addListener(io.github.izakyl.folkways.core.api.Declaring.class,
+            io.github.izakyl.folkways.plugins.combat.control.SelectionControlContent::declare);
         io.github.izakyl.folkways.plugins.combat.ui.CombatContent.install(modBus);
         OrdersPlugin.install(modBus);
         io.github.izakyl.folkways.plugins.supply.SupplyContent.install(modBus);
