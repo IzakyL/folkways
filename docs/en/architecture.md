@@ -4,10 +4,10 @@
 
 ## Modules
 
-Folkways has **two required mods and three optional extensions**, each a Gradle
+Folkways has **two required mods and four optional extensions**, each a Gradle
 project under `mods/`. They use separate mod IDs and share the `folkways`
 content namespace. The root project runs tests and collects jars rather than
-building a sixth mod.
+building a seventh mod.
 
 | Gradle project                          | Mod ID                   | Responsibility                                                                         |
 | --------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
@@ -16,6 +16,7 @@ building a sixth mod.
 | `:create` → `mods/create`               | `folkways_create`        | Rail, dispatch, elevators, track joints and schematic hand-off                         |
 | `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | Golems as residents                                                                    |
 | `:cookery` → `mods/cookery`             | `folkways_cookery`       | Native Cookery farming, appliances, shared tools, Kaleidoscope Tavern wine and lessons |
+| `:tacz` → `mods/tacz`                   | `folkways_tacz`          | Resident firearms, physical ammunition and discharge lifecycle                         |
 
 ```mermaid
 flowchart BT
@@ -23,6 +24,7 @@ flowchart BT
     Create --> Vanilla
     ModularGolems[Modular Golems] --> Vanilla
     Cookery --> Vanilla
+    TACZ --> Vanilla
 ```
 
 Core handles integrations needed to read an existing world correctly, such as
@@ -85,3 +87,15 @@ package-private internals. Core's `src/gameTestFixtures` contains reusable helpe
 without test registration. An integration can reuse them without discovering
 Core's tests. Selecting a GameTest owner does not remove the other runtime mods
 its scenarios need. See [Testing](testing.md) for selection flags and CI profiles.
+
+## Optional firearm loadouts
+
+Vanilla owns `LoadoutRegistry` / `LoadoutProvider`, the combat page and physical
+supply trips. Providers register stable IDs and immutable `Selection` options,
+weapon goods, ammunition targets, low water marks, loaded counts and UI choices.
+Version-one `MELEE/BOW/CROSSBOW` preferences migrate to `folkways:melee/bow/crossbow`.
+Unknown extension IDs and options remain saved but inactive while their mod is absent.
+`WeaponSession.continuousEngagement()` defaults to false. Opting in retains the
+hand loan within `StrikeNode`; replacing or releasing an order closes it immediately.
+`WeaponAdapter` can open and range the exact selected stack through its default overloads.
+TACZ types and its generation-guard mixin live entirely in `mods/tacz`.

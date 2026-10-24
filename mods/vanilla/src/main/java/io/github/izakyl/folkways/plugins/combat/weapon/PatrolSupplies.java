@@ -188,7 +188,9 @@ public final class PatrolSupplies {
         }
         Demand demand = wanted(body);
         if (demand == null) {
-            report(body.id(), State.READY, "stock ready", 0, null, 0);
+            LoadoutRegistry.Selection selected = selected(body);
+            boolean unavailable = selected != null && selected.provider().isEmpty();
+            report(body.id(), unavailable ? State.INACTIVE : State.READY, unavailable ? "unavailable loadout" : "stock ready", 0, null, 0);
             return List.of();
         }
         if (level.getGameTime() < status(body.id()).retryAt()) { return List.of(); }

@@ -42,6 +42,7 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
     private ResidentGeoBackend(EntityRendererProvider.Context context) {
         super(context, new Rig(), Crew.INSTANCE);
         addRenderLayer(new ResidentGeoArmorLayer(this, context));
+        addRenderLayer(new ResidentGeoHeldItemLayer(this, context));
     }
 
     public static EntityRenderer<ResidentEntity> create(EntityRendererProvider.Context context) {
@@ -233,6 +234,18 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
                         default -> { }
                     }
                 }
+            }
+            if (entity instanceof ResidentEntity resident) {
+                ResidentWeaponPoses.of(resident).ifPresent(pose -> {
+                    for (GeoBone bone : getAnimationProcessor().getRegisteredBones()) {
+                        ResidentWeaponPoses.Arm arm = switch (bone.getName().replace("_", "").toLowerCase(java.util.Locale.ROOT)) {
+                            case "rightarm", "armright" -> pose.right();
+                            case "leftarm", "armleft" -> pose.left();
+                            default -> null;
+                        };
+                        if (arm != null) { bone.setRotX(-arm.pitch()); bone.setRotY(-arm.yaw()); bone.setRotZ(arm.roll()); }
+                    }
+                });
             }
             headBone().ifPresent(head -> {
                 head.setRotX((ownAnimation ? head.getRotX() : 0) + look.headPitch() * Mth.DEG_TO_RAD);

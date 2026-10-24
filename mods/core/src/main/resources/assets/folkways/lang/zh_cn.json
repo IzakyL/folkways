@@ -1266,5 +1266,12 @@
   "folkways.combat.stock.failed": "补给失败",
   "folkways.combat.stock.cancelled": "补给已取消",
   "folkways.combat.stock.timed_out": "补给超时",
-  "folkways.combat.loadout.unavailable": "装备不可用"
+  "folkways.combat.loadout.unavailable": "装备不可用",
+  "folkways.combat.loadout.tacz": "枪械",
+  "folkways.tacz.gun": "枪械：%s",
+  "folkways.tacz.ammo": "弹药",
+  "folkways.tacz.ammo_count": "已装 %s · 携带 %s",
+  "folkways.tacz.reloading": " · 换弹中",
+  "folkways.tacz.unsupported": "这把枪暂不可用",
+  "folkways.tacz.missing_pack": "缺少枪械或枪包"
 }

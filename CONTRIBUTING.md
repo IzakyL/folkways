@@ -49,7 +49,7 @@ pinned in [`blockwright.toml`](blockwright.toml) and writes `.blockwright/mods.j
 fixtures. Gradle compiles against optional integration jars even when a particular
 test profile does not load them.
 
-The build gathers five mod jars in `build/libs/` and runtime LDLib2 in `build/deps/`.
+The build gathers six mod jars in `build/libs/` and runtime LDLib2 in `build/deps/`.
 See [Architecture](docs/en/architecture.md) for module boundaries and the source map.
 
 For Windows, prepare a compatible source-built SDK using Blockwright's

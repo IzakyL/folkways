@@ -60,13 +60,14 @@ date until the first versioned release is published.
 Install **Core and Vanilla**, then add extensions for the mods you use.
 **All Folkways jars must come from the same build.**
 
-| Jar                                                        | When to install                                                                    |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Folkways Core (`folkways-core-*.jar`)                      | Always: colony engine, Colony Book and panel                                       |
-| Folkways Vanilla (`folkways-vanilla-*.jar`)                | Always: residents and their work among vanilla blocks                              |
-| Folkways × Create (`folkways-create-*.jar`)                | With Create: trains, parcels, track and schematics                                 |
-| Folkways × Modular Golems (`folkways-modulargolems-*.jar`) | With Modular Golems: golems as residents                                           |
-| Folkways × Kaleidoscope Cookery (`folkways-cookery-*.jar`) | With Kaleidoscope Cookery 1.6.0: native crops, appliances and shared kitchen tools |
+| Jar                                                        | When to install                                                                                 |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Folkways Core (`folkways-core-*.jar`)                      | Always: colony engine, Colony Book and panel                                                    |
+| Folkways Vanilla (`folkways-vanilla-*.jar`)                | Always: residents and their work among vanilla blocks                                           |
+| Folkways × Create (`folkways-create-*.jar`)                | With Create: trains, parcels, track and schematics                                              |
+| Folkways × Modular Golems (`folkways-modulargolems-*.jar`) | With Modular Golems: golems as residents                                                        |
+| Folkways × Kaleidoscope Cookery (`folkways-cookery-*.jar`) | With Kaleidoscope Cookery 1.6.0: native crops, appliances and shared kitchen tools              |
+| Folkways × TACZ (`folkways-tacz-*.jar`)                    | With the unofficial TACZ NeoForge port 1.1.8-hotfix-r7: resident firearms and finite ammunition |
 
 Ponder and Flywheel are bundled in Core; the Starlark interpreter is bundled in
 Vanilla. They do not need separate installation.
@@ -124,7 +125,7 @@ npm run setup
 ```
 
 Setup downloads the pinned integration dependencies and writes the manifest
-required by Gradle. The five mod jars are collected in `build/libs/`.
+required by Gradle. The six mod jars are collected in `build/libs/`.
 Blockwright's native Windows support is available in its source tree; the pinned
 npm release predates it. For Windows builds using a source-built SDK and
 `gradlew.bat`, see [development setup](CONTRIBUTING.md#development-setup).

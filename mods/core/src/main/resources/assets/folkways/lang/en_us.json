@@ -1266,5 +1266,12 @@
   "folkways.combat.stock.failed": "Supply failed",
   "folkways.combat.stock.cancelled": "Supply cancelled",
   "folkways.combat.stock.timed_out": "Supply timed out",
-  "folkways.combat.loadout.unavailable": "Unavailable equipment"
+  "folkways.combat.loadout.unavailable": "Unavailable equipment",
+  "folkways.combat.loadout.tacz": "Firearms",
+  "folkways.tacz.gun": "Firearm: %s",
+  "folkways.tacz.ammo": "Ammunition",
+  "folkways.tacz.ammo_count": "Loaded %s · carried %s",
+  "folkways.tacz.reloading": " · Reloading",
+  "folkways.tacz.unsupported": "This firearm is unavailable",
+  "folkways.tacz.missing_pack": "Missing firearm or gun pack"
 }

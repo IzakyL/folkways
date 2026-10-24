@@ -1,0 +1,17 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_tacz"
+ext.modName = "folkways-tacz"
+apply from: rootProject.file("gradle/mod.gradle")
+evaluationDependsOn(":core")
+evaluationDependsOn(":vanilla")
+
+dependencies {
+    api project(":vanilla")
+    compileOnly lib("tacz")
+    gametestImplementation project(":core").sourceSets.gameTestFixtures.output
+}

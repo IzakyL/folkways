@@ -49,6 +49,8 @@ jobs:
             profiles: base
           - mod: cookery
             profiles: cookery
+          - mod: tacz
+            profiles: tacz
     name: GameTests (${{ matrix.mod }})
     steps:
       - uses: actions/checkout@v5
@@ -84,8 +86,11 @@ jobs:
             if [[ "$profile" == cookery ]]; then
               gradle_args+=(-PcookeryTests=true)
             fi
+            if [[ "$profile" == tacz ]]; then
+              gradle_args+=(-PtaczTests=true)
+            fi
             status=failure
-            if timeout --signal=TERM --kill-after=60s 50m ./gradlew "${gradle_args[@]}" --console=plain runGameTestServer 2>&1 | tee "run/gametest/ci/$GAME_TEST_MOD-$profile.log"; then
+            if timeout --signal=TERM --kill-after=60s 50m ./gradlew --no-daemon "${gradle_args[@]}" --console=plain runGameTestServer 2>&1 | tee "run/gametest/ci/$GAME_TEST_MOD-$profile.log"; then
               status=success
             else
               failed=1
@@ -171,7 +176,7 @@ jobs:
           Built automatically from master at ${GITHUB_SHA::7}. Untested pre-release; back up your world before trying it.
 
           Install **folkways-core** and **folkways-vanilla**, plus LDLib2. Add **folkways-create** only with Create,
-          **folkways-modulargolems** only with Modular Golems, and **folkways-cookery** only with Kaleidoscope Cookery 1.6.0.
+          **folkways-modulargolems** only with Modular Golems, and **folkways-cookery** only with Kaleidoscope Cookery 1.6.0, and **folkways-tacz** only with the unofficial TACZ NeoForge port 1.1.8-hotfix-r7.
           All Folkways jars must come from the same build.
           EOF
           gh release create nightly jars/*.jar --prerelease --target "$GITHUB_SHA" \
