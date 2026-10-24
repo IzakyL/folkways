@@ -6,9 +6,9 @@ issueTrackerURL = "https://github.com/IzakyL/folkways/issues"
 [[mods]]
 modId = "${mod_id}"
 version = "${version}"
-displayName = "Folkways × FireFighting Additions"
+displayName = "Folkways × Create: FireFighting Additions"
 displayURL = "https://github.com/IzakyL/folkways"
-description = "Residents fight fires with water-filled extinguishers."
+description = "Residents fight fires with hydrant hoses and refill portable extinguishers."
 authors = "IzakyL"
 
 [[dependencies.${mod_id}]]
@@ -63,3 +63,6 @@ type = "required"
 versionRange = "[0.2.5-beta-fix2]"
 ordering = "BEFORE"
 side = "BOTH"
+
+[[mixins]]
+config = "folkways-firefighting.mixins.json"

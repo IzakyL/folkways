@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.plugins.damagecontrol;
 
-import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
@@ -17,7 +16,6 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.phys.Vec3;
 
 final class ExtinguishNode implements Node {
     private final NodeSpec spec;
@@ -70,9 +68,7 @@ final class ExtinguishNode implements Node {
             return Outcome.failed(DamageControlRefusal.BUSY);
         }
         for (SuppressionMethod method : SuppressionMethods.all()) {
-            if (!method.available(who) || who.body().getEyePosition().distanceToSqr(Vec3.atCenterOf(at))
-                    > method.range() * method.range()
-                    || !Reach.inSight(level, who.body().blockPosition(), at)) {
+            if (!method.reaches(level, who, target)) {
                 continue;
             }
             Optional<SuppressionSession> opened = method.open(level, who, target);

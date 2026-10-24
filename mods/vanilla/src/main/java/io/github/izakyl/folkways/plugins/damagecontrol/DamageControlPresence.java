@@ -8,7 +8,6 @@ import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Sweep;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -231,14 +230,11 @@ final class DamageControlPresence implements Facing {
             return List.of();
         }
         WorldPos target = fire.get();
-        double range = SuppressionMethods.all().stream().filter(method -> method.available(who))
-            .mapToDouble(SuppressionMethod::range).max().orElse(2);
-        Set<BlockPos> feet = new LinkedHashSet<>();
-        for (BlockPos pos : Reach.workableCells(view.level(), target.block(view.level()))) {
-            if (Vec3.atBottomCenterOf(pos).add(0, Reach.EYE_HEIGHT, 0)
-                    .distanceToSqr(Vec3.atCenterOf(target.block(view.level()))) <= range * range
-                    && !FireSurvey.fire(view.level().getBlockState(pos))) {
-                feet.add(pos);
+        Set<BlockPos> feet = Set.of();
+        for (SuppressionMethod method : SuppressionMethods.all()) {
+            feet = method.footings(view.level(), who, target);
+            if (!feet.isEmpty()) {
+                break;
             }
         }
         Optional<Stances> stances = Stances.of(view.level(), feet);
