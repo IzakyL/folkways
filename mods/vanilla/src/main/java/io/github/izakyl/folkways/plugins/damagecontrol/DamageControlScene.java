@@ -32,7 +32,7 @@ public final class DamageControlScene {
         scene.world().showSection(util.select().fromTo(2, 1, 3, 4, 2, 3), Direction.DOWN);
         scene.overlay().showOutline(PonderPalette.OUTPUT, "zone", util.select().fromTo(1, 1, 1, 5, 3, 5), 100);
         scene.overlay().showText(90)
-            .text("Frame a damage control zone and assign residents to damage control. On-duty workers leave ordinary work to fight fires; fleeing danger still comes first.")
+            .text("Frame a damage control zone and allow residents to work in damage control. On-duty workers leave ordinary work to fight fires; fleeing danger still comes first.")
             .pointAt(util.vector().centerOf(3, 1, 2)).placeNearTarget().attachKeyFrame();
         scene.idle(100);
         var worker = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(1, 0, 2), 90);
@@ -41,7 +41,7 @@ public final class DamageControlScene {
         scene.idle(20);
         scene.world().setBlock(util.grid().at(2, 1, 2), Blocks.AIR.defaultBlockState(), false);
         scene.overlay().showText(90)
-            .text("Workers smother nearby fire without placing water. With the firefighting extension, they borrow a water-filled extinguisher and refill it from colony supplies.")
+            .text("Workers smother nearby fire without placing water. With Create: FireFighting Additions installed, they prefer a hydrant cabinet with a hose, nozzle and water, or borrow and refill an extinguisher.")
             .pointAt(util.vector().centerOf(2, 1, 2)).placeNearTarget().attachKeyFrame();
         scene.idle(100);
         scene.overlay().showText(90)

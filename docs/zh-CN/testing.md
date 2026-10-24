@@ -26,7 +26,7 @@
 | `./gradlew -PgameTestMod=core runGameTestServer`                                  | 基础环境中的 Core 测试；也支持 `vanilla` 或 `create`               |
 | `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer`              | 加载 Cookery 的 Core 测试；也支持 `vanilla`                        |
 | `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer`           | 加载 Cookery，仅运行 Cookery 所属测试                              |
-| `./gradlew runGameTestServer -PgameTestMod=firefighting -PfirefightingTests=true` | 便携灭火器喷射、流体守恒、补液和中断清理                           |
+| `./gradlew runGameTestServer -PgameTestMod=firefighting -PfirefightingTests=true` | 消防水带绑定、距离、清理、喷射，以及便携灭火器补液                 |
 
 测试归属与已安装模组分开：选择 Core 时仍会加载 Vanilla 居民和相关集成。
 这些运行环境不加载 Modular Golems，它也暂时没有 GameTests。
