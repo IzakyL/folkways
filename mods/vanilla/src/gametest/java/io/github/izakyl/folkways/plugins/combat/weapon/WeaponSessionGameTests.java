@@ -46,12 +46,23 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(FolkwaysMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class WeaponSessionGameTests {
+    private static boolean previousNoSave;
+    private static final net.minecraft.server.level.TicketType<java.util.UUID> TICKING =
+        net.minecraft.server.level.TicketType.create("folkways_weapon_test", java.util.Comparator.<java.util.UUID>naturalOrder());
+
+    @net.minecraft.gametest.framework.BeforeBatch(batch = "vanilla_weapons")
+    public static void beforeWeapons(net.minecraft.server.level.ServerLevel level) {
+        previousNoSave = level.noSave; level.noSave = true;
+    }
+    @net.minecraft.gametest.framework.AfterBatch(batch = "vanilla_weapons")
+    public static void afterWeapons(net.minecraft.server.level.ServerLevel level) { level.noSave = previousNoSave; }
+
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(WeaponSessionGameTests.class);
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void bowUsesActualArrowsAndNativeDurabilityAndHurtsItsTarget(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.BOW, 7);
         ResidentEntity body = fixture.body();
@@ -80,7 +91,7 @@ public final class WeaponSessionGameTests {
         });
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void crossbowNativeReloadPersistsARealChargedProjectileAcrossSave(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.CROSSBOW, 4);
         ResidentEntity body = fixture.body();
@@ -121,7 +132,7 @@ public final class WeaponSessionGameTests {
         });
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void stoppingABowRejectsFurtherFireAndCreatesNoProjectile(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.BOW, 11);
         fixture.body().pack().insert(new ItemStack(Items.ARROW, 2));
@@ -144,7 +155,7 @@ public final class WeaponSessionGameTests {
         });
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void savingDuringBowDrawKeepsOneActualWeaponAndCancelsFire(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.BOW, 9);
         fixture.body().pack().insert(new ItemStack(Items.ARROW, 2));
@@ -168,7 +179,7 @@ public final class WeaponSessionGameTests {
         });
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void targetBecomingAlliedDuringDrawPreventsDischarge(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.BOW, 0);
         fixture.body().pack().insert(new ItemStack(Items.ARROW, 1));
@@ -195,7 +206,7 @@ public final class WeaponSessionGameTests {
         });
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(batch = "vanilla_weapons", template = "empty_large")
     public static void aFullPackSpillsTheActualWeaponOnlyOnceOnClose(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.IRON_SWORD, 17);
         WeaponSession session = Weapons.open(worker(fixture.body())).orElseThrow();
@@ -216,7 +227,7 @@ public final class WeaponSessionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void deathDuringCrossbowReloadDropsInventoryAndWeaponOnce(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.CROSSBOW, 6);
         fixture.body().pack().insert(new ItemStack(Items.ARROW, 3));
@@ -240,7 +251,7 @@ public final class WeaponSessionGameTests {
         });
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(batch = "vanilla_weapons", template = "empty_large")
     public static void unloadAndDismissalCloseTheLoanAndNoAmmoCannotFire(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.BOW, 0);
         try {
@@ -265,7 +276,7 @@ public final class WeaponSessionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(batch = "vanilla_weapons", template = "empty_large")
     public static void aRazedColonyRevokesPendingFireBeforeTheResidentsPeriodicCleanup(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.BOW, 0);
         var colony = Colonies.mint(helper.getLevel().getServer());
@@ -283,12 +294,12 @@ public final class WeaponSessionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void replacingADrawnBowWithAnotherBowClosesTheOldLoan(GameTestHelper helper) {
         replacingDuringDraw(helper, Items.BOW);
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void replacingADrawnBowWithANonWeaponKeepsBothActualItemsOnce(GameTestHelper helper) {
         replacingDuringDraw(helper, Items.STICK);
     }
@@ -332,7 +343,7 @@ public final class WeaponSessionGameTests {
         });
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void nativeBowBreakageDoesNotReturnAnExhaustedWeapon(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.BOW, new ItemStack(Items.BOW).getMaxDamage() - 1);
         fixture.body().pack().insert(new ItemStack(Items.ARROW, 1));
@@ -360,7 +371,7 @@ public final class WeaponSessionGameTests {
         });
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void anExplicitBowPreferenceFiresTheUsableBowAfterAnEarlierSword(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.IRON_SWORD, 3);
         Colony colony = enroll(helper, fixture.body());
@@ -390,7 +401,7 @@ public final class WeaponSessionGameTests {
         });
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void changingPreferenceStopsTheOldDrawAndAnEmptyPreferredBowFallsBackToASword(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.IRON_SWORD, 3);
         Colony colony = enroll(helper, fixture.body());
@@ -466,17 +477,30 @@ public final class WeaponSessionGameTests {
         BlockPos at = helper.absolutePos(new BlockPos(1, 1, 1));
         body.moveTo(at.getX() + .5, at.getY(), at.getZ() + .5);
         target.moveTo(at.getX() + 6.5, at.getY(), at.getZ() + .5);
+        // Keep native entity and projectile ticks running outside spawn in the combined test grid.
+        helper.getLevel().getChunkSource().addRegionTicket(TICKING, body.chunkPosition(), 2, body.getUUID());
         helper.getLevel().addFreshEntity(body);
         helper.getLevel().addFreshEntity(target);
         ItemStack actual = new ItemStack(item);
         actual.setDamageValue(damage);
         actual.set(DataComponents.CUSTOM_NAME, Component.literal("actual weapon"));
         body.pack().insert(actual);
-        return new Fixture(body, target);
+        Fixture fixture = new Fixture(body, target);
+        helper.testInfo.addListener(fixture);
+        return fixture;
     }
 
-    private record Fixture(ResidentEntity body, Zombie target) {
-        void close() { body.discard(); target.discard(); }
+    private record Fixture(ResidentEntity body, Zombie target) implements net.minecraft.gametest.framework.GameTestListener {
+        void close() {
+            ((net.minecraft.server.level.ServerLevel) body.level()).getChunkSource()
+                .removeRegionTicket(TICKING, body.chunkPosition(), 2, body.getUUID());
+            body.discard(); target.discard();
+        }
+        public void testStructureLoaded(net.minecraft.gametest.framework.GameTestInfo info) { }
+        public void testPassed(net.minecraft.gametest.framework.GameTestInfo info, net.minecraft.gametest.framework.GameTestRunner runner) { close(); }
+        public void testFailed(net.minecraft.gametest.framework.GameTestInfo info, net.minecraft.gametest.framework.GameTestRunner runner) { close(); }
+        public void testAddedForRerun(net.minecraft.gametest.framework.GameTestInfo original, net.minecraft.gametest.framework.GameTestInfo rerun,
+                net.minecraft.gametest.framework.GameTestRunner runner) { }
     }
 
     private static ItemStack find(ResidentEntity body, Item item) {
