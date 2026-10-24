@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -13,8 +13,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
@@ -86,8 +84,8 @@ public record BuildOrderView(UUID id, BlockPos min, BlockPos max, int placed, in
         return List.copyOf(owed);
     }
 
-    static Map<ResourceLocation, Long> owed(ServerLevel level, BuildTarget target, Set<BlockPos> met) {
-        Map<ResourceLocation, Long> owed = new LinkedHashMap<>();
+    static Map<ItemSpec, Long> owed(ServerLevel level, BuildTarget target, Set<BlockPos> met) {
+        Map<ItemSpec, Long> owed = new LinkedHashMap<>();
         Set<BlockPos> quoted = new LinkedHashSet<>();
         for (SchematicPlacement.Launch shot : target.shots().values()) {
             BlockPos anchor = shot.anchor();
@@ -96,14 +94,13 @@ public record BuildOrderView(UUID id, BlockPos min, BlockPos max, int placed, in
                 continue;
             }
             for (Need need : target.costs(level, shot, met).orElse(List.of())) {
-                Goods.members(need.spec()).stream().findFirst().ifPresent(item ->
-                    owed.merge(BuiltInRegistries.ITEM.getKey(item), need.count(), Long::sum));
+                owed.merge(need.spec(), need.count(), Long::sum);
             }
             // A waterlogged block laid where no water stands has a bucket let into it after.
             for (BlockPos cell : shot.produces()) {
                 if (!met.contains(cell) && Step.soaked(target.wanted(cell))
                         && level.getFluidState(cell).getType() != Fluids.WATER) {
-                    owed.merge(BuiltInRegistries.ITEM.getKey(Items.WATER_BUCKET), 1L, Long::sum);
+                    owed.merge(ItemSpec.of(Items.WATER_BUCKET), 1L, Long::sum);
                 }
             }
         }

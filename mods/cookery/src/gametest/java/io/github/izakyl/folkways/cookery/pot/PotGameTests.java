@@ -737,7 +737,7 @@ public final class PotGameTests {
         }
 
         void put(ItemStack stack) { helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "fixture has real room for " + stack); }
-        long count(Item item) { return Goods.countIn(pack, Goods.specOf(item.getDefaultInstance())); }
+        long count(Item item) { return Goods.countIn(pack, ItemSpec.of(item)); }
         List<ItemStack> stacks() { return IntStream.range(0, pack.getContainerSize()).mapToObj(pack::getItem).filter(stack -> !stack.isEmpty()).toList(); }
         void stockBeef(int beef, int oil) { put(new ItemStack(Items.BEEF, beef)); put(new ItemStack(ModItems.OIL.get(), oil)); }
         void stockEggTomato(boolean bowl) {
