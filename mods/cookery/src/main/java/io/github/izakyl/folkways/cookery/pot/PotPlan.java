@@ -89,8 +89,8 @@ record PotPlan(ResourceLocation id, PotRecipe recipe, Tag definition, boolean fl
         net.minecraft.nbt.CompoundTag definition = new net.minecraft.nbt.CompoundTag();
         definition.putString("native_protocol", mode.name()); definition.putString("ingredient", "minecraft:wheat_seeds");
         return new PotPlan(proceduralId(mode), protocol, definition, false,
-            List.of(new Need(ItemSpec.of(TagMod.OIL), 1), new Need(Goods.specOf(Items.WHEAT_SEEDS.getDefaultInstance()), 1)),
-            Optional.of(new Need(Goods.specOf(Items.BOWL.getDefaultInstance()), 1)), mode);
+            List.of(new Need(ItemSpec.of(TagMod.OIL), 1), new Need(ItemSpec.of(Items.WHEAT_SEEDS), 1)),
+            Optional.of(new Need(ItemSpec.of(Items.BOWL), 1)), mode);
     }
 
     static Optional<PotPlan> of(ServerLevel level, RecipeHolder<?> holder) {
@@ -133,7 +133,7 @@ record PotPlan(ResourceLocation id, PotRecipe recipe, Tag definition, boolean fl
             List<ItemSpec> values = new ArrayList<>();
             for (Ingredient.Value value : ingredient.getValues()) {
                 if (value instanceof Ingredient.TagValue tag) values.add(ItemSpec.of(tag.tag()));
-                else if (value instanceof Ingredient.ItemValue item && !item.item().isEmpty()) values.add(Goods.specOf(item.item()));
+                else if (value instanceof Ingredient.ItemValue item && !item.item().isEmpty()) values.add(ItemSpec.of(item.item().getItem()));
             }
             if (!values.isEmpty()) return Optional.of(ItemSpec.anyOf(values));
         }

@@ -56,6 +56,7 @@ import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
 import java.util.function.Consumer;
 import java.util.List;
@@ -1078,7 +1079,7 @@ public final class StockpotGameTests {
         }
 
         long count(Item item) {
-            return Goods.countIn(pack, Goods.specOf(item.getDefaultInstance()));
+            return Goods.countIn(pack, ItemSpec.of(item));
         }
 
         void load() {

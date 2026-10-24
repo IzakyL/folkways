@@ -87,7 +87,7 @@ public final class ChoppingBoardWorkshops {
         static Optional<Job> of(RecipeHolder<ChoppingBoardRecipe> holder) {
             ChoppingBoardRecipe recipe = holder.value();
             List<ItemSpec> inputs = Stream.of(recipe.getIngredient().getItems()).filter(stack -> !stack.isEmpty())
-                .map(Goods::specOf).distinct().toList();
+                .map(stack -> recipe.getIngredient().isCustom() ? Goods.specOf(stack) : ItemSpec.of(stack.getItem())).distinct().toList();
             List<ItemStack> outputs = recipe.getResults().stream().filter(stack -> !stack.isEmpty()).toList();
             return inputs.isEmpty() || outputs.isEmpty() ? Optional.empty()
                 : Optional.of(new Job(holder.id(), ItemSpec.anyOf(inputs), outputs,

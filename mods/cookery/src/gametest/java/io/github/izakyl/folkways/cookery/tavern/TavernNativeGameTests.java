@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.cookery.tavern;
 
-import com.github.ysbbbbbb.kaleidoscopetavern.block.brew.BarrelBlock;
 import com.github.ysbbbbbb.kaleidoscopetavern.block.brew.TapBlock;
 import com.github.ysbbbbbb.kaleidoscopetavern.block.deco.StepladderBlock;
 import com.github.ysbbbbbb.kaleidoscopetavern.blockentity.brew.BarrelBlockEntity;
@@ -9,7 +8,6 @@ import com.github.ysbbbbbb.kaleidoscopetavern.blockentity.brew.BarCabinetBlockEn
 import com.github.ysbbbbbb.kaleidoscopetavern.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopetavern.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopetavern.item.BottleBlockItem;
-import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.*;
 import io.github.izakyl.folkways.core.api.work.*;
@@ -33,7 +31,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @PrefixGameTestTemplate(false)
@@ -373,7 +370,7 @@ public final class TavernNativeGameTests {
             if (outcome instanceof Outcome.Done done) { done.made().forEach(s -> helper.assertTrue(Containers.insert(pack, s).isEmpty(), "real outputs fit")); work.ended(level, piece, Ending.DONE); }
             return outcome;
         }
-        long count(Item item) { return Goods.countIn(pack, Goods.specOf(new ItemStack(item))); }
+        long count(Item item) { return Goods.countIn(pack, ItemSpec.of(item)); }
         public Resident resident() { return actor.resident(); }
         public Mob body() { return actor; }
         public Container pack() { return pack; }

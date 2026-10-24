@@ -40,15 +40,14 @@ record Depot(UUID key, WorkSite site, Tally tally, List<Dock> docks, List<Shelf>
     }
 
     // A container of the network, and what it held when last read.
-    record Shelf(WorldPos at, Stances stances, Map<Item, Long> held) {
+    record Shelf(WorldPos at, Stances stances, Map<ItemSpec, Long> held) {
 
         Shelf {
             held = Map.copyOf(held);
         }
 
         long heldOf(ItemSpec spec) {
-            Set<Item> wanted = Goods.members(spec);
-            return held.entrySet().stream().filter(lot -> wanted.contains(lot.getKey()))
+            return held.entrySet().stream().filter(lot -> Goods.overlap(spec, lot.getKey()))
                 .mapToLong(Map.Entry::getValue).sum();
         }
     }
@@ -123,7 +122,7 @@ record Depot(UUID key, WorkSite site, Tally tally, List<Dock> docks, List<Shelf>
         return tally.collecting().values().stream()
             .filter(node -> node.adrift() && node.port().equals(dock.at())
                 && node.network().filter(network()::equals).isPresent()
-                && wanted.containsAll(Goods.members(node.goods()))
+                && wanted.containsAll(Goods.members(node.goods())) && Goods.overlap(produce.wanted(), node.goods())
                 && produce.batching().runs(site, List.of(), node.count(), Optional.empty(), 1) >= 1)
             .min(Comparator.comparingLong(CollectNode::placedAt));
     }

@@ -128,7 +128,7 @@ public final class SteamerStation implements KitchenStation {
         List<Job> jobs = level.getRecipeManager().getAllRecipesFor(ModRecipes.STEAMER_RECIPE).stream()
             .filter(holder -> !FolkwaysVanillaConfig.refusedRecipes().contains(holder.id()))
             .flatMap(holder -> java.util.Arrays.stream(holder.value().getIngredient().getItems()).filter(stack -> !stack.isEmpty()).map(stack ->
-                new Job(holder.id(), Goods.specOf(stack), holder.value().getResultItem(level.registryAccess()), holder.value().getCookTick())))
+                new Job(holder.id(), holder.value().getIngredient().isCustom() ? Goods.specOf(stack) : ItemSpec.of(stack.getItem()), holder.value().getResultItem(level.registryAccess()), holder.value().getCookTick())))
             .filter(job -> !job.output().isEmpty()).toList();
         return Optional.of(new Bench(key, colony, at, part, empty.get().stances(), jobs, capacity, bookings, changed));
     }

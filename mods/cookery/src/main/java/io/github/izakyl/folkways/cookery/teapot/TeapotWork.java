@@ -2,9 +2,7 @@ package io.github.izakyl.folkways.cookery.teapot;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.ITeapot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.TeapotBlockEntity;
-import com.github.ysbbbbbb.kaleidoscopecookery.crafting.container.TeapotInput;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.TeapotItem;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -34,6 +32,7 @@ import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.KitchenStation;
 import io.github.izakyl.folkways.cookery.KitchenDelivery;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -41,7 +40,6 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -74,7 +72,7 @@ final class TeapotWork implements Node, Workload.Within {
         List<Need> needs = new ArrayList<>();
         if (!fluid) { needs.add(new Need(Goods.specOf(job.bucket()), 1, true)); }
         if (!ingredient) { needs.add(new Need(job.ingredient(), 1, true)); }
-        needs.add(new Need(Goods.specOf(new ItemStack(ModItems.EMPTY_CUP.get())), job.output().getCount(), true));
+        needs.add(new Need(ItemSpec.of(ModItems.EMPTY_CUP.get()), job.output().getCount(), true));
         List<Amount> leaves = new ArrayList<>(List.of(new Amount(Goods.specOf(job.output()), job.output().getCount())));
         if (!fluid) { leaves.add(new Amount(Goods.specOf(new ItemStack(Items.BUCKET)), 1)); }
         spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, this).needs(needs)
@@ -166,7 +164,7 @@ final class TeapotWork implements Node, Workload.Within {
             Need need = switch (kind) {
                 case FLUID -> new Need(Goods.specOf(job.bucket()), 1, true);
                 case INGREDIENT -> new Need(job.ingredient(), 1, true);
-                case SERVE -> new Need(Goods.specOf(new ItemStack(ModItems.EMPTY_CUP.get())), job.output().getCount(), true);
+                case SERVE -> new Need(ItemSpec.of(ModItems.EMPTY_CUP.get()), job.output().getCount(), true);
             };
             List<Amount> made = kind == Kind.SERVE ? List.of(new Amount(Goods.specOf(job.output()), job.output().getCount())) : List.of();
             List<Amount> leaves = kind == Kind.FLUID ? List.of(new Amount(Goods.specOf(new ItemStack(Items.BUCKET)), 1)) : made;
@@ -191,7 +189,7 @@ final class TeapotWork implements Node, Workload.Within {
                     return Outcome.failed(CookeryRefusal.RECIPE_CHANGED);
                 }
                 if (kind == Kind.FLUID && job.mode() == TeapotStation.Mode.MYSTERY
-                        && (Goods.countIn(who.pack(), Goods.specOf(ModItems.EMPTY_CUP.get().getDefaultInstance())) < job.output().getCount()
+                        && (Goods.countIn(who.pack(), ItemSpec.of(ModItems.EMPTY_CUP.get())) < job.output().getCount()
                             || Goods.countIn(who.pack(), job.ingredient()) < 1)) {
                     return Outcome.failed(CookeryRefusal.NOTHING_TO_WORK_WITH);
                 }
