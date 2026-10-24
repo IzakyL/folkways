@@ -13,3 +13,5 @@ English · [简体中文](../zh-CN/README.md)
 | Find a module, API or lifecycle hook                                           | [Architecture](architecture.md)                                |
 
 For documentation layout and maintenance, see the [documentation index](../README.md).
+
+[TACZ firearms](tacz.md)

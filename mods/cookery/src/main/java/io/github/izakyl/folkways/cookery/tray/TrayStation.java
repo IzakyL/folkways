@@ -6,6 +6,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.IngredientSpecs;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -63,9 +64,9 @@ public final class TrayStation implements KitchenStation {
         if (slot < 0) { return Optional.empty(); }
         List<Job> jobs = level.getRecipeManager().getAllRecipesFor(ModRecipes.BAMBOO_TRAY_RECIPE).stream()
             .filter(holder -> !FolkwaysVanillaConfig.refusedRecipes().contains(holder.id()))
-            .flatMap(holder -> java.util.Arrays.stream(holder.value().getIngredient().getItems()).filter(stack -> !stack.isEmpty()).map(stack ->
-                new Job(holder.id(), Goods.specOf(stack), holder.value().getResultItem(level.registryAccess()), holder.value().getSubtype(),
-                    holder.value().getDuration(), Math.min(stack.getMaxStackSize(), holder.value().getResult().getMaxStackSize() / holder.value().getResult().getCount()))))
+            .flatMap(holder -> IngredientSpecs.choices(holder.value().getIngredient()).stream().map(input ->
+                new Job(holder.id(), input, holder.value().getResultItem(level.registryAccess()), holder.value().getSubtype(),
+                    holder.value().getDuration(), Math.min(Goods.stackSize(input), holder.value().getResult().getMaxStackSize() / holder.value().getResult().getCount()))))
             .filter(job -> !job.output().isEmpty() && job.capacity() > 0).toList();
         return Optional.of(new Bench(key, colony, at, slot, stances, jobs, bookings, changed));
     }

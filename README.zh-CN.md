@@ -42,13 +42,14 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 
 **Core 和 Vanilla 必装**，其他扩展按需安装。**所有 Folkways jar 必须来自同一次构建。**
 
-| Jar                                                         | 安装条件                                         |
-| ----------------------------------------------------------- | ------------------------------------------------ |
-| Folkways Core（`folkways-core-*.jar`）                      | 必装：殖民地引擎、殖民书和管理面板               |
-| Folkways Vanilla（`folkways-vanilla-*.jar`）                | 必装：居民及其在原版方块中的工作                 |
-| Folkways × Create（`folkways-create-*.jar`）                | 配合机械动力：列车、包裹、轨道和蓝图             |
-| Folkways × Modular Golems（`folkways-modulargolems-*.jar`） | 配合模块化傀儡：让傀儡成为居民                   |
-| Folkways × Kaleidoscope Cookery（`folkways-cookery-*.jar`） | 配合森罗厨房 1.6.0：作物、原生厨具和共享厨房工具 |
+| Jar                                                         | 安装条件                                                            |
+| ----------------------------------------------------------- | ------------------------------------------------------------------- |
+| Folkways Core（`folkways-core-*.jar`）                      | 必装：殖民地引擎、殖民书和管理面板                                  |
+| Folkways Vanilla（`folkways-vanilla-*.jar`）                | 必装：居民及其在原版方块中的工作                                    |
+| Folkways × Create（`folkways-create-*.jar`）                | 配合机械动力：列车、包裹、轨道和蓝图                                |
+| Folkways × Modular Golems（`folkways-modulargolems-*.jar`） | 配合模块化傀儡：让傀儡成为居民                                      |
+| Folkways × Kaleidoscope Cookery（`folkways-cookery-*.jar`） | 配合森罗厨房 1.6.0：作物、原生厨具和共享厨房工具                    |
+| Folkways × TACZ（`folkways-tacz-*.jar`）                    | 配合非官方 TACZ NeoForge 移植版 1.1.8-hotfix-r7：居民枪械与有限弹药 |
 
 Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无需单独安装这三个组件。
 
@@ -99,7 +100,7 @@ npm run setup
 ```
 
 Setup 会下载锁定版本的集成依赖，并生成 Gradle 必需的清单。
-五个模组 jar 汇总到 `build/libs/`。
+六个模组 jar 汇总到 `build/libs/`。
 Blockwright 源码已支持 Windows，当前锁定的 npm 发布包早于这次改动。
 Windows 下可使用从源码构建的 SDK 和 `gradlew.bat`，详见[开发环境](CONTRIBUTING.zh-CN.md#开发环境)。
 

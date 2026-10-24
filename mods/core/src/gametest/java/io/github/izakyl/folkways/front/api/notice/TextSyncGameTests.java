@@ -20,6 +20,13 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
 
 @EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -34,6 +41,39 @@ public final class TextSyncGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(TextSyncGameTests.class);
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void goodsPicturesKeepComponentsThroughUiAndPacketSync(GameTestHelper helper) {
+        var registries = helper.getLevel().registryAccess();
+        var stack = new ItemStack(Items.PAPER);
+        var data = new CompoundTag();
+        data.putString("AmmoId", "tacz:45acp");
+        stack.set(DataComponents.CUSTOM_DATA,
+            CustomData.of(data));
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal("Ammunition"));
+        Sentence sent = Sentence.of(Sentence.Token.Ware.of(stack, 200, registries));
+        Sentence synced = Sentence.load(sent.save());
+        helper.assertTrue(sent.equals(synced) && ItemStack.isSameItemSameComponents(
+            ((Sentence.Token.Ware) synced.tokens().getFirst()).stack(registries), stack),
+            "UI sync retains custom names and material components, with a separate aggregate count");
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        try {
+            sent.encode(buffer);
+            helper.assertTrue(Sentence.decode(buffer).equals(sent) && buffer.readableBytes() == 0,
+                "component-bearing goods survive the information card packet");
+        } finally {
+            buffer.release();
+        }
+        var old = new CompoundTag();
+        old.putString("ware", "minecraft:paper");
+        old.putLong("count", 3);
+        var legacy = new ListTag();
+        legacy.add(old);
+        helper.assertTrue(Sentence.load(legacy).equals(Sentence.of(Sentence.ware(
+            ResourceLocation.withDefaultNamespace("paper"), 3))),
+            "old goods pictures still load without component data");
+        helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 40)

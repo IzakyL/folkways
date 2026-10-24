@@ -14,6 +14,8 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.world.item.component.CustomData;
 
 /**
  * Something told in pictures, read left to right: glyphs, items with their counts, an arrow from what is used to
@@ -35,7 +37,21 @@ public record Sentence(List<Token> tokens) {
         }
 
         /** An item and how many; a count of one or none shows the item alone. */
-        record Ware(ResourceLocation item, long count) implements Token {
+        record Ware(ResourceLocation item, long count, Optional<CustomData> appearance) implements Token {
+            public Ware(ResourceLocation item, long count) {
+                this(item, count, Optional.empty());
+            }
+
+            public static Ware of(ItemStack stack, long count, HolderLookup.Provider registries) {
+                return new Ware(BuiltInRegistries.ITEM.getKey(stack.getItem()), count,
+                    stack.getComponentsPatch().isEmpty() ? Optional.empty()
+                        : Optional.of(CustomData.of((CompoundTag) stack.copyWithCount(1).save(registries))));
+            }
+
+            public ItemStack stack(HolderLookup.Provider registries) {
+                return appearance.map(data -> ItemStack.parseOptional(registries, data.copyTag()))
+                    .orElseGet(() -> new ItemStack(BuiltInRegistries.ITEM.get(item)));
+            }
         }
 
         record Plus() implements Token {
@@ -77,8 +93,8 @@ public record Sentence(List<Token> tokens) {
         return new Token.Ware(item, count);
     }
 
-    public static Token ware(ItemStack stack) {
-        return new Token.Ware(BuiltInRegistries.ITEM.getKey(stack.getItem()), stack.getCount());
+    public static Token ware(ItemStack stack, HolderLookup.Provider registries) {
+        return Token.Ware.of(stack, stack.getCount(), registries);
     }
 
     public static Token word(Notice notice) {
@@ -189,9 +205,10 @@ public record Sentence(List<Token> tokens) {
                     buffer.writeOptional(glyph.otherwise(), (buf, notice) -> notice.encode(buf));
                 }
                 case Token.Ware ware -> {
-                    buffer.writeVarInt(1);
+                    buffer.writeVarInt(ware.appearance().isPresent() ? 5 : 1);
                     buffer.writeResourceLocation(ware.item());
                     buffer.writeVarLong(ware.count());
+                    ware.appearance().ifPresent(data -> buffer.writeNbt(data.copyTag()));
                 }
                 case Token.Plus plus -> buffer.writeVarInt(2);
                 case Token.Yields yields -> buffer.writeVarInt(3);
@@ -216,6 +233,8 @@ public record Sentence(List<Token> tokens) {
                 case 2 -> PLUS;
                 case 3 -> YIELDS;
                 case 4 -> new Token.Word(Notice.decode(buffer));
+                case 5 -> new Token.Ware(buffer.readResourceLocation(), buffer.readVarLong(),
+                    Optional.of(CustomData.of(java.util.Objects.requireNonNull(buffer.readNbt()))));
                 default -> throw new DecoderException("no such token in a sentence");
             });
         }
@@ -234,6 +253,7 @@ public record Sentence(List<Token> tokens) {
                 case Token.Ware ware -> {
                     entry.putString("ware", ware.item().toString());
                     entry.putLong("count", ware.count());
+                    ware.appearance().ifPresent(data -> entry.put("stack", data.copyTag()));
                 }
                 case Token.Plus plus -> entry.putBoolean("plus", true);
                 case Token.Yields yields -> entry.putBoolean("yields", true);
@@ -259,7 +279,8 @@ public record Sentence(List<Token> tokens) {
             } else if (entry.contains("ware")) {
                 ResourceLocation item = ResourceLocation.tryParse(entry.getString("ware"));
                 if (item != null) {
-                    tokens.add(new Token.Ware(item, entry.getLong("count")));
+                    tokens.add(new Token.Ware(item, entry.getLong("count"), entry.contains("stack", Tag.TAG_COMPOUND)
+                        ? Optional.of(CustomData.of(entry.getCompound("stack"))) : Optional.empty()));
                 }
             } else if (entry.contains("plus")) {
                 tokens.add(PLUS);

@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.person.fear;
 
+import io.github.izakyl.folkways.core.api.terms.Footing;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;
@@ -20,9 +21,21 @@ public final class Fleeing {
         if (!(body instanceof PathfinderMob walker)) {
             return Optional.empty();
         }
-        Vec3 to = from
-            .map(source -> DefaultRandomPos.getPosAway(walker, RANGE, RISE, source))
-            .orElseGet(() -> LandRandomPos.getPos(walker, RANGE, RISE));
+        Vec3 to;
+        if (from.isPresent()) {
+            Vec3 source = from.get();
+            to = null;
+            double safest = body.position().distanceToSqr(source) + 16;
+            for (int attempt = 0; attempt < 8; attempt++) {
+                Vec3 candidate = DefaultRandomPos.getPosAway(walker, RANGE, RISE, source);
+                if (candidate != null && body.position().distanceToSqr(candidate) >= 16
+                        && candidate.distanceToSqr(source) > safest
+                        && Footing.withFeetAt(body.level(), BlockPos.containing(candidate))) {
+                    to = candidate;
+                    safest = candidate.distanceToSqr(source);
+                }
+            }
+        } else { to = LandRandomPos.getPos(walker, RANGE, RISE); }
         return Optional.ofNullable(to).map(BlockPos::containing);
     }
 }

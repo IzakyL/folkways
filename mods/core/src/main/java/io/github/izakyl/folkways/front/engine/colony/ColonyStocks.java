@@ -15,7 +15,6 @@ import java.util.Map;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 public final class ColonyStocks {
@@ -23,14 +22,14 @@ public final class ColonyStocks {
     private ColonyStocks() {
     }
 
-    public static Map<Item, Integer> tally(Colony colony, MinecraftServer server) {
-        Map<Item, Integer> held = new LinkedHashMap<>();
+    public static Map<ItemSpec, Integer> tally(Colony colony, MinecraftServer server) {
+        Map<ItemSpec, Integer> held = new LinkedHashMap<>();
         for (ColonyView view : colony.views(server)) {
             for (Container container : containers(colony, view)) {
                 for (int slot = 0; slot < container.getContainerSize(); slot++) {
                     ItemStack stack = container.getItem(slot);
                     if (!stack.isEmpty()) {
-                        held.merge(stack.getItem(), stack.getCount(), Integer::sum);
+                        held.merge(Goods.specOf(stack), stack.getCount(), Integer::sum);
                     }
                 }
             }
@@ -40,7 +39,7 @@ public final class ColonyStocks {
             for (int slot = 0; slot < pack.getContainerSize(); slot++) {
                 ItemStack stack = pack.getItem(slot);
                 if (!stack.isEmpty()) {
-                    held.merge(stack.getItem(), stack.getCount(), Integer::sum);
+                    held.merge(Goods.specOf(stack), stack.getCount(), Integer::sum);
                 }
             }
         }

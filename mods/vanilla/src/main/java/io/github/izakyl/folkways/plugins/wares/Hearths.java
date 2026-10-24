@@ -32,7 +32,7 @@ final class Hearths {
         }
         ItemStack held = machine.get().getItem(Machines.FUEL_SLOT);
         if (!held.isEmpty()) {
-            return Sentence.of(Sentence.doing(WaresContent.FUELING), Sentence.ware(held));
+            return Sentence.of(Sentence.doing(WaresContent.FUELING), Sentence.ware(held, level.registryAccess()));
         }
         return fuel.flatMap(spec -> Goods.members(spec).stream().findFirst())
             .map(item -> Sentence.of(Sentence.glyph("lacks"), ware(item, 0)))
@@ -50,9 +50,9 @@ final class Hearths {
         ItemStack load = machine.get().getItem(Machines.INPUT_SLOT);
         ItemStack held = machine.get().getItem(Machines.FUEL_SLOT);
         List<Sentence.Token.Ware> used = new ArrayList<>();
-        used.add(ware(load.getItem(), load.getCount()));
+        used.add(Sentence.Token.Ware.of(load, load.getCount(), level.registryAccess()));
         if (!held.isEmpty()) {
-            used.add(ware(held.getItem(), held.getCount()));
+            used.add(Sentence.Token.Ware.of(held, held.getCount(), level.registryAccess()));
         }
         Sentence turning = Sentence.turning(used, List.of(made.get()));
         return held.isEmpty() ? turning.then(fired(level, at, fuel)) : turning;
@@ -75,7 +75,7 @@ final class Hearths {
             .getRecipeFor((RecipeType<AbstractCookingRecipe>) type, input, level)
             .map(holder -> holder.value().assemble(input, level.registryAccess()))
             .filter(made -> !made.isEmpty())
-            .map(made -> ware(made.getItem(), 0));
+            .map(made -> Sentence.Token.Ware.of(made, 0, level.registryAccess()));
     }
 
     // How far through its current item the cooker is, while it has a load to cook.

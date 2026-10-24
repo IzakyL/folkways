@@ -115,6 +115,11 @@ public final class LivingContent {
         }
     }
 
+    public static boolean colonyPet(net.minecraft.world.entity.Entity entity, java.util.UUID colony) {
+        return entity.level() instanceof ServerLevel level && Colonies.of(level.getServer(), colony)
+            .filter(found -> ColonyPets.belongsTo(entity, found)).isPresent();
+    }
+
     public static void petRemoved(EntityLeaveLevelEvent event) {
         if (!(event.getLevel() instanceof ServerLevel level)) { return; }
         var entity = event.getEntity();

@@ -24,6 +24,8 @@ import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.create.rail.domain.RailContent;
 import io.github.izakyl.folkways.create.rail.domain.RailPresence;
+import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -44,7 +46,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -551,10 +552,10 @@ public final class DispatchPresence implements Facing {
         return footings;
     }
 
-    private static Map<Item, Long> counted(List<ItemStack> stacks) {
-        Map<Item, Long> held = new LinkedHashMap<>();
+    private static Map<ItemSpec, Long> counted(List<ItemStack> stacks) {
+        Map<ItemSpec, Long> held = new LinkedHashMap<>();
         for (ItemStack stack : stacks) {
-            held.merge(stack.getItem(), (long) stack.getCount(), Long::sum);
+            held.merge(Goods.specOf(stack), (long) stack.getCount(), Long::sum);
         }
         return held;
     }

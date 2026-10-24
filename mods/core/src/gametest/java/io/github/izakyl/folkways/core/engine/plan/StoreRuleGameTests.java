@@ -281,7 +281,7 @@ public final class StoreRuleGameTests {
                             vertex.plan().into().contains(nearby) || vertex.plan().from().contains(nearby)),
                         "a store that forbids taking is never used as a relay; bread is fetched into the pack");
                     helper.assertTrue(vertices.get(consumer.id()).plan().draws().stream().anyMatch(draw ->
-                            draw.from().isEmpty() && draw.count() == 4 && draw.spec().equals(BREAD)),
+                            draw.from().isEmpty() && draw.count() == 4 && draw.spec().equals(Goods.specOf(new ItemStack(Items.BREAD)))),
                         "the consumer draws its bread from the carrier's pack instead of the closed relay");
                 }
             } finally {

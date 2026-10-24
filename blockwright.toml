@@ -410,3 +410,21 @@ kaleidoscope_cookery = { target = ["server", "client"] }
 folkways_cookery = { target = ["server", "client"] }
 kaleidoscope_cookery = { target = ["server", "client"] }
 kaleidoscope_tavern = { target = ["server", "client"] }
+
+[mods.tacz]
+url = "https://cdn.modrinth.com/data/OypNE65K/versions/62q6mB5Q/tacz-neoforge-1.21.1-1.1.8-hotfix-r7.jar"
+sha512 = "7700ed99a080729c3aa21f9619e018fbe9e2303cfbcaa463175ee5170553a000b692bc4cfa2e8ce0778747eed34dcc0197fb5e4344bb258cff1ba90adc842642"
+target = []
+
+[mods.folkways_tacz]
+path = "build/libs/folkways-tacz-*.jar"
+target = []
+
+[profile.tacz.mods]
+tacz = { target = ["server", "client"] }
+folkways_tacz = { target = ["server", "client"] }
+
+[profile.tacz_models.mods]
+tacz = { target = ["server", "client"] }
+folkways_tacz = { target = ["server", "client"] }
+touhou_little_maid = { target = ["server", "client"] }

@@ -159,6 +159,20 @@ public final class UrgePreemptionGameTests {
         return ResourceLocation.fromNamespaceAndPath("folkways_test", path);
     }
 
+    @GameTest(template = "empty")
+    public static void expiredOneShotUrgeBackoffsDoNotAccumulate(GameTestHelper helper) throws Exception {
+        Urges urges = new Urges();
+        for (int n = 0; n < 128; n++) {
+            urges.refused(id("temporary_" + n), LaborRefusal.WORK_BROKE, 0);
+        }
+        urges.keenest(List.of(), 100, urge -> true);
+        var field = Urges.class.getDeclaredField("cooling");
+        field.setAccessible(true);
+        helper.assertTrue(((Map<?, ?>) field.get(urges)).isEmpty(),
+            "expired refusals must be removed even when a temporary controller never offers its identity again");
+        helper.succeed();
+    }
+
     private static final class Harness implements AutoCloseable {
         final ServerLevel level;
         final Colony colony;

@@ -10,27 +10,32 @@ def modProjects = [
     folkways_create: ":create",
     folkways_modulargolems: ":modulargolems",
     folkways_cookery: ":cookery",
+    folkways_tacz: ":tacz",
 ]
 modProjects.values().each { evaluationDependsOn(it) }
 
 // The game tests run without Modular Golems, so its Folkways mod stays out of that run.
+def taczTests = providers.gradleProperty("taczTests").map { it.toBoolean() }.getOrElse(false)
 def cookeryTests = providers.gradleProperty("cookeryTests").map { it.toBoolean() }.getOrElse(false)
 def tavernTests = providers.gradleProperty("tavernTests").map { it.toBoolean() }.getOrElse(false)
 if (tavernTests && !cookeryTests) {
     throw new GradleException("Tavern GameTests require -PcookeryTests=true")
 }
-def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" && (path != ":cookery" || cookeryTests) }
+def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" && (path != ":cookery" || cookeryTests) && (path != ":tacz" || taczTests) }
 def gameTestMod = providers.gradleProperty("gameTestMod").getOrElse("")
-if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery"])) {
-    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create or cookery")
+if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "tacz"])) {
+    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create, cookery or tacz")
 }
 if (gameTestMod == "cookery" && !cookeryTests) {
     throw new GradleException("Cookery GameTests require -PcookeryTests=true")
 }
+if (gameTestMod == "tacz" && !taczTests) {
+    throw new GradleException("TACZ GameTests require -PtaczTests=true")
+}
 def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gameTestMod}" }
 def gameTestDirectory = gameTestMod
-    ? "run/gametest/${gameTestMod}/${cookeryTests ? 'cookery' : 'base'}"
-    : "run/gametest"
+    ? "run/gametest/${gameTestMod}/${taczTests ? 'tacz' : cookeryTests ? 'cookery' : 'base'}"
+    : taczTests ? "run/gametest/tacz-combined" : "run/gametest"
 
 repositories {
     mavenCentral()
@@ -101,6 +106,7 @@ dependencies {
     }
     runtimeOnly ldlib2Coordinate
     runtimeOnly core.lib("create")
+    if (taczTests) { runtimeOnly core.lib("tacz") }
     if (cookeryTests) { runtimeOnly core.lib("kaleidoscope_cookery") }
     if (tavernTests) { runtimeOnly core.lib("kaleidoscope_tavern") }
     additionalRuntimeClasspath("com.eed3si9n.starlark:starlark:${project.starlark_version}") {

@@ -41,7 +41,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class ColonyPetsGameTests {
     @SubscribeEvent public static void register(RegisterGameTestsEvent event) { event.register(ColonyPetsGameTests.class); }
 
-    @GameTest(template = "empty", batch = "colony_pets")
+    @GameTest(template = "empty", batch = "colony_pets", timeoutTicks = 400)
     public static void arrivalsRespectDevelopmentCooldownAndUnloadedQuota(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         // Block-light propagation runs asynchronously; a fixed tick delay can cache a dark room

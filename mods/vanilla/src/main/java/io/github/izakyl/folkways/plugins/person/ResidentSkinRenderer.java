@@ -76,6 +76,10 @@ public final class ResidentSkinRenderer extends HumanoidMobRenderer<ResidentEnti
                 }
                 default -> { }
             }
+            ResidentWeaponPoses.of(resident).ifPresent(pose -> {
+                rightArm.setRotation(pose.right().pitch(), pose.right().yaw(), pose.right().roll());
+                leftArm.setRotation(pose.left().pitch(), pose.left().yaw(), pose.left().roll());
+            });
             hat.copyFrom(head); jacket.copyFrom(body);
             rightSleeve.copyFrom(rightArm); leftSleeve.copyFrom(leftArm);
             rightPants.copyFrom(rightLeg); leftPants.copyFrom(leftLeg);

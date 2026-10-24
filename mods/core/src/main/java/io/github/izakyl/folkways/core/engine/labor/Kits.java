@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.core.engine.labor;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.resident.body.Equipment;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Delivery;
@@ -27,6 +28,14 @@ final class Kits {
     private final Map<UUID, Set<UUID>> asked = new HashMap<>();
 
     void read(Colony colony, Body body, Consumer<Message> to) {
+        read(colony, body, KitRules.supplies(colony, body), to);
+    }
+
+    void read(Colony colony, Body body, boolean supply, Consumer<Message> to) {
+        if (!supply) {
+            left(body.id(), to);
+            return;
+        }
         Set<UUID> mine = asked.computeIfAbsent(body.id(), ignored -> new LinkedHashSet<>());
         WorkSite at = new WorkSite.AtEntity(body.id(), WorldSpaces.at(body.mob()));
         Set<UUID> still = new HashSet<>();
