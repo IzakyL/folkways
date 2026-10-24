@@ -10,7 +10,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 
 final class RaidInstance {
-    enum Phase { WARNING, WAVES, VICTORY, DEFEAT, WITHDRAWN, CANCELLED }
+    enum Phase { WARNING, WAVES, PLUNDER, VICTORY, DEFEAT, WITHDRAWN, CANCELLED }
     record Member(UUID id, String role, boolean dead) { }
 
     final UUID id;
@@ -27,6 +27,11 @@ final class RaidInstance {
     int fires;
     int waveFires;
     boolean paused;
+    int holdTicks;
+    int plunderTicks;
+    WorldPos heldStore;
+    ListTag plunder = new ListTag();
+    final java.util.Set<UUID> escaped = new java.util.HashSet<>();
 
     RaidInstance(UUID id, long seed, WorldPos target, WorldPos origin, RaidDefinition definition, int warning) {
         this.id = id;
@@ -37,8 +42,8 @@ final class RaidInstance {
         wait = warning;
     }
 
-    boolean active() { return phase == Phase.WARNING || phase == Phase.WAVES; }
-    int remaining() { return (int) members.stream().filter(member -> !member.dead()).count(); }
+    boolean active() { return phase == Phase.WARNING || phase == Phase.WAVES || phase == Phase.PLUNDER; }
+    int remaining() { return (int) members.stream().filter(member -> !member.dead() && !escaped.contains(member.id())).count(); }
     void died(UUID entity) {
         members.replaceAll(member -> member.id().equals(entity) ? new Member(entity, member.role(), true) : member);
     }
@@ -55,7 +60,10 @@ final class RaidInstance {
             row.putUUID("id", member.id()); row.putString("role", member.role()); row.putBoolean("dead", member.dead());
             saved.add(row);
         }
-        tag.put("members", saved);
+        tag.put("members", saved); tag.put("plunder", plunder.copy());
+        tag.putInt("holdTicks", holdTicks); tag.putInt("plunderTicks", plunderTicks);
+        if (heldStore != null) { tag.put("heldStore", heldStore.save()); }
+        ListTag leaving = new ListTag(); escaped.forEach(entity -> leaving.add(net.minecraft.nbt.NbtUtils.createUUID(entity))); tag.put("escaped", leaving);
         return tag;
     }
 
@@ -73,6 +81,10 @@ final class RaidInstance {
             CompoundTag row = (CompoundTag) value;
             raid.members.add(new Member(row.getUUID("id"), row.getString("role"), row.getBoolean("dead")));
         }
+        raid.plunder = tag.getList("plunder", Tag.TAG_COMPOUND).copy();
+        raid.holdTicks = Math.max(0, tag.getInt("holdTicks")); raid.plunderTicks = Math.max(0, tag.getInt("plunderTicks"));
+        raid.heldStore = WorldPos.load(Reader.of(tag.getCompound("heldStore"))).orElse(null);
+        for (Tag value : tag.getList("escaped", Tag.TAG_INT_ARRAY)) { raid.escaped.add(net.minecraft.nbt.NbtUtils.loadUUID(value)); }
         return raid;
     }
 }

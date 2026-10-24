@@ -18,7 +18,7 @@ public record RaidDefinition(List<Wave> waves, Limits limits, String snapshot) {
     private static final Set<EntityType<?>> SUPPORTED = Set.of(EntityType.ZOMBIE, EntityType.HUSK,
         EntityType.SKELETON, EntityType.STRAY, EntityType.PILLAGER, EntityType.VINDICATOR, EntityType.CREEPER, EntityType.RAVAGER, EntityType.WITCH);
 
-    public record Limits(int brokenBlocks, double hardness, int fireSources, int firesPerRaider, int spreadBlocks, int burnedBlocks) { }
+    public record Limits(int brokenBlocks, double hardness, int fireSources, int firesPerRaider, int spreadBlocks, int burnedBlocks, double plunderShare, int plunderStacks, int plunderItems, int plunderPerRaider) { }
 
     public record Entry(EntityType<?> entity, String role, int count, Map<EquipmentSlot, Item> equipment) {
         public Entry { equipment = Map.copyOf(equipment); }
@@ -65,7 +65,12 @@ public record RaidDefinition(List<Wave> waves, Limits limits, String snapshot) {
         int perRaider = limit(limits, "fireSourcesPerRaider", 3);
         int spread = limit(limits, "fireSpreadBlocks", 192);
         int burned = limit(limits, "burnedBlocks", 96);
-        return new RaidDefinition(waves, new Limits(breaks, hardness, fires, perRaider, spread, burned), root.toString());
+        double share = GsonHelper.getAsDouble(limits, "plunderShare", .2);
+        if (!Double.isFinite(share) || share < 0 || share > 1) { throw new IllegalArgumentException("Invalid plunder share"); }
+        int stacks = limit(limits, "plunderStacks", 8);
+        int items = limit(limits, "plunderItems", 256);
+        int cargo = limit(limits, "plunderStacksPerRaider", 2);
+        return new RaidDefinition(waves, new Limits(breaks, hardness, fires, perRaider, spread, burned, share, stacks, items, cargo), root.toString());
     }
 
     private static int limit(JsonObject limits, String key, int fallback) {

@@ -22,6 +22,12 @@ public final class WarConfig {
     static final ModConfigSpec.IntValue FIRE_PER_RAIDER = BUILDER.defineInRange("maximumFireSourcesPerRaider", 3, 0, 64);
     static final ModConfigSpec.IntValue FIRE_SPREAD = BUILDER.defineInRange("maximumFireSpreadBlocks", 192, 0, 4096);
     static final ModConfigSpec.IntValue BURNED = BUILDER.defineInRange("maximumBurnedBlocks", 96, 0, 4096);
+    static final ModConfigSpec.DoubleValue PLUNDER_SHARE = BUILDER.defineInRange("plunderShare", .2D, 0D, 1D);
+    static final ModConfigSpec.IntValue PLUNDER_STACKS = BUILDER.defineInRange("maximumPlunderStacks", 8, 0, 64);
+    static final ModConfigSpec.IntValue PLUNDER_ITEMS = BUILDER.defineInRange("maximumPlunderItems", 256, 0, 4096);
+    static final ModConfigSpec.IntValue PLUNDER_PER_RAIDER = BUILDER.defineInRange("maximumPlunderStacksPerRaider", 2, 1, 16);
+    static final ModConfigSpec.IntValue STORE_HOLD = BUILDER.defineInRange("storeHoldTicks", 200, 20, 24000);
+    static final ModConfigSpec.IntValue PLUNDER_DURATION = BUILDER.defineInRange("plunderTicks", 1200, 100, 24000);
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private WarConfig() { }

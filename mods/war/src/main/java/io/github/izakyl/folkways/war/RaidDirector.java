@@ -82,7 +82,12 @@ public final class RaidDirector {
             for (Mob mob : loaded()) { mob.setNoAi(raid.paused); if (raid.paused) { mob.setTarget(null); mob.getNavigation().stop(); } }
             syncBar(level);
             if (raid.paused) { return; }
-            if (defeated()) { finish(RaidInstance.Phase.DEFEAT); return; }
+            if (raid.phase == RaidInstance.Phase.PLUNDER) {
+                raid.plunderTicks += 20;
+                if (raid.plunderTicks >= WarConfig.PLUNDER_DURATION.get() || raid.remaining() == 0) { finish(RaidInstance.Phase.DEFEAT); }
+                save(); return;
+            }
+            if (defeated() || RaidPlunder.holding(colony, level, raid, loaded())) { plunder(); return; }
             raid.elapsed += 20;
             if (raid.elapsed >= WarConfig.TIMEOUT.get()) { finish(RaidInstance.Phase.WITHDRAWN); return; }
             if (raid.phase == RaidInstance.Phase.WARNING || raid.remaining() == 0) {
@@ -126,6 +131,15 @@ public final class RaidDirector {
         raid = new RaidInstance(UUID.randomUUID(), seed, target, origin, definition, WarConfig.WARNING.get());
         tell("folkways.raid.warning"); save();
     }
+
+    void plunder() {
+        raid.phase = RaidInstance.Phase.PLUNDER;
+        RaidPlunder.prepare(colony, raid, server);
+        tell("folkways.raid.defeat"); save();
+    }
+
+    Colony colony() { return colony; }
+    void escaped(Mob mob) { raid.escaped.add(mob.getUUID()); mob.discard(); save(); }
 
     private boolean defeated() {
         return colony.residents().stream().allMatch(resident -> {
@@ -208,7 +222,7 @@ public final class RaidDirector {
 
     boolean owns(Mob mob) {
         return active() && RaidMembers.raid(mob).filter(raid.id::equals).isPresent()
-            && raid.members.stream().anyMatch(member -> member.id().equals(mob.getUUID()) && !member.dead());
+            && raid.members.stream().anyMatch(member -> member.id().equals(mob.getUUID()) && !member.dead() && !raid.escaped.contains(member.id()));
     }
 
     private List<ServerPlayer> members(ServerLevel level, WorldPos at) {

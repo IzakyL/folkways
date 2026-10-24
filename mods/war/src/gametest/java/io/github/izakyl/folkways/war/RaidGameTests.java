@@ -165,7 +165,9 @@ public final class RaidGameTests {
         scene.begin("zombie", 1); scene.director.advance(true); scene.person.mob().kill();
         helper.runAfterDelay(2, () -> {
             scene.director.advance(true);
-            helper.assertTrue(scene.director.raid().phase == RaidInstance.Phase.DEFEAT, "last held resident dying loses the raid");
+            helper.assertTrue(scene.director.raid().phase == RaidInstance.Phase.PLUNDER, "last held resident dying begins defeat plunder");
+            scene.director.raid().plunderTicks = WarConfig.PLUNDER_DURATION.get(); scene.director.advance(true);
+            helper.assertTrue(scene.director.raid().phase == RaidInstance.Phase.DEFEAT, "plunder timeout records defeat");
             helper.succeed();
         });
     }
@@ -299,6 +301,62 @@ public final class RaidGameTests {
         helper.succeed();
     }
 
+    @GameTest(batch = "war", template = "empty_large")
+    public static void plunderRemovesRealGoodsPreservesComponentsAndDropsCargoOnDeath(GameTestHelper helper) {
+        Scene scene = new Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); WorldPos at = scene.store(new BlockPos(12, 1, 3));
+        var container = scene.colony.store(helper.getLevel(), at).orElseThrow();
+        ItemStack diamonds = new ItemStack(Items.DIAMOND, 64);
+        diamonds.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal("recovery")); container.setItem(0, diamonds);
+        scene.director.plunder();
+        helper.assertFalse(RaidPlunder.take(scene.director, mob, at), "looting cannot remotely deduct stock");
+        BlockPos beside = at.block(helper.getLevel()).west(); mob.moveTo(beside.getX() + .5, beside.getY(), beside.getZ() + .5);
+        helper.assertTrue(RaidPlunder.take(scene.director, mob, at), "actual adjacent looter takes its share");
+        helper.assertValueEqual(container.getItem(0).getCount(), 52, "twenty percent of the actual stack is removed, rounded down");
+        helper.assertTrue(RaidPlunder.carrying(mob), "real goods belong to the looter until death or escape");
+        mob.hurt(helper.getLevel().damageSources().genericKill(), Float.MAX_VALUE);
+        helper.runAfterDelay(2, () -> {
+            var dropped = helper.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, mob.getBoundingBox().inflate(3)).stream()
+                .map(net.minecraft.world.entity.item.ItemEntity::getItem).filter(stack -> stack.is(Items.DIAMOND)).toList();
+            helper.assertValueEqual(dropped.stream().mapToInt(ItemStack::getCount).sum(), 12, "killing a looter drops the actual removed goods exactly once");
+            helper.assertTrue(dropped.stream().allMatch(stack -> stack.has(net.minecraft.core.component.DataComponents.CUSTOM_NAME)), "item components survive theft and recovery");
+            helper.assertTrue(scene.director.raid().plunder.getCompound(0).getBoolean("dropped"), "the report marks goods dropped for recovery");
+            helper.succeed();
+        });
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void plunderPrefersValuablesAndSkipsLockedOrForbiddenStores(GameTestHelper helper) {
+        Scene scene = new Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); WorldPos at = scene.store(new BlockPos(12, 1, 3));
+        var container = scene.colony.store(helper.getLevel(), at).orElseThrow(); container.setItem(0, new ItemStack(Items.DIRT, 64)); container.setItem(1, new ItemStack(Items.DIAMOND, 64));
+        scene.director.plunder();
+        helper.assertValueEqual(scene.director.raid().plunder.getCompound(0).getInt("slot"), 1, "the precious item tag wins over ordinary materials");
+        BlockPos beside = at.block(helper.getLevel()).west(); mob.moveTo(beside.getX() + .5, beside.getY(), beside.getZ() + .5);
+        var block = helper.getLevel().getBlockEntity(at.block(helper.getLevel()));
+        CompoundTag locked = block.saveWithoutMetadata(helper.getLevel().registryAccess()); locked.putString("Lock", "sealed"); block.loadWithComponents(locked, helper.getLevel().registryAccess());
+        helper.assertFalse(RaidPlunder.take(scene.director, mob, at), "native locked containers cannot be looted");
+        locked.remove("Lock"); block.loadWithComponents(locked, helper.getLevel().registryAccess());
+        scene.colony.rule(FolkwaysWarMod.RAIDS, helper.getLevel().dimension(), List.of(new io.github.izakyl.folkways.core.api.terms.StoreRule.Access(at, false, true)));
+        helper.assertFalse(RaidPlunder.take(scene.director, mob, at), "registered withdrawal protection remains authoritative");
+        helper.assertValueEqual(container.getItem(1).getCount(), 64, "denied looting removes nothing");
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large", timeoutTicks = 300)
+    public static void lootersWalkToARegisteredStoreAndHoldingStoresCausesDefeat(GameTestHelper helper) {
+        Scene scene = new Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); WorldPos at = scene.store(new BlockPos(15, 1, 3));
+        var container = scene.colony.store(helper.getLevel(), at).orElseThrow(); container.setItem(0, new ItemStack(Items.EMERALD, 64));
+        scene.person.mob().setNoGravity(true); BlockPos remote = helper.absolutePos(new BlockPos(40, 1, 8)); scene.person.mob().moveTo(remote.getX(), remote.getY(), remote.getZ());
+        scene.director.plunder();
+        helper.succeedWhen(() -> {
+            helper.assertTrue(container.getItem(0).getCount() < 64, "native movement reaches and loots real registered storage");
+            helper.assertTrue(mob.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(at.block(helper.getLevel()))) <= 16, "goods move only at the store");
+            helper.assertTrue(RaidPlunder.carrying(mob), "walking looter carries the removed items");
+        });
+    }
+
     static final class Scene implements GameTestListener {
         final GameTestHelper helper;
         final Colony colony;
@@ -325,6 +383,10 @@ public final class RaidGameTests {
             director.begin(definition, WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(15, 1, 8))),
                 WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(6, 1, 8))), 42L);
             director.raid().wait = 0;
+        }
+        WorldPos store(BlockPos cell) {
+            helper.setBlock(cell, Blocks.BARREL); WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(cell));
+            colony.stores(FolkwaysWarMod.RAIDS, helper.getLevel().dimension(), List.of(at)); return at;
         }
         void close() {
             if (simulation != null) { simulation.close(); }

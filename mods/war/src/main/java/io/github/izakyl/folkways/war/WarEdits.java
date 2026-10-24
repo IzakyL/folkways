@@ -31,6 +31,26 @@ public final class WarEdits {
         return !NeoForge.EVENT_BUS.post(new BlockEvent.BreakEvent(level, at, state, FakePlayerFactory.get(level, GRIEFER))).isCanceled();
     }
 
+    static boolean loot(ServerLevel level, io.github.izakyl.folkways.core.api.colony.Colony colony,
+            io.github.izakyl.folkways.core.api.terms.WorldPos store, Mob actor) {
+        if (!store.in(level) || !io.github.izakyl.folkways.core.api.terms.StoreRule.takes(colony.storeRules(store))) { return false; }
+        BlockPos at = store.block(level);
+        if (!level.isLoaded(at) || !unlocked(level, at) || !permits(level, at, actor, true, 49)) { return false; }
+        var state = level.getBlockState(at);
+        if (state.getBlock() instanceof net.minecraft.world.level.block.ChestBlock
+                && state.getValue(net.minecraft.world.level.block.ChestBlock.TYPE) != net.minecraft.world.level.block.state.properties.ChestType.SINGLE) {
+            return unlocked(level, at.relative(net.minecraft.world.level.block.ChestBlock.getConnectedDirection(state)));
+        }
+        return true;
+    }
+
+    private static boolean unlocked(ServerLevel level, BlockPos at) {
+        // Unknown machine security has no common contract; only lockable containers are eligible.
+        var entity = level.getBlockEntity(at);
+        return entity instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity
+            && entity.saveWithoutMetadata(level.registryAccess()).getString("Lock").isEmpty();
+    }
+
     static boolean fireRules(ServerLevel level) {
         return level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)
             && level.getGameRules().getBoolean(GameRules.RULE_DOFIRETICK);

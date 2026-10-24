@@ -55,6 +55,7 @@ public final class RaidMembers {
             mob.goalSelector.addGoal(5, new Approach(mob));
             mob.goalSelector.addGoal(1, new RaidBreachGoal(mob));
             mob.goalSelector.addGoal(2, new RaidIgniteGoal(mob));
+            mob.goalSelector.addGoal(1, new RaidLootGoal(mob));
         }
     }
 
