@@ -1,10 +1,15 @@
 package io.github.izakyl.folkways.tacz;
 
 import com.tacz.guns.api.TimelessAPI;
+import com.tacz.guns.api.GunProperties;
+import com.tacz.guns.api.entity.IGunOperator;
 import com.tacz.guns.api.item.IGun;
 import com.tacz.guns.api.item.gun.FireMode;
 import com.tacz.guns.init.ModItems;
 import com.tacz.guns.resource.index.CommonGunIndex;
+import com.tacz.guns.resource.modifier.AttachmentCacheProperty;
+import com.tacz.guns.resource.pojo.data.gun.ExplosionData;
+import com.tacz.guns.resource.pojo.data.gun.Ignite;
 import com.tacz.guns.resource.pojo.data.gun.Bolt;
 import com.tacz.guns.resource.pojo.data.gun.FeedType;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
@@ -14,6 +19,7 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
@@ -39,7 +45,30 @@ final class TaczGuns {
     }
     static boolean supported(ItemStack stack) {
         return stack.is(ModItems.MODERN_KINETIC_GUN.get()) && stack.getItem() instanceof IGun gun
-            && !gun.useDummyAmmo(stack) && !gun.useInventoryAmmo(stack) && index(gun.getGunId(stack)).isPresent();
+            && !gun.useDummyAmmo(stack) && !gun.useInventoryAmmo(stack) && index(gun.getGunId(stack)).filter(index -> {
+                AttachmentCacheProperty actual = new AttachmentCacheProperty();
+                actual.eval(stack, index.getGunData());
+                return conventional(actual);
+            }).isPresent();
+    }
+    private static boolean conventional(AttachmentCacheProperty properties) {
+        ExplosionData explosion = properties.getCache(GunProperties.EXPLOSION);
+        Ignite ignite = properties.getCache(GunProperties.IGNITE);
+        return (explosion == null || !explosion.isExplode()) && !ignite.isIgniteEntity() && !ignite.isIgniteBlock();
+    }
+    static boolean safeToDischarge(LivingEntity shooter, ItemStack stack) {
+        if (!(stack.getItem() instanceof IGun gun)) { return false; }
+        IGunOperator operator = IGunOperator.fromLivingEntity(shooter);
+        AttachmentCacheProperty properties = operator.getCacheProperty();
+        if (properties == null) { return false; }
+        ExplosionData explosion = properties.getCache(GunProperties.EXPLOSION);
+        Ignite ignite = properties.getCache(GunProperties.IGNITE);
+        var data = operator.getDataHolder();
+        // Use the same runtime properties as the bullet constructor, including event and script changes.
+        return !gun.modifyProperty(data, stack, shooter, GunProperties.RuntimeOnly.EXPLODE_ENABLED, Boolean.class,
+                explosion != null && explosion.isExplode())
+            && !gun.modifyProperty(data, stack, shooter, GunProperties.RuntimeOnly.IGNITE_ENTITY, Boolean.class, ignite.isIgniteEntity())
+            && !gun.modifyProperty(data, stack, shooter, GunProperties.RuntimeOnly.IGNITE_BLOCK, Boolean.class, ignite.isIgniteBlock());
     }
     static int loaded(ItemStack stack) {
         if (!(stack.getItem() instanceof IGun gun)) { return 0; }

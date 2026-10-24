@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.tacz;
 import com.tacz.guns.api.event.common.EntityHurtByGunEvent;
 import com.tacz.guns.api.event.common.GunFireEvent;
 import com.tacz.guns.entity.EntityKineticBullet;
+import io.github.izakyl.folkways.tacz.mixin.KineticBulletAccessor;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.person.living.LivingContent;
@@ -51,6 +52,13 @@ public final class TaczDischargeGuard {
     static void joined(EntityJoinLevelEvent event) {
         if (!event.getLevel().isClientSide() && event.getEntity() instanceof EntityKineticBullet bullet
                 && bullet.getOwner() instanceof ResidentEntity body) {
+            KineticBulletAccessor payload = (KineticBulletAccessor) bullet;
+            if (payload.folkways$explosive() || payload.folkways$ignitesEntities() || payload.folkways$ignitesBlocks()) {
+                // Another fire listener can change properties after our discharge check. Reject its final payload.
+                event.setCanceled(true);
+                bullet.discard();
+                return;
+            }
             body.colonyId().ifPresent(id -> bullet.getPersistentData().putUUID(COLONY, id));
         }
     }

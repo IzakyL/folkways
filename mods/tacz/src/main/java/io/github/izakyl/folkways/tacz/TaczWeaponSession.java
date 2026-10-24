@@ -98,7 +98,7 @@ final class TaczWeaponSession implements WeaponSession {
     private boolean valid() {
         return body.level() instanceof ServerLevel level && level.getServer().isSameThread() && body.isAlive() && !body.isRemoved()
             && body.colonyId().equals(colony) && colony.filter(id -> Colonies.razed(level.getServer(), id)).isEmpty()
-            && body.ownsWeaponHand(this) && adapter.accepts(weapon());
+            && body.ownsWeaponHand(this) && adapter.accepts(weapon()) && TaczGuns.safeToDischarge(body, weapon());
     }
     private boolean permitted(LivingEntity foe) {
         ItemStack gun = weapon();
