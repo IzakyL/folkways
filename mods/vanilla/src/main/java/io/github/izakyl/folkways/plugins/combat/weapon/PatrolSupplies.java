@@ -28,38 +28,31 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.neoforged.neoforge.common.Tags;
 
 /** Finite personal stock, collected locally through the resident's existing work runner. */
 public final class PatrolSupplies {
-    private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways", "patrol");
     private static final ResourceLocation SAVED = ResourceLocation.fromNamespaceAndPath("folkways", "patrol_loadouts");
     public static final int ARROWS = 8;
     static final int RETRY_TICKS = 100;
     static final int TRIP_TICKS = 200;
     private static final int STORE_RANGE = 32;
-    private static final ItemSpec AMMUNITION = ItemSpec.of(ItemTags.ARROWS);
 
-    public enum Loadout { MELEE, BOW, CROSSBOW }
     public enum State { INACTIVE, READY, FETCHING, NO_STOCK, NO_ROOM, FAILED, CANCELLED, TIMED_OUT }
     public record Status(State state, String reason, long missing, Optional<WorldPos> source, long retryAt) { }
     record Demand(ItemSpec goods, int target, boolean weapon) { }
     record Authority(ResidentEntity body, ResidentCommands.Order order, long duty, long until, long revision) { }
 
     private final Colony colony;
-    private final Map<UUID, Loadout> loadouts = new HashMap<>();
+    private final Map<UUID, LoadoutRegistry.Selection> loadouts = new HashMap<>();
     private final Map<UUID, Long> revisions = new HashMap<>();
     private final Map<UUID, Long> duties = new HashMap<>();
     private final Map<UUID, Status> statuses = new HashMap<>();
@@ -71,30 +64,32 @@ public final class PatrolSupplies {
         for (int n = 0; n < saved.size(); n++) {
             CompoundTag row = saved.getCompound(n);
             if (row.hasUUID("resident")) {
-                try { loadouts.put(row.getUUID("resident"), Loadout.valueOf(row.getString("loadout"))); }
-                catch (IllegalArgumentException invalid) { /* Unknown future loadouts are left inactive. */ }
+                LoadoutRegistry.Selection selection = LoadoutRegistry.read(row);
+                if (selection != null) { loadouts.put(row.getUUID("resident"), selection); }
             }
         }
+        if (!saved.isEmpty() && colony.kept(SAVED).getInt("version") < 2) { save(); }
     }
 
     public static PatrolSupplies of(Colony colony) {
         return PatrolContent.suppliesOf(colony).orElseThrow();
     }
 
-    public Optional<Loadout> preference(UUID resident) { return Optional.ofNullable(loadouts.get(resident)); }
+    public Optional<LoadoutRegistry.Selection> preference(UUID resident) { return Optional.ofNullable(loadouts.get(resident)); }
 
     /** Select replenishment stock; this never removes or replaces a player-given weapon. */
-    public void loadout(Body body, Loadout loadout) {
+    public void loadout(Body body, LoadoutRegistry.Selection loadout) {
         validate(body);
         java.util.Objects.requireNonNull(loadout);
-        if (loadouts.get(body.id()) == loadout) { return; }
+        if (loadout.provider().isEmpty()) { throw new IllegalArgumentException("unavailable loadout"); }
+        if (loadout.equals(loadouts.get(body.id()))) { return; }
         ((ResidentEntity) body.mob()).stopWeaponSession();
         loadouts.put(body.id(), loadout);
         invalidate(body.id());
         save();
     }
 
-    /** Revert to ammunition-only inference from a bow or crossbow already carried. */
+    /** Revert to ammunition-only inference from a weapon already carried. */
     public void clear(Body body) {
         validate(body);
         if (!loadouts.containsKey(body.id())) { return; }
@@ -124,9 +119,11 @@ public final class PatrolSupplies {
 
     private void save() {
         CompoundTag saved = new CompoundTag();
+        saved.putInt("version", 2);
         ListTag rows = new ListTag();
         loadouts.forEach((id, loadout) -> {
-            CompoundTag row = new CompoundTag(); row.putUUID("resident", id); row.putString("loadout", loadout.name()); rows.add(row);
+            CompoundTag row = new CompoundTag(); row.putUUID("resident", id); row.putString("loadout", loadout.id().toString());
+            row.put("options", loadout.options()); rows.add(row);
         });
         saved.put("loadouts", rows);
         colony.keep(SAVED, saved);
@@ -156,16 +153,12 @@ public final class PatrolSupplies {
 
     public List<Amount> keeps(Body body) {
         if (!(body.mob() instanceof ResidentEntity person)) { return List.of(); }
-        Loadout explicit = loadouts.get(body.id());
-        Loadout selected = explicit != null ? explicit : inferred(person);
-        if (selected == null) { return List.of(); }
+        LoadoutRegistry.Selection selected = selected(person);
+        if (selected == null || selected.provider().isEmpty()) { return List.of(); }
+        LoadoutProvider provider = selected.provider().orElseThrow();
         List<Amount> kept = new ArrayList<>();
-        if (explicit != null || selected != Loadout.MELEE) {
-            kept.add(new Amount(weapon(selected), 1));
-        }
-        if (selected != Loadout.MELEE) {
-            kept.add(new Amount(AMMUNITION, ARROWS));
-        }
+        kept.add(new Amount(provider.weapon(selected.options()), 1));
+        kept.addAll(provider.ammunition(selected.options()));
         return List.copyOf(kept);
     }
 
@@ -296,49 +289,45 @@ public final class PatrolSupplies {
         return copy;
     }
 
+    private LoadoutRegistry.Selection selected(ResidentEntity body) {
+        LoadoutRegistry.Selection explicit = loadouts.get(body.id());
+        return explicit != null ? explicit : LoadoutRegistry.infer(LoadoutRegistry.carried(body)).orElse(null);
+    }
+
     private Demand wanted(ResidentEntity body) {
-        Loadout explicit = loadouts.get(body.id());
-        Loadout selected = explicit != null ? explicit : inferred(body);
-        if (selected == null) { return null; }
-        Demand arm = new Demand(weapon(selected), 1, true);
-        if (explicit != null && missing(body, arm) > 0) { return arm; }
-        Demand ammo = new Demand(AMMUNITION, ARROWS, false);
-        return selected != Loadout.MELEE && missing(body, ammo) > 0 ? ammo : null;
+        LoadoutRegistry.Selection selected = selected(body);
+        if (selected == null || selected.provider().isEmpty()) { return null; }
+        LoadoutProvider provider = selected.provider().orElseThrow();
+        Demand arm = new Demand(provider.weapon(selected.options()), 1, true);
+        if (loadouts.containsKey(body.id()) && missing(body, arm) > 0) { return arm; }
+        for (Amount ammunition : provider.ammunition(selected.options())) {
+            Demand ammo = new Demand(ammunition.spec(), (int) ammunition.count(), false);
+            if (ammo.target() - missing(body, ammo) <= provider.lowWater(selected.options(), ammunition)
+                    && missing(body, ammo) > 0) { return ammo; }
+        }
+        return null;
     }
 
     int missing(ResidentEntity body, Demand demand) {
         long carried = Goods.countIn(body.pack(), demand.goods());
         if (body.hasWeaponSession() && Goods.matches(body.getMainHandItem(), demand.goods())) { carried += body.getMainHandItem().getCount(); }
         if (!demand.weapon()) {
-            List<ItemStack> weapons = new ArrayList<>(body.pack().contents());
-            if (body.hasWeaponSession()) { weapons.add(body.getMainHandItem()); }
-            for (ItemStack weapon : weapons) {
-                var loaded = weapon.get(net.minecraft.core.component.DataComponents.CHARGED_PROJECTILES);
-                if (loaded != null) { carried += loaded.getItems().stream().filter(stack -> Goods.matches(stack, demand.goods())).mapToInt(ItemStack::getCount).sum(); }
+            for (ItemStack weapon : LoadoutRegistry.carried(body)) {
+                carried += LoadoutRegistry.infer(List.of(weapon)).flatMap(LoadoutRegistry.Selection::provider)
+                    .map(provider -> provider.loaded(weapon, demand.goods())).orElse(0);
             }
         }
         return (int) Math.max(0, demand.target() - carried);
     }
 
-    private static Loadout inferred(ResidentEntity body) {
-        List<ItemStack> carried = new ArrayList<>();
-        if (body.hasWeaponSession()) { carried.add(body.getMainHandItem()); }
-        carried.addAll(body.pack().contents());
-        for (ItemStack stack : carried) {
-            if (stack.is(Items.BOW)) { return Loadout.BOW; }
-            if (stack.is(Items.CROSSBOW)) { return Loadout.CROSSBOW; }
-        }
-        return null;
+    static boolean prefers(LoadoutRegistry.Selection loadout, ItemStack stack) {
+        return loadout.provider().map(provider -> Goods.matches(stack, provider.weapon(loadout.options()))).orElse(false);
     }
 
-    static boolean prefers(Loadout loadout, ItemStack stack) { return Goods.matches(stack, weapon(loadout)); }
-
-    private static ItemSpec weapon(Loadout loadout) {
-        return switch (loadout) {
-            case MELEE -> ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS);
-            case BOW -> ItemSpec.of(BuiltInRegistries.ITEM.getKey(Items.BOW));
-            case CROSSBOW -> ItemSpec.of(BuiltInRegistries.ITEM.getKey(Items.CROSSBOW));
-        };
+    public net.minecraft.network.chat.Component detail(ResidentEntity body) {
+        LoadoutRegistry.Selection selected = selected(body);
+        return selected == null ? net.minecraft.network.chat.Component.empty() : LoadoutRegistry.find(selected.id())
+            .map(provider -> provider.detail(body, selected.options())).orElseGet(() -> LoadoutRegistry.label(selected));
     }
 
     void finished(PatrolSupplyNode request, Ending how) {

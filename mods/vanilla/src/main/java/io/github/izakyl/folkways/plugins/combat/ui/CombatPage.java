@@ -24,6 +24,8 @@ public final class CombatPage implements Draw {
     private UUID context;
     private int residentOffset;
     private int groupOffset;
+    private int loadoutOffset;
+    private final List<Button> loadoutButtons = new ArrayList<>();
     private List<UUID> residentWindow = List.of();
     private List<UUID> groupWindow = List.of();
     private final List<UIElement> residentRows = new ArrayList<>();
@@ -71,6 +73,16 @@ public final class CombatPage implements Draw {
             Tokens.name(row, "folkways.combat.group_row." + slot);
             groups.addChildren(row); groupRows.add(row); groupNames.add(name); groupButtons.add(pick);
         }
+        UIElement loadouts = Rows.page();
+        loadouts.addChildren(Rows.strip().addChildren(
+            button("loadout_previous", "folkways.combat.previous", player, () -> loadoutOffset -= 6),
+            button("loadout_next", "folkways.combat.next", player, () -> loadoutOffset += 6)));
+        for (int slot = 0; slot < 6; slot++) {
+            int index = slot;
+            Button choice = button("loadout." + slot, "folkways.combat.select", player,
+                () -> act(player, "loadout", Integer.toString(loadoutOffset + index)));
+            loadouts.addChildren(choice); loadoutButtons.add(choice);
+        }
         UIElement content = Rows.page().addChildren(
             Rows.note(Component.translatable("folkways.combat.help")),
             Rows.heading(Component.translatable("folkways.combat.people")),
@@ -82,8 +94,7 @@ public final class CombatPage implements Draw {
             Rows.strip().addChildren(action(player, "add_point", "folkways.combat.add_point"),
                 action(player, "add_aim", "folkways.combat.add_aim"), action(player, "clear_points", "folkways.combat.clear_points")),
             preference, Rows.note(Component.translatable("folkways.combat.supply_help")),
-            Rows.strip().addChildren(action(player, "loadout_melee", "folkways.combat.loadout.melee"),
-                action(player, "loadout_bow", "folkways.combat.loadout.bow"), action(player, "loadout_crossbow", "folkways.combat.loadout.crossbow")));
+            loadouts);
         var scroll = Rows.fills(Rows.box());
         scroll.addScrollViewChild(content);
         Tokens.name(scroll, "folkways.combat.scroll");
@@ -119,6 +130,11 @@ public final class CombatPage implements Draw {
     private Tag reading(Player player) {
         CompoundTag tag = player instanceof ServerPlayer server ? desk(player).map(desk -> desk.reading(server)).orElseGet(CompoundTag::new)
             : new CompoundTag();
+        ListTag loadouts = tag.getList("loadouts", Tag.TAG_COMPOUND);
+        loadoutOffset = Math.clamp(loadoutOffset, 0, Math.max(0, loadouts.size() - 1) / 6 * 6);
+        ListTag shownLoadouts = new ListTag();
+        for (int n = loadoutOffset; n < Math.min(loadouts.size(), loadoutOffset + 6); n++) { shownLoadouts.add(loadouts.getCompound(n).copy()); }
+        tag.put("loadouts", shownLoadouts);
         ListTag residents = tag.getList("residents", Tag.TAG_COMPOUND);
         ListTag groups = tag.getList("groups", Tag.TAG_COMPOUND);
         residentOffset = Math.clamp(residentOffset, 0, Math.max(0, residents.size() - 1) / 8 * 8);
@@ -145,6 +161,11 @@ public final class CombatPage implements Draw {
         preference.setText(Pages.readText(player.registryAccess(), tag.get("loadout")));
         selection.setText(Component.translatable("folkways.combat.selection", tag.getInt("selected")));
         locations.setText(Component.literal(tag.getString("locations")));
+        ListTag loadouts = tag.getList("loadouts", Tag.TAG_COMPOUND);
+        for (int n = 0; n < loadoutButtons.size(); n++) {
+            loadoutButtons.get(n).setDisplay(n < loadouts.size());
+            if (n < loadouts.size()) { loadoutButtons.get(n).setText(Pages.readText(player.registryAccess(), loadouts.getCompound(n).get("label"))); }
+        }
         ListTag residents = tag.getList("residents", Tag.TAG_COMPOUND);
         for (int n = 0; n < 8; n++) {
             residentRows.get(n).setDisplay(n < residents.size());

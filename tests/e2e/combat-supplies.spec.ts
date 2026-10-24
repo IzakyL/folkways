@@ -192,6 +192,7 @@ const IMPORTS = [
   "net.minecraft.world.phys.Vec3", "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.colony.Held",
   "io.github.izakyl.folkways.core.api.terms.WorldSpaces", "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.ResidentEntity",
+  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry",
   "io.github.izakyl.folkways.plugins.combat.command.ResidentCommands", "io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies",
 ];
 
@@ -204,7 +205,7 @@ var resident = PersonBody.RESIDENT.get().create(level);
 resident.moveTo(args.number("homeX"), args.number("stockY"), args.number("homeZ"));
 resident.setPersistenceRequired();
 colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow(); resident.joinColony(colony.id()); level.addFreshEntity(resident);
-PatrolSupplies.of(colony).loadout(resident, PatrolSupplies.Loadout.BOW);
+PatrolSupplies.of(colony).loadout(resident, LoadoutRegistry.BOW);
 ResidentCommands.of(colony).guard(resident, WorldSpaces.at(resident), new Vec3(1, 0, 0));
 return Map.of("colony", args.string("colony"), "resident", resident.id().toString(),
  "stockX", args.number("stockX"), "stockY", args.number("stockY"), "stockZ", args.number("stockZ"),
@@ -283,7 +284,7 @@ const GUARD_MELEE = defineTask<Scene, { done: boolean }>({
 var args = Args.of(ctx); var server = (MinecraftServer)ctx.server(); var level = server.overworld();
 var colony = Colonies.of(server, UUID.fromString(args.string("colony"))).orElseThrow();
 var body = (ResidentEntity)level.getEntity(UUID.fromString(args.string("resident")));
-PatrolSupplies.of(colony).loadout(body, PatrolSupplies.Loadout.MELEE);
+PatrolSupplies.of(colony).loadout(body, LoadoutRegistry.MELEE);
 ResidentCommands.of(colony).guard(body, WorldSpaces.at(level,
  new BlockPos((int)Math.floor(args.number("homeX")), (int)args.integer("stockY"), (int)Math.floor(args.number("homeZ")))), new Vec3(1, 0, 0));
 return Map.of("done", true);

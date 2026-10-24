@@ -20,7 +20,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 
-// One native attack, owned and ticked by BodyRunner. An interruption always closes its actual hand loan.
+// BodyRunner owns the attack and its hand loan, including a weapon's continuing engagement.
 final class StrikeNode implements Node {
 
     private final NodeSpec spec;
@@ -71,9 +71,13 @@ final class StrikeNode implements Node {
                 return false;
             }
         }
+        if (session.continuousEngagement() && session.state() == WeaponSession.State.READY && !session.fire(target)) {
+            return false;
+        }
         session.tick();
         killed = !target.isAlive();
-        return session.state() == WeaponSession.State.FIRING || session.state() == WeaponSession.State.RELOADING;
+        return !killed && (session.continuousEngagement() && session.state() == WeaponSession.State.READY
+            || session.state() == WeaponSession.State.FIRING || session.state() == WeaponSession.State.RELOADING);
     }
 
     @Override

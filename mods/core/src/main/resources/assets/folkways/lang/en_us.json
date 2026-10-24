@@ -1265,5 +1265,6 @@
   "folkways.combat.stock.no_room": "Pack full",
   "folkways.combat.stock.failed": "Supply failed",
   "folkways.combat.stock.cancelled": "Supply cancelled",
-  "folkways.combat.stock.timed_out": "Supply timed out"
+  "folkways.combat.stock.timed_out": "Supply timed out",
+  "folkways.combat.loadout.unavailable": "Unavailable equipment"
 }

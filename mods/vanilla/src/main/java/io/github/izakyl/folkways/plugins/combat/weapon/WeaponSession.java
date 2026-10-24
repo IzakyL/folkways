@@ -8,6 +8,9 @@ public interface WeaponSession extends AutoCloseable {
 
     State state();
 
+    /** Keep the same hand loan between attacks while this node still owns the engagement. */
+    default boolean continuousEngagement() { return false; }
+
     /** Queue one attack. Each tick and the eventual discharge recheck hostility, sight and range. */
     boolean fire(LivingEntity target);
 

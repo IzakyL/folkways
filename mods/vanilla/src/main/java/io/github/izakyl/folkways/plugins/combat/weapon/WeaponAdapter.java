@@ -10,6 +10,10 @@ public interface WeaponAdapter {
 
     double range();
 
+    default double range(Worker worker, ItemStack weapon) { return range(); }
+
+    default Optional<WeaponSession> open(Worker worker, ItemStack weapon) { return open(worker); }
+
     default boolean ranged() { return range() > 4.5; }
 
     /** Inventory-dependent readiness, such as an actual compatible projectile or a loaded chamber. */

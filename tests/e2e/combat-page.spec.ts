@@ -199,10 +199,10 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     evidence.push({ step: "UI released actual retreat orders", reading });
     expect(reading.residents.every(resident => resident.orderMode === "NONE")).toBe(true);
 
-    await scrollElementIntoView(client, { id: `${CONTROL}loadout_bow` });
-    await clickElement(client, { id: `${CONTROL}loadout_bow` });
+    await scrollElementIntoView(client, { id: `${CONTROL}loadout.1` });
+    await clickElement(client, { id: `${CONTROL}loadout.1` });
     reading = await waitFor(server, scene, "UI bow preference is persisted for both actual group members", state =>
-      state.group === selectedGroup && state.loadouts.length === 2 && state.loadouts.every(loadout => loadout === "BOW"), 80, 4);
+      state.group === selectedGroup && state.loadouts.length === 2 && state.loadouts.every(loadout => loadout === "folkways:bow"), 80, 4);
     await expect.poll(async () => (await panelElements(client)).find(element => element.id === `${CONTROL}preference`)?.text ?? "", {
       timeout: 10_000,
       message: "the real page must reflect the server-persisted bow preference",
@@ -239,7 +239,7 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     expect(englishUi.find(element => element.id === `${CONTROL}preference`)?.text)
       .toContain("Bow");
     const englishReading = await sample(server, scene, "English page reopened with persisted bow preference");
-    expect(englishReading.loadouts).toEqual(["BOW", "BOW"]);
+    expect(englishReading.loadouts).toEqual(["folkways:bow", "folkways:bow"]);
     for (const [token, label] of [
       [`${CONTROL}execute`, "Start guard / patrol"],
       [`${CONTROL}retreat`, "Retreat here"],
@@ -413,7 +413,7 @@ for(var id:ids){
   readings.add(row);
 }
 var memberIds=group==null?List.<String>of():group.members().stream().map(UUID::toString).sorted().toList();
-var loadouts=ids.stream().map(id->PatrolSupplies.of(colony).preference(id).map(choice->choice.name()).orElse("AUTO")).toList();
+var loadouts=ids.stream().map(id->PatrolSupplies.of(colony).preference(id).map(choice->choice.id().toString()).orElse("AUTO")).toList();
 return Map.of("colony",colony.id().toString(),"group",group==null?"":group.id().toString(),
   "groupMembers",memberIds,"groupPhase",group==null?"NONE":group.phase().name(),
   "routeStops",group==null?0:group.patrolRoute().size(),"patrolStop",group==null?-1:group.patrolStop(),
