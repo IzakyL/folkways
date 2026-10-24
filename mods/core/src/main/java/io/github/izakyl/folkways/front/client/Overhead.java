@@ -64,6 +64,23 @@ public final class Overhead {
             eye.getYRot(), eye.getXRot(), tacticalControls(), OverheadTools.selected().map(OverheadTools.Tool::id)));
     }
 
+    /** Whether tools may currently interact with this view, rather than a book page or another screen. */
+    public static boolean activeScreen() {
+        return on() && Minecraft.getInstance().screen instanceof OverheadScreen;
+    }
+
+    public record Ray(Vec3 origin, Vec3 direction) { }
+
+    /** A read-only world ray through a GUI pixel, using the same view as the book's pointer. */
+    public static Optional<Ray> screenRay(double mouseX, double mouseY) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!activeScreen()) { return Optional.empty(); }
+        Window window = minecraft.getWindow();
+        Aim aim = aim(minecraft, 2.0D * mouseX / window.getGuiScaledWidth() - 1.0D,
+            1.0D - 2.0D * mouseY / window.getGuiScaledHeight());
+        return Optional.of(new Ray(aim.from(), aim.look()));
+    }
+
     static boolean tacticalControls() {
         if (Minecraft.getInstance().screen instanceof OverheadScreen screen) {
             Optional<Boolean> dragging = screen.dragTacticalControls();
@@ -139,10 +156,15 @@ public final class Overhead {
 
     /** The ray under the mouse, out of the camera through the pixel the pointer is on. */
     static Aim aim(Minecraft minecraft) {
-        Camera camera = minecraft.gameRenderer.getMainCamera();
         Window window = minecraft.getWindow();
         double across = 2.0D * minecraft.mouseHandler.xpos() / window.getScreenWidth() - 1.0D;
         double up = 1.0D - 2.0D * minecraft.mouseHandler.ypos() / window.getScreenHeight();
+        return aim(minecraft, across, up);
+    }
+
+    private static Aim aim(Minecraft minecraft, double across, double up) {
+        Camera camera = minecraft.gameRenderer.getMainCamera();
+        Window window = minecraft.getWindow();
         double half = Math.tan(Math.toRadians(minecraft.options.fov().get()) / 2.0D);
         double wide = half * window.getScreenWidth() / window.getScreenHeight();
         Vector3f look = new Vector3f(camera.getLookVector())

@@ -9,8 +9,12 @@ import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
 import io.github.izakyl.folkways.front.engine.net.SetBookGesturePacket;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -38,6 +42,28 @@ final class OverheadScreen extends Screen {
     private Laid laid;
     private enum Drag { NONE, BLOCKED, LEGACY, PAN, ORBIT }
     private Drag middleDrag = Drag.NONE;
+    private final Map<Integer, OverheadTools.Handler> toolDrags = new HashMap<>();
+    private final Set<Integer> cancelledButtons = new HashSet<>();
+    private final Set<Integer> toolKeys = new HashSet<>();
+    private long toolRevision = OverheadTools.selectionRevision();
+
+    private Optional<OverheadTools.Handler> handler() {
+        if (toolRevision != OverheadTools.selectionRevision()) {
+            cancelToolDrags();
+            toolRevision = OverheadTools.selectionRevision();
+        }
+        if (minecraft.screen != this || HeldPlacement.holding()) {
+            cancelToolDrags();
+            return Optional.empty();
+        }
+        return OverheadTools.selectedHandler();
+    }
+
+    private void cancelToolDrags() {
+        toolDrags.values().stream().distinct().forEach(OverheadTools.Handler::cancelPointer);
+        cancelledButtons.addAll(toolDrags.keySet());
+        toolDrags.clear();
+    }
 
     /** A gesture keeps the camera profile it started with until its middle button is released. */
     Optional<Boolean> dragTacticalControls() {
@@ -180,6 +206,8 @@ final class OverheadScreen extends Screen {
         Overhead.fly(minecraft, (now - lastFrameMs) / 1000.0D);
         lastFrameMs = now;
 
+        handler().ifPresent(handler -> handler.render(graphics, mouseX, mouseY, partialTick));
+
         status().ifPresent(status -> {
             int textWidth = font.width(status);
             int left = (width - textWidth) / 2;
@@ -213,7 +241,11 @@ final class OverheadScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        handler();
+        cancelledButtons.remove(button);
         if (button == InputConstants.MOUSE_BUTTON_MIDDLE) {
+            // Camera gestures replace a tool's unfinished pointer gesture, whichever button began first.
+            cancelToolDrags();
             // Ownership is decided at press, not by whichever modifier happens to be held on a later frame.
             middleDrag = !Overhead.tacticalControls() ? Drag.LEGACY : overButton(mouseX, mouseY) ? Drag.BLOCKED
                 : hasAltDown() ? Drag.ORBIT : Drag.PAN;
@@ -228,6 +260,17 @@ final class OverheadScreen extends Screen {
             setFocused(null);
             return taken;
         }
+        if (button != InputConstants.MOUSE_BUTTON_MIDDLE) {
+            Optional<OverheadTools.Handler> handler = handler();
+            if (middleDrag != Drag.NONE && handler.isPresent()) {
+                cancelledButtons.add(button);
+                return true;
+            }
+            if (handler.isPresent() && handler.get().mouseClicked(mouseX, mouseY, button)) {
+                toolDrags.put(button, handler.get());
+                return true;
+            }
+        }
         return switch (button) {
             case InputConstants.MOUSE_BUTTON_LEFT -> FolkwaysClientGameEvents.click(minecraft);
             case InputConstants.MOUSE_BUTTON_RIGHT -> FolkwaysClientGameEvents.use(minecraft);
@@ -237,7 +280,14 @@ final class OverheadScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        handler();
+        if (cancelledButtons.contains(button)) { return true; }
         if (button != InputConstants.MOUSE_BUTTON_MIDDLE) {
+            OverheadTools.Handler owner = toolDrags.get(button);
+            if (owner != null && handler().filter(active -> active == owner).isPresent()) {
+                owner.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+                return true;
+            }
             return false;
         }
         switch (middleDrag) {
@@ -251,7 +301,16 @@ final class OverheadScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        handler();
         if (button == InputConstants.MOUSE_BUTTON_MIDDLE) { middleDrag = Drag.NONE; }
+        if (cancelledButtons.remove(button)) { return true; }
+        OverheadTools.Handler owner = toolDrags.remove(button);
+        if (owner != null) {
+            if (handler().filter(active -> active == owner).isPresent()) {
+                owner.mouseReleased(mouseX, mouseY, button);
+            }
+            return true;
+        }
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
@@ -269,6 +328,11 @@ final class OverheadScreen extends Screen {
      */
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (toolKeys.contains(keyCode)) { return true; }
+        if (getFocused() == null && handler().filter(handler -> handler.keyPressed(keyCode, scanCode, modifiers)).isPresent()) {
+            toolKeys.add(keyCode);
+            return true;
+        }
         switch (keyCode) {
             case InputConstants.KEY_TAB -> {
                 OverheadTools.deselect();
@@ -294,8 +358,23 @@ final class OverheadScreen extends Screen {
     }
 
     @Override
+    public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        if (toolKeys.remove(keyCode)) { return true; }
+        return super.keyReleased(keyCode, scanCode, modifiers);
+    }
+
+    @Override
     public void onClose() {
         Overhead.leave(minecraft);
+    }
+
+    @Override
+    public void removed() {
+        OverheadTools.selectedHandler().ifPresent(OverheadTools.Handler::cancel);
+        toolDrags.clear();
+        cancelledButtons.clear();
+        toolKeys.clear();
+        super.removed();
     }
 
     @Override
