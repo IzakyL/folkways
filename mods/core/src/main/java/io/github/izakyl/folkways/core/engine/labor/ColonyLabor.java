@@ -248,7 +248,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     }
 
     private void answer(ServerLevel level, Map<UUID, Body> present) {
-        if (survey.answer(level, colony, present, body -> kits.read(colony.works(), body, inbox::raise))) {
+        if (survey.answer(level, colony, present, (body, supply) -> kits.read(colony.works(), body, supply, inbox::raise))) {
             inbox.raise(Message.ANSWERED);
         }
         waysAnswered |= ColonyWays.answered(colony, level);
