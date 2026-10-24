@@ -249,7 +249,7 @@ final class Readout {
         return tally.toString();
     }
 
-    private static String name(Why why) {
+    static String name(Why why) {
         return switch (why) {
             case Why.Turned turned -> "TURNED:" + named(turned.why());
             case Why.Cooling ignored -> "COOLING";

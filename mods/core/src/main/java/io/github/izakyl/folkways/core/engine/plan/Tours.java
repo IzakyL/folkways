@@ -91,6 +91,10 @@ final class Tours {
     // The ways this schedule has asked to be found: weighing hands asks for none, so each is asked for once.
     private final Set<Route> sought = new HashSet<>();
     private int tries;
+    private final int improvementLimit;
+    private RefinementBudget improvement;
+    private long improvementWork;
+    private boolean limited;
     // Orders that looked shorter by straight lines but were not once laid out for real, so later schedules do
     // not ask for the same ways again.
     private final Set<List<UUID>> declined = new HashSet<>();
@@ -163,8 +167,20 @@ final class Tours {
     }
 
     Tours(int horizon, int depth) {
+        this(horizon, depth, RefinementBudget.WORK);
+    }
+
+    Tours(int horizon, int depth, int improvementLimit) {
         this.horizon = horizon;
         this.depth = depth;
+        this.improvementLimit = improvementLimit;
+    }
+
+    long improvementWork() { return improvementWork; }
+    boolean limited() { return limited; }
+
+    private void improving(long work) {
+        if (improvement != null) improvement.spend(work);
     }
 
     int horizon() {
@@ -186,6 +202,8 @@ final class Tours {
         fits.clear();
         laidNow.clear();
         beyondTried = 0;
+        limited = false;
+        improvementWork = 0;
         this.retry = retry;
         index(crew);
 
@@ -611,6 +629,7 @@ final class Tours {
         boolean grouped = continuing(id);
         int beyond = Integer.MAX_VALUE;
         for (Candidate candidate : candidates) {
+            improving(1);
             if (best != null && candidate.bound() >= bestCost) {
                 break;
             }
@@ -741,6 +760,7 @@ final class Tours {
             }
             int head = !seat.route.isEmpty() && seat.hand.id().equals(heldBy.get(seat.route.getFirst())) ? 1 : 0;
             for (int at = seat.route.size() - 1; at >= head; at--) {
+                improving(1);
                 if (endless(seat, at) || !fitsWith(seat, id, carried, at)) {
                     continue;
                 }
@@ -910,6 +930,7 @@ final class Tours {
 
     // Whether the seat's pack holds its route with `id` put in at `at`, counted from what the hand carries now.
     private boolean fitsWith(Seat seat, UUID id, List<Amount> carried, int at) {
+        improving(1L + seat.route.size());
         List<List<Amount>> order = new ArrayList<>(seat.route.size() + 1);
         for (int step = 0; step < seat.route.size(); step++) {
             if (step == at) {
@@ -945,6 +966,7 @@ final class Tours {
         WorldPos first = goals.isEmpty() ? null : goals.getFirst();
         List<Candidate> candidates = new ArrayList<>();
         for (Seat seat : seats) {
+            improving(1);
             if (mustBe != null && !mustBe.equals(seat.hand.id())) {
                 continue;
             }
@@ -1134,23 +1156,82 @@ final class Tours {
     // else, or move a short run of work to another place on its own route, which is how a worker stops walking
     // back and forth between the same two places.
     private void improve(List<Seat> seats) {
+        Layout original = new Layout(seats);
+        improvement = new RefinementBudget(improvementLimit, System::nanoTime,
+            FolkwaysConfig.mode() == FolkwaysConfig.Mode.SINGLE_THREAD ? Long.MAX_VALUE : RefinementBudget.NANOS);
         Set<Seat> present = new HashSet<>(seats);
         tries = 0;
         boolean better = true;
-        while (better && tries < MOST_TRIES) {
-            better = shed(seats);
-            for (Seat seat : List.copyOf(changed)) {
-                while (present.contains(seat) && tries < MOST_TRIES && reorder(seats, seat)) {
-                    better = true;
+        try {
+            while (better && tries < MOST_TRIES) {
+                improving(1);
+                better = shed(seats);
+                for (Seat seat : List.copyOf(changed)) {
+                    while (present.contains(seat) && tries < MOST_TRIES && reorder(seats, seat)) {
+                        better = true;
+                    }
                 }
             }
+        } catch (RefinementBudget.Exhausted exhausted) {
+            // A limit may be reached in the middle of a trial. Publish the valid initial assignment, never the
+            // partly moved layout; its work still reaches the residents even when refinement cannot finish.
+            original.restore();
+            limited = true;
+        } finally {
+            improvementWork = improvement.spent();
+            improvement = null;
         }
     }
+
+    private final class Layout {
+        private final Map<Seat, RouteState> routes = new LinkedHashMap<>();
+        private final Map<UUID, Placed> wasSettled = new LinkedHashMap<>(settled);
+        private final Map<UUID, UUID> wasSeatOf = new LinkedHashMap<>(seatOf);
+        private final Map<Stand, List<Span>> wasSpots = new LinkedHashMap<>();
+        private final Set<Seat> wasChanged = new HashSet<>(changed);
+
+        Layout(List<Seat> seats) {
+            for (Seat seat : seats) {
+                routes.put(seat, new RouteState(List.copyOf(seat.route), List.copyOf(seat.when), seat.cursor,
+                    seat.clock, seat.base, seat.held, seat.endless, Map.copyOf(seat.stood)));
+            }
+            spots.forEach((stand, spans) -> wasSpots.put(stand, List.copyOf(spans)));
+        }
+
+        void restore() {
+            // Restore in linear time, without performing more searches or trying to repair a partial trial.
+            routes.forEach((seat, route) -> {
+                seat.route.clear();
+                seat.route.addAll(route.route());
+                seat.when.clear();
+                seat.when.addAll(route.when());
+                seat.cursor = route.cursor();
+                seat.clock = route.clock();
+                seat.base = route.base();
+                seat.held = route.held();
+                seat.endless = route.endless();
+                seat.stood.clear();
+                seat.stood.putAll(route.stood());
+            });
+            settled.clear();
+            settled.putAll(wasSettled);
+            seatOf.clear();
+            seatOf.putAll(wasSeatOf);
+            spots.clear();
+            wasSpots.forEach((stand, spans) -> spots.put(stand, new ArrayList<>(spans)));
+            changed.clear();
+            changed.addAll(wasChanged);
+        }
+    }
+
+    private record RouteState(List<UUID> route, List<Placed> when, WorldPos cursor, int clock, int base,
+                              Map<ItemSpec, Long> held, int endless, Map<WorldPos, Integer> stood) { }
 
     // Hand work from the end of the longest route to someone else, until no such move ends the plan sooner.
     private boolean shed(List<Seat> seats) {
         boolean better = false;
         for (int moves = 0; moves < MOST_SHEDS; moves++) {
+            improving(1);
             Seat longest = longest(seats);
             if (longest == null || longest.route.size() < 2 || !shedFrom(seats, longest)) {
                 return better;
@@ -1174,6 +1255,7 @@ final class Tours {
         Set<UUID> tried = new HashSet<>();
         int looked = 0;
         for (int at = longest.route.size() - 1; at >= head && looked < SHED_LOOKS; at--) {
+            improving(1L + longest.route.size());
             UUID last = longest.route.get(at);
             if (tried.contains(last)) {
                 continue;
@@ -1191,31 +1273,25 @@ final class Tours {
             if (from < head || !movable(moving) || !takenBySomeone(moving, others)) {
                 continue;
             }
-            List<UUID> oldIds = List.copyOf(longest.route.subList(from, longest.route.size()));
-            List<Placed> oldPlaced = List.copyOf(longest.when.subList(from, longest.when.size()));
-            strip(longest, from);
-            List<UUID> staying = new ArrayList<>(oldIds);
-            staying.removeAll(moving);
-            boolean laid = lay(seats, longest, staying).isPresent();
-            for (UUID id : moving) {
-                if (!laid) {
-                    break;
+            improving(1L + settled.size());
+            Layout before = new Layout(seats);
+            boolean kept = false;
+            try {
+                List<UUID> staying = new ArrayList<>(longest.route.subList(from, longest.route.size()));
+                staying.removeAll(moving);
+                strip(longest, from);
+                boolean laid = lay(seats, longest, staying).isPresent();
+                for (UUID id : moving) {
+                    if (!laid) break;
+                    place(id, others, true);
+                    laid = settled.containsKey(id);
                 }
-                place(id, others, true);
-                laid = settled.containsKey(id);
-            }
-            if (laid && score(seats).beats(was)) {
-                return true;
-            }
-            for (UUID id : moving) {
-                UUID took = seatOf.get(id);
-                if (took != null && !took.equals(longest.hand.id())) {
-                    unsettle(this.seats.get(took), id);
+                if (laid && score(seats).beats(was)) {
+                    kept = true;
+                    return true;
                 }
-            }
-            strip(longest, from);
-            for (int back = 0; back < oldIds.size(); back++) {
-                settle(longest, oldIds.get(back), oldPlaced.get(back));
+            } finally {
+                if (!kept) before.restore();
             }
         }
         return false;
@@ -1260,6 +1336,7 @@ final class Tours {
         for (int length = 1; length <= LONGEST_RUN; length++) {
             for (int from = head; from + length <= size; from++) {
                 for (int to = head; to + length <= size; to++) {
+                    improving(1);
                     if (to == from) {
                         continue;
                     }
@@ -1373,6 +1450,7 @@ final class Tours {
     }
 
     private boolean refit(Seat seat, UUID id) {
+        improving(1);
         Vertex node = fixed(id);
         for (UUID predecessor : weave.before(id)) {
             if (!settled.containsKey(predecessor)) {

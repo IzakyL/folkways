@@ -40,7 +40,7 @@ public final class Scheduler {
         }
     }
 
-    public record Timing(long applyNanos, long scheduleNanos) {
+    public record Timing(long applyNanos, long scheduleNanos, long improvementWork, boolean limited) {
     }
 
     // The routes that changed, by resident (an empty route where one ended), the work left unassigned and why,
@@ -68,7 +68,7 @@ public final class Scheduler {
         long applied = System.nanoTime();
         if (ways == null) {
             return new Scheduled(Map.of(), List.of(), false, Long.MAX_VALUE, Map.of(),
-                new Timing(applied - started, 0), tick);
+                new Timing(applied - started, 0, 0, false), tick);
         }
         Schedule schedule;
         try {
@@ -98,7 +98,7 @@ public final class Scheduler {
             hands |= CREW_COULD_ANSWER.contains(nobody.why());
         }
         return new Scheduled(changed, schedule.unassigned(), hands, tours.wakeAt(), laid,
-            new Timing(applied - started, System.nanoTime() - applied), tick);
+            new Timing(applied - started, System.nanoTime() - applied, tours.improvementWork(), tours.limited()), tick);
     }
 
     public int size() {
