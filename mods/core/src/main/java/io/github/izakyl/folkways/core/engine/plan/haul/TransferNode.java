@@ -17,8 +17,10 @@ import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkGesture;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.WorkProtection;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Xp;
+import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import io.github.izakyl.folkways.core.engine.plan.Manifest;
 import io.github.izakyl.folkways.core.engine.plan.Staged;
 import io.github.izakyl.folkways.core.engine.plan.Stores;
@@ -156,6 +158,7 @@ public final class TransferNode implements Node, Staged {
         return handed && to instanceof Endpoint.Store(Stash stash) ? Optional.of(stash) : Optional.empty();
     }
     @Override public NodeSpec spec() { return spec; }
+    @Override public boolean editsBlocks() { return false; }
     @Override public boolean replannable() { return true; }
 
     // Taking from, or putting into, the same store as the transfer just done is one reach.
@@ -196,12 +199,20 @@ public final class TransferNode implements Node, Staged {
         };
     }
 
+    private boolean permitted(ServerLevel level, Worker who) {
+        return (!(from instanceof Endpoint.Store store) || WorkProtection.interact(level, who, store.stash().pos()))
+            && (!(to instanceof Endpoint.Store target) || WorkProtection.interact(level, who, target.stash().pos()));
+    }
+
     // The core lifts the planned goods out of the source; all of them or none.
     @Override
     public Drawn draw(ServerLevel level, Worker who) {
         if (from instanceof Endpoint.Store store
                 && !StoreRule.takes(Stores.rulesAt(store.stash().pos()))) {
             return new Short(HaulRefusal.NOTHING_TO_TAKE);
+        }
+        if (!permitted(level, who)) {
+            return new Short(LaborRefusal.PROTECTED);
         }
         List<ItemStack> goods = cargo.exact();
         List<Need> produced = cargo.pending();
@@ -259,6 +270,9 @@ public final class TransferNode implements Node, Staged {
         if (!directed && to instanceof Endpoint.Store store
                 && !StoreRule.stores(Stores.rulesAt(store.stash().pos()))) {
             return Outcome.failed(HaulRefusal.NO_ROOM);
+        }
+        if (!permitted(level, who)) {
+            return Outcome.failed(LaborRefusal.PROTECTED);
         }
         Container destination = inventory(to, level, who).orElse(null);
         if (destination == null) {

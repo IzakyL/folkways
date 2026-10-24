@@ -410,3 +410,15 @@ kaleidoscope_cookery = { target = ["server", "client"] }
 folkways_cookery = { target = ["server", "client"] }
 kaleidoscope_cookery = { target = ["server", "client"] }
 kaleidoscope_tavern = { target = ["server", "client"] }
+
+# Core protection bridge; opt in with the claims compatibility profile.
+[mods.ftbchunks]
+url = "https://maven.ftb.dev/releases/dev/ftb/mods/ftb-chunks-neoforge/2101.1.22/ftb-chunks-neoforge-2101.1.22.jar"
+sha512 = "6589c6f9efb86b0f50963143a9c3c5647aeded698825189494455013441bae7973c1b83f95fce35d3f0b5239a8afd153c8b55ce4a3a6b21fd5d44ae47cecb2d8"
+target = []
+
+[profile.compatibility.mods]
+ftbchunks = { target = ["server", "client"] }
+ftbteams = { target = ["server", "client"] }
+ftblibrary = { target = ["server", "client"] }
+architectury = { target = ["server", "client"] }

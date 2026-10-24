@@ -34,6 +34,11 @@ final class SleepAction implements Node {
     }
 
     @Override
+    public boolean editsBlocks() {
+        return false;
+    }
+
+    @Override
     public NodeSpec spec() {
         return spec;
     }

@@ -7,6 +7,7 @@ public enum LaborRefusal implements RefusalKind {
 
     NO_WAY_THERE,
     WORK_BROKE,
+    PROTECTED,
     NOWHERE_TO_PUT_IT,
     GOODS_GONE,
     WAITS_ON_ITSELF,

@@ -11,6 +11,11 @@ public interface Node {
 
     NodeSpec spec();
 
+    /** Whether this work changes blocks, as opposed to interacting with an inventory or entity. */
+    default boolean editsBlocks() {
+        return true;
+    }
+
     default Doing.Wares wares() {
         return spec().wares();
     }

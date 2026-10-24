@@ -120,3 +120,9 @@ CI 也会运行 `npm run format:md:check`。
 同步更新英文和中文版，界面名称以游戏语言文件为准，命令、路径和 Java 符号保持原文。
 详细玩法、自定义内容、测试与架构说明放入 `docs/en/` 和 `docs/zh-CN/`。
 目录和维护说明见[文档索引](docs/README.md)。
+
+### FTB Chunks 领地保护
+
+修改世界之前，核心以殖民地创始人的 UUID 作为目标维度中的自动化身份，检查工作地点、实体和仓库存取。建造、农业和地基工作还会逐格检查受影响的方块，流体改动单独检查。大箱子需要两半都有权限，Sable 位置会换算为世界坐标。装有 FTB Chunks 时，找不到创始人或无法解析位置一律拒绝；未安装时不加载桥接代码。
+
+先运行 `npm run setup`，再用 `./gradlew runGameTestServer` 跑不含 FTB Chunks 的常规测试，然后用 `./gradlew -PftbCompat runGameTestServer` 跑加载固定版本 FTB 模组的独立 `folkways_compat` 测试。手动检查可用 Blockwright 的 `compatibility` 配置，它会安装同样的 FTB 依赖。

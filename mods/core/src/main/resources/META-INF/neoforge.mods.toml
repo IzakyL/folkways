@@ -81,6 +81,14 @@ versionRange = "[4.5,)"
 ordering = "AFTER"
 side = "CLIENT"
 
+[[dependencies.${mod_id}]]
+modId = "ftbchunks"
+type = "optional"
+reason = "Residents respect claimed chunks using the colony founder's automation permissions."
+versionRange = "[2101.1.22,)"
+ordering = "AFTER"
+side = "BOTH"
+
 [[mixins]]
 config = "folkways.mixins.json"
 

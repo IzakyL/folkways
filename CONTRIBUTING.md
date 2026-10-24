@@ -144,3 +144,17 @@ Update English and Chinese pages together. Use the game's locale catalogs for UI
 names and keep commands, paths and Java symbols literal. Put detailed gameplay,
 content, testing and architecture material under `docs/en/` and `docs/zh-CN/`.
 See the [documentation index](docs/README.md) for the layout and maintenance notes.
+
+### FTB Chunks protection
+
+Core checks work sites, entities and storage access before mutation using the
+colony founder’s UUID as an automation actor in the target dimension. Building,
+farming and groundwork also check each affected cell; fluid edits have their own
+check. Double chests require access to both halves, and Sable positions are mapped
+to world coordinates. Missing founders or unresolved positions fail closed while
+FTB Chunks is installed. Without FTB Chunks, the bridge stays unloaded.
+
+After `npm run setup`, run `./gradlew runGameTestServer` for the ordinary suite
+without FTB Chunks, then `./gradlew -PftbCompat runGameTestServer` for the isolated
+`folkways_compat` suite with the pinned FTB mods loaded. Blockwright’s
+`compatibility` profile installs the same FTB dependencies for manual checks.
