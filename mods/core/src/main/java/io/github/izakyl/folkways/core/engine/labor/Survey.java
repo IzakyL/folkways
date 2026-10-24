@@ -92,6 +92,7 @@ final class Survey {
 
     private final Map<Stash, Refusal> refusals = new HashMap<>();
     private final Map<UUID, Crew.Hand> hands = new LinkedHashMap<>();
+    private Set<UUID> reserved = Set.of();
     private final Map<UUID, Long> licencesRead = new HashMap<>();
     private final Map<UUID, List<Equipment.Demand>> equipmentRead = new HashMap<>();
     private final Map<UUID, Boolean> suppliesRead = new HashMap<>();
@@ -124,6 +125,12 @@ final class Survey {
 
     void read(UUID resident) {
         handsOf.add(resident);
+    }
+
+    void reserved(Set<UUID> next) {
+        for (UUID id : reserved) { if (!next.contains(id)) { handsOf.add(id); } }
+        for (UUID id : next) { if (!reserved.contains(id)) { handsOf.add(id); } }
+        reserved = Set.copyOf(next);
     }
 
     void forget(UUID resident) {
@@ -351,6 +358,10 @@ final class Survey {
     }
 
     private boolean readHand(ColonyData colony, Body body, UUID resident, BiConsumer<Body, Boolean> seen) {
+        if (body != null && reserved.contains(resident)) {
+            seen.accept(body, false);
+            return hands.remove(resident) != null;
+        }
         if (body == null) {
             licencesRead.remove(resident);
             equipmentRead.remove(resident);

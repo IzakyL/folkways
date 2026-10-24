@@ -40,7 +40,7 @@ final class Urges {
         cooling.values().removeIf(until -> until <= now);
         Urge best = null;
         for (Urge urge : offered) {
-            if (quiet(urge.id(), now) || !available.test(urge)) {
+            if (urge.reservation() || quiet(urge.id(), now) || !available.test(urge)) {
                 continue;
             }
             if (best == null || urge.outranks(best)) {

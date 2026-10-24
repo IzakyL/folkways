@@ -205,11 +205,15 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         }
         runners.away(this, present.keySet(), colony.holdings().carriedOff(), level.getGameTime());
         ColonyView view = present.isEmpty() ? null : ColonySnapshot.of(colony, level);
+        Set<UUID> reserved = new LinkedHashSet<>();
         for (Body body : present.values()) {
             BodyRunner runner = runners.of(body.id());
-            interrupt(level, view, body, runner);
-            runner.tick(this, level, body);
+            boolean controlled = interrupt(level, view, body, runner);
+            if (controlled) { reserved.add(body.id()); }
+            // Personal needs and commands still execute; an idle reserved body cannot claim a planned node.
+            if (!controlled || runner.executing()) { runner.tick(this, level, body); }
         }
+        survey.reserved(reserved);
         answer(level, present);
         for (int round = 0; round < MOST_ROUNDS && !pipeline.weaving() && inbox.any(); round++) {
             plan(level);
@@ -301,9 +305,14 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         }
     }
 
-    private void interrupt(ServerLevel level, ColonyView view, Body body, BodyRunner runner) {
+    private boolean interrupt(ServerLevel level, ColonyView view, Body body, BodyRunner runner) {
         Worker who = hands(body, Placement.NOWHERE);
         List<Urge> offered = urges.offered(colony, view, body, who);
+        boolean reserved = offered.stream().anyMatch(Urge::reservation);
+        if (reserved && runner.inHand().isPresent()) {
+            // Use the normal release path, including continuous pieces, gestures, tools and input reservations.
+            runner.letGo(this, level, body, "controller-reservation");
+        }
         Optional<Urge> current = runner.ownUrge().flatMap(id -> offered.stream()
             .filter(urge -> urge.id().equals(id)).findFirst());
         if (runner.ownBusiness() && current.isEmpty()) {
@@ -314,7 +323,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
                 && (!runner.executing() || urge.preempts()
                     && current.map(urge::outranks).orElse(true)));
         if (keenest.isEmpty()) {
-            return;
+            return reserved;
         }
         Node doing;
         try {
@@ -322,7 +331,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         } catch (RuntimeException | LinkageError broken) {
             Labor.LOGGER.error("urge {} threw asking for its work", keenest.get().id(), broken);
             urges.refused(keenest.get().id(), LaborRefusal.WORK_BROKE, level.getGameTime());
-            return;
+            return reserved;
         }
         personal.entered(doing, level);
         try {
@@ -334,11 +343,12 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             personal.failure(doing.id()).ifPresent(why -> urgeRefused(keenest.get().id(), why, level.getGameTime()));
             personal.cancelled(doing.id());
             personal.forget(doing.id());
-            return;
+            return reserved;
         }
         runner.letGo(this, level, body, "urge-preempts");
         personalRequests.put(doing.id(), new Personal(body.id(), keenest.get().id()));
         runner.offer(this, level, body, keenest.get(), doing);
+        return reserved;
     }
 
     // What the weave changed, applied: work that went or was grown afresh is let go of and ends as the plan says,
