@@ -17,6 +17,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -206,6 +207,24 @@ public final class SurveyGameTests {
             + asked);
         asked = cellsOf(new Survey(level, box).weed(Survey.weeds(true, true)));
         helper.assertTrue(asked.equals(Set.of(grass, poppy, sunflower)), "the grass and the flowers, got " + asked);
+        helper.succeed();
+    }
+
+    // Snow is no weed or flower: it stays when weeding and does not hold up a fill above it.
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void snowIsLeftByWeedingAndAllowsFillAbove(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
+        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.STONE);
+        for (int layers = 1; layers <= 8; layers++) {
+            BlockState snow = Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, layers);
+            place(level, origin, snow);
+            helper.assertFalse(Survey.weeds(true, true).test(snow), "snow is not selected as a weed");
+            helper.assertTrue(new Survey(level, Set.of(origin)).weed(Survey.weeds(true, true)).isEmpty(),
+                "weeding leaves the snow, " + layers + " layers");
+            helper.assertTrue(cellsOf(new Survey(level, Set.of(origin.above())).fill())
+                .equals(Set.of(origin.above())), "a fill offers the cell above snow, " + layers + " layers");
+        }
         helper.succeed();
     }
 

@@ -30,14 +30,18 @@ final class Tillage {
     static final TagKey<Block> FLOWERS = tag("flowers");
     static final TagKey<Block> TILLABLE_UNDER_WEEDS = tag("tillable_under_weeds");
 
-    // Snow is cleared for tilling regardless of which plants a plot keeps.
-    // Flowers are often planted on purpose, so each is the plot's own choice.
+    // What a plot lets its residents pull up: flowers are often planted on purpose, so each is the plot's own choice.
     record Clearing(boolean grass, boolean flowers) {
 
         static final Clearing ALL = new Clearing(true, true);
 
         boolean clears(BlockState state) {
-            return state.is(Blocks.SNOW) || grass && state.is(WEEDS) || flowers && state.is(FLOWERS);
+            return grass && state.is(WEEDS) || flowers && state.is(FLOWERS);
+        }
+
+        // Snow is cleared for tilling regardless of which plants a plot keeps.
+        boolean clearsForTilling(BlockState state) {
+            return state.is(Blocks.SNOW) || clears(state);
         }
     }
 
@@ -49,8 +53,8 @@ final class Tillage {
             return true;
         }
         // The work clears what is in the way and asks the hoe again before turning the soil.
-        return clearing.clears(level.getBlockState(ground.above())) && hoe.canPerformAction(ItemAbilities.HOE_TILL)
-            && state.is(TILLABLE_UNDER_WEEDS);
+        return clearing.clearsForTilling(level.getBlockState(ground.above()))
+            && hoe.canPerformAction(ItemAbilities.HOE_TILL) && state.is(TILLABLE_UNDER_WEEDS);
     }
 
     static Optional<BlockState> tilled(Level level, BlockPos ground, BlockState state, ItemStack hoe) {
