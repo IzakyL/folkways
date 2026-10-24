@@ -479,7 +479,7 @@
   "folkways.ponder.groundwork.text_2": "Clear takes out every block in the box, from the top down, and only in the box: mark it as deep as you mean to dig. Builders do it, with the tool each block wants, and leave the colony's own blocks alone.",
   "folkways.ponder.groundwork.text_3": "Fill lays the block chosen in its settings into every open cell, from the bottom up, brought from the colony's stores.",
   "folkways.ponder.groundwork.text_4": "Weed pulls the grass and ferns in the box. Flowers are pulled only with Pull flowers ticked, and a fill never buries one. Farmers do it.",
-  "folkways.ponder.groundwork.text_5": "Fell takes down every tree whose trunk stands in the box, its leaves with it. A log with no leaves of its own, in a wall or a beam, is left standing.",
+  "folkways.ponder.groundwork.text_5": "Fell takes down trees whose trunks stand in the box, leaves and all. It also clears horizontal logs resting on the ground away from trees, with their moss and other small plants. Colony building blocks stay.",
   "folkways.ponder.groundwork.text_6": "Haul has the haulers pick up whatever lies loose in the box and carry it off to the colony's stores.",
   "folkways.ponder.golems.header": "Golems: put your Modular Golems to work",
   "folkways.ponder.golems.text_1": "With the book on pointing, left click a Modular Golem you own. It joins the colony as a resident; click it again and it leaves.",

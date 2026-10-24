@@ -91,7 +91,7 @@ public final class GroundworkScene {
         Selection tree = util.select().fromTo(4, 1, 4, 8, 6, 8);
         scene.overlay().showOutline(PonderPalette.OUTPUT, "fell", util.select().fromTo(5, 1, 5, 7, 1, 7), 90);
         scene.overlay().showText(90)
-            .text("Fell takes down every tree whose trunk stands in the box, its leaves with it. A log with no leaves of its own, in a wall or a beam, is left standing.")
+            .text("Fell takes down trees whose trunks stand in the box, leaves and all. It also clears horizontal logs resting on the ground away from trees, with their moss and other small plants. Colony building blocks stay.")
             .colored(PonderPalette.OUTPUT)
             .pointAt(util.vector().topOf(trunk.below()))
             .placeNearTarget()
