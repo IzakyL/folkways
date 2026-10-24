@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -32,14 +33,18 @@ public sealed interface Skin {
 
     record Cleared() implements Skin {}
 
-    record Stamped(Map<BlockPos, BlockState> cells, List<Swap> swaps) implements Skin {
+    record Stamped(Map<BlockPos, BlockState> cells, List<Swap> swaps, Map<BlockPos, StructurePayload> payloads) implements Skin {
 
         public Stamped {
             cells = Map.copyOf(cells);
             swaps = List.copyOf(swaps);
+            payloads = Map.copyOf(payloads);
             if (cells.isEmpty()) {
                 throw new IllegalArgumentException("a stamp of no cells builds nothing");
             }
+        }
+        public Stamped(Map<BlockPos, BlockState> cells, List<Swap> swaps) {
+            this(cells, swaps, Map.of());
         }
     }
 

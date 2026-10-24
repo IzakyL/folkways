@@ -93,6 +93,7 @@ public final class BlueprintBook {
     /** The blueprint as its target: one filed before targets were resolved this way is resolved now, once. */
     Optional<Blueprint> target(ServerLevel level, UUID id) {
         Blueprint found = blueprints.get(id);
+        if (found != null) found.compatible();
         if (found == null || found.confirmed()) {
             return Optional.ofNullable(found);
         }

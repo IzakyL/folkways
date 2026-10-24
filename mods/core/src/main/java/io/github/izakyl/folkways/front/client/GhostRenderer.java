@@ -12,6 +12,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.logging.LogUtils;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.front.api.Ghost;
+import io.github.izakyl.folkways.front.api.StructureModels;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -164,7 +165,9 @@ final class GhostRenderer {
             }
         }
 
-        GhostView view = new GhostView(level, modelled);
+        Map<BlockPos, Ghost> payloads = new HashMap<>();
+        ghosts.forEach(ghost -> payloads.put(ghost.pos(), ghost));
+        GhostView view = new GhostView(level, modelled, payloads);
         for (List<BlockPos> cells : frames.values()) {
             mesh(view, cells);
         }
@@ -189,8 +192,15 @@ final class GhostRenderer {
                 // A modded model may expect a real level behind it; one that cannot mesh here is left out, as
                 // Create's schematic renderer leaves it out.
                 try {
-                    for (RenderType type : model.getRenderTypes(state, random, data)) {
-                        blocks.renderBatched(state, pos, view, poseStack, faded, true, random, data, type);
+                    Optional<Map<RenderType, BakedModel>> configured = StructureModels.of(view, view.payloads().get(pos));
+                    if (configured.isPresent()) {
+                        configured.get().forEach((type, built) -> blocks.getModelRenderer().tesselateBlock(view, built, state,
+                            pos, poseStack, faded, true, random, state.getSeed(pos),
+                            net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY, ModelData.EMPTY, type));
+                    } else {
+                        for (RenderType type : model.getRenderTypes(state, random, data)) {
+                            blocks.renderBatched(state, pos, view, poseStack, faded, true, random, data, type);
+                        }
                     }
                 } catch (RuntimeException failure) {
                     LOGGER.debug("Could not mesh the ghost of {} at {}", state, pos, failure);
@@ -236,7 +246,7 @@ final class GhostRenderer {
      * them. Light is full everywhere, as in Litematica's schematic world, so a ghost reads the same by day or
      * night; ambient occlusion still shades it where it meets solid blocks.
      */
-    private record GhostView(Level level, Map<BlockPos, BlockState> ghosts) implements BlockAndTintGetter {
+    private record GhostView(Level level, Map<BlockPos, BlockState> ghosts, Map<BlockPos, Ghost> payloads) implements BlockAndTintGetter {
 
         @Override
         public BlockState getBlockState(BlockPos pos) {

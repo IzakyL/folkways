@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.core.api.colony.Cadence;
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
@@ -84,6 +85,8 @@ final class BuildPresence implements Facing {
     private final Map<UUID, TemporaryScaffolds> temporary = new LinkedHashMap<>();
     private final Set<UUID> cancelled = new LinkedHashSet<>();
     private final Map<UUID, BuildSite> sites = new LinkedHashMap<>();
+    private final Map<UUID, Component> payloadFailures = new LinkedHashMap<>();
+    private final Map<UUID, Long> payloadRetryAt = new LinkedHashMap<>();
     private final Map<UUID, Growing> growing = new LinkedHashMap<>();
     // Growing sites whose next round is being drawn now.
     private final Set<UUID> drawing = new HashSet<>();
@@ -446,7 +449,26 @@ final class BuildPresence implements Facing {
     // loaded would stay refused for good. Until then it is tried again each tick.
     @Nullable
     private BuildSite open(ServerLevel level, BlueprintBuildOrder order) {
-        Optional<Blueprint> drawing = book.target(level, order.blueprintId());
+        if (!cancelled.contains(order.id()) && level.getGameTime() < payloadRetryAt.getOrDefault(order.id(), 0L)) return null;
+        try {
+            BuildSite opened = openCompatible(level, order);
+            payloadFailures.remove(order.id());
+            payloadRetryAt.remove(order.id());
+            return opened;
+        } catch (StructureCompat.Failure failed) {
+            BuildSite partial = sites.remove(order.id());
+            if (partial != null) partial.close();
+            untallied.remove(order.id());
+            owed.remove(order.id());
+            payloadFailures.put(order.id(), failed.component());
+            payloadRetryAt.put(order.id(), level.getGameTime() + RETRY_TICKS);
+            return null;
+        }
+    }
+
+    @Nullable
+    private BuildSite openCompatible(ServerLevel level, BlueprintBuildOrder order) {
+        Optional<Blueprint> drawing = cancelled.contains(order.id()) ? Optional.empty() : book.target(level, order.blueprintId());
         BuildTarget target = cancelled.contains(order.id()) || drawing.isEmpty()
             ? new BuildTarget(order.anchor().realm(), Map.of())
             : BuildTarget.of(order, drawing.get()).in(level);
@@ -528,6 +550,8 @@ final class BuildPresence implements Facing {
     }
 
     private void retire(UUID order) {
+        payloadFailures.remove(order);
+        payloadRetryAt.remove(order);
         owed.remove(order);
         met.remove(order);
         joined.remove(order);
@@ -638,7 +662,7 @@ final class BuildPresence implements Facing {
             Component.literal(order.name()),
             cancelled.contains(order.id())
                 ? Component.translatable("folkways.page.build.cleanup")
-                : detailOf(site),
+                : payloadFailures.getOrDefault(order.id(), detailOf(site)),
             List.of(new Board.Act.Ping(order.anchor().cell()),
                 new Board.Act.Do(BuildAct.cancelling(order.id()), "folkways.action.delete",
                     ResourceLocation.withDefaultNamespace("barrier"))));

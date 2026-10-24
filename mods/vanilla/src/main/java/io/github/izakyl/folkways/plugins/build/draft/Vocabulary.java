@@ -5,6 +5,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -756,7 +757,7 @@ public final class Vocabulary implements StarlarkValue {
         Vec3i size = found.size();
         List<Set<Integer>> slices = slicesOf(stretch, size.getX(), size.getY(), size.getZ());
         return slices.equals(found.stretch()) ? found
-            : shaped(() -> new Piece(found.cells(), size, slices));
+            : shaped(() -> new Piece(found.cells(), size, slices, found.payloads()));
     }
 
     private static List<Set<Integer>> slicesOf(Dict<?, ?> stretch, int width, int height, int depth)
@@ -862,6 +863,7 @@ public final class Vocabulary implements StarlarkValue {
             };
         }
         Map<BlockPos, BlockState> local = new LinkedHashMap<>();
+        Map<BlockPos, StructurePayload> payload = new LinkedHashMap<>();
         for (Map.Entry<BlockPos, BlockState> cell : chosen.cells().entrySet()) {
             BlockPos at = cell.getKey();
             int x = at.getX() + offset[0];
@@ -869,13 +871,15 @@ public final class Vocabulary implements StarlarkValue {
             int z = at.getZ() + offset[2];
             if (x >= 0 && x < room[0] && y >= 0 && y < room[1] && z >= 0 && z < room[2]) {
                 local.put(at, cell.getValue());
+                if (chosen.payloads().containsKey(at)) payload.put(at, chosen.payloads().get(at));
             }
         }
         if (local.isEmpty()) {
             throw Starlark.errorf("nothing of this piece lies inside the scope it was stamped into");
         }
-        Map<BlockPos, BlockState> cells = new Piece(local, new Vec3i(chosen.span(0), chosen.span(1), chosen.span(2)))
-            .laidInto(scope, offset);
+        Piece clipped = new Piece(local, chosen.size(), List.of(), payload);
+        Map<BlockPos, BlockState> cells = clipped.laidInto(scope, offset);
+        Map<BlockPos, StructurePayload> payloads = clipped.payloadsInto(scope, offset);
 
         List<Swap> swaps = new ArrayList<>();
         for (Map.Entry<?, ?> entry : swap.entrySet()) {
@@ -883,7 +887,7 @@ public final class Vocabulary implements StarlarkValue {
         }
         Set<BlockPos> filled = new LinkedHashSet<>(cells.keySet());
         return new Made(new Massing.Part(role, labelsOf(labels), shaped(() -> new Solid.Cells(filled)),
-            shaped(() -> new Skin.Stamped(cells, swaps)), overOf(over), role));
+            shaped(() -> new Skin.Stamped(cells, swaps, payloads)), overOf(over), role));
     }
 
     @StarlarkMethod(

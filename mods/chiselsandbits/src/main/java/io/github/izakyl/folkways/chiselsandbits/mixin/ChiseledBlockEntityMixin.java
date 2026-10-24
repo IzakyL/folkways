@@ -44,6 +44,16 @@ abstract class ChiseledBlockEntityMixin extends BlockEntity implements Schematic
         }
     }
 
+    @Inject(method = "rotate", at = @At("HEAD"), cancellable = true)
+    private void folkways$registryRotation(net.minecraft.core.Direction.Axis axis, int turns, CallbackInfo ci) {
+        if (getLevel() != null && CandBSchematicBridge.schematic(getLevel())) ci.cancel();
+    }
+
+    @Inject(method = "mirror", at = @At("HEAD"), cancellable = true)
+    private void folkways$registryMirror(net.minecraft.core.Direction.Axis axis, CallbackInfo ci) {
+        if (getLevel() != null && CandBSchematicBridge.schematic(getLevel())) ci.cancel();
+    }
+
     @Override
     public boolean folkways$valid() {
         return folkways$valid;

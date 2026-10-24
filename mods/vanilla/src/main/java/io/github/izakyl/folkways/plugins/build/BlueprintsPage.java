@@ -90,11 +90,13 @@ public final class BlueprintsPage implements Draw {
 
     // The blueprint the pointer is on: its name, how big it stands and how many blocks it takes, and whose it is.
     private static final class Side {
+        private Entry shown;
         private final UIElement element = new UIElement();
         private final Label named = Rows.text(Component.empty());
         private final Label size = Rows.note(Component.empty());
         private final Label blocks = Rows.note(Component.empty());
         private final Label whose = Rows.note(Component.empty());
+        private final Label materials = Rows.note(Component.empty());
 
         private Side() {
             element.layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
@@ -102,13 +104,14 @@ public final class BlueprintsPage implements Draw {
             Tokens.name(named, TOKEN + ".previewed");
             Tokens.name(size, TOKEN + ".size");
             Tokens.name(blocks, TOKEN + ".blocks");
-            element.addChildren(named, size, blocks, whose);
+            element.addChildren(named, size, blocks, whose, materials);
         }
 
         private void show(@Nullable Entry entry) {
-            if (entry == null) {
+            if (entry == null || entry.equals(shown)) {
                 return;
             }
+            shown = entry;
             named.setText(entry.name());
             Optional<CompoundTag> file = Optional.ofNullable(entry.file());
             Optional<int[]> stands = file.flatMap(Side::sizeOf);
@@ -117,6 +120,24 @@ public final class BlueprintsPage implements Draw {
             blocks.setText(file.<Component>map(tag -> Component.translatable(TOKEN + ".blocks", blocksOf(tag)))
                 .orElse(Component.empty()));
             whose.setText(Component.translatable("folkways.picker.root." + (entry.own() ? "own" : "shared")));
+            materials.setText(describe(entry));
+        }
+
+        private static Component describe(Entry entry) {
+            var level = net.minecraft.client.Minecraft.getInstance().level;
+            if (level == null || entry.file() == null) return Component.empty();
+            try {
+                var text = Component.empty();
+                for (Component line : BlueprintMaterials.describe(entry.file(), level.registryAccess())) {
+                    if (!text.getSiblings().isEmpty()) text.append("\n");
+                    text.append(line);
+                }
+                return text;
+            } catch (io.github.izakyl.folkways.core.api.structure.StructureCompat.Failure failed) {
+                return failed.component();
+            } catch (RuntimeException failed) {
+                return Component.translatable("folkways.refusal.build.micro_data_invalid");
+            }
         }
 
         private static Optional<int[]> sizeOf(CompoundTag file) {

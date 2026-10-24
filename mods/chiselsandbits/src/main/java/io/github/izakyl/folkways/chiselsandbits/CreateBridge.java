@@ -41,8 +41,18 @@ final class CreateBridge {
         var type = ModBlockEntityTypes.CHISELED.get();
         SafeNbtWriterRegistry.REGISTRY.register(type, (entity, tag, registries) -> tag.merge(bridge.safe(entity)));
         MovedBlockTransformerRegistries.BLOCK_ENTITY_TRANSFORMERS.register(type, (entity, transform) -> {
+            if (entity instanceof SchematicBits bits && !bits.folkways$valid()
+                && (entity.getLevel() == null || schematic(entity.getLevel()))) return;
             if (transform.rotationAxis != null && transform.rotationAxis != Direction.Axis.Y) {
-                throw new IllegalArgumentException("Chiseled schematics support horizontal rotations");
+                var storage = CandBSchematicBridge.checked(entity).payload().storage().createSnapshot();
+                if (transform.mirror != null && transform.mirror != net.minecraft.world.level.block.Mirror.NONE) {
+                    storage.mirror(transform.mirror == net.minecraft.world.level.block.Mirror.FRONT_BACK
+                        ? Direction.Axis.X : Direction.Axis.Z);
+                }
+                storage.rotate(transform.rotationAxis, Math.floorMod(transform.angle / 90, 4));
+                entity.loadWithComponents(CandBStructureCodec.encode(storage), entity.getLevel() == null
+                    ? net.minecraft.core.RegistryAccess.EMPTY : entity.getLevel().registryAccess());
+                return;
             }
             bridge.turn(entity, transform.mirror, transform.rotation);
         });

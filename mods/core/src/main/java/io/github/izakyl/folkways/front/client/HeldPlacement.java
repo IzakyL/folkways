@@ -132,7 +132,7 @@ final class HeldPlacement {
         BlockPos aimed = cornerAimed(player);
         corner = aimed;
         BlockPos at = corner;
-        GHOSTS.show(level, blocks.stream().map(ghost -> new Ghost(ghost.pos().offset(at), ghost.state())).toList());
+        GHOSTS.show(level, blocks.stream().map(ghost -> new Ghost(ghost.pos().offset(at), ghost.state(), ghost.payload())).toList());
     }
 
     // The cell beside the face aimed at is where its floor stands, in the middle of its footprint; held out in the

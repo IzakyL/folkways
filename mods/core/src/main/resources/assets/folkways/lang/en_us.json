@@ -1199,5 +1199,19 @@
   "folkways.refusal.pasture.hive_taken": "Somebody else is working at this hive",
   "folkways.refusal.pasture.hive_not_ready": "That hive is not ready to harvest",
   "folkways.refusal.pasture.hive_not_smoked": "Campfire smoke does not reach that hive",
-  "folkways.apiary.status.smoke_missing": "%s hives need campfire smoke"
+  "folkways.apiary.status.smoke_missing": "%s hives need campfire smoke",
+  "folkways.structure.chiselsandbits": "Chisels & Bits + Folkways integration",
+  "folkways.blueprint.requires": "Requires %s",
+  "folkways.blueprint.micro.material": "%s × %s",
+  "folkways.blueprint.micro.more": "%s more bit materials",
+  "folkways.blueprint.micro.same_state": "Supply ready-made bits. Clear an existing chiseled block before rebuilding a different shape in its place.",
+  "folkways.refusal.build.micro_data_invalid": "This blueprint contains damaged or oversized chiseled data. Capture or import it again.",
+  "folkways.refusal.build.missing_integration": "This blueprint needs a missing or newer building integration. Its data has been kept.",
+  "folkways.refusal.draft.unsupported_payload": "This template contains building data that cannot be used or swapped here.",
+  "folkways.blueprints.capture": "Save as blueprint",
+  "folkways.blueprints.capture.name": "File name",
+  "folkways.blueprints.capture.hint": "Save the marked blocks to the server’s blueprints and templates. Use a new name with lowercase letters, numbers or underscores.",
+  "folkways.blueprints.capture.name_invalid": "Use a new name with lowercase letters, numbers or underscores.",
+  "folkways.blueprints.capture.saved": "Saved blueprint and template: %s",
+  "folkways.blueprints.capture.failed": "Could not save. Choose a smaller loaded area and an unused file name."
 }

@@ -381,7 +381,7 @@ public final class DraftPanel {
     private static List<Ghost> ghostsOf(Drawn.Ready ready) {
         Level level = Minecraft.getInstance().level;
         return ready.draft().cells().stream()
-            .map(cell -> new Ghost(ready.corner().offset(cell.offset()), cell.state()))
+            .map(cell -> new Ghost(ready.corner().offset(cell.offset()), cell.state(), cell.payload()))
             .filter(ghost -> level == null || !level.getBlockState(ghost.pos()).equals(ghost.state()))
             .toList();
     }

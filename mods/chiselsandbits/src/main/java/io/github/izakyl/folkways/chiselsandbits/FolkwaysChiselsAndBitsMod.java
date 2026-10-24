@@ -17,6 +17,7 @@ public final class FolkwaysChiselsAndBitsMod {
     public FolkwaysChiselsAndBitsMod(IEventBus bus, ModContainer container) {
         container.registerConfig(ModConfig.Type.SERVER, CandBConfig.SPEC);
         bus.addListener(this::setup);
+        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) bus.addListener(CandBModels::setup);
     }
 
     private void setup(FMLCommonSetupEvent event) {

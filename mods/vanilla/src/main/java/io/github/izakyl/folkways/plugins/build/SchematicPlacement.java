@@ -170,7 +170,7 @@ public final class SchematicPlacement {
                 }
                 CompoundTag saved = StructureCompat.of(read).map(handler -> handler.capture(entity))
                     .orElseGet(() -> entity.saveWithFullMetadata(level.registryAccess()));
-                data.put(pos, BlockData.of(saved));
+                data.put(pos, BlockData.of(StructureCompat.tagged(read, saved).tag()));
             }
         }
         Set<BlockPos> kept = new LinkedHashSet<>();
@@ -237,7 +237,12 @@ public final class SchematicPlacement {
             return null;
         }
         CompoundTag prepared = adapter.prepare(level, state, stored);
-        BlockEntity fresh = prepared == null ? null : BlockData.of(prepared).entity(level, pos, state);
+        if (StructureCompat.of(state).isPresent()) {
+            if (prepared == null) throw StructureCompat.invalid();
+            return BlockData.of(prepared).entity(level, pos, state);
+        }
+        BlockEntity fresh = BlockData.EMPTY.entity(level, pos, state);
+        if (fresh != null && prepared != null) fresh.loadWithComponents(prepared, level.registryAccess());
         return fresh;
     }
 

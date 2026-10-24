@@ -12,7 +12,7 @@ properties = { "online-mode" = "false", "level-seed" = "folkways-e2e", "allow-fl
 connect = "127.0.0.1:25565"
 options = { guiScale = "1", fullscreen = "false", overrideWidth = "1280", overrideHeight = "720" }
 
-# The four Folkways mods, as gradle build gathers them.
+# Folkways jars gathered by Gradle; integration extensions are enabled by their profiles.
 [mods.folkways_core]
 path = "build/libs/folkways-core-*.jar"
 
@@ -68,6 +68,24 @@ target = []
 from = "chiselsandbits"
 entry = "META-INF/jarjar/neoforge-21.1.22.jar"
 # Bundled SHA-512: 9d70facf740bf253542138470ee22d8ebda32751004c67172fd69de9171fba9d7b2ededd5a99f418e245a446217c1155c8142a61b8277ecb2bea996b9a20a74c
+target = []
+
+[mods.scena-core]
+from = "scena"
+entry = "META-INF/jarjar/scena-core-21.1.22.jar"
+# Bundled SHA-512: 3737d4980006f2f5cca9afa8900114a8b0cd6279fe84027477a0ac0d314c39edbee815b6dac46d3d6d35f77c65f62a3b33d92bbe1e09cee5dcd66d6379656798
+target = []
+
+[mods.saecularia]
+from = "scena"
+entry = "META-INF/jarjar/neoforge-21.1.11.jar"
+# Bundled SHA-512: 70c6b154b9c0ea84c5ff696722af5d065a896e9878d595908433dbb48d4d16d191d7d5cd086781be1cb13fb46284bb1e0f27b2bf5b68304b5ea0c57c428f6a59
+target = []
+
+[mods.saecularia-core]
+from = "saecularia"
+entry = "META-INF/jarjar/saecularia-caudices-core-21.1.11.jar"
+# Bundled SHA-512: 48eba9054e27ddee1823ceca2d340072c91bff62ca5f2c03861b280540bd3ee96f87c31e3f6509bf7d55bd0ab0906460e8511dd04cf1ba113d07b22fc3194fdc
 target = []
 
 [mods.ldlib2]
@@ -442,21 +460,3 @@ kaleidoscope_tavern = { target = ["server", "client"] }
 [profile.chiselsandbits.mods]
 folkways_chiselsandbits = { target = ["server", "client"] }
 chiselsandbits = { target = ["server", "client"] }
-
-[mods.scena-core]
-from = "scena"
-entry = "META-INF/jarjar/scena-core-21.1.22.jar"
-# Bundled SHA-512: 3737d4980006f2f5cca9afa8900114a8b0cd6279fe84027477a0ac0d314c39edbee815b6dac46d3d6d35f77c65f62a3b33d92bbe1e09cee5dcd66d6379656798
-target = []
-
-[mods.saecularia]
-from = "scena"
-entry = "META-INF/jarjar/neoforge-21.1.11.jar"
-# Bundled SHA-512: 70c6b154b9c0ea84c5ff696722af5d065a896e9878d595908433dbb48d4d16d191d7d5cd086781be1cb13fb46284bb1e0f27b2bf5b68304b5ea0c57c428f6a59
-target = []
-
-[mods.saecularia-core]
-from = "saecularia"
-entry = "META-INF/jarjar/saecularia-caudices-core-21.1.11.jar"
-# Bundled SHA-512: 48eba9054e27ddee1823ceca2d340072c91bff62ca5f2c03861b280540bd3ee96f87c31e3f6509bf7d55bd0ab0906460e8511dd04cf1ba113d07b22fc3194fdc
-target = []

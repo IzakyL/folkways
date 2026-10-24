@@ -42,13 +42,14 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 
 **Core 和 Vanilla 必装**，其他扩展按需安装。**所有 Folkways jar 必须来自同一次构建。**
 
-| Jar                                                         | 安装条件                                         |
-| ----------------------------------------------------------- | ------------------------------------------------ |
-| Folkways Core（`folkways-core-*.jar`）                      | 必装：殖民地引擎、殖民书和管理面板               |
-| Folkways Vanilla（`folkways-vanilla-*.jar`）                | 必装：居民及其在原版方块中的工作                 |
-| Folkways × Create（`folkways-create-*.jar`）                | 配合机械动力：列车、包裹、轨道和蓝图             |
-| Folkways × Modular Golems（`folkways-modulargolems-*.jar`） | 配合模块化傀儡：让傀儡成为居民                   |
-| Folkways × Kaleidoscope Cookery（`folkways-cookery-*.jar`） | 配合森罗厨房 1.6.0：作物、原生厨具和共享厨房工具 |
+| Jar                                                          | 安装条件                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------- |
+| Folkways Core（`folkways-core-*.jar`）                       | 必装：殖民地引擎、殖民书和管理面板                            |
+| Folkways Vanilla（`folkways-vanilla-*.jar`）                 | 必装：居民及其在原版方块中的工作                              |
+| Folkways × Create（`folkways-create-*.jar`）                 | 配合机械动力：列车、包裹、轨道和蓝图                          |
+| Folkways × Modular Golems（`folkways-modulargolems-*.jar`）  | 配合模块化傀儡：让傀儡成为居民                                |
+| Folkways × Kaleidoscope Cookery（`folkways-cookery-*.jar`）  | 配合森罗厨房 1.6.0：作物、原生厨具和共享厨房工具              |
+| Folkways × Chisels & Bits（`folkways-chiselsandbits-*.jar`） | 配合 Chisels & Bits 21.1.33：用备好的碎块建造微方块蓝图和模板 |
 
 Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无需单独安装这三个组件。
 
@@ -64,19 +65,20 @@ Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无�
 
 ## 可选集成
 
-| 模组                                                                                                                                   | 集成内容                                                                                                            |
-| -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| [Create / 机械动力](https://modrinth.com/mod/create) 6.0+，配合 Folkways × Create                                                      | 按蓝图施工、驾驶列车、乘坐电梯、铺设轨道，以及通过仓储管理器的包裹网络下单。未安装扩展时，Core 仍会处理绕行机械装置 |
-| [Sable](https://modrinth.com/mod/sable)                                                                                                | 居民可以进出子世界结构，例如 Create Aeronautics 的飞船                                                              |
-| [Modular Golems / 模块化傀儡](https://modrinth.com/mod/modular-golems) 3.1.43+，配合 Folkways × Modular Golems                         | 傀儡加入居民名单，像人类居民一样承担工种                                                                            |
-| [Kaleidoscope Cookery / 森罗厨房](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0，配合 Folkways × Kaleidoscope Cookery | 水田种植、食材处理、原生厨具、共享工具、厨房置物架、割草采种，以及十三节教程                                        |
-| [Kaleidoscope Tavern / 森罗酒馆](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0，配合 Cookery 扩展                      | 搭棚种葡萄，榨汁、发酵、装瓶酿酒，居民为用餐区吧台补货并在那里喝酒；一节教程                                        |
-| [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                                     | 使用基岩版格式的居民模型                                                                                            |
-| [Touhou Little Maid / 车万女仆](https://modrinth.com/mod/touhou-little-maid) 1.5+，需 GeckoLib                                         | 将内置及已安装扩展包中的模型用作居民外观，可逐个或按包选择                                                          |
-| [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                                 | 殖民书沿第三人称相机的准星瞄准                                                                                      |
-| [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                              | 在容器和物品筛选中使用配方查看器的物品列表                                                                          |
-| [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                                      | 创始人可将殖民地交给队伍；队员共同管理，队长持有创始人权限                                                          |
-| [Just Enough Characters（JEC）](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                              | 在物品选择器、目录选择器、居民分工和库存页使用全拼、首字母与混合输入搜索；仅需客户端安装                            |
+| 模组                                                                                                                                   | 集成内容                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| [Create / 机械动力](https://modrinth.com/mod/create) 6.0+，配合 Folkways × Create                                                      | 按蓝图施工、驾驶列车、乘坐电梯、铺设轨道，以及通过仓储管理器的包裹网络下单。未安装扩展时，Core 仍会处理绕行机械装置                     |
+| [Sable](https://modrinth.com/mod/sable)                                                                                                | 居民可以进出子世界结构，例如 Create Aeronautics 的飞船                                                                                  |
+| [Modular Golems / 模块化傀儡](https://modrinth.com/mod/modular-golems) 3.1.43+，配合 Folkways × Modular Golems                         | 傀儡加入居民名单，像人类居民一样承担工种                                                                                                |
+| [Kaleidoscope Cookery / 森罗厨房](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0，配合 Folkways × Kaleidoscope Cookery | 水田种植、食材处理、原生厨具、共享工具、厨房置物架、割草采种，以及十三节教程                                                            |
+| [Kaleidoscope Tavern / 森罗酒馆](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0，配合 Cookery 扩展                      | 搭棚种葡萄，榨汁、发酵、装瓶酿酒，居民为用餐区吧台补货并在那里喝酒；一节教程                                                            |
+| [Chisels & Bits](https://www.curseforge.com/minecraft/mc-mods/chisels-bits/files/7441123) 21.1.33，配合 Folkways × Chisels & Bits      | 保存或导入静态、多材质雕刻，用 `template(...)` 复用，按材质提供碎块；可单独使用，也可配合机械动力。[说明](docs/zh-CN/chiselsandbits.md) |
+| [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                                     | 使用基岩版格式的居民模型                                                                                                                |
+| [Touhou Little Maid / 车万女仆](https://modrinth.com/mod/touhou-little-maid) 1.5+，需 GeckoLib                                         | 将内置及已安装扩展包中的模型用作居民外观，可逐个或按包选择                                                                              |
+| [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                                 | 殖民书沿第三人称相机的准星瞄准                                                                                                          |
+| [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                              | 在容器和物品筛选中使用配方查看器的物品列表                                                                                              |
+| [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                                      | 创始人可将殖民地交给队伍；队员共同管理，队长持有创始人权限                                                                              |
+| [Just Enough Characters（JEC）](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                              | 在物品选择器、目录选择器、居民分工和库存页使用全拼、首字母与混合输入搜索；仅需客户端安装                                                |
 
 JEC 搜索沿用其键盘方案和模糊音设置。输入示例，以及物品搜索与已保存筛选规则的区别，见[搜索](docs/zh-CN/gameplay.md#搜索)。
 车万女仆扩展模型包的安装方法见[女仆模型包](docs/zh-CN/gameplay.md#女仆模型包)。
@@ -99,7 +101,7 @@ npm run setup
 ```
 
 Setup 会下载锁定版本的集成依赖，并生成 Gradle 必需的清单。
-五个模组 jar 汇总到 `build/libs/`。
+六个模组 jar 汇总到 `build/libs/`。
 Blockwright 源码已支持 Windows，当前锁定的 npm 发布包早于这次改动。
 Windows 下可使用从源码构建的 SDK 和 `gradlew.bat`，详见[开发环境](CONTRIBUTING.zh-CN.md#开发环境)。
 

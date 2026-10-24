@@ -8,6 +8,8 @@ import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
@@ -16,7 +18,31 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /** Per-block configuration hooks; integrations do not replace the placement adapter. */
 public final class StructureCompat {
+    public static final String DESCRIPTOR = "folkways:structure";
+
+    public static final class Failure extends IllegalArgumentException {
+        private final String key;
+
+        public Failure(String key) {
+            super(key);
+            this.key = key;
+        }
+
+        public Component component() {
+            return Component.translatable(key);
+        }
+    }
+
+    public static Failure invalid() {
+        return new Failure("folkways.refusal.build.micro_data_invalid");
+    }
+
     public interface Handler {
+        ResourceLocation id();
+
+        default Component name() {
+            return Component.translatable("folkways.structure." + id().getPath());
+        }
         BlockEntity detached(HolderLookup.Provider registries, BlockPos pos, BlockState state, StructurePayload payload);
 
         CompoundTag capture(BlockEntity entity);
@@ -45,8 +71,39 @@ public final class StructureCompat {
         return Optional.ofNullable(HANDLERS.get(state.getBlock()));
     }
 
+    public static void validate(StructurePayload payload) {
+        CompoundTag tag = payload.tag();
+        if (!tag.contains(DESCRIPTOR)) return;
+        CompoundTag descriptor = tag.getCompound(DESCRIPTOR);
+        if (!tag.contains(DESCRIPTOR, net.minecraft.nbt.Tag.TAG_COMPOUND) || descriptor.getInt("version") != 1
+            || HANDLERS.values().stream().noneMatch(handler -> handler.id().toString().equals(descriptor.getString("id")))) {
+            throw new Failure("folkways.refusal.build.missing_integration");
+        }
+    }
+
+    public static StructurePayload tagged(BlockState state, CompoundTag tag) {
+        CompoundTag kept = tag.copy();
+        of(state).ifPresent(handler -> {
+            CompoundTag descriptor = new CompoundTag();
+            descriptor.putString("id", handler.id().toString());
+            descriptor.putInt("version", 1);
+            kept.put(DESCRIPTOR, descriptor);
+        });
+        return new StructurePayload(kept);
+    }
+
     public static StructurePayload transform(BlockState state, StructurePayload payload, Mirror mirror, Rotation rotation) {
-        return !payload.present() || mirror == Mirror.NONE && rotation == Rotation.NONE ? payload
-            : of(state).map(handler -> handler.transformed(payload, mirror, rotation)).orElse(payload);
+        validate(payload);
+        if (!payload.present() || mirror == Mirror.NONE && rotation == Rotation.NONE) {
+            return payload;
+        }
+        try {
+            return of(state).map(handler -> tagged(state, handler.transformed(payload, mirror, rotation).tag()))
+                .orElse(payload);
+        } catch (Failure failed) {
+            throw failed;
+        } catch (RuntimeException failed) {
+            throw invalid();
+        }
     }
 }

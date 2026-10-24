@@ -1,6 +1,11 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import static io.github.izakyl.folkways.plugins.build.CandBTestData.sculpture;
+import static io.github.izakyl.folkways.plugins.build.CandBTestData.state;
+import static io.github.izakyl.folkways.plugins.build.CandBTestData.structure;
+
 import com.simibubi.create.AllDataComponents;
+import com.simibubi.create.content.contraptions.StructureTransform;
 import com.simibubi.create.content.schematics.SchematicItem;
 import com.simibubi.create.content.schematics.cannon.SchematicannonBlockEntity;
 import com.simibubi.create.content.schematics.requirement.ItemRequirement;
@@ -21,29 +26,22 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import mod.chiselsandbits.api.block.storage.StateEntryStorage;
-import mod.chiselsandbits.api.blockinformation.BlockInformation;
 import mod.chiselsandbits.block.entities.ChiseledBlockEntity;
-import mod.chiselsandbits.registrars.ModBlocks;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Vec3i;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.IntTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtUtils;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -56,7 +54,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class CandBSpikeGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
-        event.register(CandBSpikeGameTests.class);
+        if (net.neoforged.fml.ModList.get().isLoaded("create")) event.register(CandBSpikeGameTests.class);
     }
 
     @GameTest(template = "empty", timeoutTicks = 20)
@@ -77,7 +75,7 @@ public final class CandBSpikeGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 20)
-    public static void everyHorizontalTransformMovesTheActualVoxels(GameTestHelper helper) {
+    public static void voxelAndRegistryTransformsMoveTheActualVoxels(GameTestHelper helper) {
         var storage = sculpture();
         for (Mirror mirror : Mirror.values()) {
             for (Rotation rotation : Rotation.values()) {
@@ -98,19 +96,51 @@ public final class CandBSpikeGameTests {
                 }
             }
         }
+        var bridge = new CandBSchematicBridge();
+        for (Direction.Axis axis : Direction.Axis.values()) {
+            for (Rotation rotation : Rotation.values()) {
+                for (Mirror mirror : Mirror.values()) {
+                    var entity = bridge.detached(helper.getLevel().registryAccess(), BlockPos.ZERO, state(),
+                        new StructurePayload(CandBStructureCodec.encode(storage)));
+                    var transform = new StructureTransform(BlockPos.ZERO, axis, rotation, mirror);
+                    transform.apply(entity);
+                    var transformed = CandBSchematicBridge.checked(entity).payload().storage();
+                    for (int x = 0; x < 16; x++) {
+                        for (int y = 0; y < 16; y++) {
+                            for (int z = 0; z < 16; z++) {
+                                Vec3 moved = transform.applyWithoutOffset(new Vec3((x + 0.5) / 16,
+                                    (y + 0.5) / 16, (z + 0.5) / 16)).scale(16);
+                                BlockPos at = BlockPos.containing(moved);
+                                helper.assertValueEqual(transformed.getBlockInformation(at.getX(), at.getY(), at.getZ()),
+                                    storage.getBlockInformation(x, y, z), axis + "/" + rotation + "/" + mirror + " registry voxel");
+                            }
+                        }
+                    }
+                }
+            }
+        }
         helper.succeed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 240)
     public static void realCannonAndResidentConsumeAndPrintTheSameBits(GameTestHelper helper) throws Exception {
+        printPair(helper, Rotation.NONE, Mirror.NONE);
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 240)
+    public static void rotatedMirroredCannonAndResidentPrintTheSameVoxels(GameTestHelper helper) throws Exception {
+        printPair(helper, Rotation.CLOCKWISE_90, Mirror.FRONT_BACK);
+    }
+
+    private static void printPair(GameTestHelper helper, Rotation rotation, Mirror mirror) throws Exception {
         var level = helper.getLevel();
         var storage = sculpture();
-        ChiseledBlockEntity expected = new ChiseledBlockEntity(BlockPos.ZERO, state());
-        expected.receivePayload(new ChiseledBlockEntity.Payload(storage, expected.payload().mutableStatistics()));
+        var turned = storage.createSnapshot();
+        CandBStructureCodec.turn(turned, mirror, rotation);
         CompoundTag data = CandBStructureCodec.encode(storage);
         Blueprint source = new Blueprint(UUID.randomUUID(), "chiseled spike", List.of(
             new BlueprintBlock(BlockPos.ZERO, state(), BlockData.of(data))), BlueprintVolume.of(1, 1, 1).orElseThrow(), 0);
-        Blueprint resolved = source.confirm(level);
+        Blueprint resolved = source.transformed(rotation, mirror).orElseThrow().confirm(level);
         helper.assertValueEqual(resolved.blocks().size(), 1, "temporary printer keeps chiseled cells");
         BlockPos residentPos = helper.absolutePos(new BlockPos(7, 2, 5));
         BlockPos cannonPos = helper.absolutePos(new BlockPos(2, 2, 2));
@@ -134,14 +164,23 @@ public final class CandBSpikeGameTests {
         Path directory = CreatePaths.UPLOADED_SCHEMATICS_DIR.resolve("folkways-tests");
         Files.createDirectories(directory);
         Path path = directory.resolve(file);
+        CandBTestData.sameVoxels(helper, sculpture(), CandBStructureCodec.decode(data), "raw source before save");
         NbtIo.writeCompressed(structure(data), path);
         ItemStack schematic = SchematicItem.create(level, file, "folkways-tests");
         schematic.set(AllDataComponents.SCHEMATIC_DEPLOYED, true);
         schematic.set(AllDataComponents.SCHEMATIC_ANCHOR, printedPos);
+        schematic.set(AllDataComponents.SCHEMATIC_ROTATION, rotation);
+        schematic.set(AllDataComponents.SCHEMATIC_MIRROR, mirror);
         level.setBlock(cannonPos, net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(
             net.minecraft.resources.ResourceLocation.parse("create:schematicannon")).defaultBlockState(), Block.UPDATE_ALL);
         var cannon = (SchematicannonBlockEntity) level.getBlockEntity(cannonPos);
         cannon.inventory.setStackInSlot(0, schematic);
+        helper.assertValueEqual(SchematicItem.getSettings(schematic).getRotation(), rotation, "schematic rotation setting");
+        helper.assertValueEqual(SchematicItem.getSettings(schematic).getMirror(), mirror, "schematic mirror setting");
+        cannon.printer.loadSchematic(schematic, level, true);
+        cannon.printer.advanceCurrentPos();
+        cannon.printer.handleCurrentTarget((pos, targetState, entity) -> CandBTestData.sameVoxels(helper, turned,
+            ((ChiseledBlockEntity) entity).payload().storage(), "printer before launch"), (pos, entity) -> helper.fail("unexpected entity"));
         cannon.printer.loadSchematic(schematic, level, true);
         cannon.blocksToPlace = 1;
         cannon.remainingFuel = 10;
@@ -162,8 +201,7 @@ public final class CandBSpikeGameTests {
                 "placed entities finish decoding");
             helper.assertValueEqual(CandBStructureCodec.counts(printed.payload().storage()),
                 CandBStructureCodec.counts(storage), "cannon's decoded material counts");
-            helper.assertValueEqual(printed.createSnapshot().createNewShapeIdentifier(),
-                expected.createSnapshot().createNewShapeIdentifier(), "cannon preserves blueprint voxel coordinates");
+            CandBTestData.sameVoxels(helper, turned, printed.payload().storage(), "final cannon print");
             helper.assertValueEqual(printed.createSnapshot().createNewShapeIdentifier(),
                 resident.createSnapshot().createNewShapeIdentifier(), "same voxel layout after real placement");
             helper.assertTrue(stock.getItem(0).isEmpty() && stock.getItem(1).isEmpty(),
@@ -172,39 +210,36 @@ public final class CandBSpikeGameTests {
         });
     }
 
-    static StateEntryStorage sculpture() {
-        StateEntryStorage storage = new StateEntryStorage();
-        for (int x = 0; x < 7; x++) {
-            storage.setBlockInformation(x, 0, 0, new BlockInformation(
-                (x < 3 ? Blocks.OAK_PLANKS : Blocks.STONE).defaultBlockState(), Optional.empty()));
+    @GameTest(template = "empty_large", timeoutTicks = 40)
+    public static void corruptDataStopsEvenARealCreativeCrateCannon(GameTestHelper helper) throws Exception {
+        var level = helper.getLevel();
+        BlockPos at = helper.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos target = at.offset(4, 0, 4);
+        String file = "folkways-broken-" + UUID.randomUUID() + ".nbt";
+        Path directory = CreatePaths.UPLOADED_SCHEMATICS_DIR.resolve("folkways-tests");
+        Files.createDirectories(directory);
+        Path path = directory.resolve(file);
+        try {
+            NbtIo.writeCompressed(structure(new CompoundTag()), path);
+            ItemStack schematic = SchematicItem.create(level, file, "folkways-tests");
+            schematic.set(AllDataComponents.SCHEMATIC_DEPLOYED, true);
+            schematic.set(AllDataComponents.SCHEMATIC_ANCHOR, target);
+            var registry = net.minecraft.core.registries.BuiltInRegistries.BLOCK;
+            level.setBlock(at, registry.get(net.minecraft.resources.ResourceLocation.parse("create:schematicannon"))
+                .defaultBlockState(), Block.UPDATE_ALL);
+            level.setBlock(at.west(), registry.get(net.minecraft.resources.ResourceLocation.parse("create:creative_crate"))
+                .defaultBlockState(), Block.UPDATE_ALL);
+            var cannon = (SchematicannonBlockEntity) level.getBlockEntity(at);
+            cannon.inventory.setStackInSlot(0, schematic);
+            cannon.state = SchematicannonBlockEntity.State.RUNNING;
+            cannon.tick();
+            helper.assertTrue(cannon.state == SchematicannonBlockEntity.State.STOPPED
+                && cannon.statusMsg.equals("schematicErrored"), "bad data refuses the actual cannon before any shot");
+            helper.assertTrue(cannon.flyingBlocks.isEmpty() && level.getBlockState(target).isAir(), "no free creative print");
+        } finally {
+            Files.deleteIfExists(path);
         }
-        return storage;
+        helper.succeed();
     }
 
-    static BlockState state() {
-        return ModBlocks.CHISELED_BLOCK.get().defaultBlockState();
-    }
-
-    static CompoundTag structure(CompoundTag data) {
-        CompoundTag tag = new CompoundTag();
-        tag.put("size", ints(1, 1, 1));
-        ListTag palette = new ListTag();
-        palette.add(NbtUtils.writeBlockState(state()));
-        tag.put("palette", palette);
-        CompoundTag cell = new CompoundTag();
-        cell.put("pos", ints(0, 0, 0));
-        cell.putInt("state", 0);
-        cell.put("nbt", data);
-        ListTag blocks = new ListTag();
-        blocks.add(cell);
-        tag.put("blocks", blocks);
-        tag.put("entities", new ListTag());
-        return tag;
-    }
-
-    private static ListTag ints(int... values) {
-        ListTag tag = new ListTag();
-        for (int value : values) tag.add(IntTag.valueOf(value));
-        return tag;
-    }
 }

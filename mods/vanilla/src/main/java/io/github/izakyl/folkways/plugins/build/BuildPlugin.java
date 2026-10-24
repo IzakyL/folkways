@@ -35,6 +35,7 @@ public final class BuildPlugin {
         NeoForge.EVENT_BUS.addListener(BuildPackets::onPlayerLoggedOut);
         if (FMLEnvironment.dist.isClient()) {
             modBus.addListener(DraftOffer::register);
+            modBus.addListener(BlueprintCaptureOffer::register);
             modBus.addListener(FMLClientSetupEvent.class, event -> event.enqueueWork(HeldBlueprints::install));
             modBus.addListener(BuildScene::declare);
         }

@@ -302,6 +302,8 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
                 LOGGER.info("{}: {}", id, drawing.reports());
             }
             return ready.counting(drawing.reports());
+        } catch (io.github.izakyl.folkways.core.api.structure.StructureCompat.Failure failed) {
+            return Drawn.refused(DraftRefusal.UNSUPPORTED_PAYLOAD);
         } catch (EvalException stopped) {
             DraftRefusal why = drawing.stoppedFor();
             return new Drawn.Refused(why == null ? DraftRefusal.PATTERN_FAILED : why, stopped.getMessage(),

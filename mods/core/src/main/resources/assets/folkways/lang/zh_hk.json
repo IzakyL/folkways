@@ -1199,5 +1199,19 @@
   "folkways.refusal.pasture.hive_taken": "已經有人在處理這個蜂箱",
   "folkways.refusal.pasture.hive_not_ready": "那個蜂箱還不能採收",
   "folkways.refusal.pasture.hive_not_smoked": "營火煙氣沒有到達那個蜂箱",
-  "folkways.apiary.status.smoke_missing": "%s 個蜂箱缺少營火煙氣"
+  "folkways.apiary.status.smoke_missing": "%s 個蜂箱缺少營火煙氣",
+  "folkways.structure.chiselsandbits": "Chisels & Bits 與 Folkways 擴充",
+  "folkways.blueprint.requires": "需要 %s",
+  "folkways.blueprint.micro.material": "%s × %s",
+  "folkways.blueprint.micro.more": "另有 %s 種碎塊材質",
+  "folkways.blueprint.micro.same_state": "備好對應材質的碎塊。同種雕刻方塊會略過，換造型前先拆除。",
+  "folkways.refusal.build.micro_data_invalid": "藍圖中的雕刻資料損壞或過大，重新儲存或匯入。",
+  "folkways.refusal.build.missing_integration": "這份藍圖缺少所需的建築擴充，或擴充版本不符；藍圖資料已保留。",
+  "folkways.refusal.draft.unsupported_payload": "這份範本的建築資料無法在這裡使用或替換。",
+  "folkways.blueprints.capture": "儲存為藍圖",
+  "folkways.blueprints.capture.name": "檔案名稱",
+  "folkways.blueprints.capture.hint": "把圈地內的方塊存入伺服器的藍圖庫和範本庫。新檔案名稱使用小寫字母、數字或底線。",
+  "folkways.blueprints.capture.name_invalid": "檔案名稱使用小寫字母、數字或底線。",
+  "folkways.blueprints.capture.saved": "已儲存藍圖和範本：%s",
+  "folkways.blueprints.capture.failed": "未能儲存。把圈地縮小至已載入的範圍，並換一個未用過的檔案名稱。"
 }

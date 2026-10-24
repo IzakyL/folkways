@@ -19,19 +19,21 @@
 
 选择测试所属模组和运行环境：
 
-| 命令                                                                    | 范围                                                               |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `./gradlew runGameTestServer`                                           | 基础环境中的 Core、Vanilla、Create 合并测试                        |
-| `./gradlew -PcookeryTests=true runGameTestServer`                       | 加载 Cookery 的合并测试，包含 Core 和 Vanilla 的 `src/cookeryTest` |
-| `./gradlew -PgameTestMod=core runGameTestServer`                        | 基础环境中的 Core 测试；也支持 `vanilla` 或 `create`               |
-| `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer`    | 加载 Cookery 的 Core 测试；也支持 `vanilla`                        |
-| `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer` | 加载 Cookery，仅运行 Cookery 所属测试                              |
+| 命令                                                                                                            | 范围                                                               |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `./gradlew runGameTestServer`                                                                                   | 基础环境中的 Core、Vanilla、Create 合并测试                        |
+| `./gradlew -PcookeryTests=true runGameTestServer`                                                               | 加载 Cookery 的合并测试，包含 Core 和 Vanilla 的 `src/cookeryTest` |
+| `./gradlew -PgameTestMod=core runGameTestServer`                                                                | 基础环境中的 Core 测试；也支持 `vanilla` 或 `create`               |
+| `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer`                                            | 加载 Cookery 的 Core 测试；也支持 `vanilla`                        |
+| `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer`                                         | 加载 Cookery，仅运行 Cookery 所属测试                              |
+| `./gradlew --no-daemon -PchiselsTests=true -PgameTestMod=chiselsandbits runGameTestServer`                      | Chisels & Bits 专项，包含真实蓝图炮                                |
+| `./gradlew --no-daemon -PchiselsTests=true -PgameTestMod=chiselsandbits -PwithoutCreate=true runGameTestServer` | 未安装机械动力的 Chisels & Bits 专项                               |
 
 测试归属与已安装模组分开：选择 Core 时仍会加载 Vanilla 居民和相关集成。
 这些运行环境不加载 Modular Golems，它也暂时没有 GameTests。
 Core 会一并运行已有 LDLib2 依赖测试，其他模组不重复运行。
 
-按模组选中的游戏目录为 `run/gametest/<mod>/<base|cookery>/`，合并运行使用 `run/gametest/`。
+按模组选中的游戏目录为 `run/gametest/<mod>/<base|cookery|chiselsandbits|without-create>/`，合并运行使用 `run/gametest/`。
 直接通过 Gradle 启动服务器前，需要先在对应目录的 `eula.txt` 中接受 [Minecraft EULA](https://www.minecraft.net/eula)。
 仅在同意其条款后执行。
 
@@ -166,3 +168,5 @@ CI 不运行完整 e2e、Sable、界面截图、Ponder、性能基准或宣传�
 JUnit 用例表示本次服务器调用是否通过；单个 GameTest 的详细结果保留在服务器日志中。
 
 客户端冒烟测试将 `tests/out/` 上传为 `client-smoke-results`。
+
+`chiselsandbits` Blockwright 配置同时安装可选扩展和固定版本的 C&B 依赖。范围与测试依赖见[集成说明](chiselsandbits.md)。共享开发机器上的 Gradle 命令使用 `--no-daemon`。

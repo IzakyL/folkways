@@ -4,18 +4,19 @@
 
 ## Modules
 
-Folkways has **two required mods and three optional extensions**, each a Gradle
+Folkways has **two required mods and four optional extensions**, each a Gradle
 project under `mods/`. They use separate mod IDs and share the `folkways`
 content namespace. The root project runs tests and collects jars rather than
-building a sixth mod.
+building a seventh mod.
 
-| Gradle project                          | Mod ID                   | Responsibility                                                                         |
-| --------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| `:core` → `mods/core`                   | `folkways_core`          | Colony engine, public APIs, screens and lessons; supplies no resident work on its own  |
-| `:vanilla` → `mods/vanilla`             | `folkways_vanilla`       | Residents and their work among vanilla blocks                                          |
-| `:create` → `mods/create`               | `folkways_create`        | Rail, dispatch, elevators, track joints and schematic hand-off                         |
-| `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | Golems as residents                                                                    |
-| `:cookery` → `mods/cookery`             | `folkways_cookery`       | Native Cookery farming, appliances, shared tools, Kaleidoscope Tavern wine and lessons |
+| Gradle project                            | Mod ID                    | Responsibility                                                                         |
+| ----------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------- |
+| `:core` → `mods/core`                     | `folkways_core`           | Colony engine, public APIs, screens and lessons; supplies no resident work on its own  |
+| `:vanilla` → `mods/vanilla`               | `folkways_vanilla`        | Residents and their work among vanilla blocks                                          |
+| `:create` → `mods/create`                 | `folkways_create`         | Rail, dispatch, elevators, track joints and schematic hand-off                         |
+| `:modulargolems` → `mods/modulargolems`   | `folkways_modulargolems`  | Golems as residents                                                                    |
+| `:cookery` → `mods/cookery`               | `folkways_cookery`        | Native Cookery farming, appliances, shared tools, Kaleidoscope Tavern wine and lessons |
+| `:chiselsandbits` → `mods/chiselsandbits` | `folkways_chiselsandbits` | Chiseled templates, exact bit costs, schematic loading and Create registries           |
 
 ```mermaid
 flowchart BT
@@ -23,6 +24,7 @@ flowchart BT
     Create --> Vanilla
     ModularGolems[Modular Golems] --> Vanilla
     Cookery --> Vanilla
+    ChiselsAndBits --> Vanilla
 ```
 
 Core handles integrations needed to read an existing world correctly, such as
@@ -81,3 +83,5 @@ package-private internals. Core's `src/gameTestFixtures` contains reusable helpe
 without test registration. An integration can reuse them without discovering
 Core's tests. Selecting a GameTest owner does not remove the other runtime mods
 its scenarios need. See [Testing](testing.md) for selection flags and CI profiles.
+
+[Chisels & Bits integration](chiselsandbits.md) describes payload ownership, save migration and the synchronous schematic bridge.

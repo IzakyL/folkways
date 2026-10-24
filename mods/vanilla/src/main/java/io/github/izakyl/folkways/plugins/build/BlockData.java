@@ -33,6 +33,14 @@ public record BlockData(CompoundTag tag, List<UnloadedBlock.Turn> turns) {
         return tag.isEmpty() ? EMPTY : new BlockData(tag, List.of());
     }
 
+    public StructurePayload payload(BlockState state) {
+        StructurePayload payload = new StructurePayload(tag);
+        for (UnloadedBlock.Turn turn : turns) {
+            payload = StructureCompat.transform(state, payload, turn.mirror(), turn.rotation());
+        }
+        return payload;
+    }
+
     public boolean present() {
         return !tag.isEmpty();
     }
@@ -48,6 +56,7 @@ public record BlockData(CompoundTag tag, List<UnloadedBlock.Turn> turns) {
 
     /** A detached entity holding this data, turned as the blueprint was; it never touches the world. */
     public BlockEntity entity(ServerLevel level, BlockPos pos, BlockState state) {
+        StructureCompat.validate(new StructurePayload(tag));
         var handler = StructureCompat.of(state);
         if (handler.isPresent()) {
             BlockEntity entity = handler.get().detached(level.registryAccess(), pos, state, new StructurePayload(tag));

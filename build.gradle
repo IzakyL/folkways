@@ -16,12 +16,13 @@ modProjects.values().each { evaluationDependsOn(it) }
 
 // The game tests run without Modular Golems, so its Folkways mod stays out of that run.
 def cookeryTests = providers.gradleProperty("cookeryTests").map { it.toBoolean() }.getOrElse(false)
+def withoutCreate = providers.gradleProperty("withoutCreate").map { it.toBoolean() }.getOrElse(false)
 def chiselsTests = providers.gradleProperty("chiselsTests").map { it.toBoolean() }.getOrElse(false)
 def tavernTests = providers.gradleProperty("tavernTests").map { it.toBoolean() }.getOrElse(false)
 if (tavernTests && !cookeryTests) {
     throw new GradleException("Tavern GameTests require -PcookeryTests=true")
 }
-def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" && (path != ":cookery" || cookeryTests) && (path != ":chiselsandbits" || chiselsTests) }
+def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" && (path != ":create" || !withoutCreate) && (path != ":cookery" || cookeryTests) && (path != ":chiselsandbits" || chiselsTests) }
 def gameTestMod = providers.gradleProperty("gameTestMod").getOrElse("")
 if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "chiselsandbits"])) {
     throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create cookery or chiselsandbits")
@@ -34,7 +35,7 @@ if (gameTestMod == "chiselsandbits" && !chiselsTests) {
 }
 def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gameTestMod}" }
 def gameTestDirectory = gameTestMod
-    ? "run/gametest/${gameTestMod}/${cookeryTests ? 'cookery' : 'base'}"
+    ? "run/gametest/${gameTestMod}/${withoutCreate ? 'without-create' : chiselsTests ? 'chiselsandbits' : cookeryTests ? 'cookery' : 'base'}"
     : "run/gametest"
 
 repositories {
@@ -67,6 +68,7 @@ neoForge {
                 // Same-package construction tests belong to Vanilla's Java module, while their sources stay in the integration.
                 if (path == ":vanilla" && chiselsTests && (!gameTestMod || gameTestMod == "chiselsandbits")) {
                     sourceSet project(":chiselsandbits").sourceSets.gametest
+                    if (!withoutCreate) sourceSet project(":chiselsandbits").sourceSets.createTest
                 }
                 if (suiteMods.containsKey(id) && path != ":chiselsandbits") {
                     sourceSet mod.sourceSets.gametest
@@ -108,8 +110,11 @@ dependencies {
             runtimeOnly project(path).sourceSets.cookeryTest.output
         }
     }
+    if (chiselsTests && !withoutCreate && (!gameTestMod || gameTestMod == "chiselsandbits")) {
+        runtimeOnly project(":chiselsandbits").sourceSets.createTest.output
+    }
     runtimeOnly ldlib2Coordinate
-    runtimeOnly core.lib("create")
+    if (!withoutCreate) { runtimeOnly core.lib("create") }
     if (chiselsTests) {
         runtimeOnly core.lib("chiselsandbits")
     }

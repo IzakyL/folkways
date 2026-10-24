@@ -10,6 +10,13 @@ import io.github.izakyl.folkways.plugins.build.draft.Pattern;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.build.draft.Round;
 import io.github.izakyl.folkways.plugins.build.draft.Templates;
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.library.Shelves;
+import io.github.izakyl.folkways.plugins.build.draft.PatternPackets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Optional;
@@ -36,6 +43,7 @@ public final class BuildPackets {
     }
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
         event.registrar(FolkwaysMod.NETWORK_VERSION)
+            .playToServer(CaptureBlueprintPacket.TYPE, CaptureBlueprintPacket.STREAM_CODEC, BuildPackets::handleCapture)
             .playToServer(BlueprintChunkPacket.TYPE, BlueprintChunkPacket.STREAM_CODEC,
                 BuildPackets::handleChunk)
             .playToServer(UploadBlueprintPacket.TYPE, UploadBlueprintPacket.STREAM_CODEC,
@@ -43,6 +51,52 @@ public final class BuildPackets {
             .playToServer(PlaceBlueprintPacket.TYPE, PlaceBlueprintPacket.STREAM_CODEC,
                 BuildPackets::handlePlace)
             .playToServer(CommissionPacket.TYPE, CommissionPacket.STREAM_CODEC, BuildPackets::handleCommission);
+    }
+
+    private static void handleCapture(CaptureBlueprintPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player)
+                || Books.ofHeldBook(player, packet.colony()).isEmpty()) return;
+            Optional<LibraryPath> name = LibraryPath.of(packet.name());
+            if (name.isEmpty() || net.minecraft.resources.ResourceLocation.tryBuild(Shelves.NAMESPACE, packet.name()) == null) {
+                refuse(player, Component.translatable("folkways.blueprints.capture.name_invalid"));
+                return;
+            }
+            ServerLevel level = player.serverLevel();
+            try {
+                var box = net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(packet.from(), packet.to());
+                CompoundTag file = BlueprintCapture.read(level, box, pos -> level.mayInteract(player, pos));
+                saveCapture(packet.name(), file);
+                Templates.reload(level.getServer().getResourceManager());
+                PatternPackets.offerToEveryone(level.getServer());
+                player.displayClientMessage(Component.translatable("folkways.blueprints.capture.saved", packet.name()), true);
+            } catch (StructureCompat.Failure failed) {
+                refuse(player, failed.component());
+            } catch (IllegalArgumentException | IOException failed) {
+                refuse(player, Component.translatable("folkways.blueprints.capture.failed"));
+            }
+        });
+    }
+
+    private static void saveCapture(String name, CompoundTag file) throws IOException {
+        byte[] bytes;
+        try (ByteArrayOutputStream written = new ByteArrayOutputStream()) {
+            NbtIo.writeCompressed(file, written);
+            bytes = written.toByteArray();
+        }
+        if (!BlueprintUploads.fits(bytes)) throw new IllegalArgumentException("Capture exceeds the upload limit");
+        Path blueprint = Templates.BLUEPRINTS.path().resolve(name + ".nbt");
+        Path piece = Templates.SHELF.path().resolve(name + ".nbt");
+        if (Files.exists(blueprint) || Files.exists(piece)) throw new IOException("Capture name already used");
+        Files.createDirectories(blueprint.getParent());
+        Files.createDirectories(piece.getParent());
+        Files.write(blueprint, bytes, StandardOpenOption.CREATE_NEW);
+        try {
+            Files.write(piece, bytes, StandardOpenOption.CREATE_NEW);
+        } catch (IOException failed) {
+            Files.deleteIfExists(blueprint);
+            throw failed;
+        }
     }
 
     private static void handleChunk(BlueprintChunkPacket packet, IPayloadContext context) {
@@ -109,13 +163,24 @@ public final class BuildPackets {
             return;
         }
         if (raise) {
-            raise(level, player, blueprint.get(), anchor);
+            try {
+                raise(level, player, blueprint.get(), anchor);
+            } catch (StructureCompat.Failure failed) {
+                refuse(player, failed.component());
+                return;
+            }
             player.displayClientMessage(
                 Component.translatable("folkways.blueprint.raised", blueprint.get().name()), true);
             return;
         }
-        Optional<BlueprintBuildOrder> filed = site.get().file(level, blueprint.get(), anchor,
-            siteName, Optional.of(player.getUUID()), player.getGameProfile().getName());
+        Optional<BlueprintBuildOrder> filed;
+        try {
+            filed = site.get().file(level, blueprint.get(), anchor,
+                siteName, Optional.of(player.getUUID()), player.getGameProfile().getName());
+        } catch (StructureCompat.Failure failed) {
+            refuse(player, failed.component());
+            return;
+        }
         if (filed.isEmpty()) {
             refuse(player, Component.translatable("folkways.blueprint.too_many",
                 BlueprintBook.MAX_BUILD_ORDERS));

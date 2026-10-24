@@ -5,7 +5,6 @@ import com.mojang.serialization.DataResult;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import mod.chiselsandbits.api.block.storage.StateEntryStorage;
@@ -67,13 +66,26 @@ public final class CandBStructureCodec {
 
     public static Map<BlockInformation, Integer> counts(StateEntryStorage storage) {
         Map<BlockInformation, Integer> counts = new LinkedHashMap<>();
+        long started = System.nanoTime();
         int size = storage.getSize();
+        int paletteSize = storage.palette().paletteEntries().size();
+        int width = paletteSize <= 1 ? 0 : 32 - Integer.numberOfLeadingZeros(paletteSize - 1);
+        java.util.BitSet indices = java.util.BitSet.valueOf(storage.getRawData());
+        if (indices.length() > size * size * size * width) {
+            throw new IllegalArgumentException("Excessive voxel palette or indices");
+        }
         if (size < 1 || size > 32) {
             throw new IllegalArgumentException("Unsupported voxel resolution");
         }
         for (int x = 0; x < size; x++) {
+            if (System.nanoTime() - started > CandBConfig.PROCESSING_MILLIS.get() * 1_000_000L) {
+                throw new IllegalArgumentException("Voxel processing budget exceeded");
+            }
             for (int y = 0; y < size; y++) {
                 for (int z = 0; z < size; z++) {
+                    int index = mod.chiselsandbits.api.util.ByteArrayUtils.getValueAt(indices, width,
+                        x * size * size + y * size + z);
+                    if (index >= paletteSize) throw new IllegalArgumentException("Invalid voxel palette index");
                     BlockInformation material = storage.getBlockInformation(x, y, z);
                     if (!material.isAir()) {
                         counts.merge(material, 1, Integer::sum);
