@@ -25,6 +25,20 @@ public final class WarEvents {
         for (var colony : Colonies.all(event.getServer())) { RaidDirector.of(colony).ifPresent(RaidDirector::tick); }
     }
 
+    @SubscribeEvent(priority = net.neoforged.bus.api.EventPriority.LOWEST)
+    public static void explosion(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
+        if (!(event.getExplosion().getDirectSourceEntity() instanceof net.minecraft.world.entity.Mob mob) || !RaidMembers.marked(mob)) { return; }
+        event.getAffectedBlocks().removeIf(at -> !WarEdits.reserve(mob, at, true));
+        if (mob instanceof net.minecraft.world.entity.monster.Creeper) { RaidMembers.director(mob).ifPresent(director -> director.died(mob.getUUID())); }
+    }
+
+    @SubscribeEvent(priority = net.neoforged.bus.api.EventPriority.LOWEST, receiveCanceled = true)
+    public static void exploding(net.neoforged.neoforge.event.level.ExplosionEvent.Start event) {
+        if (event.isCanceled() && event.getExplosion().getDirectSourceEntity() instanceof net.minecraft.world.entity.monster.Creeper mob && RaidMembers.marked(mob)) {
+            RaidMembers.director(mob).ifPresent(director -> director.died(mob.getUUID()));
+        }
+    }
+
     @SubscribeEvent
     public static void commands(RegisterCommandsEvent event) {
         var raids = Commands.literal("raids").requires(source -> source.hasPermission(2));

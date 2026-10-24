@@ -41,3 +41,5 @@ versionRange = "[${version}]"
 ordering = "AFTER"
 side = "BOTH"
 
+[[mixins]]
+config = "folkways-war.mixins.json"

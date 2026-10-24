@@ -14,9 +14,11 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 
-public record RaidDefinition(List<Wave> waves, String snapshot) {
+public record RaidDefinition(List<Wave> waves, Limits limits, String snapshot) {
     private static final Set<EntityType<?>> SUPPORTED = Set.of(EntityType.ZOMBIE, EntityType.HUSK,
-        EntityType.SKELETON, EntityType.STRAY, EntityType.PILLAGER, EntityType.VINDICATOR);
+        EntityType.SKELETON, EntityType.STRAY, EntityType.PILLAGER, EntityType.VINDICATOR, EntityType.CREEPER, EntityType.RAVAGER, EntityType.WITCH);
+
+    public record Limits(int brokenBlocks, double hardness) { }
 
     public record Entry(EntityType<?> entity, String role, int count, Map<EquipmentSlot, Item> equipment) {
         public Entry { equipment = Map.copyOf(equipment); }
@@ -53,7 +55,13 @@ public record RaidDefinition(List<Wave> waves, String snapshot) {
             waves.add(parsed);
         }
         if (waves.isEmpty() || waves.size() > 16) { throw new IllegalArgumentException("Raid needs 1–16 waves"); }
-        return new RaidDefinition(waves, root.toString());
+        JsonObject limits = GsonHelper.getAsJsonObject(root, "limits", new JsonObject());
+        int breaks = GsonHelper.getAsInt(limits, "brokenBlocks", 96);
+        double hardness = GsonHelper.getAsDouble(limits, "hardness", 5);
+        if (breaks < 0 || breaks > 4096 || !Double.isFinite(hardness) || hardness < 0 || hardness >= 50) {
+            throw new IllegalArgumentException("Invalid raid damage limits");
+        }
+        return new RaidDefinition(waves, new Limits(breaks, hardness), root.toString());
     }
 
     private static int bounded(JsonObject object, String key, int min, int max) {

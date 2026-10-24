@@ -29,6 +29,7 @@ public final class RaidMembers {
         tag.putUUID("colony", colony); tag.putUUID("raid", raid); tag.putString("role", role);
         mob.getPersistentData().put(MARK, tag);
     }
+    public static boolean marked(Mob mob) { return raid(mob).isPresent(); }
     static Optional<UUID> raid(Mob mob) {
         CompoundTag tag = mob.getPersistentData().getCompound(MARK);
         return tag.hasUUID("raid") ? Optional.of(tag.getUUID("raid")) : Optional.empty();
@@ -52,6 +53,7 @@ public final class RaidMembers {
         });
         if (mob.goalSelector.getAvailableGoals().stream().noneMatch(goal -> goal.getGoal() instanceof Approach)) {
             mob.goalSelector.addGoal(5, new Approach(mob));
+            mob.goalSelector.addGoal(1, new RaidBreachGoal(mob));
         }
     }
 

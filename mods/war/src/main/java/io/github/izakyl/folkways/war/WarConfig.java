@@ -16,6 +16,8 @@ public final class WarConfig {
     static final ModConfigSpec.IntValue MAX_MEMBERS = BUILDER.defineInRange("maximumRaiders", 64, 1, 256);
     static final ModConfigSpec.ConfigValue<List<? extends String>> DISABLED_DIMENSIONS = BUILDER.defineListAllowEmpty(
         "disabledDimensions", List.of("minecraft:the_end"), () -> "minecraft:the_end", value -> value instanceof String);
+    static final ModConfigSpec.IntValue BREAKS = BUILDER.defineInRange("maximumBrokenBlocks", 96, 0, 4096);
+    static final ModConfigSpec.DoubleValue HARDNESS = BUILDER.defineInRange("maximumBreachHardness", 5D, 0D, 49D);
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private WarConfig() { }

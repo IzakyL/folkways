@@ -170,6 +170,72 @@ public final class RaidGameTests {
         });
     }
 
+    @GameTest(batch = "war", template = "empty_large")
+    public static void breachesRespectServerAndDatapackCapsAndNeverOpenContainers(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        scene.begin(RaidDefinition.parse(definition("zombie", 1).snapshot().replace("\"waves\":", "\"limits\":{\"brokenBlocks\":2},\"waves\":")));
+        scene.director.advance(true); Mob mob = scene.director.loaded().getFirst();
+        BlockPos first = mob.blockPosition().east();
+        helper.getLevel().setBlockAndUpdate(first, Blocks.DEEPSLATE_BRICKS.defaultBlockState());
+        helper.assertTrue(WarEdits.breakBlock(mob, first), "normal stone and deepslate can be breached");
+        BlockPos chest = first.east(); helper.getLevel().setBlockAndUpdate(chest, Blocks.CHEST.defaultBlockState());
+        helper.assertFalse(WarEdits.breakBlock(mob, chest), "direct breach never opens a block entity");
+        helper.getLevel().setBlockAndUpdate(first, Blocks.OBSIDIAN.defaultBlockState());
+        helper.assertFalse(WarEdits.breakBlock(mob, first), "obsidian is outside the hardness cap");
+        helper.getLevel().setBlockAndUpdate(first, Blocks.STONE.defaultBlockState());
+        helper.assertTrue(WarEdits.breakBlock(mob, first), "second block fits the shared cap");
+        helper.getLevel().setBlockAndUpdate(first, Blocks.STONE.defaultBlockState());
+        helper.assertFalse(WarEdits.breakBlock(mob, first), "datapack cap stops the next edit");
+        helper.assertValueEqual(scene.director.raid().broken, 2, "damage budget is exact for successful breaks");
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void mobGriefingAndCancelledBreakEventsBlockRaidEdits(GameTestHelper helper) {
+        Scene scene = new Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); BlockPos at = mob.blockPosition().east();
+        helper.getLevel().setBlockAndUpdate(at, Blocks.STONE.defaultBlockState());
+        var rule = helper.getLevel().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_MOBGRIEFING);
+        boolean before = rule.get();
+        try { rule.set(false, helper.getLevel().getServer()); helper.assertFalse(WarEdits.breakBlock(mob, at), "mobGriefing=false forbids breaking"); }
+        finally { rule.set(before, helper.getLevel().getServer()); }
+        java.util.function.Consumer<net.neoforged.neoforge.event.level.BlockEvent.BreakEvent> deny = event -> { if (event.getPos().equals(at)) { event.setCanceled(true); } };
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(deny);
+        try { helper.assertFalse(WarEdits.breakBlock(mob, at), "NeoForge block-break cancellation is authoritative"); }
+        finally { net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(deny); }
+        helper.assertValueEqual(scene.director.raid().broken, 0, "refusals do not spend damage budget");
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void realCreeperExplosionsDamageBuildingsWithinTheRaidCap(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        scene.begin(RaidDefinition.parse(definition("creeper", 1).snapshot().replace("\"waves\":", "\"limits\":{\"brokenBlocks\":3},\"waves\":")));
+        scene.director.advance(true); Mob creeper = scene.director.loaded().getFirst(); creeper.setNoAi(true);
+        BlockPos at = helper.absolutePos(new BlockPos(7, 1, 8));
+        for (int x = -2; x <= 2; x++) { for (int z = -2; z <= 2; z++) { helper.getLevel().setBlockAndUpdate(at.offset(x, 0, z), Blocks.OAK_PLANKS.defaultBlockState()); } }
+        var building = BlockPos.betweenClosedStream(at.offset(-5, -1, -5), at.offset(5, 4, 5)).map(BlockPos::immutable)
+            .filter(pos -> !helper.getLevel().getBlockState(pos).isAir()).toList();
+        helper.getLevel().explode(creeper, at.getX() + .5, at.getY() + 1, at.getZ() + .5, 4, net.minecraft.world.level.Level.ExplosionInteraction.MOB);
+        long missing = building.stream().filter(pos -> helper.getLevel().getBlockState(pos).isAir()).count();
+        helper.assertTrue(missing > 0 && missing <= 3, "native creeper explosion makes real missing blocks within the cap");
+        helper.assertTrue(scene.director.raid().broken <= 3, "shared cap includes explosion blocks");
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large", timeoutTicks = 360)
+    public static void aBreacherPhysicallyOpensAStoneWall(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        for (int z = 1; z < 15; z++) { for (int y = 1; y < 5; y++) { helper.setBlock(new BlockPos(11, y, z), Blocks.STONE_BRICKS); } }
+        scene.begin(RaidDefinition.parse(definition("zombie", 1).snapshot().replace("fighter", "breacher")));
+        scene.director.advance(true); Mob mob = scene.director.loaded().getFirst();
+        BlockPos near = helper.absolutePos(new BlockPos(9, 1, 8)); mob.moveTo(near.getX() + .5, near.getY(), near.getZ() + .5);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(scene.director.raid().broken > 0, "the breacher spends time attacking the wall");
+            helper.assertTrue(java.util.stream.IntStream.range(1, 5).anyMatch(y -> helper.getLevel().getBlockState(helper.absolutePos(new BlockPos(11, y, 8))).isAir()), "the wall really loses a block");
+        });
+    }
+
     static final class Scene implements GameTestListener {
         final GameTestHelper helper;
         final Colony colony;
@@ -191,8 +257,9 @@ public final class RaidGameTests {
             colony.hold(PersonContent.ID, Held.Entity.of(person.mob())).orElseThrow(); person.joinColony(colony.id());
             helper.getLevel().addFreshEntity(person.mob()); helper.testInfo.addListener(this);
         }
-        void begin(String entity, int waves) {
-            director.begin(definition(entity, waves), WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(15, 1, 8))),
+        void begin(String entity, int waves) { begin(definition(entity, waves)); }
+        void begin(RaidDefinition definition) {
+            director.begin(definition, WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(15, 1, 8))),
                 WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(6, 1, 8))), 42L);
             director.raid().wait = 0;
         }
