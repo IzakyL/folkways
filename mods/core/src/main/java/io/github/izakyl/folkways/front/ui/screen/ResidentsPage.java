@@ -16,11 +16,17 @@ import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import dev.vfyjxf.taffy.style.FlexWrap;
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.participation.Participation;
+import io.github.izakyl.folkways.core.api.participation.Participations;
+import io.github.izakyl.folkways.core.api.participation.Stake;
+import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.effect.perk.PerkPool;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.resident.body.FolkwaysAttachments;
 import io.github.izakyl.folkways.core.api.resident.body.Keenness;
 import io.github.izakyl.folkways.core.api.resident.body.Licences;
+import io.github.izakyl.folkways.core.api.resident.body.WorkPriorities;
+import io.github.izakyl.folkways.core.engine.colony.WorkDefaults;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.front.api.Facing;
@@ -154,7 +160,7 @@ public final class ResidentsPage implements Draw {
         });
         Tokens.name(search, "folkways.resident.search");
 
-        UIElement page = Rows.page().addChildren(Rows.strip().addChildren(search), empty, unmatched, matrix);
+        UIElement page = Rows.page().addChildren(defaults(player), Rows.strip().addChildren(search), empty, unmatched, matrix);
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
 
         page.addSyncValue(DataBindingBuilder.tagS2C(() -> rosterTag(player))
@@ -174,6 +180,96 @@ public final class ResidentsPage implements Draw {
             .build()
             .getSyncValue());
         return page;
+    }
+
+    private static UIElement defaults(Player player) {
+        UIElement section = Rows.page();
+        section.layout(layout -> layout.flexShrink(0));
+        Button fold = new Button();
+        fold.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
+        Tokens.name(fold, "folkways.resident.defaults.fold");
+        UIElement under = Rows.page();
+        under.layout(layout -> layout.flexShrink(0));
+        under.addChildren(Rows.note(Component.translatable("folkways.ui.residents.defaults.hint")));
+        List<ResourceLocation> kinds = ResidentKinds.ids().stream()
+            .filter(id -> ResidentKinds.of(id).orElseThrow().workDefaults()).sorted().toList();
+        UIElement table = new UIElement().layout(layout -> layout.flexDirection(FlexDirection.COLUMN).widthAuto()
+            .minWidth(NAME_WIDTH + DOING_WIDTH + Rows.GAP * 2 + CELL_WIDTH * Vocations.ids().size()).gapAll(1));
+        table.addChildren(header(player.level().isClientSide()));
+        for (ResourceLocation kind : kinds) {
+            UIElement cells = grid();
+            for (ResourceLocation trade : Vocations.ids()) {
+                Label cell = priorityCell(trade);
+                Tokens.name(cell, "folkways.resident.defaults." + Tokens.of(kind) + "." + Tokens.of(trade));
+                cell.addServerEventListener(UIEvents.CLICK, event -> editDefault(player, kind, trade, true, 0));
+                cell.addServerEventListener(UIEvents.MOUSE_WHEEL,
+                    event -> editDefault(player, kind, trade, false, (int) Math.signum(event.deltaY)));
+                cell.addSyncValue(DataBindingBuilder.intValS2C(() -> authority(player)
+                        .map(acting -> defaultStanding(acting.colony(), kind, trade)).orElse(BARRED))
+                    .onSyncReceived(standing -> showPriority(cell, standing)).build().getSyncValue());
+                cells.addChildren(cell);
+            }
+            table.addChildren(Rows.row().addChildren(fixed(NAME_WIDTH).setText(
+                Component.translatable("entity." + kind.getNamespace() + "." + kind.getPath())), fixed(DOING_WIDTH), cells));
+        }
+        ScrollerView matrix = Rows.wideBox();
+        matrix.layout(layout -> layout.height((Rows.ROW_HEIGHT + 1) * (kinds.size() + 1) + 10).flexShrink(0));
+        matrix.addScrollViewChild(table);
+        under.addChildren(matrix);
+        Button reset = new Button().setText(Component.translatable("folkways.ui.residents.defaults.reset"))
+            .setOnServerClick(event -> resetDefaults(player));
+        reset.layout(layout -> layout.flexShrink(0));
+        reset.style(style -> style.tooltips(Component.translatable("folkways.ui.residents.defaults.reset_hint")));
+        Tokens.name(reset, "folkways.resident.defaults.reset");
+        fold.setText(Component.literal("− ").append(Component.translatable("folkways.ui.residents.defaults.title")));
+        fold.setOnClick(event -> {
+            boolean open = !under.isDisplayed();
+            under.setDisplay(open);
+            fold.setText(Component.literal(open ? "− " : "+ ")
+                .append(Component.translatable("folkways.ui.residents.defaults.title")));
+        });
+        section.addChildren(Rows.strip().addChildren(fold, reset), under);
+        return section;
+    }
+
+    private static int defaultStanding(Colony colony, ResourceLocation kind, ResourceLocation trade) {
+        Participation participation = Participations.between(kind, Stake.vocation(trade));
+        if (participation == Participation.NONE) {
+            return BARRED;
+        }
+        WorkPriorities.Rule rule = WorkDefaults.of(colony, kind).of(trade);
+        return rule.allowed() || participation == Participation.ALWAYS ? rule.priority().number() : -rule.priority().number();
+    }
+
+    static void editDefault(Player player, ResourceLocation kind, ResourceLocation trade, boolean toggle, int notches) {
+        authority(player).ifPresent(acting -> {
+            WorkPriorities.Rule current = WorkDefaults.of(acting.colony(), kind).of(trade);
+            int level = Math.clamp(current.priority().number() + Integer.signum(notches), 1, 4);
+            WorkDefaults.set(acting.colony(), kind, trade, toggle ? !current.allowed() : current.allowed(), level);
+        });
+    }
+
+    static void resetDefaults(Player player) {
+        authority(player).ifPresent(acting -> ResidentKinds.ids().forEach(kind -> WorkDefaults.reset(acting.colony(), kind)));
+    }
+
+    private static Label priorityCell(ResourceLocation trade) {
+        Label cell = new Label();
+        cell.setText(Component.empty());
+        cell.layout(layout -> layout.width(CELL_WIDTH - 6).height(16).marginHorizontal(3).flexShrink(0));
+        cell.textStyle(style -> style.textAlignHorizontal(Horizontal.CENTER)
+            .textAlignVertical(Vertical.CENTER).textWrap(TextWrap.HIDE));
+        cell.addClass("folkways_priority");
+        Cues.under(cell, vocationName(trade),
+            Cue.of("folkways.keys.allow", Cue.Key.CLICK), Cue.of("folkways.keys.rank", Cue.Key.WHEEL));
+        // The wheel ranks the cell; it must not also scroll the table beneath it.
+        cell.addEventListener(UIEvents.MOUSE_WHEEL, UIEvent::stopPropagation);
+        return cell;
+    }
+
+    private static void showPriority(Label cell, int standing) {
+        cell.setText(Component.literal(cell(standing)));
+        cell.textStyle(style -> style.textColor(standing < 0 ? BARRED_COLOR : ALLOWED_COLOR));
     }
 
     private UIElement detail(Player player) {
@@ -315,20 +411,11 @@ public final class ResidentsPage implements Draw {
             List<ResourceLocation> trades = Vocations.ids();
             for (int slot = 0; slot < trades.size(); slot++) {
                 int trade = slot;
-                Label cell = new Label();
-                cell.setText(Component.empty());
-                cell.layout(layout -> layout.width(CELL_WIDTH - 6).height(16).marginHorizontal(3).flexShrink(0));
-                cell.textStyle(style -> style.textAlignHorizontal(Horizontal.CENTER)
-                .textAlignVertical(Vertical.CENTER).textWrap(TextWrap.HIDE));
-                cell.addClass("folkways_priority");
-                Cues.under(cell, vocationName(trades.get(trade)),
-                    Cue.of("folkways.keys.allow", Cue.Key.CLICK), Cue.of("folkways.keys.rank", Cue.Key.WHEEL));
+                Label cell = priorityCell(trades.get(trade));
                 cell.addServerEventListener(UIEvents.CLICK,
                     event -> togglePriority(player, state, index, trade));
                 cell.addServerEventListener(UIEvents.MOUSE_WHEEL,
                     event -> rankPriority(player, state, index, trade, (int) Math.signum(event.deltaY)));
-                // The wheel ranks the cell; it must not also scroll the table beneath it.
-                cell.addEventListener(UIEvents.MOUSE_WHEEL, UIEvent::stopPropagation);
                 priorities.add(cell);
                 cells.addChildren(cell);
             }
@@ -560,9 +647,7 @@ public final class ResidentsPage implements Draw {
             for (int trade = 0; trade < row.priorities.size(); trade++) {
                 int standing = trade < priorities.length ? priorities[trade] : BARRED;
                 Label cell = row.priorities.get(trade);
-                cell.setText(Component.literal(cell(standing)));
-                cell.textStyle(style -> style
-                    .textColor(standing < 0 ? BARRED_COLOR : ALLOWED_COLOR));
+                showPriority(cell, standing);
             }
         }
         return matched;
