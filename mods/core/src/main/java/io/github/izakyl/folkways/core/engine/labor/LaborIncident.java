@@ -3,7 +3,9 @@ package io.github.izakyl.folkways.core.engine.labor;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -15,6 +17,8 @@ import net.neoforged.neoforge.common.NeoForge;
 
 // Immutable diagnostic data, posted on the server thread. It does not retain work, bodies or a world in a chat queue.
 public final class LaborIncident extends Event {
+    // Published by the front as an immutable snapshot; planning threads may read it too.
+    private static volatile Set<UUID> subscriptions = Set.of();
     private final UUID colony;
     private final ResourceKey<Level> dimension;
     private final String key;
@@ -32,19 +36,23 @@ public final class LaborIncident extends Event {
     public String key() { return dimension.location() + "/" + key; }
     public Component message() { return message.copy(); }
 
-    static void publish(UUID colony, ResourceKey<Level> dimension, String key, Component message) {
+    public static void subscriptions(Set<UUID> colonies) { subscriptions = Set.copyOf(colonies); }
+
+    static void publish(UUID colony, ResourceKey<Level> dimension, String key, Supplier<Component> message) {
+        if (!subscriptions.contains(colony)) return;
         try {
-            NeoForge.EVENT_BUS.post(new LaborIncident(colony, dimension, key, message));
+            NeoForge.EVENT_BUS.post(new LaborIncident(colony, dimension, key, message.get()));
         } catch (RuntimeException broken) {
             Labor.LOGGER.warn("diagnostic listener failed for {}", key, broken);
         }
     }
 
-    static void work(UUID colony, ServerLevel level, Body body, Node node, String reason, Component detail) {
+    static void work(UUID colony, ServerLevel level, Body body, Node node, String reason, Supplier<Component> detail) {
+        if (!subscriptions.contains(colony)) return;
         publish(colony, level.dimension(), body.id() + "/" + node.id() + "/" + reason,
-            Component.translatable("folkways.debug.incident.work", level.dimension().location().toString(),
+            () -> Component.translatable("folkways.debug.incident.work", level.dimension().location().toString(),
                 entity(body.mob()), body.mob().blockPosition().toShortString(), job(node), shortId(node.id()),
-                target(level, node), detail));
+                target(level, node), detail.get()));
     }
 
     static Component job(Node node) {

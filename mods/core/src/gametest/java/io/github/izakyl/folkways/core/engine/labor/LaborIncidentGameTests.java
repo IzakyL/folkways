@@ -7,7 +7,9 @@ import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -45,16 +47,47 @@ public final class LaborIncidentGameTests {
         List<LaborIncident> events = new ArrayList<>();
         Consumer<LaborIncident> listener = event -> { if (event.colony().equals(colony)) events.add(event); };
         NeoForge.EVENT_BUS.addListener(listener);
+        LaborIncident.subscriptions(Set.of(colony));
         try {
-            LaborIncident.work(colony, level, body, node, "urge-preempts/flee", LaborIncident.surroundings(body));
+            LaborIncident.work(colony, level, body, node, "urge-preempts/flee", () -> LaborIncident.surroundings(body));
             String json = Component.Serializer.toJson(events.getFirst().message(), level.registryAccess());
             helper.assertTrue(json.contains("Pickup witness") && json.contains("item.minecraft.wheat")
                     && json.contains(drop.getUUID().toString().substring(0, 8)) && json.contains("unknown"),
                 "the message retains the real item, drop ID and explicit unknown context as client components");
         } finally {
+            LaborIncident.subscriptions(Set.of());
             NeoForge.EVENT_BUS.unregister(listener);
             drop.discard();
             body.mob().discard();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void unsubscribedColoniesBuildNothingAndPostNoEvents(GameTestHelper helper) {
+        UUID colony = UUID.randomUUID();
+        AtomicInteger built = new AtomicInteger();
+        List<LaborIncident> events = new ArrayList<>();
+        Consumer<LaborIncident> listener = event -> { if (event.colony().equals(colony)) events.add(event); };
+        NeoForge.EVENT_BUS.addListener(listener);
+        try {
+            for (Set<UUID> watching : List.of(Set.<UUID>of(), Set.of(UUID.randomUUID()))) {
+                LaborIncident.subscriptions(watching);
+                LaborIncident.publish(colony, helper.getLevel().dimension(), "disabled", () -> {
+                    built.incrementAndGet();
+                    return Component.literal("disabled");
+                });
+                // No world or worker may be inspected before checking the subscription.
+                LaborIncident.work(colony, null, null, null, "disabled", () -> {
+                    built.incrementAndGet();
+                    return Component.literal("disabled");
+                });
+            }
+            helper.assertValueEqual(built.get(), 0, "unsubscribed detail suppliers must remain unevaluated");
+            helper.assertValueEqual(events.size(), 0, "unsubscribed incidents must not reach the event bus");
+        } finally {
+            LaborIncident.subscriptions(Set.of());
+            NeoForge.EVENT_BUS.unregister(listener);
         }
         helper.succeed();
     }

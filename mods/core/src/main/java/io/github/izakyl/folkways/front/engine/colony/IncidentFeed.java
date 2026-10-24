@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import net.minecraft.network.chat.Component;
@@ -36,17 +37,19 @@ final class IncidentFeed {
         }
         held.message = message.copy();
         held.count++;
-        if (now >= held.next && room(now)) deliver(held, now, sink);
+        // An offer opening a new window must give older queued keys their turn too.
+        if (now >= held.next && room(now)) flush(now, sink);
     }
 
     void flush(long now, BiConsumer<Component, Long> sink) {
-        for (Pending held : pending.values()) {
-            if (held.count > 0 && now >= held.next && room(now)) deliver(held, now, sink);
-        }
         if (overflow > 0 && room(now)) {
             sink.accept(Component.translatable("folkways.debug.incident.overflow", overflow), 1L);
             overflow = 0;
             sent++;
+        }
+        for (String key : List.copyOf(pending.keySet())) {
+            Pending held = pending.get(key);
+            if (held.count > 0 && now >= held.next && room(now)) deliver(key, held, now, sink);
         }
     }
 
@@ -55,10 +58,12 @@ final class IncidentFeed {
         return sent < BURST;
     }
 
-    private void deliver(Pending held, long now, BiConsumer<Component, Long> sink) {
+    private void deliver(String key, Pending held, long now, BiConsumer<Component, Long> sink) {
         sink.accept(held.message, held.count);
         held.count = 0;
         held.next = now + REPEAT;
         sent++;
+        pending.remove(key);
+        pending.put(key, held);
     }
 }

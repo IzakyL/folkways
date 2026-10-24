@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import net.minecraft.network.chat.Component;
@@ -36,8 +37,11 @@ public final class LaborDebug {
         NeoForge.EVENT_BUS.addListener(LaborDebug::tick);
         NeoForge.EVENT_BUS.addListener(LaborDebug::incident);
         NeoForge.EVENT_BUS.addListener(PlayerEvent.PlayerLoggedOutEvent.class,
-            event -> WATCHING.remove(event.getEntity().getUUID()));
-        NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> WATCHING.clear());
+            event -> forget(event.getEntity().getUUID()));
+        NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> {
+            WATCHING.clear();
+            LaborIncident.subscriptions(Set.of());
+        });
     }
 
     public static boolean enabled(Player player) {
@@ -49,6 +53,7 @@ public final class LaborDebug {
         if (!(player instanceof ServerPlayer reader)) return;
         if (!on) {
             if (WATCHING.remove(reader.getUUID()) != null) {
+                subscriptions();
                 reader.sendSystemMessage(Component.translatable("folkways.debug.disabled"));
             }
             return;
@@ -57,16 +62,25 @@ public final class LaborDebug {
             Watch before = WATCHING.get(reader.getUUID());
             if (before == null || !before.colony.equals(colony.id())) {
                 WATCHING.put(reader.getUUID(), new Watch(colony.id()));
+                subscriptions();
                 reader.sendSystemMessage(Component.translatable("folkways.debug.enabled"));
             }
         });
+    }
+
+    private static void forget(UUID player) {
+        if (WATCHING.remove(player) != null) subscriptions();
+    }
+
+    private static void subscriptions() {
+        LaborIncident.subscriptions(WATCHING.values().stream().map(watch -> watch.colony).collect(Collectors.toSet()));
     }
 
     private static void tick(ServerTickEvent.Post event) {
         if (WATCHING.isEmpty()) return;
         var server = event.getServer();
         long now = server.getTickCount();
-        WATCHING.entrySet().removeIf(entry -> {
+        if (WATCHING.entrySet().removeIf(entry -> {
             ServerPlayer reader = server.getPlayerList().getPlayer(entry.getKey());
             Colony colony = ColonyGround.of(server, entry.getValue().colony).orElse(null);
             if (reader == null || colony == null || !Charters.member(server, colony, reader.getUUID())) return true;
@@ -78,7 +92,7 @@ public final class LaborDebug {
                 () -> reader.sendSystemMessage(Component.translatable("folkways.debug.waiting",
                     reader.serverLevel().dimension().location().toString())));
             return false;
-        });
+        })) subscriptions();
     }
 
     private static void incident(LaborIncident event) {

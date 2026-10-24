@@ -122,7 +122,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     private void planningProblem(String stage, String error) {
         LaborIncident.publish(colony.colonyId(), dimension, "planning/" + stage,
-            net.minecraft.network.chat.Component.translatable("folkways.debug.incident.planning",
+            () -> net.minecraft.network.chat.Component.translatable("folkways.debug.incident.planning",
                 dimension.location().toString() + "/" + stage, error));
     }
 
@@ -347,7 +347,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         }
         runner.interruptedWork().ifPresent(interrupted -> LaborIncident.work(colony.colonyId(), level, body,
             interrupted, "urge-preempts/" + keenest.get().id(),
-            net.minecraft.network.chat.Component.translatable("folkways.debug.incident.preempted",
+            () -> net.minecraft.network.chat.Component.translatable("folkways.debug.incident.preempted",
                 keenest.get().id().toString(), LaborIncident.job(doing), LaborIncident.target(level, doing),
                 LaborIncident.surroundings(body))));
         runner.letGo(this, level, body, "urge-preempts");
@@ -478,7 +478,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         if (laid.timing().limited()) {
             limitedSchedules++;
             LaborIncident.publish(colony.colonyId(), dimension, "fallback",
-                net.minecraft.network.chat.Component.translatable("folkways.debug.incident.fallback",
+                () -> net.minecraft.network.chat.Component.translatable("folkways.debug.incident.fallback",
                     dimension.location().toString(), laid.timing().scheduleNanos() / 1_000_000, limitedSchedules));
         }
         laid.changed().forEach((resident, tour) -> {

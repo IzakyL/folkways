@@ -77,6 +77,7 @@ public final class SchedulingRecoveryGameTests {
             }
         };
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(listener);
+        LaborIncident.subscriptions(Set.of(data.colonyId()));
         try {
             Fixture scene = new Fixture(helper, 1, null, Placement.NOWHERE, null, labor);
             scene.enqueue(scene.initial(), scene.crew);
@@ -88,6 +89,7 @@ public final class SchedulingRecoveryGameTests {
             helper.assertTrue(events.size() == 1 && events.getFirst().key().contains("planning/schedule"),
                 "the next simulation publication reports the fault without waiting for a heartbeat");
         } finally {
+            LaborIncident.subscriptions(Set.of());
             net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(listener);
             labor.close();
         }

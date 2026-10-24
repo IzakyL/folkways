@@ -36,6 +36,40 @@ public final class IncidentFeedGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void recurringKeysCannotStarveALateOneOff(GameTestHelper helper) {
+        IncidentFeed feed = new IncidentFeed();
+        List<String> messages = new ArrayList<>();
+        for (int n = 0; n < 16; n++) feed.offer("recurring/" + n, Component.literal("recurring"), 0,
+            (message, count) -> messages.add(message.getString()));
+        feed.offer("late", Component.literal("late"), 0, (message, count) -> messages.add(message.getString()));
+        for (int tick = 40; tick <= 480; tick += 40) {
+            for (int n = 0; n < 16; n++) feed.offer("recurring/" + n, Component.literal("recurring"), tick,
+                (message, count) -> messages.add(message.getString()));
+            feed.flush(tick, (message, count) -> messages.add(message.getString()));
+        }
+        helper.assertTrue(messages.contains("late"), "recurring keys must leave a turn for a late one-off incident");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void recurringKeysCannotStarveOverflow(GameTestHelper helper) {
+        IncidentFeed feed = new IncidentFeed();
+        List<Component> messages = new ArrayList<>();
+        for (int n = 0; n < 65; n++) feed.offer("recurring/" + n, Component.literal("recurring"), 0,
+            (message, count) -> messages.add(message));
+        for (int tick = 40; tick <= 480; tick += 40) {
+            for (int n = 0; n < 64; n++) feed.offer("recurring/" + n, Component.literal("recurring"), tick,
+                (message, count) -> messages.add(message));
+            feed.flush(tick, (message, count) -> messages.add(message));
+        }
+        helper.assertTrue(messages.stream().anyMatch(message -> message.getContents()
+                instanceof net.minecraft.network.chat.contents.TranslatableContents contents
+                && contents.getKey().equals("folkways.debug.incident.overflow")),
+            "overflow must get a turn even while every retained key keeps recurring");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void differentFailuresShareABurstLimitAndEventuallyDeliver(GameTestHelper helper) {
         IncidentFeed feed = new IncidentFeed();
         List<Long> counts = new ArrayList<>();
@@ -58,7 +92,9 @@ public final class IncidentFeedGameTests {
             (message, count) -> messages.add(message));
         for (int tick = 40; tick <= 680; tick += 40) feed.flush(tick, (message, count) -> messages.add(message));
         helper.assertValueEqual(messages.size(), 65, "bounded detail entries plus a single overflow summary");
-        var contents = (net.minecraft.network.chat.contents.TranslatableContents) messages.getLast().getContents();
+        var contents = messages.stream().map(Component::getContents)
+            .filter(net.minecraft.network.chat.contents.TranslatableContents.class::isInstance)
+            .map(net.minecraft.network.chat.contents.TranslatableContents.class::cast).findFirst().orElseThrow();
         helper.assertTrue(contents.getKey().equals("folkways.debug.incident.overflow")
                 && ((Number) contents.getArgs()[0]).longValue() == 9_936,
             "the bounded queue must account for the events it could not retain individually");
