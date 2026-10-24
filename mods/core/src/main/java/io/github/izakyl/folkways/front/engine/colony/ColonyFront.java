@@ -1,13 +1,15 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
+import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.colony.Holding;
 import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.front.api.FrontView;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.engine.Enrollments;
@@ -22,9 +24,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 // What the book draws on a colony: the areas and lines it holds for the plugins that drew them, and the settings
@@ -39,6 +43,24 @@ public final class ColonyFront implements FrontView {
 
     private static final Map<UUID, ColonyFront> HELD = new ConcurrentHashMap<>();
 
+    private record ZoneKey(UUID id, ResourceKey<Level> dimension) { }
+
+    private record CachedZone(Holding holding, ColonySettings settings,
+            Map<Realm, Optional<BlockPos>> origins, Optional<ColonyZone> zone) {
+        static CachedZone of(Holding holding, ColonySettings settings, ServerLevel level) {
+            Map<Realm, Optional<BlockPos>> origins = new LinkedHashMap<>();
+            ((Held.Area) holding.what()).covered().forEach(at -> origins.computeIfAbsent(at.realm(),
+                realm -> WorldSpaces.storage(level, new WorldPos(realm, BlockPos.ZERO))));
+            return new CachedZone(holding, settings, Map.copyOf(origins), ColonyZone.in(holding, level, settings));
+        }
+
+        boolean matches(Holding current, ColonySettings chosen, ServerLevel level) {
+            return holding == current && settings.equals(chosen) && origins.entrySet().stream().allMatch(entry ->
+                entry.getValue().equals(WorldSpaces.storage(level, new WorldPos(entry.getKey(), BlockPos.ZERO))));
+        }
+    }
+
+    private final Map<ZoneKey, CachedZone> zoneCache = new LinkedHashMap<>();
     private final Colony colony;
     private final Map<UUID, ColonySettings> drawn = new LinkedHashMap<>();
     private final Map<ResourceLocation, ColonySettings> settings = new LinkedHashMap<>();
@@ -72,9 +94,10 @@ public final class ColonyFront implements FrontView {
 
     public List<ColonyZone> zonesIn(ServerLevel level) {
         List<ColonyZone> found = new ArrayList<>();
+        zoneCache.keySet().removeIf(key -> colony.holding(key.id()).isEmpty());
         for (Holding holding : colony.holdings()) {
             if (holding.what() instanceof Held.Area) {
-                ColonyZone.in(holding, level, settingsOf(holding)).ifPresent(found::add);
+                zoneIn(holding, level).ifPresent(found::add);
             }
         }
         return List.copyOf(found);
@@ -98,8 +121,20 @@ public final class ColonyFront implements FrontView {
         if (server == null || !(holding.what() instanceof Held.Area)) {
             return Optional.empty();
         }
-        return holding.what().cells().getFirst().level(server)
-            .flatMap(level -> ColonyZone.in(holding, level, settingsOf(holding)));
+        return ((Held.Area) holding.what()).covered().iterator().next().level(server)
+            .flatMap(level -> zoneIn(holding, level));
+    }
+
+    // Storage coordinates change when the holding or its frame changes, not on every colony tick.
+    private Optional<ColonyZone> zoneIn(Holding holding, ServerLevel level) {
+        ColonySettings chosen = settingsOf(holding);
+        ZoneKey key = new ZoneKey(holding.id(), level.dimension());
+        CachedZone cached = zoneCache.get(key);
+        if (cached == null || !cached.matches(holding, chosen, level)) {
+            cached = CachedZone.of(holding, chosen, level);
+            zoneCache.put(key, cached);
+        }
+        return cached.zone();
     }
 
     public Optional<ColonyZone> addZone(ServerLevel level, ResourceLocation delegation, Set<BlockPos> cells,
