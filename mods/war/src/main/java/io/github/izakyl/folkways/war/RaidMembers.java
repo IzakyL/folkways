@@ -87,7 +87,7 @@ public final class RaidMembers {
 
     @SubscribeEvent
     public static void ticking(net.neoforged.neoforge.event.tick.EntityTickEvent.Pre event) {
-        if (!(event.getEntity() instanceof Mob mob) || !(mob.level() instanceof ServerLevel) || !marked(mob)) { return; }
+        if (!(event.getEntity() instanceof Mob mob) || !(mob.level() instanceof ServerLevel) || !marked(mob) || !mob.isAlive()) { return; }
         var director = director(mob);
         if (director.filter(d -> d.owns(mob)).isPresent()) {
             mob.setNoAi(director.get().raid().paused);

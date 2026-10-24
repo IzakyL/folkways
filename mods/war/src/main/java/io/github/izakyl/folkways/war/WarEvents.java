@@ -27,6 +27,12 @@ public final class WarEvents {
     }
 
     @SubscribeEvent(priority = net.neoforged.bus.api.EventPriority.LOWEST)
+    public static void portal(net.neoforged.neoforge.event.level.BlockEvent.PortalSpawnEvent event) {
+        // Fire placement runs onPlace before the source can be recorded in the fire ledger.
+        if (WarEdits.placingFire(event.getLevel(), event.getPos())) { event.setCanceled(true); }
+    }
+
+    @SubscribeEvent(priority = net.neoforged.bus.api.EventPriority.LOWEST)
     public static void trample(net.neoforged.neoforge.event.level.BlockEvent.FarmlandTrampleEvent event) {
         if (event.getEntity() instanceof net.minecraft.world.entity.Mob mob && RaidMembers.marked(mob)
                 && !WarEdits.reserve(mob, event.getPos(), false)) { event.setCanceled(true); }

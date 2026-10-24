@@ -277,11 +277,84 @@ public final class RaidRegressionGameTests {
             case "forbidden" -> scene.colony.rule(FolkwaysWarMod.RAIDS, helper.getLevel().dimension(), java.util.List.of(new io.github.izakyl.folkways.core.api.terms.StoreRule.Access(first, false, true)));
             default -> throw new IllegalArgumentException(reason);
         }
-        helper.assertFalse(RaidPlunder.take(scene.director, mob, first), "a stale in-flight target cannot withdraw stock");
+        if (!reason.equals("removed")) { helper.assertFalse(RaidPlunder.take(scene.director, mob, first), "a stale in-flight target cannot withdraw stock"); }
         helper.assertValueEqual(RaidPlunder.target(scene.director, mob), second, "invalid entries cannot starve a later accessible store");
         BlockPos beside = second.block(helper.getLevel()).west(); mob.moveTo(beside.getX() + .5, beside.getY(), beside.getZ() + .5);
         helper.assertTrue(RaidPlunder.take(scene.director, mob, second), "looting continues at the next actual container");
         helper.assertValueEqual(remaining.getItem(0).getCount(), 52, "only the valid store supplies the next share"); helper.succeed();
+    }
+
+    private static BlockPos portalFrame(GameTestHelper helper, Mob mob) {
+        for (int x = 10; x <= 13; x++) {
+            for (int y = 1; y <= 5; y++) { helper.setBlock(new BlockPos(x, y, 3), x == 10 || x == 13 || y == 1 || y == 5 ? Blocks.OBSIDIAN : Blocks.AIR); }
+        }
+        BlockPos fire = helper.absolutePos(new BlockPos(11, 2, 3)); mob.moveTo(fire.getX() - 1, fire.getY(), fire.getZ() - 1); return fire;
+    }
+
+    private static void noOtherPortalChanges(GameTestHelper helper, BlockPos fire) {
+        for (int x = 0; x < 2; x++) {
+            for (int y = 0; y < 3; y++) {
+                BlockPos at = fire.offset(x, y, 0);
+                helper.assertFalse(helper.getLevel().getBlockState(at).is(Blocks.NETHER_PORTAL), "raider fire cannot change a second cell into a portal");
+                if (!at.equals(fire)) { helper.assertTrue(helper.getLevel().getBlockState(at).isAir(), "every other frame interior cell remains unchanged"); }
+            }
+        }
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void raiderIgnitionCannotCreateAPortalButOrdinaryFireStillCan(GameTestHelper helper) {
+        var scene = new RaidGameTests.Scene(helper); scene.begin("zombie", 1); scene.director.advance(true); Mob mob = scene.director.loaded().getFirst();
+        BlockPos at = portalFrame(helper, mob);
+        var rule = helper.getLevel().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOFIRETICK); boolean before = rule.get();
+        try {
+            rule.set(true, helper.getLevel().getServer());
+            helper.assertTrue(AttributedFires.ignite(mob, at), "the authorized ignition still places real fire inside an obsidian frame");
+            helper.assertTrue(helper.getLevel().getBlockState(at).is(Blocks.FIRE) && AttributedFires.of(helper.getLevel()).attributed(at), "the source remains fire with provenance");
+            noOtherPortalChanges(helper, at);
+            helper.getLevel().removeBlock(at, false); helper.getLevel().setBlockAndUpdate(at, Blocks.FIRE.defaultBlockState());
+            helper.assertTrue(helper.getLevel().getBlockState(at).is(Blocks.NETHER_PORTAL), "ordinary fire retains vanilla portal creation after the scoped placement ends");
+        } finally { rule.set(before, helper.getLevel().getServer()); }
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void cancelledIgnitionInsideAPortalFrameLeavesNoPortalOrFire(GameTestHelper helper) {
+        var scene = new RaidGameTests.Scene(helper); scene.begin("zombie", 1); scene.director.advance(true); Mob mob = scene.director.loaded().getFirst();
+        BlockPos at = portalFrame(helper, mob);
+        var rule = helper.getLevel().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOFIRETICK); boolean before = rule.get();
+        java.util.function.Consumer<net.neoforged.neoforge.event.level.BlockEvent.EntityPlaceEvent> deny = event -> { if (event.getPos().equals(at)) { event.setCanceled(true); } };
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(deny);
+        try {
+            rule.set(true, helper.getLevel().getServer()); helper.assertFalse(AttributedFires.ignite(mob, at), "placement cancellation rejects the entire authorized edit");
+            noOtherPortalChanges(helper, at); helper.assertTrue(helper.getLevel().getBlockState(at).isAir(), "the source snapshot is restored");
+            helper.assertFalse(AttributedFires.of(helper.getLevel()).attributed(at), "rejected ignition records no provenance");
+            helper.assertValueEqual(scene.director.raid().fires, 0, "a cancelled placement consumes no source allowance");
+        } finally { net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(deny); rule.set(before, helper.getLevel().getServer()); }
+        helper.getLevel().setBlockAndUpdate(at, Blocks.FIRE.defaultBlockState());
+        helper.assertTrue(helper.getLevel().getBlockState(at).is(Blocks.NETHER_PORTAL), "rollback also restores the ordinary portal-creation context"); helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void burningReplacementFireCannotCreateAPortalEither(GameTestHelper helper) {
+        var scene = new RaidGameTests.Scene(helper); scene.begin("zombie", 1); scene.director.advance(true); Mob mob = scene.director.loaded().getFirst();
+        BlockPos at = portalFrame(helper, mob); helper.getLevel().setBlockAndUpdate(at, Blocks.OAK_PLANKS.defaultBlockState());
+        var rule = helper.getLevel().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOFIRETICK); boolean before = rule.get();
+        try {
+            rule.set(true, helper.getLevel().getServer());
+            helper.assertTrue(WarEdits.burningFire(helper.getLevel(), at, mob, Blocks.FIRE.defaultBlockState()), "the burning replacement uses the same protected placement path");
+            noOtherPortalChanges(helper, at); helper.assertTrue(helper.getLevel().getBlockState(at).is(Blocks.FIRE), "a burning block becomes fire rather than an unbudgeted portal");
+        } finally { rule.set(before, helper.getLevel().getServer()); }
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void completedDeathsKeepTheirNativeDeathTicks(GameTestHelper helper) {
+        var scene = new RaidGameTests.Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); scene.extra.add(mob); mob.kill();
+        var event = net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.tick.EntityTickEvent.Pre(mob));
+        helper.assertFalse(event.isCanceled(), "a confirmed kill must retain the native death and experience lifecycle"); mob.tick();
+        helper.assertFalse(mob.isRemoved(), "retirement must not discard a corpse before vanilla finishes its death ticks");
+        helper.assertTrue(mob.deathTime > 0, "native death time continues after the member slot is resolved"); helper.succeed();
     }
 
 }

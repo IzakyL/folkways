@@ -19,6 +19,8 @@ public final class WarEdits {
     static final TagKey<net.minecraft.world.level.block.Block> PROTECTED = TagKey.create(Registries.BLOCK,
         ResourceLocation.fromNamespaceAndPath("folkways", "raid_protected"));
     private static final GameProfile GRIEFER = new GameProfile(UUID.fromString("67a19e80-a20c-4bbd-89dd-5a9d1286cb00"), "[FolkwaysRaid]");
+    private record FirePlacement(ServerLevel level, BlockPos at) { }
+    private static final ThreadLocal<FirePlacement> PLACING_FIRE = new ThreadLocal<>();
     private WarEdits() { }
 
     static boolean permits(ServerLevel level, BlockPos at, Mob mob, boolean container, double hardness) {
@@ -75,11 +77,22 @@ public final class WarEdits {
 
     private static boolean firePlacement(ServerLevel level, BlockPos at, Mob actor, net.minecraft.world.level.block.state.BlockState state) {
         var snapshot = net.neoforged.neoforge.common.util.BlockSnapshot.create(level.dimension(), level, at);
-        if (!level.setBlock(at, state, 3)) { return false; }
-        if (net.neoforged.neoforge.event.EventHooks.onBlockPlace(actor, snapshot, net.minecraft.core.Direction.UP)) {
-            snapshot.restore(); return false;
+        FirePlacement previous = PLACING_FIRE.get();
+        PLACING_FIRE.set(new FirePlacement(level, at.immutable()));
+        try {
+            if (!level.setBlock(at, state, 3)) { return false; }
+            if (net.neoforged.neoforge.event.EventHooks.onBlockPlace(actor, snapshot, net.minecraft.core.Direction.UP)) {
+                snapshot.restore(); return false;
+            }
+            return true;
+        } finally {
+            if (previous == null) { PLACING_FIRE.remove(); } else { PLACING_FIRE.set(previous); }
         }
-        return true;
+    }
+
+    static boolean placingFire(net.minecraft.world.level.LevelAccessor level, BlockPos at) {
+        FirePlacement placement = PLACING_FIRE.get();
+        return placement != null && placement.level() == level && placement.at().equals(at);
     }
 
     static int burnCost(ServerLevel level, BlockPos at, Mob actor, int remaining) {
