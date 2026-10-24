@@ -27,6 +27,7 @@ public final class BuiltinPlugins {
         FishingPlugin.install(modBus);
         GroundworkPlugin.install(modBus);
         PatrolPlugin.install(modBus);
+        io.github.izakyl.folkways.plugins.damagecontrol.DamageControlPlugin.install(modBus);
         OrdersPlugin.install(modBus);
         io.github.izakyl.folkways.plugins.supply.SupplyContent.install(modBus);
     }

@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
+import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -141,6 +142,11 @@ final class BuildPresence implements Facing {
         numbered = Math.max(0, saved.integer(TAG_NUMBERED).orElse(0));
         nameUnnamed();
         book.reportChangesTo(this::keep);
+    }
+
+    boolean buildingAt(ServerLevel level, WorldPos at) {
+        return sites.values().stream().anyMatch(site -> site.target().realm().equals(at.realm())
+            && site.target().in(level).cells().containsKey(at.block(level)));
     }
 
     // Sites kept from before they were named are numbered now; an order a growing site placed shares its name.
