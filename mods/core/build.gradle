@@ -28,6 +28,8 @@ dependencies {
     gameTestFixturesImplementation sourceSets.main.output
     gameTestFixturesImplementation project(":vanilla")
     gametestImplementation sourceSets.gameTestFixtures.output
+    compileOnly lib("ftbchunks")
+    compileOnly lib("ftblibrary")
     compileOnly lib("emi")
     compileOnly lib("jei")
     compileOnly lib("jecharacters")

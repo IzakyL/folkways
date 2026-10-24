@@ -11,7 +11,9 @@ import io.github.izakyl.folkways.core.api.work.Unmet;
 import io.github.izakyl.folkways.core.api.work.WorkGesture;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.WorkProtection;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,6 +106,24 @@ abstract class BuildNode implements Node {
                 || !entry.getValue().canSurvive(level, cell);
         })) {
             return refuse(BuildRefusal.NO_WAY_TO_BUILD);
+        }
+        for (var entry : remaining(level, job.after(), false).entrySet()) {
+            BlockPos at = entry.getKey();
+            if (!WorkProtection.edit(level, who, at)
+                || (!level.getFluidState(at).isEmpty() || !entry.getValue().getFluidState().isEmpty())
+                    && !WorkProtection.fluid(level, who, at)) {
+                return Outcome.failed(LaborRefusal.PROTECTED);
+            }
+        }
+        for (BlockPos at : remaining(level, job.before(), false).keySet()) {
+            if (!WorkProtection.edit(level, who, at)) {
+                return Outcome.failed(LaborRefusal.PROTECTED);
+            }
+        }
+        for (WorldPos cell : job.joint()) {
+            if (!WorkProtection.edit(level, who, cell.block(level))) {
+                return Outcome.failed(LaborRefusal.PROTECTED);
+            }
         }
         return work(level, who);
     }

@@ -13,6 +13,7 @@ import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Staged;
+import io.github.izakyl.folkways.core.api.work.WorkProtection;
 import io.github.izakyl.folkways.core.engine.plan.Stores;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +32,12 @@ public final class Commit {
     }
 
     public static Outcome run(ServerLevel level, Node node, Worker who) {
+        if (!WorkProtection.work(level, node, who)
+                || who.placement() != null && who.placement().draws().stream()
+                    .anyMatch(draw -> draw.from().isPresent()
+                        && !WorkProtection.interact(level, who, draw.from().get().pos()))) {
+            return Outcome.failed(LaborRefusal.PROTECTED);
+        }
         if (node instanceof Staged staged) {
             return switch (staged.draw(level, who)) {
                 case Staged.Short(var why) -> Outcome.failed(why);
@@ -41,7 +48,7 @@ public final class Commit {
         List<Drawn> drawn = new ArrayList<>();
         List<Owed> owed = owed(who.placement());
         for (Need need : node.spec().needs()) {
-            if (need.count() > 0 && !draw(who, need, owed, drawn)) {
+            if (need.count() > 0 && !draw(level, who, need, owed, drawn)) {
                 putBack(who, drawn);
                 return Outcome.failed(LaborRefusal.GOODS_GONE);
             }
@@ -88,7 +95,7 @@ public final class Commit {
     // of the pack and the stores are other work's, and what is short of them fails the work for the plan to see.
     // A need the plan set nothing aside for takes what matches, carried goods from the pack and anything else
     // also from the stores in reach.
-    private static boolean draw(Worker who, Need need, List<Owed> owed, List<Drawn> drawn) {
+    private static boolean draw(ServerLevel level, Worker who, Need need, List<Owed> owed, List<Drawn> drawn) {
         long left = need.count();
         boolean planned = false;
         for (Owed one : owed) {
@@ -114,7 +121,8 @@ public final class Commit {
         left = drawFrom(who.pack(), matching, left, drawn);
         if (!need.carried()) {
             for (Worker.Store store : who.within()) {
-                if (StoreRule.takes(Stores.rulesAt(store.at()))) {
+                if (StoreRule.takes(Stores.rulesAt(store.at()))
+                        && WorkProtection.interact(level, who, store.at())) {
                     left = drawFrom(store.contents(), matching, left, drawn);
                 }
             }
@@ -163,11 +171,14 @@ public final class Commit {
             if (left.isEmpty()) {
                 break;
             }
-            if (StoreRule.stores(Stores.rulesAt(store.at()))) {
+            if (StoreRule.stores(Stores.rulesAt(store.at()))
+                    && WorkProtection.interact((ServerLevel) who.body().level(), who, store.at())) {
                 left = Containers.insert(store.contents(), left);
             }
         }
-        who.spill(left);
+        if (!left.isEmpty()) {
+            who.spill(left);
+        }
     }
 
     private record Supplied(Worker who, List<ItemStack> supplied) implements Worker {

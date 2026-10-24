@@ -48,6 +48,11 @@ abstract class CraftNode implements Node {
     }
 
     @Override
+    public boolean editsBlocks() {
+        return false;
+    }
+
+    @Override
     public final NodeSpec spec() {
         return spec;
     }

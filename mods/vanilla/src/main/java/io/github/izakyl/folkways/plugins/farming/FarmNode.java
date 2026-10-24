@@ -8,12 +8,15 @@ import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.WorkGesture;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.WorkProtection;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import io.github.izakyl.folkways.front.api.PastDay;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
@@ -70,6 +73,19 @@ abstract class FarmNode implements Node {
     @Override
     public final Outcome commit(ServerLevel level, Worker who) {
         if (!chore.tending().permits(chore)) return refuse(FarmRefusal.GROUND_TAKEN);
+        Job job = chore.job();
+        for (BlockPos cell : job.cells()) {
+            if (!WorkProtection.edit(level, who, cell)
+                || (this instanceof PlantNode || this instanceof TillNode)
+                    && !WorkProtection.edit(level, who, cell.above())) {
+                return Outcome.failed(LaborRefusal.PROTECTED);
+            }
+        }
+        for (BlockPos cell : job.canopy()) {
+            if (!WorkProtection.edit(level, who, cell)) {
+                return Outcome.failed(LaborRefusal.PROTECTED);
+            }
+        }
         List<ItemStack> supplied = who.supplied();
         Outcome done = work(level, who, chore.job());
         PastDay made = chore.tending().made();

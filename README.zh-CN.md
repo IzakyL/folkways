@@ -75,6 +75,7 @@ Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无�
 | [Touhou Little Maid / 车万女仆](https://modrinth.com/mod/touhou-little-maid) 1.5+，需 GeckoLib                                         | 将内置及已安装扩展包中的模型用作居民外观，可逐个或按包选择                                                          |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                                 | 殖民书沿第三人称相机的准星瞄准                                                                                      |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                              | 在容器和物品筛选中使用配方查看器的物品列表                                                                          |
+| [FTB Chunks](https://www.curseforge.com/minecraft/mc-mods/ftb-chunks-forge) 2101.1.22+                                                 | 居民以创始人的自动化权限遵守领地保护，包括服务器的假玩家规则 |
 | [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                                      | 创始人可将殖民地交给队伍；队员共同管理，队长持有创始人权限                                                          |
 | [Just Enough Characters（JEC）](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                              | 在物品选择器、目录选择器、居民分工和库存页使用全拼、首字母与混合输入搜索；仅需客户端安装                            |
 
