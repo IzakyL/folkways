@@ -2,7 +2,7 @@
 
 [架构说明](architecture.md) · [English](../en/combat-architecture.md)
 
-本增量从战斗初稿 `e40ebc7` 续作，并同步 master `2146c09`。已提供原版敌对、居民自卫与逃跑、服务端单人命令和最多 8 人的实际 UnitGroup。居民弓弩、真实武器会话、War 和枪械兼容尚未实现。
+本增量从战斗初稿 `e40ebc7` 续作，并同步 master `506eec3`。已提供原版敌对、居民自卫与逃跑、服务端单人命令和最多 8 人的实际 UnitGroup。居民弓弩、真实武器会话、War 和枪械兼容尚未实现。
 
 ## 模块边界
 

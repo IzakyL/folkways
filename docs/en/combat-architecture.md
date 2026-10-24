@@ -2,7 +2,7 @@
 
 [Architecture](architecture.md) · [简体中文](../zh-CN/combat-architecture.md)
 
-This increment continues draft e40ebc7 and incorporates master 2146c09. It provides native hostility, defence and escape, server-side resident commands and actual groups of up to eight people. Resident bows/crossbows, real weapon sessions, War and gun integration remain future work.
+This increment continues draft e40ebc7 and incorporates master 506eec3. It provides native hostility, defence and escape, server-side resident commands and actual groups of up to eight people. Resident bows/crossbows, real weapon sessions, War and gun integration remain future work.
 
 ## Module ownership
 

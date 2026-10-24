@@ -250,6 +250,7 @@ export const PASSING = new Set([
   "NO_WAY_THERE",
   // An elevator disappearing or cancelling a ride is a recoverable travel condition.
   "UNAVAILABLE", "RIDE_CANCELLED",
+  "HIVE_GONE", "HIVE_TAKEN", "HIVE_NOT_READY", "HIVE_NOT_SMOKED",
   "NO_STANCE", "ACCESS_DEPENDENCY", "CONTESTED",
   "GROUND_TAKEN", "BEAST_TAKEN", "LINE_ALREADY_OUT", "STATION_BUSY",
   "GOODS_GONE", "NOWHERE_TO_PUT_IT",
