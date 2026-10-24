@@ -19,7 +19,7 @@ export function checkSpecTypes(suite: string) {
 export function buildMod() {
   try {
     const wrapper = process.platform === "win32" ? ".\\gradlew.bat" : "./gradlew";
-    execSync(`${wrapper} build -x test`, { cwd: REPO_ROOT, stdio: "inherit" });
+    execSync(`${wrapper} --no-daemon build -x test`, { cwd: REPO_ROOT, stdio: "inherit" });
   } catch {
     throw new Error("\n[mod build] Gradle wrapper build -x test failed; refusing to run (the specs run against the mod built here).\n");
   }
