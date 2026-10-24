@@ -1266,5 +1266,7 @@
   "folkways.combat.stock.failed": "補給失敗",
   "folkways.combat.stock.cancelled": "補給已取消",
   "folkways.combat.stock.timed_out": "補給逾時",
-  "folkways.combat.loadout.unavailable": "裝備不可用"
+  "folkways.combat.loadout.unavailable": "裝備不可用",
+  "folkways.combat.loadout.warfare.firearm": "槍械（卓越前線）",
+  "folkways.doing.folkways.warfare_operating": "操作炮位"
 }

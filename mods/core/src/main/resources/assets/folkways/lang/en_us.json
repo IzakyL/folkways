@@ -1266,5 +1266,7 @@
   "folkways.combat.stock.failed": "Supply failed",
   "folkways.combat.stock.cancelled": "Supply cancelled",
   "folkways.combat.stock.timed_out": "Supply timed out",
-  "folkways.combat.loadout.unavailable": "Unavailable equipment"
+  "folkways.combat.loadout.unavailable": "Unavailable equipment",
+  "folkways.combat.loadout.warfare.firearm": "Firearm (Superb Warfare)",
+  "folkways.doing.folkways.warfare_operating": "Operating an emplacement"
 }

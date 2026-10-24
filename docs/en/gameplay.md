@@ -282,3 +282,7 @@ its own installed packs; pack assets are not sent over the network.
 After changing packs, run `/reload` on the server and reload client resources
 with F3+T, or restart the game. Files in `config/touhou_little_maid/file/` are
 download caches and do not count as installed packs.
+
+## Superb Warfare
+
+With Folkways × Superb Warfare, guards collect physical firearm ammunition and operate emplacements inside their guard area. See [firearms and weapon stations](warfare.md) for setup, supply and safety rules.
