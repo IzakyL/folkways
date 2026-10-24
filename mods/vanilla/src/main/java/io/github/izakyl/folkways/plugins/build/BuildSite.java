@@ -2,7 +2,6 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.core.api.ground.BlockChanges;
 import io.github.izakyl.folkways.core.api.terms.Closures;
-import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.Realm;
@@ -12,6 +11,7 @@ import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.InputAllocation;
 import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
@@ -46,7 +46,6 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -418,7 +417,7 @@ final class BuildSite {
             }
             List<Need> needs = new ArrayList<>();
             // Brought in the pack: the pieces are done all over the site, not beside a store at its edge.
-            goods.forEach((item, count) -> needs.add(new Need(item, count, true)));
+            goods.forEach((item, count) -> needs.add(new Need(item, count, true).replacing()));
             Piece first = batch.getFirst();
             this.first = first.node().id();
             positionsAt = geometryVersion;
@@ -1261,23 +1260,7 @@ final class BuildSite {
 
     // Whether the worker holds what the piece takes, in its pack.
     private static boolean supplied(Worker who, Piece piece) {
-        for (Need need : piece.node().spec().needs()) {
-            if (count(who.pack(), need.spec()) < need.count()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static long count(Container held, ItemSpec spec) {
-        long count = 0;
-        for (int slot = 0; slot < held.getContainerSize(); slot++) {
-            ItemStack stack = held.getItem(slot);
-            if (!stack.isEmpty() && Goods.matches(stack, spec)) {
-                count += stack.getCount();
-            }
-        }
-        return count;
+        return InputAllocation.canSupply(who.pack(), piece.node().spec().needs());
     }
 
     // Remaining physical prerequisite depth, walked without recursion for tall builds. A cycle is defensive

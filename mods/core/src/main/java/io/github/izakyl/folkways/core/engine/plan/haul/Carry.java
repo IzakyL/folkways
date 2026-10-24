@@ -128,10 +128,10 @@ final class Carry implements Carrying {
                 return count;
             }
         }
-        return fetch(plan, where, consumer, concrete, count, made);
+        return fetch(plan, where, consumer, concrete, count, made, edge.unit());
     }
 
-    private static long fetch(Laying plan, Stash where, UUID consumer, ItemSpec concrete, long count, boolean made) {
+    private static long fetch(Laying plan, Stash where, UUID consumer, ItemSpec concrete, long count, boolean made, int unit) {
         Set<Stand> loading = plan.around(where);
         if (loading.isEmpty()) {
             plan.because(Why.NO_ROOM);
@@ -142,6 +142,8 @@ final class Carry implements Carrying {
             return 0;
         }
         long riding = Math.min(count, plan.perTrip(concrete));
+        riding -= riding % unit;
+        if (riding <= 0) return 0;
         Manifest goods = manifest(plan, where, concrete, riding, made);
         Optional<UUID> recipient = plan.node(consumer).worker();
         TransferNode fetch = TransferNode.at(Endpoint.store(where), new Endpoint.Pack(recipient), goods, loading)

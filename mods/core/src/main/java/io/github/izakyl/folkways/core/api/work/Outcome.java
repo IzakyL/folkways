@@ -10,16 +10,21 @@ public sealed interface Outcome {
     List<WorkNoise> noises();
 
     // Whatever the core handed over and the work did not use goes back into the worker's pack.
-    record Done(List<WorkNoise> noises, List<ItemStack> made, Optional<Xp> xp, List<ItemStack> unused)
+    record Done(List<WorkNoise> noises, List<ItemStack> made, Optional<Xp> xp, List<ItemStack> unused, List<InputReceipt> inputs)
         implements Outcome {
 
         public Done {
             made = List.copyOf(made);
             unused = List.copyOf(unused);
+            inputs = List.copyOf(inputs);
+        }
+
+        public Done(List<WorkNoise> noises, List<ItemStack> made, Optional<Xp> xp, List<ItemStack> unused) {
+            this(noises, made, xp, unused, List.of());
         }
 
         public Done(List<WorkNoise> noises, List<ItemStack> made, Optional<Xp> xp) {
-            this(noises, made, xp, List.of());
+            this(noises, made, xp, List.of(), List.of());
         }
     }
 

@@ -164,7 +164,7 @@ final class Expansion {
 
     // The edge again, for just what this growth was bringing.
     Edge reopened() {
-        return serves.covering(covers);
+        return serves.reopening(covers);
     }
 
     // Every edge it still feeds, each for just what it brings that edge.

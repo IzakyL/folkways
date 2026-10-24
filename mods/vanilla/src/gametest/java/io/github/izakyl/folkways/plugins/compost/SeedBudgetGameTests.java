@@ -3,13 +3,14 @@ package io.github.izakyl.folkways.plugins.compost;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.plugins.compost.SeedBudget;
 import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.plugins.farming.CropSeeds;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
-import net.minecraft.core.BlockPos;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.Item;
@@ -20,6 +21,9 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.component.CustomData;
 
 @EventBusSubscriber(modid = "folkways_vanilla", bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -27,6 +31,25 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class SeedBudgetGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(SeedBudgetGameTests.class); }
+
+    @GameTest(template = "empty")
+    public static void exactStockTargetsProtectOnlyTheirActualComponentVariant(GameTestHelper helper) {
+        ItemStack kept = new ItemStack(Items.WHEAT_SEEDS);
+        var data = new CompoundTag();
+        data.putString("variety", "kept");
+        kept.set(DataComponents.CUSTOM_DATA,
+            CustomData.of(data));
+        var location = SeedBudget.Location.pack(UUID.randomUUID());
+        var snapshot = new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("store", location,
+            List.of(new ItemStack(Items.WHEAT_SEEDS, 100)))), List.of(), List.of(), Map.of(),
+            List.of(new SeedBudget.StockTarget("special seeds", Goods.specOf(kept), 1)), true);
+        var budget = new SeedBudget(() -> snapshot, () -> Set.of(Items.WHEAT_SEEDS), item -> 0);
+        helper.assertTrue(!budget.permits(UUID.randomUUID(), kept),
+            "surplus of another component variant cannot make reserved escrow compostable");
+        helper.assertTrue(budget.permits(UUID.randomUUID(), new ItemStack(Items.WHEAT_SEEDS)),
+            "the exact target does not reserve ordinary seeds of the same item");
+        helper.succeed();
+    }
 
     @GameTest(template = "empty")
     public static void duplicateInventoryViewsAndDuplicateNodeClaimsNeverIncreaseTheAllowance(GameTestHelper helper) {
@@ -119,8 +142,8 @@ public final class SeedBudgetGameTests {
         var snapshot = new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("two seed kinds", place,
             List.of(new ItemStack(Items.WHEAT_SEEDS, 64), new ItemStack(Items.BEETROOT_SEEDS, 64)))),
             List.of(), List.of(), Map.of());
-        var defaults = new java.util.concurrent.atomic.AtomicInteger(32);
-        Map<Item, Integer> overrides = new java.util.HashMap<>();
+        var defaults = new AtomicInteger(32);
+        Map<Item, Integer> overrides = new HashMap<>();
         overrides.put(Items.BEETROOT_SEEDS, 12);
         var budget = new SeedBudget(() -> snapshot, () -> Set.of(Items.WHEAT_SEEDS, Items.BEETROOT_SEEDS),
             item -> overrides.getOrDefault(item, defaults.get()));
@@ -166,7 +189,7 @@ public final class SeedBudgetGameTests {
         // Eighty-five seeds existed before logistics drew a twenty-one-seed compost batch.
         var snapshot = new SeedBudget.Snapshot(List.of(stock("remaining pack", location, 64)),
             List.of(), List.of(), Map.of());
-        var keep = new java.util.concurrent.atomic.AtomicInteger(64);
+        var keep = new AtomicInteger(64);
         var budget = new SeedBudget(() -> snapshot, () -> Set.of(Items.WHEAT_SEEDS), ignored -> keep.get());
         UUID action = UUID.randomUUID();
         helper.assertTrue(budget.permits(action, new ItemStack(Items.WHEAT_SEEDS, 21)),
@@ -186,7 +209,7 @@ public final class SeedBudgetGameTests {
     }
 
     private static SeedBudget.Stock stock(String id, SeedBudget.Location location, int count) {
-        java.util.ArrayList<ItemStack> stacks = new java.util.ArrayList<>();
+        ArrayList<ItemStack> stacks = new ArrayList<>();
         for (int left = count; left > 0; left -= 64) stacks.add(new ItemStack(Items.WHEAT_SEEDS, Math.min(64, left)));
         return new SeedBudget.Stock(id, location, stacks);
     }

@@ -42,13 +42,14 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 
 **Core 和 Vanilla 必装**，其他扩展按需安装。**所有 Folkways jar 必须来自同一次构建。**
 
-| Jar                                                         | 安装条件                                         |
-| ----------------------------------------------------------- | ------------------------------------------------ |
-| Folkways Core（`folkways-core-*.jar`）                      | 必装：殖民地引擎、殖民书和管理面板               |
-| Folkways Vanilla（`folkways-vanilla-*.jar`）                | 必装：居民及其在原版方块中的工作                 |
-| Folkways × Create（`folkways-create-*.jar`）                | 配合机械动力：列车、包裹、轨道和蓝图             |
-| Folkways × Modular Golems（`folkways-modulargolems-*.jar`） | 配合模块化傀儡：让傀儡成为居民                   |
-| Folkways × Kaleidoscope Cookery（`folkways-cookery-*.jar`） | 配合森罗厨房 1.6.0：作物、原生厨具和共享厨房工具 |
+| Jar                                                         | 安装条件                                                                    |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Folkways Core（`folkways-core-*.jar`）                      | 必装：殖民地引擎、殖民书和管理面板                                          |
+| Folkways Vanilla（`folkways-vanilla-*.jar`）                | 必装：居民及其在原版方块中的工作                                            |
+| Folkways × Create（`folkways-create-*.jar`）                | 配合机械动力：列车、包裹、轨道和蓝图                                        |
+| Folkways × Modular Golems（`folkways-modulargolems-*.jar`） | 配合模块化傀儡：让傀儡成为居民                                              |
+| Folkways × Kaleidoscope Cookery（`folkways-cookery-*.jar`） | 配合森罗厨房 1.6.0：作物、原生厨具和共享厨房工具                            |
+| Folkways Resources（`folkways-resources-*.jar`）            | 可选[扁平化资源](docs/zh-CN/resources.md)，居民直接在建造、种植和填地时消耗 |
 
 Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无需单独安装这三个组件。
 

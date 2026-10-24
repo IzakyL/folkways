@@ -317,7 +317,7 @@ public final class CreateJointGameTests {
         Node join = joins.getFirst().node();
         int owed = count(Joints.joiner().cost(level, from, to).orElseThrow(), track());
         helper.assertValueEqual(join.spec().needs(), List.of(new Need(ItemSpec.of(
-            ResourceLocation.fromNamespaceAndPath("create", "track")), owed)), "the join asks for what Create charges");
+            ResourceLocation.fromNamespaceAndPath("create", "track")), owed).replacing()), "the join asks for what Create charges");
         work(helper, site, worker);
         helper.assertValueEqual(tracks(worker), 62L - owed, "and spends exactly that");
         helper.assertTrue(Joints.joiner().joined(level, from, to), "the turn is laid");

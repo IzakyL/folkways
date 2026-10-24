@@ -1,0 +1,6 @@
+{
+  "resource": "folkways:sapling_resource",
+  "members": "folkways:flattening/sapling/targets",
+  "default_item": "minecraft:oak_sapling",
+  "cost": 1
+}

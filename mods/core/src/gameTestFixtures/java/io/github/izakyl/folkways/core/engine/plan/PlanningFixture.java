@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
@@ -82,6 +83,24 @@ public final class PlanningFixture {
             public Faring anyoneReaches(Set<WorldPos> goals) {
                 return Faring.yes(Journey.afoot(1, goals));
             }
+        };
+    }
+
+    public static Worker placed(Worker who, Placement placement, List<Worker.Store> stores) {
+        return placed(who, placement, stores, who::spill);
+    }
+
+    public static Worker placed(Worker who, Placement placement, List<Worker.Store> stores, Consumer<ItemStack> spill) {
+        return new Worker() {
+            public Resident resident() { return who.resident(); }
+            public Mob body() { return who.body(); }
+            public Container pack() { return who.pack(); }
+            public List<Store> within() { return stores; }
+            public ItemStack held(ToolNeed need) { return who.held(need); }
+            public void spill(ItemStack stack) { spill.accept(stack); }
+            public Effects effects() { return who.effects(); }
+            public List<Node> route() { return who.route(); }
+            public Placement placement() { return placement; }
         };
     }
 

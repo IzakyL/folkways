@@ -115,7 +115,7 @@ public final class SeedBudget {
         return purposes(seeds.get()).stream().map(alternatives -> {
             Item first = alternatives.getFirst();
             return new Reserve(alternatives, ItemSpec.anyOf(alternatives.stream()
-                .map(item -> Goods.specOf(item.getDefaultInstance())).toList()), reserve(alternatives),
+                .map(item -> ItemSpec.of(item)).toList()), reserve(alternatives),
                 tally(first).missing());
         }).toList();
     }
@@ -135,7 +135,8 @@ public final class SeedBudget {
         distinct.values().forEach(stock -> stock.stacks().stream().filter(stack -> !stack.isEmpty())
             .forEach(stack -> units.add(new Unit(stock.at(), stack))));
         if (!escrow.isEmpty()) units.add(new Unit(Location.UNKNOWN, escrow));
-        long physical = units.stream().filter(unit -> unit.stack.is(seed)).mapToLong(unit -> unit.free).sum();
+        ItemSpec wanted = escrow.isEmpty() ? ItemSpec.of(seed) : Goods.specOf(escrow);
+        long physical = units.stream().filter(unit -> Goods.matches(unit.stack, wanted)).mapToLong(unit -> unit.free).sum();
         record ClaimKey(UUID node, Location at, ItemSpec goods) { }
         Map<ClaimKey, Long> claims = new LinkedHashMap<>();
         for (Claim claim : snapshot.claims()) {
@@ -157,17 +158,20 @@ public final class SeedBudget {
             if (old == null || need.count() > old.count()) future.put(need.identity(), need);
         }
         future.values().forEach(need -> allocate(units, Location.UNKNOWN, need.goods(), need.count()));
-        long free = units.stream().filter(unit -> unit.stack.is(seed)).mapToLong(unit -> unit.free).sum();
-        Map<Item, Long> available = new LinkedHashMap<>();
-        units.forEach(unit -> available.merge(unit.stack.getItem(), unit.free, Long::sum));
-        Map<Item, Long> baseline = new LinkedHashMap<>();
+        long free = units.stream().filter(unit -> Goods.matches(unit.stack, wanted)).mapToLong(unit -> unit.free).sum();
+        Map<ItemSpec, Long> available = new LinkedHashMap<>();
+        units.forEach(unit -> available.merge(Goods.specOf(unit.stack), unit.free, Long::sum));
+        Map<ItemSpec, Long> baseline = new LinkedHashMap<>();
         long missing = 0;
         for (List<Item> purpose : purposes(seeds.get())) {
             long left = reserve(purpose);
             for (Item alternative : purpose) {
-                long kept = Math.min(left, available.getOrDefault(alternative, 0L));
-                baseline.put(alternative, kept);
-                left -= kept;
+                for (Map.Entry<ItemSpec, Long> entry : available.entrySet()) {
+                    if (!Goods.overlap(entry.getKey(), ItemSpec.of(alternative))) continue;
+                    long kept = Math.min(left, entry.getValue());
+                    baseline.put(entry.getKey(), kept);
+                    left -= kept;
+                }
             }
             if (purpose.getFirst() == seed) missing = left;
         }
@@ -175,15 +179,15 @@ public final class SeedBudget {
         snapshot.targets().forEach(target -> targets.merge(target.identity(), target,
             (before, next) -> before.count() >= next.count() ? before : next));
         snapshot.maintainTargets().forEach((item, count) -> targets.put("item/" + item,
-            new StockTarget("item/" + item, Goods.specOf(item.getDefaultInstance()), count)));
-        Map<Item, Long> ordered = new LinkedHashMap<>();
+            new StockTarget("item/" + item, ItemSpec.of(item), count)));
+        Map<ItemSpec, Long> ordered = new LinkedHashMap<>();
         for (StockTarget target : targets.values()) {
             long left = target.count();
             // Explicit stock targets first reuse the purpose reserve. Different target boxes still
             // allocate distinct units, and a tag/anyOf target protects its total only once.
             for (int pass = 0; pass < 2 && left > 0; pass++) {
-                for (Map.Entry<Item, Long> entry : available.entrySet()) {
-                    if (!Goods.matches(entry.getKey().getDefaultInstance(), target.goods())) continue;
+                for (Map.Entry<ItemSpec, Long> entry : available.entrySet()) {
+                    if (!Goods.overlap(entry.getKey(), target.goods())) continue;
                     long limit = pass == 0 ? baseline.getOrDefault(entry.getKey(), 0L) : entry.getValue();
                     long room = Math.max(0, limit - ordered.getOrDefault(entry.getKey(), 0L));
                     long take = Math.min(room, left);
@@ -193,7 +197,8 @@ public final class SeedBudget {
                 }
             }
         }
-        long retained = Math.max(baseline.getOrDefault(seed, 0L), ordered.getOrDefault(seed, 0L));
+        long retained = available.keySet().stream().filter(spec -> Goods.overlap(spec, wanted))
+            .mapToLong(spec -> Math.max(baseline.getOrDefault(spec, 0L), ordered.getOrDefault(spec, 0L))).sum();
         return new Tally(physical, physical - free, retained, snapshot.complete() ? Math.max(0, free - retained) : 0,
             missing);
     }

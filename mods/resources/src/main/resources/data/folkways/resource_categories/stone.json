@@ -1,0 +1,6 @@
+{
+  "resource": "folkways:stone_resource",
+  "members": "folkways:flattening/stone/targets",
+  "default_item": "minecraft:cobblestone",
+  "cost": 1
+}

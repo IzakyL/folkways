@@ -738,7 +738,7 @@ final class BodyRunner {
         heard(level, body, outcome);
         switch (outcome) {
             case Outcome.Done(List<WorkNoise> ignored, List<ItemStack> made, Optional<Xp> xp,
-                              List<ItemStack> returned) -> {
+                              List<ItemStack> returned, var inputs) -> {
                 Wear.from(level, body, node.spec(), who, item -> labor.broke(resident, item));
                 WorkYield.gave(body.mob(), node, made);
                 Stowing.put(who, placement, made);

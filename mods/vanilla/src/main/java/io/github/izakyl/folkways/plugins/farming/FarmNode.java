@@ -2,6 +2,8 @@ package io.github.izakyl.folkways.plugins.farming;
 
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.work.Ending;
+import io.github.izakyl.folkways.core.api.work.InputAllocation;
+import io.github.izakyl.folkways.core.api.work.InputReceipt;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
@@ -75,7 +77,11 @@ abstract class FarmNode implements Node {
         PastDay made = chore.tending().made();
         made.record(spec, done, level.getGameTime());
         if (done instanceof Outcome.Done finished) {
-            made.spent(spec, spentOf(supplied, finished.unused()), level.getGameTime());
+            List<InputReceipt> inputs = who.inputs();
+            List<ItemStack> spent = inputs == null || inputs.isEmpty() ? spentOf(supplied, finished.unused())
+                : new InputAllocation(inputs).settle(finished.unused())
+                    .consumed().stream().map(InputReceipt::paid).toList();
+            made.spent(spec, spent, level.getGameTime());
         }
         return done;
     }

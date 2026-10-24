@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "tag": "folkways:flattening/sapling/sources"
+    }
+  ],
+  "result": {
+    "id": "folkways:sapling_resource",
+    "count": 1
+  }
+}

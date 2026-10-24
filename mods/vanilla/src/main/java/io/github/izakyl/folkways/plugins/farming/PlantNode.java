@@ -31,7 +31,7 @@ final class PlantNode extends FarmNode {
 
     private static List<Need> materials(Chore chore) {
         List<Need> needs = new ArrayList<>();
-        needs.add(new Need(chore.crop().seedSpec(), chore.job().cells().size()));
+        needs.add(new Need(chore.crop().seedSpec(), chore.job().cells().size()).replacing());
         chore.crop().behavior().ifPresent(b -> needs.addAll(b.plantingMaterials(chore.job().cells().size())));
         return List.copyOf(needs);
     }

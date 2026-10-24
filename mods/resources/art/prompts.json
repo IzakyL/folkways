@@ -1,0 +1,11 @@
+{
+  "tool": "built-in imagegen",
+  "transparent_background": true,
+  "export": "Nearest-neighbor sampling into a centered 14-pixel sprite on a transparent 16x16 PNG.",
+  "prompts": {
+    "wood_resource.png": "Use case: stylized-concept. Asset type: Minecraft mod inventory item texture. Create ONE clean pixel-art icon for a wood resource: a small tied bundle of three brown squared timbers, warm tan cut ends, dark brown outline, upper-left light. Transparent background. Strict 16 by 16 pixel design enlarged by nearest-neighbor to fill the image, no anti-aliasing, no text, no shadow outside the sprite. Occupy pixels 2 through 13, centered, small limited vanilla Minecraft palette. Save the output as a PNG.",
+    "stone_resource.png": "Use case: stylized-concept. Asset type: Minecraft inventory texture. ONE pixel-art stone resource icon, a compact pile of three chunky cool gray stones with slate shadows and light gray facets. Transparent background. Exact 16x16 pixel design enlarged with nearest neighbor, no antialias, limited vanilla Minecraft palette, dark outline, upper-left light, centered pixels 2 to 13. No text, no shadow outside sprite.",
+    "sapling_resource.png": "Use case: stylized-concept. Asset type: Minecraft mod inventory texture. ONE clean pixel-art sapling resource icon: small bundle of two tiny saplings with rich green leaves and brown stems, wrapped together by a tan tie. Transparent background. Strict 16x16 pixel design enlarged with nearest neighbor; hard square pixels, no antialias; dark outlines, upper-left highlights, limited vanilla Minecraft colors; centered pixels 2 to 13. No text or shadow outside sprite.",
+    "seed_resource.png": "Use case: stylized-concept. Asset type: Minecraft inventory item texture. ONE clean pixel art seed resource icon, a tiny open tan seed pouch with three golden seeds and one small green sprout visible at its mouth. Transparent background. Strict 16x16 pixel design enlarged with nearest neighbor, hard square pixels with no antialias, limited vanilla Minecraft colors, dark brown outline, upper-left highlights, centered within pixels 2 through 13. No text, no shadow outside sprite."
+  }
+}

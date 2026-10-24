@@ -35,6 +35,11 @@ Core 会一并运行已有 LDLib2 依赖测试，其他模组不重复运行。
 直接通过 Gradle 启动服务器前，需要先在对应目录的 `eula.txt` 中接受 [Minecraft EULA](https://www.minecraft.net/eula)。
 仅在同意其条款后执行。
 
+资源扩展的完整测试使用 `-PresourcesTests=true`，专项测试使用
+`-PresourcesTests=true -PgameTestMod=resources`。多任务共用机器时所有 Gradle 命令都加上 `--no-daemon`。
+资源专项测试同时加载 Vanilla 的 `src/resourcesTest` 消费者场景，
+游戏目录为 `run/gametest/resources/resources/`。
+
 ## Blockwright 套件
 
 [Blockwright](https://github.com/IzakyL/blockwright) 驱动真实 Minecraft 客户端和服务器。

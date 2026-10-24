@@ -40,7 +40,7 @@ final class FoodSafety {
                 continue;
             }
             if (food != null && food.nutrition() > 0 && (!rejectUnsafe || safe(stack, food))) {
-                allowed.add(Goods.specOf(stack));
+                allowed.add(ItemSpec.of(item));
             }
         }
         return allowed.isEmpty() ? Optional.empty() : Optional.of(ItemSpec.anyOf(allowed));

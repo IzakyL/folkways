@@ -30,6 +30,8 @@ import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.Item;
 
 final class ToolStock {
 
@@ -63,8 +65,15 @@ final class ToolStock {
     }
 
     Optional<ItemSpec> allowed(ItemSpec family) {
-        List<ItemSpec> choices = Goods.members(family).stream().filter(item -> KitRules.allows(colony, item))
-            .map(item -> Goods.specOf(item.getDefaultInstance())).toList();
+        List<ItemSpec> choices = new ArrayList<>();
+        for (ItemSpec alternative : family.anyOf().isEmpty() ? List.of(family) : family.anyOf()) {
+            for (Item item : Goods.members(alternative)) {
+                if (KitRules.allows(colony, item)) {
+                    choices.add(new ItemSpec(Optional.of(BuiltInRegistries.ITEM.getKey(item)), Optional.empty(),
+                        Set.of(), alternative.components()));
+                }
+            }
+        }
         return choices.isEmpty() ? Optional.empty() : Optional.of(ItemSpec.anyOf(choices));
     }
 

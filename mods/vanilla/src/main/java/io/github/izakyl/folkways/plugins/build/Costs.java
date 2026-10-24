@@ -43,9 +43,9 @@ public final class Costs {
         return new Need(ItemSpec.of(BuiltInRegistries.ITEM.getKey(item)), count);
     }
 
-    /** The colony matches items by kind only, so an exact item is representable only when it is a plain one. */
+    /** Strict schematic requirements retain the complete component identity. */
     public static Quote strict(ItemStack stack) {
-        return stack.getComponentsPatch().isEmpty() ? Quote.of(List.of(need(stack))) : Quote.unsupported();
+        return Quote.of(List.of(new Need(ItemSpec.exact(stack), stack.getCount())));
     }
 
     /** A fluid source is poured from its bucket: a step of the colony's own, not one of the cannon's. */

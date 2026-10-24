@@ -16,10 +16,14 @@ public interface Worker {
 
     Container pack();
 
-    // The goods this node declared as needs, already taken by the core from wherever it put them. The work
-    // uses them however it likes; any it hands back as unused are returned, the rest are spent.
+    // The declared inputs, already paid for by the core. Substitutions expose the requested item only for this
+    // commit; inputs() retains the actual payment. Unused inputs are returned as the goods that paid for them.
     default List<ItemStack> supplied() {
         return List.of();
+    }
+
+    default List<InputReceipt> inputs() {
+        return supplied().stream().map(stack -> new InputReceipt(stack, stack)).toList();
     }
 
     List<Store> within();
