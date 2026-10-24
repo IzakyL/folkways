@@ -59,6 +59,30 @@ JEC 及其 PinIn 库只用于编译，不随 Folkways 内嵌。
 只有普通查询词使用该匹配器；模组 ID、标签、完整物品 ID 和通配符保留注册标识符语义。
 已保存的规则使用不带显示名称的原有重载，因此客户端语言或可选集成不会改变服务器的筛选行为。
 
+## 增量地形证明
+
+`Grounds.Watch.now(body)` 保留每个身体自己的普通可达起点。`Ground.beginAccess(exits)` 的显式出口
+证明只在移动方式、实体类型、体型、步高／跌落限制、火焰免疫、铁轨／禁行区域起点规则及寻路代价
+全部一致时共享地形分区和搜索结果；虚拟落块及出口集合也属于缓存键。`Ground.with(changes)` 不修改世界。
+铁轨起点权限还包含实际起点位置；含铁轨的虚拟落块按身体起点保守隔离。自定义移动方式在能够完整
+声明其求值器依赖的能力前，按身体单独缓存。
+
+每个殖民地 tick 为所有规划循环共用一个 `Ground.Budget`，调用 `Access.advance` 续算。
+分区扫描和图搜索都消耗预算。纳秒数非正值表示只限制工作量；`unlimited()` 保留同步 `accessFrom`
+的行为。搜索未完成时不能将未证明可达当成不可达。对尚未扫描的位置查询 `standable` 前，先调用
+`Ground.prepare(feet, budget)`。
+达到固定格数上限时 `Access.complete()` 也会返回真，已经证明的正向路线仍可使用；
+只有 `Access.exhaustive()` 为真时，负距离才能证明两处不连通。
+
+地形写入、区块可用性、移动装置障碍及禁行规则变化会更新 `Watch.revision()`，使旧证明失效。
+动态来源实现 `Keepout.refresh(level)`，在其返回结果改变时调用 `Keepouts.changed()`；安装或移除来源
+也会更新版本。每批身体视图开始及实际落块前调用一次 `Watch.refresh()`，检查同 tick 内的环境变化；
+普通身体视图共用每个服务器 tick 一次的环境扫描。
+已完成的 `Access` 描述建立时的移动能力，原身体移动后仍可共享；调用者还须通过 `Ground.valid()`
+检查身体能力，并在实际落块前取得当前身体视图。所有世界读取和最终复核均在服务器线程执行。
+缓存有固定条目／格数上限；淘汰不会取消调用者持有的搜索，关闭监视后清空查询缓存。
+`Watch.stats()` 无需开启聊天日志即可读取累计请求、命中、分区扫描、工作量、失效次数、环境扫描次数和当前缓存大小。
+
 ## 生命周期与测试归属
 
 [`ColonyLifecycle`](../../mods/core/src/main/java/io/github/izakyl/folkways/core/api/colony/ColonyLifecycle.java)

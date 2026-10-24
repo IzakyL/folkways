@@ -48,7 +48,7 @@ for (const on of twins()) test(on.title("groundwork end-to-end: clear, fill, wee
     const grounded = await waitForGroundedPlayer(server);
     const player = grounded.name;
     const origin = { x: Math.round(grounded.pos.x) + 4, y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) + 4 };
-    await stage.lay(server, foundingBox(origin));
+    await layStage(server, player, origin);
     const founded = await foundColonyFast(server, client, player, { origin, residentCount: RESIDENT_COUNT, stage });
     const store = founded.foodChest;
 
@@ -148,6 +148,80 @@ for (const on of twins()) test(on.title("groundwork end-to-end: clear, fill, wee
     await pair?.teardown(testInfo);
   }
 });
+
+for (const on of twins()) test(on.title("fill retreats through a narrow hall and waits for the player before sealing"), async ({}, testInfo) => {
+  stage = on;
+  test.setTimeout(BUDGET.slow);
+  ensureOut("e2e");
+  const runId = newRunId();
+  let pair: E2EPair | undefined;
+  try {
+    pair = await launchPair({
+      config: stage.config,
+      server: { trace: tracePath("e2e", stage.name("safe-fill-server")), instance: seededServer(stage.name(`safe-fill-server-${runId}`)) },
+      client: { trace: tracePath("e2e", stage.name("safe-fill-client")), instance: stage.name(`safe-fill-client-${runId}`) },
+    });
+    const { server, client } = pair;
+    const grounded = await waitForGroundedPlayer(server);
+    const player = grounded.name;
+    const origin = { x: Math.round(grounded.pos.x) + 4, y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) + 4 };
+    await layStage(server, player, origin);
+    const founded = await foundColonyFast(server, client, player, { origin, residentCount: 3, stage });
+    const cell = (x: number, y: number, z: number): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
+    const hall = { min: cell(7, 0, 10), max: cell(13, 1, 10) };
+    await tryCommand(server, `fill ${at(cell(6, 0, 9))} ${at(cell(14, 2, 11))} minecraft:stone`);
+    await tryCommand(server, `fill ${at(cell(6, 0, 10))} ${at(cell(13, 1, 10))} minecraft:air`);
+    const inside = stage.stand(cell(10, 0, 10));
+    await tryCommand(server, `tp ${player} ${inside.x + 0.5} ${inside.y} ${inside.z + 0.5}`);
+    await draw(server, founded.evidence.colonyId, ["fill"], hall);
+    await stockToolsForResidents(server, stage.at(founded.foodChest), TRADE_TOOLS.building, 3, 4);
+    await tryCommand(server, `item replace block ${at(founded.foodChest)} container.20 with minecraft:dirt 64`);
+
+    const deepEnd = [cell(13, 0, 10), cell(13, 1, 10)];
+    let deepFilled = false;
+    for (let spent = 0; spent < WORK_TICKS; spent += STEP_TICKS) {
+      await tick.sprint(server, STEP_TICKS);
+      expect(await allAre(server, [cell(7, 0, 10), cell(7, 1, 10)], "minecraft:air"),
+        "the player's only exit stays open throughout construction").toBe(true);
+      if (await allAre(server, deepEnd, "minecraft:dirt")) {
+        deepFilled = true;
+        break;
+      }
+    }
+    expect(deepFilled, "builders still make progress at the far end while the player is inside").toBe(true);
+    const outside = stage.stand(cell(4, 0, 10));
+    await tryCommand(server, `tp ${player} ${outside.x + 0.5} ${outside.y} ${outside.z + 0.5}`);
+    let completed = false;
+    for (let spent = 0; spent < WORK_TICKS; spent += STEP_TICKS) {
+      await tick.sprint(server, STEP_TICKS);
+      if (await allAre(server, boxCells(hall), "minecraft:dirt")) {
+        completed = true;
+        break;
+      }
+    }
+    expect(completed, "the hall, including its reserved passage and last opening, fills after the player leaves").toBe(true);
+  } catch (error) {
+    pair?.failing(error);
+    throw error;
+  } finally {
+    await pair?.teardown(testInfo);
+  }
+});
+
+async function layStage(server: MinecraftServer, player: string, origin: Vec) {
+  if (stage.kind === "aboard") {
+    // Assembly removes the floor before the ship has collision. Keep the fixture's player above it until
+    // the deck exists, then restore an ordinary, non-spectating player for the actual construction checks.
+    await tryCommand(server, `gamemode spectator ${player}`);
+    await tryCommand(server, `tp ${player} ${origin.x + 0.5} ${origin.y + 1} ${origin.z + 0.5}`);
+  }
+  await stage.lay(server, foundingBox(origin));
+  if (stage.kind === "aboard") {
+    const stand = stage.stand(origin);
+    await tryCommand(server, `tp ${player} ${stand.x + 0.5} ${stand.y} ${stand.z + 0.5}`);
+    await tryCommand(server, `gamemode creative ${player}`);
+  }
+}
 
 async function mark(server: MinecraftServer, client: MinecraftClient, player: string, min: Vec, max: Vec) {
   // Click existing blocks without overwriting the scene; no zone exists until its fixture is ready.

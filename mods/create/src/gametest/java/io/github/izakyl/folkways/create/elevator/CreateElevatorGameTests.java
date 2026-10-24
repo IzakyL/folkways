@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.create.elevator;
 
+import com.simibubi.create.content.contraptions.elevator.ElevatorContactBlockEntity;
 import com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlockEntity;
 import com.simibubi.create.content.contraptions.glue.SuperGlueEntity;
 import io.github.izakyl.folkways.FolkwaysMod;
@@ -29,6 +30,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -140,6 +142,122 @@ public final class CreateElevatorGameTests {
             level.setBlockAndUpdate(upper.below(), Blocks.AIR.defaultBlockState());
             f.cleanup.run();
         });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void interfaceRefreshVersionsRealAssemblyContactChangesAndDisassemblyInTheSameTick(GameTestHelper helper) {
+        var level = helper.getLevel();
+        Keepouts.refresh(level);
+        long beforeAssembly = Keepouts.revision();
+        var f = fixture(helper);
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(
+                f.adapter.inspect(level.getServer(), f.ref).filter(view -> view.floors().size() == 2).isPresent(),
+                assembly(f)))
+            .thenExecute(() -> {
+                BlockPos lower = f.deck.offset(2, 1, 2);
+                BlockPos upper = lower.above(5);
+                BlockPos landing = f.deck.offset(2, 1, -1);
+                BlockPos contact = f.deck.offset(5, 8, 2);
+                var originalContact = level.getBlockState(contact);
+                long tick = level.getGameTime();
+                Keepouts.refresh(level);
+                helper.assertTrue(Keepouts.forbidden(level, lower) && Keepouts.forbidden(level, upper),
+                    "the installed Keepout interface sees both floors of the real assembled shaft");
+                helper.assertTrue(Keepouts.revision() > beforeAssembly,
+                    "real assembly publishes a new shaft revision");
+                var escaping = Keepouts.blockingEscapeFrom(level, level, lower);
+                var outside = Keepouts.blockingEscapeFrom(level, level, landing);
+                helper.assertFalse(escaping.forbids(level, upper.getX(), upper.getY(), upper.getZ()),
+                    "an origin already in this shaft may escape its own vehicle");
+                helper.assertTrue(outside.forbids(level, upper.getX(), upper.getY(), upper.getZ()),
+                    "an outside origin never receives permission to cross the shaft");
+                long unchanged = Keepouts.revision();
+                for (int i = 0; i < 3; i++) Keepouts.refresh(level);
+                helper.assertValueEqual(Keepouts.revision(), unchanged,
+                    "repeated identical geometry does not invalidate completion certificates");
+
+                level.setBlockAndUpdate(contact, Blocks.AIR.defaultBlockState());
+                long beforeRemoval = Keepouts.revision();
+                Keepouts.refresh(level);
+                helper.assertTrue(Keepouts.revision() > beforeRemoval,
+                    "removing the upper contact changes the shaft revision before the tick ends");
+                helper.assertTrue(Keepouts.forbidden(level, lower) && !Keepouts.forbidden(level, upper),
+                    "contact removal immediately shrinks the vertical keepout without losing the lower shaft");
+                helper.assertTrue(outside.forbids(level, upper.getX(), upper.getY(), upper.getZ()),
+                    "an older captured keepout stays immutable while its revision is superseded");
+
+                level.setBlockAndUpdate(contact, originalContact);
+                var restored = (ElevatorContactBlockEntity) level.getBlockEntity(contact);
+                helper.assertTrue(restored != null, "restored real contact has its native block entity");
+                restored.initialize();
+                long beforeRestore = Keepouts.revision();
+                Keepouts.refresh(level);
+                helper.assertTrue(Keepouts.revision() > beforeRestore && Keepouts.forbidden(level, upper),
+                    "native contact registration restores the upper shaft in this same tick");
+                long restoredRevision = Keepouts.revision();
+                Keepouts.refresh(level);
+                helper.assertValueEqual(Keepouts.revision(), restoredRevision,
+                    "a stable restored contact adds no duplicate invalidation");
+
+                // A new stop within the same endpoints changes the contact list, but not its keepout geometry.
+                BlockPos middle = f.deck.offset(5, 5, 2);
+                level.setBlockAndUpdate(middle, originalContact);
+                var middleContact = (ElevatorContactBlockEntity) level.getBlockEntity(middle);
+                helper.assertTrue(middleContact != null, "middle stop has its native block entity");
+                middleContact.initialize();
+                Keepouts.refresh(level);
+                helper.assertValueEqual(Keepouts.revision(), restoredRevision,
+                    "an interior contact with identical projected geometry keeps the same revision");
+                level.setBlockAndUpdate(middle, Blocks.AIR.defaultBlockState());
+
+                var vehicle = f.pulley.getAttachedContraption();
+                f.pulley.disassemble();
+                helper.assertTrue(vehicle.isRemoved() || !vehicle.isAlive(), "Create really disassembles its live vehicle");
+                long beforeDisassembly = Keepouts.revision();
+                Keepouts.refresh(level);
+                helper.assertTrue(Keepouts.revision() > beforeDisassembly,
+                    "disassembly invalidates the published shaft before the same tick finishes");
+                helper.assertFalse(Keepouts.forbidden(level, lower) || Keepouts.forbidden(level, upper),
+                    "a removed vehicle no longer leaves its lower or upper shaft forbidden");
+                long disassembled = Keepouts.revision();
+                Keepouts.refresh(level);
+                Keepouts.refresh(level);
+                helper.assertValueEqual(Keepouts.revision(), disassembled,
+                    "refreshing unchanged absence does not advance the revision");
+                helper.assertValueEqual(level.getGameTime(), tick,
+                    "all changed and unchanged interface refreshes were checked within one server tick");
+                f.cleanup.run();
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void anUnloadEventInvalidatesARealShaftOnceAndInterfaceRefreshRebuildsIt(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var f = fixture(helper);
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(
+                f.adapter.inspect(level.getServer(), f.ref).filter(view -> view.floors().size() == 2).isPresent(),
+                assembly(f)))
+            .thenExecute(() -> {
+                BlockPos lower = f.deck.offset(2, 1, 2);
+                Keepouts.refresh(level);
+                helper.assertTrue(Keepouts.forbidden(level, lower), "a real shaft has been published");
+                long beforeUnload = Keepouts.revision();
+                // Exercise the registered unload callback; the fixture itself stays loaded for a native rebuild.
+                ElevatorShafts.unload(new LevelEvent.Unload(level));
+                helper.assertTrue(Keepouts.revision() > beforeUnload && !Keepouts.forbidden(level, lower),
+                    "removing a nonempty snapshot notifies readers and removes its keepout");
+                long unloaded = Keepouts.revision();
+                ElevatorShafts.unload(new LevelEvent.Unload(level));
+                helper.assertValueEqual(Keepouts.revision(), unloaded,
+                    "a repeated unload of absent geometry does not invalidate again");
+                Keepouts.refresh(level);
+                helper.assertTrue(Keepouts.revision() > unloaded && Keepouts.forbidden(level, lower),
+                    "the installed interface rebuilds the still-real vehicle after the unload callback");
+                long rebuilt = Keepouts.revision();
+                Keepouts.refresh(level);
+                helper.assertValueEqual(Keepouts.revision(), rebuilt, "a rebuilt unchanged snapshot stays stable");
+                f.cleanup.run();
+            }).thenSucceed();
     }
 
     @GameTest(template = "empty", timeoutTicks = 1200)

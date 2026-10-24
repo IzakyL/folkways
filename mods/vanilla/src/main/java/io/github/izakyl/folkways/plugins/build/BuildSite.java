@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.core.api.ground.BlockChanges;
 import io.github.izakyl.folkways.core.api.terms.Closures;
+import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
@@ -49,6 +50,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -1230,6 +1232,28 @@ final class BuildSite {
     // Whether the pack takes what the piece leaves. A piece that spends goods frees room in the doing, so it is let
     // be: the worker brought those goods in for it, and turned away it would carry them off again.
     private static boolean roomFor(Worker who, Piece piece) {
+        if (lowering(piece)) {
+            // Cleanup returns plain scaffolding exactly, so it can reuse the stack the raise drew from.
+            // Generic block drops still need the conservative empty-slot check below.
+            Container pack = who.pack();
+            ItemStack scaffold = new ItemStack(Items.SCAFFOLDING);
+            int left = piece.cells().size();
+            int capacity = pack.getMaxStackSize(scaffold);
+            for (int slot = 0; slot < pack.getContainerSize(); slot++) {
+                ItemStack there = pack.getItem(slot);
+                if (Containers.accepts(pack, slot, scaffold)) {
+                    if (there.isEmpty()) {
+                        left -= capacity;
+                    } else if (ItemStack.isSameItemSameComponents(there, scaffold)) {
+                        left -= Math.max(0, capacity - there.getCount());
+                    }
+                }
+                if (left <= 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
         NodeSpec spec = piece.node().spec();
         return spec.leaves().isEmpty() || !spec.needs().isEmpty() || Leaves.fit(who.pack(), spec.leaves());
     }

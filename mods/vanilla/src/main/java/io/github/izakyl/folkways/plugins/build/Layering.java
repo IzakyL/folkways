@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.terms.BlockSketch;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
@@ -134,7 +135,7 @@ final class Layering {
     private Plan plan() {
         lay(pending());
         joints();
-        Sketch done = new Sketch(level);
+        BlockSketch done = new BlockSketch(level);
         drafts.stream().filter(draft -> !draft.dropped).forEach(draft -> done.drawAll(draft.after()));
         for (Draft draft : drafts) {
             switch (draft.kind) {
@@ -328,7 +329,7 @@ final class Layering {
 
     // What the piece leans on once all is built: every neighbour it would not stay without, taken away alone. It
     // goes after those, so it is never placed in the air when it need not be.
-    private void held(Draft draft, Sketch done) {
+    private void held(Draft draft, BlockSketch done) {
         for (Map.Entry<BlockPos, BlockState> part : draft.after().entrySet()) {
             BlockState state = part.getValue();
             if (state.isAir() || state.liquid()) {
@@ -354,7 +355,7 @@ final class Layering {
 
     // What hangs on a cell cleared goes first, as it would drop when the cell does.
     private void cleared(Draft draft) {
-        Sketch without = new Sketch(level);
+        BlockSketch without = new BlockSketch(level);
         without.drawAll(draft.after());
         for (BlockPos part : draft.after().keySet()) {
             for (Direction direction : Direction.values()) {

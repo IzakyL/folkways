@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -42,6 +43,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.network.chat.Component;
 
 final class GroundPresence implements Facing {
 
@@ -57,6 +60,10 @@ final class GroundPresence implements Facing {
         private final Map<String, Chores> works = new LinkedHashMap<>();
         private Optional<ItemSpec> filling = Optional.empty();
         private Weeding weeding = new Weeding(false, false);
+        private FillPlan fillPlan;
+        // Stable receipts and the actual builder's unfinished retreat survive an ordinary save.
+        // Transient search state and positive execution permissions are never persisted.
+        private CompoundTag completionState = new CompoundTag();
 
         Site(UUID zone) {
             this.zone = zone;
@@ -69,6 +76,7 @@ final class GroundPresence implements Facing {
                 : Optional.empty();
             if (!with.equals(filling)) {
                 works.remove(GroundworkContent.FILL);
+                closeFill();
                 filling = with;
             }
             boolean grass = settings.flag(GroundworkContent.WEED);
@@ -116,8 +124,9 @@ final class GroundPresence implements Facing {
                         state -> true, (cell, state) -> member.test(cell) || kept.test(state)),
                     clear);
             }
-            // Cleared and filled, the box is dug out as far as anyone can get at it before anything is laid in it.
-            List<Job> fill = digging && !discovering ? List.of() : survey.fill(claimed);
+            // Discovery keeps every target, including clear and weed prerequisites. An active full-tail
+            // plan reads that complete target set, not the old per-cell instantaneous stance predictions.
+            List<Job> fill = !discovering && (with.isPresent() || digging) ? List.of() : survey.fill(claimed);
             if (discovering && with.isPresent()) {
                 Map<String, Job> future = new LinkedHashMap<>();
                 fill.forEach(job -> future.put(job.key(), job));
@@ -135,7 +144,29 @@ final class GroundPresence implements Facing {
             }
             if (with.isPresent()) {
                 ItemSpec spec = with.get();
-                settle(GroundworkContent.FILL, (at, chore) -> new FillNode(chore, spec), fill);
+                if (discovering) {
+                    settle(GroundworkContent.FILL, (at, chore) -> {
+                        throw new IllegalStateException("discovery does not offer work");
+                    }, fill);
+                } else {
+                    if (fillPlan == null) {
+                        fillPlan = new FillPlan(level, zone, colony.id(), view.cells(),
+                            () -> colony.storesIn(level.dimension()).stream()
+                                .filter(at -> at.in(level) && at.sameRealm(WorldPos.of(level, view.cells().iterator().next())))
+                                .map(at -> at.block(level)).toList(),
+                            GroundPresence.this::fillChanged, true, FillPlan.Limits.NORMAL);
+                        fillPlan.restoreCompletion(completionState);
+                        fillPlan.persistCompletionWith(GroundPresence.this::keepMade);
+                    }
+                    Set<String> wanted = new HashSet<>(targets.getOrDefault(GroundworkContent.FILL, Set.of()));
+                    Chores existing = works.get(GroundworkContent.FILL);
+                    if (existing != null) {
+                        wanted.removeAll(existing.spent());
+                    }
+                    FillPlan plan = fillPlan;
+                    List<Job> front = plan.refresh(fill, wanted, fillState(spec));
+                    settle(GroundworkContent.FILL, (at, chore) -> new FillNode(chore, spec, plan), front);
+                }
             }
             if (settings.flag(GroundworkContent.HAUL)) {
                 settle(GroundworkContent.HAUL, (at, chore) -> new HaulNode(at, chore), survey.haul(view::at));
@@ -149,7 +180,7 @@ final class GroundPresence implements Facing {
                 Set<String> found = new LinkedHashSet<>(jobs.stream().map(Job::key).toList());
                 if (initialized.contains(zone)) {
                     Set<String> wanted = targets.get(work);
-                    if (wanted != null) {
+                    if (wanted != null && !work.equals(GroundworkContent.FILL)) {
                         wanted.retainAll(found);
                     }
                 } else {
@@ -167,7 +198,8 @@ final class GroundPresence implements Facing {
 
         boolean complete() {
             return initialized.contains(zone) && targets.values().stream().allMatch(Set::isEmpty)
-                && works.values().stream().noneMatch(Chores::busy);
+                && works.values().stream().noneMatch(Chores::busy)
+                && (fillPlan == null || fillPlan.complete());
         }
 
         void update(ServerLevel level, ZoneView zone) {
@@ -181,6 +213,8 @@ final class GroundPresence implements Facing {
                 initialized.remove(this.zone);
                 targets.clear();
                 works.clear();
+                closeFill();
+                completionState = new CompoundTag();
             }
             configuration = configured;
             discovering = true;
@@ -204,6 +238,26 @@ final class GroundPresence implements Facing {
 
         void goals(ServerLevel level, List<Grown> into) {
             works.values().forEach(chores -> chores.goals(level, into));
+            if (fillPlan != null) {
+                into.addAll(fillPlan.steppingAside());
+            }
+        }
+
+        void closeFill() {
+            if (fillPlan != null) {
+                completionState = fillPlan.saveCompletion();
+                fillPlan.close();
+                fillPlan = null;
+            }
+        }
+
+        void advanceFill() {
+            if (fillPlan != null && filling.isPresent() && fillPlan.advance()) {
+                FillPlan plan = fillPlan;
+                ItemSpec spec = filling.orElseThrow();
+                settle(GroundworkContent.FILL, (at, chore) -> new FillNode(chore, spec, plan), plan.requests());
+                sweep.nudge();
+            }
         }
     }
 
@@ -234,6 +288,14 @@ final class GroundPresence implements Facing {
 
     private final PastDay made = new PastDay();
 
+    private final AtomicBoolean fillDirty = new AtomicBoolean();
+    private int nextFillSite;
+
+    private void fillChanged() {
+        fillDirty.set(true);
+        sweep.nudge();
+    }
+
     GroundPresence(Colony colony) {
         this.colony = colony;
         this.sweep = new Sweep(colony, GroundworkContent.ID, 100);
@@ -243,6 +305,7 @@ final class GroundPresence implements Facing {
             saved.uuid("zone").ifPresent(id -> {
                 Site site = new Site(id);
                 site.configuration = saved.string("configuration").orElse(null);
+                site.completionState = saved.blob("completion").orElseGet(CompoundTag::new);
                 saved.blob("targets").ifPresent(targets -> {
                     for (String kind : targets.getAllKeys()) {
                         ListTag keys = targets.getList(kind, Tag.TAG_STRING);
@@ -261,10 +324,43 @@ final class GroundPresence implements Facing {
 
     @Override
     public List<Line> zoneLines(ZoneView zone, ColonyView view) {
-        return zone.delegation().equals(GroundworkContent.ZONE) ? made.lines(zone, view) : List.of();
+        if (!zone.delegation().equals(GroundworkContent.ZONE)) {
+            return List.of();
+        }
+        List<Line> lines = new ArrayList<>(made.lines(zone, view));
+        Site site = sites.get(zone.id());
+        if (site != null && site.fillPlan != null) {
+            FillPlan plan = site.fillPlan;
+            String status = plan.steppingAside().isEmpty() ? plan.completionStatus() : "RETREATING";
+            Component state = switch (status) {
+                case "DISCOVERING", "CAPTURING", "PLANNING", "uninitialized" ->
+                    Component.translatable("folkways.ground.fill.status.planning");
+                case "VERIFYING", "VALIDATING" ->
+                    Component.translatable("folkways.ground.fill.status.verifying");
+                case "READY", "APPROACHING", "WORKING" ->
+                    Component.translatable("folkways.ground.fill.status.working");
+                case "RETREATING" -> Component.translatable("folkways.ground.fill.status.retreating");
+                case "UNSUPPORTED" -> Component.translatable("folkways.ground.fill.status.limited");
+                case "CONFLICT" -> Component.translatable("folkways.ground.fill.status.conflict");
+                case "COMPLETE", "CLOSED" -> null;
+                default -> Component.translatable("folkways.ground.fill.status.waiting");
+            };
+            if (state != null) lines.add(Line.text(state));
+        }
+        return List.copyOf(lines);
     }
 
     public void tick(MinecraftServer server) {
+        if (fillDirty.getAndSet(false)) {
+            refresh(server);
+        }
+        if (!sites.isEmpty()) {
+            List<Site> pending = new ArrayList<>(sites.values());
+            int start = Math.floorMod(nextFillSite++, pending.size());
+            for (int i = 0; i < pending.size(); i++) {
+                pending.get((start + i) % pending.size()).advanceFill();
+            }
+        }
         sweep.tick(server, this::refresh, this::goals);
     }
 
@@ -285,13 +381,20 @@ final class GroundPresence implements Facing {
                 seen.add(zone.id());
             }
         }
-        sites.keySet().retainAll(seen);
+        sites.entrySet().removeIf(entry -> {
+            if (seen.contains(entry.getKey())) {
+                return false;
+            }
+            entry.getValue().closeFill();
+            return true;
+        });
         initialized.retainAll(seen);
         keepMade();
     }
 
     public void closed(Closing why) {
         keepMade();
+        sites.values().forEach(Site::closeFill);
         sites.clear();
         initialized.clear();
     }
@@ -303,12 +406,16 @@ final class GroundPresence implements Facing {
                 site.targets.forEach((kind, pending) -> {
                     ListTag keys = new ListTag();
                     Chores chores = site.works.get(kind);
-                    pending.stream().filter(key -> chores == null || !chores.spent().contains(key))
+                    pending.stream().filter(key -> (chores == null || !chores.spent().contains(key))
+                            && (!kind.equals(GroundworkContent.FILL) || site.fillPlan == null
+                                || !site.fillPlan.receipted(key)))
                         .forEach(key -> keys.add(StringTag.valueOf(key)));
                     targets.put(kind, keys);
                 });
                 return Writer.of().uuid("zone", site.zone).string("configuration", site.configuration)
-                    .blob("targets", targets).tag();
+                    .blob("targets", targets)
+                    .blob("completion", site.fillPlan == null ? site.completionState : site.fillPlan.saveCompletion())
+                    .tag();
             }).tag();
         if (!saved.equals(colony.kept(GroundworkContent.ID))) {
             colony.keep(GroundworkContent.ID, saved);
@@ -321,5 +428,11 @@ final class GroundPresence implements Facing {
             site.goals(view.level(), goals);
         }
         return goals;
+    }
+
+    private static BlockState fillState(ItemSpec spec) {
+        return spec.item().map(BuiltInRegistries.ITEM::get).filter(BlockItem.class::isInstance)
+            .map(BlockItem.class::cast).map(item -> item.getBlock().defaultBlockState())
+            .orElse(Blocks.STONE.defaultBlockState());
     }
 }

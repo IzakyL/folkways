@@ -77,6 +77,10 @@ final class Quest {
         return ask;
     }
 
+    boolean on(Waypoints candidate) {
+        return net == candidate;
+    }
+
     PathfindingLoad.Denial denial() {
         return denial;
     }
