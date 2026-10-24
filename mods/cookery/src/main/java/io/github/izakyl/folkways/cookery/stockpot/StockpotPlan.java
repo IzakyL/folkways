@@ -15,6 +15,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.crafting.soupbase.SoupBaseManager
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.IngredientSpecs;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Leaves;
@@ -223,23 +224,7 @@ record StockpotPlan(ResourceLocation id, StockpotRecipe recipe, Tag definition, 
         return Leaves.merged(containers);
     }
     private static Optional<ItemSpec> specOf(Ingredient ingredient) {
-        if (ingredient.isEmpty() || ingredient.hasNoItems()) {
-            return Optional.empty();
-        }
-        if (!ingredient.isCustom()) {
-            List<ItemSpec> alternatives = new ArrayList<>();
-            for (Ingredient.Value value : ingredient.getValues()) {
-                if (value instanceof Ingredient.TagValue tag) {
-                    alternatives.add(ItemSpec.of(tag.tag()));
-                } else if (value instanceof Ingredient.ItemValue item && !item.item().isEmpty()) {
-                    alternatives.add(ItemSpec.of(item.item().getItem()));
-                }
-            }
-            if (!alternatives.isEmpty()) {
-                return Optional.of(ItemSpec.anyOf(alternatives));
-            }
-        }
-        return Goods.accepting(ingredient);
+        return IngredientSpecs.of(ingredient);
     }
 
     private static List<Need> merged(List<Need> needs) {

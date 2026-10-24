@@ -16,6 +16,7 @@ import java.util.stream.Stream;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponentPredicate;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
@@ -88,6 +89,14 @@ public record ItemSpec(Optional<ResourceLocation> item, Optional<TagKey<Item>> t
             return anyOf(anyOf.stream().map(spec -> spec.withComponents(values)).toList());
         }
         return new ItemSpec(item, tag, anyOf, Optional.of(ItemComponents.subset(values)));
+    }
+
+    /** Component-value equality, allowing unspecified components, as a recipe predicate does. */
+    public ItemSpec withComponents(DataComponentPredicate predicate) {
+        if (!anyOf.isEmpty()) {
+            return anyOf(anyOf.stream().map(spec -> spec.withComponents(predicate)).toList());
+        }
+        return new ItemSpec(item, tag, anyOf, Optional.of(ItemComponents.matching(predicate)));
     }
 
     /** The stack's complete component identity, independent of its count. */

@@ -8,6 +8,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.IngredientSpecs;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -103,9 +104,9 @@ public final class MillstoneStation implements KitchenStation {
         }
         List<Job> jobs = level.getRecipeManager().getAllRecipesFor(ModRecipes.MILLSTONE_RECIPE).stream()
             .filter(holder -> !FolkwaysVanillaConfig.refusedRecipes().contains(holder.id()))
-            .map(holder -> Job.of(holder.id(), holder.value())).flatMap(Optional::stream)
-            .flatMap(job -> Goods.members(job.input()).stream().map(item -> new Job(job.recipe(),
-                ItemSpec.of(item), job.guaranteed(), job.possible()))).toList();
+            .flatMap(holder -> Job.of(holder.id(), holder.value()).stream().flatMap(job ->
+                IngredientSpecs.choices(holder.value().ingredient()).stream().map(input ->
+                    new Job(job.recipe(), input, job.guaranteed(), job.possible())))).toList();
         return Optional.of(new Bench(key, colony, at, stances, jobs, bookings, changed));
     }
     public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
@@ -154,12 +155,11 @@ public final class MillstoneStation implements KitchenStation {
             possible = possible.stream().map(ItemStack::copy).toList();
         }
         static Optional<Job> of(ResourceLocation id, MillstoneRecipe recipe) {
-            List<ItemSpec> inputs = java.util.Arrays.stream(recipe.ingredient().getItems())
-                .filter(stack -> !stack.isEmpty()).map(Goods::specOf).toList();
+            Optional<ItemSpec> input = IngredientSpecs.of(recipe.ingredient());
             List<ItemStack> certain = recipe.results().stream().filter(out -> out.chance() >= 1)
                 .map(out -> out.stack().copy()).toList();
-            return inputs.isEmpty() || certain.isEmpty() ? Optional.empty()
-                : Optional.of(new Job(id, ItemSpec.anyOf(inputs), certain,
+            return input.isEmpty() || certain.isEmpty() ? Optional.empty()
+                : Optional.of(new Job(id, input.get(), certain,
                     recipe.results().stream().map(out -> out.stack().copy()).toList()));
         }
         int capacity() {

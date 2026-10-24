@@ -42,6 +42,7 @@ import net.minecraft.nbt.TagParser;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.util.Unit;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
@@ -300,6 +301,30 @@ public final class ItemIdentityGameTests {
         } finally {
             colony.raze();
         }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 10)
+    public static void transientComponentConstraintsRefuseSerializationWithoutChangingTheirMeaning(GameTestHelper helper) {
+        var values = DataComponentMap.builder().set(DataComponents.CREATIVE_SLOT_LOCK, Unit.INSTANCE).build();
+        ItemSpec subset = ItemSpec.of(Items.PAPER).withComponents(values);
+        ItemStack locked = new ItemStack(Items.PAPER);
+        locked.set(DataComponents.CREATIVE_SLOT_LOCK, Unit.INSTANCE);
+        ItemSpec exact = ItemSpec.exact(locked);
+        var ops = helper.getLevel().registryAccess().createSerializationContext(NbtOps.INSTANCE);
+        for (ItemSpec spec : List.of(subset, exact, ItemSpec.anyOf(List.of(subset, ItemSpec.of(Items.STONE))))) {
+            helper.assertTrue(ItemSpec.CODEC.encodeStart(ops, spec).error().isPresent(),
+                "a transient constraint must produce a codec error even with world registries");
+            boolean refused = false;
+            try {
+                spec.save(helper.getLevel().registryAccess());
+            } catch (IllegalStateException expected) {
+                refused = true;
+            }
+            helper.assertTrue(refused, "NBT save refuses transient constraints instead of writing a broader specification");
+        }
+        helper.assertTrue(Goods.matches(locked, subset) && !Goods.matches(new ItemStack(Items.PAPER), subset),
+            "failed persistence leaves the original runtime constraint intact");
         helper.succeed();
     }
 

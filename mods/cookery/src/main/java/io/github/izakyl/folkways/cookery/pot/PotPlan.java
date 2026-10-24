@@ -12,6 +12,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.QualityUtils;
 import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.IngredientSpecs;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Leaves;
@@ -128,16 +129,7 @@ record PotPlan(ResourceLocation id, PotRecipe recipe, Tag definition, boolean fl
     }
 
     static Optional<ItemSpec> goods(Ingredient ingredient) {
-        if (ingredient.isEmpty() || ingredient.hasNoItems()) return Optional.empty();
-        if (!ingredient.isCustom()) {
-            List<ItemSpec> values = new ArrayList<>();
-            for (Ingredient.Value value : ingredient.getValues()) {
-                if (value instanceof Ingredient.TagValue tag) values.add(ItemSpec.of(tag.tag()));
-                else if (value instanceof Ingredient.ItemValue item && !item.item().isEmpty()) values.add(ItemSpec.of(item.item().getItem()));
-            }
-            if (!values.isEmpty()) return Optional.of(ItemSpec.anyOf(values));
-        }
-        return Goods.accepting(ingredient);
+        return IngredientSpecs.of(ingredient);
     }
 
     ItemSpec produces() {

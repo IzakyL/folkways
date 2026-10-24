@@ -47,6 +47,9 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -55,6 +58,84 @@ public final class DispatchPlanningGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(DispatchPlanningGameTests.class);
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void anItemOnlyNetworkOrderCannotBeAdoptedForNamedGoods(GameTestHelper helper) {
+        PackageNetwork original = PackageNetworks.get();
+        Network fake = new Network();
+        PackageNetworks.install(fake.adapter());
+        try {
+            var fixture = new PlanningFixture(helper);
+            var nodes = new LinkedHashMap<UUID, CollectNode>();
+            var depot = depot(fixture, nodes, UUID.randomUUID(), List.of(), fake.supply());
+            var broad = Produce.of(ResourceLocation.withDefaultNamespace("test"), new WorkSite.AtBlock(fixture.source),
+                ItemSpec.of(Items.IRON_INGOT), 6, Produce.UNBOUNDED);
+            var first = depot.options(broad, Grown.of(broad)).getFirst();
+            first.holds().forEach(hold -> helper.assertTrue(hold.take().isEmpty(), "the first order is reserved"));
+            var sent = (CollectNode) first.replacement().nodes().getFirst();
+            helper.assertTrue(sent.planned(helper.getLevel()).isEmpty(), "the original order is sent");
+            first.holds().forEach(hold -> hold.release(Ending.REVOKED));
+            fake.arrived.put(0, 6);
+            ItemSpec named = ItemSpec.of(Items.IRON_INGOT).withComponents(DataComponentMap.builder()
+                .set(DataComponents.CUSTOM_NAME, Component.literal("Reserved")).build());
+            var next = Produce.of(ResourceLocation.withDefaultNamespace("test"), new WorkSite.AtBlock(fixture.source),
+                named, 6, Produce.UNBOUNDED);
+            helper.assertTrue(depot.options(next, Grown.of(next)).isEmpty()
+                && nodes.get(sent.id()) == sent && sent.adrift() && fake.arrived.get(0) == 6,
+                "an ordinary parcel stays with its old order instead of being adopted for overlapping named goods");
+            helper.assertTrue(fake.sent.equals(List.of(6L)), "refusing adoption sends no duplicate request");
+        } finally {
+            PackageNetworks.install(original);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void aHandPackedOrderIsAdoptedOnlyWhenItsEntireSpecificationIsAccepted(GameTestHelper helper) {
+        PackageNetwork original = PackageNetworks.get();
+        Network fake = new Network();
+        PackageNetworks.install(fake.adapter());
+        try {
+            var fixture = new PlanningFixture(helper);
+            var nodes = new LinkedHashMap<UUID, CollectNode>();
+            var port = fixture.source.at(fixture.source.cell().above());
+            var dock = new Depot.Dock(fixture.target, Stances.at(fixture.target),
+                new NetworkSnapshot.Port("far", true, List.of(), Optional.empty(), 0), 0, true);
+            var desk = new Counter.Desk(fixture.source, Stances.at(fixture.source), port, List.of(dock));
+            var counter = new Counter(UUID.randomUUID(), new WorkSite.AtBlock(fixture.source), List.of(desk), nodes,
+                new Eta(), (level, from, to, parcel, collect) -> true, 1);
+            ItemSpec broad = ItemSpec.of(Items.IRON_INGOT);
+            var sent = CollectNode.sentByHand(fixture.target, Stances.at(fixture.target), broad, 6, 1, 20,
+                desk.route(), "far", new Eta(), nodes, -42);
+            sent.sent(helper.getLevel().getGameTime());
+            sent.setAdrift();
+            nodes.put(sent.id(), sent);
+            fake.arrived.put(-42, 6);
+            ItemSpec named = broad.withComponents(DataComponentMap.builder()
+                .set(DataComponents.CUSTOM_NAME, Component.literal("Reserved")).build());
+            var wanted = Produce.of(ResourceLocation.withDefaultNamespace("test"), new WorkSite.AtBlock(fixture.target),
+                named, 6, Produce.UNBOUNDED);
+            var replacement = counter.options(wanted, Grown.of(wanted)).getFirst();
+            helper.assertTrue(replacement.replacement().nodes().stream().anyMatch(PackNode.class::isInstance),
+                "a constrained need packs a new parcel rather than inheriting an ordinary parcel's order number");
+            replacement.holds().forEach(hold -> helper.assertTrue(hold.take().isEmpty(), "the new parcel is reserved"));
+            var fresh = (CollectNode) replacement.replacement().nodes().stream()
+                .filter(CollectNode.class::isInstance).findFirst().orElseThrow();
+            helper.assertTrue(!fresh.placed() && nodes.get(sent.id()) == sent && fake.arrived.get(-42) == 6,
+                "the old physical parcel remains untouched and the new one has not been sent");
+            var accepted = Produce.of(ResourceLocation.withDefaultNamespace("test"), new WorkSite.AtBlock(fixture.target),
+                broad, 6, Produce.UNBOUNDED);
+            var adoption = counter.options(accepted, Grown.of(accepted)).getFirst();
+            adoption.holds().forEach(hold -> helper.assertTrue(hold.take().isEmpty(), "the compatible order can be adopted"));
+            var adopted = (CollectNode) adoption.replacement().nodes().getFirst();
+            helper.assertTrue(adopted.handOrder() == -42 && adopted.ready(helper.getLevel())
+                && Commit.run(helper.getLevel(), adopted, fixture.worker) instanceof Outcome.Done,
+                "a compatible adoption still collects the existing physical parcel without sending another");
+        } finally {
+            PackageNetworks.install(original);
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
