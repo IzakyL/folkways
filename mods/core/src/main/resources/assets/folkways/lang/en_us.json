@@ -48,8 +48,6 @@
   "folkways.book.gesture.box": "Book: marking out ground",
   "folkways.book.gesture.line": "Book: drawing a line",
   "folkways.book.gesture.point": "Book: taking blocks and bodies in",
-  "folkways.choice.hint": "Pick one, then confirm",
-  "folkways.choice.hint.many": "Pick any, then confirm",
   "folkways.choice.variant.square": "%s (2×2)",
   "folkways.colony.create": "Found a colony",
   "folkways.tab.members": "Members",
@@ -764,7 +762,7 @@
   "folkways.vocation.folkways.hauling": "Haul",
   "folkways.vocation.folkways.hauling.about": "Fetches goods and stows them where they are wanted",
   "folkways.vocation.folkways.herding": "Herd",
-  "folkways.vocation.folkways.herding.about": "Feeds, shears, milks and culls the colony's animals",
+  "folkways.vocation.folkways.herding.about": "Feeds, shears, milks and culls the colony's animals, and harvests its apiaries",
   "folkways.vocation.folkways.patrolling": "Patrol",
   "folkways.vocation.folkways.patrolling.about": "Walks the colony's patrol routes, keeping monsters from spawning along them, and fights the ones it meets",
   "folkways.zone.corner": "First corner set down",
@@ -1211,5 +1209,14 @@
   "folkways.mood.ago.hours": "%s h ago",
   "folkways.mood.ago.days": "%s d ago",
   "folkways.housing.no_bed": "No assigned bed",
-  "folkways.housing.reason.no_bed": "Register a bed for this resident"
+  "folkways.housing.reason.no_bed": "Register a bed for this resident",
+  "folkways.delegation.folkways.apiary": "Apiary",
+  "folkways.settings.apiary.product": "Product",
+  "folkways.doing.folkways.harvesting_honey": "Harvesting honey",
+  "folkways.apiary.status.summary": "%s hives · %s ready",
+  "folkways.refusal.pasture.hive_gone": "That hive is gone",
+  "folkways.refusal.pasture.hive_taken": "Somebody else is working at this hive",
+  "folkways.refusal.pasture.hive_not_ready": "That hive is not ready to harvest",
+  "folkways.refusal.pasture.hive_not_smoked": "Campfire smoke does not reach that hive",
+  "folkways.apiary.status.smoke_missing": "%s hives need campfire smoke"
 }

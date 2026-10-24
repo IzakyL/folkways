@@ -105,6 +105,7 @@ final class Tours {
     private final Set<UUID> laidNow = new HashSet<>();
     private int beyondTried;
     private final Map<UUID, byte[]> fits = new HashMap<>();
+    private final Set<UUID> overloaded = new LinkedHashSet<>();
 
     // What a route carries is counted per kind of goods, so many small loads of one thing share their stacks.
     private record Placed(int start, int finish, Stand at, int base, Map<ItemSpec, Long> held) {
@@ -236,13 +237,34 @@ final class Tours {
             }
         }
         List<Unassigned> unassigned = new ArrayList<>(waiting.size());
+        overloaded.clear();
         for (UUID id : order) {
             Unassigned nobody = waiting.get(id);
             if (nobody != null) {
                 unassigned.add(nobody);
+                if (nobody.why() == Unassigned.Reason.PACK_BUSY) {
+                    packedBy(id, line);
+                }
             }
         }
         return new Schedule(tours, unassigned);
+    }
+
+    // The hands with no route whose packs are too full for work waiting on them. Nothing on a route will ever empty
+    // such a pack, so the work would wait for good unless they are asked to put their cargo away.
+    Set<UUID> overloaded() {
+        return Set.copyOf(overloaded);
+    }
+
+    private void packedBy(UUID id, List<Seat> line) {
+        UUID mustBe = boundWorker(id);
+        List<Amount> carried = fixed(id).plan().carrying();
+        for (Seat seat : line) {
+            if ((mustBe == null || mustBe.equals(seat.hand.id())) && seat.route.isEmpty()
+                    && seat.base + cells(seat.with(carried)) > seat.hand.packCapacity()) {
+                overloaded.add(seat.hand.id());
+            }
+        }
     }
 
     // Work is handed out a wave at a time, each the work most hangs on among what waits on nothing unlaid, as much of

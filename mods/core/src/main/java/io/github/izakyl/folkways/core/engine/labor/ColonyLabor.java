@@ -92,6 +92,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     // What each stage last asked of the survey: the weave's whole ask, and whether the schedule wants hands read.
     private Asks weaveAsks = Asks.NONE;
     private boolean scheduleHands;
+    private Set<UUID> overloaded = Set.of();
     private List<Shortfall> shortfalls = List.of();
     private List<Refused> refused = List.of();
     private boolean waysAnswered;
@@ -496,6 +497,14 @@ public final class ColonyLabor implements ColonyWorks.Listening {
                 weaveAsks.wakeAt()));
         }
         scheduleWakeAt = laid.wakeAt();
+        // Work bound to a full pack waits for it to be emptied, and only putting the cargo away empties it: asked
+        // again each time the resident newly keeps work waiting so.
+        for (UUID resident : laid.overloaded()) {
+            if (!overloaded.contains(resident)) {
+                idle(resident);
+            }
+        }
+        overloaded = laid.overloaded();
     }
 
     private static UUID about(Message message) {

@@ -451,7 +451,10 @@ final class BuildPresence implements Facing {
         if (!loaded(level, target)) {
             return null;
         }
-        BuildSite site = new BuildSite(order.id(), asks, target, scaffoldsOf(order.id()));
+        var workArea = growing.values().stream().filter(one -> one.order().filter(order.id()::equals).isPresent())
+            .map(one -> one.growth().reach().moved(one.hint().anchor().getX(), one.hint().anchor().getY(),
+                one.hint().anchor().getZ())).findFirst().orElse(null);
+        BuildSite site = new BuildSite(order.id(), asks, target, scaffoldsOf(order.id()), workArea);
         sites.put(order.id(), site);
         site.start(level, met.getOrDefault(order.id(), Set.of()), joined.getOrDefault(order.id(), Set.of()));
         untallied.add(order.id());

@@ -48,8 +48,6 @@
   "folkways.book.gesture.box": "书：圈地",
   "folkways.book.gesture.line": "书：画线",
   "folkways.book.gesture.point": "书：点选",
-  "folkways.choice.hint": "选好一项后确认",
-  "folkways.choice.hint.many": "可选多项，选好后确认",
   "folkways.choice.variant.square": "%s（2×2）",
   "folkways.colony.create": "建立殖民地",
   "folkways.tab.members": "成员",
@@ -764,7 +762,7 @@
   "folkways.vocation.folkways.hauling": "搬运",
   "folkways.vocation.folkways.hauling.about": "取来物品，并存放到需要的地方",
   "folkways.vocation.folkways.herding": "放牧",
-  "folkways.vocation.folkways.herding.about": "喂养、剪毛、挤奶、宰杀殖民地的牲畜",
+  "folkways.vocation.folkways.herding.about": "喂养、剪毛、挤奶、宰杀殖民地的牲畜，并采收蜂场",
   "folkways.vocation.folkways.patrolling": "巡逻",
   "folkways.vocation.folkways.patrolling.about": "沿殖民地的巡逻路线来回巡视，遏制沿途刷怪，并攻击遇到的敌对生物",
   "folkways.zone.corner": "已选第一个角",
@@ -1211,5 +1209,14 @@
   "folkways.mood.ago.hours": "%s 小时前",
   "folkways.mood.ago.days": "%s 天前",
   "folkways.housing.no_bed": "尚未分配床位",
-  "folkways.housing.reason.no_bed": "为这位居民登记一张床"
+  "folkways.housing.reason.no_bed": "为这位居民登记一张床",
+  "folkways.delegation.folkways.apiary": "蜂场",
+  "folkways.settings.apiary.product": "产出",
+  "folkways.doing.folkways.harvesting_honey": "采收蜂蜜",
+  "folkways.apiary.status.summary": "%s 个蜂箱 · %s 个可采收",
+  "folkways.refusal.pasture.hive_gone": "那个蜂箱已经不在了",
+  "folkways.refusal.pasture.hive_taken": "已经有人在处理这个蜂箱",
+  "folkways.refusal.pasture.hive_not_ready": "那个蜂箱还不能采收",
+  "folkways.refusal.pasture.hive_not_smoked": "营火烟气没有到达那个蜂箱",
+  "folkways.apiary.status.smoke_missing": "%s 个蜂箱缺少营火烟气"
 }

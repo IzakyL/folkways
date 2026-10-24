@@ -15,6 +15,7 @@ import io.github.izakyl.folkways.core.api.work.Doings;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkExertion;
 import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
+import io.github.izakyl.folkways.plugins.build.SiteTravel;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -37,6 +38,7 @@ public final class OnFoot implements Conveyance {
 
     private final double speed;
     private final RefusalKind lost;
+    private final SiteTravel siteTravel = new SiteTravel();
     private int settling;
     private int walkingTicks;
     private double closest = Double.MAX_VALUE;
@@ -59,6 +61,15 @@ public final class OnFoot implements Conveyance {
         }
         if (Reach.standingIn(body, new Stances.Cells(to))) {
             return Going.ARRIVED;
+        }
+        // Only dimension-local work areas permit relocation; aboard coordinates keep their usual travel.
+        if (to.stream().allMatch(cell -> cell.realm() instanceof Realm.Dimension)
+                && siteTravel.toward(level, body, cells)) {
+            closest = Double.MAX_VALUE;
+            sinceProgress = 0;
+            settling = 0;
+            repath(body, cells);
+            return Reach.standingIn(body, new Stances.Cells(to)) ? Going.ARRIVED : Going.UNDERWAY;
         }
         if (!closingIn(body, to)) {
             return new Going.Failed(lost);
@@ -85,6 +96,7 @@ public final class OnFoot implements Conveyance {
 
     @Override
     public void setOut(ServerLevel level, Mob body, Set<WorldPos> to) {
+        siteTravel.reset();
         walked = body.walkDist;
         distanceWalked = 0;
         settling = 0;
