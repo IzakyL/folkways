@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
@@ -20,6 +21,9 @@ import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.person.PersonContent;
+import io.github.izakyl.folkways.plugins.combat.group.UnitGroup;
+import io.github.izakyl.folkways.plugins.combat.group.UnitGroups;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -437,6 +441,46 @@ public final class PatrolGameTests {
             helper.assertTrue(Wards.warded(level, stop.east(radius - 1)), "ordinary coverage remains");
             helper.succeed();
         });
+    }
+
+    @GameTest(template = "empty_large")
+    public static void failedWaitingCannotResumeAnOldPatrolDutyButCanDefendItself(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Colony colony = Colonies.mint(level.getServer());
+        Body guard = PersonBody.RESIDENT.get().create(level);
+        Zombie zombie = EntityType.ZOMBIE.create(level);
+        place(helper, guard.mob(), new BlockPos(5, 1, 5));
+        place(helper, zombie, new BlockPos(8, 1, 5));
+        zombie.setNoAi(true);
+        try {
+            colony.hold(PersonContent.ID, Held.Entity.of(guard.mob())).orElseThrow();
+            guard.joinColony(colony.id());
+            PatrolPresence patrol = new PatrolPresence(colony);
+            patrol.watched(guard.id(), level.getGameTime());
+            UnitGroups groups = UnitGroups.of(colony);
+            for (int x = 0; x <= 11; x++) {
+                for (int z = 0; z <= 11; z++) {
+                    for (int y = -3; y <= 0; y++) { helper.setBlock(new BlockPos(x, y, z), Blocks.AIR); }
+                }
+            }
+            UnitGroup group = groups.stopSelection(List.of(guard));
+            helper.assertValueEqual(group.phase(), UnitGroup.Phase.FAILED_WAITING,
+                "a stop without any safe local footing still cancels movement and waits");
+            for (int x = 0; x <= 11; x++) {
+                for (int z = 0; z <= 11; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE); }
+            }
+            Worker armed = worker(guard, new ItemStack(Items.IRON_SWORD));
+            helper.assertTrue(patrol.urges(armed, colony.view(level)).isEmpty(),
+                "an old on-duty ward cannot restart proactive hunting while the squad waits for intervention");
+            guard.mob().setLastHurtByMob(zombie);
+            helper.assertFalse(patrol.urges(armed, colony.view(level)).isEmpty(),
+                "failed waiting still permits bounded defence against a real recent attacker");
+        } finally {
+            guard.mob().discard();
+            zombie.discard();
+            colony.raze();
+        }
+        helper.succeed();
     }
 
     private static void place(GameTestHelper helper, Mob mob, BlockPos relative) {

@@ -21,6 +21,7 @@ import net.minecraft.world.phys.Vec3;
 /** Transient logical captain. Only the existing command runner moves residents. */
 final class PointRoute {
     final UUID commandId = UUID.randomUUID();
+    final boolean attackMove;
     private static final int ADVANCE = 3;
     private static final int MAX_POINTS = 16;
     List<WorldPos> points;
@@ -36,7 +37,12 @@ final class PointRoute {
     }
 
     PointRoute(UnitGroups owner, List<Body> bodies, List<WorldPos> points, int cycleStart, boolean appendable) {
+        this(owner, bodies, points, cycleStart, appendable, false);
+    }
+
+    PointRoute(UnitGroups owner, List<Body> bodies, List<WorldPos> points, int cycleStart, boolean appendable, boolean attackMove) {
         this.owner = owner;
+        this.attackMove = attackMove;
         this.points = List.copyOf(points);
         this.cycleStart = cycleStart;
         this.appendable = appendable;
@@ -97,7 +103,7 @@ final class PointRoute {
 
     /** Compute without changing the captain; commit only after a complete command batch is accepted. */
     WorldPos advance(List<Body> bodies) {
-        if (travellingTicks() >= 2400) {
+        if (travellingTicks() >= 1200) {
             throw new IllegalArgumentException("captain route leg timed out");
         }
         WorldPos goal = points.get(stop);
@@ -128,6 +134,30 @@ final class PointRoute {
         if (!hasNext()) { throw new IllegalStateException("point queue is waiting for another point"); }
         stop = stop + 1 < points.size() ? stop + 1 : cycleStart;
         travellingSince = owner.server.overworld().getGameTime();
+    }
+
+    /** A bounded local search for a safe end-of-command assembly anchor. */
+    static PointRoute regroup(UnitGroups owner, List<Body> bodies) {
+        for (Body body : bodies) {
+            WorldPos at = WorldSpaces.at(body.mob());
+            for (int radius = 0; radius <= 2; radius++) {
+                for (int dx = -radius; dx <= radius; dx++) {
+                    for (int dz = -radius; dz <= radius; dz++) {
+                        if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) { continue; }
+                        for (int dy : new int[] {0, -1, 1, -2, 2}) {
+                            try {
+                                PointRoute route = new PointRoute(owner, bodies,
+                                    List.of(at.at(at.cell().offset(dx, dy, dz))), -1);
+                                route.captain = route.points.getFirst();
+                                route.slots(bodies);
+                                return route;
+                            } catch (IllegalArgumentException unavailable) { /* Try the next local dry anchor. */ }
+                        }
+                    }
+                }
+            }
+        }
+        throw new IllegalArgumentException("no safe local regroup anchor");
     }
 
     Vec3 front() {

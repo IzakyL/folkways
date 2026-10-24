@@ -51,7 +51,7 @@ public final class CombatSelectionOwnership {
         public void release(UUID resident) {
             // A newer group, a new point route on this group, or a book-page deployment owns its own controls.
             if (UnitGroups.of(colony).ofResident(resident).filter(current -> current == group).isPresent()
-                    && group.pointCommandId().filter(command::equals).isPresent()) {
+                    && group.commandId().filter(command::equals).isPresent()) {
                 // remove closes only this group's actual handle, whose identity cannot cancel an individual replacement.
                 group.remove(resident);
                 if (group.members().isEmpty()) { UnitGroups.of(colony).dissolve(group); }
@@ -174,6 +174,23 @@ public final class CombatSelectionOwnership {
         clear(player.getUUID());
     }
 
+    /** Atomically forget the selected residents from every reference before releasing their tracked controls. */
+    public boolean releaseSelected(ServerPlayer player, List<UUID> residents) {
+        requireThread();
+        prune();
+        Context context = contexts.get(player.getUUID());
+        Set<UUID> selected = new LinkedHashSet<>(residents);
+        if (context == null || !valid(context) || selected.isEmpty()
+                || !context.selection.containsAll(selected)
+                || selected.stream().anyMatch(id -> !player.getUUID().equals(owners.get(id)))) { return false; }
+        context.selection.removeAll(selected);
+        context.groups.forEach(group -> group.removeAll(selected));
+        changed(player.getUUID());
+        reconcile(context);
+        renew(context);
+        return true;
+    }
+
     public Snapshot snapshot(ServerPlayer player) {
         requireThread();
         prune();
@@ -222,12 +239,12 @@ public final class CombatSelectionOwnership {
             && (owner == null || owner.equals(player.getUUID()));
     }
 
-    /** Record only a newly accepted RTS point command, never a pre-existing autonomous or page command. */
+    /** Record only a newly accepted RTS command generation, never a pre-existing autonomous or page command. */
     public void trackGroup(ServerPlayer player, UnitGroup group) {
         requireThread();
         prune();
         Context context = contexts.get(player.getUUID());
-        UUID command = group.pointCommandId().orElseThrow(() -> new IllegalArgumentException("not a point command"));
+        UUID command = group.commandId().orElseThrow(() -> new IllegalArgumentException("not an active group command"));
         if (context == null || !valid(context) || group.members().isEmpty()
                 || group.members().stream().anyMatch(id -> !player.getUUID().equals(owners.get(id))
                     || UnitGroups.of(colony).ofResident(id).filter(current -> current == group).isEmpty())) {

@@ -18,6 +18,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Mob;
 
 /** Colony-owned actual membership; player shortcut selections belong to a future War client. */
 public final class UnitGroups {
@@ -95,15 +97,23 @@ public final class UnitGroups {
 
     /** Point intent: the click is the logical captain, with an optional prefix followed by a cycle. */
     public boolean commandSelectionPoints(List<Body> residents, List<WorldPos> points, int cycleStart) {
+        return commandSelectionPoints(residents, points, cycleStart, false);
+    }
+
+    public boolean commandSelectionPoints(List<Body> residents, List<WorldPos> points, int cycleStart, boolean attackMove) {
         requireServerThread();
         List<Body> people = residents.stream().distinct().toList();
         people.forEach(this::validate);
-        PointRoute route = new PointRoute(this, people, points, cycleStart);
+        PointRoute route = new PointRoute(this, people, points, cycleStart, false, attackMove);
         return startSelectionPoints(people, route);
     }
 
     /** Each Ctrl click is committed immediately; only the exact actual squad can extend its queue. */
     public boolean appendSelectionPoint(List<Body> residents, WorldPos point) {
+        return appendSelectionPoint(residents, point, false);
+    }
+
+    public boolean appendSelectionPoint(List<Body> residents, WorldPos point, boolean attackMove) {
         requireServerThread();
         List<Body> people = residents.stream().distinct().toList();
         if (people.isEmpty()) { throw new IllegalArgumentException("point queues require members"); }
@@ -112,12 +122,71 @@ public final class UnitGroups {
         Set<UUID> selected = people.stream().map(Body::id).collect(Collectors.toSet());
         if (existing != null && existing.hasPointQueue() && existing.members.equals(selected)
                 && people.stream().allMatch(body -> membership.get(body.id()) == existing)) {
+            if (existing.attackMove() != attackMove) {
+                throw new IllegalArgumentException("an appended point must inherit the route's movement mode");
+            }
             existing.appendPoint(people, point);
             return true;
         }
         // A changed selection or legacy formation begins a fresh queue. All
         // footing and member validation precedes installing or releasing any command handle.
-        return startSelectionPoints(people, new PointRoute(this, people, List.of(point), -1, true));
+        return startSelectionPoints(people, new PointRoute(this, people, List.of(point), -1, true, attackMove));
+    }
+
+    /** A complete existing squad keeps its identity; a partial selection becomes one new actual squad. */
+    public UnitGroup attackSelection(List<Body> residents, Mob target, ServerPlayer commander) {
+        requireServerThread();
+        List<Body> people = selection(residents);
+        UnitGroup group = exactSelection(people).orElseGet(() -> detachedSelection(people));
+        boolean fresh = !groups.containsKey(group.id());
+        // ResidentCommands validates the complete target batch before replacing any old handle.
+        List<ResidentCommands.Order> attacks = commands.attack(people, target, commander);
+        if (fresh) { groups.put(group.id(), group); }
+        group.startAttack(attacks);
+        transfer(people, group);
+        return group;
+    }
+
+    /** Stopping always ends the old command, even when no local safe assembly cells exist. */
+    public UnitGroup stopSelection(List<Body> residents) {
+        requireServerThread();
+        List<Body> people = selection(residents);
+        UnitGroup group = exactSelection(people).orElseGet(() -> detachedSelection(people));
+        groups.putIfAbsent(group.id(), group);
+        group.stop(people);
+        transfer(people, group);
+        return group;
+    }
+
+    private List<Body> selection(List<Body> residents) {
+        List<Body> people = residents.stream().distinct().toList();
+        if (people.isEmpty()) { throw new IllegalArgumentException("squad commands require members"); }
+        people.forEach(this::validate);
+        return people;
+    }
+
+    private Optional<UnitGroup> exactSelection(List<Body> people) {
+        UnitGroup group = membership.get(people.getFirst().id());
+        Set<UUID> selected = people.stream().map(Body::id).collect(Collectors.toSet());
+        return Optional.ofNullable(group).filter(existing -> existing.members.equals(selected)
+            && people.stream().allMatch(body -> membership.get(body.id()) == existing));
+    }
+
+    private UnitGroup detachedSelection(List<Body> people) {
+        UnitGroup group = new UnitGroup(this, UUID.randomUUID());
+        people.forEach(body -> group.members.add(body.id()));
+        return group;
+    }
+
+    private void transfer(List<Body> people, UnitGroup group) {
+        for (Body body : people) {
+            UnitGroup previous = membership.put(body.id(), group);
+            if (previous != null && previous != group) {
+                previous.removeMember(body.id());
+                if (previous.members.isEmpty()) { groups.remove(previous.id(), previous); }
+            }
+        }
+        save();
     }
 
     private boolean startSelectionPoints(List<Body> people, PointRoute route) {

@@ -36,6 +36,7 @@ public final class ResidentCommands {
 
     public enum Mode { MOVE, HOLD, RETREAT, GUARD, ATTACK }
     public enum Status { MOVING, HOLDING, ARRIVED, RELEASED, FAILED }
+    public enum AttackEnd { NONE, TARGET_DEFEATED, TARGET_LOST, OUT_OF_RANGE, TIMED_OUT, AUTHORITY_LOST, REPLACED, CANCELLED, FAILED }
     public record Target(Body body, WorldPos destination, Mode mode, Optional<Vec3> facing) { }
 
     /** A handle can release only its own order, including after a replacement was issued. */
@@ -55,6 +56,8 @@ public final class ResidentCommands {
         private long engagedUntil = Long.MIN_VALUE;
         private boolean yielded;
         private boolean deliberateGuard;
+        private boolean dangerRetreat;
+        private volatile AttackEnd attackEnd = AttackEnd.NONE;
         private volatile Status status = Status.MOVING;
         private volatile RefusalKind failure;
 
@@ -71,17 +74,31 @@ public final class ResidentCommands {
         public Mode mode() { return mode; }
         UUID step() { return step; }
         public Status status() { return status; }
+        public AttackEnd attackEnd() { return attackEnd; }
+        /** Formation commands can lend the same runner to wounded fear and bounded retaliation. */
+        public Order allowDangerRetreat() {
+            requireServerThread();
+            if (active.get(resident()) != this) { throw new IllegalStateException("only a current order can yield to danger"); }
+            dangerRetreat = true;
+            return this;
+        }
+        public boolean defensiveOnly() { return dangerRetreat && mode == Mode.HOLD; }
+        public boolean yieldingToDanger() {
+            return (dangerRetreat || mode == Mode.GUARD && deliberateGuard) && woundedDanger(this)
+                || defensiveOnly() && (engaged() || retaliating(this)
+                    || body.mob() instanceof ResidentEntity resident && resident.hasWeaponSession());
+        }
         /** A reloaded entity with the same resident UUID needs a fresh transient order. */
         public boolean boundTo(Body candidate) { return body.mob() == candidate.mob(); }
         /** A short, renewed combat lease; never survives a cancelled or replaced order. */
         public boolean engaged() {
-            return mode == Mode.GUARD && active.get(resident()) == this
+            return (mode == Mode.GUARD || defensiveOnly()) && active.get(resident()) == this
                 && server.overworld().getGameTime() < engagedUntil;
         }
         /** Patrol renews this only while offering a valid enemy inside the guard's leash. */
         public void engaging() {
             requireServerThread();
-            if (mode == Mode.GUARD && active.get(resident()) == this) {
+            if ((mode == Mode.GUARD || defensiveOnly()) && active.get(resident()) == this) {
                 engagedUntil = server.overworld().getGameTime() + 20;
             }
         }
@@ -141,7 +158,7 @@ public final class ResidentCommands {
         }).toList();
         for (Order order : next) {
             Order previous = active.put(order.resident(), order);
-            if (previous != null) { previous.status = Status.RELEASED; }
+            if (previous != null) { replaced(previous); }
         }
         return next;
     }
@@ -193,26 +210,42 @@ public final class ResidentCommands {
         }).toList();
         for (Order order : next) {
             Order previous = active.put(order.resident(), order);
-            if (previous != null) { previous.status = Status.RELEASED; }
+            if (previous != null) { replaced(previous); }
         }
         return next;
     }
 
     public void release(Order order) {
         requireServerThread();
-        if (active.remove(order.resident(), order)) { order.status = Status.RELEASED; }
+        if (active.remove(order.resident(), order)) {
+            if (order.mode == Mode.ATTACK && order.attackEnd == AttackEnd.NONE) {
+                AttackEnd why = attackInvalidation(order);
+                order.attackEnd = why == AttackEnd.NONE ? AttackEnd.CANCELLED : why;
+            }
+            order.status = Status.RELEASED;
+        }
     }
 
     public void release(UUID resident) {
         requireServerThread();
-        Order order = active.remove(resident);
-        if (order != null) { order.status = Status.RELEASED; }
+        Order order = active.get(resident);
+        if (order != null) { release(order); }
     }
 
-    void targetLeft(UUID target) {
+    private void replaced(Order previous) {
+        if (previous.mode == Mode.ATTACK) { previous.attackEnd = AttackEnd.REPLACED; }
+        previous.status = Status.RELEASED;
+    }
+
+    void targetLeft(UUID target) { targetLeft(target, false); }
+
+    void targetLeft(UUID target, boolean defeated) {
         requireServerThread();
         for (Order order : List.copyOf(active.values())) {
-            if (target.equals(order.target)) { release(order); }
+            if (target.equals(order.target)) {
+                order.attackEnd = defeated ? AttackEnd.TARGET_DEFEATED : AttackEnd.TARGET_LOST;
+                release(order);
+            }
         }
     }
 
@@ -225,12 +258,14 @@ public final class ResidentCommands {
             + (order.mode == Mode.ATTACK ? order.step : order.id));
         double weight = order.mode == Mode.GUARD ? Urge.DIRE - .5
             : Urge.DIRE + (order.mode == Mode.RETREAT ? 2 : 1);
+        if (order.yieldingToDanger()) { weight = Math.min(weight, Urge.DIRE - .5); }
         return List.of(new Urge(intent, weight, true,
             () -> order.mode == Mode.ATTACK ? new AttackNode(this, order, who) : new CommandNode(this, order),
             priority(order)));
     }
 
     Urge.Priority priority(Order order) {
+        if (order.yieldingToDanger()) { return Urge.Priority.ORDINARY; }
         if (order.mode != Mode.GUARD) { return Urge.Priority.CONTROL; }
         if (!order.deliberateGuard || order.engaged()
                 // A native attack may outlive the short detection lease. Let its actual hand loan finish;
@@ -238,18 +273,31 @@ public final class ResidentCommands {
                 || order.body.mob() instanceof ResidentEntity resident && resident.hasWeaponSession()) {
             return Urge.Priority.ORDINARY;
         }
-        var body = order.body.mob();
-        if (body.getHealth() <= body.getMaxHealth() * .35F) {
-            boolean fleeing = order.body.doing().filter(doing ->
-                doing.toward().orElse(doing.what()).equals(FearContent.FLEEING)).isPresent();
-            var attacker = body.getLastHurtByMob();
-            var hurt = body.getLastDamageSource();
-            boolean danger = attacker instanceof Mob foe && foe.getTarget() == body
-                    && Threats.hostile(foe, body) && body.distanceToSqr(foe) <= 16 * 16
-                || hurt != null && (hurt.is(DamageTypeTags.PANIC_CAUSES) || hurt.is(DamageTypeTags.IS_FIRE));
-            if (fleeing || danger) { return Urge.Priority.ORDINARY; }
-        }
+        if (woundedDanger(order)) { return Urge.Priority.ORDINARY; }
         return Urge.Priority.CONTROL;
+    }
+
+    private boolean woundedDanger(Order order) {
+        var body = order.body.mob();
+        boolean fleeing = order.body.doing().filter(doing ->
+            doing.toward().orElse(doing.what()).equals(FearContent.FLEEING)).isPresent();
+        if (fleeing) { return true; }
+        if (body.getHealth() > body.getMaxHealth() * .35F) { return false; }
+        var attacker = body.getLastHurtByMob();
+        // LivingEntity expires this source after forty game ticks; old fire cannot hold a squad forever.
+        var hurt = body.getLastDamageSource();
+        return attacker instanceof Mob foe && foe.getTarget() == body
+                && Threats.hostile(foe, body) && body.distanceToSqr(foe) <= 16 * 16
+            || hurt != null && (hurt.is(DamageTypeTags.PANIC_CAUSES) || hurt.is(DamageTypeTags.IS_FIRE));
+    }
+
+    private boolean retaliating(Order order) {
+        var body = order.body.mob();
+        return body.getLastHurtByMob() instanceof Mob foe
+            && body.tickCount - body.getLastHurtByMobTimestamp() <= 100
+            && Threats.hostile(foe, body) && body.distanceToSqr(foe) <= 12 * 12 && body.hasLineOfSight(foe)
+            && WorldSpaces.world(body.level(), order.destination)
+                .filter(at -> at.distanceToSqr(foe.position()) <= 12 * 12).isPresent();
     }
 
     boolean active(Order order) {
@@ -279,6 +327,10 @@ public final class ResidentCommands {
     void ended(Order order, Ending how) {
         if (how instanceof Ending.Failed failed && active.remove(order.resident(), order)) {
             order.failure = failed.why();
+            if (order.mode == Mode.ATTACK) {
+                AttackEnd why = attackInvalidation(order);
+                order.attackEnd = why == AttackEnd.NONE ? AttackEnd.FAILED : why;
+            }
             order.status = Status.FAILED;
         } else if (active.get(order.resident()) == order && order.mode == Mode.ATTACK) {
             if (how instanceof Ending.Done) { order.step = UUID.randomUUID(); }
@@ -314,7 +366,8 @@ public final class ResidentCommands {
                     order.approached = at;
                     order.retargetAt = now + 10;
                 }
-            } else if (order.mode == Mode.GUARD && (order.engaged() || order.yielded)
+            } else if ((order.mode == Mode.GUARD || order.defensiveOnly())
+                    && (order.engaged() || order.yielded || order.yieldingToDanger())
                     && order.status == Status.MOVING) {
                 // Combat and fear borrow this same runner. Only time owned by the command is travel time.
                 order.movingSince++;
@@ -327,7 +380,10 @@ public final class ResidentCommands {
     }
 
     void clear() {
-        active.values().forEach(order -> order.status = Status.RELEASED);
+        active.values().forEach(order -> {
+            if (order.mode == Mode.ATTACK) { order.attackEnd = AttackEnd.CANCELLED; }
+            order.status = Status.RELEASED;
+        });
         active.clear();
     }
 
@@ -340,20 +396,30 @@ public final class ResidentCommands {
     }
 
     Optional<Mob> attackTarget(Order order) {
-        if (order.mode != Mode.ATTACK || active.get(order.resident()) != order || !valid(order.body)
-                || server.overworld().getGameTime() - order.movingSince >= 600) { return Optional.empty(); }
+        if (order.mode != Mode.ATTACK || active.get(order.resident()) != order
+                || attackInvalidation(order) != AttackEnd.NONE) { return Optional.empty(); }
+        return Optional.ofNullable(((ServerLevel) order.body.mob().level()).getEntity(order.target))
+            .filter(Mob.class::isInstance).map(Mob.class::cast);
+    }
+
+    private AttackEnd attackInvalidation(Order order) {
+        if (!valid(order.body)) { return AttackEnd.CANCELLED; }
+        if (server.overworld().getGameTime() - order.movingSince >= 600) { return AttackEnd.TIMED_OUT; }
         ServerPlayer commander = server.getPlayerList().getPlayer(order.commander);
         if (commander == null || commander.isSpectator() || !commander.isAlive()
                 || SelectionOrders.authorized(commander, colony.id()).isEmpty()
-                || commander.level() != order.body.mob().level()) { return Optional.empty(); }
+                || commander.level() != order.body.mob().level()) { return AttackEnd.AUTHORITY_LOST; }
         ServerLevel level = (ServerLevel) order.body.mob().level();
-        return Optional.ofNullable(level.getEntity(order.target)).filter(Mob.class::isInstance).map(Mob.class::cast)
-            .filter(target -> Threats.explicitlyAttackable(target, order.body.mob(), commander)
-                && WorldSpaces.at(target).sameRealm(order.destination)
-                && WorldSpaces.at(target).cell().distSqr(order.destination.cell()) <= 64 * 64
-                && order.body.mob().distanceToSqr(target) <= 128 * 128
-                && commander.distanceToSqr(target) <= 128 * 128
-                && level.hasChunkAt(target.blockPosition()));
+        if (!(level.getEntity(order.target) instanceof Mob target)) { return AttackEnd.TARGET_LOST; }
+        if (!target.isAlive()) { return AttackEnd.TARGET_DEFEATED; }
+        if (!Threats.explicitlyAttackable(target, order.body.mob(), commander)
+                || !level.hasChunkAt(target.blockPosition())) { return AttackEnd.TARGET_LOST; }
+        if (!WorldSpaces.at(target).sameRealm(order.destination)
+                || WorldSpaces.at(target).cell().distSqr(order.destination.cell()) > 64 * 64
+                || order.body.mob().distanceToSqr(target) > 128 * 128 || commander.distanceToSqr(target) > 128 * 128) {
+            return AttackEnd.OUT_OF_RANGE;
+        }
+        return AttackEnd.NONE;
     }
 
     boolean permitsAttack(Order order, UUID step, Worker worker, Mob target) {

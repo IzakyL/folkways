@@ -386,6 +386,28 @@ public final class ResidentCommandGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 300)
+    public static void formationHoldRegainsControlAfterRecentFireExpires(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body body = f.resident(new BlockPos(2, 1, 2));
+        ResidentCommands.Order hold = f.commands.hold(body, f.at(2, 1, 2)).allowDangerRetreat();
+        body.mob().hurt(f.level.damageSources().onFire(), 1);
+        body.mob().setHealth(body.mob().getMaxHealth() * .25F);
+        helper.assertTrue(hold.yieldingToDanger(), "a wounded formation member yields to actual recent fire");
+        helper.assertValueEqual(f.commands.priority(hold), Urge.Priority.ORDINARY,
+            "recent danger lowers control priority so fear can borrow the same runner");
+        helper.assertTrue(f.commands.urges(commandWorker(body)).getFirst().weight() < Urge.DIRE,
+            "the command's numeric weight also yields to fear");
+        helper.startSequence().thenIdle(41)
+            .thenExecute(() -> helper.assertTrue(body.mob().getLastDamageSource() == null,
+                "Minecraft expires a previous fire source after forty game ticks"))
+            .thenWaitUntil(() -> helper.assertFalse(hold.yieldingToDanger(),
+                "after the existing finite fear escape finishes, old fire cannot pause regrouping indefinitely"))
+            .thenExecute(() -> helper.assertValueEqual(f.commands.priority(hold), Urge.Priority.CONTROL,
+                "low health alone does not prevent control from returning"))
+            .thenSucceed();
+    }
+
     private static Worker commandWorker(Body body) {
         return new Worker() {
             public io.github.izakyl.folkways.core.api.resident.Resident resident() { return body.resident(); }

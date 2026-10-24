@@ -3,6 +3,8 @@ package io.github.izakyl.folkways.plugins.patrol;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.Threats;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.plugins.combat.group.UnitGroup;
+import io.github.izakyl.folkways.plugins.combat.group.UnitGroups;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
 import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -241,12 +243,18 @@ final class PatrolPresence implements Facing {
             return List.of();
         }
         Optional<ResidentCommands.Order> order = ResidentCommands.of(colony).current(who.resident().id());
+        boolean failedWaiting = order.isEmpty() && UnitGroups.of(colony).ofResident(who.resident().id())
+            .filter(group -> group.phase() == UnitGroup.Phase.FAILED_WAITING).isPresent();
         List<Urge> supply = supplies.urges(who, order,
             lastWatch.getOrDefault(who.resident().id(), Long.MIN_VALUE),
-            dutyUntil.getOrDefault(who.resident().id(), Long.MIN_VALUE));
+            failedWaiting ? Long.MIN_VALUE : dutyUntil.getOrDefault(who.resident().id(), Long.MIN_VALUE));
         Optional<ResidentCommands.Order> guard = order
-            .filter(current -> current.mode() == ResidentCommands.Mode.GUARD);
-        Optional<Mob> foe = guard.isPresent() || onDuty(who.resident().id(), level.getGameTime())
+            .filter(current -> current.mode() == ResidentCommands.Mode.GUARD || current.defensiveOnly());
+        // Failed waiting has no navigation handle, but must not resume an old patrol duty or supply trip.
+        // Stopped and reforming squads may retaliate inside their fixed slot leash, never scan for a new foe.
+        Optional<Mob> foe = failedWaiting || guard.filter(ResidentCommands.Order::defensiveOnly).isPresent()
+            ? attacker(body).filter(target -> insideLeash(level, guard, WorldSpaces.at(target)))
+            : guard.isPresent() || onDuty(who.resident().id(), level.getGameTime())
             ? nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE), guard)
             : attacker(body);
         if (foe.isEmpty() || !Weapons.armed(who)) {
