@@ -18,7 +18,7 @@ dependencyResolutionManagement {
 rootProject.name = "folkways"
 
 // Each Folkways mod is a project of its own under mods/; the root runs them together for the game tests.
-["core", "vanilla", "create", "modulargolems", "cookery"].each { name ->
+["core", "vanilla", "create", "modulargolems", "cookery", "warfare"].each { name ->
     include ":${name}"
     project(":${name}").projectDir = file("mods/${name}")
 }

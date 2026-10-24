@@ -28,7 +28,6 @@ import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -39,8 +38,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -49,7 +46,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
@@ -611,19 +607,7 @@ final class OrdersPresence implements Facing {
     }
 
     private static ItemStack iconOf(ItemSpec spec) {
-        if (!spec.anyOf().isEmpty()) {
-            return spec.anyOf().stream().min(Comparator.comparing(ItemSpec::describe))
-                .map(OrdersPresence::iconOf).orElse(ItemStack.EMPTY);
-        }
-        if (spec.tag().isPresent()) {
-            for (Holder<Item> holder : BuiltInRegistries.ITEM.getTag(spec.tag().get())
-                .map(named -> (Iterable<Holder<Item>>) named).orElseGet(List::of)) {
-                return new ItemStack(holder.value());
-            }
-            return ItemStack.EMPTY;
-        }
-        return spec.item().flatMap(BuiltInRegistries.ITEM::getOptional)
-            .map(ItemStack::new).orElse(ItemStack.EMPTY);
+        return Goods.display(spec);
     }
 
     private static Component nameOf(ItemSpec spec) {

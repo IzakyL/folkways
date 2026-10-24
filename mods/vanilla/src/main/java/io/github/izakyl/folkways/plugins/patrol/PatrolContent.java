@@ -1,15 +1,21 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.core.api.Declaring;
+import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.vocation.VocationSpec;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
+import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
+import io.github.izakyl.folkways.core.api.resident.body.PackKeeps;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.effect.Modifier;
 import io.github.izakyl.folkways.effect.Stat;
 import io.github.izakyl.folkways.effect.perk.Perk;
 import io.github.izakyl.folkways.front.api.Delegation;
+import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Registering;
@@ -18,6 +24,7 @@ import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import java.util.List;
+import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.common.Tags;
 
@@ -83,6 +90,11 @@ public final class PatrolContent {
 
     public static void declare(Declaring declaring) {
         declaring.vocation(SPEC);
+        CoreSettings.defaultTool(ItemSpec.of(ResourceLocation.withDefaultNamespace("bow")));
+        CoreSettings.defaultTool(ItemSpec.of(ResourceLocation.withDefaultNamespace("crossbow")));
+        KitRules.supplyPolicy(ID, (colony, body) -> !(body.mob() instanceof ResidentEntity person) || !person.hasWeaponSession());
+        PackKeeps.add((colony, body) -> suppliesOf(colony)
+            .map(supplies -> supplies.keeps(body)).orElse(List.of()));
         declaring.colony(ID, scope -> {
             PatrolPresence state = new PatrolPresence(scope.colony());
             scope.share(state);
@@ -90,6 +102,10 @@ public final class PatrolContent {
             scope.urges(state::urges);
             scope.closed(state::closed);
         });
+    }
+
+    public static Optional<PatrolSupplies> suppliesOf(Colony colony) {
+        return colony.service(ID, PatrolPresence.class).map(PatrolPresence::supplies);
     }
 
     public static void enroll(Registering registering) {

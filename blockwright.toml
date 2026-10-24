@@ -410,3 +410,22 @@ kaleidoscope_cookery = { target = ["server", "client"] }
 folkways_cookery = { target = ["server", "client"] }
 kaleidoscope_cookery = { target = ["server", "client"] }
 kaleidoscope_tavern = { target = ["server", "client"] }
+
+[mods.folkways_warfare]
+path = "build/libs/folkways-warfare-*.jar"
+target = []
+
+[mods.superbwarfare]
+url = "https://cdn.modrinth.com/data/Cd3DYqzn/versions/bl7W8fjU/superbwarfare-0.8.9.2-mc1.21.1-c22d98c2.jar"
+sha512 = "fb035d68d6ee30c17e8eade8de6e2019ccf9f3e517fa467be59441a397553c81bd29778f92fa0406f1ac3aa73f68ad522aed5d65825336c36686714c900877a5"
+target = []
+
+[mods.kotlinforforge]
+url = "https://cdn.modrinth.com/data/ordsPcFz/versions/uhJhCT7X/kotlinforforge-5.12.0-all.jar"
+sha512 = "b8c3942f4d33179edf3f102f3d870b99dd436f8b8236dbbd31aa51b888162c692cfd88927295f24dc8b4375232f4c6c17360c5d6c4823f93cbcd7cf4bdc8bd14"
+target = []
+
+[profile.warfare.mods]
+folkways_warfare = { target = ["client", "server"] }
+superbwarfare = { target = ["client", "server"] }
+kotlinforforge = { target = ["client", "server"] }

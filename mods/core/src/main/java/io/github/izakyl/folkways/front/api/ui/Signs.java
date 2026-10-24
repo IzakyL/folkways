@@ -14,7 +14,6 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.SpriteContents;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -100,9 +99,9 @@ public final class Signs {
                     }
                 }
                 case Sentence.Token.Ware ware -> {
-                    Item item = BuiltInRegistries.ITEM.get(ware.item());
-                    if (item != Items.AIR) {
-                        signs.add(new Sign.Ware(new ItemStack(item), ware.count() > 1L ? compact(ware.count()) : ""));
+                    ItemStack stack = ware.stack(Minecraft.getInstance().level.registryAccess());
+                    if (!stack.isEmpty()) {
+                        signs.add(new Sign.Ware(stack, ware.count() > 1L ? compact(ware.count()) : ""));
                     }
                 }
                 case Sentence.Token.Plus plus -> signs.add(PLUS);

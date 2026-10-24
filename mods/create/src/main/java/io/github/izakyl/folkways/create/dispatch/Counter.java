@@ -20,11 +20,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 
 /**
  * The colony's own post: goods a resident carries to a packager no network packs at, packs there by hand, and sends
@@ -119,9 +117,8 @@ record Counter(UUID key, WorkSite site, List<Desk> desks, Map<UUID, CollectNode>
     }
 
     private Optional<CollectNode> adrift(Produce produce) {
-        Set<Item> wanted = Goods.members(produce.wanted());
         return collecting.values().stream()
-            .filter(node -> node.byHand() && node.adrift() && wanted.containsAll(Goods.members(node.goods()))
+            .filter(node -> node.byHand() && node.adrift() && Goods.includes(produce.wanted(), node.goods())
                 && produce.batching().runs(site, List.of(), node.count(), Optional.empty(), 1) >= 1)
             .min(Comparator.comparingLong(CollectNode::placedAt));
     }

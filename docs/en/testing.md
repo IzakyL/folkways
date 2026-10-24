@@ -188,3 +188,7 @@ invocation under `run/gametest/ci/<mod>-<profile>.*`; artifact names are
 passed. Individual GameTest details remain in the server logs.
 
 Client smoke uploads `tests/out/` as `client-smoke-results`.
+
+## Superb Warfare profile
+
+The optional `blockwright.toml#warfare` profile loads the extension, SBW and Kotlin for Forge. Run `./gradlew --no-daemon -PwarfareTests=true -PgameTestMod=warfare runGameTestServer` for its tests or omit `-PgameTestMod=warfare` for the combined suite. Selected output uses `run/gametest/warfare/warfare/`. See [Warfare](warfare.md).

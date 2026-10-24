@@ -1,0 +1,53 @@
+modLoader = "javafml"
+loaderVersion = "${loader_version_range}"
+license = "MIT"
+issueTrackerURL = "https://github.com/IzakyL/folkways/issues"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${version}"
+displayName = "Folkways × Superb Warfare"
+displayURL = "https://github.com/IzakyL/folkways"
+description = "Residents use Superb Warfare firearms and emplacements with physical ammunition from colony stores."
+authors = "IzakyL"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neoforge_requirement}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "folkways_core"
+type = "required"
+reason = "Folkways Core runs the colony."
+versionRange = "[${version}]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "folkways_vanilla"
+type = "required"
+reason = "Folkways Vanilla supplies residents, guard orders and patrol supplies."
+versionRange = "[${version}]"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "superbwarfare"
+type = "required"
+reason = "This extension uses Superb Warfare weapons and its native firing API."
+versionRange = "[0.8.9.2,0.9)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[mixins]]
+config = "folkways-warfare.mixins.json"

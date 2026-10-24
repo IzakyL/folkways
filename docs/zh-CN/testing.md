@@ -166,3 +166,7 @@ CI 不运行完整 e2e、Sable、界面截图、Ponder、性能基准或宣传�
 JUnit 用例表示本次服务器调用是否通过；单个 GameTest 的详细结果保留在服务器日志中。
 
 客户端冒烟测试将 `tests/out/` 上传为 `client-smoke-results`。
+
+## 卓越前线环境
+
+可选 `blockwright.toml#warfare` 配置加载扩展、SBW 和 Kotlin for Forge。运行 `./gradlew --no-daemon -PwarfareTests=true -PgameTestMod=warfare runGameTestServer` 执行专项测试；去掉 `-PgameTestMod=warfare` 执行合并套件。专项输出位于 `run/gametest/warfare/warfare/`。见[卓越前线说明](warfare.md)。

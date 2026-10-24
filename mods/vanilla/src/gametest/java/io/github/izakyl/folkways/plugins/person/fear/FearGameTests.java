@@ -20,6 +20,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -38,6 +39,54 @@ public final class FearGameTests {
     @GameTest(template = "empty")
     public static void aCampfireBurnSendsTheResidentAway(GameTestHelper helper) {
         fleesAfterABurn(helper, PersonBody.RESIDENT.get().create(helper.getLevel()));
+    }
+
+    @GameTest(template = "empty_large")
+    public static void randomSamplingCannotWithdrawAnEscapeAlreadyUnderway(GameTestHelper helper) {
+        for (int x = 0; x < 22; x++) {
+            for (int z = 0; z < 22; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE); }
+        }
+        Body body = PersonBody.RESIDENT.get().create(helper.getLevel());
+        Colony colony = Colonies.mint(helper.getLevel().getServer());
+        BlockPos at = helper.absolutePos(new BlockPos(10, 1, 10));
+        body.mob().moveTo(at.getX() + .5, at.getY(), at.getZ() + .5);
+        body.mob().setNoAi(true);
+        helper.getLevel().addFreshEntity(body.mob());
+        try {
+            body.mob().hurt(helper.getLevel().damageSources().campfire(), 1);
+            FearPresence fear = new FearPresence();
+            List<io.github.izakyl.folkways.core.api.work.Urge> first = List.of();
+            for (int attempt = 0; attempt < 20 && first.isEmpty(); attempt++) {
+                first = fear.urges(worker(body), colony.view(helper.getLevel()));
+            }
+            helper.assertFalse(first.isEmpty(), "a safe point is found on an open floor");
+            var destination = first.getFirst().take().get().spec().site().where();
+            for (int attempt = 0; attempt < 100; attempt++) {
+                var next = fear.urges(worker(body), colony.view(helper.getLevel()));
+                helper.assertValueEqual(next.size(), 1, "a running escape is offered on every tick");
+                helper.assertValueEqual(next.getFirst().take().get().spec().site().where(), destination,
+                    "the escape destination stays stable while travelling");
+            }
+        } finally { body.mob().discard(); colony.raze(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large")
+    public static void escapingAnAttackerChoosesUsefulSeparation(GameTestHelper helper) {
+        for (int x = 0; x < 22; x++) {
+            for (int z = 0; z < 22; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE); }
+        }
+        Body body = PersonBody.RESIDENT.get().create(helper.getLevel());
+        BlockPos at = helper.absolutePos(new BlockPos(10, 1, 10));
+        body.mob().moveTo(at.getX() + .5, at.getY(), at.getZ() + .5);
+        body.mob().getRandom().setSeed(42L);
+        var attacker = body.mob().position().add(2, 0, 0);
+        var to = Fleeing.awayFrom(body.mob(), java.util.Optional.of(attacker)).orElseThrow();
+        var point = net.minecraft.world.phys.Vec3.atBottomCenterOf(to);
+        helper.assertTrue(point.distanceToSqr(attacker) > body.mob().position().distanceToSqr(attacker) + 16,
+            "the escape point makes useful distance from the attacker");
+        body.mob().discard();
+        helper.succeed();
     }
 
     private static void fleesAfterABurn(GameTestHelper helper, Body body) {

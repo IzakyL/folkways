@@ -4,9 +4,9 @@
 
 ## 模组划分
 
-Folkways 包含**两个必装模组和三个可选扩展**，分别对应 `mods/` 下的 Gradle 子项目。
+Folkways 包含**两个必装模组和四个可选扩展**，分别对应 `mods/` 下的 Gradle 子项目。
 它们有独立的模组 ID，共用 `folkways` 内容命名空间。
-根项目负责运行测试和收集 jar，不会构建第六个模组。
+根项目负责运行测试和收集 jar，不会构建第七个模组。
 
 | Gradle 项目                             | 模组 ID                  | 职责                                                     |
 | --------------------------------------- | ------------------------ | -------------------------------------------------------- |
@@ -15,6 +15,7 @@ Folkways 包含**两个必装模组和三个可选扩展**，分别对应 `mods/
 | `:create` → `mods/create`               | `folkways_create`        | 列车、调度、电梯、轨道接缝与机械动力蓝图交接             |
 | `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | 傀儡居民                                                 |
 | `:cookery` → `mods/cookery`             | `folkways_cookery`       | 原生 Cookery 农业、厨具、共享工具、森罗酒馆酿酒和教程    |
+| `:warfare` → `mods/warfare`             | `folkways_warfare`       | 卓越前线枪械、炮位和弹药补给                             |
 
 ```mermaid
 flowchart BT
@@ -22,6 +23,7 @@ flowchart BT
     Create --> Vanilla
     ModularGolems[Modular Golems] --> Vanilla
     Cookery --> Vanilla
+    Warfare --> Vanilla
 ```
 
 为正确理解已存在的世界结构所需的兼容逻辑放入 Core，例如 Sable 子世界和机械动力装置。
@@ -61,6 +63,9 @@ JEC 及其 PinIn 库只用于编译，不随 Folkways 内嵌。
 
 ## 生命周期与测试归属
 
+Vanilla 的日常战斗、服务端居民命令和实际小队见[战斗与编队说明](combat-architecture.md)。
+命令复用 Core 的安全劳动中断流程；War、RTS 界面和枪械兼容保持未来独立模块。
+
 [`ColonyLifecycle`](../../mods/core/src/main/java/io/github/izakyl/folkways/core/api/colony/ColonyLifecycle.java)
 提供迁移与关闭钩子。关闭监听器通过
 [`Cleanup`](../../mods/core/src/main/java/io/github/izakyl/folkways/base/task/Cleanup.java)
@@ -71,3 +76,17 @@ JEC 及其 PinIn 库只用于编译，不随 Folkways 内嵌。
 Core 的 `src/gameTestFixtures` 提供不注册测试的共享辅助代码，因此其他模组复用准备逻辑时不会顺带发现 Core 的测试。
 选择某个 GameTest 所属模组，不代表移除该场景所需的其他运行时模组。
 筛选参数和 CI 环境见[测试指南](testing.md)。
+
+[Folkways × 卓越前线](warfare.md) 在 `mods/warfare` 中适配 SBW 枪械与炮位；装备方案注册、补给和命令座位归属留在 Vanilla。
+
+## 可选枪械装备
+
+Vanilla 负责 `LoadoutRegistry` / `LoadoutProvider`、战斗页和实际补给往返。
+扩展以稳定 ID 注册不可变的 `Selection` 选项、武器物品需求、备弹目标、低水位、装弹计数和界面选项。
+`LoadoutProvider.acceptsWeapon(stack, options)` 默认使用原有物品匹配，既有实现无需修改。
+扩展可以覆写此方法，在库存预览、领取、结算和缺额统计时统一筛选可用实物。
+背包保留名额按已携带的可用武器的完整组件身份计算。
+旧版 `MELEE/BOW/CROSSBOW` 偏好会迁移为 `folkways:melee/bow/crossbow`。
+未安装的扩展 ID 和选项仍会保存，但暂不启用。
+`WeaponSession.continuousEngagement()` 默认关闭；启用后，`StrikeNode` 在交战期间保留主手借用。
+替换或解除命令会立即关闭会话。`WeaponAdapter` 的默认重载允许按选中的实物计算射程并开启会话。

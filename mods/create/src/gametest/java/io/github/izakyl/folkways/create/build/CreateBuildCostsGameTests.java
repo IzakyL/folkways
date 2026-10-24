@@ -9,9 +9,22 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.plugins.build.SchematicPlacement;
+import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.work.Node;
+import io.github.izakyl.folkways.core.api.work.NodeSpec;
+import io.github.izakyl.folkways.core.api.work.Outcome;
+import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.api.work.WorkSite;
+import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
+import io.github.izakyl.folkways.plugins.build.BlockData;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.function.Function;
+import java.util.Map;
+import java.util.UUID;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
@@ -35,6 +48,13 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.item.component.CustomData;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -55,7 +75,9 @@ public final class CreateBuildCostsGameTests {
                     new ItemStack(Items.WHITE_BANNER), ItemRequirement.ItemUseType.CONSUME)),
                 entity -> ItemRequirement.INVALID,
                 entity -> new ItemRequirement(ItemRequirement.ItemUseType.CONSUME,
-                    new ItemStack(Items.IRON_INGOT, entity == null ? 1 : entity.getPersistentData().getInt("cost"))));
+                    new ItemStack(Items.IRON_INGOT, entity == null ? 1 : entity.getPersistentData().getInt("cost"))),
+                entity -> new ItemRequirement(new ItemRequirement.StrictNbtStackRequirement(
+                    componentStack("stone"), ItemRequirement.ItemUseType.CONSUME)));
             for (int index = 0; index < requirements.size(); index++) {
                 Block block = new AddonBlock(requirements.get(index));
                 registry.register(ResourceLocation.fromNamespaceAndPath(FolkwaysCreateMod.ID,
@@ -123,11 +145,11 @@ public final class CreateBuildCostsGameTests {
     @GameTest(template = "empty", timeoutTicks = 20)
     public static void aBeltIsShotWholeFromItsLastSegment(GameTestHelper helper) {
         BlockPos start = helper.absolutePos(new BlockPos(1, 2, 2));
-        Block beltBlock = net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(
+        Block beltBlock = BuiltInRegistries.BLOCK.get(
             ResourceLocation.fromNamespaceAndPath("create", "belt"));
         BlockState belt = beltBlock.defaultBlockState()
             .setValue(BeltBlock.HORIZONTAL_FACING, Direction.EAST).setValue(BeltBlock.SLOPE, BeltSlope.HORIZONTAL);
-        java.util.Map<BlockPos, BlockState> target = java.util.Map.of(
+        Map<BlockPos, BlockState> target = Map.of(
             start, belt.setValue(BeltBlock.PART, BeltPart.START),
             start.east(), belt.setValue(BeltBlock.PART, BeltPart.MIDDLE),
             start.east(2), belt.setValue(BeltBlock.PART, BeltPart.END));
@@ -141,13 +163,59 @@ public final class CreateBuildCostsGameTests {
         for (int x = 0; x < 3; x++) {
             helper.getLevel().setBlock(start.east(x).below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
         }
-        rules.fire(helper.getLevel(), shot, states, pos -> io.github.izakyl.folkways.plugins.build.BlockData.EMPTY,
+        rules.fire(helper.getLevel(), shot, states, pos -> BlockData.EMPTY,
             ItemStack.EMPTY);
         for (BlockPos cell : target.keySet()) {
             helper.assertTrue(helper.getLevel().getBlockState(cell).getBlock() instanceof BeltBlock,
                 "every segment of the belt stands");
         }
         helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 10)
+    public static void strictAddonComponentsOnlyAcceptTheMatchingMaterial(GameTestHelper helper) {
+        var need = SchematicPlacement.adapter().requirement(FIXTURES.get(6).defaultBlockState(), null)
+            .needs().orElseThrow().getFirst();
+        ItemStack matching = componentStack("stone");
+        ItemStack other = componentStack("wood");
+        var inventory = new SimpleContainer(other, matching);
+        helper.assertTrue(need.count() == 4 && need.spec().components().orElseThrow().exact()
+            && Goods.countIn(inventory, need.spec()) == 4,
+            "the placement adapter retains strict material identity and count");
+        var fixture = new PlanningFixture(helper);
+        var spec = NodeSpec.of(UUID.randomUUID(),
+            ResourceLocation.withDefaultNamespace("test"), new WorkSite.AtBlock(fixture.target),
+            Stances.at(fixture.target),
+            Workload.Once.of(1)).needs(need).done();
+        var placement = new Node() {
+            public NodeSpec spec() { return spec; }
+            public Outcome commit(ServerLevel level,
+                    Worker who) {
+                helper.assertTrue(ItemStack.isSameItemSameComponents(who.supplied().getFirst(), componentStack("stone")),
+                    "build commit receives the required material stack");
+                return Outcome.done();
+            }
+        };
+        fixture.worker.pack().setItem(0, other.copy());
+        helper.assertTrue(Commit.run(helper.getLevel(), placement, fixture.worker)
+            instanceof Outcome.Failed,
+            "a different material cannot satisfy the build cost");
+        fixture.worker.pack().setItem(1, matching.copy());
+        helper.assertTrue(Commit.run(helper.getLevel(), placement, fixture.worker)
+            instanceof Outcome.Done && fixture.worker.pack().getItem(0).getCount() == 4,
+            "only the matching material is consumed");
+        matching.set(DataComponents.CUSTOM_NAME, Component.literal("changed"));
+        helper.assertTrue(!Goods.matches(matching, need.spec()),
+            "even additional components fail the cannon's strict requirement");
+        helper.succeed();
+    }
+
+    private static ItemStack componentStack(String material) {
+        ItemStack stack = new ItemStack(Items.PAPER, 4);
+        var data = new CompoundTag();
+        data.putString("material", material);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(data));
+        return stack;
     }
 
     private static final class AddonBlock extends Block implements SpecialBlockItemRequirement {

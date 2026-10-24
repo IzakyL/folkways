@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.plugins.compost;
 
 import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemDrops;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -19,6 +18,7 @@ import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.plugins.farming.FarmingContent;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -144,7 +144,7 @@ public final class CompostStation {
             hold = bookings.hold(at, id);
             spec = NodeSpec.of(id, CompostContent.ID, new WorkSite.AtBlock(at), stances, Workload.Once.of(10))
                 .vocation(FarmingContent.trade()).leaves(Leaves.room(1))
-                .needs(seed.map(item -> List.of(new Need(Goods.specOf(item.getDefaultInstance()), inputs, true))).orElseGet(List::of))
+                .needs(seed.map(item -> List.of(new Need(ItemSpec.of(item), inputs, true))).orElseGet(List::of))
                 .doing(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways", "composting")).done();
         }
 

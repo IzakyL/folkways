@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
 import io.github.izakyl.folkways.plugins.person.living.LivingContent;
 import io.github.izakyl.folkways.plugins.person.look.LookPool;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLook;
@@ -41,6 +42,7 @@ import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ProjectileWeaponItem;
 import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,6 +84,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
     }
 
     private boolean handIsPresentation;
+    private WeaponSession weaponSession;
 
     public ResidentEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -161,6 +164,9 @@ public class ResidentEntity extends PathfinderMob implements Body {
 
     @Override
     public void presentHeldItem(ItemStack copy) {
+        if (weaponSession != null) {
+            return;
+        }
         sweepStrayHandStack();
         handIsPresentation = !copy.isEmpty();
         setItemInHand(InteractionHand.MAIN_HAND, copy);
@@ -168,6 +174,10 @@ public class ResidentEntity extends PathfinderMob implements Body {
 
     @Override
     public void clearHandPresentation() {
+        if (weaponSession != null) {
+            presentCastLine(Optional.empty());
+            return;
+        }
         sweepStrayHandStack();
         handIsPresentation = false;
         setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
@@ -184,7 +194,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
     }
 
     private void sweepStrayHandStack() {
-        if (handIsPresentation || !(level() instanceof ServerLevel)) {
+        if (weaponSession != null || handIsPresentation || !(level() instanceof ServerLevel)) {
             return;
         }
         ItemStack stray = getMainHandItem();
@@ -200,6 +210,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
 
     @Override
     public void onRemovedFromLevel() {
+        closeWeaponSession();
         super.onRemovedFromLevel();
         if (level() instanceof ServerLevel serverLevel) {
             colonyId().flatMap(id -> Colonies.of(serverLevel.getServer(), id))
@@ -210,6 +221,82 @@ public class ResidentEntity extends PathfinderMob implements Body {
     @Override
     public Mob mob() {
         return this;
+    }
+
+    /** Vanilla weapons temporarily own the actual main hand; Core tool presentation never owns it. */
+    public boolean hasWeaponSession() {
+        return weaponSession != null;
+    }
+
+    public boolean ownsWeaponHand(WeaponSession session) {
+        return weaponSession == session;
+    }
+
+    @Override
+    public void setItemSlot(EquipmentSlot slot, ItemStack stack) {
+        if (slot == EquipmentSlot.MAINHAND && weaponSession != null && stack != getMainHandItem()) {
+            // Commands and other mods may replace the hand. Return the previous actual item before
+            // installing the replacement; the stopped session must never adopt or fire the new item.
+            closeWeaponSession();
+        }
+        super.setItemSlot(slot, stack);
+    }
+
+    public void claimWeaponHand(WeaponSession session, ItemStack actual) {
+        if (weaponSession != null || !(level() instanceof ServerLevel)) {
+            throw new IllegalStateException("resident main hand is already owned or is not on the server");
+        }
+        clearHandPresentation();
+        weaponSession = session;
+        handIsPresentation = false;
+        super.setItemSlot(EquipmentSlot.MAINHAND, actual);
+    }
+
+    public void releaseWeaponHand(WeaponSession session) {
+        if (weaponSession != session) {
+            return;
+        }
+        stopUsingItem();
+        ItemStack actual = getMainHandItem();
+        super.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+        weaponSession = null;
+        ItemStack remainder = pack().insert(actual);
+        if (!remainder.isEmpty()) {
+            spawnAtLocation(remainder);
+        }
+    }
+
+    private void closeWeaponSession() {
+        if (weaponSession != null) {
+            weaponSession.close();
+        }
+    }
+
+    /** Server-side control changes stop the one actual hand owner through its normal return lifecycle. */
+    public void stopWeaponSession() {
+        if (!(level() instanceof ServerLevel level) || !level.getServer().isSameThread()) {
+            throw new IllegalStateException("resident weapon control belongs to the server thread");
+        }
+        closeWeaponSession();
+    }
+
+    @Override
+    public ItemStack getProjectile(ItemStack weapon) {
+        if (weaponSession != null && weapon.getItem() instanceof ProjectileWeaponItem projectile) {
+            for (int slot = 0; slot < pack().getContainerSize(); slot++) {
+                ItemStack candidate = pack().getItem(slot);
+                if (!candidate.isEmpty() && projectile.getAllSupportedProjectiles(weapon).test(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
+    @Override
+    public void leaveColony() {
+        closeWeaponSession();
+        Body.super.leaveColony();
     }
 
     @Override
@@ -274,6 +361,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
         if (colonyId().filter(id -> Colonies.razed(level.getServer(), id)).isEmpty()) {
             return;
         }
+        closeWeaponSession();
         io.github.izakyl.folkways.core.api.resident.body.Equipment.release(this);
         pack().dropContents(this);
         leaveColony();
@@ -287,6 +375,21 @@ public class ResidentEntity extends PathfinderMob implements Body {
             return new ResidentNames.Drawn(given, surname()).asName();
         }
         return ResidentNames.of(level().registryAccess(), getUUID());
+    }
+
+    @Override
+    public CompoundTag saveWithoutId(CompoundTag tag) {
+        // Entity serializes attachments (including Pack) BEFORE addAdditionalSaveData.
+        // Return the loan before that point so neither the hand nor the snapshot duplicates or loses it.
+        closeWeaponSession();
+        return super.saveWithoutId(tag);
+    }
+
+    @Override
+    public void load(CompoundTag tag) {
+        closeWeaponSession();
+        handIsPresentation = false;
+        super.load(tag);
     }
 
     @Override
@@ -342,6 +445,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
 
     @Override
     protected void dropCustomDeathLoot(ServerLevel level, DamageSource damageSource, boolean recentlyHit) {
+        closeWeaponSession();
         super.dropCustomDeathLoot(level, damageSource, recentlyHit);
         pack().dropContents(this);
         ItemStack stray = getMainHandItem();

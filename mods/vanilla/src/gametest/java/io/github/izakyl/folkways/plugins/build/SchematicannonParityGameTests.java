@@ -158,7 +158,7 @@ public final class SchematicannonParityGameTests {
                 name + ": a block with no item is skipped");
             BlockState banner = Blocks.WHITE_BANNER.defaultBlockState();
             helper.assertValueEqual(rules.requirement(banner, new BannerBlockEntity(at, banner)).needs().orElseThrow(),
-                List.of(need("white_banner", 1)), name + ": a plain banner is a plain banner");
+                List.of(new Need(ItemSpec.exact(new ItemStack(Items.WHITE_BANNER)), 1)), name + ": a plain banner retains its exact components");
         });
         helper.succeed();
     }
