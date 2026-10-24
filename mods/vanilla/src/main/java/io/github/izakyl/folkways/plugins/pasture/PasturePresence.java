@@ -114,7 +114,8 @@ final class PasturePresence implements Facing {
         Map<Herd.Job, PenChores> here = pens.computeIfAbsent(tally.pen().zone(), zone -> {
             Map<Herd.Job, PenChores> chores = new EnumMap<>(Herd.Job.class);
             for (Herd.Job job : Herd.Job.values()) {
-                chores.put(job, new PenChores(tally.pen(), job, sweep::nudge, made));
+                chores.put(job, new PenChores(tally.pen(), job, sweep::nudge, made,
+                    level -> Pen.find(colony.view(level), Fronts.of(colony), zone)));
             }
             return chores;
         });

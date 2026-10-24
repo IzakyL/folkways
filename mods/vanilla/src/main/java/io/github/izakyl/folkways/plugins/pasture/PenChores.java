@@ -5,9 +5,11 @@ import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.front.api.PastDay;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import net.minecraft.server.level.ServerLevel;
 
 final class PenChores {
@@ -17,17 +19,20 @@ final class PenChores {
     private volatile Pen pen;
     private final Runnable changed;
     private final PastDay made;
+    private final Function<ServerLevel, Optional<Pen>> current;
 
     private volatile List<Quarry> standing = List.of();
 
     private final Set<UUID> worked = ConcurrentHashMap.newKeySet();
 
-    PenChores(Pen pen, Herd.Job job, Runnable changed, PastDay made) {
+    PenChores(Pen pen, Herd.Job job, Runnable changed, PastDay made,
+            Function<ServerLevel, Optional<Pen>> current) {
         this.changed = changed;
         this.made = made;
         this.zone = pen.zone();
         this.job = job;
         this.pen = pen;
+        this.current = current;
     }
 
     void settle(Pen pen, List<Quarry> found) {
@@ -57,8 +62,8 @@ final class PenChores {
         return switch (job) {
             case SHEAR -> new ShearNode(chore);
             case NURTURE -> new NurtureNode(chore, pen.keeps().feed(), nurturer.orElseThrow());
-            case FEED -> new FeedNode(chore, pen.keeps().feed(), pen);
-            case CULL -> new CullNode(chore);
+            case FEED -> new FeedNode(chore, pen.keeps().feed(), pen, current);
+            case CULL -> new CullNode(chore, current);
             case GLEAN -> new GleanNode(level, chore);
         };
     }
