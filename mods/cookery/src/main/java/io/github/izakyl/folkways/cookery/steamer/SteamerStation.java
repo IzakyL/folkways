@@ -7,6 +7,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.IngredientSpecs;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -127,8 +128,8 @@ public final class SteamerStation implements KitchenStation {
         int capacity = level.getBlockState(part.block(level)).getValue(SteamerBlock.HALF) ? 4 : 8;
         List<Job> jobs = level.getRecipeManager().getAllRecipesFor(ModRecipes.STEAMER_RECIPE).stream()
             .filter(holder -> !FolkwaysVanillaConfig.refusedRecipes().contains(holder.id()))
-            .flatMap(holder -> java.util.Arrays.stream(holder.value().getIngredient().getItems()).filter(stack -> !stack.isEmpty()).map(stack ->
-                new Job(holder.id(), holder.value().getIngredient().isCustom() ? Goods.specOf(stack) : ItemSpec.of(stack.getItem()), holder.value().getResultItem(level.registryAccess()), holder.value().getCookTick())))
+            .flatMap(holder -> IngredientSpecs.choices(holder.value().getIngredient()).stream().map(input ->
+                new Job(holder.id(), input, holder.value().getResultItem(level.registryAccess()), holder.value().getCookTick())))
             .filter(job -> !job.output().isEmpty()).toList();
         return Optional.of(new Bench(key, colony, at, part, empty.get().stances(), jobs, capacity, bookings, changed));
     }

@@ -6,6 +6,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.IngredientSpecs;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -95,8 +96,8 @@ public final class SpitStation implements KitchenStation {
         List<Job> jobs = level.getRecipeManager().getAllRecipesFor(RecipeType.CAMPFIRE_COOKING).stream()
             .filter(holder -> !FolkwaysVanillaConfig.refusedRecipes().contains(holder.id()))
             .flatMap(holder -> holder.value().getIngredients().stream().flatMap(ingredient ->
-                java.util.Arrays.stream(ingredient.getItems()).filter(stack -> !stack.isEmpty()).map(stack ->
-                    new Job(holder.id(), ingredient.isCustom() ? Goods.specOf(stack) : ItemSpec.of(stack.getItem()), holder.value().getResultItem(level.registryAccess()).copyWithCount(1),
+                IngredientSpecs.choices(ingredient).stream().map(input ->
+                    new Job(holder.id(), input, holder.value().getResultItem(level.registryAccess()).copyWithCount(1),
                         holder.value().getCookingTime())))).filter(job -> !job.output().isEmpty()).toList();
         return Optional.of(new Bench(key, colony, at, available.get().part(), available.get().stances(), jobs, bookings, changed));
     }

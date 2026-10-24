@@ -5,6 +5,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.ChoppingBoardReci
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.IngredientSpecs;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Amount;
@@ -24,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Stream;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -86,12 +86,10 @@ public final class ChoppingBoardWorkshops {
 
         static Optional<Job> of(RecipeHolder<ChoppingBoardRecipe> holder) {
             ChoppingBoardRecipe recipe = holder.value();
-            List<ItemSpec> inputs = Stream.of(recipe.getIngredient().getItems()).filter(stack -> !stack.isEmpty())
-                .map(stack -> recipe.getIngredient().isCustom() ? Goods.specOf(stack) : ItemSpec.of(stack.getItem())).distinct().toList();
+            Optional<ItemSpec> input = IngredientSpecs.of(recipe.getIngredient());
             List<ItemStack> outputs = recipe.getResults().stream().filter(stack -> !stack.isEmpty()).toList();
-            return inputs.isEmpty() || outputs.isEmpty() ? Optional.empty()
-                : Optional.of(new Job(holder.id(), ItemSpec.anyOf(inputs), outputs,
-                    recipe.getCutCount(), recipe.getModelId()));
+            return input.isEmpty() || outputs.isEmpty() ? Optional.empty()
+                : Optional.of(new Job(holder.id(), input.get(), outputs, recipe.getCutCount(), recipe.getModelId()));
         }
 
         static Job recover(ResourceLocation recipe, ChoppingBoardBlockEntity board, ServerLevel level) {
