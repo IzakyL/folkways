@@ -86,8 +86,18 @@ input to the existing consumer and records both requested and paid items in
 payment; canceling hauled work uses the existing cargo recovery path. A single
 physical resource cannot pay several competing variants at once.
 
-Reload replaces immutable category rules, replans untouched work and checks
-current rules again before spending. An invalidated payment cannot be consumed.
+Supply checks and actual draws share allocation by complete item identity, so
+an undersized named stack cannot hide enough ordinary resources. Each removal
+is recorded before the next slot or container callback runs. A failed draw
+restores all real goods; an output slot that forbids returns falls back to the
+worker's pack and then dropped items.
+
+Reload atomically replaces the rules and their revision. A planning round uses
+one immutable snapshot and verifies it under the reload lock before publication;
+a stale round releases its new reservations and retries. Untouched work is
+replanned. Draws retain their original logical input and ratio through hauling,
+so an invalid payment in already started work reports a shortage rather than
+borrowing another job's materials. Commit checks current rules before spending.
 The extension adds no saved settings or persisted work format; old colonies,
 blueprints and fields load without a migration. Without the extension installed,
 no resource rules or items are registered and existing work uses real materials.
