@@ -26,6 +26,7 @@ final class CommandNode implements Node {
     }
 
     public NodeSpec spec() { return spec; }
+    public boolean directTravel() { return true; }
     public boolean ready(ServerLevel level) { return commands.active(order); }
     public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
     public void released(ServerLevel level, Worker who, Ending how) { commands.ended(order, how); }

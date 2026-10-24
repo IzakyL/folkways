@@ -31,6 +31,11 @@ final class FleeAction implements Node {
     }
 
     @Override
+    public boolean directTravel() {
+        return true;
+    }
+
+    @Override
     public Outcome commit(ServerLevel level, Worker who) {
         return Outcome.done();
     }

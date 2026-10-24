@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.plugins.combat.Threats;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,7 +42,10 @@ final class FearPresence {
     private Optional<BlockPos> away(Worker who) {
         Mob body = who.body();
         DamageSource hurt = body.getLastDamageSource();
-        boolean danger = hurt != null && (hurt.is(DamageTypeTags.PANIC_CAUSES) || hurt.is(DamageTypeTags.IS_FIRE));
+        Mob pursuer = body.getLastHurtByMob() instanceof Mob mob && mob.getTarget() == body
+            && Threats.hostile(mob, body) && body.distanceToSqr(mob) <= 16 * 16 ? mob : null;
+        boolean danger = pursuer != null || hurt != null
+            && (hurt.is(DamageTypeTags.PANIC_CAUSES) || hurt.is(DamageTypeTags.IS_FIRE));
         Escape escape = escapes.get(body);
         long now = body.level().getGameTime();
         boolean failed = Bodies.of(body).flatMap(resident -> resident.balk())
@@ -57,7 +61,7 @@ final class FearPresence {
         }
         escapes.remove(body);
         if (!danger) { return Optional.empty(); }
-        Entity from = hurt.getEntity();
+        Entity from = pursuer != null ? pursuer : hurt == null ? null : hurt.getEntity();
         Optional<BlockPos> to = Fleeing.awayFrom(body, Optional.ofNullable(from).map(Entity::position));
         to.ifPresent(point -> escapes.put(body, new Escape(point, now)));
         return to;
