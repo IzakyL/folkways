@@ -49,7 +49,8 @@ public final class PersonBody {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.residentKind(ResidentKind.growing(ID, Locomotions.named(Locomotions.WALKING)).taking(rows()));
+        declaring.residentKind(ResidentKind.growing(ID, Locomotions.named(Locomotions.WALKING))
+            .taking(rows()).withWorkDefaults());
     }
 
     public static ResidentKind person() {

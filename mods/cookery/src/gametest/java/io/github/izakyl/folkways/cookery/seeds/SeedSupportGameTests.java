@@ -277,8 +277,11 @@ public final class SeedSupportGameTests {
         try (var rig = new Fixture(helper)) {
             rig.body.pack().setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
             rig.body.pack().setItem(1, new ItemStack(Items.WHEAT_SEEDS, 36));
-            rig.colony.hold(PersonContent.ID, new Held.Entity(UUID.randomUUID(),
-                BuiltInRegistries.ENTITY_TYPE.getKey(PersonBody.RESIDENT.get()))).orElseThrow();
+            ResidentEntity unloaded = PersonBody.RESIDENT.get().create(rig.level);
+            unloaded.moveTo(helper.absolutePos(new BlockPos(2, 2, 2)).getCenter());
+            rig.level.addFreshEntity(unloaded);
+            rig.colony.hold(PersonContent.ID, Held.Entity.of(unloaded)).orElseThrow();
+            unloaded.remove(net.minecraft.world.entity.Entity.RemovalReason.UNLOADED_TO_CHUNK);
             helper.assertTrue(!rig.support.snapshot().complete(), "a held resident without a loaded entity has unknown physical stock");
             helper.assertValueEqual(rig.support.budget(rig.level).tally(Items.WHEAT_SEEDS).physical(), 100L, "known physical seeds are still reported faithfully");
             helper.assertValueEqual(rig.support.budget(rig.level).tally(Items.WHEAT_SEEDS).compostable(), 0L, "unknown carried claims pause destructive work");
