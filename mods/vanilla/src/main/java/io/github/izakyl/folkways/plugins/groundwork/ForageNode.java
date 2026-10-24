@@ -12,23 +12,20 @@ import io.github.izakyl.folkways.core.api.work.WorkNoise;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Xp;
-import io.github.izakyl.folkways.plugins.farming.CropBehaviors;
 import io.github.izakyl.folkways.plugins.farming.FarmingContent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CaveVines;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
 
 final class ForageNode extends GroundNode {
     private final Block plant;
@@ -42,11 +39,13 @@ final class ForageNode extends GroundNode {
 
     private static NodeSpec declare(ServerLevel level, Chores.Chore chore) {
         BlockState state = level.getBlockState(chore.job().cell());
+        int berries = (int) chore.job().cells().stream()
+            .filter(cell -> CaveVines.hasGlowBerries(level.getBlockState(cell))).count();
         var spec = GroundNode.declare(chore, FarmingContent.trade(), Workload.Once.of(
-            GroundworkContent.CELL_TICKS, FarmingContent::haste))
-            .leaves(Leaves.room(3))
+            GroundworkContent.CELL_TICKS * (Foraging.vine(state) ? chore.job().cells().size() : 1), FarmingContent::haste))
+            .leaves(Foraging.vine(state) ? Leaves.ofStacks(List.of(new ItemStack(Items.GLOW_BERRIES, berries))) : Leaves.room(3))
             .doing(GroundworkContent.FORAGING, state.getBlock());
-        if (!Foraging.renewable(state) && state.requiresCorrectToolForDrops()) {
+        if (state.requiresCorrectToolForDrops()) {
             spec.tools(new ToolUse(new ToolNeed.SuitableFor(state), 1));
         }
         return spec.done();
@@ -56,47 +55,33 @@ final class ForageNode extends GroundNode {
     Outcome work(ServerLevel level, Worker who, Job job) {
         BlockPos cell = job.cell();
         BlockState state = level.getBlockState(cell);
-        if (!state.is(plant) || !Foraging.ripe(level, cell)) return Outcome.done();
-        List<BlockPos> cells = Foraging.cells(level, cell);
+        if (!state.is(plant) || !Foraging.root(state)) return Outcome.done();
+        List<BlockPos> cells = Foraging.cells(level, cell, Set.copyOf(job.cells()));
         if (cells.isEmpty() || !job.cells().equals(cells) || cells.stream().anyMatch(at -> !level.isLoaded(at)
                 || spared.test(at) || level.getBlockState(at).getDestroySpeed(level, at) < 0.0F)) {
             return refuse(GroundRefusal.NOTHING_TO_WORK);
         }
-        if (Foraging.renewable(state) && !state.is(Blocks.SWEET_BERRY_BUSH)
-                && !state.is(Blocks.CAVE_VINES) && !state.is(Blocks.CAVE_VINES_PLANT)) {
-            return CropBehaviors.of(plant).flatMap(crop -> crop.gather(level, who, List.of(cell)))
-                .<Outcome>map(harvest -> new Outcome.Done(harvest.noises(), harvest.items(),
-                    harvest.worked() > 0 ? Optional.of(new Xp(FarmingContent.trade(), 1)) : Optional.empty()))
-                .orElseGet(Outcome::done);
+        // Cut vines from the bottom so every marked segment pays its loot before losing its support.
+        List<BlockPos> cut = Foraging.vine(state) ? cells : List.of(cell);
+        List<BlockState> seen = cut.stream().map(level::getBlockState).toList();
+        List<AABB> bounds = new ArrayList<>();
+        for (BlockPos at : cells) {
+            bounds.add(new AABB(at).inflate(1));
+            WorldSpaces.world(level, WorldPos.of(level, at))
+                .ifPresent(world -> bounds.add(AABB.ofSize(world, 3, 3, 3)));
         }
-        List<ItemStack> items;
-        List<AABB> bounds = new ArrayList<>(List.of(new AABB(cell).inflate(1)));
-        WorldSpaces.world(level, WorldPos.of(level, cell))
-            .ifPresent(world -> bounds.add(AABB.ofSize(world, 3, 3, 3)));
-        try {
-            var captured = ItemDrops.capture(level, bounds, () -> {
-                if (state.is(Blocks.SWEET_BERRY_BUSH)) {
-                    // This vanilla interaction only uses Player as a nullable game-event source.
-                    state.useWithoutItem(level, null, new BlockHitResult(Vec3.atCenterOf(cell), Direction.UP, cell, false));
-                    return List.<ItemStack>of();
-                }
-                if (Foraging.renewable(state)) {
-                    CaveVines.use(who.body(), state, level, cell);
-                    return List.<ItemStack>of();
-                }
-                return take(level, who.body(), cell, state, who.held(new ToolNeed.SuitableFor(state)));
-            });
-            items = new ArrayList<>(captured.result());
-            items.addAll(captured.items());
-        } catch (ItemDrops.CaptureFailure broken) {
-            // Once the plant changed, settle its captured fruit instead of harvesting it again.
-            if (level.getBlockState(cell).equals(state)) throw broken;
-            items = broken.items();
-            org.slf4j.LoggerFactory.getLogger("folkways-groundwork").warn("forage {} changed before notification failed", cell, broken);
-        }
-        if (level.getBlockState(cell).equals(state)) return Outcome.done();
-        WorkNoise noise = Foraging.renewable(state) ? WorkNoise.placed(cell, level.getBlockState(cell))
-            : WorkNoise.broke(cell, state);
-        return new Outcome.Done(List.of(noise), items, Optional.of(new Xp(FarmingContent.trade(), 1)));
+        List<ItemStack> items = new ArrayList<>();
+        List<WorkNoise> noises = new ArrayList<>();
+        var captured = ItemDrops.capture(level, bounds, () -> {
+            for (int index = 0; index < cut.size(); index++) {
+                BlockPos at = cut.get(index);
+                BlockState block = seen.get(index);
+                items.addAll(take(level, who.body(), at, block, who.held(new ToolNeed.SuitableFor(block))));
+                noises.add(WorkNoise.broke(at, block));
+            }
+            return true;
+        });
+        items.addAll(captured.items());
+        return new Outcome.Done(List.copyOf(noises), items, Optional.of(new Xp(FarmingContent.trade(), cut.size())));
     }
 }

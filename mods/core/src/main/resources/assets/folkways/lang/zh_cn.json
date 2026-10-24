@@ -483,7 +483,7 @@
   "folkways.ponder.groundwork.text_4": "除草会拔掉框里的草和蕨。花只有勾上“拔花”才会拔，填充也不会把花埋掉。由农夫来做。",
   "folkways.ponder.groundwork.text_5": "砍树会把树干在框里的树连同树叶一起砍倒，也会清走贴地且不连着树木的横向倒木及其苔藓等小植物。殖民地建筑方块会保留。",
   "folkways.ponder.groundwork.text_6": "搬运会让搬运工捡起框里散落的东西，送到殖民地仓库。",
-  "folkways.ponder.groundwork.text_7": "采集让农夫把野生食物收进殖民地容器。成熟浆果灌木和洞穴藤蔓采后继续生长；蘑菇和野生作物会整株采下。同时勾选清空时，优先清空。",
+  "folkways.ponder.groundwork.text_7": "采集让农夫拆除食物植物，把果实和种子等掉落收进殖民地容器。未成熟的浆果灌木和圈定范围内的整列洞穴藤蔓也会清走，不留植株。同时勾选清空时，优先清空。",
   "folkways.ponder.golems.header": "傀儡：让你的傀儡为殖民地干活",
   "folkways.ponder.golems.text_1": "把书切到点选，左键点击一个属于你的金属傀儡，它就作为居民加入殖民地；再点一次则离开。",
   "folkways.ponder.golems.text_2": "只有傀儡的主人才能移交它，已经属于另一个殖民地的傀儡不会被带走。",

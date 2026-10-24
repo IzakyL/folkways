@@ -116,14 +116,13 @@ public final class GroundworkScene {
         scene.world().setBlock(berries, Blocks.SWEET_BERRY_BUSH.defaultBlockState()
             .setValue(net.minecraft.world.level.block.SweetBerryBushBlock.AGE, 3), false);
         scene.overlay().showText(100)
-            .text("Forage lets farmers gather wild food into colony stores. Ripe berry bushes and cave vines keep growing after picking; mushrooms and wild crops are picked whole. Clear takes priority when both switches are ticked.")
+            .text("Forage has farmers break food plants and store all their drops. Young berry bushes and fruitless cave-vine segments are cleared too. The marked vine column is removed, without leaving plants to regrow. Clear takes priority when both switches are ticked.")
             .colored(PonderPalette.GREEN)
             .pointAt(util.vector().centerOf(berries))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(50);
-        scene.world().setBlock(berries, Blocks.SWEET_BERRY_BUSH.defaultBlockState()
-            .setValue(net.minecraft.world.level.block.SweetBerryBushBlock.AGE, 1), false);
+        scene.world().setBlock(berries, Blocks.AIR.defaultBlockState(), true);
         scene.world().createItemEntity(util.vector().centerOf(berries), Vec3.ZERO, new ItemStack(Items.SWEET_BERRIES, 2));
         scene.idle(60);
     }

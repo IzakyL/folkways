@@ -143,13 +143,16 @@ final class Survey {
 
     List<Job> forage(Predicate<BlockPos> spared, Set<BlockPos> claimed) {
         List<Job> jobs = new ArrayList<>();
+        Set<BlockPos> found = new HashSet<>();
         for (BlockPos cell : sorted(UPWARD)) {
-            if (!level.isLoaded(cell) || !Foraging.ripe(level, cell)) continue;
-            List<BlockPos> plant = Foraging.cells(level, cell);
+            if (found.contains(cell) || !level.isLoaded(cell) || !Foraging.root(level.getBlockState(cell))) continue;
+            List<BlockPos> plant = Foraging.cells(level, cell, cells);
             if (plant.isEmpty() || plant.stream().anyMatch(at -> claimed.contains(at) || spared.test(at)
                     || !clearable(level, at, level.getBlockState(at)))) continue;
-            stances(cell, Set.of()).ifPresent(where -> jobs.add(new Job(Job.keyOf(cell), site(cell), cell,
-                plant, List.of(), where)));
+            stances(cell, Set.of()).ifPresent(where -> {
+                found.addAll(plant);
+                jobs.add(new Job(Job.keyOf(cell), site(cell), cell, plant, List.of(), where));
+            });
         }
         return jobs;
     }

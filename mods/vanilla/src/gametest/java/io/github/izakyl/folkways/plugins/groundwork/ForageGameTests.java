@@ -70,54 +70,73 @@ public final class ForageGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void ripeBerriesUseVanillaHarvestAndRegrow(GameTestHelper helper) {
+    public static void berryBushesAreBrokenAtEveryAge(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
-            f.place(berry(3));
-            f.zone(GroundworkContent.FORAGE);
-            Node node = f.only();
-            Outcome.Done done = (Outcome.Done) node.commit(f.level, f.fixture.worker);
-            helper.assertTrue(f.level.getBlockState(f.cell).equals(berry(1)), "the bush regrows from vanilla age one");
-            int berries = count(done, Items.SWEET_BERRIES);
-            helper.assertTrue(berries >= 2 && berries <= 3, "vanilla ripe yield is two or three berries");
-            helper.assertTrue(((Outcome.Done) node.commit(f.level, f.fixture.worker)).made().isEmpty(), "replay cannot pay again");
-            f.place(berry(2));
-            done = (Outcome.Done) node.commit(f.level, f.fixture.worker);
-            helper.assertTrue(count(done, Items.SWEET_BERRIES) >= 1 && count(done, Items.SWEET_BERRIES) <= 2,
-                "age two is also right-click harvestable");
+            for (int age = 0; age <= 3; age++) {
+                f.place(berry(age));
+                f.zone(GroundworkContent.FORAGE);
+                Node node = f.only();
+                Outcome.Done done = (Outcome.Done) node.commit(f.level, f.fixture.worker);
+                helper.assertTrue(f.level.getBlockState(f.cell).isAir(), "a berry bush is removed at age " + age);
+                helper.assertTrue(age < 2 ? done.made().isEmpty() : count(done, Items.SWEET_BERRIES) > 0,
+                    "the bush pays its ordinary breaking loot at age " + age);
+                helper.assertTrue(((Outcome.Done) node.commit(f.level, f.fixture.worker)).made().isEmpty(), "replay cannot pay again");
+            }
             helper.assertTrue(f.level.getEntitiesOfClass(ItemEntity.class, new AABB(f.cell).inflate(2)).isEmpty(),
-                "the native interaction's drops are captured, not left on the ground");
+                "all forage loot enters the outcome");
         }
         helper.succeed();
     }
 
     @GameTest(template = "empty")
-    public static void unripeAndDisabledForageAreUntouched(GameTestHelper helper) {
+    public static void disabledForageLeavesBerryBushesAlone(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             f.place(berry(1));
-            f.zone(GroundworkContent.FORAGE, GroundworkContent.WEED);
-            helper.assertTrue(f.nodes().isEmpty() && f.level.getBlockState(f.cell).equals(berry(1)), "unripe bushes stay");
-            f.place(berry(3));
             f.zone(GroundworkContent.WEED);
-            helper.assertTrue(f.nodes().isEmpty() && f.level.getBlockState(f.cell).equals(berry(3)), "weeding does not forage");
+            helper.assertTrue(f.nodes().isEmpty() && f.level.getBlockState(f.cell).equals(berry(1)), "weeding does not forage");
+            f.place(berry(3));
             f.zone();
-            helper.assertTrue(f.nodes().isEmpty(), "all switches off means no work");
+            helper.assertTrue(f.nodes().isEmpty() && f.level.getBlockState(f.cell).equals(berry(3)), "disabled forage leaves plants alone");
         }
         helper.succeed();
     }
 
     @GameTest(template = "empty")
-    public static void glowBerriesKeepBothKindsOfCaveVines(GameTestHelper helper) {
+    public static void glowBerryColumnsIncludeFruitlessSegmentsAndStayWithinTheMark(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
-            for (Block vine : List.of(Blocks.CAVE_VINES, Blocks.CAVE_VINES_PLANT)) {
-                f.place(vine.defaultBlockState().setValue(CaveVines.BERRIES, true));
-                f.zone(GroundworkContent.FORAGE);
-                Outcome.Done done = (Outcome.Done) f.only().commit(f.level, f.fixture.worker);
-                helper.assertTrue(f.level.getBlockState(f.cell).is(vine)
-                    && !f.level.getBlockState(f.cell).getValue(CaveVines.BERRIES), "the vine stays without berries");
-                helper.assertTrue(count(done, Items.GLOW_BERRIES) == 1, "vanilla drops one glow berry");
-                f.zone(GroundworkContent.FORAGE);
-                helper.assertTrue(f.nodes().isEmpty(), "fruitless vines are not picked");
+            place(f.level, f.cell.above(4), Blocks.STONE.defaultBlockState());
+            for (int y = 0; y <= 3; y++) {
+                Block vine = y == 0 ? Blocks.CAVE_VINES : Blocks.CAVE_VINES_PLANT;
+                place(f.level, f.cell.above(y), vine.defaultBlockState().setValue(CaveVines.BERRIES, y != 1));
             }
+            Set<BlockPos> marked = Set.of(f.cell, f.cell.above(), f.cell.above(2));
+            f.zone(marked, GroundworkContent.FORAGE);
+            helper.assertTrue(f.nodes().size() == 1, "one column is one clearing job");
+            Node node = f.only();
+            Outcome.Done done = (Outcome.Done) node.commit(f.level, f.fixture.worker);
+            for (BlockPos cell : marked) helper.assertTrue(f.level.getBlockState(cell).isAir(), "every marked vine segment goes");
+            helper.assertTrue(count(done, Items.GLOW_BERRIES) == 2, "both marked fruiting segments pay their loot");
+            helper.assertTrue(Foraging.vine(f.level.getBlockState(f.cell.above(3)))
+                && f.level.getBlockState(f.cell.above(3)).getValue(CaveVines.BERRIES), "the unmarked upper vine keeps its fruit");
+            helper.assertTrue(((Outcome.Done) node.commit(f.level, f.fixture.worker)).made().isEmpty(), "a column cannot pay twice");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void protectedVineSegmentsPreventCuttingTheirColumn(GameTestHelper helper) {
+        try (Fixture f = new Fixture(helper)) {
+            f.place(Blocks.CAVE_VINES.defaultBlockState().setValue(CaveVines.BERRIES, true));
+            place(f.level, f.cell.above(), Blocks.CAVE_VINES_PLANT.defaultBlockState());
+            Set<BlockPos> marked = Set.of(f.cell, f.cell.above());
+            helper.assertTrue(new Survey(f.level, marked).forage(f.cell.above()::equals, Set.of()).isEmpty(),
+                "a protected segment keeps the complete column out of discovery");
+            f.zone(marked, GroundworkContent.FORAGE);
+            Node node = f.only();
+            f.colony.hold(GroundworkContent.ID, new Held.Block(WorldPos.of(f.level, f.cell.above()))).orElseThrow();
+            helper.assertTrue(node.commit(f.level, f.fixture.worker) instanceof Outcome.Failed,
+                "protection is checked for the whole column again at commit");
+            helper.assertTrue(f.level.getBlockState(f.cell).is(Blocks.CAVE_VINES), "the lower vine stays too");
         }
         helper.succeed();
     }
@@ -151,13 +170,14 @@ public final class ForageGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void pickingRechecksProtectionRipenessAndReplacement(GameTestHelper helper) {
+    public static void pickingRechecksProtectionAndReplacement(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             f.place(berry(3));
             f.zone(GroundworkContent.FORAGE);
             Node node = f.only();
             f.place(berry(1));
-            helper.assertTrue(((Outcome.Done) node.commit(f.level, f.fixture.worker)).made().isEmpty(), "ripeness is read again");
+            helper.assertTrue(((Outcome.Done) node.commit(f.level, f.fixture.worker)).made().isEmpty()
+                && f.level.getBlockState(f.cell).isAir(), "a bush that became unripe is still removed with its current loot");
             f.place(Blocks.STONE.defaultBlockState());
             node.commit(f.level, f.fixture.worker);
             helper.assertTrue(f.level.getBlockState(f.cell).is(Blocks.STONE), "replacement blocks stay");
@@ -196,8 +216,38 @@ public final class ForageGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void savedInPlaceTargetsMigrateWithoutRediscoveringOtherWork(GameTestHelper helper) {
+        try (Fixture f = new Fixture(helper)) {
+            f.place(berry(3));
+            place(f.level, f.cell.east(), berry(0));
+            place(f.level, f.cell.west(), Blocks.SHORT_GRASS.defaultBlockState());
+            f.zone(Set.of(f.cell, f.cell.east(), f.cell.west()), GroundworkContent.FORAGE, GroundworkContent.WEED);
+            f.presence.closed(Closing.SHUTDOWN);
+            var saved = f.colony.kept(GroundworkContent.ID);
+            var site = saved.getList("sites", 10).getCompound(0);
+            site.remove("forage_version");
+            var old = new net.minecraft.nbt.ListTag();
+            old.add(net.minecraft.nbt.StringTag.valueOf(Job.keyOf(f.cell)));
+            site.getCompound("targets").put(GroundworkContent.FORAGE, old);
+            site.getCompound("targets").put(GroundworkContent.WEED, new net.minecraft.nbt.ListTag());
+            f.colony.keep(GroundworkContent.ID, saved);
+            GroundPresence loaded = new GroundPresence(f.colony);
+            loaded.refresh(f.level.getServer());
+            List<Node> nodes = loaded.goals(f.colony.view(f.level)).stream().flatMap(goal -> goal.nodes().stream()).toList();
+            helper.assertTrue(nodes.size() == 2 && nodes.stream().allMatch(node -> node instanceof ForageNode),
+                "migration discovers the formerly unripe bush but preserves completed weeding");
+            for (Node node : nodes) node.commit(f.level, f.fixture.worker);
+            helper.assertTrue(f.level.getBlockState(f.cell.east()).isAir(), "the migrated young bush is removed");
+            helper.assertTrue(f.level.getBlockState(f.cell.west()).is(Blocks.SHORT_GRASS), "unrelated completed work stays spent");
+            helper.assertTrue(f.colony.kept(GroundworkContent.ID).getList("sites", 10).getCompound(0)
+                .getInt("forage_version") == 2, "the new target revision is saved");
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 800)
-    public static void harvestedBerriesReachColonyStorage(GameTestHelper helper) throws ReflectiveOperationException {
+    public static void brokenBerryBushLootReachesColonyStorage(GameTestHelper helper) throws ReflectiveOperationException {
         stored(helper, berry(3), false);
     }
 
@@ -206,10 +256,22 @@ public final class ForageGameTests {
         stored(helper, wild.defaultBlockState(), true);
     }
 
+    @GameTest(template = "empty", timeoutTicks = 800)
+    public static void wholeVineColumnLootReachesColonyStorage(GameTestHelper helper) throws ReflectiveOperationException {
+        stored(helper, Blocks.CAVE_VINES.defaultBlockState().setValue(CaveVines.BERRIES, true), false);
+    }
+
     private static void stored(GameTestHelper helper, BlockState plant, boolean picked) throws ReflectiveOperationException {
         Fixture f = new Fixture(helper);
         f.place(plant);
-        f.zone(GroundworkContent.FORAGE);
+        boolean vines = Foraging.vine(plant);
+        Set<BlockPos> marked = vines ? Set.of(f.cell, f.cell.above(), f.cell.above(2)) : Set.of(f.cell);
+        if (vines) {
+            place(f.level, f.cell.above(), Blocks.CAVE_VINES_PLANT.defaultBlockState());
+            place(f.level, f.cell.above(2), Blocks.CAVE_VINES_PLANT.defaultBlockState().setValue(CaveVines.BERRIES, true));
+            place(f.level, f.cell.above(3), Blocks.STONE.defaultBlockState());
+        }
+        f.zone(marked, GroundworkContent.FORAGE);
         BlockPos barrel = f.cell.east(3);
         place(f.level, barrel, Blocks.BARREL.defaultBlockState());
         Container stock = (Container) f.level.getBlockEntity(barrel);
@@ -253,9 +315,9 @@ public final class ForageGameTests {
         });
         helper.runAtTickTime(790, close);
         helper.startSequence().thenWaitUntil(() -> {
-            helper.assertTrue(picked ? f.level.getBlockState(f.cell).isAir() : f.level.getBlockState(f.cell).is(Blocks.SWEET_BERRY_BUSH),
-                "one-off plants go; renewable bushes stay");
-            helper.assertTrue(stock.countItem(picked ? Items.WHEAT : Items.SWEET_BERRIES) >= (picked ? 1 : 2), "food reaches the colony barrel");
+            for (BlockPos cell : marked) helper.assertTrue(f.level.getBlockState(cell).isAir(), "every marked forage block is destroyed");
+            helper.assertTrue(stock.countItem(vines ? Items.GLOW_BERRIES : picked ? Items.WHEAT : Items.SWEET_BERRIES)
+                >= (vines ? 2 : 1), "food reaches the colony barrel");
             if (picked) helper.assertTrue(stock.countItem(Items.WHEAT_SEEDS) == 1, "wild seeds are stored with the food");
         }).thenExecute(close).thenSucceed();
     }
@@ -294,11 +356,15 @@ public final class ForageGameTests {
         void place(BlockState state) { ForageGameTests.place(level, cell, state); }
 
         void zone(String... switches) {
+            zone(Set.of(cell), switches);
+        }
+
+        void zone(Set<BlockPos> marked, String... switches) {
             ColonyFront front = ColonyFront.of(colony);
             front.zonesIn(level).forEach(zone -> front.erase(zone.id()));
             ColonySettings settings = ColonySettings.empty().with(GroundworkContent.CLEAR, new ColonySettings.Value.Flag(false));
             for (String key : switches) settings = settings.with(key, new ColonySettings.Value.Flag(true));
-            front.addZone(level, GroundworkContent.ZONE, Set.of(cell), settings).orElseThrow();
+            front.addZone(level, GroundworkContent.ZONE, marked, settings).orElseThrow();
             presence.refresh(level.getServer());
         }
 

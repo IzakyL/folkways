@@ -483,7 +483,7 @@
   "folkways.ponder.groundwork.text_4": "Weed pulls the grass and ferns in the box. Flowers are pulled only with Pull flowers ticked, and a fill never buries one. Farmers do it.",
   "folkways.ponder.groundwork.text_5": "Fell takes down trees whose trunks stand in the box, leaves and all. It also clears horizontal logs resting on the ground away from trees, with their moss and other small plants. Colony building blocks stay.",
   "folkways.ponder.groundwork.text_6": "Haul has the haulers pick up whatever lies loose in the box and carry it off to the colony's stores.",
-  "folkways.ponder.groundwork.text_7": "Forage lets farmers gather wild food into colony stores. Ripe berry bushes and cave vines keep growing after picking; mushrooms and wild crops are picked whole. Clear takes priority when both switches are ticked.",
+  "folkways.ponder.groundwork.text_7": "Forage has farmers break food plants and store all their drops. Young berry bushes and fruitless cave-vine segments are cleared too. The marked vine column is removed, without leaving plants to regrow. Clear takes priority when both switches are ticked.",
   "folkways.ponder.golems.header": "Golems: put your Modular Golems to work",
   "folkways.ponder.golems.text_1": "With the book on pointing, left click a Modular Golem you own. It joins the colony as a resident; click it again and it leaves.",
   "folkways.ponder.golems.text_2": "Only the golem's owner can hand it over, and one that already belongs to another colony stays there.",

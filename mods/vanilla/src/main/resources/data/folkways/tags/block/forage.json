@@ -1,6 +1,9 @@
 {
   "replace": false,
   "values": [
+    "minecraft:sweet_berry_bush",
+    "minecraft:cave_vines",
+    "minecraft:cave_vines_plant",
     "minecraft:brown_mushroom",
     "minecraft:red_mushroom",
     "minecraft:pumpkin",
@@ -59,6 +62,18 @@
     },
     {
       "id": "supplementaries:wild_flax",
+      "required": false
+    },
+    {
+      "id": "kaleidoscope_cookery:tea_tree",
+      "required": false
+    },
+    {
+      "id": "kaleidoscope_cookery:tomato_crop",
+      "required": false
+    },
+    {
+      "id": "kaleidoscope_cookery:chili_crop",
       "required": false
     }
   ]
