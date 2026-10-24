@@ -34,6 +34,9 @@ public sealed interface Message {
     record Idle(UUID resident) implements Message {
     }
 
+    record PackBusy(UUID resident) implements Message {
+    }
+
     record Answered() implements Message {
     }
 

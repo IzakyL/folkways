@@ -4,6 +4,14 @@ import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 
 enum PastureRefusal implements RefusalKind.Named {
 
+    HIVE_GONE,
+
+    HIVE_TAKEN,
+
+    HIVE_NOT_READY,
+
+    HIVE_NOT_SMOKED,
+
     BEAST_GONE,
 
     BEAST_TAKEN,
