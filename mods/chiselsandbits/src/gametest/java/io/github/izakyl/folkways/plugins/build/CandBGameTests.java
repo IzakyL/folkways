@@ -120,6 +120,48 @@ public final class CandBGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void chunkRestorationKeepsStatisticsAndTheCarving(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos at = helper.absolutePos(new BlockPos(4, 2, 4));
+        level.setBlock(at, state(), Block.UPDATE_ALL);
+        var first = (ChiseledBlockEntity) level.getBlockEntity(at);
+        first.loadWithComponents(CandBStructureCodec.encode(sculpture()), level.registryAccess());
+        CompoundTag saved = first.saveWithFullMetadata(level.registryAccess());
+        helper.assertTrue(!saved.contains("folkways:schematic"), "ordinary chunk data has no schematic marker");
+        first.setRemoved();
+        var restored = (ChiseledBlockEntity) net.minecraft.world.level.block.entity.BlockEntity.loadStatic(
+            at, state(), saved, level.registryAccess());
+        helper.assertTrue(restored.getLevel() == null, "the chunk reads the entity before attaching its level");
+        level.setBlockEntity(restored);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(!restored.getStatistics().isEmptyBlock(), "the restored carving is not replaceable as an empty block");
+            helper.assertTrue(!restored.getShape(mod.chiselsandbits.api.axissize.CollisionType.NONE_AIR).isEmpty(),
+                "restored collision statistics retain the shape");
+            CandBTestData.sameVoxels(helper, sculpture(), restored.payload().storage());
+            restored.setChanged();
+            helper.assertTrue(level.getBlockState(at).is(state().getBlock()), "a later update cannot erase the carving");
+            var captured = BlueprintCapture.read(level, BoundingBox.fromCorners(at, at), pos -> true);
+            var blueprint = StructureNbt.toBlueprint(captured, level.registryAccess(), UUID.randomUUID(), "restored", 0,
+                StructureNbt.AirMeaning.UNCONSTRAINED, 8).orElseThrow().confirm(level);
+            helper.assertTrue(!blueprint.blocks().isEmpty(), "the restored carving remains capturable and buildable");
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 40)
+    public static void synchronousDetachedReadRecalculatesWhenAWorldIsAttached(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos at = helper.absolutePos(new BlockPos(2, 2, 2));
+        var detached = new ChiseledBlockEntity(at, state());
+        detached.loadWithComponents(CandBStructureCodec.encode(sculpture()), level.registryAccess());
+        detached.setLevel(level);
+        helper.assertTrue(!detached.getStatistics().isEmptyBlock(), "attaching a world completes synchronous statistics");
+        helper.assertTrue(!detached.getShape(mod.chiselsandbits.api.axissize.CollisionType.NONE_AIR).isEmpty(),
+            "the detached read does not leave an empty collision shape");
+        detached.setRemoved();
+        helper.succeed();
+    }
+
     @GameTest(template = "empty_large", timeoutTicks = 60)
     public static void missingOneMaterialRestoresAllBitsAndNeverPlaces(GameTestHelper helper) {
         var level = helper.getLevel();

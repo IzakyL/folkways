@@ -42,7 +42,9 @@ public final class CandBSchematicBridge implements StructureCompat.Handler {
     @Override
     public BlockEntity detached(HolderLookup.Provider registries, BlockPos pos, BlockState state, StructurePayload payload) {
         ChiseledBlockEntity entity = new ChiseledBlockEntity(pos, state);
-        entity.loadWithComponents(payload.tag(), registries);
+        CompoundTag data = payload.tag();
+        data.putBoolean("folkways:schematic", true);
+        entity.loadWithComponents(data, registries);
         checked(entity);
         return entity;
     }
