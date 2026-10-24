@@ -48,7 +48,7 @@ public final class GroundworkScene {
         scene.idle(15);
 
         scene.overlay().showText(90)
-            .text("A groundwork zone does whichever work is ticked in its settings, one or several: clear, fill, weed, fell and haul. Cleared and filled together, the box is dug out and laid with the fill block; the fill block already there stays.")
+            .text("A groundwork zone does whichever work is ticked in its settings, one or several: clear, fill, weed, fell, haul and forage. Cleared and filled together, the box is dug out and laid with the fill block; the fill block already there stays.")
             .pointAt(util.vector().topOf(4, 0, 4))
             .placeNearTarget()
             .attachKeyFrame();
@@ -111,6 +111,21 @@ public final class GroundworkScene {
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
+
+        BlockPos berries = util.grid().at(6, 1, 1);
+        scene.world().setBlock(berries, Blocks.SWEET_BERRY_BUSH.defaultBlockState()
+            .setValue(net.minecraft.world.level.block.SweetBerryBushBlock.AGE, 3), false);
+        scene.overlay().showText(100)
+            .text("Forage lets farmers gather wild food into colony stores. Ripe berry bushes and cave vines keep growing after picking; mushrooms and wild crops are picked whole. Clear takes priority when both switches are ticked.")
+            .colored(PonderPalette.GREEN)
+            .pointAt(util.vector().centerOf(berries))
+            .placeNearTarget()
+            .attachKeyFrame();
+        scene.idle(50);
+        scene.world().setBlock(berries, Blocks.SWEET_BERRY_BUSH.defaultBlockState()
+            .setValue(net.minecraft.world.level.block.SweetBerryBushBlock.AGE, 1), false);
+        scene.world().createItemEntity(util.vector().centerOf(berries), Vec3.ZERO, new ItemStack(Items.SWEET_BERRIES, 2));
+        scene.idle(60);
     }
 
     private static void plantTree(SceneBuilder scene, SceneBuildingUtil util, BlockPos trunk) {

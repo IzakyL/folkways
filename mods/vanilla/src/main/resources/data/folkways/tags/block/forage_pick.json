@@ -1,0 +1,65 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:brown_mushroom",
+    "minecraft:red_mushroom",
+    "minecraft:pumpkin",
+    "minecraft:melon",
+    {
+      "id": "farmersdelight:wild_cabbages",
+      "required": false
+    },
+    {
+      "id": "farmersdelight:wild_onions",
+      "required": false
+    },
+    {
+      "id": "farmersdelight:wild_tomatoes",
+      "required": false
+    },
+    {
+      "id": "farmersdelight:wild_carrots",
+      "required": false
+    },
+    {
+      "id": "farmersdelight:wild_potatoes",
+      "required": false
+    },
+    {
+      "id": "farmersdelight:wild_beetroots",
+      "required": false
+    },
+    {
+      "id": "farmersdelight:wild_rice",
+      "required": false
+    },
+    {
+      "id": "pamhc2crops:aridgarden",
+      "required": false
+    },
+    {
+      "id": "pamhc2crops:frostgarden",
+      "required": false
+    },
+    {
+      "id": "pamhc2crops:shadedgarden",
+      "required": false
+    },
+    {
+      "id": "pamhc2crops:soggygarden",
+      "required": false
+    },
+    {
+      "id": "pamhc2crops:tropicalgarden",
+      "required": false
+    },
+    {
+      "id": "pamhc2crops:windygarden",
+      "required": false
+    },
+    {
+      "id": "supplementaries:wild_flax",
+      "required": false
+    }
+  ]
+}

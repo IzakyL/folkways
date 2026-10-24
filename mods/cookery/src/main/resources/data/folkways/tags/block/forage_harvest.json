@@ -1,0 +1,17 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "kaleidoscope_cookery:tea_tree",
+      "required": false
+    },
+    {
+      "id": "kaleidoscope_cookery:tomato_crop",
+      "required": false
+    },
+    {
+      "id": "kaleidoscope_cookery:chili_crop",
+      "required": false
+    }
+  ]
+}

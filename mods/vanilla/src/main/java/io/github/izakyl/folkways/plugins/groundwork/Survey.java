@@ -141,6 +141,19 @@ final class Survey {
         return jobs;
     }
 
+    List<Job> forage(Predicate<BlockPos> spared, Set<BlockPos> claimed) {
+        List<Job> jobs = new ArrayList<>();
+        for (BlockPos cell : sorted(UPWARD)) {
+            if (!level.isLoaded(cell) || !Foraging.ripe(level, cell)) continue;
+            List<BlockPos> plant = Foraging.cells(level, cell);
+            if (plant.isEmpty() || plant.stream().anyMatch(at -> claimed.contains(at) || spared.test(at)
+                    || !clearable(level, at, level.getBlockState(at)))) continue;
+            stances(cell, Set.of()).ifPresent(where -> jobs.add(new Job(Job.keyOf(cell), site(cell), cell,
+                plant, List.of(), where)));
+        }
+        return jobs;
+    }
+
     // A tree is felled from the foot of its trunk in the box, whole, the way a wood lot fells one. A log with no
     // leaves of its own is no tree, but a beam or a wall, and stays.
     List<Job> fell() {

@@ -1,6 +1,59 @@
-# Groundwork and fallen logs
+# Groundwork: forage and fallen logs
 
 [Documentation](README.md) · [简体中文](../zh-CN/groundwork.md)
+
+## Gathering wild food
+
+Enable **Forage** and turn **Clear** off to have farmers gather marked food plants
+into colony storage. Forage defaults off. Sweet berry bushes at age two or three
+use the vanilla empty-hand interaction and reset to age one; cave-vine heads and
+bodies use vanilla berry picking and keep their vine block. Unripe plants stay.
+These are one-time groundwork targets, not a recurring farm: the zone finishes
+after its discovered work, without waiting for unripe plants or later regrowth.
+
+**Clear takes priority** when enabled, removing the plant through the existing
+clearing path. Weeding does not harvest berries; when Forage is enabled it leaves
+renewable forage alone. Other enabled work, such as felling a supporting tree or
+filling a plant's ground, still has its ordinary effect. Colony-registered blocks
+and the selected fill material are protected, with a second check at commit.
+Unregistered player plants cannot be distinguished from naturally generated ones.
+
+Small brown/red mushrooms, pumpkins and melons are picked whole, using normal
+block loot and tools, without planting them back. Carved pumpkins, mushroom trees,
+ordinary vanilla crop fields and tree leaves are not included. A marked lower half
+of a tagged two-block wild plant claims its matching upper half too; loot is rolled
+once at the lower half before removing its support. Protected upper halves prevent
+picking. Any immediate neighbor-update drops are captured with the harvest.
+
+Data packs select plants through `#folkways:forage_pick` (one-off plants) and
+`#folkways:forage_harvest` (renewable plants). Tagged `CropBlock` plants in Pick
+must be fully grown. Harvest requires a known lifecycle: the two vanilla berry
+rules or an owning integration's registered `CropBehavior.ripe/gather`. An unknown
+Harvest entry is skipped rather than broken. Three pack slots are reserved for
+food and propagation items. All mutations stay in `Node.commit`; native spawned
+drops enter `Outcome.Done` through the existing `ItemDrops` capture.
+
+### Checked mods and block IDs
+
+Checked on 2026-10-24 using the published NeoForge 1.21.1 jars and their loot and
+block definitions. Optional block IDs are `required: false`; no extra dependency
+or test profile was added. Only Cookery is actually loaded in the optional test
+run; the other mods were inspected, with generic picking covered by a test-only
+wild plant that drops both food and a seed.
+
+| Mod and checked version                                                                                                  | Covered plants and behavior                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Farmer's Delight 1.3.4](https://modrinth.com/mod/farmers-delight/version/1.21.1-1.3.4)                                  | Pick `farmersdelight:wild_cabbages`, `wild_onions`, `wild_tomatoes`, `wild_carrots`, `wild_potatoes`, `wild_beetroots`, `wild_rice`. Wild rice has two halves and retains its water.                                                                                                                                                                                                                                                            |
+| [Kaleidoscope Cookery 1.6.0](https://modrinth.com/mod/kaleidoscope-cookery/version/1.6.0-neoforge%2Bmc1.21.1)            | Its Folkways integration opts `kaleidoscope_cookery:tea_tree`, `tomato_crop`, `chili_crop` into Harvest, reusing its existing crop behaviors and resetting to ages three/five/five. These are ordinary crop blocks; this version has no separate wild crop blocks. `kaleidoscope_cookery:wild_rice` is a seed item obtained from grass, already handled by the integration's seed-gathering area. Cultivated rice and lettuce remain farm work. |
+| [Pam's HarvestCraft 2 Crops 1.0.9](https://www.curseforge.com/minecraft/mc-mods/pams-harvestcraft-2-crops/files/8064883) | Pick `pamhc2crops:aridgarden`, `frostgarden`, `shadedgarden`, `soggygarden`, `tropicalgarden`, `windygarden`. The published Modrinth 1.0.0 jar was also checked; its six IDs agree. Cultivated `pam...crop` blocks are not opted in.                                                                                                                                                                                                            |
+| [Supplementaries 4.0.2](https://modrinth.com/mod/supplementaries/version/rWq0ko29)                                       | Pick `supplementaries:wild_flax` for its normal seeds. This includes a useful propagation plant even though flax itself is not food. Cultivated `supplementaries:flax` is not opted in.                                                                                                                                                                                                                                                         |
+| [Croptopia 4.2.4](https://www.curseforge.com/minecraft/mc-mods/croptopia/files/7958876)                                  | NeoForge 1.21.1 is available. Examples are `croptopia:blueberry_crop`, `blackberry_crop`, `corn_crop`; `#croptopia:crops` also includes tree fruit such as `apple_crop`. Not opted in: native picking changes player stats/exhaustion, resets crops and drops loot; fruit leaves have another lifecycle. Supporting it needs its own integration, rather than breaking renewable crops or guessing resets.                                      |
+
+Saved sites without the new configuration field migrate to `forage=false`, keeping
+their previous target sets. Turning Forage on deliberately rediscovers the zone,
+like any settings change. No other persisted format changes are made.
+
+## Fallen logs
 
 A groundwork zone's **Fell trees** setting also clears fallen wood. Farmers take
 horizontal blocks in `#minecraft:logs` or `#folkways:fallen_logs` when they rest on
@@ -70,4 +123,7 @@ planning and execution pipeline. The tag-only fixture adds `minecraft:hay_block`
 to `#folkways:fallen_logs` in test resources only; it is not shipped as content.
 Other tests cover standing trees, diagonal connections, protected blocks,
 unsupported beams, changes before commit, decorations, marked boundaries and the
-connectivity budget. Run `./gradlew runGameTestServer` for the combined suite.
+connectivity budget. Forage tests additionally cover vanilla ripeness/reset, both
+cave-vine blocks, disabled settings, Clear priority, two-block plants, protection,
+replacement, old saved configurations, and actual food/seed storage.
+`./gradlew -PcookeryTests=true runGameTestServer` also verifies Cookery regrowth. Run `./gradlew runGameTestServer` for the combined suite.

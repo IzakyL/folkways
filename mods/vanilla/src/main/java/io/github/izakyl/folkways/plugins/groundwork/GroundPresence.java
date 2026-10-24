@@ -83,6 +83,7 @@ final class GroundPresence implements Facing {
             }
             Predicate<BlockPos> member = cell -> colony.holdingAt(WorldPos.of(level, cell)).isPresent();
             Predicate<BlockState> kept = kept(with);
+            Predicate<BlockPos> spared = cell -> member.test(cell) || kept.test(level.getBlockState(cell));
             // A cell is worked by one kind at a time: a tree is felled whole before anyone clears round it, and a weed
             // is pulled before a block is laid over it.
             Set<BlockPos> claimed = new HashSet<>();
@@ -105,10 +106,16 @@ final class GroundPresence implements Facing {
                                 && !new FallenLogs(at, member).at(cell))
                     : new FellNode(at, chore), trees);
             }
+            if (settings.flag(GroundworkContent.FORAGE) && !settings.flag(GroundworkContent.CLEAR)) {
+                List<Job> forage = survey.forage(spared, claimed);
+                forage.forEach(plant -> claimed.addAll(plant.cells()));
+                settle(GroundworkContent.FORAGE, (at, chore) -> new ForageNode(at, chore, spared), forage);
+            }
             if (grass || flowers) {
                 Predicate<BlockState> pulled = Survey.weeds(grass, flowers);
                 List<Job> weeds = survey.weed(pulled).stream()
-                    .filter(weed -> !claimed.contains(weed.cell())).toList();
+                    .filter(weed -> !claimed.contains(weed.cell()) && !(settings.flag(GroundworkContent.FORAGE)
+                        && Foraging.renewable(level.getBlockState(weed.cell())))).toList();
                 weeds.forEach(weed -> {
                     claimed.add(weed.cell());
                     claimed.add(weed.cell().above());
@@ -153,7 +160,8 @@ final class GroundPresence implements Facing {
                 settle(GroundworkContent.HAUL, (at, chore) -> new HaulNode(at, chore), survey.haul(view::at));
             }
             works.keySet().removeIf(work -> work.equals(GroundworkContent.WEED) ? !grass && !flowers
-                : !settings.flag(work) || work.equals(GroundworkContent.FILL) && with.isEmpty());
+                : !settings.flag(work) || work.equals(GroundworkContent.FILL) && with.isEmpty()
+                    || work.equals(GroundworkContent.FORAGE) && settings.flag(GroundworkContent.CLEAR));
         }
 
         private void settle(String work, Chores.Maker maker, List<Job> jobs) {
@@ -185,7 +193,7 @@ final class GroundPresence implements Facing {
         void update(ServerLevel level, ZoneView zone) {
             Settings settings = zone.settings();
             String configured = List.of(GroundworkContent.CLEAR, GroundworkContent.FILL, GroundworkContent.WEED,
-                    GroundworkContent.FLOWERS, GroundworkContent.FELL, GroundworkContent.HAUL).stream()
+                    GroundworkContent.FLOWERS, GroundworkContent.FELL, GroundworkContent.HAUL, GroundworkContent.FORAGE).stream()
                 .map(key -> key + "=" + settings.flag(key)).collect(java.util.stream.Collectors.joining(","))
                 + settings.items(GroundworkContent.BLOCK).map(ItemSpec::describe).orElse("")
                 + zone.cells().stream().map(BlockPos::asLong).sorted().toList();
@@ -255,6 +263,10 @@ final class GroundPresence implements Facing {
             saved.uuid("zone").ifPresent(id -> {
                 Site site = new Site(id);
                 site.configuration = saved.string("configuration").orElse(null);
+                // Older sites had no forage switch. Preserve their already discovered targets when it stays off.
+                if (site.configuration != null && !site.configuration.contains(",forage=")) {
+                    site.configuration = site.configuration.replaceFirst("(haul=(?:true|false))", "$1,forage=false");
+                }
                 saved.blob("targets").ifPresent(targets -> {
                     for (String kind : targets.getAllKeys()) {
                         ListTag keys = targets.getList(kind, Tag.TAG_STRING);
