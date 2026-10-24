@@ -4,6 +4,20 @@ plugins {
 
 // The root builds no mod of its own: it hosts the modules needed by each GameTest suite.
 
+ext.buildChannel = providers.gradleProperty("buildChannel").getOrElse("release").toLowerCase(Locale.ROOT)
+if (!(buildChannel in ["release", "nightly", "dev", "snapshot", "rc", "beta", "alpha"])) {
+    throw new GradleException("Unknown buildChannel '${buildChannel}'; choose release, nightly, dev, snapshot, rc, beta or alpha")
+}
+ext.nightlyBuild = buildChannel == "nightly"
+ext.buildVersion = project.mod_version + (buildChannel == "release" ? "" : "-${buildChannel}")
+// Keep this packaging decision aligned with BuildChannel.development; checkDiagnostics compares both.
+def versionWords = (buildVersion.toLowerCase(Locale.ROOT) =~ /[a-z]+/).collect { it }
+def channelWords = (buildChannel =~ /[a-z]+/).collect { it }
+def formalWords = ["release", "rc", "beta", "alpha"]
+ext.diagnosticsBuild = (!versionWords.any { it in formalWords }
+    && !channelWords.any { it in ["rc", "beta", "alpha"] }
+    && (!versionWords.isEmpty() || !channelWords.any { it in formalWords }))
+
 def modProjects = [
     folkways_core: ":core",
     folkways_vanilla: ":vanilla",
@@ -122,7 +136,7 @@ tasks.named("jar") {
 }
 
 // Every mod's jar into build/libs, where the e2e instances find them.
-def collectJars = tasks.register("collectJars", Copy) {
+def collectJars = tasks.register("collectJars", Sync) {
     modProjects.values().each { path -> from(project(path).tasks.named("jar")) }
     into layout.buildDirectory.dir("libs")
 }

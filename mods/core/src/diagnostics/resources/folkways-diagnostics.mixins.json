@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.diagnostics.mixin",
+  "plugin": "io.github.izakyl.folkways.diagnostics.SparkDiagnosticsPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "SparkClientBackgroundMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

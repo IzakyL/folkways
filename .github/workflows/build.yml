@@ -7,6 +7,12 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        channel: [release, nightly]
+    name: Build (${{ matrix.channel }})
+    env:
+      ORG_GRADLE_PROJECT_buildChannel: ${{ matrix.channel }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -30,13 +36,15 @@ jobs:
       - run: npm run test:unit
       - uses: actions/upload-artifact@v6
         with:
-          name: folkways-jars
+          name: folkways-${{ matrix.channel }}-jars
           path: build/libs/*.jar
           if-no-files-found: error
   game-tests:
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 110
+    env:
+      ORG_GRADLE_PROJECT_buildChannel: nightly
     strategy:
       fail-fast: false
       matrix:
@@ -110,6 +118,8 @@ jobs:
     name: Client smoke (founding)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      ORG_GRADLE_PROJECT_buildChannel: nightly
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -158,7 +168,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v6
         with:
-          name: folkways-jars
+          name: folkways-nightly-jars
           path: jars
       - name: Replace the nightly release
         env:
@@ -167,12 +177,19 @@ jobs:
         run: |
           rm -f jars/*-sources.jar
           gh release delete nightly --cleanup-tag --yes || true
-          cat > notes.md <<EOF
-          Built automatically from master at ${GITHUB_SHA::7}. Untested pre-release; back up your world before trying it.
-
+          printf 'Built automatically from master at %s. Pre-release; back up your world before trying it.\n\n' "${GITHUB_SHA::7}" > notes.md
+          cat >> notes.md <<'EOF'
           Install **folkways-core** and **folkways-vanilla**, plus LDLib2. Add **folkways-create** only with Create,
           **folkways-modulargolems** only with Modular Golems, and **folkways-cookery** only with Kaleidoscope Cookery 1.6.0.
           All Folkways jars must come from the same build.
+
+          Spark is optional and must be installed separately; no Folkways build bundles it.
+          With Spark installed, Nightly requests background sampling for the client and server
+          at Spark's default 10 ms interval, unless you have opted out. Use `profiler info` to confirm.
+          To save a local profile, run `/spark profiler stop --save-to-file` (server) or
+          `/sparkc profiler stop --save-to-file` (client). Profiles are saved under `config/spark/`.
+          The usual `open`/`stop` commands without `--save-to-file` upload data to Spark's viewer.
+          Release builds default to disabled planning heartbeat logs.
           EOF
           gh release create nightly jars/*.jar --prerelease --target "$GITHUB_SHA" \
             --title "Nightly build" \

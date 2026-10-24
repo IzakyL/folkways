@@ -15,6 +15,69 @@ Complete the [development setup](../../CONTRIBUTING.md#development-setup) first.
 | `./gradlew check`         | Module checks, game test source compilation, and checks for tabs and trailing whitespace; does not launch game tests |
 | `./gradlew build`         | Gradle checks, jar packaging and collection                                                                          |
 
+## Development diagnostics
+
+`./gradlew build` produces Release jars. `./gradlew -PbuildChannel=nightly build`
+produces jars with a `-nightly` version suffix. `dev`, `snapshot`, `rc`, `beta` and
+`alpha` channels also append their channel to the version; channel names are case-insensitive.
+CI builds and checks Release and Nightly;
+its GameTests and client smoke test run the Nightly channel. The Nightly release
+publishes only that channel's jars. Switching channels also clears the previous
+channel's collected jars from `build/libs/`.
+
+Automatic background sampling and planning heartbeat defaults require **both** a development
+version and Spark in NeoForge's installed mod list. A jar on a compile/test classpath does not count.
+The actual loaded Core version takes priority over the packaged channel. Version markers
+`release`, `rc`, `beta` and `alpha` exclude automatic diagnostics, even beside `nightly` or `dev`.
+Markers are whole runs of letters, case-insensitive: `RC1` and `alpha.2` exclude diagnostics;
+ordinary words such as `alphabet`, `betamax` and `releaseNotes` do not. `dev`, `snapshot`,
+`nightly` and other custom version labels qualify. A numeric version such as `0.1.0` with the
+explicit `release` channel stays off; a missing version and channel do not opt in.
+
+For example, `./gradlew -Pmod_version=0.1.0-dev build` uses the default Release channel but
+produces a development version. It enables these defaults only if Spark is separately installed.
+Without Spark, it leaves the heartbeat default off and does not mutate Spark properties or files.
+Saved heartbeat and Spark preferences always take priority.
+
+Every channel, including Nightly, requires players to install Spark separately; Folkways never
+bundles Spark or adds it to game runtimes. The [Spark NeoForge 1.21.1 reference build](https://modrinth.com/mod/spark/version/1.10.124-neoforge-1.21.1)
+is used only for compilation and compatibility tests. It rejects automatic client sampling even
+when opted in, so development versions package a client-only compatibility
+mixin that lets Spark's own background manager honour its merged `backgroundProfiler` setting.
+The optional loading guard applies this internal hook only to the verified Spark mod version
+`1.10.124`. Missing or other Spark versions skip it and retain Spark's own client behaviour; use
+Spark's commands to start client sampling when needed. Ordinary Release/RC/Beta/Alpha versions
+contain neither the hook nor its registration.
+Sampling uses Spark's default 10 ms interval. The early Folkways log requests sampling; confirm
+that Spark actually started it with `profiler info` on each side.
+
+After reproducing a slowdown, save the server profile locally with
+`/spark profiler stop --save-to-file`; for rendering stalls use
+`/sparkc profiler stop --save-to-file`. The files are written under
+`config/spark/`. Use `profiler info` on either command to inspect sampling status,
+and `profiler start` to begin another recording. Bare `profiler open` or
+`profiler stop` uploads profiling data to Spark's viewer; automatic background
+sampling does not upload a profile.
+
+To opt out of automatic development sampling, set `backgroundProfiler` to `false`
+in `config/spark/config.json`, or launch Java with `-Dspark.backgroundProfiler=false`
+or `SPARK_BACKGROUNDPROFILER=false`. A saved `diagnostics.logPlanHeartbeat`
+preference in `folkways_core-server.toml` controls the heartbeat log separately.
+Per-player chat diagnostics remain opt-in. A separately installed Spark mod
+keeps its own settings with a formal Release/RC/Beta/Alpha version.
+
+Use Java 21's JFR for deeper investigations of allocations, GC pauses or locks;
+start a short recording when needed. Nightly does not start a second continuous
+JFR recording alongside Spark. Spark's native async profiler supports Linux and
+macOS; on Windows its Java sampler provides CPU stack samples. See
+[Spark commands](https://spark.lucko.me/docs/Command-Usage) and
+[profiler engines](https://spark.lucko.me/docs/misc/Using-async-profiler).
+
+`./gradlew :core:checkDiagnostics :core:verifyDiagnostics` checks the selected
+version boundaries, Spark-presence gating, saved opt-outs, actual Spark constructor/field compatibility,
+optional client-hook registration and absence of bundled Spark files without launching
+Minecraft. Both checks are included in `build`.
+
 ## NeoForge GameTests
 
 Choose a test owner and environment:

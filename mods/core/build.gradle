@@ -8,10 +8,105 @@ ext.modId = "folkways_core"
 ext.modName = "folkways-core"
 apply from: rootProject.file("gradle/mod.gradle")
 
+if (rootProject.diagnosticsBuild) {
+    repositories {
+        exclusiveContent {
+            forRepository { maven { url = "https://api.modrinth.com/maven" } }
+            filter { includeModule("maven.modrinth", "spark") }
+        }
+    }
+}
+
+if (rootProject.diagnosticsBuild) {
+    dependencies {
+        compileOnly "maven.modrinth:spark:${project.spark_version}"
+    }
+    sourceSets.main.java.srcDir("src/diagnostics/java")
+    sourceSets.main.resources.srcDir("src/diagnostics/resources")
+}
+
+tasks.named("processResources") {
+    inputs.property("buildChannel", rootProject.buildChannel)
+    inputs.property("buildVersion", project.version.toString())
+    filesMatching("META-INF/folkways/build.properties") {
+        expand(build_channel: rootProject.buildChannel, build_version: project.version.toString())
+    }
+}
+
+// Spark remains player-installed in every channel; only the optional development hook is packaged.
+tasks.register("verifyDiagnostics") {
+    group = "verification"
+    dependsOn tasks.named("jar")
+    inputs.file(tasks.named("jar", Jar).flatMap { it.archiveFile })
+    inputs.property("buildChannel", rootProject.buildChannel)
+    inputs.property("buildVersion", project.version.toString())
+    inputs.property("diagnosticsBuild", rootProject.diagnosticsBuild)
+    doLast {
+        def archive = tasks.named("jar", Jar).get().archiveFile.get().asFile
+        def contents = zipTree(archive)
+        def info = new Properties()
+        contents.matching { include "META-INF/folkways/build.properties" }.singleFile.withInputStream { info.load(it) }
+        if (info.getProperty("channel") != rootProject.buildChannel) {
+            throw new GradleException("Wrong diagnostic channel in ${archive.name}")
+        }
+        if (info.getProperty("version") != project.version.toString()) {
+            throw new GradleException("Wrong diagnostic version in ${archive.name}")
+        }
+        def metadata = new groovy.json.JsonSlurper().parse(
+            contents.matching { include "META-INF/jarjar/metadata.json" }.singleFile)
+        def profiler = metadata.jars.findAll { it.identifier.artifact == "spark" }
+        if (!profiler.isEmpty() || !contents.matching {
+            include "META-INF/jarjar/*spark*.jar", "me/lucko/spark/**"
+            include "META-INF/LICENSE_spark.txt", "META-INF/NOTICE_spark.txt"
+        }.isEmpty()) {
+            throw new GradleException("Spark must be installed separately; profiler files leaked into ${archive.name}")
+        }
+        def modInfo = contents.matching { include "META-INF/neoforge.mods.toml" }.singleFile.text
+        if (rootProject.diagnosticsBuild) {
+            contents.matching { include "folkways-diagnostics.mixins.json" }.singleFile
+            contents.matching { include "io/github/izakyl/folkways/diagnostics/mixin/SparkClientBackgroundMixin.class" }.singleFile
+            contents.matching { include "io/github/izakyl/folkways/diagnostics/SparkDiagnosticsPlugin.class" }.singleFile
+            if (!modInfo.contains('config = "folkways-diagnostics.mixins.json"')) {
+                throw new GradleException("Development Spark client compatibility hook is not registered")
+            }
+        } else if (modInfo.contains("folkways-diagnostics.mixins.json") || !contents.matching {
+            include "folkways-diagnostics.mixins.json", "io/github/izakyl/folkways/diagnostics/**"
+        }.isEmpty()) {
+            throw new GradleException("Development client hook leaked into ${archive.name}")
+        }
+        logger.lifecycle("Verified ${rootProject.buildChannel} diagnostics in ${archive.name}")
+    }
+}
+
 // Shared helpers stay in the core module to retain access to package-private planning internals.
 // They contain no test registration, so consumers never load the core test suite to reuse them.
 sourceSets {
     gameTestFixtures
+    diagnosticsTest {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+
+if (rootProject.diagnosticsBuild) {
+    dependencies {
+        diagnosticsTestRuntimeOnly "maven.modrinth:spark:${project.spark_version}"
+    }
+}
+
+tasks.register("checkDiagnostics", JavaExec) {
+    group = "verification"
+    classpath = sourceSets.diagnosticsTest.runtimeClasspath
+    mainClass = "io.github.izakyl.folkways.DiagnosticsCheck"
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(project.java_release.toInteger())
+    }
+    args rootProject.buildChannel, project.version.toString(), rootProject.diagnosticsBuild.toString()
+    environment.remove("SPARK_BACKGROUNDPROFILER")
+}
+
+tasks.named("check") {
+    dependsOn "verifyDiagnostics", "checkDiagnostics"
 }
 
 neoForge {
