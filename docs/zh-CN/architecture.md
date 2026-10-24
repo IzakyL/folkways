@@ -61,6 +61,9 @@ JEC 及其 PinIn 库只用于编译，不随 Folkways 内嵌。
 
 ## 生命周期与测试归属
 
+Vanilla 的日常战斗、服务端居民命令和实际小队见[战斗与编队说明](combat-architecture.md)。
+命令复用 Core 的安全劳动中断流程；War、RTS 界面和枪械兼容保持未来独立模块。
+
 [`ColonyLifecycle`](../../mods/core/src/main/java/io/github/izakyl/folkways/core/api/colony/ColonyLifecycle.java)
 提供迁移与关闭钩子。关闭监听器通过
 [`Cleanup`](../../mods/core/src/main/java/io/github/izakyl/folkways/base/task/Cleanup.java)
