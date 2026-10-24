@@ -36,6 +36,17 @@ abstract class ChiseledBlockEntityMixin extends BlockEntity implements Schematic
     @Shadow public abstract void receivePayload(ChiseledBlockEntity.Payload payload);
     @Shadow private Tag lastTag;
     @Unique private boolean folkways$valid;
+    @Unique private boolean folkways$pendingStatistics;
+
+    @Inject(method = "setLevel", at = @At("RETURN"))
+    private void folkways$finishStatistics(net.minecraft.world.level.Level level, CallbackInfo ci) {
+        if (folkways$pendingStatistics && !CandBSchematicBridge.schematic(level)) {
+            var self = (ChiseledBlockEntity) (Object) this;
+            ((SchematicStatistics) (Object) self.payload().mutableStatistics())
+                .folkways$recalculate(level, storage, getBlockPos());
+            folkways$pendingStatistics = false;
+        }
+    }
 
     @Inject(method = "setChanged", at = @At("HEAD"), cancellable = true)
     private void folkways$noSchematicUpdates(CallbackInfo ci) {
@@ -62,8 +73,8 @@ abstract class ChiseledBlockEntityMixin extends BlockEntity implements Schematic
     @Inject(method = "loadAdditional", at = @At("HEAD"), cancellable = true)
     private void folkways$readSchematic(CompoundTag tag, HolderLookup.Provider registries, CallbackInfo ci) {
         BlockEntity self = (BlockEntity) (Object) this;
-        if (self.getLevel() != null && !CandBSchematicBridge.schematic(self.getLevel())
-            && !tag.getBoolean("folkways:schematic")) {
+        if (!CandBSchematicBridge.schematic(self.getLevel()) && !tag.getBoolean("folkways:schematic")) {
+            // Chunk restoration keeps C&B's queued read and statistics until a real level is attached.
             return;
         }
         folkways$valid = false;
@@ -74,6 +85,7 @@ abstract class ChiseledBlockEntityMixin extends BlockEntity implements Schematic
                 ((SchematicStatistics) (Object) empty.mutableStatistics())
                     .folkways$recalculate(self.getLevel(), storage, self.getBlockPos());
             }
+            folkways$pendingStatistics = self.getLevel() == null || CandBSchematicBridge.schematic(self.getLevel());
             receivePayload(new ChiseledBlockEntity.Payload(storage, empty.mutableStatistics()));
             lastTag = CandBStructureCodec.encode(storage).get("data");
             folkways$valid = true;
