@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Ending;
+import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
@@ -153,7 +154,7 @@ public final class ResidentCommands {
     boolean active(Order order) {
         boolean activeNow = active.get(order.resident()) == order && valid(order.body);
         if (activeNow && order.status == Status.HOLDING
-                && !Reach.standingAt(order.body.mob().position(), order.destination.block(order.body.mob().level()))) {
+                && !Reach.standingIn(order.body.mob(), Stances.at(order.destination))) {
             order.status = Status.MOVING;
             order.movingSince = server.overworld().getGameTime();
         }
@@ -180,11 +181,18 @@ public final class ResidentCommands {
         } else if (active.get(order.resident()) == order && order.mode == Mode.GUARD) {
             // Only a command that actually owned the runner can yield it. A never-started order
             // still has its original bounded timeout instead of waiting forever for execution.
+            if (order.status == Status.HOLDING) {
+                order.status = Status.MOVING;
+                order.movingSince = server.overworld().getGameTime();
+            }
             order.yielded = true;
         }
     }
 
-    void taking(Order order) { order.yielded = false; }
+    void taking(Order order) {
+        active(order);
+        order.yielded = false;
+    }
 
     void tick(MinecraftServer ignored) {
         for (Order order : List.copyOf(active.values())) {

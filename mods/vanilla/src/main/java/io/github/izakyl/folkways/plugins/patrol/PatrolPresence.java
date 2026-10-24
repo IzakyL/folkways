@@ -335,7 +335,15 @@ final class PatrolPresence implements Facing {
                 }
             }
         } else {
-            cells.addAll(Reach.workableCells(level, cellOf(level, foe)));
+            // Reaching a stance permits 0.9 horizontal and 1.0 vertical displacement. Compare
+            // real world positions and leave that room before the native attack's strict range check.
+            double safeReach = Math.max(0, Weapons.range(who) - Math.hypot(.9, 1.0));
+            for (BlockPos cell : Reach.workableCells(level, cellOf(level, foe))) {
+                if (WorldSpaces.world(level, WorldSpaces.at(level, cell))
+                        .filter(point -> point.distanceToSqr(foe.position()) <= safeReach * safeReach).isPresent()) {
+                    cells.add(cell);
+                }
+            }
         }
         cells.removeIf(cell -> !insideLeash(level, guard, WorldSpaces.at(level, cell)));
         return Stances.of(cells.stream().map(cell -> WorldSpaces.at(level, cell)).toList());

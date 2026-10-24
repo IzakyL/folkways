@@ -111,6 +111,7 @@ Temporary transit-column slots may follow safe local footing up to two blocks ab
 - Guards with usable weapons attack without being hit first. Both targets and combat stances remain within 12 blocks of the assigned slot. Ranged guards prefer firing from existing footing with sight and range.
 - Healthy guards renew a short engagement lease; ENGAGING pauses route progress and travel timeout. Wounded combat does not renew it, allowing fear to preempt.
 - After combat, present members return to their original slots and assemble for 20 ticks before advancing. Existing death, missing-member, return and individual-order rules apply.
+- HOLDING and the patrol pause also verify members' actual positions. A yielded GUARD returns to MOVING, so cached pre-combat arrival cannot advance the route. Melee stance selection leaves room for navigation's arrival tolerance; actual damage retains native range and sight checks.
 - All stops validate before replacing control. Unreachable movement releases as FAILED; a fully unloaded group waits and reforms at its current stop when members return.
 
 ### Combat page and point configuration

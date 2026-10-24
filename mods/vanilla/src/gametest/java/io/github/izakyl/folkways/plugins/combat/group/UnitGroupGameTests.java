@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
@@ -582,7 +583,10 @@ public final class UnitGroupGameTests {
             helper.assertValueEqual(new HashSet<>(group.destinations().values()).size(), people.size(), "slots never overlap");
             for (Body body : people) {
                 helper.assertTrue(Reach.standingAt(body.mob().position(), group.destinations().get(body.id()).block(level)),
-                    "each member physically stands in its assigned slot");
+                    "each member physically stands in its assigned slot; body=" + body.id() + " feet=" + body.mob().position()
+                        + " slot=" + group.destinations().get(body.id())
+                        + " world=" + WorldSpaces.world(level, group.destinations().get(body.id()))
+                        + " order=" + commands.current(body.id()).map(ResidentCommands.Order::status));
             }
         }
         void close() {

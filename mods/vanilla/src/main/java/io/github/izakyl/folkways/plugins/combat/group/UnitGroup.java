@@ -2,8 +2,10 @@ package io.github.izakyl.folkways.plugins.combat.group;
 
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -44,8 +46,12 @@ public final class UnitGroup {
     public UUID id() { return id; }
     public Set<UUID> members() { return Set.copyOf(members); }
     public Phase phase() {
-        return mode == ResidentCommands.Mode.GUARD && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)
-            ? Phase.ENGAGING : phase;
+        if (mode == ResidentCommands.Mode.GUARD && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)) {
+            return Phase.ENGAGING;
+        }
+        // Entity movement can occur after this group's tick. Never expose a cached assembly
+        // while a survivor has already left its assigned slot or yielded the command runner.
+        return phase == Phase.HOLDING && !assembled(loaded()) ? Phase.LINE : phase;
     }
     /** Transient route and current stop; membership alone is persisted. */
     public List<Deployment> patrolRoute() { return patrol; }
@@ -201,12 +207,10 @@ public final class UnitGroup {
             } else { fail(); }
         } else if (mode == ResidentCommands.Mode.GUARD && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)) {
             assembledSince = Long.MIN_VALUE;
-        } else if (phase == Phase.HOLDING && orders.values().stream()
-                .anyMatch(order -> order.status() == ResidentCommands.Status.MOVING)) {
+        } else if (phase == Phase.HOLDING && !assembled(bodies)) {
             phase = Phase.LINE;
             assembledSince = Long.MIN_VALUE;
-        } else if (!orders.isEmpty() && orders.values().stream()
-                .allMatch(order -> order.status() == ResidentCommands.Status.HOLDING)) {
+        } else if (assembled(bodies)) {
             if (phase == Phase.COLUMN) {
                 try {
                     if (++columnAt < bodies.size()) {
@@ -234,6 +238,14 @@ public final class UnitGroup {
                 }
             }
         }
+    }
+
+    private boolean assembled(List<Body> bodies) {
+        return !orders.isEmpty() && bodies.size() == orders.size() && bodies.stream().allMatch(body -> {
+            ResidentCommands.Order order = orders.get(body.id());
+            return order != null && order.boundTo(body) && order.status() == ResidentCommands.Status.HOLDING
+                && Reach.standingIn(body.mob(), Stances.at(order.destination()));
+        });
     }
 
     private void issue(List<Body> bodies, List<WorldPos> cells, Phase next, ResidentCommands.Mode mode) {

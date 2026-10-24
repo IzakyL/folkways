@@ -36,11 +36,27 @@ type Reading = {
   enemyPresent: boolean;
   enemyHealth: number;
   enemyMaxHealth: number;
+  enemyX: number;
+  enemyY: number;
+  enemyZ: number;
+  enemyDistance: number;
+  hasLineOfSight: boolean;
   damageSource: string;
   damageBy: string;
   swordCount: number;
   swordDamage: number;
   weaponSession: boolean;
+  weaponArmed: boolean;
+  weaponRange: number;
+  navigationDone: boolean;
+  navigationPathNodes: number;
+  balk: string;
+  orderDestinationX: number;
+  orderDestinationY: number;
+  orderDestinationZ: number;
+  orderDestinationWorldX: number;
+  orderDestinationWorldY: number;
+  orderDestinationWorldZ: number;
   workBlock: string;
   dirtCount: number;
 };
@@ -186,7 +202,7 @@ test("GUARD survives two combat rounds, returns to its slot, then resumes real w
 });
 
 const IMPORTS = [
-  "java.util.UUID", "java.util.Set", "java.util.LinkedHashMap", "java.util.Map", "java.util.List",
+  "java.util.UUID", "java.util.Set", "java.util.LinkedHashMap", "java.util.Map", "java.util.List", "java.lang.reflect.Proxy",
   "net.minecraft.server.MinecraftServer", "net.minecraft.server.level.ServerLevel", "net.minecraft.core.BlockPos",
   "net.minecraft.resources.ResourceLocation", "net.minecraft.core.registries.BuiltInRegistries",
   "net.minecraft.world.entity.EntityType", "net.minecraft.world.entity.Mob",
@@ -197,6 +213,7 @@ const IMPORTS = [
   "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.person.ResidentEntity",
   "io.github.izakyl.folkways.plugins.combat.command.ResidentCommands",
+  "io.github.izakyl.folkways.core.api.work.Worker", "io.github.izakyl.folkways.plugins.combat.weapon.Weapons",
   "io.github.izakyl.folkways.front.engine.colony.ColonyFront", "io.github.izakyl.folkways.front.engine.colony.ColonySchemas",
   "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
 ];
@@ -244,6 +261,7 @@ var commands = ResidentCommands.of(colony);
 var order = commands.current(resident.id()).orElseGet(() ->
   commands.guard(resident, WorldSpaces.at(resident), new Vec3(1, 0, 0)));
 if (order.mode() != ResidentCommands.Mode.GUARD) throw new IllegalStateException("existing resident order is not GUARD");
+var home = WorldSpaces.world(level, order.destination()).orElseThrow();
 Mob enemy = EntityType.ZOMBIE.create(level);
 enemy.setNoAi(true);
 enemy.setPersistenceRequired();
@@ -252,7 +270,7 @@ enemy.setHealth(60.0F);
 enemy.moveTo(resident.getX() + 8.5, resident.getY(), resident.getZ() + .5);
 level.addFreshEntity(enemy);
 return Map.of("enemy", enemy.getUUID().toString(), "order", order.id().toString(),
-  "homeX", resident.getX(), "homeY", resident.getY(), "homeZ", resident.getZ());
+  "homeX", home.x, "homeY", home.y, "homeZ", home.z);
 ` }) });
 
 const READ = defineTask<Scene, Reading>({
@@ -267,9 +285,19 @@ var current = ResidentCommands.of(colony).current(resident.id());
 String enemyId = args.strings("enemies").isEmpty() ? "" : args.strings("enemies").getLast();
 Mob enemy = enemyId.isEmpty() ? null : (Mob)level.getEntity(UUID.fromString(enemyId));
 boolean session = resident.hasWeaponSession();
+Worker weaponWorker = (Worker)Proxy.newProxyInstance(Worker.class.getClassLoader(), new Class<?>[] { Worker.class },
+  (proxy, method, values) -> switch (method.getName()) {
+    case "body" -> resident;
+    case "resident" -> resident.resident();
+    case "pack" -> resident.pack();
+    default -> throw new UnsupportedOperationException("diagnostic Worker method: " + method.getName());
+  });
 var hand = resident.getMainHandItem();
 int swordCount = resident.pack().count(Items.IRON_SWORD) + (session && hand.is(Items.IRON_SWORD) ? hand.getCount() : 0);
 var damage = enemy == null ? null : enemy.getLastDamageSource();
+var path = resident.getNavigation().getPath();
+var order = current.map(value -> value.destination().cell()).orElse(null);
+var orderWorld = current.flatMap(value -> WorldSpaces.world(level, value.destination())).orElse(null);
 var result = new LinkedHashMap<String, Object>();
 result.put("tick", level.getGameTime()); result.put("residentPresent", true); result.put("residentHealth", resident.getHealth());
 result.put("x", resident.getX()); result.put("y", resident.getY()); result.put("z", resident.getZ());
@@ -280,12 +308,26 @@ result.put("orderStatus", current.map(value -> value.status().name()).orElse("NO
 result.put("doing", resident.doing().map(value -> value.what().toString()).orElse("NONE"));
 result.put("enemy", enemyId); result.put("enemyPresent", enemy != null && enemy.isAlive());
 result.put("enemyHealth", enemy == null ? 0.0F : enemy.getHealth()); result.put("enemyMaxHealth", enemy == null ? 0.0F : enemy.getMaxHealth());
+result.put("enemyX", enemy == null ? -1.0 : enemy.getX()); result.put("enemyY", enemy == null ? -1.0 : enemy.getY());
+result.put("enemyZ", enemy == null ? -1.0 : enemy.getZ());
+result.put("enemyDistance", enemy == null ? -1.0 : resident.distanceTo(enemy));
+result.put("hasLineOfSight", enemy != null && enemy.isAlive() && resident.hasLineOfSight(enemy));
 result.put("damageSource", damage == null ? "NONE" : damage.getMsgId());
 result.put("damageBy", damage == null || damage.getEntity() == null ? "NONE" : damage.getEntity().getUUID().toString());
 result.put("swordCount", swordCount); result.put("swordDamage", session && hand.is(Items.IRON_SWORD)
   ? hand.getDamageValue() : resident.pack().contents().stream().filter(stack -> stack.is(Items.IRON_SWORD))
     .mapToInt(ItemStack::getDamageValue).findFirst().orElse(-1));
 result.put("weaponSession", session);
+result.put("weaponArmed", Weapons.armed(weaponWorker)); result.put("weaponRange", Weapons.range(weaponWorker));
+result.put("navigationDone", resident.getNavigation().isDone());
+result.put("navigationPathNodes", path == null ? 0 : path.getNodeCount());
+result.put("balk", resident.balk().map(Object::toString).orElse("NONE"));
+result.put("orderDestinationX", order == null ? -1 : order.getX());
+result.put("orderDestinationY", order == null ? -1 : order.getY());
+result.put("orderDestinationZ", order == null ? -1 : order.getZ());
+result.put("orderDestinationWorldX", orderWorld == null ? -1.0 : orderWorld.x);
+result.put("orderDestinationWorldY", orderWorld == null ? -1.0 : orderWorld.y);
+result.put("orderDestinationWorldZ", orderWorld == null ? -1.0 : orderWorld.z);
 result.put("workBlock", BuiltInRegistries.BLOCK.getKey(level.getBlockState(new BlockPos(
   (int)args.integer("workX"), (int)args.integer("workY"), (int)args.integer("workZ")))
   .getBlock()).toString());
