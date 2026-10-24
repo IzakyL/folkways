@@ -39,6 +39,7 @@ public final class UnitGroup {
     private int patrolAt = -1;
     private long assembledSince = Long.MIN_VALUE;
     private ResidentCommands.Mode mode = ResidentCommands.Mode.HOLD;
+    private PointRoute points;
     boolean changed;
 
     UnitGroup(UnitGroups owner, UUID id) { this.owner = owner; this.id = id; }
@@ -55,7 +56,11 @@ public final class UnitGroup {
     }
     /** Transient route and current stop; membership alone is persisted. */
     public List<Deployment> patrolRoute() { return patrol; }
-    public int patrolStop() { return patrolAt; }
+    public int patrolStop() { return points == null ? patrolAt : points.stop(); }
+    /** Mandatory click points, including any one-time prefix before the cycle. */
+    public List<WorldPos> pointRoute() { return points == null ? List.of() : points.points; }
+    public int cycleStart() { return points == null ? -1 : points.cycleStart; }
+    public Optional<WorldPos> captain() { return Optional.ofNullable(points).map(PointRoute::captain); }
     public Set<UUID> missing() {
         owner.requireGroup(this);
         Set<UUID> missing = new LinkedHashSet<>(members);
@@ -77,12 +82,14 @@ public final class UnitGroup {
     /** Establish one interruptible guard formation, returning to its slots after combat or fear. */
     public void guard(Deployment intent) {
         begin(intent, false, ResidentCommands.Mode.GUARD);
+        points = null;
         patrol = List.of();
         patrolAt = -1;
     }
     /** Retreat as one actual squad; release and later deployments retain ownership of every retreat handle. */
     public void retreat(Deployment intent) {
         begin(intent, false, ResidentCommands.Mode.RETREAT);
+        points = null;
         patrol = List.of();
         patrolAt = -1;
     }
@@ -104,6 +111,7 @@ public final class UnitGroup {
             validate(bodies, cells);
         }
         begin(next.getFirst(), true, ResidentCommands.Mode.GUARD);
+        points = null;
         patrol = next;
         patrolAt = 0;
     }
@@ -120,6 +128,7 @@ public final class UnitGroup {
 
     private void deploy(Deployment intent, boolean column) {
         begin(intent, column, ResidentCommands.Mode.HOLD);
+        points = null;
         patrol = List.of();
         patrolAt = -1;
     }
@@ -155,12 +164,28 @@ public final class UnitGroup {
         orders.values().forEach(ResidentCommands.Order::close);
         orders.clear();
         deployment = null;
+        points = null;
         patrol = List.of();
         patrolAt = -1;
         assembledSince = Long.MIN_VALUE;
         mode = ResidentCommands.Mode.HOLD;
         adjustedColumn = false;
         phase = Phase.IDLE;
+    }
+
+    void startPoints(PointRoute route) {
+        owner.requireGroup(this);
+        List<Body> bodies = loaded();
+        List<WorldPos> slots = route.slots(bodies);
+        // The exact Deployment API retains its line endpoints. Click routes use their own centered slots.
+        Deployment previous = deployment;
+        deployment = new Deployment(route.captain(), route.captain(), route.front(), new Deployment.Formation(2, 1));
+        try { issue(bodies, slots, Phase.LINE, ResidentCommands.Mode.HOLD); }
+        catch (IllegalArgumentException | IllegalStateException rejected) { deployment = previous; throw rejected; }
+        points = route;
+        mode = ResidentCommands.Mode.HOLD;
+        patrol = List.of();
+        patrolAt = -1;
     }
 
     void removeMember(UUID member) {
@@ -189,6 +214,10 @@ public final class UnitGroup {
         bodies = loaded();
         Set<UUID> present = new LinkedHashSet<>();
         bodies.forEach(body -> present.add(body.id()));
+        if (points != null) {
+            tickPoints(bodies, present);
+            return;
+        }
         if (changed || !present.equals(orders.keySet())) {
             changed = false;
             try { begin(deployment, true, mode); }
@@ -240,6 +269,61 @@ public final class UnitGroup {
         }
     }
 
+    private void tickPoints(List<Body> bodies, Set<UUID> present) {
+        if (bodies.isEmpty()) { points.waiting(); }
+        if (changed || !present.equals(orders.keySet())) {
+            changed = false;
+            if (bodies.isEmpty()) {
+                orders.values().forEach(ResidentCommands.Order::close);
+                orders.clear();
+                phase = Phase.WAITING;
+                assembledSince = Long.MIN_VALUE;
+            } else {
+                try { issue(bodies, points.slots(bodies), Phase.LINE, mode); }
+                catch (IllegalArgumentException unavailable) { fail(); }
+            }
+            return;
+        }
+        if (bodies.isEmpty()) { return; }
+        if (orders.values().stream().anyMatch(order -> order.status() == ResidentCommands.Status.FAILED)) {
+            fail();
+            return;
+        }
+        if (mode == ResidentCommands.Mode.GUARD && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)) {
+            assembledSince = Long.MIN_VALUE;
+            return;
+        }
+        if (!assembled(bodies)) {
+            phase = Phase.LINE;
+            assembledSince = Long.MIN_VALUE;
+            return;
+        }
+        try {
+            if (points.atStop()) {
+                phase = Phase.HOLDING;
+                if (!points.loops()) { return; }
+                if (mode != ResidentCommands.Mode.GUARD) {
+                    // Travel is deliberate player control. A fully assembled patrol can fight
+                    // during its stop, then every survivor must reform before the dwell starts.
+                    issue(bodies, points.slots(bodies), Phase.LINE, ResidentCommands.Mode.GUARD);
+                    mode = ResidentCommands.Mode.GUARD;
+                    return;
+                }
+                long now = owner.server.overworld().getGameTime();
+                if (assembledSince == Long.MIN_VALUE) { assembledSince = now; }
+                if (now - assembledSince < PATROL_PAUSE) { return; }
+                points.nextStop();
+            }
+            // Every advance waits for all available members. No member receives the distant final
+            // waypoint while its squad is still at a previous captain position.
+            WorldPos next = points.advance(bodies);
+            List<WorldPos> slots = points.slots(bodies, next);
+            issue(bodies, slots, Phase.LINE, ResidentCommands.Mode.HOLD);
+            mode = ResidentCommands.Mode.HOLD;
+            points.advanced(next);
+        } catch (IllegalArgumentException unavailable) { fail(); }
+    }
+
     private boolean assembled(List<Body> bodies) {
         return !orders.isEmpty() && bodies.size() == orders.size() && bodies.stream().allMatch(body -> {
             ResidentCommands.Order order = orders.get(body.id());
@@ -256,6 +340,9 @@ public final class UnitGroup {
             targets.add(target(body, target, mode));
         }
         List<ResidentCommands.Order> replacements = owner.commands.replace(targets);
+        if (points != null && mode == ResidentCommands.Mode.GUARD) {
+            replacements.forEach(ResidentCommands.Order::deliberateGuard);
+        }
         orders.values().forEach(ResidentCommands.Order::close);
         orders.clear();
         column = next == Phase.COLUMN ? List.copyOf(cells) : List.of();

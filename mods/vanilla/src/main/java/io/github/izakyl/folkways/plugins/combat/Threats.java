@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.NeutralMob;
+import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.monster.Spider;
 
@@ -21,5 +22,14 @@ public final class Threats {
             && (!(mob instanceof Spider) || mob.getLightLevelDependentMagicValue() < .5F
                 || mob.getTarget() != null && mob.getTarget().isAlive())
             && (!(mob instanceof NeutralMob neutral) || mob.getTarget() == resident || neutral.isAngryAt(resident));
+    }
+
+    /** Explicit orders may target neutral mobs, while all resident bodies and allies stay protected. */
+    public static boolean explicitlyAttackable(Mob mob, LivingEntity resident, LivingEntity commander) {
+        return mob != resident && mob != commander && mob.level() == resident.level()
+            && mob.level() == commander.level() && mob.isAlive() && !mob.isRemoved()
+            && Bodies.of(mob).isEmpty() && !mob.isAlliedTo(resident) && !resident.isAlliedTo(mob)
+            && !mob.isAlliedTo(commander) && !commander.isAlliedTo(mob)
+            && (!(mob instanceof TamableAnimal tame) || !tame.isOwnedBy(commander));
     }
 }

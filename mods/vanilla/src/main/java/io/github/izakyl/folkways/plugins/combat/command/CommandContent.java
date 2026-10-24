@@ -38,6 +38,10 @@ public final class CommandContent {
     @SubscribeEvent
     public static void left(EntityLeaveLevelEvent event) {
         if (event.getLevel() instanceof ServerLevel level) {
+            if (event.getEntity() instanceof net.minecraft.world.entity.Mob) {
+                Colonies.all(level.getServer()).forEach(colony -> colony.service(ID, ResidentCommands.class)
+                    .ifPresent(commands -> commands.targetLeft(event.getEntity().getUUID())));
+            }
             Bodies.of(event.getEntity()).ifPresent(body -> body.colonyId()
                 .flatMap(id -> Colonies.of(level.getServer(), id))
                 .flatMap(colony -> colony.service(ID, ResidentCommands.class))

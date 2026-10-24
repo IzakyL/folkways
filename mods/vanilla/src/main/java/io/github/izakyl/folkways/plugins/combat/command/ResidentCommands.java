@@ -11,6 +11,11 @@ import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.plugins.person.fear.FearContent;
+import io.github.izakyl.folkways.plugins.combat.Threats;
+import io.github.izakyl.folkways.plugins.combat.net.SelectionOrders;
+import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -21,12 +26,15 @@ import java.util.UUID;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.Vec3;
 
 /** Server-side orders executed exclusively by Core's existing labour runner. */
 public final class ResidentCommands {
 
-    public enum Mode { MOVE, HOLD, RETREAT, GUARD }
+    public enum Mode { MOVE, HOLD, RETREAT, GUARD, ATTACK }
     public enum Status { MOVING, HOLDING, ARRIVED, RELEASED, FAILED }
     public record Target(Body body, WorldPos destination, Mode mode, Optional<Vec3> facing) { }
 
@@ -37,9 +45,16 @@ public final class ResidentCommands {
         private final WorldPos destination;
         private final Mode mode;
         private final Optional<Vec3> facing;
+        private UUID target;
+        private UUID commander;
+        private UUID step = UUID.randomUUID();
+        private WorldPos approached;
+        private long retargetAt;
+        private double attackRange = 4.5;
         private long movingSince = server.overworld().getGameTime();
         private long engagedUntil = Long.MIN_VALUE;
         private boolean yielded;
+        private boolean deliberateGuard;
         private volatile Status status = Status.MOVING;
         private volatile RefusalKind failure;
 
@@ -54,6 +69,7 @@ public final class ResidentCommands {
         public UUID resident() { return body.id(); }
         public WorldPos destination() { return destination; }
         public Mode mode() { return mode; }
+        UUID step() { return step; }
         public Status status() { return status; }
         /** A reloaded entity with the same resident UUID needs a fresh transient order. */
         public boolean boundTo(Body candidate) { return body.mob() == candidate.mob(); }
@@ -68,6 +84,15 @@ public final class ResidentCommands {
             if (mode == Mode.GUARD && active.get(resident()) == this) {
                 engagedUntil = server.overworld().getGameTime() + 20;
             }
+        }
+        /** Player-authored patrol stops keep control between battles; legacy guards keep their ordinary priority. */
+        public Order deliberateGuard() {
+            requireServerThread();
+            if (mode != Mode.GUARD || active.get(resident()) != this) {
+                throw new IllegalStateException("only an active guard can be made deliberate");
+            }
+            deliberateGuard = true;
+            return this;
         }
         public Optional<RefusalKind> failure() { return Optional.ofNullable(failure); }
         public void close() { release(this); }
@@ -95,6 +120,31 @@ public final class ResidentCommands {
         return issue(body, destination, Mode.HOLD, Optional.of(facing.normalize()));
     }
     public Order retreat(Body body, WorldPos destination) { return issue(body, destination, Mode.RETREAT, Optional.empty()); }
+
+    /** One explicit mob target, bound to this commander's continuing book authority and each actual body. */
+    public List<Order> attack(List<Body> bodies, Mob target, ServerPlayer commander) {
+        requireServerThread();
+        if (SelectionOrders.authorized(commander, colony.id()).isEmpty() || bodies.isEmpty()) {
+            throw new IllegalArgumentException("unauthorized attack");
+        }
+        var seen = new HashSet<UUID>();
+        List<Order> next = bodies.stream().map(body -> {
+            validate(body, WorldSpaces.at(target));
+            if (!seen.add(body.id()) || !Threats.explicitlyAttackable(target, body.mob(), commander)) {
+                throw new IllegalArgumentException("friendly or unavailable target");
+            }
+            Order order = new Order(body, WorldSpaces.at(target), Mode.ATTACK, Optional.empty());
+            order.target = target.getUUID();
+            order.commander = commander.getUUID();
+            order.approached = order.destination;
+            return order;
+        }).toList();
+        for (Order order : next) {
+            Order previous = active.put(order.resident(), order);
+            if (previous != null) { previous.status = Status.RELEASED; }
+        }
+        return next;
+    }
     /** Yield to combat and fear, then return to this same slot through the existing labour runner. */
     public Order guard(Body body, WorldPos destination, Vec3 facing) {
         if (!Double.isFinite(facing.lengthSqr()) || facing.horizontalDistanceSqr() < .01) {
@@ -134,6 +184,7 @@ public final class ResidentCommands {
         List<Order> next = targets.stream().map(target -> {
             validate(target.body(), target.destination());
             Objects.requireNonNull(target.mode());
+            if (target.mode() == Mode.ATTACK) { throw new IllegalArgumentException("attack requires a live target and commander"); }
             if (!seen.add(target.body().id()) || target.facing().filter(front ->
                     !Double.isFinite(front.lengthSqr()) || front.horizontalDistanceSqr() < .01).isPresent()) {
                 throw new IllegalArgumentException("invalid batch command");
@@ -158,19 +209,52 @@ public final class ResidentCommands {
         if (order != null) { order.status = Status.RELEASED; }
     }
 
+    void targetLeft(UUID target) {
+        requireServerThread();
+        for (Order order : List.copyOf(active.values())) {
+            if (target.equals(order.target)) { release(order); }
+        }
+    }
+
     List<Urge> urges(Worker who) {
         Order order = active.get(who.resident().id());
-        if (order == null || !valid(order.body)) { return List.of(); }
+        if (order == null || !active(order)) { return List.of(); }
+        if (order.mode == Mode.ATTACK) { order.attackRange = Weapons.range(who); }
         // A replacement has its own urge identity: it safely interrupts even a trip already in progress.
-        ResourceLocation intent = ResourceLocation.fromNamespaceAndPath("folkways", "command/" + order.id);
+        ResourceLocation intent = ResourceLocation.fromNamespaceAndPath("folkways", "command/"
+            + (order.mode == Mode.ATTACK ? order.step : order.id));
         double weight = order.mode == Mode.GUARD ? Urge.DIRE - .5
             : Urge.DIRE + (order.mode == Mode.RETREAT ? 2 : 1);
         return List.of(new Urge(intent, weight, true,
-            () -> new CommandNode(this, order)));
+            () -> order.mode == Mode.ATTACK ? new AttackNode(this, order, who) : new CommandNode(this, order),
+            priority(order)));
+    }
+
+    Urge.Priority priority(Order order) {
+        if (order.mode != Mode.GUARD) { return Urge.Priority.CONTROL; }
+        if (!order.deliberateGuard || order.engaged()
+                // A native attack may outlive the short detection lease. Let its actual hand loan finish;
+                // repeatedly cancelling a long draw at the lease boundary would prevent every shot.
+                || order.body.mob() instanceof ResidentEntity resident && resident.hasWeaponSession()) {
+            return Urge.Priority.ORDINARY;
+        }
+        var body = order.body.mob();
+        if (body.getHealth() <= body.getMaxHealth() * .35F) {
+            boolean fleeing = order.body.doing().filter(doing ->
+                doing.toward().orElse(doing.what()).equals(FearContent.FLEEING)).isPresent();
+            var attacker = body.getLastHurtByMob();
+            var hurt = body.getLastDamageSource();
+            boolean danger = attacker instanceof Mob foe && foe.getTarget() == body
+                    && Threats.hostile(foe, body) && body.distanceToSqr(foe) <= 16 * 16
+                || hurt != null && (hurt.is(DamageTypeTags.PANIC_CAUSES) || hurt.is(DamageTypeTags.IS_FIRE));
+            if (fleeing || danger) { return Urge.Priority.ORDINARY; }
+        }
+        return Urge.Priority.CONTROL;
     }
 
     boolean active(Order order) {
-        boolean activeNow = active.get(order.resident()) == order && valid(order.body);
+        boolean activeNow = active.get(order.resident()) == order && valid(order.body)
+            && (order.mode != Mode.ATTACK || attackTarget(order).isPresent());
         if (activeNow && order.status == Status.HOLDING
                 && !Reach.standingIn(order.body.mob(), Stances.at(order.destination))) {
             order.status = Status.MOVING;
@@ -196,6 +280,8 @@ public final class ResidentCommands {
         if (how instanceof Ending.Failed failed && active.remove(order.resident(), order)) {
             order.failure = failed.why();
             order.status = Status.FAILED;
+        } else if (active.get(order.resident()) == order && order.mode == Mode.ATTACK) {
+            if (how instanceof Ending.Done) { order.step = UUID.randomUUID(); }
         } else if (active.get(order.resident()) == order && order.mode == Mode.GUARD) {
             // Only a command that actually owned the runner can yield it. A never-started order
             // still has its original bounded timeout instead of waiting forever for execution.
@@ -214,8 +300,20 @@ public final class ResidentCommands {
 
     void tick(MinecraftServer ignored) {
         for (Order order : List.copyOf(active.values())) {
-            if (!valid(order.body)) {
+            if (!valid(order.body) || order.mode == Mode.ATTACK && attackTarget(order).isEmpty()) {
                 release(order);
+            } else if (order.mode == Mode.ATTACK) {
+                // A moving target replaces only this runner's short approach step, never starts another navigator.
+                Mob target = attackTarget(order).orElseThrow();
+                long now = server.overworld().getGameTime();
+                WorldPos at = WorldSpaces.at(target);
+                if (now >= order.retargetAt && !at.equals(order.approached)
+                        && (order.body.mob().distanceTo(target) > order.attackRange
+                            || !order.body.mob().hasLineOfSight(target))) {
+                    order.step = UUID.randomUUID();
+                    order.approached = at;
+                    order.retargetAt = now + 10;
+                }
             } else if (order.mode == Mode.GUARD && (order.engaged() || order.yielded)
                     && order.status == Status.MOVING) {
                 // Combat and fear borrow this same runner. Only time owned by the command is travel time.
@@ -239,6 +337,29 @@ public final class ResidentCommands {
             && !body.mob().isPassenger()
             && body.colonyId().filter(colony.id()::equals).isPresent()
             && colony.holdingOf(body.id()).isPresent();
+    }
+
+    Optional<Mob> attackTarget(Order order) {
+        if (order.mode != Mode.ATTACK || active.get(order.resident()) != order || !valid(order.body)
+                || server.overworld().getGameTime() - order.movingSince >= 600) { return Optional.empty(); }
+        ServerPlayer commander = server.getPlayerList().getPlayer(order.commander);
+        if (commander == null || commander.isSpectator() || !commander.isAlive()
+                || SelectionOrders.authorized(commander, colony.id()).isEmpty()
+                || commander.level() != order.body.mob().level()) { return Optional.empty(); }
+        ServerLevel level = (ServerLevel) order.body.mob().level();
+        return Optional.ofNullable(level.getEntity(order.target)).filter(Mob.class::isInstance).map(Mob.class::cast)
+            .filter(target -> Threats.explicitlyAttackable(target, order.body.mob(), commander)
+                && WorldSpaces.at(target).sameRealm(order.destination)
+                && WorldSpaces.at(target).cell().distSqr(order.destination.cell()) <= 64 * 64
+                && order.body.mob().distanceToSqr(target) <= 128 * 128
+                && commander.distanceToSqr(target) <= 128 * 128
+                && level.hasChunkAt(target.blockPosition()));
+    }
+
+    boolean permitsAttack(Order order, UUID step, Worker worker, Mob target) {
+        return order.step.equals(step) && worker.body() == order.body.mob()
+            && worker.resident().id().equals(order.resident())
+            && attackTarget(order).filter(found -> found == target).isPresent();
     }
 
     private void requireServerThread() {

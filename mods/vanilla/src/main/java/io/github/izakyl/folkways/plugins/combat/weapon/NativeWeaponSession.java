@@ -30,6 +30,8 @@ final class NativeWeaponSession implements WeaponSession {
     private LivingEntity target;
     private int elapsed;
     private long lastTick = Long.MIN_VALUE;
+    private LivingEntity explicitTarget;
+    private java.util.function.BooleanSupplier explicitPermission;
 
     NativeWeaponSession(Worker worker, WeaponAdapter adapter, Kind kind) {
         this(worker, adapter, kind, false);
@@ -50,6 +52,15 @@ final class NativeWeaponSession implements WeaponSession {
 
     @Override
     public State state() { return state; }
+
+    @Override
+    public boolean explicitTarget(LivingEntity foe, java.util.function.BooleanSupplier authorized) {
+        if (state != State.READY || explicitTarget != null || !(foe instanceof Mob) || !valid()
+                || authorized == null || !authorized.getAsBoolean()) { return false; }
+        explicitTarget = foe;
+        explicitPermission = authorized;
+        return true;
+    }
 
     @Override
     public boolean fire(LivingEntity foe) {
@@ -192,7 +203,10 @@ final class NativeWeaponSession implements WeaponSession {
 
     private boolean permitted(LivingEntity foe) {
         return foe instanceof Mob mob && foe.level() == body.level() && foe.isAlive() && !foe.isRemoved()
-            && Threats.hostile(mob, body) && body.hasLineOfSight(foe)
+            && (explicitTarget == null ? Threats.hostile(mob, body)
+                : explicitTarget == foe && !mob.isAlliedTo(body) && !body.isAlliedTo(mob)
+                    && io.github.izakyl.folkways.core.api.resident.body.Bodies.of(mob).isEmpty()
+                    && explicitPermission.getAsBoolean()) && body.hasLineOfSight(foe)
             && body.distanceTo(foe) <= adapter.range() + (kind == Kind.MELEE ? foe.getBbWidth() : 0);
     }
 
@@ -213,6 +227,8 @@ final class NativeWeaponSession implements WeaponSession {
             return;
         }
         state = State.STOPPING;
+        explicitTarget = null;
+        explicitPermission = null;
         target = null;
         elapsed = 0;
         // stopUsingItem clears use state; releaseUsingItem would discharge a fully drawn bow.

@@ -11,7 +11,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 public record CombatSelectionPacket(UUID colonyId, List<UUID> residents, List<WorldPos> points,
-        boolean patrol) implements CustomPacketPayload {
+        int cycleStart) implements CustomPacketPayload {
     public static final Type<CombatSelectionPacket> TYPE = new Type<>(
         ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "combat_selection"));
     public static final StreamCodec<RegistryFriendlyByteBuf, CombatSelectionPacket> STREAM_CODEC =
@@ -25,6 +25,12 @@ public record CombatSelectionPacket(UUID colonyId, List<UUID> residents, List<Wo
         }
     }
 
+    public CombatSelectionPacket(UUID colonyId, List<UUID> residents, List<WorldPos> points, boolean patrol) {
+        this(colonyId, residents, points, patrol ? 0 : -1);
+    }
+
+    public boolean patrol() { return cycleStart >= 0; }
+
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
 
     private void encode(RegistryFriendlyByteBuf buffer) {
@@ -32,17 +38,17 @@ public record CombatSelectionPacket(UUID colonyId, List<UUID> residents, List<Wo
         writeIds(buffer, residents);
         buffer.writeVarInt(points.size());
         points.forEach(point -> point.write(buffer));
-        buffer.writeBoolean(patrol);
+        buffer.writeVarInt(cycleStart);
     }
 
     private static CombatSelectionPacket decode(RegistryFriendlyByteBuf buffer) {
         UUID colony = buffer.readUUID();
-        List<UUID> residents = readIds(buffer);
+        List<UUID> residents = readIds(buffer, CombatPackets.MAX_MEMBERS);
         int count = buffer.readVarInt();
         if (count < 0 || count > CombatPackets.MAX_POINTS) { throw new IllegalArgumentException("invalid patrol points"); }
         List<WorldPos> points = new ArrayList<>(count);
         for (int n = 0; n < count; n++) { points.add(WorldPos.read(buffer)); }
-        return new CombatSelectionPacket(colony, residents, points, buffer.readBoolean());
+        return new CombatSelectionPacket(colony, residents, points, buffer.readVarInt());
     }
 
     static void writeIds(RegistryFriendlyByteBuf buffer, java.util.Collection<UUID> ids) {
@@ -51,9 +57,13 @@ public record CombatSelectionPacket(UUID colonyId, List<UUID> residents, List<Wo
     }
 
     static List<UUID> readIds(RegistryFriendlyByteBuf buffer) {
+        return readIds(buffer, Integer.MAX_VALUE);
+    }
+
+    static List<UUID> readIds(RegistryFriendlyByteBuf buffer, int limit) {
         int count = buffer.readVarInt();
         // Bound allocations by the packet's actual bytes, never by a gameplay member cap.
-        if (count < 0 || count > buffer.readableBytes() / 16) {
+        if (count < 0 || count > limit || count > buffer.readableBytes() / 16) {
             throw new IllegalArgumentException("invalid resident identifiers");
         }
         List<UUID> ids = new ArrayList<>(count);

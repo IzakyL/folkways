@@ -8,8 +8,13 @@ public interface WeaponSession extends AutoCloseable {
 
     State state();
 
-    /** Queue one attack. Each tick and the eventual discharge recheck hostility, sight and range. */
+    /** Queue one attack. Ticks and discharge recheck hostility or the explicit lease, plus sight and range. */
     boolean fire(LivingEntity target);
+
+    /** A single explicit target and live order lease. Adapters must opt in; ordinary fire stays hostile-only. */
+    default boolean explicitTarget(LivingEntity target, java.util.function.BooleanSupplier authorized) {
+        return false;
+    }
 
     /** Load a crossbow without firing it. False means unavailable ammunition or unsupported reload. */
     boolean reload();

@@ -25,6 +25,8 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 public final class CombatPackets {
     public static final int MAX_MEMBERS = 256;
     public static final int MAX_POINTS = 16;
+    // Selection now carries a loop-start index instead of the first draft's boolean patrol flag.
+    private static final String NETWORK_VERSION = "2";
     private record Snapshot(UUID colony, WorldPos at, Set<UUID> residents) { }
     private static volatile Snapshot snapshot;
     private static long requested;
@@ -35,10 +37,23 @@ public final class CombatPackets {
 
     /** True means sent; server acceptance is reported separately in the action bar. */
     public static boolean submit(List<UUID> residents, List<WorldPos> points, boolean patrol) {
+        return submit(residents, points, patrol ? 0 : -1);
+    }
+
+    public static boolean submit(List<UUID> residents, List<WorldPos> points, int cycleStart) {
         Snapshot current = snapshot;
         if (current == null || current.colony() == null || residents.isEmpty() || residents.size() > MAX_MEMBERS
-                || points.isEmpty() || points.size() > MAX_POINTS) { return false; }
-        PacketDistributor.sendToServer(new CombatSelectionPacket(current.colony(), residents, points, patrol));
+                || points.isEmpty() || points.size() > MAX_POINTS
+                || !SelectionOrders.validCycle(points.size(), cycleStart)) { return false; }
+        PacketDistributor.sendToServer(new CombatSelectionPacket(current.colony(), residents, points, cycleStart));
+        return true;
+    }
+
+    public static boolean attack(List<UUID> residents, UUID target) {
+        Snapshot current = snapshot;
+        if (current == null || current.colony() == null || target == null || residents.isEmpty()
+                || residents.size() > MAX_MEMBERS) { return false; }
+        PacketDistributor.sendToServer(new CombatAttackPacket(current.colony(), residents, target));
         return true;
     }
 
@@ -55,11 +70,18 @@ public final class CombatPackets {
 
     @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
-        event.registrar(FolkwaysMod.NETWORK_VERSION)
+        event.registrar(NETWORK_VERSION)
             .playToServer(CombatSelectionPacket.TYPE, CombatSelectionPacket.STREAM_CODEC, (packet, context) ->
                 context.enqueueWork(() -> {
                     if (context.player() instanceof ServerPlayer player) {
-                        boolean accepted = SelectionOrders.submit(player, packet.colonyId(), packet.residents(), packet.points(), packet.patrol());
+                        boolean accepted = SelectionOrders.submit(player, packet.colonyId(), packet.residents(), packet.points(), packet.cycleStart());
+                        player.displayClientMessage(Component.translatable(accepted ? "folkways.combat.saved" : "folkways.combat.error.rejected"), true);
+                    }
+                }))
+            .playToServer(CombatAttackPacket.TYPE, CombatAttackPacket.STREAM_CODEC, (packet, context) ->
+                context.enqueueWork(() -> {
+                    if (context.player() instanceof ServerPlayer player) {
+                        boolean accepted = SelectionOrders.attack(player, packet.colonyId(), packet.residents(), packet.target());
                         player.displayClientMessage(Component.translatable(accepted ? "folkways.combat.saved" : "folkways.combat.error.rejected"), true);
                     }
                 }))

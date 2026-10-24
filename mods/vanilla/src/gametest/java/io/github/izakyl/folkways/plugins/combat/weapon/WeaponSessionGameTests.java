@@ -17,6 +17,7 @@ import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
@@ -191,6 +192,61 @@ public final class WeaponSessionGameTests {
                 if (team != null) { helper.getLevel().getScoreboard().removePlayerTeam((net.minecraft.world.scores.PlayerTeam) team); }
                 fixture.close();
             }
+            helper.succeed();
+        });
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void explicitNeutralTargetUsesTheActualNativeWeapon(GameTestHelper helper) {
+        Fixture fixture = fixture(helper, Items.BOW, 5);
+        var cow = EntityType.COW.create(helper.getLevel());
+        cow.setNoAi(true);
+        cow.moveTo(fixture.target().getX(), fixture.target().getY(), fixture.target().getZ());
+        fixture.target().discard();
+        helper.getLevel().addFreshEntity(cow);
+        fixture.body().pack().insert(new ItemStack(Items.ARROW, 2));
+        WeaponSession session = Weapons.open(worker(fixture.body())).orElseThrow();
+        helper.assertFalse(session.fire(cow), "autonomous fire still rejects neutral mobs");
+        helper.assertTrue(session.explicitTarget(cow, () -> true), "the explicit order binds one live target");
+        helper.assertTrue(session.fire(cow), "an explicitly ordered neutral target starts a native shot");
+        AtomicInteger seen = ticking(helper, fixture, session);
+        helper.runAfterDelay(45, () -> {
+            try {
+                helper.assertTrue(seen.get() > 0 && cow.getHealth() < cow.getMaxHealth(),
+                    "the explicit target takes real native projectile damage");
+                helper.assertValueEqual(fixture.body().pack().count(Items.ARROW), 1, "one actual arrow is consumed");
+                session.close();
+                helper.assertValueEqual(find(fixture.body(), Items.BOW).getDamageValue(), 6, "native durability is retained");
+                helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "the real weapon returns once");
+            } finally { cow.discard(); fixture.close(); }
+            helper.succeed();
+        });
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void explicitPermissionIsTargetBoundAndRevocationCancelsTheDraw(GameTestHelper helper) {
+        Fixture fixture = fixture(helper, Items.BOW, 5);
+        var cow = EntityType.COW.create(helper.getLevel());
+        cow.setNoAi(true);
+        cow.moveTo(fixture.target().getX(), fixture.target().getY(), fixture.target().getZ());
+        helper.getLevel().addFreshEntity(cow);
+        fixture.body().pack().insert(new ItemStack(Items.ARROW, 1));
+        AtomicBoolean permitted = new AtomicBoolean(true);
+        WeaponSession session = Weapons.open(worker(fixture.body())).orElseThrow();
+        helper.assertTrue(session.explicitTarget(cow, permitted::get), "a live order lease is accepted");
+        helper.assertFalse(session.fire(fixture.target()), "the explicit lease cannot fire at a different hostile target");
+        helper.assertTrue(session.fire(cow), "the bound target begins drawing");
+        AtomicInteger seen = ticking(helper, fixture, session);
+        helper.runAfterDelay(10, () -> permitted.set(false));
+        helper.runAfterDelay(35, () -> {
+            try {
+                helper.assertValueEqual(seen.get(), 0, "revocation cancels charging before projectile discharge");
+                helper.assertValueEqual(cow.getHealth(), cow.getMaxHealth(), "the revoked neutral target is unharmed");
+                helper.assertValueEqual(fixture.body().pack().count(Items.ARROW), 1, "revocation spends no arrow");
+                helper.assertValueEqual(session.state(), WeaponSession.State.STOPPING, "a revoked session is terminal");
+                session.close(); session.close();
+                helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "revocation returns the hand loan once");
+            } finally { cow.discard(); fixture.close(); }
             helper.succeed();
         });
     }

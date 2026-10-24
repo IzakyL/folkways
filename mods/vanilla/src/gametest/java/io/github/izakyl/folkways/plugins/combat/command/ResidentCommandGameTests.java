@@ -17,11 +17,14 @@ import io.github.izakyl.folkways.core.api.work.ToolUse;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.fear.FearContent;
+import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
+import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -331,6 +334,72 @@ public final class ResidentCommandGameTests {
                 f.colony.raze();
                 helper.assertTrue(closing.status() == ResidentCommands.Status.RELEASED, "colony close releases holds");
             }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large")
+    public static void deliberatePatrolGuardRetainsControlAfterItsRealWeaponLoanFinishes(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body body = f.resident(new BlockPos(2, 1, 2));
+        ResidentCommands.Order guard = f.commands.guard(body, f.at(2, 1, 2), new Vec3(1, 0, 0));
+        helper.assertValueEqual(f.commands.priority(guard), Urge.Priority.ORDINARY, "legacy guard priority is unchanged");
+        guard.deliberateGuard();
+        helper.assertValueEqual(f.commands.priority(guard), Urge.Priority.CONTROL,
+            "a player patrol stop keeps priority over unrelated personal needs");
+        guard.engaging();
+        helper.assertValueEqual(f.commands.priority(guard), Urge.Priority.ORDINARY,
+            "an actual engagement permits combat to borrow the same runner");
+        body.pack().insert(new ItemStack(Items.IRON_SWORD));
+        WeaponSession session = Weapons.open(commandWorker(body)).orElseThrow();
+        helper.runAfterDelay(21, () -> {
+            try {
+                helper.assertFalse(guard.engaged(), "the short combat detection lease has elapsed");
+                helper.assertValueEqual(f.commands.priority(guard), Urge.Priority.ORDINARY,
+                    "the actual hand loan prevents lease expiry from repeatedly cancelling a longer native attack");
+                session.close();
+                helper.assertValueEqual(f.commands.priority(guard), Urge.Priority.CONTROL,
+                    "the patrol reclaims control as soon as both combat lease and actual loan are over");
+            } finally { session.close(); }
+            helper.succeed();
+        });
+    }
+
+    @GameTest(template = "empty_large")
+    public static void aDeliberateGuardYieldsToLowHealthDangerButNotLowHealthAlone(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body body = f.resident(new BlockPos(2, 1, 2));
+        ResidentCommands.Order guard = f.commands.guard(body, f.at(2, 1, 2), new Vec3(1, 0, 0)).deliberateGuard();
+        body.mob().setHealth(body.mob().getMaxHealth() * .25F);
+        helper.assertValueEqual(f.commands.priority(guard), Urge.Priority.CONTROL,
+            "low health without danger does not allow unrelated needs to take over a player patrol");
+        Zombie enemy = EntityType.ZOMBIE.create(f.level);
+        enemy.setNoAi(true);
+        enemy.moveTo(body.mob().getX() + 2, body.mob().getY(), body.mob().getZ());
+        f.level.addFreshEntity(enemy);
+        f.enemies.add(enemy);
+        enemy.setTarget(body.mob());
+        body.mob().setLastHurtByMob(enemy);
+        helper.assertValueEqual(f.commands.priority(guard), Urge.Priority.ORDINARY,
+            "a wounded guard in real danger permits the existing fear urge to borrow its runner");
+        enemy.setTarget(null);
+        helper.assertValueEqual(f.commands.priority(guard), Urge.Priority.CONTROL,
+            "once the danger is gone the deliberate stop regains its control tier");
+        helper.succeed();
+    }
+
+    private static Worker commandWorker(Body body) {
+        return new Worker() {
+            public io.github.izakyl.folkways.core.api.resident.Resident resident() { return body.resident(); }
+            public net.minecraft.world.entity.Mob body() { return body.mob(); }
+            public net.minecraft.world.Container pack() { return body.pack(); }
+            public List<Store> within() { return List.of(); }
+            public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
+            public void spill(ItemStack stack) { body.mob().spawnAtLocation(stack); }
+            public io.github.izakyl.folkways.effect.Effects effects() { return body.effects(); }
+            public List<Node> route() { return List.of(); }
+            public io.github.izakyl.folkways.core.api.work.Placement placement() {
+                return io.github.izakyl.folkways.core.api.work.Placement.NOWHERE;
+            }
+        };
     }
 
     @GameTest(template = "empty_large")

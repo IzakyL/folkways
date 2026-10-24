@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.Collection;
@@ -90,6 +91,46 @@ public final class UnitGroups {
         }
         save();
         return group;
+    }
+
+    /** Point intent: the click is the logical captain, with an optional prefix followed by a cycle. */
+    public boolean commandSelectionPoints(List<Body> residents, List<WorldPos> points, int cycleStart) {
+        requireServerThread();
+        List<Body> people = residents.stream().distinct().toList();
+        people.forEach(this::validate);
+        PointRoute route = new PointRoute(this, people, points, cycleStart);
+        UnitGroup group = new UnitGroup(this, UUID.randomUUID());
+        people.forEach(body -> group.members.add(body.id()));
+        groups.put(group.id(), group);
+        try { group.startPoints(route); }
+        catch (IllegalArgumentException | IllegalStateException rejected) {
+            groups.remove(group.id(), group);
+            throw rejected;
+        }
+        for (Body body : people) {
+            UnitGroup previous = membership.put(body.id(), group);
+            if (previous != null) {
+                previous.removeMember(body.id());
+                if (previous.members.isEmpty()) { groups.remove(previous.id(), previous); }
+            }
+        }
+        save();
+        return true;
+    }
+
+    /** Detach only selected members before an explicit individual order takes over. */
+    public void releaseSelection(List<Body> residents) {
+        requireServerThread();
+        List<Body> people = residents.stream().distinct().toList();
+        people.forEach(this::validate);
+        for (Body body : people) {
+            UnitGroup previous = membership.remove(body.id());
+            if (previous != null) {
+                previous.removeMember(body.id());
+                if (previous.members.isEmpty()) { groups.remove(previous.id(), previous); }
+            }
+        }
+        save();
     }
 
     void add(UnitGroup group, Body body) {

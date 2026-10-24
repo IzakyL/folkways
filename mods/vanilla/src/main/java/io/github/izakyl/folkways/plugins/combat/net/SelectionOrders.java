@@ -8,7 +8,8 @@ import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.front.api.ui.Pages;
-import io.github.izakyl.folkways.plugins.combat.group.Deployment;
+import io.github.izakyl.folkways.plugins.combat.Threats;
+import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.plugins.combat.group.UnitGroups;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.LinkedHashSet;
@@ -18,37 +19,58 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.Mob;
 
 /** Authoritative selection commands; clients submit intent, never navigation or membership edits. */
 public final class SelectionOrders {
     private SelectionOrders() { }
 
-    static Optional<Colony> authorized(ServerPlayer player, UUID expected) {
-        if (!player.getServer().isSameThread()) { return Optional.empty(); }
+    public static Optional<Colony> authorized(ServerPlayer player, UUID expected) {
+        if (!player.getServer().isSameThread() || player.isSpectator() || !player.isAlive()) { return Optional.empty(); }
         return Pages.colonyOf(player).filter(colony -> colony.id().equals(expected))
             .filter(colony -> Books.ofHeldBook(player, expected).filter(held -> held.id().equals(expected)).isPresent());
     }
 
     public static boolean submit(ServerPlayer player, UUID colonyId, List<UUID> residents,
             List<WorldPos> points, boolean patrol) {
+        return submit(player, colonyId, residents, points, patrol ? 0 : -1);
+    }
+
+    public static boolean validCycle(int count, int cycleStart) {
+        return cycleStart == -1 ? count == 1 : cycleStart >= 0 && cycleStart < count - 1;
+    }
+
+    public static boolean submit(ServerPlayer player, UUID colonyId, List<UUID> residents,
+            List<WorldPos> points, int cycleStart) {
         try {
             Colony colony = authorized(player, colonyId).orElseThrow(() -> new IllegalArgumentException("unauthorized"));
             if (residents.isEmpty() || residents.size() > CombatPackets.MAX_MEMBERS
                     || points.isEmpty() || points.size() > CombatPackets.MAX_POINTS
-                    || (patrol ? points.size() < 2 : points.size() != 1)) {
+                    || !validCycle(points.size(), cycleStart)) {
                 return false;
             }
             // Duplicate identifiers are harmless; every distinct selected person is retained.
             List<Body> people = new LinkedHashSet<>(residents).stream()
                 .map(id -> body(player, colony, id).orElseThrow(() -> new IllegalArgumentException("unavailable"))).toList();
-            Vec3 front = front(player, people, points.getFirst());
-            List<Deployment> route = points.stream().map(point -> compact(point, front, people.size())).toList();
-            for (int n = 0; n < route.size(); n++) {
-                validPoint(player, points.get(n));
-                for (WorldPos cell : route.get(n).line(people.size())) { validPoint(player, cell); }
-            }
-            UnitGroups.of(colony).commandSelection(people, route, patrol);
+            points.forEach(point -> validPoint(player, point));
+            return UnitGroups.of(colony).commandSelectionPoints(people, points, cycleStart);
+        } catch (IllegalArgumentException | IllegalStateException rejected) {
+            return false;
+        }
+    }
+
+    /** Players are deliberately outside this command's PvP scope; only a loaded nonfriendly Mob is accepted. */
+    public static boolean attack(ServerPlayer player, UUID colonyId, List<UUID> residents, UUID targetId) {
+        try {
+            Colony colony = authorized(player, colonyId).orElseThrow(() -> new IllegalArgumentException("unauthorized"));
+            if (residents.isEmpty() || residents.size() > CombatPackets.MAX_MEMBERS
+                    || !(player.serverLevel().getEntity(targetId) instanceof Mob target)
+                    || player.distanceToSqr(target) > 128 * 128) { return false; }
+            List<Body> people = new LinkedHashSet<>(residents).stream()
+                .map(id -> body(player, colony, id).orElseThrow(() -> new IllegalArgumentException("unavailable"))).toList();
+            if (people.stream().anyMatch(body -> !Threats.explicitlyAttackable(target, body.mob(), player))) { return false; }
+            ResidentCommands.of(colony).attack(people, target, player);
+            UnitGroups.of(colony).releaseSelection(people);
             return true;
         } catch (IllegalArgumentException | IllegalStateException rejected) {
             return false;
@@ -85,23 +107,4 @@ public final class SelectionOrders {
         }
     }
 
-    private static Vec3 front(ServerPlayer player, List<Body> people, WorldPos target) {
-        double x = people.stream().mapToDouble(body -> WorldSpaces.at(body.mob()).cell().getX()).average().orElse(0);
-        double z = people.stream().mapToDouble(body -> WorldSpaces.at(body.mob()).cell().getZ()).average().orElse(0);
-        double dx = target.cell().getX() - x;
-        double dz = target.cell().getZ() - z;
-        if (dx * dx + dz * dz < .01) {
-            var direction = player.getDirection();
-            return new Vec3(direction.getStepX(), 0, direction.getStepZ());
-        }
-        return Math.abs(dx) > Math.abs(dz) ? new Vec3(Math.signum(dx), 0, 0) : new Vec3(0, 0, Math.signum(dz));
-    }
-
-    private static Deployment compact(WorldPos at, Vec3 front, int count) {
-        int columns = (int) Math.ceil(Math.sqrt(count));
-        Vec3 side = new Vec3(-front.z, 0, front.x).scale(columns - 1);
-        Vec3 center = Vec3.atBottomCenterOf(at.cell());
-        return new Deployment(at.at(BlockPos.containing(center.subtract(side))),
-            at.at(BlockPos.containing(center.add(side))), front, new Deployment.Formation(2, columns));
-    }
 }

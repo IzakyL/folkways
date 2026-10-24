@@ -49,6 +49,84 @@ public final class UnitGroupGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(UnitGroupGameTests.class); }
 
+    @GameTest(template = "empty_large", timeoutTicks = 3000)
+    public static void clickRouteAssemblesDwellsAtEveryPointThenRepeatsOnlyItsCycle(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(4);
+        List<WorldPos> route = List.of(scene.at(8, 1, 8), scene.at(18, 1, 8),
+            scene.at(18, 1, 16), scene.at(8, 1, 16));
+        scene.groups.commandSelectionPoints(people, route, 1); // A-B-C-D-B means prefix A, cycle B-C-D.
+        UnitGroup group = scene.groups.ofResident(people.getFirst().id()).orElseThrow();
+        helper.onEachTick(() -> group.captain().ifPresent(captain -> {
+            for (WorldPos slot : group.destinations().values()) {
+                helper.assertTrue(slot.cell().distSqr(captain.cell()) <= 3 * 3,
+                    "every simultaneous short order stays close to the virtual captain");
+            }
+        }));
+        var sequence = helper.startSequence();
+        for (int stop : new int[] {0, 1, 2, 3, 1, 2}) {
+            sequence.thenWaitUntil(() -> helper.assertTrue(group.patrolStop() == stop
+                    && group.phase() == UnitGroup.Phase.HOLDING,
+                "all available members physically assemble at mandatory point " + stop + "; phase=" + group.phase()))
+                .thenExecute(() -> {
+                    helper.assertTrue(group.captain().orElseThrow().equals(route.get(stop)),
+                        "the logical captain reaches the click itself, without a rear staging offset");
+                    scene.assertLine(helper, group, people);
+                })
+                .thenIdle(19)
+                .thenExecute(() -> helper.assertValueEqual(group.patrolStop(), stop,
+                    "an assembled waypoint dwells for at least twenty ticks before leaving"));
+        }
+        sequence.thenExecute(() -> {
+            helper.assertTrue(group.pointRoute().equals(route) && group.cycleStart() == 1,
+                "prefix and cycle remain distinct transient route intent");
+            group.release();
+            helper.assertTrue(group.captain().isEmpty() && group.pointRoute().isEmpty()
+                    && people.stream().allMatch(body -> scene.commands.current(body.id()).isEmpty()),
+                "release forgets the captain, cycle and every owned runner handle");
+        }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 1200)
+    public static void clickAnchorUsesNearbyRaisedSlotsWithoutRequiringAFlatFormation(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(4);
+        helper.setBlock(new BlockPos(16, 1, 8), Blocks.STONE);
+        WorldPos click = scene.at(16, 1, 10);
+        scene.groups.commandSelectionPoints(people, List.of(click), -1);
+        UnitGroup group = scene.groups.ofResident(people.getFirst().id()).orElseThrow();
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.HOLDING,
+                "a point command crosses ordinary uneven terrain and assembles"))
+            .thenExecute(() -> {
+                helper.assertTrue(group.captain().orElseThrow().equals(click), "the click remains the squad anchor");
+                helper.assertTrue(group.destinations().containsValue(scene.at(16, 2, 8)),
+                    "a nearby slot follows the raised safe standing surface instead of rejecting the click");
+                scene.assertLine(helper, group, people);
+                group.release();
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large")
+    public static void rejectedLaterClickPreservesMembershipAndOwnedHandles(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(4);
+        UnitGroup original = scene.groups.create(people);
+        original.hold(scene.line(12));
+        var handles = people.stream().map(body -> scene.commands.current(body.id()).orElseThrow()).toList();
+        helper.setBlock(new BlockPos(18, 1, 10), Blocks.STONE);
+        try {
+            scene.groups.commandSelectionPoints(people, List.of(scene.at(8, 1, 10), scene.at(18, 1, 10)), 0);
+            helper.fail("the unsafe later click must reject the entire route");
+        } catch (IllegalArgumentException expected) {
+            helper.assertTrue(people.stream().allMatch(body -> scene.groups.ofResident(body.id()).orElseThrow() == original),
+                "complete point preflight preserves every original membership index");
+            helper.assertTrue(handles.stream().allMatch(order -> scene.commands.current(order.resident()).orElseThrow() == order),
+                "complete point preflight preserves every original runner handle");
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = "empty_large", timeoutTicks = 1000)
     public static void fourResidentsPassAOneBlockOpeningAndRestoreTheirLine(GameTestHelper helper) {
         Scene scene = new Scene(helper);
