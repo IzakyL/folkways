@@ -1795,7 +1795,9 @@ public final class Weaver {
                 stowing.remove(hand.id());
                 continue;
             }
-            if (occupied.contains(hand.id())) {
+            // A pending task may be bound to the last seed in a full pack while its fetch waits for room.
+            // Keep active work intact, but let idle hands put away cargo not claimed by that pending task.
+            if (hand.holding().isPresent()) {
                 continue;
             }
             gapsOf.remove(hand.id());

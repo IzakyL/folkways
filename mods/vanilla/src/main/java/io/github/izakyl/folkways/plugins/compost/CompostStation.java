@@ -60,6 +60,32 @@ public final class CompostStation {
         this.enabled = enabled;
     }
 
+    // A batch is local to one goals call. It is lazy: adopted work, mature output and disabled
+    // stations do not read the colony's inventory or seed catalogue at all.
+    final class Planning {
+        private final UUID colony;
+        private Optional<SeedBudget> source;
+        private List<Item> items;
+        private SeedBudget.Planning allowance;
+
+        private Planning(UUID colony) { this.colony = colony; }
+        private Optional<SeedBudget> source() {
+            if (source == null) source = budgets.apply(colony);
+            return source;
+        }
+        private List<Item> items() {
+            if (items == null) items = seeds.get().stream()
+                .sorted(Comparator.comparing(item -> BuiltInRegistries.ITEM.getKey(item).toString())).toList();
+            return items;
+        }
+        private SeedBudget.Planning allowance() {
+            if (allowance == null) allowance = source().orElseThrow().planning();
+            return allowance;
+        }
+    }
+
+    Planning planning(UUID colony) { return new Planning(colony); }
+
     // Vanilla always accepts the first item in an empty composter. Remaining layers take
     // 1 / chance items on average; round the entire remaining batch up to whole items.
     public static int averageInputs(ItemStack stack, int fill) {
@@ -74,6 +100,12 @@ public final class CompostStation {
 
     public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
             CompostBookings bookings, Runnable changed) {
+        return recovery(colony, level, at, stances, bookings, changed, planning(colony));
+    }
+
+    List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,
+            CompostBookings bookings, Runnable changed, Planning planning) {
+        if (!planning.colony.equals(colony)) throw new IllegalArgumentException("another colony's compost planning");
         BlockState state = level.getBlockState(at.block(level));
         if (!matches(state)) return List.of();
         Site site = new Site(colony, at);
@@ -83,11 +115,10 @@ public final class CompostStation {
         int fill = state.getValue(ComposterBlock.LEVEL);
         if (fill == 8) return List.of(Grown.of(new Work(site, stances, bookings, changed, Optional.empty(), 0)));
         if (fill >= 7 || !enabled.test(colony)) return List.of();
-        Optional<SeedBudget> budget = budgets.apply(colony);
-        if (budget.isEmpty()) return List.of();
-        return seeds.get().stream().sorted(Comparator.comparing(item -> BuiltInRegistries.ITEM.getKey(item).toString()))
+        if (planning.source().isEmpty()) return List.of();
+        return planning.items().stream()
             .filter(item -> averageInputs(item.getDefaultInstance(), fill) > 0
-                && budget.get().tally(item).compostable() >= averageInputs(item.getDefaultInstance(), fill))
+                && planning.allowance().tally(item).compostable() >= averageInputs(item.getDefaultInstance(), fill))
             .findFirst().map(item -> List.of(Grown.of(new Work(site, stances, bookings, changed,
                 Optional.of(item), averageInputs(item.getDefaultInstance(), fill))))).orElseGet(List::of);
     }

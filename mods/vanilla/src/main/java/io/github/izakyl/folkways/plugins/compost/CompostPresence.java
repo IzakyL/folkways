@@ -94,10 +94,11 @@ public final class CompostPresence implements Facing, Holding.Watch {
     public List<Grown> goals(ColonyView view) {
         List<Grown> goals = new ArrayList<>();
         ServerLevel level = view.level();
+        CompostStation.Planning planning = station.planning(colony.id());
         sites.forEach((at, stances) -> {
             if (!at.in(level) || !level.isLoaded(at.block(level))) return;
             goals.addAll(stances.isPresent()
-                ? station.recovery(colony.id(), level, at, stances.get(), bookings, sweep::nudge)
+                ? station.recovery(colony.id(), level, at, stances.get(), bookings, sweep::nudge, planning)
                 : station.activeRecovery(colony.id(), level, at, bookings));
         });
         return List.copyOf(goals);
