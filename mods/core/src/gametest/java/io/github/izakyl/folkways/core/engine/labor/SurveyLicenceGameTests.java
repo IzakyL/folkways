@@ -1,6 +1,11 @@
 package io.github.izakyl.folkways.core.engine.labor;
 
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.api.colony.Colonies;
+import io.github.izakyl.folkways.core.api.colony.Held;
+import io.github.izakyl.folkways.core.api.resident.body.Keenness;
+import io.github.izakyl.folkways.core.engine.colony.WorkDefaults;
+import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -71,5 +76,29 @@ public final class SurveyLicenceGameTests {
     private static boolean holds(Survey survey, Vocation trade) {
         List<Crew.Hand> hands = survey.known(NOWHERE, List.of()).hands();
         return hands.size() == 1 && hands.get(0).licenceFor(trade).isPresent();
+    }
+
+    @GameTest(template = "empty")
+    public static void copiedDefaultsReachThePlannersCrew(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var colony = Colonies.mint(level.getServer());
+        var body = PersonBody.RESIDENT.get().create(level);
+        body.moveTo(helper.absolutePos(new net.minecraft.core.BlockPos(1, 2, 1)).getCenter());
+        level.addFreshEntity(body);
+        Vocation hauling = Vocations.of(Vocations.HAULING).orElseThrow();
+        try {
+            WorkDefaults.set(colony, PersonBody.ID, hauling.id(), true, 1);
+            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            Survey survey = new Survey();
+            survey.read(body.id());
+            survey.answer(level, ColonyData.find(level.getServer(), colony.id()).orElseThrow(),
+                Map.of(body.id(), body), seen -> { });
+            helper.assertTrue(survey.known(NOWHERE, List.of()).hands().getFirst().keennessOf(hauling)
+                .orElseThrow() == Keenness.FIRST, "the planner receives the copied priority through the normal survey");
+        } finally {
+            body.discard();
+            colony.raze();
+        }
+        helper.succeed();
     }
 }

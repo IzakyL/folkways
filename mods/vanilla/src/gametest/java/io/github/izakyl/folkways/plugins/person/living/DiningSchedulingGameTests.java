@@ -206,10 +206,8 @@ public final class DiningSchedulingGameTests {
             ColonyFront.of(colony).addZone(level, LivingContent.DINING, Set.of(table, chair), settings).orElseThrow();
             person = PersonBody.RESIDENT.get().create(level);
             person.moveTo(Vec3.atBottomCenterOf(table.offset(2, 0, 1)));
-            colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
-            person.joinColony(colony.id());
             level.addFreshEntity(person);
-            colony.entered(person);
+            colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
             living = colony.service(LivingContent.ID, LivingPresence.class).orElseThrow();
             helper.onEachTick(() -> {
                 if (closed) return;
