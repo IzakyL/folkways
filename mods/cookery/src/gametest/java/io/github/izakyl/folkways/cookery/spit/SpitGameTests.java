@@ -30,6 +30,7 @@ import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.testing.RecoveryAsking;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -429,7 +430,7 @@ public final class SpitGameTests {
             return result;
         }
         List<ItemEntity> drops() { return level.getEntitiesOfClass(ItemEntity.class, new AABB(cell).inflate(2)); }
-        long count(net.minecraft.world.item.Item item) { return Goods.countIn(pack, Goods.specOf(new ItemStack(item))); }
+        long count(net.minecraft.world.item.Item item) { return Goods.countIn(pack, ItemSpec.of(item)); }
         public Resident resident() { return actor.resident(); }
         public Mob body() { return actor; }
         public Container pack() { return pack; }

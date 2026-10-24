@@ -18,6 +18,7 @@ import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
+import io.github.izakyl.folkways.core.api.terms.Goods;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -35,7 +36,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -246,19 +246,19 @@ final class WaresPresence implements Facing {
     }
 
     private static List<Sentence.Token.Ware> stock(ServerLevel level, BlockPos at) {
-        Map<Item, Long> held = new LinkedHashMap<>();
+        Map<ItemSpec, Long> held = new LinkedHashMap<>();
         Containers.at(level, at).ifPresent(store -> {
             for (int slot = 0; slot < store.getContainerSize(); slot++) {
                 ItemStack stack = store.getItem(slot);
                 if (!stack.isEmpty()) {
-                    held.merge(stack.getItem(), (long) stack.getCount(), Long::sum);
+                    held.merge(Goods.specOf(stack), (long) stack.getCount(), Long::sum);
                 }
             }
         });
         return held.entrySet().stream()
-            .sorted(Map.Entry.<Item, Long>comparingByValue().reversed())
+            .sorted(Map.Entry.<ItemSpec, Long>comparingByValue().reversed())
             .limit(STOCK_SHOWN)
-            .map(entry -> new Sentence.Token.Ware(BuiltInRegistries.ITEM.getKey(entry.getKey()), entry.getValue()))
+            .map(entry -> Sentence.Token.Ware.of(Goods.display(entry.getKey()), entry.getValue(), level.registryAccess()))
             .toList();
     }
 

@@ -121,7 +121,7 @@ record Counter(UUID key, WorkSite site, List<Desk> desks, Map<UUID, CollectNode>
     private Optional<CollectNode> adrift(Produce produce) {
         Set<Item> wanted = Goods.members(produce.wanted());
         return collecting.values().stream()
-            .filter(node -> node.byHand() && node.adrift() && wanted.containsAll(Goods.members(node.goods()))
+            .filter(node -> node.byHand() && node.adrift() && wanted.containsAll(Goods.members(node.goods())) && Goods.overlap(produce.wanted(), node.goods())
                 && produce.batching().runs(site, List.of(), node.count(), Optional.empty(), 1) >= 1)
             .min(Comparator.comparingLong(CollectNode::placedAt));
     }

@@ -621,7 +621,7 @@ public final class TeapotGameTests {
             helper.assertTrue(pot().getStatus() == ITeapot.FINISHED && pot().getResult().getCount() == job.output().getCount() && TeaBatch.read(pot(), level).isPresent(), "the original actual native finished batch and ownership are restored");
             helper.assertTrue(drops().isEmpty(), "failed serving leaves no uncaptured real product or duplicate pot");
         }
-        long count(Item item) { return Goods.countIn(pack, Goods.specOf(new ItemStack(item))); }
+        long count(Item item) { return Goods.countIn(pack, ItemSpec.of(item)); }
         List<ItemEntity> drops() { return level.getEntitiesOfClass(ItemEntity.class, new AABB(cell).inflate(3)); }
         public Resident resident() { return actor.resident(); }
         public Mob body() { return actor; }

@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.api.terms.Goods;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -14,7 +15,6 @@ import javax.annotation.Nullable;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.IntTag;
@@ -260,9 +260,7 @@ public final class SchematicPlacement {
     /** The stack a shot is shown carrying, handed to the block as it is placed: its first requirement. */
     static ItemStack icon(List<Need> cost) {
         return cost.stream().findFirst()
-            .flatMap(need -> need.spec().item())
-            .map(BuiltInRegistries.ITEM::get)
-            .map(ItemStack::new)
+            .map(need -> Goods.display(need.spec()))
             .orElse(ItemStack.EMPTY);
     }
 

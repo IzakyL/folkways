@@ -51,8 +51,8 @@ final class TavernWork implements Node, Workload.Within {
             .doing(CookeryContent.COOKING).done();
         recovery = recovering ? Grown.of(this) : null;
     }
-    private ItemSpec input() { return Goods.specOf(new ItemStack(barrel ? ModItems.GRAPE_BUCKET.get() : ModItems.GRAPE.get())); }
-    private ItemSpec carrier() { return Goods.specOf(new ItemStack(barrel ? ModItems.EMPTY_BOTTLE.get() : Items.BUCKET)); }
+    private ItemSpec input() { return ItemSpec.of(barrel ? ModItems.GRAPE_BUCKET.get() : ModItems.GRAPE.get()); }
+    private ItemSpec carrier() { return ItemSpec.of(barrel ? ModItems.EMPTY_BOTTLE.get() : Items.BUCKET); }
     public NodeSpec spec() { return spec; }
     public List<Amount> planningLeaves(List<Amount> promised) { return Leaves.unpromised(spec.leaves(), promised); }
     public Optional<RefusalKind> planned(ServerLevel level) {

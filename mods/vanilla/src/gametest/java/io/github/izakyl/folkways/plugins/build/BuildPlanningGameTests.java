@@ -12,7 +12,6 @@ import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Need;
@@ -60,7 +59,6 @@ import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.level.block.state.properties.DoorHingeSide;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -375,7 +373,7 @@ public final class BuildPlanningGameTests {
         helper.assertTrue(BuildOrderView.pending(level, frozen, rig.site.metCells(), rig.site.metJoints()).stream()
             .noneMatch(ghost -> ghost.pos().equals(first)), "a completed block never returns as a ghost");
         helper.assertValueEqual(BuildOrderView.owed(level, frozen, rig.site.metCells()),
-            Map.of(ResourceLocation.withDefaultNamespace("stone"), 1L),
+            Map.of(ItemSpec.of(Items.STONE), 1L),
             "broken completed blocks never return to the material bill");
         Set<BlockPos> saved = rig.site.met();
         rig.site.close();

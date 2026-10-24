@@ -12,6 +12,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.world.item.ItemStack;
@@ -183,13 +186,18 @@ public final class KitchenTools {
     }
 
     public synchronized CompoundTag save(UUID colony) {
+        return save(colony, RegistryAccess.fromRegistryOfRegistries(
+            BuiltInRegistries.REGISTRY));
+    }
+
+    public synchronized CompoundTag save(UUID colony, HolderLookup.Provider registries) {
         CompoundTag saved = new CompoundTag();
         ListTag list = new ListTag();
         for (Lease lease : leases(colony)) {
             CompoundTag entry = new CompoundTag();
             entry.putUUID("id", lease.id());
             entry.putUUID("node", lease.request().node());
-            entry.put("tools", lease.request().tools().save());
+            entry.put("tools", lease.request().tools().save(registries));
             entry.putUUID("tool", lease.tool());
             entry.putUUID("resident", lease.resident());
             list.add(entry);
@@ -200,12 +208,17 @@ public final class KitchenTools {
 
     // Execution permits do not survive restart. Only physical returns survive; old work is not revived.
     public synchronized void load(UUID colony, CompoundTag saved) {
+        load(colony, saved, RegistryAccess.fromRegistryOfRegistries(
+            BuiltInRegistries.REGISTRY));
+    }
+
+    public synchronized void load(UUID colony, CompoundTag saved, HolderLookup.Provider registries) {
         queues.keySet().removeIf(family -> family.colony().equals(colony));
         leases(colony).forEach(this::remove);
         List<Lease> recovered = Entries.of(Reader.of(saved), "loans", entry -> {
             Optional<UUID> id = entry.uuid("id");
             Optional<UUID> node = entry.uuid("node");
-            Optional<ItemSpec> tools = entry.child("tools").flatMap(ItemSpec::load);
+            Optional<ItemSpec> tools = entry.child("tools").flatMap(reader -> ItemSpec.load(reader, registries));
             Optional<UUID> tool = entry.uuid("tool");
             Optional<UUID> resident = entry.uuid("resident");
             return id.isPresent() && node.isPresent() && tools.isPresent() && tool.isPresent() && resident.isPresent()

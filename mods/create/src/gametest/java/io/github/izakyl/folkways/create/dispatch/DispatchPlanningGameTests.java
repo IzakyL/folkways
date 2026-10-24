@@ -488,8 +488,8 @@ public final class DispatchPlanningGameTests {
             Depot depot = new Depot(UUID.randomUUID(), new WorkSite.AtBlock(near),
                 new Tally(network, List.of(new PackageNetwork.Supply(new ItemStack(Items.IRON_INGOT), 128)), 0, false,
                     nodes, new LinkedHashMap<>()), List.of(),
-                List.of(new Depot.Shelf(near, Stances.at(near), Map.of(Items.IRON_INGOT, 64L)),
-                    new Depot.Shelf(far, Stances.at(far), Map.of(Items.IRON_INGOT, 64L))),
+                List.of(new Depot.Shelf(near, Stances.at(near), Map.of(Goods.specOf(new ItemStack(Items.IRON_INGOT)), 64L)),
+                    new Depot.Shelf(far, Stances.at(far), Map.of(Goods.specOf(new ItemStack(Items.IRON_INGOT)), 64L))),
                 new Eta(), 1);
             Owed delivery = new Owed(new WorkSite.AtBlock(fixture.target), Stances.at(fixture.target), iron, 32);
             var situation = fixture.situation(new Stock(List.of(), Map.of(new Stash(fixture.target), 2)),
@@ -628,7 +628,7 @@ public final class DispatchPlanningGameTests {
         Depot plain = depot(fixture, nodes, network, parcels, supply);
         return new Depot(plain.key(), plain.site(),
             new Tally(network, supply, 0, manned, nodes, new LinkedHashMap<>()), plain.docks(),
-            List.of(new Depot.Shelf(fixture.source, Stances.at(fixture.source), Map.of(Items.IRON_INGOT, shelved))),
+            List.of(new Depot.Shelf(fixture.source, Stances.at(fixture.source), Map.of(Goods.specOf(new ItemStack(Items.IRON_INGOT)), shelved))),
             plain.eta(), plain.reachTicks());
     }
 

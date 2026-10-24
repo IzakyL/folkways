@@ -179,7 +179,7 @@ public final class SeedPresence implements Facing {
                 if (!zone.settings().flag(RESTORE_GRASS)) status = "need_grass";
                 else if (zone.cells().stream().noneMatch(ground -> GrassSources.safeRestore(view.level(), ground, zone.cells()))) status = "need_growth_space";
                 else status = Fronts.of(colony).stocked(view.level().getServer(),
-                    io.github.izakyl.folkways.core.api.terms.Goods.specOf(Items.BONE_MEAL.getDefaultInstance())) == 0
+                    io.github.izakyl.folkways.core.api.terms.ItemSpec.of(Items.BONE_MEAL)) == 0
                     ? "need_bonemeal" : "restoring";
             } else status = "gathering";
         }
@@ -222,7 +222,7 @@ public final class SeedPresence implements Facing {
             hold = bookings.hold(anchor, id);
             spec = NodeSpec.of(id, ID, new WorkSite.AtBlock(ground), stances, Workload.Once.of(10))
                 .vocation(FarmingContent.trade()).gesture(WorkGesture.SWING).leaves(Leaves.room(4))
-                .needs(restore ? List.of(new Need(io.github.izakyl.folkways.core.api.terms.Goods.specOf(Items.BONE_MEAL.getDefaultInstance()), 1, true)) : List.of())
+                .needs(restore ? List.of(new Need(io.github.izakyl.folkways.core.api.terms.ItemSpec.of(Items.BONE_MEAL), 1, true)) : List.of())
                 .doing(restore ? RESTORING : GATHERING).done();
         }
         public NodeSpec spec() { return spec; }
