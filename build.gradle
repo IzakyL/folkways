@@ -10,6 +10,7 @@ def modProjects = [
     folkways_create: ":create",
     folkways_modulargolems: ":modulargolems",
     folkways_cookery: ":cookery",
+    folkways_war: ":war",
 ]
 modProjects.values().each { evaluationDependsOn(it) }
 
@@ -21,8 +22,8 @@ if (tavernTests && !cookeryTests) {
 }
 def testedMods = modProjects.findAll { id, path -> path != ":modulargolems" && (path != ":cookery" || cookeryTests) }
 def gameTestMod = providers.gradleProperty("gameTestMod").getOrElse("")
-if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery"])) {
-    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create or cookery")
+if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "war"])) {
+    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create, cookery or war")
 }
 if (gameTestMod == "cookery" && !cookeryTests) {
     throw new GradleException("Cookery GameTests require -PcookeryTests=true")

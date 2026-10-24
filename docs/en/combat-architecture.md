@@ -2,16 +2,16 @@
 
 [Architecture](architecture.md) · [简体中文](../zh-CN/combat-architecture.md)
 
-This increment continues draft e40ebc7 and incorporates master 506eec3. It provides configurable hostility, defence and escape, server-side orders, groups of up to eight people, formation patrols and real melee, bow and crossbow sessions. War and gun integrations remain separate future modules.
+This increment continues draft e40ebc7 and now incorporates master 7cf7259. It provides configurable hostility, defence and escape, server-side orders, actual groups, formation patrols and real melee, bow and crossbow sessions. Optional War now provides selection and shortcut inputs; raids, strategic AI and gun integrations remain unimplemented.
 
 ## Module ownership
 
-| Module                            | Responsibility                                                                                       |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Core                              | Residents, labour, item ownership, lifecycle, general travel and exclusive execution                 |
-| Vanilla                           | Everyday hostility, defence, patrol, orders, actual groups, placement, movement and weapon contracts |
-| War, future                       | Raids, PvE/PvP, strategic AI, RTS UI, box selection, dragged lines and numbered shortcut selections  |
-| Separate gun integrations, future | Native TaCZ or Point Blank execution through Vanilla contracts                                       |
+| Module                            | Responsibility                                                                                           |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Core                              | Residents, labour, item ownership, lifecycle, general travel and exclusive execution                     |
+| Vanilla                           | Everyday hostility, defence, patrol, orders, actual groups, placement, movement and weapon contracts     |
+| War                               | RTS selection, shortcut sets, pointer orders and route drafts; raids and strategic AI remain future work |
+| Separate gun integrations, future | Native TaCZ or Point Blank execution through Vanilla contracts                                           |
 
 Core and Vanilla require neither War nor gun mods. Create, Cookery and Modular Golems retain independent extensions.
 
@@ -82,14 +82,14 @@ GUARD time spent yielding the same runner to fear or combat does not consume its
 
 ## P3: actual UnitGroups and deployment intents
 
-UnitGroups.of(colony).create(people) creates an actual group of one to eight people; ofResident(id) reads exclusive membership. Transfers release the previous group's control. Group identity and member order persist in the colony ledger. Deployments are transient, so groups reload as IDLE.
+UnitGroups.of(colony).create(people) creates an actual group; ofResident(id) reads exclusive membership. Creation and loading no longer truncate membership to eight. Transfers release the previous group's control. Group identity and member order persist in the colony ledger. Deployments are transient, so groups reload as IDLE.
 
 ```java
 var group = UnitGroups.of(colony).create(people);
 group.move(new Deployment(left, right, front, new Deployment.Formation(2)));
 ```
 
-Deployment accepts level endpoints in the same realm, a horizontal front approximately perpendicular to the line, and spacing between two and eight blocks. It currently supplies one rank with at most eight distinct block positions. Future War code can submit the intent without steering each entity.
+Deployment accepts level endpoints in the same realm, a horizontal front approximately perpendicular to the line, and spacing between two and eight blocks. Formation(spacing) retains a single rank; Formation(spacing, columns) supplies multiple ranks. The endpoint line remains at most 128 blocks long and every slot must be distinct and safe. War submits this intent without steering each entity.
 
 - move sends members into their target column in sequence, then restores the line, preventing followers from blocking leaders. If column slots have no footing, it tries the line directly.
 - hold establishes a line; gather assembles around a centre; release relinquishes all member orders.
@@ -99,7 +99,7 @@ Deployment accepts level endpoints in the same realm, a horizontal front approxi
 - Dead or dismissed members leave; unloaded members remain missing while present members reform; returning members receive fresh slots.
 - Unreachable deployments report FAILED and release everyone. Fresh deployment after opening a path can retry without teleportation or endless retries.
 
-The concrete acceptance case is four people physically crossing a one-block opening and restoring a line. This does not guarantee all bottlenecks, arbitrary terrain, multiple ranks, vehicles or ship deployment. The separate 16/32/64-total-entity combat sample does not establish large-group formation performance. War shortcut selections may overlap; actual group membership cannot.
+The validated acceptance case is four people physically crossing a one-block opening and restoring a line. New compact ranks still require gameplay testing; this does not guarantee all bottlenecks, arbitrary terrain, vehicles or ship deployment. The separate 16/32/64-total-entity combat sample does not establish large-group formation performance. War shortcut selections may overlap; actual group membership cannot.
 
 Temporary transit-column slots may follow safe local footing up to two blocks above or below their planned height. Final line slots remain exact. An unreachable height-adjusted transit slot permits one freshly validated attempt at the final line; failure there releases the orders. A separate four-person acceptance scene covers two single-file bends and two steps, followed by a return patrol.
 
@@ -119,6 +119,24 @@ Temporary transit-column slots may follow safe local footing up to two blocks ab
 Vanilla registers `folkways:combat` as a dedicated colony-book page through the existing Front extension API. The page selects loaded residents, creates or chooses an actual group, adds points at the player's feet or a verified aimed support surface, and submits explicit orders. A single point configures a guard post; two to sixteen points configure looping patrol stops. Each point is a formation centre, not one endpoint of a deployment line.
 
 The page also provides retreat, release and melee/bow/crossbow preferences. Actions recheck the authorized colony on the server; stale or foreign group IDs, missing members during deployment, invalid terrain and out-of-range destinations cannot acquire control. Release can still clear a group with unloaded members. Draft points remain in the current server session; restarting does not restore orders. This page does not add War selection tools or hotkeys.
+
+### Optional War inputs in the V combat tool
+
+Core exposes generic OverheadTools.Handler callbacks and Overhead.screenRay(); Vanilla owns CombatPackets, SelectionOrders and UnitGroups.commandSelection(). Optional folkways_war installs the interaction handler onto Vanilla's existing combat tool and never owns navigation. Without War, the previous book action remains available.
+
+| Input                     | Result                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------- |
+| LMB drag / click          | Select loaded colony residents by their projected screen rectangles / select one                  |
+| Ctrl+1–9 / 1–9            | Save the exact current selection / recall currently available members                             |
+| RMB ground                | Submit one move intent for the whole selection, with compact ranks based on its actual size       |
+| Ctrl+RMB                  | Add draft waypoints; after two distinct points, click the first marker to close and submit patrol |
+| Backspace / Esc or Delete | Undo the last point / cancel the draft                                                            |
+
+Shortcut sets can overlap and do not alter actual membership or labour. They last for this client session and clear on colony/realm change or logout. Drafts do not issue orders until closure; selection changes, missing members and leaving the tool or screen cancel them. MMB camera movement retains the route draft. Consumed shortcuts are latched until key release, preventing repeats and hotbar changes. The existing page remains available for guard posts, retreat, release and loadouts.
+
+The client obtains an authorized roster instead of inferring enrollment from unsynchronized Body attachments. Commands carry an explicit colony ID, resident UUIDs and WorldPos points. The server checks authority, every selected resident, every stop and every final slot before replacing control. Selected members may come from multiple groups; unselected members retain their original group intent, and old handles cannot close replacement orders. Packet safety limits are 256 selected residents and 16 stops, rejecting the whole request on overflow rather than selecting only eight. These limits do not establish large-group performance or terrain reliability.
+
+Camera controls remain MMB pan and Alt+MMB orbit in the combat tool, with the existing account-specific persistent global option controlling other tools. This iteration compiles all mods and GameTest sources before daily-instance replacement and manual testing. Three new GameTests cover twelve-person ranks, partial transfers across groups and rejection preserving original commands; compilation is not execution. Run GameTests and Blockwright before updating the PR, including shortcut conflicts, route closure, bottlenecks, death/unload and world reload.
 
 ## P4: real native weapon sessions
 

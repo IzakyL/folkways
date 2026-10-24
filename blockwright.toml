@@ -30,6 +30,11 @@ path = "build/libs/folkways-modulargolems-*.jar"
 path = "build/libs/folkways-cookery-*.jar"
 target = []
 
+# Optional RTS input layer; installed explicitly by profiles that exercise it.
+[mods.folkways_war]
+path = "build/libs/folkways-war-neoforge-*.jar"
+target = []
+
 # Compiled against, and installed only by the cookery test and promo profiles.
 [mods.kaleidoscope_cookery]
 url = "https://cdn.modrinth.com/data/v17FatAc/versions/g8w0b2ly/kaleidoscopecookery-1.6.0-neoforge%2Bmc1.21.1.jar"

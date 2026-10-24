@@ -1,0 +1,16 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_war"
+ext.modName = "folkways-war"
+apply from: rootProject.file("gradle/mod.gradle")
+
+// This module is installed separately. Its required runtime relationship is declared in neoforge.mods.toml.
+// Compile-only project edges make the Core and Vanilla APIs available without changing their standalone jars.
+dependencies {
+    compileOnly project(":core")
+    compileOnly project(":vanilla")
+}
