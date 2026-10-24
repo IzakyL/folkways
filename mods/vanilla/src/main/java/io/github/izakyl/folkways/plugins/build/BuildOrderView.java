@@ -66,7 +66,8 @@ public record BuildOrderView(UUID id, BlockPos min, BlockPos max, int placed, in
                 || target.costs(level, shot, met).isEmpty()) {
                 continue;
             }
-            owed.add(new Ghost(pos, wanted));
+            owed.add(new Ghost(pos, wanted,
+                new io.github.izakyl.folkways.core.api.structure.StructurePayload(target.dataAt(pos).tag())));
         }
         for (Joint joint : target.joints()) {
             BlockState start = target.cells().get(joint.from());

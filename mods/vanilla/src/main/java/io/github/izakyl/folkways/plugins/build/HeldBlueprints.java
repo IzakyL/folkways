@@ -93,6 +93,12 @@ public final class HeldBlueprints {
                 : Component.translatable("folkways.blueprint.unreadable"), true);
             return;
         }
+        try {
+            blueprint.get().compatible();
+        } catch (io.github.izakyl.folkways.core.api.structure.StructureCompat.Failure failed) {
+            player.displayClientMessage(failed.component(), true);
+            return;
+        }
         away.run();
         Placing.hold(new Held(entry, file.get(), blueprint.get()));
     }
@@ -112,7 +118,8 @@ public final class HeldBlueprints {
         @Override
         public List<Ghost> blocks(Rotation rotation, Mirror mirror) {
             return blueprint.transformed(rotation, mirror)
-                .map(turned -> turned.blocks().stream().map(block -> new Ghost(block.offset(), block.state())).toList())
+                .map(turned -> turned.blocks().stream().map(block -> new Ghost(block.offset(), block.state(),
+                    block.data().payload(block.state()))).toList())
                 .orElse(List.of());
         }
 

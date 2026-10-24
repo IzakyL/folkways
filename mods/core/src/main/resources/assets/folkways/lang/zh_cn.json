@@ -1291,5 +1291,19 @@
   "folkways.damage_control.worker": "执行居民：%s",
   "folkways.overhead.mode.build": "建设",
   "folkways.overhead.mode.rts": "RTS",
-  "folkways.overhead.mode.damage_control": "损管"
+  "folkways.overhead.mode.damage_control": "损管",
+  "folkways.structure.chiselsandbits": "Chisels & Bits 与 Folkways 扩展",
+  "folkways.blueprint.requires": "需要 %s",
+  "folkways.blueprint.micro.material": "%s × %s",
+  "folkways.blueprint.micro.more": "另有 %s 种碎块材质",
+  "folkways.blueprint.micro.same_state": "备好对应材质的碎块。同种雕刻方块会跳过，换造型前先拆除。",
+  "folkways.refusal.build.micro_data_invalid": "蓝图中的雕刻数据损坏或过大，重新保存或导入。",
+  "folkways.refusal.build.missing_integration": "这份蓝图缺少所需的建筑扩展，或扩展版本不符；蓝图数据已保留。",
+  "folkways.refusal.draft.unsupported_payload": "这份模板的建筑数据无法在这里使用或替换。",
+  "folkways.blueprints.capture": "保存为蓝图",
+  "folkways.blueprints.capture.name": "文件名",
+  "folkways.blueprints.capture.hint": "把圈地内的方块存入服务器的蓝图库和模板库。新文件名使用小写字母、数字或下划线。",
+  "folkways.blueprints.capture.name_invalid": "文件名使用小写字母、数字或下划线。",
+  "folkways.blueprints.capture.saved": "已保存蓝图和模板：%s",
+  "folkways.blueprints.capture.failed": "未能保存。圈地缩小到已加载的范围，并换一个未用过的文件名。"
 }

@@ -32,12 +32,13 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 
 ## 模组一览
 
-本仓库构建九个模组，`mods/` 下每个目录对应一个，产物为 `folkways-<目录名>-*.jar`。所有扩展都需要 Core 和 Vanilla。
+本仓库构建十个模组，`mods/` 下每个目录对应一个，产物为 `folkways-<目录名>-*.jar`。所有扩展都需要 Core 和 Vanilla。
 
 | 模组                                      | 目录                 | 额外依赖                                                                              | 作用                                                                   |
 | ----------------------------------------- | -------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Folkways Core                             | `mods/core`          | —                                                                                     | 殖民地引擎：自行规划工作的居民、寻路、殖民书和管理面板；本身不提供工作 |
 | Folkways Vanilla                          | `mods/vanilla`       | Core                                                                                  | 居民在原版方块中的工种：种植、畜牧、捕鱼、制作、搬运和建造             |
+| Folkways × Chisels & Bits                 | `mods/chiselsandbits` | Chisels & Bits 21.1.33；机械动力可选                                                     | 居民使用殖民地仓储中的碎块建造雕刻蓝图和模板                   |
 | Folkways × Create                         | `mods/create`        | 机械动力 6.0+                                                                         | 居民驾驶列车、通过打包机和邮箱收发包裹、铺设轨道、按蓝图施工           |
 | Folkways × Modular Golems                 | `mods/modulargolems` | 模块化傀儡 3.1.43+                                                                    | 傀儡加入居民名单，像人类居民一样承担工种                               |
 | Folkways × Kaleidoscope Cookery           | `mods/cookery`       | 森罗厨房 1.6.x；可选森罗酒馆 1.2.x                                                    | 居民用原生厨具种植、处理、烹饪和储存食物；装有酒馆时还会酿酒、供酒     |
@@ -104,6 +105,9 @@ Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无�
 
 JEC 搜索沿用其键盘方案和模糊音设置。
 
+安装 Folkways × Chisels & Bits 和 Chisels & Bits 21.1.33 后，可圈定区域并保存为蓝图或模板。
+所需碎块须事先存入殖民地仓储；每个体素消耗一个对应材质的碎块。机械动力为可选依赖。
+
 ## 从源码构建
 
 准备 **Java 21 JDK** 和 **Node.js 22.14+**，在 **Linux x64** 上从仓库根目录执行锁定的构建流程：
@@ -115,7 +119,7 @@ npm run setup
 ```
 
 Setup 会下载锁定版本的集成依赖，并生成 Gradle 必需的清单。
-九个模组 jar 汇总到 `build/libs/`。
+十个模组 jar 汇总到 `build/libs/`。
 Blockwright 源码已支持 Windows，当前锁定的 npm 发布包早于这次改动。
 Windows 下可使用从源码构建的 SDK 和 `gradlew.bat`，详见[开发环境](CONTRIBUTING.zh-CN.md#开发环境)。
 

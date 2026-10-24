@@ -19,9 +19,18 @@ public final class ColonyGhosts {
         for (Facing facing : Facing.all(colony)) {
             ghosts.addAll(facing.ghosts(view));
         }
-        if (ghosts.size() > most) {
+        if (ghosts.size() > most || ghosts.stream().anyMatch(ghost -> ghost.payload().present())) {
             ghosts.sort(Comparator.comparingDouble(ghost -> ghost.pos().distSqr(near)));
         }
-        return List.copyOf(ghosts.subList(0, Math.min(most, ghosts.size())));
+        List<Ghost> kept = new ArrayList<>();
+        int payloadBytes = 0;
+        for (Ghost ghost : ghosts.subList(0, Math.min(most, ghosts.size()))) {
+            int bytes = ghost.payload().tag().sizeInBytes();
+            if (payloadBytes + bytes <= 256 * 1024) {
+                kept.add(ghost);
+                payloadBytes += bytes;
+            }
+        }
+        return List.copyOf(kept);
     }
 }

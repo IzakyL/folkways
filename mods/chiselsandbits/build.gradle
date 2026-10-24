@@ -22,6 +22,9 @@ dependencies {
         transitive = false
     }
     gametestImplementation project(":core").sourceSets.gameTestFixtures.output
+    gametestCompileOnly("com.eed3si9n.starlark:starlark:${project.starlark_version}") {
+        transitive = false
+    }
 }
 
 // C&B 21.1.33 bundles this library as MOD without a mod descriptor, so NeoForge discards it (#1343 upstream).
@@ -32,9 +35,21 @@ def saeculariaRuntime = tasks.register("saeculariaRuntime", Jar) {
     from({ zipTree(lib("saecularia-core").singleFile) }) {
         exclude "META-INF/MANIFEST.MF"
     }
+    from("src/main/resources/META-INF/licenses") { into "META-INF/licenses" }
     manifest.attributes("FMLModType": "GAMELIBRARY", "Automatic-Module-Name": "folkways_saecularia_runtime")
 }
 
 tasks.named("processResources") {
     from(saeculariaRuntime) { into "META-INF/jarjar" }
 }
+
+sourceSets { createTest }
+neoForge { addModdingDependenciesTo sourceSets.createTest }
+configurations {
+    createTestCompileOnly.extendsFrom gametestCompileOnly
+    createTestImplementation.extendsFrom gametestImplementation
+}
+dependencies {
+    createTestImplementation sourceSets.gametest.output
+}
+tasks.named("check") { dependsOn "compileCreateTestJava" }

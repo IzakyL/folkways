@@ -17,6 +17,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.fml.ModList;
 
 public final class CandBSchematicBridge implements StructureCompat.Handler {
+    @Override
+    public net.minecraft.resources.ResourceLocation id() {
+        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways", "chiselsandbits");
+    }
     public static boolean schematic(Level level) {
         return ModList.get().isLoaded("create") && CreateBridge.schematic(level);
     }
@@ -25,9 +29,13 @@ public final class CandBSchematicBridge implements StructureCompat.Handler {
         if (!(entity instanceof ChiseledBlockEntity chiseled)
             || entity.getLevel() == null && !((SchematicBits) entity).folkways$valid()
             || entity.getLevel() != null && schematic(entity.getLevel()) && !((SchematicBits) entity).folkways$valid()) {
-            throw new IllegalArgumentException("Invalid chiseled schematic cell");
+            throw StructureCompat.invalid();
         }
-        CandBStructureCodec.counts(chiseled.payload().storage());
+        try {
+            CandBStructureCodec.counts(chiseled.payload().storage());
+        } catch (RuntimeException invalid) {
+            throw StructureCompat.invalid();
+        }
         return chiseled;
     }
 

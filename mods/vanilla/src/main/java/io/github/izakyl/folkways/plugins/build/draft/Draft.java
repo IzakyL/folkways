@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
 import java.util.List;
 import java.util.Objects;
 import net.minecraft.core.BlockPos;
@@ -17,12 +18,17 @@ public record Draft(Extent extent, List<Cell> cells, List<Joint> joints) {
         this(extent, cells, List.of());
     }
 
-    public record Cell(BlockPos offset, BlockState state, Source source) {
+    public record Cell(BlockPos offset, BlockState state, Source source, StructurePayload payload) {
 
         public Cell {
             offset = offset.immutable();
             Objects.requireNonNull(state, "state");
             Objects.requireNonNull(source, "source");
+            Objects.requireNonNull(payload, "payload");
+        }
+
+        public Cell(BlockPos offset, BlockState state, Source source) {
+            this(offset, state, source, StructurePayload.EMPTY);
         }
 
         public Cell(BlockPos offset, BlockState state) {

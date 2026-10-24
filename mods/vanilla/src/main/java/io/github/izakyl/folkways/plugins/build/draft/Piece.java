@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,11 +19,16 @@ import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkValue;
 
 @StarlarkBuiltin(name = "piece", doc = "A piece of building written out cell by cell.")
-public record Piece(Map<BlockPos, BlockState> cells, Vec3i size, List<Set<Integer>> stretch)
+public record Piece(Map<BlockPos, BlockState> cells, Vec3i size, List<Set<Integer>> stretch,
+        Map<BlockPos, StructurePayload> payloads)
     implements StarlarkValue {
 
     public Piece {
         cells = Map.copyOf(cells);
+        payloads = Map.copyOf(payloads);
+        if (!cells.keySet().containsAll(payloads.keySet())) {
+            throw new IllegalArgumentException("a payload belongs to a cell of its piece");
+        }
         if (size.getX() < 1 || size.getY() < 1 || size.getZ() < 1) {
             throw new IllegalArgumentException("a piece measures at least one cell on every axis");
         }
@@ -38,6 +45,10 @@ public record Piece(Map<BlockPos, BlockState> cells, Vec3i size, List<Set<Intege
             kept.add(Set.copyOf(slices));
         }
         stretch = List.copyOf(kept);
+    }
+
+    public Piece(Map<BlockPos, BlockState> cells, Vec3i size, List<Set<Integer>> stretch) {
+        this(cells, size, stretch, Map.of());
     }
 
     public Piece(Map<BlockPos, BlockState> cells, Vec3i size) {
@@ -97,34 +108,41 @@ public record Piece(Map<BlockPos, BlockState> cells, Vec3i size, List<Set<Intege
             made[axis] = order.size();
         }
         Map<BlockPos, BlockState> grown = new LinkedHashMap<>();
+        Map<BlockPos, StructurePayload> payload = new LinkedHashMap<>();
         for (int y = 0; y < made[1]; y++) {
             for (int z = 0; z < made[2]; z++) {
                 for (int x = 0; x < made[0]; x++) {
-                    BlockState state = cells.get(new BlockPos(sources.get(0).get(x), sources.get(1).get(y),
-                        sources.get(2).get(z)));
+                    BlockPos source = new BlockPos(sources.get(0).get(x), sources.get(1).get(y), sources.get(2).get(z));
+                    BlockState state = cells.get(source);
                     if (state != null) {
-                        grown.put(new BlockPos(x, y, z), state);
+                        BlockPos at = new BlockPos(x, y, z);
+                        grown.put(at, state);
+                        if (payloads.containsKey(source)) payload.put(at, payloads.get(source));
                     }
                 }
             }
         }
-        return new Piece(grown, new Vec3i(made[0], made[1], made[2]));
+        return new Piece(grown, new Vec3i(made[0], made[1], made[2]), List.of(), payload);
     }
 
     Piece tiledTo(int[] room) {
         Map<BlockPos, BlockState> laid = new LinkedHashMap<>();
+        Map<BlockPos, StructurePayload> payload = new LinkedHashMap<>();
         for (int y = 0; y < room[1]; y++) {
             for (int z = 0; z < room[2]; z++) {
                 for (int x = 0; x < room[0]; x++) {
-                    BlockState state = cells.get(new BlockPos(Math.floorMod(x, span(0)), Math.floorMod(y, span(1)),
-                        Math.floorMod(z, span(2))));
+                    BlockPos source = new BlockPos(Math.floorMod(x, span(0)), Math.floorMod(y, span(1)),
+                        Math.floorMod(z, span(2)));
+                    BlockState state = cells.get(source);
                     if (state != null) {
-                        laid.put(new BlockPos(x, y, z), state);
+                        BlockPos at = new BlockPos(x, y, z);
+                        laid.put(at, state);
+                        if (payloads.containsKey(source)) payload.put(at, payloads.get(source));
                     }
                 }
             }
         }
-        return new Piece(laid, new Vec3i(room[0], room[1], room[2]));
+        return new Piece(laid, new Vec3i(room[0], room[1], room[2]), List.of(), payload);
     }
 
     Map<BlockPos, BlockState> laidInto(Scope scope, int[] offset) {
@@ -140,6 +158,21 @@ public record Piece(Map<BlockPos, BlockState> cells, Vec3i size, List<Set<Intege
                 state.rotate(turn));
         }
         return laid;
+    }
+
+    Map<BlockPos, StructurePayload> payloadsInto(Scope scope, int[] offset) {
+        Map<BlockPos, StructurePayload> laid = new LinkedHashMap<>();
+        payloads.forEach((at, payload) -> {
+            BlockState state = cells.get(at);
+            // Pieces count rows towards their front; Minecraft counts Z towards the south.
+            StructurePayload facing = StructureCompat.transform(state, payload, Mirror.LEFT_RIGHT, Rotation.NONE);
+            if (scope.mirrored()) {
+                facing = StructureCompat.transform(state, facing, Mirror.FRONT_BACK, Rotation.NONE);
+            }
+            laid.put(scope.cell(at.getX() + offset[0], at.getY() + offset[1], at.getZ() + offset[2]),
+                StructureCompat.transform(state, facing, Mirror.NONE, turnTo(scope)));
+        });
+        return Map.copyOf(laid);
     }
 
     private static Rotation turnTo(Scope scope) {

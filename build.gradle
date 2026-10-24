@@ -25,12 +25,14 @@ def cookeryTests = providers.gradleProperty("cookeryTests").map { it.toBoolean()
 def warfareTests = providers.gradleProperty("warfareTests").map { it.toBoolean() }.getOrElse(false)
 def taczTests = providers.gradleProperty("taczTests").map { it.toBoolean() }.getOrElse(false)
 def rtsTests = providers.gradleProperty("rtsTests").map { it.toBoolean() }.getOrElse(false)
+def withoutCreate = providers.gradleProperty("withoutCreate").map { it.toBoolean() }.getOrElse(false)
 def chiselsTests = providers.gradleProperty("chiselsTests").map { it.toBoolean() }.getOrElse(false)
 def tavernTests = providers.gradleProperty("tavernTests").map { it.toBoolean() }.getOrElse(false)
 if (tavernTests && !cookeryTests) {
     throw new GradleException("Tavern GameTests require -PcookeryTests=true")
 }
 def testedMods = modProjects.findAll { id, path -> (path != ":modulargolems" || modularGolemsTests)
+    && (path != ":create" || !withoutCreate)
     && (path != ":cookery" || cookeryTests)
     && (path != ":chiselsandbits" || chiselsTests)
     && (path != ":rts" || rtsTests)
@@ -68,7 +70,7 @@ def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gam
 // Every installed-mod combination owns its world, including Tavern's extra registries.
 def gameTestSuites = [cookery: cookeryTests, modulargolems: modularGolemsTests, tavern: tavernTests,
     rts: rtsTests, warfare: warfareTests, tacz: taczTests, firefighting: firefightingTests,
-    chiselsandbits: chiselsTests]
+    chiselsandbits: chiselsTests, "without-create": withoutCreate]
     .findAll { suite, enabled -> enabled }.keySet().join("-") ?: "base"
 def gameTestDirectory = "run/gametest/${gameTestMod ?: 'all'}/${gameTestSuites}"
 
@@ -103,6 +105,7 @@ neoForge {
                 // Same-package construction tests belong to Vanilla's Java module.
                 if (path == ":vanilla" && chiselsTests && (!gameTestMod || gameTestMod == "chiselsandbits")) {
                     sourceSet project(":chiselsandbits").sourceSets.gametest
+                    if (!withoutCreate) sourceSet project(":chiselsandbits").sourceSets.createTest
                 }
                 if (suiteMods.containsKey(id) && path != ":chiselsandbits") {
                     sourceSet mod.sourceSets.gametest
@@ -147,8 +150,11 @@ dependencies {
             runtimeOnly project(path).sourceSets.cookeryTest.output
         }
     }
+    if (chiselsTests && !withoutCreate && (!gameTestMod || gameTestMod == "chiselsandbits")) {
+        runtimeOnly project(":chiselsandbits").sourceSets.createTest.output
+    }
     runtimeOnly ldlib2Coordinate
-    runtimeOnly core.lib("create")
+    if (!withoutCreate) { runtimeOnly core.lib("create") }
     // Maid expression regressions bake and evaluate the converted clips with the real GeckoLib parser.
     if (!gameTestMod || gameTestMod == "vanilla") { runtimeOnly core.lib("geckolib") }
     if (taczTests) { runtimeOnly core.lib("tacz") }
