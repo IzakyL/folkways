@@ -10,6 +10,7 @@ final class RaidBreachGoal extends Goal {
     private final Mob mob;
     private BlockPos obstruction;
     private int work;
+    private boolean finished;
 
     RaidBreachGoal(Mob mob) { this.mob = mob; setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK)); }
 
@@ -25,20 +26,21 @@ final class RaidBreachGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return obstruction != null && !mob.level().getBlockState(obstruction).isAir()
+        return !finished && obstruction != null && !mob.level().getBlockState(obstruction).isAir()
             && mob.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(obstruction)) <= 9
             && RaidMembers.director(mob).filter(d -> d.owns(mob) && !d.raid().paused).isPresent()
             && (mob.getTarget() == null || !mob.hasLineOfSight(mob.getTarget()));
     }
 
-    @Override public void start() { work = 0; mob.getNavigation().stop(); }
+    @Override public void start() { work = 0; finished = false; mob.getNavigation().stop(); }
     @Override public boolean requiresUpdateEveryTick() { return true; }
     @Override public void tick() {
+        if (finished || obstruction == null) { return; }
         mob.getLookControl().setLookAt(obstruction.getX() + .5, obstruction.getY() + .5, obstruction.getZ() + .5);
         int duration = Math.max(20, (int) (mob.level().getBlockState(obstruction).getDestroySpeed(mob.level(), obstruction) * 40));
         if (++work % 10 == 0) { mob.swing(net.minecraft.world.InteractionHand.MAIN_HAND); }
         mob.level().destroyBlockProgress(mob.getId(), obstruction, Math.min(9, work * 10 / duration));
-        if (work >= duration) { WarEdits.breakBlock(mob, obstruction); stop(); }
+        if (work >= duration) { WarEdits.breakBlock(mob, obstruction); finished = true; }
     }
     @Override public void stop() {
         if (obstruction != null) { mob.level().destroyBlockProgress(mob.getId(), obstruction, -1); }
