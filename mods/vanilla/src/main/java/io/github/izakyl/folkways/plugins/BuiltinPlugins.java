@@ -27,6 +27,11 @@ public final class BuiltinPlugins {
         FishingPlugin.install(modBus);
         GroundworkPlugin.install(modBus);
         PatrolPlugin.install(modBus);
+        modBus.addListener(io.github.izakyl.folkways.core.api.Declaring.class,
+            io.github.izakyl.folkways.plugins.combat.command.CommandContent::declare);
+        modBus.addListener(io.github.izakyl.folkways.core.api.Declaring.class,
+            io.github.izakyl.folkways.plugins.combat.group.GroupContent::declare);
+        io.github.izakyl.folkways.plugins.combat.ui.CombatContent.install(modBus);
         OrdersPlugin.install(modBus);
         io.github.izakyl.folkways.plugins.supply.SupplyContent.install(modBus);
     }

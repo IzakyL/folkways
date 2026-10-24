@@ -42,7 +42,7 @@ npm run setup
 **第一次运行 Gradle 前必须先执行 setup**，调整锁定依赖后也应重新执行。
 Gradle 编译时需要可选集成的 jar，即使某个测试环境并不加载这些模组。
 
-五个模组 jar 汇总到 `build/libs/`，运行时使用的 LDLib2 放在 `build/deps/`。
+六个模组 jar 汇总到 `build/libs/`，运行时使用的 LDLib2 放在 `build/deps/`。
 模块边界与源码位置见[架构说明](docs/zh-CN/architecture.md)。
 
 Windows 下请按 Blockwright 的[本地构建说明](https://github.com/IzakyL/blockwright/blob/master/CONTRIBUTING.md)

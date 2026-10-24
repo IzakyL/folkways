@@ -4,10 +4,10 @@
 
 ## Modules
 
-Folkways has **two required mods and three optional extensions**, each a Gradle
+Folkways has **two required mods and four optional extensions**, each a Gradle
 project under `mods/`. They use separate mod IDs and share the `folkways`
 content namespace. The root project runs tests and collects jars rather than
-building a sixth mod.
+building another mod.
 
 | Gradle project                          | Mod ID                   | Responsibility                                                                         |
 | --------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
@@ -17,12 +17,15 @@ building a sixth mod.
 | `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | Golems as residents                                                                    |
 | `:cookery` → `mods/cookery`             | `folkways_cookery`       | Native Cookery farming, appliances, shared tools, Kaleidoscope Tavern wine and lessons |
 
+| `:war` → `mods/war` | `folkways_war` | Optional colony raids, bounded damage, plunder and reports |
+
 ```mermaid
 flowchart BT
     Vanilla --> Core
     Create --> Vanilla
     ModularGolems[Modular Golems] --> Vanilla
     Cookery --> Vanilla
+    War --> Vanilla
 ```
 
 Core handles integrations needed to read an existing world correctly, such as
@@ -51,6 +54,8 @@ Built-in patterns live under
 Integration dependencies and mod IDs are declared in each module's `build.gradle`
 and `src/main/resources/META-INF/neoforge.mods.toml`.
 
+See [Colony raids](raids.md) for War lifecycle, permissions and saved data.
+
 ## Display-text search
 
 [`TextSearch`](../../mods/core/src/main/java/io/github/izakyl/folkways/front/api/ui/TextSearch.java)
@@ -68,6 +73,10 @@ registry semantics. Saved rules use the original overload without display names,
 so client language and optional integrations cannot change server filtering.
 
 ## Lifecycle and test ownership
+
+Vanilla's everyday combat, server-side resident orders and actual groups are described in
+[Combat and formations](combat-architecture.md). Orders use Core's safe labour preemption;
+War, RTS UI and gun integrations remain separate future modules.
 
 [`ColonyLifecycle`](../../mods/core/src/main/java/io/github/izakyl/folkways/core/api/colony/ColonyLifecycle.java)
 provides relocation and closing hooks. Closing listeners use

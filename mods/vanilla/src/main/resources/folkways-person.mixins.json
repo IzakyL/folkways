@@ -5,7 +5,8 @@
   "plugin": "io.github.izakyl.folkways.plugins.person.mixin.PersonMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "PathNavigationMixin"
+    "PathNavigationMixin",
+    "ProjectileWeaponInvoker"
   ],
   "injectors": {
     "defaultRequire": 0

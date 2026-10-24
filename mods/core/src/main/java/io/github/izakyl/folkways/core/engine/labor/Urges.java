@@ -36,6 +36,8 @@ final class Urges {
     }
 
     Optional<Urge> keenest(List<Urge> offered, long now, Predicate<Urge> available) {
+        // One-shot controllers may never offer a refused identity again.
+        cooling.values().removeIf(until -> until <= now);
         Urge best = null;
         for (Urge urge : offered) {
             if (quiet(urge.id(), now) || !available.test(urge)) {

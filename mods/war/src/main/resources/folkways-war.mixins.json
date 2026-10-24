@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.war.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "RavagerMixin",
+    "FireBlockMixin",
+    "FireRemovalMixin",
+    "ProjectileMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
