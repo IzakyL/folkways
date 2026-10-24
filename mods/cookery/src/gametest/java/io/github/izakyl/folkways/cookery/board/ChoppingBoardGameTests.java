@@ -61,6 +61,13 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.ChoppingBoardRecipe;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.alchemy.Potions;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.SingleRecipeInput;
+import net.neoforged.neoforge.common.crafting.DataComponentIngredient;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -70,6 +77,23 @@ public final class ChoppingBoardGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(ChoppingBoardGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void nonStrictBoardRecipesAcceptNamedComponentIngredients(GameTestHelper helper) {
+        var ingredient = DataComponentIngredient.of(false,
+            DataComponents.POTION_CONTENTS,
+            new PotionContents(Potions.HEALING), Items.POTION);
+        var recipe = new ChoppingBoardRecipe(ingredient,
+            List.of(new ItemStack(Items.PAPER)), 1, ResourceLocation.withDefaultNamespace("paper"));
+        var holder = new RecipeHolder<>(
+            ResourceLocation.fromNamespaceAndPath("folkways", "test/component_board"), recipe);
+        var job = ChoppingBoardWorkshops.Job.of(holder).orElseThrow();
+        ItemStack named = ingredient.getItems()[0].copy();
+        named.set(DataComponents.CUSTOM_NAME, Component.literal("Medicine"));
+        helper.assertTrue(recipe.matches(new SingleRecipeInput(named), helper.getLevel())
+            && Goods.matches(named, job.input()), "the board's planning input accepts every extra component allowed by the recipe");
+        helper.succeed();
     }
 
     @GameTest(template = "empty")

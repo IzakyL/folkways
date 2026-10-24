@@ -23,6 +23,11 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.alchemy.Potions;
+import net.neoforged.neoforge.common.crafting.DataComponentIngredient;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -31,6 +36,26 @@ public final class AssemblyGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(AssemblyGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void aNamedPotionSatisfiesANonStrictCraftingIngredient(GameTestHelper helper) {
+        Ingredient ingredient = DataComponentIngredient.of(false,
+            DataComponents.POTION_CONTENTS,
+            new PotionContents(Potions.HEALING), Items.POTION);
+        ItemStack named = ingredient.getItems()[0].copy();
+        named.set(DataComponents.CUSTOM_NAME, Component.literal("Medicine"));
+        var needs = Ingredients.demandsOf(List.of(ingredient)).orElseThrow();
+        helper.assertTrue(ingredient.test(named) && Goods.matches(named, needs.getFirst().spec()),
+            "crafting and smelting share the non-strict ingredient conversion");
+        CraftingRecipe recipe = new ShapelessRecipe("", CraftingBookCategory.MISC, new ItemStack(Items.BOOK),
+            NonNullList.of(Ingredient.EMPTY, ingredient));
+        var holder = new RecipeHolder<>(ResourceLocation.fromNamespaceAndPath("folkways", "test/component_crafting"), recipe);
+        var pool = new SimpleContainer(named);
+        helper.assertTrue(Assembly.grid(holder, List.of(ingredient), 1, 1).runOnce(helper.getLevel(), pool)
+            .orElseThrow().getFirst().is(Items.BOOK) && pool.isEmpty(),
+            "the actual recipe consumes the named potion accepted by planning");
+        helper.succeed();
     }
 
     @SuppressWarnings("unchecked")
