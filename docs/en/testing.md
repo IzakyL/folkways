@@ -37,6 +37,12 @@ use `run/gametest/`. Before launching a server directly through Gradle, accept
 the [Minecraft EULA](https://www.minecraft.net/eula) in that directory's
 `eula.txt`. Only do so if you accept it.
 
+Resources adds `-PresourcesTests=true` for combined runs and
+`-PresourcesTests=true -PgameTestMod=resources` for its focused suite. All Gradle
+commands on shared development machines should include `--no-daemon`.
+The focused resource suite also loads Vanilla's `src/resourcesTest` consumers;
+its game directory is `run/gametest/resources/resources/`.
+
 ## Blockwright suites
 
 [Blockwright](https://github.com/IzakyL/blockwright) drives real Minecraft clients

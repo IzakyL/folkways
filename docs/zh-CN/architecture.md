@@ -4,9 +4,9 @@
 
 ## 模组划分
 
-Folkways 包含**两个必装模组和三个可选扩展**，分别对应 `mods/` 下的 Gradle 子项目。
+Folkways 包含**两个必装模组和四个可选扩展**，分别对应 `mods/` 下的 Gradle 子项目。
 它们有独立的模组 ID，共用 `folkways` 内容命名空间。
-根项目负责运行测试和收集 jar，不会构建第六个模组。
+根项目负责运行测试和收集 jar，不会构建第七个模组。
 
 | Gradle 项目                             | 模组 ID                  | 职责                                                     |
 | --------------------------------------- | ------------------------ | -------------------------------------------------------- |
@@ -15,6 +15,7 @@ Folkways 包含**两个必装模组和三个可选扩展**，分别对应 `mods/
 | `:create` → `mods/create`               | `folkways_create`        | 列车、调度、电梯、轨道接缝与机械动力蓝图交接             |
 | `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | 傀儡居民                                                 |
 | `:cookery` → `mods/cookery`             | `folkways_cookery`       | 原生 Cookery 农业、厨具、共享工具、森罗酒馆酿酒和教程    |
+| `:resources` → `mods/resources`         | `folkways_resources`     | 建造、种植和填地工作直接消耗的可选标签资源               |
 
 ```mermaid
 flowchart BT
@@ -22,6 +23,7 @@ flowchart BT
     Create --> Vanilla
     ModularGolems[Modular Golems] --> Vanilla
     Cookery --> Vanilla
+    Resources --> Vanilla
 ```
 
 为正确理解已存在的世界结构所需的兼容逻辑放入 Core，例如 Sable 子世界和机械动力装置。

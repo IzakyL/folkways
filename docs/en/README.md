@@ -6,6 +6,7 @@ English · [简体中文](../zh-CN/README.md)
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------- |
 | Install Folkways and found a colony                                            | [Project README](../../README.md)                              |
 | Manage members, storage, residents' food, housing and perks, or resident looks | [Gameplay](gameplay.md)                                        |
+| Use optional flat resources                                                    | [Resources](resources.md)                                      |
 | Add patterns, structures, skins or models                                      | [Custom content](custom-content.md)                            |
 | Configure the server                                                           | [Server configuration](custom-content.md#server-configuration) |
 | Build the mod and contribute                                                   | [Contributing](../../CONTRIBUTING.md)                          |

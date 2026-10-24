@@ -8,6 +8,7 @@ colony, or the [contribution guide](../CONTRIBUTING.md) for development setup.
 | Guide                                                                           | English                                | 简体中文                              |
 | ------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------- |
 | Colony management, storage, perks, food, housing, composting and resident looks | [Gameplay](en/gameplay.md)             | [玩法指南](zh-CN/gameplay.md)         |
+| Optional flat resources                                                         | [Resources](en/resources.md)           | [扁平化资源](zh-CN/resources.md)      |
 | Data packs, local libraries and server settings                                 | [Custom content](en/custom-content.md) | [自定义内容](zh-CN/custom-content.md) |
 | Local checks, GameTests, Blockwright suites and CI                              | [Testing](en/testing.md)               | [测试指南](zh-CN/testing.md)          |
 | Modules, public APIs, source layout and lifecycle                               | [Architecture](en/architecture.md)     | [架构说明](zh-CN/architecture.md)     |

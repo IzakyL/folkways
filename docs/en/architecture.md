@@ -4,10 +4,10 @@
 
 ## Modules
 
-Folkways has **two required mods and three optional extensions**, each a Gradle
+Folkways has **two required mods and four optional extensions**, each a Gradle
 project under `mods/`. They use separate mod IDs and share the `folkways`
 content namespace. The root project runs tests and collects jars rather than
-building a sixth mod.
+building a seventh mod.
 
 | Gradle project                          | Mod ID                   | Responsibility                                                                         |
 | --------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
@@ -16,6 +16,7 @@ building a sixth mod.
 | `:create` → `mods/create`               | `folkways_create`        | Rail, dispatch, elevators, track joints and schematic hand-off                         |
 | `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | Golems as residents                                                                    |
 | `:cookery` → `mods/cookery`             | `folkways_cookery`       | Native Cookery farming, appliances, shared tools, Kaleidoscope Tavern wine and lessons |
+| `:resources` → `mods/resources`         | `folkways_resources`     | Optional tagged resources consumed directly by building, planting and fill work        |
 
 ```mermaid
 flowchart BT
@@ -23,6 +24,7 @@ flowchart BT
     Create --> Vanilla
     ModularGolems[Modular Golems] --> Vanilla
     Cookery --> Vanilla
+    Resources --> Vanilla
 ```
 
 Core handles integrations needed to read an existing world correctly, such as
