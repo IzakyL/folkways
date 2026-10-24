@@ -35,6 +35,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.entity.monster.EnderMan;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -267,7 +268,8 @@ public final class PatrolGameTests {
             helper.assertTrue(patrol.urges(worker(guard, ItemStack.EMPTY), colony.view(level)).isEmpty(),
                 "a resident on patrol with no weapon does not go for a monster");
             List<Urge> urges = patrol.urges(worker(guard, sword), colony.view(level));
-            helper.assertTrue(urges.size() == 1 && urges.get(0).id().equals(PatrolPresence.ENGAGE),
+            helper.assertTrue(urges.size() == 1 && urges.get(0).id().equals(ResourceLocation.fromNamespaceAndPath(
+                    PatrolPresence.ENGAGE.getNamespace(), PatrolPresence.ENGAGE.getPath() + "/" + zombie.getUUID())),
                 "an armed resident on patrol goes for the zombie beside it");
             helper.assertTrue(urges.get(0).weight() > Urge.DIRE && urges.get(0).preempts(),
                 "a patroller at full health stands its ground over fleeing");
@@ -290,16 +292,17 @@ public final class PatrolGameTests {
         place(helper, guard.mob(), new BlockPos(1, 1, 1));
         place(helper, zombie, new BlockPos(2, 1, 1));
         zombie.setNoAi(true);
-        guard.presentHeldItem(new ItemStack(Items.IRON_SWORD));
-        helper.runAfterDelay(2, () -> {
+        guard.pack().insert(new ItemStack(Items.IRON_SWORD));
+        Worker actual = worker(guard, guard.pack());
+        StrikeNode strike = new StrikeNode(level, zombie, Stances.WHEREVER);
+        var attack = (io.github.izakyl.folkways.core.api.work.Workload.Continuous) strike.spec().workload();
+        helper.onEachTick(() -> attack.holds(level, actual));
+        helper.runAfterDelay(15, () -> {
             try {
-                helper.assertValueEqual(zombie.getHealth(), zombie.getMaxHealth(), "the target is unhurt before the strike");
-                helper.assertValueEqual(zombie.invulnerableTime, 0, "the target has no earlier damage cooldown");
-                float before = zombie.getHealth();
-                StrikeNode strike = new StrikeNode(level, zombie, Stances.WHEREVER);
-                strike.commit(level, worker(guard, guard.mob().getMainHandItem()));
-                helper.assertTrue(before - zombie.getHealth() >= 5.0F,
-                    "an iron sword strikes for its own damage, not a bare fist's; took " + (before - zombie.getHealth()));
+                helper.assertTrue(zombie.getMaxHealth() - zombie.getHealth() >= 5.0F,
+                    "an actual iron sword strikes for its own damage, not a bare fist's");
+                strike.released(level, actual, io.github.izakyl.folkways.core.api.work.Ending.DONE);
+                helper.assertValueEqual(guard.pack().count(Items.IRON_SWORD), 1, "the actual sword returns once");
             } finally {
                 guard.mob().discard();
                 zombie.discard();
@@ -307,6 +310,97 @@ public final class PatrolGameTests {
             }
             helper.succeed();
         });
+    }
+
+    @GameTest(template = "empty")
+    public static void anArmedResidentDefendsItselfOffDutyAndYieldsWhenWounded(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 6; x++) {
+            for (int z = 0; z < 3; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE); }
+        }
+        Colony colony = Colonies.mint(level.getServer());
+        Body guard = PersonBody.RESIDENT.get().create(level);
+        Zombie zombie = EntityType.ZOMBIE.create(level);
+        place(helper, guard.mob(), new BlockPos(1, 1, 1));
+        place(helper, zombie, new BlockPos(3, 1, 1));
+        guard.mob().setNoAi(true);
+        zombie.setNoAi(true);
+        PatrolPresence patrol = new PatrolPresence(colony);
+        ItemStack sword = new ItemStack(Items.IRON_SWORD);
+        helper.assertTrue(patrol.urges(worker(guard, sword), colony.view(level)).isEmpty(),
+            "an off-duty resident does not seek out an unengaged monster");
+        guard.mob().hurt(level.damageSources().mobAttack(zombie), 1);
+        helper.assertTrue(patrol.urges(worker(guard, ItemStack.EMPTY), colony.view(level)).isEmpty(),
+            "an unarmed resident leaves defence to fear");
+        guard.pack().insert(sword);
+        Worker actual = worker(guard, guard.pack());
+        List<Urge> defence = patrol.urges(actual, colony.view(level));
+        helper.assertTrue(defence.size() == 1 && defence.getFirst().weight() > Urge.DIRE,
+            "an armed healthy resident may stand its ground against its attacker off duty");
+        Node strike = defence.getFirst().take().get();
+        var attack = (io.github.izakyl.folkways.core.api.work.Workload.Continuous) strike.spec().workload();
+        zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.CARVED_PUMPKIN));
+        helper.onEachTick(() -> attack.holds(level, actual));
+        helper.runAfterDelay(15, () -> {
+            try {
+                helper.assertTrue(zombie.getHealth() < zombie.getMaxHealth(), "self-defence reuses a real patrol strike");
+                strike.released(level, actual, io.github.izakyl.folkways.core.api.work.Ending.DONE);
+                guard.mob().setHealth(guard.mob().getMaxHealth() * .25F);
+                helper.assertTrue(patrol.urges(actual, colony.view(level)).getFirst().weight() < Urge.DIRE,
+                    "a wounded defender yields to the existing fear urge");
+            } finally { guard.mob().discard(); zombie.discard(); colony.raze(); }
+            helper.succeed();
+        });
+    }
+
+    @GameTest(template = "empty")
+    public static void patrolDoesNotProvokeANeutralEnderman(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 6; x++) {
+            for (int z = 0; z < 3; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE); }
+        }
+        Colony colony = Colonies.mint(level.getServer());
+        Body guard = PersonBody.RESIDENT.get().create(level);
+        EnderMan enderman = EntityType.ENDERMAN.create(level);
+        place(helper, guard.mob(), new BlockPos(1, 1, 1));
+        place(helper, enderman, new BlockPos(4, 1, 1));
+        enderman.setNoAi(true);
+        try {
+            PatrolPresence patrol = new PatrolPresence(colony);
+            patrol.watched(guard.id(), level.getGameTime());
+            Worker armed = worker(guard, new ItemStack(Items.IRON_SWORD));
+            helper.assertTrue(patrol.urges(armed, colony.view(level)).isEmpty(), "neutral enderman is left alone");
+            enderman.setTarget(guard.mob());
+            helper.assertFalse(patrol.urges(armed, colony.view(level)).isEmpty(),
+                "an enderman that is already attacking may be opposed");
+            enderman.setTarget(null);
+            enderman.stopBeingAngry();
+            float before = enderman.getHealth();
+            new StrikeNode(level, enderman, Stances.WHEREVER).commit(level, armed);
+            helper.assertValueEqual(enderman.getHealth(), before, "a queued strike rechecks restored neutrality");
+        } finally { guard.mob().discard(); enderman.discard(); colony.raze(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aStrikeCannotHitThroughASolidWall(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Colony colony = Colonies.mint(level.getServer());
+        Body guard = PersonBody.RESIDENT.get().create(level);
+        Zombie zombie = EntityType.ZOMBIE.create(level);
+        place(helper, guard.mob(), new BlockPos(1, 1, 1));
+        place(helper, zombie, new BlockPos(3, 1, 1));
+        guard.mob().setNoAi(true);
+        zombie.setNoAi(true);
+        try {
+            helper.setBlock(new BlockPos(2, 1, 1), Blocks.STONE);
+            helper.setBlock(new BlockPos(2, 2, 1), Blocks.STONE);
+            guard.presentHeldItem(new ItemStack(Items.IRON_SWORD));
+            float before = zombie.getHealth();
+            new StrikeNode(level, zombie, Stances.WHEREVER).commit(level, worker(guard, guard.mob().getMainHandItem()));
+            helper.assertValueEqual(zombie.getHealth(), before, "a solid wall stops the strike at commit time");
+        } finally { guard.mob().discard(); zombie.discard(); colony.raze(); }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")
@@ -354,12 +448,21 @@ public final class PatrolGameTests {
     private static Worker worker(Body body, ItemStack weapon) {
         Container pack = new SimpleContainer(1);
         pack.setItem(0, weapon);
+        return worker(body, pack);
+    }
+
+    private static Worker worker(Body body, Container pack) {
         return new Worker() {
             public Resident resident() { return body.resident(); }
             public Mob body() { return body.mob(); }
             public Container pack() { return pack; }
             public List<Store> within() { return List.of(); }
-            public ItemStack held(ToolNeed need) { return Tools.answers(weapon, need) ? weapon : ItemStack.EMPTY; }
+            public ItemStack held(ToolNeed need) {
+                for (int slot = 0; slot < pack.getContainerSize(); slot++) {
+                    if (Tools.answers(pack.getItem(slot), need)) { return pack.getItem(slot); }
+                }
+                return ItemStack.EMPTY;
+            }
             public void spill(ItemStack stack) { throw new AssertionError("patrolling must not spill items"); }
             public Effects effects() { return body.effects(); }
             public List<Node> route() { return List.of(); }

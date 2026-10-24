@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.core.engine.EngineMode;
@@ -36,6 +37,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -92,6 +94,7 @@ final class Survey {
     private final Map<UUID, Crew.Hand> hands = new LinkedHashMap<>();
     private final Map<UUID, Long> licencesRead = new HashMap<>();
     private final Map<UUID, List<Equipment.Demand>> equipmentRead = new HashMap<>();
+    private final Map<UUID, Boolean> suppliesRead = new HashMap<>();
 
     private final Deque<BlockPos> storesDue = new ArrayDeque<>();
     private final Deque<UUID> handsDue = new ArrayDeque<>();
@@ -127,12 +130,23 @@ final class Survey {
         hands.remove(resident);
         licencesRead.remove(resident);
         equipmentRead.remove(resident);
+        suppliesRead.remove(resident);
         handsOf.remove(resident);
         handsDue.remove(resident);
     }
 
     boolean answer(ServerLevel level, ColonyData colony, Map<UUID, Body> present, Consumer<Body> seen) {
+        return answer(level, colony, present, (body, supply) -> seen.accept(body));
+    }
+
+    boolean answer(ServerLevel level, ColonyData colony, Map<UUID, Body> present, BiConsumer<Body, Boolean> seen) {
+        suppliesRead.keySet().retainAll(present.keySet());
         for (Body body : present.values()) {
+            boolean supply = KitRules.supplies(colony.works(), body);
+            Boolean supplied = suppliesRead.put(body.id(), supply);
+            if (supplied == null || supplied != supply) {
+                handsOf.add(body.id());
+            }
             if (Equipment.reconcile(colony.works(), body)) {
                 handsOf.add(body.id());
             }
@@ -336,10 +350,11 @@ final class Survey {
         return known.items();
     }
 
-    private boolean readHand(ColonyData colony, Body body, UUID resident, Consumer<Body> seen) {
+    private boolean readHand(ColonyData colony, Body body, UUID resident, BiConsumer<Body, Boolean> seen) {
         if (body == null) {
             licencesRead.remove(resident);
             equipmentRead.remove(resident);
+            suppliesRead.remove(resident);
             return hands.remove(resident) != null;
         }
         Equipment.reconcile(colony.works(), body);
@@ -360,7 +375,7 @@ final class Survey {
             kit.inPack(body),
             Optional.empty(),
             kit.cargoIn(body)));
-        seen.accept(body);
+        seen.accept(body, suppliesRead.getOrDefault(resident, true));
         return had == null || !sameHand(had, hands.get(resident));
     }
 

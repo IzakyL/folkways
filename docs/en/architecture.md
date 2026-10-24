@@ -69,6 +69,10 @@ so client language and optional integrations cannot change server filtering.
 
 ## Lifecycle and test ownership
 
+Vanilla's everyday combat, server-side resident orders and actual groups are described in
+[Combat and formations](combat-architecture.md). Orders use Core's safe labour preemption;
+War, RTS UI and gun integrations remain separate future modules.
+
 [`ColonyLifecycle`](../../mods/core/src/main/java/io/github/izakyl/folkways/core/api/colony/ColonyLifecycle.java)
 provides relocation and closing hooks. Closing listeners use
 [`Cleanup`](../../mods/core/src/main/java/io/github/izakyl/folkways/base/task/Cleanup.java)

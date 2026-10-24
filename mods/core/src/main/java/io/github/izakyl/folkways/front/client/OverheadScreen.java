@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.izakyl.folkways.front.api.Shape;
+import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.api.ui.Placing;
 import io.github.izakyl.folkways.front.engine.item.BookGestures;
 import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
@@ -17,6 +18,7 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -34,20 +36,33 @@ final class OverheadScreen extends Screen {
 
     private long lastFrameMs = Util.getMillis();
     private Laid laid;
+    private enum Drag { NONE, BLOCKED, LEGACY, PAN, ORBIT }
+    private Drag middleDrag = Drag.NONE;
+
+    /** A gesture keeps the camera profile it started with until its middle button is released. */
+    Optional<Boolean> dragTacticalControls() {
+        return switch (middleDrag) {
+            case PAN, ORBIT -> Optional.of(true);
+            case LEGACY -> Optional.of(false);
+            default -> Optional.empty();
+        };
+    }
 
     /** What the buttons were laid out for; they are laid out again when it changes. */
-    private record Laid(Shape.Gesture gesture, boolean drafting, boolean ready, boolean placing) {
+    private record Laid(Shape.Gesture gesture, boolean drafting, boolean ready, boolean placing, ResourceLocation tool) {
 
         static Laid now(Minecraft minecraft) {
             Shape.Gesture gesture = HeldBook.bound(minecraft.player).map(HeldBook::gesture).orElse(null);
             boolean placing = HeldPlacement.holding();
+            ResourceLocation tool = OverheadTools.selected().map(OverheadTools.Tool::id).orElse(null);
+            if (tool != null) { return new Laid(gesture, false, false, placing, tool); }
             if (gesture == Shape.Gesture.BOX) {
-                return new Laid(gesture, ZoneSelection.drafting(), ZoneSelection.marked().isPresent(), placing);
+                return new Laid(gesture, ZoneSelection.drafting(), ZoneSelection.marked().isPresent(), placing, null);
             }
             if (gesture == Shape.Gesture.LINE) {
-                return new Laid(gesture, PathSelection.drafting(), PathSelection.drawn().isPresent(), placing);
+                return new Laid(gesture, PathSelection.drafting(), PathSelection.drawn().isPresent(), placing, null);
             }
-            return new Laid(gesture, false, false, placing);
+            return new Laid(gesture, false, false, placing, null);
         }
     }
 
@@ -80,8 +95,17 @@ final class OverheadScreen extends Screen {
             ItemStack icon = book.get().stack().copy();
             ColonyBookItem.setGesture(icon, gesture);
             gestures.add(new Chip(Component.translatable("folkways.overhead.gesture." + gesture.getSerializedName()),
-                icon, () -> laid.gesture() == gesture,
-                () -> PacketDistributor.sendToServer(new SetBookGesturePacket(book.get().hand(), gesture))));
+                icon, () -> laid.tool() == null && laid.gesture() == gesture, () -> {
+                    OverheadTools.deselect();
+                    PacketDistributor.sendToServer(new SetBookGesturePacket(book.get().hand(), gesture));
+                }));
+        }
+        for (OverheadTools.Tool tool : OverheadTools.tools()) {
+            Chip chip = new Chip(Component.translatable(tool.nameKey()), new ItemStack(BuiltInRegistries.ITEM.get(tool.icon())),
+                () -> tool.id().equals(laid.tool()), () -> OverheadTools.select(tool.id()));
+            chip.active = !laid.placing() && !laid.drafting();
+            if (!chip.active) { chip.setTooltip(Tooltip.create(Component.translatable("folkways.overhead.tools.finish_draft"))); }
+            gestures.add(chip);
         }
         row(gestures, (width - widthOf(gestures)) / 2, MARGIN);
 
@@ -91,6 +115,12 @@ final class OverheadScreen extends Screen {
             drafted.add(act("folkways.keys.place.turn", () -> HeldPlacement.turn(1)));
             drafted.add(act("folkways.keys.place.flip", () -> HeldPlacement.flip(1)));
             drafted.add(act("folkways.keys.discard", HeldPlacement::discard));
+            row(drafted, (width - widthOf(drafted)) / 2, MARGIN + Chip.HEIGHT + GAP + STATUS_HEIGHT + GAP);
+            return;
+        }
+        if (OverheadTools.selected().isPresent()) {
+            OverheadTools.Tool tool = OverheadTools.selected().orElseThrow();
+            drafted.add(act(tool.actionKey(), tool.open()));
             row(drafted, (width - widthOf(drafted)) / 2, MARGIN + Chip.HEIGHT + GAP + STATUS_HEIGHT + GAP);
             return;
         }
@@ -166,6 +196,11 @@ final class OverheadScreen extends Screen {
     }
 
     private Optional<Component> status() {
+        Optional<OverheadTools.Tool> tool = OverheadTools.selected();
+        if (tool.isPresent()) {
+            return Optional.of(Component.translatable(Overhead.tacticalControls()
+                ? "folkways.overhead.camera.tactical" : tool.get().nameKey()));
+        }
         if (laid.gesture() == Shape.Gesture.BOX) {
             return ZoneSelection.status();
         }
@@ -178,6 +213,15 @@ final class OverheadScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == InputConstants.MOUSE_BUTTON_MIDDLE) {
+            // Ownership is decided at press, not by whichever modifier happens to be held on a later frame.
+            middleDrag = !Overhead.tacticalControls() ? Drag.LEGACY : overButton(mouseX, mouseY) ? Drag.BLOCKED
+                : hasAltDown() ? Drag.ORBIT : Drag.PAN;
+            if (middleDrag == Drag.PAN || middleDrag == Drag.ORBIT) {
+                Overhead.beginTacticalDrag(minecraft);
+                return true;
+            }
+        }
         if (overButton(mouseX, mouseY)) {
             boolean taken = super.mouseClicked(mouseX, mouseY, button);
             // A button pressed is not left holding the keyboard, where Enter and Space would press it again.
@@ -196,8 +240,19 @@ final class OverheadScreen extends Screen {
         if (button != InputConstants.MOUSE_BUTTON_MIDDLE) {
             return false;
         }
-        Overhead.turn(dragX, dragY);
+        switch (middleDrag) {
+            case LEGACY -> Overhead.turn(dragX, dragY);
+            case PAN -> Overhead.pan(minecraft, dragX, dragY);
+            case ORBIT -> Overhead.orbit(dragX, dragY);
+            default -> { return false; }
+        }
         return true;
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == InputConstants.MOUSE_BUTTON_MIDDLE) { middleDrag = Drag.NONE; }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
@@ -216,11 +271,13 @@ final class OverheadScreen extends Screen {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         switch (keyCode) {
             case InputConstants.KEY_TAB -> {
+                OverheadTools.deselect();
                 HeldBook.bound(minecraft.player).ifPresent(book -> PacketDistributor.sendToServer(
                     new SetBookGesturePacket(book.hand(), BookGestures.next(book.gesture()))));
                 return true;
             }
             case InputConstants.KEY_BACKSPACE, InputConstants.KEY_DELETE -> {
+                if (OverheadTools.selected().isPresent()) { return true; }
                 if (HeldPlacement.holding()) {
                     HeldPlacement.discard();
                 } else if (laid.gesture() == Shape.Gesture.LINE) {

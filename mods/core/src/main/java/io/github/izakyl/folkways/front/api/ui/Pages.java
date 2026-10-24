@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.front.api.ui;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -12,18 +13,30 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 
 public final class Pages {
 
     // The colony a player may act for through the book in hand.
     private static Function<ServerPlayer, Optional<Colony>> authority = player -> Optional.empty();
+    private static Consumer<ResourceLocation> opening = page -> { };
 
     private Pages() {
     }
 
     public static void install(Function<ServerPlayer, Optional<Colony>> installed) {
         authority = installed;
+    }
+
+    /** Installed by the client; requesting a page does not grant authority over its colony. */
+    public static void installOpening(Consumer<ResourceLocation> installed) {
+        opening = Objects.requireNonNull(installed);
+    }
+
+    /** Open a declared main book page for the colony selected by the book's holder. */
+    public static void open(ResourceLocation page) {
+        opening.accept(Objects.requireNonNull(page));
     }
 
     public static Optional<Colony> colonyOf(Player player) {

@@ -29,6 +29,7 @@ import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.testing.KitchenRecoveryWanted;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.cookery.tray.mixin.BambooTrayAccess;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
@@ -38,6 +39,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestInfo;
+import net.minecraft.gametest.framework.GameTestListener;
+import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -187,14 +191,57 @@ public final class TrayGameTests {
     @GameTest(template = "empty", timeoutTicks = 2300)
     public static void anOpaqueRoofPausesDryingAndRemovingItResumesTheNativeRecipe(GameTestHelper helper) {
         Rig rig = new Rig(helper, LEAVES);
-        TrayWork work = rig.load();
-        rig.level.setBlockAndUpdate(rig.cell.above(2), Blocks.STONE.defaultBlockState());
-        helper.runAfterDelay(60, () -> {
-            helper.assertValueEqual(rig.progress(), 0, "the real native exposure check does not dry through an opaque roof");
-            helper.assertTrue(work.next(rig.level, rig) instanceof Workload.Within.Turn.Wait, "sheltered raw leaves are not a finished batch");
-            rig.level.setBlockAndUpdate(rig.cell.above(2), Blocks.AIR.defaultBlockState());
+        TrayWork[] recovered = new TrayWork[1];
+        boolean[] closed = {false};
+        Consumer<Ending> close = how -> {
+            if (closed[0]) { return; }
+            closed[0] = true;
+            try { if (recovered[0] != null) { recovered[0].ended(rig.level, how); } }
+            finally { rig.close(); }
+        };
+        helper.testInfo.addListener(new GameTestListener() {
+            public void testStructureLoaded(GameTestInfo info) { }
+            public void testPassed(GameTestInfo info, GameTestRunner runner) { close.accept(Ending.DONE); }
+            public void testFailed(GameTestInfo info, GameTestRunner runner) { close.accept(Ending.DROPPED); }
+            public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) { }
         });
-        afterProcessing(rig, ready -> helper.assertTrue(ready.step(work) instanceof Outcome.Done, "opening real sky exposure resumes drying"));
+        rig.level.setBlockAndUpdate(rig.cell.above(2), Blocks.STONE.defaultBlockState());
+        helper.runAfterDelay(100, () -> helper.assertTrue(!rig.tray().getItem(0).isEmpty(),
+            "the native roof exposure settles within 100 ticks before loading real input"));
+        helper.startSequence()
+            // Native exposure first reads asynchronous sky light; do not load during that update window.
+            .thenWaitUntil(() -> helper.assertTrue(!rig.level.canSeeSky(rig.cell.above())
+                && !BambooTrayAccess.folkways$exposure(rig.level, rig.cell), "the actual roof blocks native sky exposure"))
+            .thenExecute(() -> {
+                // Automatic work correctly waits for exposure; native player insertion also works under shelter.
+                ItemStack input = rig.pack.removeItem(0, 2);
+                helper.assertTrue(rig.tray().onPutItem(rig.level, rig.actor, input, 0) && input.isEmpty(),
+                    "the native slot consumes the two real raw leaves from the pack");
+                TrayBatch.remember(rig.tray(), rig.level, new TrayBatch.Batch(rig.colony, UUID.randomUUID(),
+                    rig.recipe.id(), 0, rig.recipe.value().getSubtype(), rig.recipe.value().getDuration(),
+                    rig.input.copyWithCount(2), rig.output.copy()));
+                var recovery = new TrayStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {});
+                helper.assertValueEqual(recovery.size(), 1, "the actual owned native slot is recovered");
+                recovered[0] = (TrayWork) recovery.getFirst().nodes().getFirst();
+                helper.assertTrue(recovered[0].planned(rig.level).isEmpty(), "the real recovery books its normal turn");
+            })
+            .thenExecuteAfter(60, () -> {
+                helper.assertValueEqual(rig.progress(), 0, "the real native exposure check does not dry through an opaque roof");
+                helper.assertTrue(ItemStack.matches(rig.tray().getItem(0), rig.input.copyWithCount(2)),
+                    "sheltered raw leaves remain unchanged in the actual slot");
+                helper.assertTrue(recovered[0].next(rig.level, rig) instanceof Workload.Within.Turn.Wait,
+                    "the actual recovery workload waits for its sheltered native batch");
+                rig.level.setBlockAndUpdate(rig.cell.above(2), Blocks.AIR.defaultBlockState());
+            })
+            .thenWaitUntil(() -> helper.assertTrue(TrayBatch.read(rig.tray(), rig.level)
+                .filter(batch -> TrayBatch.ready(rig.tray(), rig.level, batch)).isPresent(),
+                "opening real sky exposure resumes and completes the native drying recipe"))
+            .thenExecute(() -> {
+                helper.assertTrue(rig.step(recovered[0]) instanceof Outcome.Done, "the actual recovery collects the finished native slot");
+                helper.assertValueEqual(Goods.countIn(rig.pack, Goods.specOf(rig.output)), (long) rig.output.getCount(),
+                    "the real recipe output enters the pack exactly once");
+                helper.assertTrue(rig.tray().getItem(0).isEmpty() && rig.drops().isEmpty(), "the real harvest leaves no duplicate output");
+            }).thenSucceed();
     }
 
     @GameTest(template = "empty", timeoutTicks = 1300)

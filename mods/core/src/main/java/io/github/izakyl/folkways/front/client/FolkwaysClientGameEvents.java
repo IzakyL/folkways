@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.front.engine.item.BookGestures;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
@@ -68,6 +69,7 @@ public final class FolkwaysClientGameEvents {
         modifierDown = false;
         alternateDown = false;
         Overhead.forget();
+        OverheadTools.deselect();
         Desk.forget();
         ShapePreview.clear();
         HeldPlacement.clear();
@@ -104,6 +106,7 @@ public final class FolkwaysClientGameEvents {
         if (book.isEmpty()) {
             return false;
         }
+        if (Overhead.on() && OverheadTools.selected().isPresent()) { return true; }
         // A shape held to be set down takes the click, whatever the book's gesture.
         if (HeldPlacement.holding()) {
             return HeldPlacement.handleLeftClick();
@@ -120,6 +123,10 @@ public final class FolkwaysClientGameEvents {
         Optional<HeldBook> book = HeldBook.bound(minecraft.player);
         if (book.isEmpty() || minecraft.gameMode == null) {
             return false;
+        }
+        if (Overhead.on() && OverheadTools.selected().isPresent()) {
+            OverheadTools.selected().orElseThrow().open().run();
+            return true;
         }
         aimOpening(minecraft);
         minecraft.gameMode.useItem(minecraft.player, book.get().hand());
@@ -180,6 +187,7 @@ public final class FolkwaysClientGameEvents {
         if (book.isEmpty()) {
             return false;
         }
+        if (Overhead.on() && OverheadTools.selected().isPresent()) { return false; }
         if (sneakDown(minecraft.player)) {
             PacketDistributor.sendToServer(
                 new SetBookGesturePacket(book.get().hand(), BookGestures.next(book.get().gesture())));

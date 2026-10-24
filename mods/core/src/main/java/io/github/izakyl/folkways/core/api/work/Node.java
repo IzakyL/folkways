@@ -42,6 +42,15 @@ public interface Node {
         return false;
     }
 
+    // Short local actions can use their locomotion directly instead of planning a multimodal journey.
+    default boolean directTravel() {
+        return false;
+    }
+
+    default boolean staysAtWorkSite() {
+        return false;
+    }
+
     default boolean ready(ServerLevel level) {
         return true;
     }

@@ -1,13 +1,19 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.plugins.combat.Threats;
+import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
+import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.core.api.colony.Asking;
 import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
+import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Reach;
+import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -40,7 +46,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -78,6 +83,7 @@ final class PatrolPresence implements Facing {
     }
 
     private final Colony colony;
+    private final PatrolSupplies supplies;
 
     private final Asking asking;
 
@@ -99,11 +105,13 @@ final class PatrolPresence implements Facing {
 
     PatrolPresence(Colony colony) {
         this.colony = colony;
+        this.supplies = new PatrolSupplies(colony);
         this.asking = new Asking(colony, PatrolContent.ID, this::ended);
         this.cron = Cadence.claim(colony, PERIOD);
     }
 
     public void tick(MinecraftServer server) {
+        supplies.tick(server);
         if (!swept || cron.due(server)) {
             swept = true;
             refresh(server);
@@ -113,6 +121,8 @@ final class PatrolPresence implements Facing {
             asking.offer(server, this::goals);
         }
     }
+
+    PatrolSupplies supplies() { return supplies; }
 
     void refresh(MinecraftServer server) {
         Map<UUID, List<Stop>> found = new LinkedHashMap<>();
@@ -227,25 +237,39 @@ final class PatrolPresence implements Facing {
     // A patroller on duty - one who stood watch while its last ward still holds - goes for monsters near it.
     public List<Urge> urges(Worker who, ColonyView view) {
         Mob body = who.body();
-        if (!(body.level() instanceof ServerLevel level) || !onDuty(who.resident().id(), level.getGameTime())
-                || !armed(who)) {
+        if (!(body.level() instanceof ServerLevel level)) {
             return List.of();
         }
-        Optional<Mob> foe = nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE));
-        if (foe.isEmpty()) {
-            return List.of();
+        Optional<ResidentCommands.Order> order = ResidentCommands.of(colony).current(who.resident().id());
+        List<Urge> supply = supplies.urges(who, order,
+            lastWatch.getOrDefault(who.resident().id(), Long.MIN_VALUE),
+            dutyUntil.getOrDefault(who.resident().id(), Long.MIN_VALUE));
+        Optional<ResidentCommands.Order> guard = order
+            .filter(current -> current.mode() == ResidentCommands.Mode.GUARD);
+        Optional<Mob> foe = guard.isPresent() || onDuty(who.resident().id(), level.getGameTime())
+            ? nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE), guard)
+            : attacker(body);
+        if (foe.isEmpty() || !Weapons.armed(who)) {
+            return supply;
         }
-        Optional<Stances> reach = Stances.of(level, Reach.workableCells(level, cellOf(level, foe.get())));
+        Optional<Stances> reach = battleStances(level, who, foe.get(), guard);
         if (reach.isEmpty()) {
-            return List.of();
+            return supply;
         }
-        double weight = body.getHealth() > body.getMaxHealth() * WOUNDED ? STAND_GROUND : Urge.NOW;
+        boolean standsGround = body.getHealth() > body.getMaxHealth() * WOUNDED;
+        double weight = standsGround ? STAND_GROUND : Urge.NOW;
+        // A wounded guard's combat urge cannot displace its position order. Only actual combat priority
+        // renews the group pause; fear remains free to take over independently.
+        if (standsGround) { guard.ifPresent(ResidentCommands.Order::engaging); }
         Mob target = foe.get();
         if (who.effects().value(PatrolContent.ALERT_RANGE) > 0) {
             alerts.put(target.getUUID(), level.getGameTime() + 100);
         }
         Stances stances = reach.get();
-        return List.of(new Urge(ENGAGE, weight, true, () -> new StrikeNode(level, target, stances)));
+        ResourceLocation intent = ResourceLocation.fromNamespaceAndPath(ENGAGE.getNamespace(),
+            ENGAGE.getPath() + "/" + target.getUUID());
+        return List.of(new Urge(intent, weight, true, () -> body instanceof ResidentEntity
+            ? new StrikeNode(level, target, stances) : new ToolStrikeNode(level, target, stances)));
     }
 
     private boolean onDuty(UUID resident, long now) {
@@ -253,15 +277,20 @@ final class PatrolPresence implements Facing {
         return at != null && now <= dutyUntil.getOrDefault(resident, Long.MIN_VALUE);
     }
 
-    private static boolean armed(Worker who) {
-        return ResidentKinds.barehanded(who.resident().kind(), Optional.of(PatrolContent.trade()))
-            || !who.held(PatrolContent.WEAPON).isEmpty();
+    // An armed resident away from patrol may defend itself, without becoming a roaming hunter.
+    private static Optional<Mob> attacker(Mob body) {
+        return Optional.ofNullable(body.getLastHurtByMob())
+            .filter(Mob.class::isInstance).map(Mob.class::cast)
+            .filter(mob -> body.tickCount - body.getLastHurtByMobTimestamp() <= 100
+                && Threats.hostile(mob, body) && body.distanceToSqr(mob) <= ENGAGE_RANGE * ENGAGE_RANGE
+                && body.hasLineOfSight(mob));
     }
 
-    private Optional<Mob> nearestFoe(ServerLevel level, Mob body, double range) {
+    private Optional<Mob> nearestFoe(ServerLevel level, Mob body, double range, Optional<ResidentCommands.Order> guard) {
         alerts.values().removeIf(until -> until < level.getGameTime());
         List<Mob> near = level.getEntitiesOfClass(Mob.class, body.getBoundingBox().inflate(Math.max(range, 24)),
-            mob -> mob instanceof Enemy && mob.isAlive() && !mob.isRemoved()
+            mob -> Threats.hostile(mob, body)
+                && insideLeash(level, guard, WorldSpaces.at(mob))
                 && (body.distanceToSqr(mob) <= range * range
                     || alerts.containsKey(mob.getUUID()) && body.distanceToSqr(mob) <= 24 * 24));
         near.sort(Comparator.comparingDouble(body::distanceToSqr));
@@ -271,6 +300,53 @@ final class PatrolPresence implements Facing {
             }
         }
         return Optional.empty();
+    }
+
+    private static boolean insideLeash(ServerLevel level, Optional<ResidentCommands.Order> guard,
+            WorldPos at) {
+        return guard.isEmpty() || guard.get().destination().sameRealm(at)
+            && WorldSpaces.world(level, guard.get().destination()).flatMap(origin -> WorldSpaces.world(level, at)
+                .map(point -> origin.distanceToSqr(point) <= ENGAGE_RANGE * ENGAGE_RANGE)).orElse(false);
+    }
+
+    private static Optional<Stances> battleStances(ServerLevel level, Worker who, Mob foe,
+            Optional<ResidentCommands.Order> guard) {
+        Mob body = who.body();
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        if (Weapons.ranged(who)) {
+            double range = Weapons.range(who);
+            BlockPos here = cellOf(level, body);
+            if (body.distanceTo(foe) <= range && body.hasLineOfSight(foe) && Footing.withFeetAt(level, here)) {
+                // Ranged guards fire from their existing footing instead of walking into melee.
+                cells.add(here);
+            } else {
+                BlockPos target = cellOf(level, foe);
+                var towardBody = body.position().subtract(foe.position()).multiply(1, 0, 1).normalize();
+                for (int distance = 2; distance < range; distance++) {
+                    for (double turn : new double[] {-.5, 0, .5}) {
+                        var feet = net.minecraft.world.phys.Vec3.atBottomCenterOf(target)
+                            .add(towardBody.yRot((float) turn).scale(distance));
+                        for (int dy = -2; dy <= 2; dy++) {
+                            BlockPos cell = BlockPos.containing(feet).offset(0, dy, 0);
+                            if (level.hasChunkAt(cell) && Footing.withFeetAt(level, cell)
+                                    && Reach.inSight(level, cell, target)) { cells.add(cell); }
+                        }
+                    }
+                }
+            }
+        } else {
+            // Reaching a stance permits 0.9 horizontal and 1.0 vertical displacement. Compare
+            // real world positions and leave that room before the native attack's strict range check.
+            double safeReach = Math.max(0, Weapons.range(who) - Math.hypot(.9, 1.0));
+            for (BlockPos cell : Reach.workableCells(level, cellOf(level, foe))) {
+                if (WorldSpaces.world(level, WorldSpaces.at(level, cell))
+                        .filter(point -> point.distanceToSqr(foe.position()) <= safeReach * safeReach).isPresent()) {
+                    cells.add(cell);
+                }
+            }
+        }
+        cells.removeIf(cell -> !insideLeash(level, guard, WorldSpaces.at(level, cell)));
+        return Stances.of(cells.stream().map(cell -> WorldSpaces.at(level, cell)).toList());
     }
 
     // The block a mob stands in, where the level stores it: the ship's cell when it stands on one, as the cells
@@ -285,6 +361,7 @@ final class PatrolPresence implements Facing {
     }
 
     public void closed(Closing why) {
+        supplies.close();
         routes = Map.of();
         laps.clear();
         lastWatch.clear();
