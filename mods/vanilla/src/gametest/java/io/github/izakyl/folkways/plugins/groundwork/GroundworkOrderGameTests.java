@@ -26,6 +26,7 @@ import io.github.izakyl.folkways.plugins.build.BlueprintVolume;
 import io.github.izakyl.folkways.plugins.build.BuildContent;
 import io.github.izakyl.folkways.plugins.build.BuildOrders;
 import io.github.izakyl.folkways.plugins.build.FiledOrderRig;
+import io.github.izakyl.folkways.plugins.build.SchematicPlacement;
 import java.lang.reflect.Proxy;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,7 +83,7 @@ public final class GroundworkOrderGameTests {
             helper.assertValueEqual(f.targets(), Map.of(corner.east(), Blocks.AIR.defaultBlockState(),
                 corner.south(), Blocks.AIR.defaultBlockState(), corner.above(), Blocks.AIR.defaultBlockState()),
                 "explicit air covers exactly the non-box zone, leaving its hole absent");
-            helper.assertTrue(f.blueprint().confirmed(), "normal schematic confirmation freezes the target");
+            helper.assertTrue(f.blueprint().confirmed(), "the zone settings already confirm the target");
             helper.assertTrue(!order.name().isBlank(), "the ordinary numbered site name is used");
             helper.assertTrue(f.front.zone(zone.id()).isEmpty(), "filing immediately erases the zone");
             f.sweep();
@@ -93,7 +94,7 @@ public final class GroundworkOrderGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void fillUsesOpenCellsAndNeverBuriesAFlower(GameTestHelper helper) {
+    public static void fillTargetsEveryMarkedCell(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             BlockPos air = f.at;
             BlockPos solid = air.east();
@@ -109,8 +110,9 @@ public final class GroundworkOrderGameTests {
                 .with(GroundworkContent.FLOWERS, new ColonySettings.Value.Flag(true)));
             f.sweep();
             helper.assertValueEqual(f.targets(), Map.of(air, Blocks.DIRT.defaultBlockState(),
-                grass, Blocks.DIRT.defaultBlockState(), aboveSnow, Blocks.DIRT.defaultBlockState()),
-                "only current air and replaceable cells are filled; flowers, unlike snow, bar the cell above");
+                solid, Blocks.DIRT.defaultBlockState(), grass, Blocks.DIRT.defaultBlockState(),
+                aboveFlower, Blocks.DIRT.defaultBlockState(), aboveSnow, Blocks.DIRT.defaultBlockState()),
+                "fill replaces solids and includes cells above flowers");
             helper.assertTrue(f.front.zone(zone.id()).isEmpty(), "fill becomes an order immediately");
             helper.assertTrue(f.ground.goals(f.colony.view(f.level)).isEmpty(), "other ticked work is ignored");
         }
@@ -139,30 +141,30 @@ public final class GroundworkOrderGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void colonyHoldingsAreExcludedFromEveryOrderKind(GameTestHelper helper) {
+    public static void colonyHoldingsAreIncludedInEveryOrderKind(GameTestHelper helper) {
         for (int kind = 0; kind < 3; kind++) {
             try (Fixture f = new Fixture(helper)) {
                 f.colony.hold(BuildContent.ID, new Held.Block(WorldPos.of(f.level, f.at))).orElseThrow();
                 f.zone(Set.of(f.at, f.at.east()), settings(kind != 1, kind != 0));
                 f.sweep();
                 BlockState target = kind == 0 ? Blocks.AIR.defaultBlockState() : Blocks.DIRT.defaultBlockState();
-                helper.assertValueEqual(f.targets(), Map.of(f.at.east(), target), "holdings are always skipped");
+                helper.assertValueEqual(f.targets(), Map.of(f.at, target, f.at.east(), target), "holdings are included");
                 helper.assertValueEqual(f.order().anchor(), WorldPos.of(f.level, f.at),
-                    "excluding the minimum cell does not move the origin");
+                    "the minimum marked cell is the origin");
             }
         }
         helper.succeed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void anEmptySelectionErasesTheZoneWithoutFiling(GameTestHelper helper) {
+    public static void fillFilesAnOrderOverSolidGround(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             f.place(f.at, Blocks.STONE.defaultBlockState());
             ZoneView zone = f.zone(Set.of(f.at), settings(false, true));
             f.sweep();
-            helper.assertTrue(f.front.zone(zone.id()).isEmpty(), "nothing left to fill erases the zone");
-            helper.assertValueEqual(f.orders(), 0, "an empty selection creates no order");
-            helper.assertValueEqual(f.drawings(), 0, "nor any reusable drawing");
+            helper.assertTrue(f.front.zone(zone.id()).isEmpty(), "filing the fill order erases the zone");
+            helper.assertValueEqual(f.orders(), 1, "solid ground still creates an order");
+            helper.assertValueEqual(f.drawings(), 1, "the order keeps its drawing");
         }
         helper.succeed();
     }
@@ -182,6 +184,53 @@ public final class GroundworkOrderGameTests {
             helper.assertTrue(f.level.getBlockState(f.at).is(Blocks.DIRT), "ordinary build work lays the block");
             helper.assertValueEqual(f.orders(), 0, "the completed order disappears");
             helper.assertValueEqual(f.drawings(), 0, "the synthetic blueprint is discarded with it");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void zoneSettingsConfirmTheDrawingWithoutASchematicPrinterPass(GameTestHelper helper) {
+        SchematicPlacement.Adapter installed = SchematicPlacement.adapter();
+        SchematicPlacement.install((SchematicPlacement.Adapter) Proxy.newProxyInstance(
+            SchematicPlacement.Adapter.class.getClassLoader(), new Class<?>[] {SchematicPlacement.Adapter.class},
+            (proxy, method, args) -> {
+                if (method.getName().equals("print")) {
+                    throw new AssertionError("groundwork must not pass through schematic confirmation");
+                }
+                return method.invoke(installed, args);
+            }));
+        try {
+            for (int kind = 0; kind < 3; kind++) {
+                try (Fixture f = new Fixture(helper)) {
+                    f.place(f.at, Blocks.OAK_PLANKS.defaultBlockState());
+                    f.place(f.at.east(), Blocks.DIRT.defaultBlockState());
+                    boolean fill = kind != 0;
+                    ZoneView zone = f.zone(Set.of(f.at, f.at.east()), settings(kind != 1, fill)
+                        .with(GroundworkContent.BLOCK, new ColonySettings.Value.Items(List.of(
+                            ItemFilter.item(ResourceLocation.withDefaultNamespace("oak_log"))))));
+                    long drawn = f.level.getGameTime();
+                    f.sweep();
+                    BlockState state = fill ? Blocks.OAK_LOG.defaultBlockState() : Blocks.AIR.defaultBlockState();
+                    Blueprint actual = f.blueprint();
+                    Blueprint expected = new Blueprint(actual.id(), "groundwork", List.of(
+                        new BlueprintBlock(BlockPos.ZERO, state), new BlueprintBlock(new BlockPos(1, 0, 0), state)),
+                        List.of(), List.of(), BlueprintVolume.of(2, 1, 1).orElseThrow(), drawn, true);
+                    helper.assertValueEqual(actual, expected, "the filed drawing is exactly the zone's own confirmed target");
+                    helper.assertTrue(f.front.zone(zone.id()).isEmpty(), "the zone is erased on filing");
+                    Worker worker = worker(f.level, f.at.south(3));
+                    worker.pack().setItem(0, new ItemStack(Items.OAK_LOG, 16));
+                    try {
+                        FiledOrderRig.work(helper, f.colony, f.order().id(), worker);
+                    } finally {
+                        worker.body().discard();
+                    }
+                    helper.assertValueEqual(f.level.getBlockState(f.at), state, "ordinary build work meets the first target");
+                    helper.assertValueEqual(f.level.getBlockState(f.at.east()), state, "ordinary build work meets the second target");
+                    helper.assertValueEqual(f.drawings(), 0, "completion discards the zone's drawing");
+                }
+            }
+        } finally {
+            SchematicPlacement.install(installed);
         }
         helper.succeed();
     }
@@ -226,7 +275,7 @@ public final class GroundworkOrderGameTests {
                 BlueprintVolume.of(1, 1, 1).orElseThrow(), 0);
             for (int i = 0; i < 64; i++) {
                 helper.assertTrue(BuildOrders.fileOnce(f.colony, f.level,
-                    new Blueprint(UUID.randomUUID(), seed.name(), seed.blocks(), seed.volume(), i),
+                    new Blueprint(UUID.randomUUID(), seed.name(), seed.blocks(), List.of(), List.of(), seed.volume(), i, true),
                     WorldPos.of(f.level, f.at)), "the existing order fits");
             }
             ZoneView zone = f.zone(Set.of(f.at), settings(true, false));

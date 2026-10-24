@@ -48,7 +48,7 @@ public final class GroundworkScene {
         scene.idle(15);
 
         scene.overlay().showText(90)
-            .text("Clear or Fill turns the zone into one build order, then erases the zone. Clear and Fill together replace every marked cell with the chosen block. Other work ticked is ignored.")
+            .text("Clear or Fill turns the zone into one build order, then erases the zone. With Fill ticked, every marked cell targets the chosen block. Other work ticked is ignored.")
             .pointAt(util.vector().topOf(4, 0, 4))
             .placeNearTarget()
             .attachKeyFrame();
@@ -56,7 +56,7 @@ public final class GroundworkScene {
 
         scene.overlay().showOutline(PonderPalette.RED, "clear", boulder, 30);
         scene.overlay().showText(90)
-            .text("Clear orders air at every marked cell. The zone disappears as soon as the order is filed; builders then excavate it as an ordinary build site, leaving the colony's own blocks alone.")
+            .text("Clear alone orders air at every marked cell. The zone disappears as soon as the order is filed; builders then excavate it as an ordinary build site.")
             .colored(PonderPalette.RED)
             .pointAt(util.vector().topOf(2, 0, 2))
             .placeNearTarget()
@@ -71,7 +71,7 @@ public final class GroundworkScene {
 
         scene.overlay().showOutline(PonderPalette.GREEN, "fill", pit, 30);
         scene.overlay().showText(90)
-            .text("Fill orders the chosen block only where the ground is open now, never directly above a flower. The zone disappears when filed; builders bring the blocks from the colony's stores.")
+            .text("Fill orders the chosen block at every marked cell, replacing whatever stands there. The zone disappears when filed; builders bring the blocks from the colony's stores.")
             .colored(PonderPalette.GREEN)
             .pointAt(util.vector().topOf(2, 0, 6))
             .placeNearTarget()

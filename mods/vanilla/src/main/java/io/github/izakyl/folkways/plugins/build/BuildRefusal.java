@@ -10,5 +10,8 @@ public enum BuildRefusal implements RefusalKind.Named {
     CONTESTED,
     OCCUPIED,
     CELL_NOT_LOADED,
-    NO_SUCH_ORDER;
+    NO_SUCH_ORDER,
+    EMPTYING_CONTAINER,
+    NO_ROOM_TO_EMPTY,
+    UNREADABLE_CONTAINER;
 }

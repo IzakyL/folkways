@@ -7,7 +7,6 @@ import io.github.izakyl.folkways.core.api.colony.Sweep;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.FrontView;
@@ -21,7 +20,6 @@ import io.github.izakyl.folkways.plugins.build.Blueprint;
 import io.github.izakyl.folkways.plugins.build.BlueprintBlock;
 import io.github.izakyl.folkways.plugins.build.BlueprintVolume;
 import io.github.izakyl.folkways.plugins.build.BuildOrders;
-import io.github.izakyl.folkways.plugins.farming.FarmingContent;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -159,16 +157,8 @@ final class GroundPresence implements Facing {
         }
 
         private void order(ServerLevel level, ZoneView view) {
-            boolean clear = view.settings().flag(GroundworkContent.CLEAR);
             boolean fill = view.settings().flag(GroundworkContent.FILL);
-            Set<BlockPos> cells = new LinkedHashSet<>();
-            for (BlockPos cell : view.cells()) {
-                if (colony.holdingAt(WorldPos.of(level, cell)).isEmpty()
-                    && (clear || (level.getBlockState(cell).isAir() || level.getBlockState(cell).canBeReplaced())
-                        && !FarmingContent.weed(level.getBlockState(cell.below()), false, true))) {
-                    cells.add(cell);
-                }
-            }
+            Set<BlockPos> cells = view.cells();
             if (cells.isEmpty()) {
                 initialized.add(zone);
                 return;
@@ -195,8 +185,8 @@ final class GroundPresence implements Facing {
                 refusal = Optional.of(GroundRefusal.ORDER_TOO_LARGE);
                 return;
             }
-            Blueprint blueprint = new Blueprint(UUID.randomUUID(), "groundwork", blocks, volume.get(),
-                level.getGameTime());
+            Blueprint blueprint = new Blueprint(UUID.randomUUID(), "groundwork", blocks, List.of(), List.of(),
+                volume.get(), level.getGameTime(), true);
             if (BuildOrders.fileOnce(colony, level, blueprint, view.at(origin))) {
                 initialized.add(zone);
             } else {

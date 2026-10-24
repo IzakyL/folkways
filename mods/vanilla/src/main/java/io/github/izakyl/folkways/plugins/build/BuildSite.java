@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.ground.BlockChanges;
 import io.github.izakyl.folkways.core.api.terms.Closures;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -71,6 +72,10 @@ import net.minecraft.world.level.pathfinder.Path;
 final class BuildSite {
 
     interface Asks {
+
+        default Optional<Colony> colony() {
+            return Optional.empty();
+        }
 
         void submit(ResourceKey<Level> dimension, Grown work, BiConsumer<UUID, Ending> ended);
 
@@ -198,6 +203,7 @@ final class BuildSite {
 
     private final UUID order;
     private final Asks asks;
+    private final Emptying emptying;
     private final BuildTarget target;
     private final TemporaryScaffolds temporary;
     private final Set<BlockPos> latched = new LinkedHashSet<>();
@@ -237,6 +243,7 @@ final class BuildSite {
     BuildSite(UUID order, Asks asks, BuildTarget target, TemporaryScaffolds temporary) {
         this.order = order;
         this.asks = asks;
+        this.emptying = new Emptying(order, asks);
         this.target = target;
         this.temporary = temporary;
     }
@@ -893,7 +900,8 @@ final class BuildSite {
     }
 
     private BuildNode node(ServerLevel level, Step step, Stances footings) {
-        BuildNode node = BuildNode.of(step.job(level, target, footings, latched), (ended, how) -> { }, temporary);
+        BuildNode node = BuildNode.of(step.job(level, target, footings, latched), (ended, how) -> { }, temporary)
+            .emptying(emptying);
         if (step.kind() == BuildJob.Kind.RAISE || step.kind() == BuildJob.Kind.LOWER || step.kind() == BuildJob.Kind.JOIN) {
             return node;
         }
@@ -1224,6 +1232,21 @@ final class BuildSite {
                 return false;
             }
         }
+        if (standing != null && piece.node() instanceof BuildNode node) {
+            Optional<BuildRefusal> blocked = node.obstruction(standing);
+            for (BlockPos cell : piece.cells()) {
+                if (blocked.isPresent()) {
+                    refused.put(cell, blocked.get());
+                } else if (refused.get(cell) == BuildRefusal.EMPTYING_CONTAINER
+                    || refused.get(cell) == BuildRefusal.NO_ROOM_TO_EMPTY
+                    || refused.get(cell) == BuildRefusal.UNREADABLE_CONTAINER) {
+                    refused.remove(cell);
+                }
+            }
+            if (blocked.isPresent()) {
+                return false;
+            }
+        }
         return true;
     }
 
@@ -1387,7 +1410,12 @@ final class BuildSite {
             return false;
         }
         standing = level;
+        emptying.removed(level);
         boolean changed = access(level);
+        // Inventories change without a block update, so a waiting collection must be heard here as well.
+        boolean wasBlocked = refused.values().stream().anyMatch(why -> why == BuildRefusal.EMPTYING_CONTAINER
+            || why == BuildRefusal.NO_ROOM_TO_EMPTY || why == BuildRefusal.UNREADABLE_CONTAINER);
+        if (wasBlocked) staffingPending = true;
         for (Heard heard; (heard = endings.poll()) != null; ) {
             changed |= end(level, heard);
         }
@@ -1609,9 +1637,10 @@ final class BuildSite {
         forget();
     }
 
-    /** Stops hearing, the colony closing: its work goes with it, so nothing is withdrawn. */
+    /** Stops hearing and lifts the storage exclusions, the colony closing. */
     void forget() {
         closed = true;
+        emptying.close();
         live.clear();
         held.clear();
         reopen.run();

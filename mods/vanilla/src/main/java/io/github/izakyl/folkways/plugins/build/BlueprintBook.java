@@ -48,6 +48,14 @@ public final class BlueprintBook {
         file(blueprint.confirm(level));
     }
 
+    // A synthetic drawing is agreed by its caller, without a schematic printer pass.
+    void addConfirmed(Blueprint blueprint) {
+        if (!blueprint.confirmed()) {
+            throw new IllegalArgumentException("a synthetic drawing must already be confirmed");
+        }
+        file(blueprint);
+    }
+
     private void file(Blueprint blueprint) {
         blueprints.put(blueprint.id(), blueprint);
         forgetOldestUnused();

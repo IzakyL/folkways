@@ -4,7 +4,7 @@ import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import net.minecraft.server.level.ServerLevel;
 
-/** Build orders drawn by other colony work, with no reusable blueprint to keep afterwards. */
+/** Already confirmed drawings from other colony work, with no reusable blueprint to keep afterwards. */
 public final class BuildOrders {
 
     private BuildOrders() {

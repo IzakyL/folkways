@@ -136,6 +136,7 @@ public final class GrowingGameTests {
                     saved.set(((CompoundTag) args[1]).copy());
                     yield null;
                 }
+                case "holdingAt" -> Optional.empty();
                 case "views" -> List.of(view);
                 case "view" -> view;
                 default -> null;
