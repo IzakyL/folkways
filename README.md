@@ -60,13 +60,14 @@ date until the first versioned release is published.
 Install **Core and Vanilla**, then add extensions for the mods you use.
 **All Folkways jars must come from the same build.**
 
-| Jar                                                        | When to install                                                                    |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Folkways Core (`folkways-core-*.jar`)                      | Always: colony engine, Colony Book and panel                                       |
-| Folkways Vanilla (`folkways-vanilla-*.jar`)                | Always: residents and their work among vanilla blocks                              |
-| Folkways × Create (`folkways-create-*.jar`)                | With Create: trains, parcels, track and schematics                                 |
-| Folkways × Modular Golems (`folkways-modulargolems-*.jar`) | With Modular Golems: golems as residents                                           |
-| Folkways × Kaleidoscope Cookery (`folkways-cookery-*.jar`) | With Kaleidoscope Cookery 1.6.0: native crops, appliances and shared kitchen tools |
+| Jar                                                         | When to install                                                                           |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Folkways Core (`folkways-core-*.jar`)                       | Always: colony engine, Colony Book and panel                                              |
+| Folkways Vanilla (`folkways-vanilla-*.jar`)                 | Always: residents and their work among vanilla blocks                                     |
+| Folkways × Create (`folkways-create-*.jar`)                 | With Create: trains, parcels, track and schematics                                        |
+| Folkways × Modular Golems (`folkways-modulargolems-*.jar`)  | With Modular Golems: golems as residents                                                  |
+| Folkways × Kaleidoscope Cookery (`folkways-cookery-*.jar`)  | With Kaleidoscope Cookery 1.6.0: native crops, appliances and shared kitchen tools        |
+| Folkways × Chisels & Bits (`folkways-chiselsandbits-*.jar`) | With Chisels & Bits 21.1.33: chiseled blueprints and templates built from ready-made bits |
 
 Ponder and Flywheel are bundled in Core; the Starlark interpreter is bundled in
 Vanilla. They do not need separate installation.
@@ -87,19 +88,20 @@ perks, food, dining, housing, composting, buildings and resident looks.
 
 ## Optional integrations
 
-| Mod                                                                                                                         | What it adds                                                                                                                                                                             |
-| --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Create](https://modrinth.com/mod/create) 6.0+, with Folkways × Create                                                      | Schematic building, train driving, elevator rides, track laying and orders through a stock keeper's package network. Core handles walking around contraptions even without the extension |
-| [Sable](https://modrinth.com/mod/sable)                                                                                     | Residents path onto and off sub-levels, including Create Aeronautics ships                                                                                                               |
-| [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems                           | Golems join the roster and take trades alongside people                                                                                                                                  |
-| [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0, with Folkways × Kaleidoscope Cookery | Flooded-rice farming, ingredient preparation, native appliances, shared tools, kitchen racks, grass-seed gathering and thirteen lessons                                                  |
-| [Kaleidoscope Tavern](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0, with the Cookery extension             | Grape vineyards under pergolas, pressing, fermenting and bottling wine, and dining-area bar counters residents stock and drink at; one lesson                                            |
-| [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                          | Bedrock-format resident models                                                                                                                                                           |
-| [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib                                       | Built-in and installed add-on models become selectable resident looks, individually or by pack                                                                                           |
-| [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                      | Colony Book aiming follows its third-person crosshair                                                                                                                                    |
-| [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                   | Item filters open the recipe viewer's ingredient list                                                                                                                                    |
-| [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                           | A founder can hand the colony to their party; party members keep it and the party owner holds the founder's rights                                                                       |
-| [Just Enough Characters (JEC)](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                    | Pinyin, initials and mixed-input searches in item and folder pickers, Workforce and stock; install on the client only                                                                    |
+| Mod                                                                                                                               | What it adds                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Create](https://modrinth.com/mod/create) 6.0+, with Folkways × Create                                                            | Schematic building, train driving, elevator rides, track laying and orders through a stock keeper's package network. Core handles walking around contraptions even without the extension |
+| [Sable](https://modrinth.com/mod/sable)                                                                                           | Residents path onto and off sub-levels, including Create Aeronautics ships                                                                                                               |
+| [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems                                 | Golems join the roster and take trades alongside people                                                                                                                                  |
+| [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0, with Folkways × Kaleidoscope Cookery       | Flooded-rice farming, ingredient preparation, native appliances, shared tools, kitchen racks, grass-seed gathering and thirteen lessons                                                  |
+| [Kaleidoscope Tavern](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0, with the Cookery extension                   | Grape vineyards under pergolas, pressing, fermenting and bottling wine, and dining-area bar counters residents stock and drink at; one lesson                                            |
+| [Chisels & Bits](https://www.curseforge.com/minecraft/mc-mods/chisels-bits/files/7441123) 21.1.33, with Folkways × Chisels & Bits | Capture/import static, multi-material carvings, reuse them with `template(...)`, and supply exact material bits; works with and without Create. [Guide](docs/en/chiselsandbits.md)       |
+| [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                                | Bedrock-format resident models                                                                                                                                                           |
+| [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib                                             | Built-in and installed add-on models become selectable resident looks, individually or by pack                                                                                           |
+| [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                            | Colony Book aiming follows its third-person crosshair                                                                                                                                    |
+| [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                         | Item filters open the recipe viewer's ingredient list                                                                                                                                    |
+| [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                                 | A founder can hand the colony to their party; party members keep it and the party owner holds the founder's rights                                                                       |
+| [Just Enough Characters (JEC)](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                          | Pinyin, initials and mixed-input searches in item and folder pickers, Workforce and stock; install on the client only                                                                    |
 
 JEC searches follow its keyboard and fuzzy-spelling settings. See [Searching](docs/en/gameplay.md#searching)
 for examples and how item searches differ from saved filter rules.
@@ -124,7 +126,7 @@ npm run setup
 ```
 
 Setup downloads the pinned integration dependencies and writes the manifest
-required by Gradle. The five mod jars are collected in `build/libs/`.
+required by Gradle. The six mod jars are collected in `build/libs/`.
 Blockwright's native Windows support is available in its source tree; the pinned
 npm release predates it. For Windows builds using a source-built SDK and
 `gradlew.bat`, see [development setup](CONTRIBUTING.md#development-setup).

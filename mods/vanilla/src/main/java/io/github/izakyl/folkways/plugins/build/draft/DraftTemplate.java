@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,6 +15,8 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class DraftTemplate {
@@ -34,42 +38,58 @@ public final class DraftTemplate {
     }
 
     public static Piece pieceOf(CompoundTag file) {
-        ListTag measured = file.getList(TAG_SIZE, Tag.TAG_INT);
-        if (measured.size() != 3) {
-            throw new IllegalArgumentException("a structure file says how big it is in three numbers");
-        }
-        int width = measured.getInt(0);
-        int height = measured.getInt(1);
-        int depth = measured.getInt(2);
-        List<BlockState> palette = new ArrayList<>();
-        ListTag states = file.contains(TAG_PALETTE, Tag.TAG_LIST)
-            ? file.getList(TAG_PALETTE, Tag.TAG_COMPOUND)
-            : file.getList(TAG_PALETTES, Tag.TAG_LIST).getList(0);
-        for (int index = 0; index < states.size(); index++) {
-            palette.add(NbtUtils.readBlockState(BuiltInRegistries.BLOCK.asLookup(), states.getCompound(index)));
-        }
-        if (palette.isEmpty()) {
-            throw new IllegalArgumentException("a structure file names the blocks it is made of");
-        }
-        Map<BlockPos, BlockState> cells = new LinkedHashMap<>();
-        ListTag blocks = file.getList(TAG_BLOCKS, Tag.TAG_COMPOUND);
-        for (int index = 0; index < blocks.size(); index++) {
-            CompoundTag written = blocks.getCompound(index);
-            ListTag at = written.getList(TAG_POS, Tag.TAG_INT);
-            int state = written.getInt(TAG_STATE);
-            if (at.size() != 3 || state < 0 || state >= palette.size()) {
-                continue;
+        try (var processing = StructureCompat.processing()) {
+            ListTag measured = file.getList(TAG_SIZE, Tag.TAG_INT);
+            if (measured.size() != 3) {
+                throw new IllegalArgumentException("a structure file says how big it is in three numbers");
             }
-            BlockState block = palette.get(state);
-            if (block.isAir() || block.is(Blocks.STRUCTURE_VOID)) {
-                continue;
+            int width = measured.getInt(0);
+            int height = measured.getInt(1);
+            int depth = measured.getInt(2);
+            List<BlockState> palette = new ArrayList<>();
+            List<Boolean> known = new ArrayList<>();
+            ListTag states = file.contains(TAG_PALETTE, Tag.TAG_LIST)
+                ? file.getList(TAG_PALETTE, Tag.TAG_COMPOUND)
+                : file.getList(TAG_PALETTES, Tag.TAG_LIST).getList(0);
+            for (int index = 0; index < states.size(); index++) {
+                var name = net.minecraft.resources.ResourceLocation.tryParse(states.getCompound(index).getString("Name"));
+                known.add(name != null && BuiltInRegistries.BLOCK.containsKey(name));
+                palette.add(NbtUtils.readBlockState(BuiltInRegistries.BLOCK.asLookup(), states.getCompound(index)));
             }
-            cells.put(new BlockPos(at.getInt(0), at.getInt(1), depth - 1 - at.getInt(2)), block);
+            if (palette.isEmpty()) {
+                throw new IllegalArgumentException("a structure file names the blocks it is made of");
+            }
+            Map<BlockPos, BlockState> cells = new LinkedHashMap<>();
+            Map<BlockPos, StructurePayload> payloads = new LinkedHashMap<>();
+            ListTag blocks = file.getList(TAG_BLOCKS, Tag.TAG_COMPOUND);
+            for (int index = 0; index < blocks.size(); index++) {
+                CompoundTag written = blocks.getCompound(index);
+                ListTag at = written.getList(TAG_POS, Tag.TAG_INT);
+                int state = written.getInt(TAG_STATE);
+                if (at.size() != 3 || state < 0 || state >= palette.size()) {
+                    continue;
+                }
+                StructurePayload payload = new StructurePayload(written.getCompound("nbt"));
+                StructureCompat.validate(payload);
+                if (!known.get(state) && payload.present()) {
+                    throw new StructureCompat.Failure("folkways.refusal.build.missing_integration");
+                }
+                BlockState block = palette.get(state);
+                if (block.isAir() || block.is(Blocks.STRUCTURE_VOID)) {
+                    continue;
+                }
+                BlockPos offset = new BlockPos(at.getInt(0), at.getInt(1), depth - 1 - at.getInt(2));
+                cells.put(offset, block);
+                if (written.contains("nbt", Tag.TAG_COMPOUND)) {
+                    payloads.put(offset, StructureCompat.transform(block, payload,
+                        Mirror.LEFT_RIGHT, Rotation.NONE));
+                }
+            }
+            if (cells.isEmpty()) {
+                throw new IllegalArgumentException("this structure file holds no block at all");
+            }
+            return new Piece(cells, new Vec3i(width, height, depth), List.of(), payloads);
         }
-        if (cells.isEmpty()) {
-            throw new IllegalArgumentException("this structure file holds no block at all");
-        }
-        return new Piece(cells, new Vec3i(width, height, depth));
     }
 
     public static CompoundTag of(Draft draft, int dataVersion) {
@@ -91,6 +111,9 @@ public final class DraftTemplate {
             CompoundTag written = new CompoundTag();
             written.put(TAG_POS, posOf(cell.offset()));
             written.putInt(TAG_STATE, index);
+            if (cell.payload().present()) {
+                written.put("nbt", cell.payload().tag());
+            }
             blocks.add(written);
         }
         if (order.isEmpty()) {

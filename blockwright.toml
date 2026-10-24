@@ -12,7 +12,7 @@ properties = { "online-mode" = "false", "level-seed" = "folkways-e2e", "allow-fl
 connect = "127.0.0.1:25565"
 options = { guiScale = "1", fullscreen = "false", overrideWidth = "1280", overrideHeight = "720" }
 
-# The four Folkways mods, as gradle build gathers them.
+# Folkways jars gathered by Gradle; integration extensions are enabled by their profiles.
 [mods.folkways_core]
 path = "build/libs/folkways-core-*.jar"
 
@@ -40,6 +40,52 @@ target = []
 [mods.kaleidoscope_tavern]
 url = "https://cdn.modrinth.com/data/r9RZvhiJ/versions/W9ILsQt7/kaleidoscopetavern-1.2.0-neoforge%2Bmc1.21.1.jar"
 sha512 = "2481f11727ee303004d2e849739651f63bc28493a79d2e6a784f45632fc92e27ce4a43cc3b08b71740aa1f2a1879c15cc097c65d7a95d9d642c4a9958df6c473"
+target = []
+
+# Chisels & Bits bundles Scena and its API/core; the extracted jars are compile-only fixtures.
+[mods.folkways_chiselsandbits]
+path = "build/libs/folkways-chiselsandbits-*.jar"
+target = []
+
+[mods.chiselsandbits]
+url = "https://mediafilez.forgecdn.net/files/7441/123/chisels-and-bits-neoforge-21.1.33.jar"
+sha512 = "ee16a40ad028668ce85418b4351a3d05a976fd1e109b104be2b7c2aac0b03e6042c5fe3545f5b62b2d53f19e83d18a74ecc27ec317865d049e2dff3529a4c4f5"
+target = []
+
+[mods.chiselsandbits-api]
+from = "chiselsandbits"
+entry = "META-INF/jarjar/chisels-and-bits-api-21.1.33.jar"
+# Bundled SHA-512: fc06643ee98ae9ce1227708c5e79108293e907a37e45fbe638b93b872589ec90b5a0ed1995cbee4bb62935e89663b3662068e3f4806ee3728c2887c7bb0856a9
+target = []
+
+[mods.chiselsandbits-core]
+from = "chiselsandbits"
+entry = "META-INF/jarjar/chisels-and-bits-core-21.1.33.jar"
+# Bundled SHA-512: d198a1970ad1c04c58d582ae5da07b7e1d01c9e93d16a7995183d421b4b1673bffea175d4ee721db62633bbd890a6b88cfef7240f890cdb49bff698b812de6f1
+target = []
+
+[mods.scena]
+from = "chiselsandbits"
+entry = "META-INF/jarjar/neoforge-21.1.22.jar"
+# Bundled SHA-512: 9d70facf740bf253542138470ee22d8ebda32751004c67172fd69de9171fba9d7b2ededd5a99f418e245a446217c1155c8142a61b8277ecb2bea996b9a20a74c
+target = []
+
+[mods.scena-core]
+from = "scena"
+entry = "META-INF/jarjar/scena-core-21.1.22.jar"
+# Bundled SHA-512: 3737d4980006f2f5cca9afa8900114a8b0cd6279fe84027477a0ac0d314c39edbee815b6dac46d3d6d35f77c65f62a3b33d92bbe1e09cee5dcd66d6379656798
+target = []
+
+[mods.saecularia]
+from = "scena"
+entry = "META-INF/jarjar/neoforge-21.1.11.jar"
+# Bundled SHA-512: 70c6b154b9c0ea84c5ff696722af5d065a896e9878d595908433dbb48d4d16d191d7d5cd086781be1cb13fb46284bb1e0f27b2bf5b68304b5ea0c57c428f6a59
+target = []
+
+[mods.saecularia-core]
+from = "saecularia"
+entry = "META-INF/jarjar/saecularia-caudices-core-21.1.11.jar"
+# Bundled SHA-512: 48eba9054e27ddee1823ceca2d340072c91bff62ca5f2c03861b280540bd3ee96f87c31e3f6509bf7d55bd0ab0906460e8511dd04cf1ba113d07b22fc3194fdc
 target = []
 
 [mods.ldlib2]
@@ -410,3 +456,7 @@ kaleidoscope_cookery = { target = ["server", "client"] }
 folkways_cookery = { target = ["server", "client"] }
 kaleidoscope_cookery = { target = ["server", "client"] }
 kaleidoscope_tavern = { target = ["server", "client"] }
+
+[profile.chiselsandbits.mods]
+folkways_chiselsandbits = { target = ["server", "client"] }
+chiselsandbits = { target = ["server", "client"] }

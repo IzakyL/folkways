@@ -48,7 +48,7 @@ public final class Stock {
                  Map<Stash, Set<Item>> refused) {
         this.rules = Map.copyOf(rules);
         this.refused = Map.copyOf(refused);
-        this.holdings = List.copyOf(holdings);
+        this.holdings = holdings.stream().map(holding -> new Holding(holding.where(), holding.stack().copy())).toList();
         this.emptyCells = Map.copyOf(emptyCells);
         Set<Stash> known = new LinkedHashSet<>(emptyCells.keySet());
         for (Holding holding : this.holdings) {

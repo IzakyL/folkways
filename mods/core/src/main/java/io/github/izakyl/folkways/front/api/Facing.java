@@ -84,6 +84,11 @@ public interface Facing {
         return List.of();
     }
 
+    default List<Ghost> ghosts(ColonyView colony, int most, BlockPos near) {
+        return ghosts(colony).stream().sorted(java.util.Comparator.comparingDouble(ghost -> ghost.pos().distSqr(near)))
+            .limit(most).toList();
+    }
+
     static Optional<Facing> of(Colony colony, ResourceLocation owner) {
         return Facings.of(colony, owner);
     }

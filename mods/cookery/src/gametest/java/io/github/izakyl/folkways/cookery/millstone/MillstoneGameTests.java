@@ -37,6 +37,7 @@ import io.github.izakyl.folkways.cookery.testing.RecoveryAsking;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -492,7 +493,7 @@ public final class MillstoneGameTests {
             }
             return outcome;
         }
-        long count(net.minecraft.world.item.Item item) { return Goods.countIn(pack, Goods.specOf(new ItemStack(item))); }
+        long count(net.minecraft.world.item.Item item) { return Goods.countIn(pack, ItemSpec.of(item)); }
         public Resident resident() { return actor.resident(); }
         public Mob body() { return actor; }
         public Container pack() { return pack; }

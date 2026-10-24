@@ -62,7 +62,7 @@ public final class FolkwaysMod {
     // The mod this class is: the engine, which the other Folkways mods install their plugins over.
     public static final String CORE_ID = "folkways_core";
 
-    public static final String NETWORK_VERSION = "1";
+    public static final String NETWORK_VERSION = "2";
 
     private final Labor labor = new Labor();
 

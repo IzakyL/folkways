@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.engine.net;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.front.api.Ghost;
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
 import io.github.izakyl.folkways.front.api.Placard;
 import io.netty.buffer.ByteBuf;
 import java.util.List;
@@ -31,6 +32,7 @@ public record ColonyOverviewPacket(
     private static final StreamCodec<ByteBuf, Ghost> GHOST = StreamCodec.composite(
         BlockPos.STREAM_CODEC, Ghost::pos,
         ByteBufCodecs.VAR_INT.map(Block::stateById, Block::getId), Ghost::state,
+        ByteBufCodecs.COMPOUND_TAG.map(StructurePayload::new, StructurePayload::tag), Ghost::payload,
         Ghost::new);
     public static final StreamCodec<RegistryFriendlyByteBuf, ColonyOverviewPacket> STREAM_CODEC = StreamCodec.composite(
         SyncCodecs.capped(BlockPos.STREAM_CODEC, MAX_POSITIONS), ColonyOverviewPacket::members,

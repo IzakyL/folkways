@@ -4,17 +4,18 @@
 
 ## 模组划分
 
-Folkways 包含**两个必装模组和三个可选扩展**，分别对应 `mods/` 下的 Gradle 子项目。
+Folkways 包含**两个必装模组和四个可选扩展**，分别对应 `mods/` 下的 Gradle 子项目。
 它们有独立的模组 ID，共用 `folkways` 内容命名空间。
-根项目负责运行测试和收集 jar，不会构建第六个模组。
+根项目负责运行测试和收集 jar，不会构建第七个模组。
 
-| Gradle 项目                             | 模组 ID                  | 职责                                                     |
-| --------------------------------------- | ------------------------ | -------------------------------------------------------- |
-| `:core` → `mods/core`                   | `folkways_core`          | 殖民地引擎、公共 API、界面与教程；单独安装不提供居民工作 |
-| `:vanilla` → `mods/vanilla`             | `folkways_vanilla`       | 居民及其在原版方块中的工作                               |
-| `:create` → `mods/create`               | `folkways_create`        | 列车、调度、电梯、轨道接缝与机械动力蓝图交接             |
-| `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | 傀儡居民                                                 |
-| `:cookery` → `mods/cookery`             | `folkways_cookery`       | 原生 Cookery 农业、厨具、共享工具、森罗酒馆酿酒和教程    |
+| Gradle 项目                               | 模组 ID                   | 职责                                                     |
+| ----------------------------------------- | ------------------------- | -------------------------------------------------------- |
+| `:core` → `mods/core`                     | `folkways_core`           | 殖民地引擎、公共 API、界面与教程；单独安装不提供居民工作 |
+| `:vanilla` → `mods/vanilla`               | `folkways_vanilla`        | 居民及其在原版方块中的工作                               |
+| `:create` → `mods/create`                 | `folkways_create`         | 列车、调度、电梯、轨道接缝与机械动力蓝图交接             |
+| `:modulargolems` → `mods/modulargolems`   | `folkways_modulargolems`  | 傀儡居民                                                 |
+| `:cookery` → `mods/cookery`               | `folkways_cookery`        | 原生 Cookery 农业、厨具、共享工具、森罗酒馆酿酒和教程    |
+| `:chiselsandbits` → `mods/chiselsandbits` | `folkways_chiselsandbits` | 微方块模板、精确碎块费用、蓝图读取和机械动力注册接口     |
 
 ```mermaid
 flowchart BT
@@ -22,6 +23,7 @@ flowchart BT
     Create --> Vanilla
     ModularGolems[Modular Golems] --> Vanilla
     Cookery --> Vanilla
+    ChiselsAndBits --> Vanilla
 ```
 
 为正确理解已存在的世界结构所需的兼容逻辑放入 Core，例如 Sable 子世界和机械动力装置。
@@ -71,3 +73,5 @@ JEC 及其 PinIn 库只用于编译，不随 Folkways 内嵌。
 Core 的 `src/gameTestFixtures` 提供不注册测试的共享辅助代码，因此其他模组复用准备逻辑时不会顺带发现 Core 的测试。
 选择某个 GameTest 所属模组，不代表移除该场景所需的其他运行时模组。
 筛选参数和 CI 环境见[测试指南](testing.md)。
+
+[Chisels & Bits 集成](chiselsandbits.md)说明建筑数据归属、存档迁移与同步蓝图读取桥。

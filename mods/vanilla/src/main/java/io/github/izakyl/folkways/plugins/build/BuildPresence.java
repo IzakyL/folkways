@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.core.api.colony.Cadence;
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
@@ -21,6 +22,7 @@ import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import io.github.izakyl.folkways.plugins.build.draft.Round;
 import io.github.izakyl.folkways.plugins.build.draft.Templates;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -46,6 +48,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.core.HolderLookup;
 
 final class BuildPresence implements Facing {
 
@@ -82,11 +85,13 @@ final class BuildPresence implements Facing {
     private final Map<UUID, TemporaryScaffolds> temporary = new LinkedHashMap<>();
     private final Set<UUID> cancelled = new LinkedHashSet<>();
     private final Map<UUID, BuildSite> sites = new LinkedHashMap<>();
+    private final Map<UUID, Component> payloadFailures = new LinkedHashMap<>();
+    private final Map<UUID, Long> payloadRetryAt = new LinkedHashMap<>();
     private final Map<UUID, Growing> growing = new LinkedHashMap<>();
     // Growing sites whose next round is being drawn now.
     private final Set<UUID> drawing = new HashSet<>();
     private final Map<UUID, Drafted> drafted = new LinkedHashMap<>();
-    private final Map<UUID, Map<ResourceLocation, Long>> owed = new ConcurrentHashMap<>();
+    private final Map<UUID, Map<ItemSpec, Long>> owed = new ConcurrentHashMap<>();
     private final Map<UUID, Set<BlockPos>> met = new LinkedHashMap<>();
     private final Map<UUID, Set<Joint>> joined = new LinkedHashMap<>();
     private final Set<UUID> untallied = new LinkedHashSet<>();
@@ -444,22 +449,47 @@ final class BuildPresence implements Facing {
     // loaded would stay refused for good. Until then it is tried again each tick.
     @Nullable
     private BuildSite open(ServerLevel level, BlueprintBuildOrder order) {
-        Optional<Blueprint> drawing = book.target(level, order.blueprintId());
-        BuildTarget target = cancelled.contains(order.id()) || drawing.isEmpty()
-            ? new BuildTarget(order.anchor().realm(), Map.of())
-            : BuildTarget.of(order, drawing.get()).in(level);
-        if (!loaded(level, target)) {
+        if (!cancelled.contains(order.id()) && level.getGameTime() < payloadRetryAt.getOrDefault(order.id(), 0L)) return null;
+        try {
+            BuildSite opened = openCompatible(level, order);
+            payloadFailures.remove(order.id());
+            payloadRetryAt.remove(order.id());
+            return opened;
+        } catch (StructureCompat.Failure failed) {
+            BuildSite partial = sites.remove(order.id());
+            if (partial != null) partial.close();
+            untallied.remove(order.id());
+            owed.remove(order.id());
+            payloadFailures.put(order.id(), failed.component());
+            payloadRetryAt.put(order.id(), level.getGameTime() + RETRY_TICKS);
             return null;
         }
-        var workArea = growing.values().stream().filter(one -> one.order().filter(order.id()::equals).isPresent())
-            .map(one -> one.growth().reach().moved(one.hint().anchor().getX(), one.hint().anchor().getY(),
-                one.hint().anchor().getZ())).findFirst().orElse(null);
-        BuildSite site = new BuildSite(order.id(), asks, target, scaffoldsOf(order.id()), workArea);
-        sites.put(order.id(), site);
-        site.start(level, met.getOrDefault(order.id(), Set.of()), joined.getOrDefault(order.id(), Set.of()));
-        untallied.add(order.id());
-        tallyOne(level, order, site);
-        return site;
+    }
+
+    @Nullable
+    private BuildSite openCompatible(ServerLevel level, BlueprintBuildOrder order) {
+        try (var processing = StructureCompat.processing()) {
+            Optional<Blueprint> drawing = cancelled.contains(order.id()) ? Optional.empty() : book.target(level, order.blueprintId());
+            drawing.ifPresent(blueprint -> {
+                for (BlueprintBlock block : blueprint.blocks()) StructureCompat.inspect(block.state(),
+                    new io.github.izakyl.folkways.core.api.structure.StructurePayload(block.data().tag()));
+            });
+            BuildTarget target = cancelled.contains(order.id()) || drawing.isEmpty()
+                ? new BuildTarget(order.anchor().realm(), Map.of())
+                : BuildTarget.of(order, drawing.get()).in(level);
+            if (!loaded(level, target)) {
+                return null;
+            }
+            var workArea = growing.values().stream().filter(one -> one.order().filter(order.id()::equals).isPresent())
+                .map(one -> one.growth().reach().moved(one.hint().anchor().getX(), one.hint().anchor().getY(),
+                    one.hint().anchor().getZ())).findFirst().orElse(null);
+            BuildSite site = new BuildSite(order.id(), asks, target, scaffoldsOf(order.id()), workArea);
+            sites.put(order.id(), site);
+            site.start(level, met.getOrDefault(order.id(), Set.of()), joined.getOrDefault(order.id(), Set.of()));
+            untallied.add(order.id());
+            tallyOne(level, order, site);
+            return site;
+        }
     }
 
     private static boolean loaded(ServerLevel level, BuildTarget target) {
@@ -526,6 +556,8 @@ final class BuildPresence implements Facing {
     }
 
     private void retire(UUID order) {
+        payloadFailures.remove(order);
+        payloadRetryAt.remove(order);
         owed.remove(order);
         met.remove(order);
         joined.remove(order);
@@ -546,16 +578,30 @@ final class BuildPresence implements Facing {
 
     @Override
     public List<Ghost> ghosts(ColonyView view) {
+        return ghosts(view, 2048, BlockPos.ZERO);
+    }
+
+    @Override
+    public List<Ghost> ghosts(ColonyView view, int most, BlockPos near) {
         ServerLevel level = view.level();
         List<Ghost> owed = new ArrayList<>();
-        for (BlueprintBuildOrder order : book.allBuildOrders()) {
-            if (cancelled.contains(order.id()) || !order.anchor().in(level)) {
-                continue;
+        int payloadBytes = 256 * 1024;
+        try (var processing = StructureCompat.processing()) {
+            for (BlueprintBuildOrder order : book.allBuildOrders()) {
+                if (owed.size() >= most) break;
+                if (cancelled.contains(order.id()) || !order.anchor().in(level)) {
+                    continue;
+                }
+                BuildSite site = sites.get(order.id());
+                if (site != null) {
+                    var nearby = BuildOrderView.pending(level, site.target(), site.metCells(), site.metJoints(),
+                        most - owed.size(), near, payloadBytes);
+                    for (Ghost ghost : nearby) payloadBytes -= ghost.payload().bytes();
+                    owed.addAll(nearby);
+                }
             }
-            BuildSite site = sites.get(order.id());
-            if (site != null) {
-                owed.addAll(BuildOrderView.pending(level, site.target(), site.metCells(), site.metJoints()));
-            }
+        } catch (StructureCompat.Failure limited) {
+            // A preview never restarts the budget to finish farther-away orders.
         }
         return List.copyOf(owed);
     }
@@ -592,7 +638,7 @@ final class BuildPresence implements Facing {
                 continue;
             }
             placards.add(new Placard(grown != null ? grown.id() : order.id(), outline.get(),
-                BuildPlacards.building(Line.literal(order.name()), seen, owed.getOrDefault(order.id(), Map.of()))));
+                BuildPlacards.building(Line.literal(order.name()), seen, owed.getOrDefault(order.id(), Map.of()), level.registryAccess())));
         }
         return List.copyOf(placards);
     }
@@ -604,7 +650,7 @@ final class BuildPresence implements Facing {
         }
         List<Board.Row> standing = new ArrayList<>();
         for (BlueprintBuildOrder order : book.allBuildOrders()) {
-            standing.add(rowFor(order));
+            standing.add(rowFor(order, view.level().registryAccess()));
         }
         for (Growing one : growing.values()) {
             if (one.order().filter(this::filed).isEmpty()) {
@@ -630,19 +676,19 @@ final class BuildPresence implements Facing {
             Optional.of(Component.translatable("folkways.page.build.empty"))));
     }
 
-    private Board.Row rowFor(BlueprintBuildOrder order) {
+    private Board.Row rowFor(BlueprintBuildOrder order, HolderLookup.Provider registries) {
         BuildSite site = sites.get(order.id());
         Board.Row row = new Board.Row(new ItemStack(Items.BRICKS),
             Component.literal(order.name()),
             cancelled.contains(order.id())
                 ? Component.translatable("folkways.page.build.cleanup")
-                : detailOf(site),
+                : payloadFailures.getOrDefault(order.id(), detailOf(site)),
             List.of(new Board.Act.Ping(order.anchor().cell()),
                 new Board.Act.Do(BuildAct.cancelling(order.id()), "folkways.action.delete",
                     ResourceLocation.withDefaultNamespace("barrier"))));
         return cancelled.contains(order.id()) || site == null || site.progress().isEmpty()
             ? row
-            : row.told(toldOf(site, owed.getOrDefault(order.id(), Map.of())));
+            : row.told(toldOf(site, owed.getOrDefault(order.id(), Map.of()), registries));
     }
 
     private static Board.Row rowFor(Growing one) {
@@ -660,12 +706,12 @@ final class BuildPresence implements Facing {
 
     // The building glyph and the first of what is owed, or how far it has come when nothing is; then how many
     // cells nothing can be done about.
-    private static Sentence toldOf(BuildSite site, Map<ResourceLocation, Long> owed) {
+    private static Sentence toldOf(BuildSite site, Map<ItemSpec, Long> owed, HolderLookup.Provider registries) {
         BuildOrderView seen = site.progress().orElseThrow();
         Sentence told = owed.isEmpty()
             ? Sentence.of(Sentence.doing(BuildContent.BUILDING), Sentence.word(new Notice(
                 "folkways.page.build.progress", List.of(Notice.count(seen.placed()), Notice.count(seen.total())))))
-            : BuildPlacards.needs(owed, TOLD_WARES);
+            : BuildPlacards.needs(owed, TOLD_WARES, registries);
         int refused = site.refusals().size();
         return refused == 0 ? told : told.then(Sentence.glyph("refuses"),
             Sentence.word(Notice.count(refused)));

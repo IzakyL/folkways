@@ -17,11 +17,20 @@ public final class ColonyGhosts {
     public static List<Ghost> owed(ColonyView view, Colony colony, int most, BlockPos near) {
         List<Ghost> ghosts = new ArrayList<>();
         for (Facing facing : Facing.all(colony)) {
-            ghosts.addAll(facing.ghosts(view));
+            ghosts.addAll(facing.ghosts(view, most, near));
         }
-        if (ghosts.size() > most) {
+        if (ghosts.size() > most || ghosts.stream().anyMatch(ghost -> ghost.payload().present())) {
             ghosts.sort(Comparator.comparingDouble(ghost -> ghost.pos().distSqr(near)));
         }
-        return List.copyOf(ghosts.subList(0, Math.min(most, ghosts.size())));
+        List<Ghost> kept = new ArrayList<>();
+        int payloadBytes = 0;
+        for (Ghost ghost : ghosts.subList(0, Math.min(most, ghosts.size()))) {
+            int bytes = ghost.payload().bytes();
+            if (payloadBytes + bytes <= 256 * 1024) {
+                kept.add(ghost);
+                payloadBytes += bytes;
+            }
+        }
+        return List.copyOf(kept);
     }
 }

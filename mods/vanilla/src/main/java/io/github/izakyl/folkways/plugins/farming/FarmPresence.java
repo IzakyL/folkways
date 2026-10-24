@@ -6,7 +6,6 @@ import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Sweep;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.front.api.Facing;
@@ -17,6 +16,7 @@ import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.panel.Board;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -145,7 +145,7 @@ final class FarmPresence implements Facing {
         if (crop.get().behavior().isPresent()) {
             List<Item> seeds = crop.get().behavior().get().seeds();
             Item preferred = seeds.stream().filter(seed -> Fronts.of(colony)
-                .stocked(level.getServer(), Goods.specOf(seed.getDefaultInstance())) > 0)
+                .stocked(level.getServer(), ItemSpec.of(seed)) > 0)
                 .findFirst().orElse(seeds.getFirst());
             crop = Optional.of(crop.get().using(preferred));
         }

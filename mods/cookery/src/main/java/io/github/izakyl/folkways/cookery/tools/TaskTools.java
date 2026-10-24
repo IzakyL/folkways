@@ -66,7 +66,7 @@ public final class TaskTools {
         this.server = server;
         stock = new ToolStock(colony, server, pool, this::tool);
         var saved = colony.kept(ID);
-        pool.load(colony.id(), saved);
+        pool.load(colony.id(), saved, server.overworld().registryAccess());
         var items = saved.getList("items", Tag.TAG_COMPOUND);
         for (int index = 0; index < items.size(); index++) {
             var item = items.getCompound(index);
@@ -253,7 +253,7 @@ public final class TaskTools {
     }
 
     void persist() {
-        var saved = pool.save(colony.id());
+        var saved = pool.save(colony.id(), server.overworld().registryAccess());
         var items = new ListTag();
         for (var lease : pool.leases(colony.id())) {
             var stack = borrowed.get(lease.id());

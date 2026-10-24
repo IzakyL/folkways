@@ -1,0 +1,112 @@
+package io.github.izakyl.folkways.chiselsandbits.mixin;
+
+import io.github.izakyl.folkways.chiselsandbits.CandBSchematicBridge;
+import io.github.izakyl.folkways.chiselsandbits.CandBStructureCodec;
+import io.github.izakyl.folkways.chiselsandbits.SchematicBits;
+import io.github.izakyl.folkways.chiselsandbits.SchematicStatistics;
+import java.util.Map;
+import mod.chiselsandbits.api.block.storage.StateEntryStorage;
+import mod.chiselsandbits.api.blockinformation.BlockInformation;
+import mod.chiselsandbits.block.entities.ChiseledBlockEntity;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+@Mixin(value = ChiseledBlockEntity.class, remap = false)
+abstract class ChiseledBlockEntityMixin extends BlockEntity implements SchematicBits {
+    private ChiseledBlockEntityMixin(net.minecraft.world.level.block.entity.BlockEntityType<?> type,
+            net.minecraft.core.BlockPos pos, net.minecraft.world.level.block.state.BlockState state) {
+        super(type, pos, state);
+    }
+
+    @Inject(method = "setLevel", at = @At("HEAD"), cancellable = true)
+    private void folkways$schematicLevel(net.minecraft.world.level.Level level, CallbackInfo ci) {
+        if (CandBSchematicBridge.schematic(level)) {
+            // The printer has no chunk tracker, and its entities must never join the real world tracker.
+            super.setLevel(level);
+            ci.cancel();
+        }
+    }
+    @Shadow private StateEntryStorage storage;
+    @Shadow public abstract void receivePayload(ChiseledBlockEntity.Payload payload);
+    @Shadow private Tag lastTag;
+    @Unique private boolean folkways$valid;
+    @Unique private boolean folkways$pendingStatistics;
+    @Unique private Map<BlockInformation, Integer> folkways$counts = Map.of();
+
+    @Inject(method = "setLevel", at = @At("RETURN"))
+    private void folkways$finishStatistics(net.minecraft.world.level.Level level, CallbackInfo ci) {
+        if (folkways$pendingStatistics && !CandBSchematicBridge.schematic(level)) {
+            var self = (ChiseledBlockEntity) (Object) this;
+            ((SchematicStatistics) (Object) self.payload().mutableStatistics())
+                .folkways$recalculate(level, storage, getBlockPos());
+            folkways$pendingStatistics = false;
+        }
+    }
+
+    @Inject(method = "setChanged", at = @At("HEAD"), cancellable = true)
+    private void folkways$noSchematicUpdates(CallbackInfo ci) {
+        if (getLevel() != null && CandBSchematicBridge.schematic(getLevel())) {
+            ci.cancel();
+        } else {
+            folkways$counts = Map.of();
+        }
+    }
+
+    @Inject(method = "rotate", at = @At("HEAD"), cancellable = true)
+    private void folkways$registryRotation(net.minecraft.core.Direction.Axis axis, int turns, CallbackInfo ci) {
+        if (getLevel() != null && CandBSchematicBridge.schematic(getLevel())) ci.cancel();
+    }
+
+    @Inject(method = "mirror", at = @At("HEAD"), cancellable = true)
+    private void folkways$registryMirror(net.minecraft.core.Direction.Axis axis, CallbackInfo ci) {
+        if (getLevel() != null && CandBSchematicBridge.schematic(getLevel())) ci.cancel();
+    }
+
+    @Override
+    public boolean folkways$valid() {
+        return folkways$valid;
+    }
+
+    @Override
+    public Map<BlockInformation, Integer> folkways$counts() {
+        return folkways$counts;
+    }
+
+    @Inject(method = "loadAdditional", at = @At("HEAD"), cancellable = true)
+    private void folkways$readSchematic(CompoundTag tag, HolderLookup.Provider registries, CallbackInfo ci) {
+        BlockEntity self = (BlockEntity) (Object) this;
+        if (!CandBSchematicBridge.schematic(self.getLevel()) && !tag.getBoolean("folkways:schematic")) {
+            // Chunk restoration keeps C&B's queued read and statistics until a real level is attached.
+            return;
+        }
+        folkways$valid = false;
+        folkways$counts = Map.of();
+        try {
+            var decoded = CandBStructureCodec.validated(tag);
+            storage = decoded.storage();
+            folkways$counts = decoded.counts();
+            var empty = new ChiseledBlockEntity(self.getBlockPos(), self.getBlockState()).payload();
+            if (self.getLevel() != null && !CandBSchematicBridge.schematic(self.getLevel())) {
+                ((SchematicStatistics) (Object) empty.mutableStatistics())
+                    .folkways$recalculate(self.getLevel(), storage, self.getBlockPos());
+            }
+            folkways$pendingStatistics = self.getLevel() == null || CandBSchematicBridge.schematic(self.getLevel());
+            receivePayload(new ChiseledBlockEntity.Payload(storage, empty.mutableStatistics()));
+            lastTag = CandBStructureCodec.encode(decoded).get("data");
+            folkways$valid = true;
+        } catch (RuntimeException invalid) {
+            if (invalid instanceof io.github.izakyl.folkways.core.api.structure.StructureCompat.Failure budget) throw budget;
+            // Keep the invalid payload so neither printer silently turns it into an empty, free block.
+            lastTag = tag.get("data");
+        }
+        ci.cancel();
+    }
+}

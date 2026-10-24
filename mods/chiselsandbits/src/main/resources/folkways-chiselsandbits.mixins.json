@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "io.github.izakyl.folkways.chiselsandbits.mixin",
+  "plugin": "io.github.izakyl.folkways.chiselsandbits.mixin.CandBMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["ChiseledBlockEntityMixin", "MutableStatisticsMixin", "SchematicPrinterMixin", "SchematicannonMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

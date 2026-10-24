@@ -39,7 +39,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.client.Minecraft;
 
 // What the colony holds in its storage, item by item: a grid of icons, each with its count tucked under it as in a
 // chest, and its name and full count on hover.
@@ -169,7 +169,7 @@ public final class MetricsPage implements Draw {
         for (int index = offset; index < Math.min(stock.size(), offset + ROW_SLOTS); index++) {
             ColonyMetrics.Held line = stock.get(index);
             CompoundTag row = new CompoundTag();
-            row.putString(ITEM, line.item().toString());
+            row.put(ITEM, line.stack().save(player.registryAccess()));
             row.putInt(COUNT, line.count());
             rows.add(row);
         }
@@ -266,8 +266,8 @@ public final class MetricsPage implements Draw {
                 continue;
             }
             CompoundTag row = rows.getCompound(slot);
-            ResourceLocation item = ResourceLocation.parse(row.getString(ITEM));
-            ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.getOptional(item).orElse(Items.BARRIER));
+            ItemStack stack = ItemStack.parseOptional(Minecraft.getInstance().level.registryAccess(), row.getCompound(ITEM));
+            ResourceLocation item = BuiltInRegistries.ITEM.getKey(stack.getItem());
             int count = row.getInt(COUNT);
             Tokens.name(cell, SLOT_PREFIX + Tokens.of(item));
             icons.get(slot).setItems(stack);

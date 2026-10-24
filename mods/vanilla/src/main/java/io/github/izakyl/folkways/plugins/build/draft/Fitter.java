@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -54,6 +55,7 @@ final class Fitter {
         List<BlockPos> at = new ArrayList<>();
         List<BlockState> states = new ArrayList<>();
         List<Draft.Source> sources = new ArrayList<>();
+        List<StructurePayload> payloads = new ArrayList<>();
         List<Massing.Part> owners = new ArrayList<>();
         Draft.Source[] sourceOf = new Draft.Source[parts.size()];
         lattice.forEachCovered((x, y, z, index, octants) -> {
@@ -66,10 +68,18 @@ final class Fitter {
                 }
                 at.add(cell);
                 states.add(state);
+                payloads.add(part.skin() instanceof Skin.Stamped stamp
+                    ? stamp.payloads().getOrDefault(cell, StructurePayload.EMPTY) : StructurePayload.EMPTY);
                 sources.add(sourceOf[index]);
                 owners.add(part);
             });
         });
+        for (int index = 0; index < at.size(); index++) {
+            if (payloads.get(index).present() && owners.get(index).skin() instanceof Skin.Stamped stamp
+                && states.get(index).getBlock() != stamp.cells().get(at.get(index)).getBlock()) {
+                return Drawn.refused(DraftRefusal.UNSUPPORTED_PAYLOAD);
+            }
+        }
         Map<BlockPos, Integer> occupied = new HashMap<>();
         for (int cell = 0; cell < at.size(); cell++) {
             occupied.put(at.get(cell), cell);
@@ -98,6 +108,7 @@ final class Fitter {
                     if (part.over().takes(owners.get(existing))) {
                         states.set(existing, palettes.get(index).nearest(Octants.FULL, fitted.axis(), seed * 31L + pos.asLong()));
                         sources.set(existing, source);
+                        payloads.set(existing, StructurePayload.EMPTY);
                         owners.set(existing, part);
                     }
                     continue;
@@ -113,6 +124,7 @@ final class Fitter {
                 at.add(pos);
                 states.add(palettes.get(index).nearest(Octants.FULL, fitted.axis(), seed * 31L + pos.asLong()));
                 sources.add(source);
+                payloads.add(StructurePayload.EMPTY);
                 owners.add(part);
             }
         }
@@ -130,7 +142,7 @@ final class Fitter {
         BlockPos low = new BlockPos(minX, minY, minZ);
         List<Draft.Cell> cells = new ArrayList<>(at.size());
         for (int index = 0; index < at.size(); index++) {
-            cells.add(new Draft.Cell(at.get(index).subtract(low), states.get(index), sources.get(index)));
+            cells.add(new Draft.Cell(at.get(index).subtract(low), states.get(index), sources.get(index), payloads.get(index)));
         }
         return Extent.tightAround(cells.stream().map(Draft.Cell::offset).toList())
             .<Drawn>map(drawn -> new Drawn.Ready(anchor.offset(low), new Draft(drawn, cells)))

@@ -2,6 +2,9 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -14,7 +17,6 @@ import javax.annotation.Nullable;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.IntTag;
@@ -167,8 +169,9 @@ public final class SchematicPlacement {
                 for (UnloadedBlock.Turn turn : cell.data().turns()) {
                     rules.turn(entity, turn.mirror(), turn.rotation());
                 }
-                CompoundTag saved = entity.saveWithFullMetadata(level.registryAccess());
-                data.put(pos, BlockData.of(saved));
+                CompoundTag saved = StructureCompat.of(read).map(handler -> handler.capture(entity))
+                    .orElseGet(() -> entity.saveWithFullMetadata(level.registryAccess()));
+                data.put(pos, BlockData.of(StructureCompat.tagged(read, saved).tag()));
             }
         }
         Set<BlockPos> kept = new LinkedHashSet<>();
@@ -235,10 +238,12 @@ public final class SchematicPlacement {
             return null;
         }
         CompoundTag prepared = adapter.prepare(level, state, stored);
-        BlockEntity fresh = BlockData.EMPTY.entity(level, pos, state);
-        if (fresh != null && prepared != null) {
-            fresh.loadWithComponents(prepared, level.registryAccess());
+        if (StructureCompat.of(state).isPresent()) {
+            if (prepared == null) throw StructureCompat.invalid();
+            return BlockData.of(prepared).entity(level, pos, state);
         }
+        BlockEntity fresh = BlockData.EMPTY.entity(level, pos, state);
+        if (fresh != null && prepared != null) fresh.loadWithComponents(prepared, level.registryAccess());
         return fresh;
     }
 
@@ -260,9 +265,7 @@ public final class SchematicPlacement {
     /** The stack a shot is shown carrying, handed to the block as it is placed: its first requirement. */
     static ItemStack icon(List<Need> cost) {
         return cost.stream().findFirst()
-            .flatMap(need -> need.spec().item())
-            .map(BuiltInRegistries.ITEM::get)
-            .map(ItemStack::new)
+            .map(need -> Goods.display(need.spec()))
             .orElse(ItemStack.EMPTY);
     }
 
@@ -286,7 +289,14 @@ public final class SchematicPlacement {
             block.put("pos", ints(cell.offset().getX(), cell.offset().getY(), cell.offset().getZ()));
             block.putInt("state", index);
             if (cell.data().present()) {
-                block.put("nbt", cell.data().tag());
+                CompoundTag payload = cell.data().tag();
+                var handler = StructureCompat.of(cell.state());
+                if (handler.isPresent()) {
+                    // Canonical configuration also lets detached printer entities load without a real level.
+                    payload = handler.get().capture(handler.get().detached(level.registryAccess(), cell.offset(),
+                        cell.state(), new StructurePayload(payload)));
+                }
+                block.put("nbt", payload);
             }
             blocks.add(block);
         }
