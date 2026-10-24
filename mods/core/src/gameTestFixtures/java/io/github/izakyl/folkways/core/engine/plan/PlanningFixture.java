@@ -85,6 +85,20 @@ public final class PlanningFixture {
         };
     }
 
+    public static Worker placed(Worker who, Placement placement, List<Worker.Store> stores) {
+        return new Worker() {
+            public Resident resident() { return who.resident(); }
+            public Mob body() { return who.body(); }
+            public Container pack() { return who.pack(); }
+            public List<Store> within() { return stores; }
+            public ItemStack held(ToolNeed need) { return who.held(need); }
+            public void spill(ItemStack stack) { who.spill(stack); }
+            public Effects effects() { return who.effects(); }
+            public List<Node> route() { return who.route(); }
+            public Placement placement() { return placement; }
+        };
+    }
+
     public Situation situation(Stock stock, List<Workshop> workshops) {
         return new Situation(ways, stock, workshops, stands);
     }

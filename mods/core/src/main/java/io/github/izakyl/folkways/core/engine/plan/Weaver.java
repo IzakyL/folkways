@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
+import io.github.izakyl.folkways.core.api.work.InputSubstitutions;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
@@ -134,6 +135,7 @@ public final class Weaver {
     private final Set<UUID> grownNow = new LinkedHashSet<>();
     private final List<Expansion> madeNow = new ArrayList<>();
     private Situation now;
+    private long substitutionsAt = -1;
     private Crew crew;
     private Costs costs;
     private List<Workshop> costedFor = List.of();
@@ -238,6 +240,20 @@ public final class Weaver {
     public void know(Situation now, Crew crew) {
         this.now = now;
         this.crew = crew;
+        long revision = InputSubstitutions.revision();
+        if (substitutionsAt != revision) {
+            if (substitutionsAt >= 0) {
+                for (var entry : List.copyOf(answering.entrySet())) {
+                    Request request = asked.get(entry.getKey());
+                    if (request != null && request.work.nodes().stream().anyMatch(node ->
+                            node.spec().needs().stream().anyMatch(Need::substitutable)) && untouched(entry.getValue())) {
+                        regrow(entry.getKey(), Ending.DROPPED);
+                        sprouting.add(entry.getKey());
+                    }
+                }
+            }
+            substitutionsAt = revision;
+        }
         this.sizing = new PackSizing(crew);
         List<Able> able = crew.hands().stream().map(Able::of).toList();
         refitting |= !able.equals(fitFor);
@@ -1013,6 +1029,22 @@ public final class Weaver {
     }
 
     private long feed(Edge edge) {
+        List<InputSubstitutions.Choice> choices = InputSubstitutions.choices(edge.need());
+        if (choices.isEmpty()) return feedExact(edge, true);
+        long left = feedExact(edge, false);
+        for (InputSubstitutions.Choice choice : choices) {
+            if (left <= 0) break;
+            long physical = Math.multiplyExact(left, choice.cost());
+            Edge payment = new Edge(edge.id(), edge.consumer(),
+                new Need(choice.payment(), physical, edge.carried()), edge.trail(), choice.cost(), edge.need());
+            long missing = feedExact(payment, false);
+            left -= (physical - missing) / choice.cost();
+        }
+        if (left > 0) left = feedExact(edge.covering(left), true);
+        return left;
+    }
+
+    private long feedExact(Edge edge, boolean production) {
         lastWhy = Why.NO_SOURCE;
         int most = MOST_FILLS + FILLS_PER_ASK * asked.size();
         if (++fills > most) {
@@ -1035,8 +1067,8 @@ public final class Weaver {
         }
         long whole = edge.count();
         long left = whole - fromPack(edge, whole);
-        if (left > 0 && !restoring && !stocked && joinable(edge.spec())) {
-            List<Source> ranked = sources(edge, left, whole);
+        if (left > 0 && !restoring && production && !stocked && joinable(edge.spec())) {
+            List<Source> ranked = sources(edge, left, whole, production);
             if (!ranked.isEmpty() && ranked.getFirst() instanceof Source.Offered(Costs.Offer cheapest)) {
                 left -= joined(edge, cheapest, left);
             } else {
@@ -1047,7 +1079,7 @@ public final class Weaver {
         boolean grew = left > 0;
         while (left > 0 && grew) {
             grew = false;
-            for (Source source : sources(edge, left, whole)) {
+            for (Source source : sources(edge, left, whole, production)) {
                 long got = switch (source) {
                     case Source.Lot(Stock.Lot lot) -> fromStore(edge, lot, left);
                     case Source.Offered(Costs.Offer offer) -> fromWorkshop(edge, offer, left);
@@ -1081,7 +1113,7 @@ public final class Weaver {
     // their work and inputs besides, the walk bringing those inputs to the workshop, and the walk on to the consumer. Offers are asked for again with what is left each time round.
     // A workshop's alike offers stand together, at the cost of the cheapest of them, and among themselves the one
     // nearest the crew as it stands comes first: the walk to it from whoever would do it counts as well.
-    private List<Source> sources(Edge edge, long left, long whole) {
+    private List<Source> sources(Edge edge, long left, long whole, boolean production) {
         record Ranked(Source source, long cost, int kind, long plenty, String name, int group, long byHand) {
         }
         Node consumer = nodes.get(edge.consumer());
@@ -1097,7 +1129,7 @@ public final class Weaver {
         Map<UUID, Integer> groups = new HashMap<>();
         Map<UUID, Long> cheapest = new HashMap<>();
         List<WorldPos> hands = null;
-        if (!stockOnly.contains(edge.id()) && consumer.permitsProduction(edge.spec()) && costs.reachable(edge.spec(), near, edge.trail())) {
+        if (production && !stockOnly.contains(edge.id()) && consumer.permitsProduction(edge.spec()) && costs.reachable(edge.spec(), near, edge.trail())) {
             for (Costs.Offer offer : costs.offers(Produce.of(OWNER, near, edge.spec(), left,
                     sizing.batching(whole)))) {
                 Grown made = offer.change().replacement();
@@ -1242,7 +1274,19 @@ public final class Weaver {
             Map<ItemSpec, Long> skipped = new LinkedHashMap<>();
             List<ItemStack> taken = new ArrayList<>();
             long served = 0;
-            for (ItemStack stack : hand.cargo()) {
+            List<ItemStack> cargo = hand.cargo();
+            if (edge.unit() > 1) {
+                Map<ItemSpec, ItemStack> bundled = new LinkedHashMap<>();
+                for (ItemStack stack : cargo) {
+                    bundled.compute(Goods.specOf(stack), (key, held) -> {
+                        if (held == null) return stack.copy();
+                        held.grow(stack.getCount());
+                        return held;
+                    });
+                }
+                cargo = List.copyOf(bundled.values());
+            }
+            for (ItemStack stack : cargo) {
                 if (!Goods.matches(stack, edge.spec()) || served == count) {
                     continue;
                 }
@@ -1252,6 +1296,7 @@ public final class Weaver {
                 long skip = Math.min(used, stack.getCount());
                 skipped.put(concrete, used - skip);
                 int take = (int) Math.min(count - served, stack.getCount() - skip);
+                take -= take % edge.unit();
                 if (take > 0) {
                     taken.add(stack.copyWithCount(take));
                     served += take;
@@ -1271,6 +1316,7 @@ public final class Weaver {
     // A lot in a store: each carry of it is its own growth, so a failed fetch takes back only what it was bringing.
     private long fromStore(Edge edge, Stock.Lot lot, long left) {
         long can = Math.min(left, drawable(lot.where(), lot.concrete()));
+        can -= can % edge.unit();
         if (can <= 0) {
             return 0;
         }

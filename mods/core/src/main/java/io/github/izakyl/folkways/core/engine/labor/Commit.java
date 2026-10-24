@@ -6,6 +6,9 @@ import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.StoreRule;
+import io.github.izakyl.folkways.core.api.work.InputAllocation;
+import io.github.izakyl.folkways.core.api.work.InputReceipt;
+import io.github.izakyl.folkways.core.api.work.InputSubstitutions;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
@@ -46,11 +49,26 @@ public final class Commit {
                 return Outcome.failed(LaborRefusal.GOODS_GONE);
             }
         }
-        List<ItemStack> goods = drawn.stream().map(Drawn::stack).toList();
-        return settle(level, node, who, goods, () -> putBack(who, drawn));
+        InputAllocation allocation = new InputAllocation(drawn.stream().map(Drawn::receipt).toList());
+        Outcome outcome;
+        InputAllocation.Settlement settled = null;
+        try {
+            outcome = node.commit(level, new Supplied(who, allocation.supplied(), allocation.receipts()));
+            if (outcome instanceof Outcome.Done done) settled = allocation.settle(done.unused());
+        } catch (RuntimeException | LinkageError broken) {
+            putBack(who, drawn);
+            throw broken;
+        }
+        if (outcome instanceof Outcome.Done done) {
+            settled.returned().forEach(stack -> giveBack(who, stack));
+            return new Outcome.Done(done.noises(), done.made(), done.xp(), settled.returned(), settled.consumed());
+        }
+        putBack(who, drawn);
+        return outcome;
     }
 
-    private record Drawn(ItemStack stack, Container from) {
+    private record Drawn(ItemStack stack, Container from, ItemStack requested) {
+        InputReceipt receipt() { return new InputReceipt(requested, stack); }
     }
 
     // One of the plan's draws for the work, and how much of it the needs drawn so far have left.
@@ -63,7 +81,12 @@ public final class Commit {
     private static List<Owed> owed(Placement placed) {
         List<Owed> owed = new ArrayList<>();
         if (placed != null) {
-            placed.draws().forEach(draw -> owed.add(new Owed(draw)));
+            for (Placement.Draw draw : placed.draws()) {
+                Owed same = owed.stream().filter(one -> one.draw.from().equals(draw.from())
+                    && one.draw.spec().equals(draw.spec())).findFirst().orElse(null);
+                if (same == null) owed.add(new Owed(draw));
+                else same.left += draw.count();
+            }
         }
         return owed;
     }
@@ -72,7 +95,7 @@ public final class Commit {
             Runnable undo) {
         Outcome outcome;
         try {
-            outcome = node.commit(level, new Supplied(who, goods));
+            outcome = node.commit(level, new Supplied(who, goods, goods.stream().map(stack -> new InputReceipt(stack, stack)).toList()));
         } catch (RuntimeException | LinkageError broken) {
             undo.run();
             throw broken;
@@ -89,33 +112,35 @@ public final class Commit {
     // A need the plan set nothing aside for takes what matches, carried goods from the pack and anything else
     // also from the stores in reach.
     private static boolean draw(Worker who, Need need, List<Owed> owed, List<Drawn> drawn) {
+        List<InputSubstitutions.Choice> choices = new ArrayList<>();
+        choices.add(new InputSubstitutions.Choice(need.spec(), need.spec(), 1));
+        choices.addAll(InputSubstitutions.choices(need));
+        boolean planned = owed.stream().anyMatch(one -> choices.stream()
+            .anyMatch(choice -> Goods.overlap(one.draw.spec(), choice.payment())));
         long left = need.count();
-        boolean planned = false;
-        for (Owed one : owed) {
-            if (one.left <= 0 || !Goods.overlap(one.draw.spec(), need.spec())
-                    || need.carried() && one.draw.from().isPresent()) {
-                continue;
-            }
-            planned = true;
-            Container source = one.draw.from().map(stash -> storeAt(who, stash)).orElse(who.pack());
-            if (source == null || left <= 0) {
-                continue;
-            }
-            long want = Math.min(left, one.left);
-            long got = want - drawFrom(source,
-                stack -> Goods.matches(stack, need.spec()) && Goods.matches(stack, one.draw.spec()), want, drawn);
-            one.left -= got;
-            left -= got;
-        }
-        if (planned) {
-            return left <= 0;
-        }
-        Predicate<ItemStack> matching = stack -> Goods.matches(stack, need.spec());
-        left = drawFrom(who.pack(), matching, left, drawn);
-        if (!need.carried()) {
-            for (Worker.Store store : who.within()) {
-                if (StoreRule.takes(Stores.rulesAt(store.at()))) {
-                    left = drawFrom(store.contents(), matching, left, drawn);
+        for (InputSubstitutions.Choice choice : choices) {
+            if (left <= 0) break;
+            if (planned) {
+                for (Owed one : owed) {
+                    if (one.left <= 0 || !Goods.overlap(one.draw.spec(), choice.payment())
+                            || need.carried() && one.draw.from().isPresent()) continue;
+                    Container source = one.draw.from().map(stash -> storeAt(who, stash)).orElse(who.pack());
+                    if (source == null) continue;
+                    long want = Math.min(left, one.left / choice.cost());
+                    long got = want - drawFrom(source, stack -> Goods.matches(stack, choice.payment())
+                        && Goods.matches(stack, one.draw.spec()), want, choice, drawn);
+                    one.left -= got * choice.cost();
+                    left -= got;
+                }
+            } else {
+                Predicate<ItemStack> matching = stack -> Goods.matches(stack, choice.payment());
+                left = drawFrom(who.pack(), matching, left, choice, drawn);
+                if (!need.carried()) {
+                    for (Worker.Store store : who.within()) {
+                        if (StoreRule.takes(Stores.rulesAt(store.at()))) {
+                            left = drawFrom(store.contents(), matching, left, choice, drawn);
+                        }
+                    }
                 }
             }
         }
@@ -133,14 +158,24 @@ public final class Commit {
     }
 
     // Draws up to `left` matching goods from one container; answers what is still to draw.
-    private static long drawFrom(Container source, Predicate<ItemStack> matching, long left, List<Drawn> drawn) {
+    private static long drawFrom(Container source, Predicate<ItemStack> matching, long left,
+            InputSubstitutions.Choice choice, List<Drawn> drawn) {
         while (left > 0) {
-            ItemStack taken = Containers.extract(source, matching, (int) Math.min(left, Integer.MAX_VALUE));
-            if (taken.isEmpty()) {
-                break;
+            int want = (int) Math.min(left, Integer.MAX_VALUE / choice.cost()) * choice.cost();
+            ItemStack taken = Containers.extract(source, matching, want);
+            if (taken.isEmpty()) break;
+            int units = taken.getCount() / choice.cost();
+            int remainder = taken.getCount() % choice.cost();
+            if (remainder > 0) {
+                ItemStack rest = Containers.insert(source, taken.copyWithCount(remainder));
+                if (!rest.isEmpty()) throw new IllegalStateException("input extraction could not restore its remainder");
+                taken.shrink(remainder);
             }
-            left -= taken.getCount();
-            drawn.add(new Drawn(taken, source));
+            if (units == 0) break;
+            left -= units;
+            ItemStack target = choice.target().equals(choice.payment()) ? taken.copyWithCount(units)
+                : Goods.display(choice.target()).copyWithCount(units);
+            drawn.add(new Drawn(taken, source, target));
         }
         return left;
     }
@@ -167,10 +202,10 @@ public final class Commit {
                 left = Containers.insert(store.contents(), left);
             }
         }
-        who.spill(left);
+        if (!left.isEmpty()) who.spill(left);
     }
 
-    private record Supplied(Worker who, List<ItemStack> supplied) implements Worker {
+    private record Supplied(Worker who, List<ItemStack> supplied, List<InputReceipt> inputs) implements Worker {
 
         Supplied {
             supplied = supplied.stream().map(ItemStack::copy).toList();
