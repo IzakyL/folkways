@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.damagecontrol;
 
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -10,6 +11,7 @@ import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Urge;
+import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.shell.structure.StructureSnapshots;
@@ -17,13 +19,17 @@ import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.front.api.notice.Line;
+import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.front.engine.colony.ZoneDrafts;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.build.MaintenanceOrders;
 import io.github.izakyl.folkways.plugins.build.SchematicPlacement;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +46,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -368,6 +375,203 @@ public final class DamageControlGameTests {
         helper.assertTrue(rig.level.getBlockState(rig.target.above()).is(Blocks.GOLD_BLOCK), "the neighbouring player block is preserved");
         rig.close();
         helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void partialDoorsCannotStarveLaterRepairCells(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        Colony colony = Colonies.mint(rig.level.getServer());
+        try {
+            BlockPos origin = rig.target.above(128);
+            Map<BlockPos, BlockState> recorded = new LinkedHashMap<>();
+            Set<BlockPos> cells = new LinkedHashSet<>();
+            BlockState lower = Blocks.OAK_DOOR.defaultBlockState();
+            BlockState upper = lower.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER);
+            for (int i = 0; i < 128; i++) {
+                BlockPos door = origin.offset(i % 16, 0, i / 16);
+                rig.level.setBlock(door.below(), Blocks.STONE.defaultBlockState(), 2);
+                rig.level.setBlock(door, lower, 2);
+                cells.add(door.above());
+                recorded.put(door.above().subtract(origin), upper);
+            }
+            BlockPos stone = origin.east(18);
+            for (BlockPos at : BlockPos.betweenClosed(stone.offset(-2, -1, -2), stone.offset(2, -1, 2))) {
+                rig.level.setBlock(at, Blocks.STONE.defaultBlockState(), 2);
+            }
+            cells.add(stone);
+            recorded.put(stone.subtract(origin), Blocks.STONE.defaultBlockState());
+            for (int i = 0; i < 128; i++) {
+                BlockPos door = origin.offset(i % 16, 0, i / 16);
+                cells.add(door);
+                recorded.put(door.subtract(origin), lower);
+            }
+            var zone = ColonyFront.of(colony).addZone(rig.level, DamageControlContent.ID, cells,
+                ColonySettings.empty().with("repair", new ColonySettings.Value.Flag(true))).orElseThrow();
+            var snapshot = new StructureSnapshots.Snapshot(WorldPos.of(rig.level, origin), recorded, 0);
+            colony.keep(DamageControlContent.ID, Writer.of().integer("schemaVersion", 1)
+                .children("baselines", List.of(zone.id()), id -> Writer.of().uuid("zone", id).longValue("revision", 1)
+                    .blob("snapshot", snapshot.save()).tag()).tag());
+            DamageControlPresence presence = new DamageControlPresence(colony);
+            for (int round = 0; round < 3; round++) {
+                presence.survey(List.of(colony.view(rig.level)), 512);
+                presence.refresh(rig.level.getServer());
+            }
+            Node repair = repairNodes(presence, colony, rig.level).stream()
+                .filter(node -> ((WorkSite.AtBlock) node.spec().site()).pos().equals(WorldPos.of(rig.level, stone)))
+                .findFirst().orElseThrow();
+            rig.worker.body().setPos(stone.getX() - .5, stone.getY(), stone.getZ() + .5);
+            rig.store.setItem(0, new ItemStack(Items.STONE));
+            helper.assertTrue(Commit.run(rig.level, repair, rig.worker) instanceof Outcome.Done,
+                "the 129th missing cell is repaired after rotating past 128 partial doors");
+            helper.assertTrue(rig.level.getBlockState(stone).is(Blocks.STONE), "the later stone cell is restored");
+            helper.assertValueEqual(rig.store.countItem(Items.STONE), 0, "the normal build path consumes its material");
+        } finally { colony.raze(); rig.close(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void disablingAnOverlappingRepairOwnerLetsTheOtherZoneTakeOver(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        Colony colony = Colonies.mint(rig.level.getServer());
+        try {
+            var front = ColonyFront.of(colony);
+            var chosen = ColonySettings.empty().with("repair", new ColonySettings.Value.Flag(true));
+            var first = front.addZone(rig.level, DamageControlContent.ID, Set.of(rig.target), chosen).orElseThrow();
+            var second = front.addZone(rig.level, DamageControlContent.ID, Set.of(rig.target), chosen).orElseThrow();
+            rig.level.setBlock(rig.target, Blocks.STONE.defaultBlockState(), 2);
+            DamageControlPresence presence = new DamageControlPresence(colony);
+            for (var zone : List.of(first, second)) {
+                presence.act(DamageControlContent.ID, "record:" + zone.id(), Optional.empty(), colony.view(rig.level));
+            }
+            rig.level.removeBlock(rig.target, false);
+            presence.survey(List.of(colony.view(rig.level)), 512);
+            presence.refresh(rig.level.getServer());
+            Node old = repairNodes(presence, colony, rig.level).getFirst();
+            front.setDrawn(first.id(), first.settings().with("repair", new ColonySettings.Value.Flag(false)));
+            presence.survey(List.of(colony.view(rig.level)), 512);
+            helper.assertFalse(old.ready(rig.level), "the disabled owner's old work cannot run");
+            presence.refresh(rig.level.getServer());
+            List<Node> replacement = repairNodes(presence, colony, rig.level);
+            helper.assertValueEqual(replacement.size(), 1, "the enabled overlap still publishes exactly one repair");
+            helper.assertFalse(replacement.getFirst().id().equals(old.id()), "ownership changes rather than retaining the disabled task");
+            rig.store.setItem(0, new ItemStack(Items.STONE));
+            helper.assertTrue(Commit.run(rig.level, replacement.getFirst(), rig.worker) instanceof Outcome.Done,
+                "the second zone's replacement work can restore the cell");
+        } finally { colony.raze(); rig.close(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void anEnclosedNearestFireDoesNotHideAnAccessibleFire(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        Colony colony = Colonies.mint(rig.level.getServer());
+        try {
+            for (BlockPos cell : BlockPos.betweenClosed(rig.target.offset(-2, -1, -2), rig.target.offset(2, 3, 2))) {
+                if (!cell.equals(rig.target)) {
+                    rig.level.setBlock(cell, Blocks.STONE.defaultBlockState(), 2);
+                }
+            }
+            BlockPos farther = rig.target.east(7);
+            rig.level.setBlock(rig.target.below(), Blocks.NETHERRACK.defaultBlockState(), 2);
+            rig.level.setBlock(rig.target, Blocks.FIRE.defaultBlockState(), 2);
+            rig.level.setBlock(farther.below(), Blocks.NETHERRACK.defaultBlockState(), 2);
+            rig.level.setBlock(farther, Blocks.FIRE.defaultBlockState(), 2);
+            ColonyFront.of(colony).addZone(rig.level, DamageControlContent.ID,
+                Set.of(rig.target, farther, rig.target.west(3)), ColonySettings.empty()).orElseThrow();
+            DamageControlPresence presence = new DamageControlPresence(colony);
+            presence.tick(rig.level.getServer());
+            presence.goals(colony.view(rig.level)).getFirst().nodes().getFirst().commit(rig.level, rig.worker);
+            var urge = presence.urges(rig.worker, colony.view(rig.level));
+            helper.assertValueEqual(urge.size(), 1, "an unreachable nearest fire does not stop the search");
+            Node fire = urge.getFirst().take().get();
+            helper.assertValueEqual(((WorkSite.AtBlock) fire.spec().site()).pos(), WorldPos.of(rig.level, farther),
+                "the next accessible fire is selected");
+            rig.worker.body().setPos(farther.getX() - .5, farther.getY(), farther.getZ() + .5);
+            helper.assertTrue(Commit.run(rig.level, fire, rig.worker) instanceof Outcome.Done, "the second fire is actually extinguished");
+            fire.ended(rig.level, Ending.DONE);
+            helper.assertTrue(rig.level.getBlockState(rig.target).is(Blocks.FIRE), "the enclosed fire is left for a later retry");
+        } finally { colony.raze(); rig.close(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void aOneCellBudgetRotatesBetweenDimensions(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        Colony colony = Colonies.mint(rig.level.getServer());
+        ServerLevel other = rig.level.getServer().getLevel(Level.NETHER);
+        BlockPos at = rig.target.above(64);
+        other.getChunkAt(at);
+        try {
+            var front = ColonyFront.of(colony);
+            var chosen = ColonySettings.empty().with("repair", new ColonySettings.Value.Flag(true));
+            var first = front.addZone(rig.level, DamageControlContent.ID, Set.of(at, at.east()), chosen).orElseThrow();
+            var second = front.addZone(other, DamageControlContent.ID, Set.of(at, at.east()), chosen).orElseThrow();
+            DamageControlPresence presence = new DamageControlPresence(colony);
+            for (ServerLevel level : List.of(rig.level, other)) {
+                level.setBlock(at, Blocks.STONE.defaultBlockState(), 2);
+                level.setBlock(at.east(), Blocks.AIR.defaultBlockState(), 2);
+                var zone = level == rig.level ? first : second;
+                presence.act(DamageControlContent.ID, "record:" + zone.id(), Optional.empty(), colony.view(level));
+                level.removeBlock(at, false);
+                level.setBlock(at.east().below(), Blocks.NETHERRACK.defaultBlockState(), 2);
+                level.setBlock(at.east(), Blocks.FIRE.defaultBlockState(), 2);
+            }
+            for (int tick = 0; tick < 4; tick++) {
+                presence.survey(List.of(colony.view(rig.level), colony.view(other)), 1);
+            }
+            for (var zone : List.of(first, second)) {
+                ServerLevel level = zone.dimension().equals(rig.level.dimension()) ? rig.level : other;
+                var line = (Line.Text) presence.zoneLines(zone, colony.view(level)).getFirst();
+                var status = (TranslatableContents) line.component().getContents();
+                helper.assertValueEqual(((Number) status.getArgs()[0]).intValue(), 1, "each dimension discovers its fire");
+                helper.assertValueEqual(((Number) status.getArgs()[1]).intValue(), 1, "each dimension discovers its missing block");
+            }
+        } finally {
+            other.removeBlock(at, false);
+            other.removeBlock(at.east(), false);
+            other.removeBlock(at.east().below(), false);
+            colony.raze(); rig.close();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void aHundredRespondersShareBoundedSelectionWithoutStarvation(GameTestHelper helper) {
+        Colony colony = Colonies.mint(helper.getLevel().getServer());
+        List<Rig> responders = new ArrayList<>();
+        for (int i = 0; i < 100; i++) { responders.add(new Rig(helper)); }
+        Rig rig = responders.getFirst();
+        ColonyFront.of(colony).addZone(rig.level, DamageControlContent.ID,
+            Set.of(rig.target, rig.target.west()), ColonySettings.empty()).orElseThrow();
+        rig.level.setBlock(rig.target.below(), Blocks.NETHERRACK.defaultBlockState(), 2);
+        rig.level.setBlock(rig.target, Blocks.FIRE.defaultBlockState(), 2);
+        DamageControlPresence presence = new DamageControlPresence(colony);
+        presence.tick(rig.level.getServer());
+        Node watch = presence.goals(colony.view(rig.level)).getFirst().nodes().getFirst();
+        responders.forEach(responder -> watch.commit(rig.level, responder.worker));
+        Set<UUID> heard = new LinkedHashSet<>();
+        helper.onEachTick(() -> {
+            int selected = 0;
+            for (Rig responder : responders) {
+                if (!presence.urges(responder.worker, colony.view(rig.level)).isEmpty()) {
+                    selected++;
+                    heard.add(responder.worker.resident().id());
+                }
+            }
+            helper.assertTrue(selected <= FolkwaysVanillaConfig.damageControlConcurrency(),
+                "all residents together have only the configured number of footing searches each tick");
+        });
+        helper.startSequence().thenExecuteAfter((100 + FolkwaysVanillaConfig.damageControlConcurrency() - 1)
+                / FolkwaysVanillaConfig.damageControlConcurrency() + 5, () -> {
+            try {
+                helper.assertValueEqual(heard.size(), 100, "fixed resident iteration order does not starve the last responders");
+            } finally { colony.raze(); responders.forEach(Rig::close); }
+        }).thenSucceed();
+    }
+
+    private static List<Node> repairNodes(DamageControlPresence presence, Colony colony, ServerLevel level) {
+        return presence.goals(colony.view(level)).stream().flatMap(work -> work.nodes().stream())
+            .filter(node -> node.spec().doing().equals(DamageControlContent.REPAIRING)).toList();
     }
 
     private static ZoneView zone(ServerLevel level, Set<BlockPos> cells) {

@@ -33,6 +33,7 @@ import io.github.izakyl.folkways.plugins.build.MaintenanceOrders;
 import io.github.izakyl.folkways.plugins.build.SchematicPlacement;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -55,6 +56,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 final class DamageControlPresence implements Facing {
+    private record Repair(UUID zone, long revision, Node node) { }
+
     private final Colony colony;
     private final Sweep sweep;
     private final Map<ResourceKey<Level>, FireSurvey> surveys = new LinkedHashMap<>();
@@ -64,7 +67,17 @@ final class DamageControlPresence implements Facing {
     private final Map<UUID, ZoneView> zones = new LinkedHashMap<>();
     private final Map<UUID, Map<WorldPos, BlockState>> missing = new LinkedHashMap<>();
     private final Map<UUID, Set<WorldPos>> conflicts = new LinkedHashMap<>();
-    private final Map<WorldPos, Node> repairs = new LinkedHashMap<>();
+    private final Map<WorldPos, Repair> repairs = new LinkedHashMap<>();
+    private final Map<UUID, Iterator<BlockPos>> repairCursors = new LinkedHashMap<>();
+    private final Map<ResourceKey<Level>, List<WorldPos>> knownFires = new LinkedHashMap<>();
+    private final Map<ResourceKey<Level>, Integer> fireTurns = new LinkedHashMap<>();
+    private Set<WorldPos> fires = Set.of();
+    private final Map<UUID, Long> waiting = new LinkedHashMap<>();
+    private final Map<UUID, Long> retryAfter = new LinkedHashMap<>();
+    private final Map<UUID, Map<WorldPos, Long>> unreachable = new LinkedHashMap<>();
+    private long responseTick = Long.MIN_VALUE;
+    private int responsesLeft;
+    private int surveyTurn;
     private final Map<UUID, Node> watches = new LinkedHashMap<>();
     private final Map<UUID, Long> duty = new LinkedHashMap<>();
     private final Map<WorldPos, DamageControlRefusal> refusals = new LinkedHashMap<>();
@@ -84,27 +97,50 @@ final class DamageControlPresence implements Facing {
     }
 
     void tick(MinecraftServer server) {
-        List<ColonyView> views = colony.views(server);
-        zones.clear();
-        surveys.keySet().retainAll(views.stream().map(ColonyView::dimension).toList());
-        FrontView front = Fronts.of(colony);
-        int left = FolkwaysVanillaConfig.damageControlScanBudget();
-        for (int i = 0; i < views.size(); i++) {
-            ColonyView view = views.get(i);
-            List<? extends ZoneView> here = front.zonesIn(view.level()).stream()
-                .filter(zone -> zone.delegation().equals(DamageControlContent.ID)
-                    && !zone.cells().isEmpty() && zone.cells().size() <= FolkwaysVanillaConfig.maxDamageControlCells()
-                    && zone.settings().flag("enabled")).toList();
-            here.forEach(zone -> zones.put(zone.id(), zone));
-            int budget = left / (views.size() - i);
-            left -= surveys.computeIfAbsent(view.dimension(), dimension -> new FireSurvey()).scan(view.level(), here, budget, (zone, pos, state) -> inspect(view.level(), zone, pos, state));
-        }
+        List<ColonyView> views = new ArrayList<>();
+        server.getAllLevels().forEach(level -> views.add(colony.view(level)));
+        survey(views, FolkwaysVanillaConfig.damageControlScanBudget());
         missing.keySet().retainAll(zones.keySet());
         conflicts.keySet().retainAll(zones.keySet());
         refusals.keySet().retainAll(fires());
         watches.keySet().retainAll(zones.keySet());
         duty.values().removeIf(until -> until < server.overworld().getGameTime());
         sweep.tick(server, this::refresh, this::goals);
+    }
+
+    void survey(List<ColonyView> views, int allowance) {
+        zones.clear();
+        FrontView front = Fronts.of(colony);
+        Map<ResourceKey<Level>, List<? extends ZoneView>> byDimension = new LinkedHashMap<>();
+        List<ColonyView> covered = new ArrayList<>();
+        for (ColonyView view : views) {
+            List<? extends ZoneView> here = front.zonesIn(view.level()).stream()
+                .filter(zone -> zone.delegation().equals(DamageControlContent.ID)
+                    && !zone.cells().isEmpty() && zone.cells().size() <= FolkwaysVanillaConfig.maxDamageControlCells()
+                    && zone.settings().flag("enabled")).toList();
+            here.forEach(zone -> zones.put(zone.id(), zone));
+            if (!here.isEmpty()) {
+                covered.add(view);
+                byDimension.put(view.dimension(), here);
+            }
+        }
+        surveys.keySet().retainAll(byDimension.keySet());
+        int left = allowance;
+        int first = covered.isEmpty() ? 0 : Math.floorMod(surveyTurn++, covered.size());
+        for (int i = 0; i < covered.size(); i++) {
+            ColonyView view = covered.get((first + i) % covered.size());
+            int budget = (left + covered.size() - i - 1) / (covered.size() - i);
+            left -= surveys.computeIfAbsent(view.dimension(), dimension -> new FireSurvey())
+                .scan(view.level(), byDimension.get(view.dimension()), budget,
+                    (zone, pos, state) -> inspect(view.level(), zone, pos, state));
+        }
+        knownFires.clear();
+        Set<WorldPos> found = new LinkedHashSet<>();
+        surveys.forEach((dimension, survey) -> {
+            knownFires.put(dimension, List.copyOf(survey.fires()));
+            found.addAll(survey.fires());
+        });
+        fires = Set.copyOf(found);
     }
 
     private void inspect(ServerLevel level, ZoneView zone, BlockPos pos, BlockState standing) {
@@ -117,25 +153,33 @@ final class DamageControlPresence implements Facing {
         BlockState wanted = baseline.cells().get(pos.subtract(baseline.origin().block(level)));
         Map<WorldPos, BlockState> absent = missing.computeIfAbsent(zone.id(), id -> new LinkedHashMap<>());
         Set<WorldPos> changed = conflicts.computeIfAbsent(zone.id(), id -> new LinkedHashSet<>());
-        absent.remove(at);
         changed.remove(at);
         if (wanted == null || !MaintenanceBaseline.accepts(wanted)) {
+            absent.remove(at);
             return;
         }
         if (standing.isAir()) {
             absent.put(at, wanted);
-        } else if (!standing.is(wanted.getBlock())) {
-            changed.add(at);
+        } else {
+            absent.remove(at);
+            if (!standing.is(wanted.getBlock())) {
+                changed.add(at);
+            }
         }
     }
 
-    private void refresh(MinecraftServer server) {
+    void refresh(MinecraftServer server) {
         if (baselines.keySet().removeIf(id -> colony.holding(id).isEmpty())) {
             revisions.keySet().retainAll(baselines.keySet());
             remember();
         }
-        repairs.entrySet().removeIf(entry -> zones.values().stream().noneMatch(zone ->
-            zone.settings().flag("repair") && missing.getOrDefault(zone.id(), Map.of()).containsKey(entry.getKey())));
+        repairCursors.keySet().retainAll(baselines.keySet());
+        repairs.entrySet().removeIf(entry -> {
+            Repair repair = entry.getValue();
+            return !active(repair.zone(), "repair")
+                || revisions.getOrDefault(repair.zone(), 0L) != repair.revision()
+                || !missing.getOrDefault(repair.zone(), Map.of()).containsKey(entry.getKey());
+        });
         for (ZoneView zone : zones.values()) {
             Optional<ServerLevel> world = zone.at(zone.cells().iterator().next()).level(server);
             if (world.isEmpty()) {
@@ -153,24 +197,31 @@ final class DamageControlPresence implements Facing {
                 continue;
             }
             Map<BlockPos, BlockState> recorded = baseline.in(level);
-            absent.keySet().stream().limit(128).forEach(at ->
-                SchematicPlacement.adapter().launch(pos -> recorded.getOrDefault(pos, Blocks.AIR.defaultBlockState()),
-                    at.block(level)).ifPresent(launch -> {
-                        if (launch.produces().stream().allMatch(pos -> absent.containsKey(zone.at(pos)))) {
-                            launch.produces().forEach(pos -> targets.put(zone.at(pos), recorded.get(pos)));
-                        }
-                    }));
+            Iterator<BlockPos> cursor = repairCursors.computeIfAbsent(zone.id(), id -> baseline.cells().keySet().iterator());
+            for (int checked = 0; checked < Math.min(128, baseline.cells().size()); checked++) {
+                if (!cursor.hasNext()) {
+                    cursor = baseline.cells().keySet().iterator();
+                    repairCursors.put(zone.id(), cursor);
+                }
+                BlockPos pos = cursor.next().offset(baseline.origin().block(level));
+                if (!absent.containsKey(zone.at(pos))) {
+                    continue;
+                }
+                SchematicPlacement.adapter().launch(cell -> recorded.getOrDefault(cell, Blocks.AIR.defaultBlockState()), pos)
+                    .filter(launch -> launch.produces().stream().allMatch(cell -> absent.containsKey(zone.at(cell))))
+                    .ifPresent(launch -> launch.produces().forEach(cell -> targets.put(zone.at(cell), recorded.get(cell))));
+            }
             long revision = revisions.getOrDefault(zone.id(), 0L);
             for (Node node : MaintenanceOrders.missing(level, targets, DamageControlContent.ID,
                     DamageControlContent.trade(), DamageControlContent.REPAIRING,
                     () -> active(zone.id(), "repair") && revisions.getOrDefault(zone.id(), 0L) == revision
                         && fires().isEmpty(), at -> !MaintenanceOrders.buildingAt(colony, level, at), DamageControlRefusal.CONFLICT,
                     (done, how) -> {
-                        repairs.values().removeIf(old -> old.id().equals(done.id()));
+                        repairs.values().removeIf(old -> old.node().id().equals(done.id()));
                         sweep.nudge();
                     })) {
                 WorldPos at = ((WorkSite.AtBlock) node.spec().site()).pos();
-                repairs.putIfAbsent(at, node);
+                repairs.putIfAbsent(at, new Repair(zone.id(), revision, node));
             }
         }
     }
@@ -208,9 +259,9 @@ final class DamageControlPresence implements Facing {
         watches.values().stream().filter(Objects::nonNull)
             .filter(node -> ((WorkSite.AtBlock) node.spec().site()).pos().in(view.level()))
             .forEach(node -> goals.add(Grown.of(node)));
-        repairs.forEach((at, node) -> {
+        repairs.forEach((at, repair) -> {
             if (at.in(view.level())) {
-                goals.add(Grown.of(node));
+                goals.add(Grown.of(repair.node()));
             }
         });
         return goals;
@@ -221,44 +272,80 @@ final class DamageControlPresence implements Facing {
                 || Bodies.of(who.body()).flatMap(body -> body.licences().of(DamageControlContent.trade())).isEmpty()) {
             return List.of();
         }
-        Optional<WorldPos> fire = fires().stream().filter(at -> at.in(view.level())
-                && view.level().isLoaded(at.block(view.level())) && FireSurvey.fire(view.level().getBlockState(at.block(view.level())))
-                && incidents.free(at, who.resident().id()) && protectedFire(at, view.level()))
-            .min(Comparator.comparingDouble(at -> who.body().distanceToSqr(
-                Vec3.atCenterOf(at.block(view.level())))));
-        if (fire.isEmpty()) {
+        ServerLevel level = view.level();
+        long now = level.getServer().overworld().getGameTime();
+        UUID worker = who.resident().id();
+        if (retryAfter.getOrDefault(worker, Long.MIN_VALUE) > now || fires.isEmpty()
+                || !incidents.available(worker, FolkwaysVanillaConfig.damageControlConcurrency())) {
             return List.of();
         }
-        WorldPos target = fire.get();
-        Set<BlockPos> feet = Set.of();
-        for (SuppressionMethod method : SuppressionMethods.all()) {
-            feet = method.footings(view.level(), who, target);
-            if (!feet.isEmpty()) {
-                break;
+        if (responseTick != now) {
+            responseTick = now;
+            responsesLeft = FolkwaysVanillaConfig.damageControlConcurrency();
+            waiting.values().removeIf(seen -> seen < now - 1);
+            retryAfter.values().removeIf(until -> until <= now);
+            unreachable.values().forEach(positions -> positions.values().removeIf(until -> until <= now));
+            unreachable.values().removeIf(Map::isEmpty);
+        }
+        waiting.put(worker, now);
+        if (responsesLeft == 0 || !waiting.keySet().iterator().next().equals(worker)) {
+            return List.of();
+        }
+        waiting.remove(worker);
+        responsesLeft--;
+        retryAfter.put(worker, now + 20);
+        Map<WorldPos, Long> blocked = unreachable.computeIfAbsent(worker, id -> new LinkedHashMap<>());
+        List<WorldPos> known = knownFires.getOrDefault(view.dimension(), List.of());
+        if (known.isEmpty()) {
+            return List.of();
+        }
+        // Selection reads only the shared survey. Bound both addresses considered and expensive footing searches.
+        int first = fireTurns.getOrDefault(view.dimension(), 0);
+        List<WorldPos> candidates = new ArrayList<>();
+        int count = Math.min(128, known.size());
+        for (int i = 0; i < count; i++) {
+            WorldPos at = known.get(Math.floorMod(first + i, known.size()));
+            if (incidents.free(at, worker) && !blocked.containsKey(at)) {
+                candidates.add(at);
             }
         }
-        Optional<Stances> stances = Stances.of(view.level(), feet);
-        if (stances.isEmpty()) {
-            refusals.put(target, DamageControlRefusal.NO_REACH);
-            return List.of();
+        fireTurns.put(view.dimension(), Math.floorMod(first + count, known.size()));
+        candidates.sort(Comparator.comparingDouble(at -> who.body().distanceToSqr(Vec3.atCenterOf(at.block(level)))));
+        boolean firstTarget = true;
+        for (WorldPos target : candidates) {
+            if (!firstTarget) {
+                if (responsesLeft == 0) {
+                    break;
+                }
+                responsesLeft--;
+            }
+            firstTarget = false;
+            Set<BlockPos> feet = Set.of();
+            for (SuppressionMethod method : SuppressionMethods.all()) {
+                feet = method.footings(level, who, target);
+                if (!feet.isEmpty()) {
+                    break;
+                }
+            }
+            Optional<Stances> stances = Stances.of(level, feet);
+            if (stances.isEmpty()) {
+                refusals.put(target, DamageControlRefusal.NO_REACH);
+                blocked.put(target, now + 20);
+                continue;
+            }
+            refusals.remove(target);
+            return List.of(new Urge(DamageControlContent.EXTINGUISHING, Urge.NOW + .5, true,
+                () -> new ExtinguishNode(target, worker, stances.get(), incidents, () -> protectedFire(target, level))));
         }
-        refusals.remove(target);
-        return List.of(new Urge(DamageControlContent.EXTINGUISHING, Urge.NOW + .5, true,
-            () -> new ExtinguishNode(target, who.resident().id(), stances.get(), incidents,
-                () -> protectedFire(target, view.level()))));
+        return List.of();
     }
 
     private boolean protectedFire(WorldPos at, ServerLevel level) {
-        return !closed && zones.values().stream().anyMatch(zone -> zone.settings().flag("extinguish")
-            && zone.at(zone.cells().iterator().next()).sameRealm(at) && zone.cells().contains(at.block(level))
-                && zone.at(at.block(level)).equals(at));
+        return !closed && at.in(level) && zones.values().stream().anyMatch(zone -> zone.settings().flag("extinguish")
+            && zone.cells().contains(at.block(level)) && zone.at(at.block(level)).equals(at));
     }
 
-    private Set<WorldPos> fires() {
-        Set<WorldPos> found = new LinkedHashSet<>();
-        surveys.values().forEach(survey -> found.addAll(survey.fires()));
-        return found;
-    }
+    private Set<WorldPos> fires() { return fires; }
 
     void closed(Closing why) {
         closed = true;
@@ -305,6 +392,7 @@ final class DamageControlPresence implements Facing {
             return Attempt.refused(DamageControlRefusal.UNSUPPORTED);
         }
         revisions.merge(id, 1L, Long::sum);
+        repairCursors.remove(id);
         missing.remove(id);
         conflicts.remove(id);
         repairs.clear();
@@ -362,7 +450,7 @@ final class DamageControlPresence implements Facing {
     }
 
     private long fires(ZoneView zone) {
-        return fires().stream().filter(at -> zone.cells().stream().anyMatch(pos -> zone.at(pos).equals(at))).count();
+        return zone.cells().stream().map(zone::at).filter(fires::contains).count();
     }
 
     @Override

@@ -28,6 +28,10 @@ final class Incidents {
         claims.remove(at, worker);
     }
 
+    boolean available(UUID worker, int limit) {
+        return claims.containsValue(worker) || claims.size() < limit;
+    }
+
     int workers() {
         return claims.size();
     }

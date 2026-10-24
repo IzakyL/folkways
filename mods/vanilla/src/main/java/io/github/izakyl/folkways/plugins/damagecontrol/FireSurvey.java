@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.damagecontrol;
 
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.front.api.ZoneView;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -22,6 +23,7 @@ final class FireSurvey {
 
     private final Map<UUID, Iterator<BlockPos>> cursors = new LinkedHashMap<>();
     private final Set<WorldPos> fires = new LinkedHashSet<>();
+    private List<? extends ZoneView> surveyed = List.of();
     private int turn;
 
     int scan(ServerLevel level, List<? extends ZoneView> zones, int budget,
@@ -32,8 +34,12 @@ final class FireSurvey {
             fires.clear();
             return 0;
         }
-        fires.removeIf(at -> at.in(level) && zones.stream().noneMatch(zone ->
-            zone.settings().flag("extinguish") && zone.at(zone.cells().iterator().next()).sameRealm(at) && zone.cells().contains(at.block(level))));
+        if (!surveyed.equals(zones)) {
+            fires.removeIf(at -> !at.in(level) || zones.stream().noneMatch(zone -> zone.settings().flag("extinguish")
+                && zone.cells().contains(at.block(level)) && zone.at(at.block(level)).equals(at)));
+            cursors.clear();
+            surveyed = List.copyOf(zones);
+        }
         while (read < budget) {
             ZoneView zone = zones.get(Math.floorMod(turn++, zones.size()));
             if (zone.cells().isEmpty()) {
@@ -66,7 +72,7 @@ final class FireSurvey {
     }
 
     Set<WorldPos> fires() {
-        return Set.copyOf(fires);
+        return Collections.unmodifiableSet(fires);
     }
 
     static boolean fire(BlockState state) {
