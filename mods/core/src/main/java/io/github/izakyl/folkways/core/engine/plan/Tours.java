@@ -101,6 +101,7 @@ final class Tours {
     private final Set<UUID> laidNow = new HashSet<>();
     private int beyondTried;
     private final Map<UUID, byte[]> fits = new HashMap<>();
+    private final Set<UUID> stow = new LinkedHashSet<>();
 
     // What a route carries is counted per kind of goods, so many small loads of one thing share their stacks.
     private record Placed(int start, int finish, Stand at, int base, Map<ItemSpec, Long> held) {
@@ -218,13 +219,36 @@ final class Tours {
             }
         }
         List<Unassigned> unassigned = new ArrayList<>(waiting.size());
+        stow.clear();
         for (UUID id : order) {
             Unassigned nobody = waiting.get(id);
             if (nobody != null) {
                 unassigned.add(nobody);
+                if (nobody.why() == Unassigned.Reason.PACK_BUSY) {
+                    packBlocked(id, line);
+                }
             }
         }
         return new Schedule(tours, unassigned);
+    }
+
+    // Only work still blocked after insertion asks the weave to free a pack. The weave knows which cargo is
+    // unclaimed; the schedule only knows whose route cannot make room for the work.
+    Set<UUID> stow() {
+        return Set.copyOf(stow);
+    }
+
+    private void packBlocked(UUID id, List<Seat> line) {
+        UUID mustBe = boundWorker(id);
+        List<Amount> carried = fixed(id).plan().carrying();
+        for (Seat seat : line) {
+            if ((mustBe == null || mustBe.equals(seat.hand.id())) && seat.hand.holding().isEmpty()
+                    && !seat.hand.cargo().isEmpty() && !endless(seat, seat.route.size()) && !keeping(seat, id)
+                    && groupRefusal(seat, id) == null && cells(pickedUp(carried)) <= seat.hand.packCapacity()
+                    && seat.base + cells(seat.with(carried)) > seat.hand.packCapacity()) {
+                stow.add(seat.hand.id());
+            }
+        }
     }
 
     // Work is handed out a wave at a time, each the work most hangs on among what waits on nothing unlaid, as much of

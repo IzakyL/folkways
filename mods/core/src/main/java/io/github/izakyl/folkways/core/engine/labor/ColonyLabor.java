@@ -475,6 +475,9 @@ public final class ColonyLabor implements ColonyWorks.Listening {
                 weaveAsks.wakeAt()));
         }
         scheduleWakeAt = laid.wakeAt();
+        for (UUID resident : laid.stow()) {
+            inbox.raise(new Message.PackBusy(resident));
+        }
     }
 
     private static UUID about(Message message) {

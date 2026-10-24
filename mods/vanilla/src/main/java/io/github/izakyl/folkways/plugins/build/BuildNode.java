@@ -39,6 +39,7 @@ abstract class BuildNode implements Node {
     private final Ends ends;
     private final NodeSpec spec;
     private Predicate<BlockPos> met = cell -> false;
+    private boolean onlyReplaceable;
 
     BuildNode(BuildJob job, Ends ends) {
         this.job = job;
@@ -74,6 +75,11 @@ abstract class BuildNode implements Node {
         return this;
     }
 
+    final BuildNode onlyReplaceable() {
+        onlyReplaceable = true;
+        return this;
+    }
+
     @Override
     public final NodeSpec spec() {
         return spec;
@@ -91,6 +97,13 @@ abstract class BuildNode implements Node {
         }
         if (finished(level)) {
             return new Outcome.Done(List.of(), List.of(), Optional.empty(), who.supplied());
+        }
+        if (onlyReplaceable && job.after().entrySet().stream().anyMatch(entry -> {
+            BlockPos cell = entry.getKey().block(level);
+            return !level.getBlockState(cell).canBeReplaced() || !level.getFluidState(cell).isEmpty()
+                || !entry.getValue().canSurvive(level, cell);
+        })) {
+            return refuse(BuildRefusal.NO_WAY_TO_BUILD);
         }
         return work(level, who);
     }

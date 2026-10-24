@@ -42,6 +42,14 @@ public final class PastureContent {
 
     public static final ResourceLocation PASTURE = ID;
 
+    public static final ResourceLocation APIARY = ResourceLocation.fromNamespaceAndPath("folkways", "apiary");
+    public static final ResourceLocation HARVESTING_HONEY =
+        ResourceLocation.fromNamespaceAndPath("folkways", "harvesting_honey");
+    public static final Schema.Setting PRODUCT = new Schema.Setting.Choice(
+        "product", "folkways.settings.apiary.product", ResourceLocation.withDefaultNamespace("honey_bottle"),
+        List.of(ResourceLocation.withDefaultNamespace("honey_bottle"), ResourceLocation.withDefaultNamespace("honeycomb")),
+        ResourceLocation.withDefaultNamespace("honey_bottle"));
+
     public static final ResourceLocation HERDING =
         ResourceLocation.fromNamespaceAndPath("folkways", "herding");
 
@@ -115,7 +123,10 @@ public final class PastureContent {
     public static void enroll(Registering registering) {
         registering.facing(ID, colony -> colony.service(ID, PasturePresence.class)
             .map(value -> (Facing) value));
-        registering.enrollment(ID, new Enrollment(List.of(pen()), Schema.none(), List.of(PAGE)));
+        registering.enrollment(ID, new Enrollment(List.of(pen(),
+            new Delegation(APIARY, new Shape.Volume(FolkwaysVanillaConfig.maxPastureCells()),
+                new Schema(List.of(PRODUCT)), ResourceLocation.withDefaultNamespace("beehive"))),
+            Schema.none(), List.of(PAGE)));
     }
 
     public static Vocation trade() {

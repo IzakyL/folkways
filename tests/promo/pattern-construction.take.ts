@@ -10,17 +10,18 @@ test("residents construct bundled patterns from real commissions in accelerated 
  test.setTimeout(90 * 60_000);
  const scope=process.env.FOLKWAYS_PATTERN_SCOPE ?? "pattern-construction";
  const run=take(scope); let pair: PromoPair | undefined;
+ run.note("configuration",{workers:Number(process.env.FOLKWAYS_PATTERN_WORKERS??6),tickRate:Number(process.env.FOLKWAYS_PATTERN_TICK_RATE??160),groundDepth:Number(process.env.FOLKWAYS_PATTERN_GROUND_DEPTH??32),mineDefaults:process.env.FOLKWAYS_PATTERN_MINE_DEFAULTS==="1"});
  try {
   pair=await launchPromoPair(scope,{config:"blockwright.toml"}); const {server,client}=pair;
   const player=(await waitForGroundedPlayer(server)).name;
   await world.command(server,`op ${player}`); await cinematicWorld(server);await world.command(server,"gamerule doDaylightCycle false");await world.command(server,"time set noon");
   await world.command(server,`gamemode spectator ${player}`);
   await world.command(server,"forceload add -32 -32 96 48");
-  const setup=await runColonyTask(server,HEIGHT,{});const y=Number(setup.y);
+  const setup=await runColonyTask(server,HEIGHT,{depth:Number(process.env.FOLKWAYS_PATTERN_GROUND_DEPTH??32)});const y=Number(setup.y);
   await world.command(server,`tp ${player} -4 ${y} 0`);
   await world.command(server,`item replace entity ${player} weapon.mainhand with folkways:colony_book`);
   const {colony_id}=await foundPromoColonyFast(server,player,setup.members);
-  await admitPromoSettlersFast(server,player,colony_id,6);
+  await admitPromoSettlersFast(server,player,colony_id,Number(process.env.FOLKWAYS_PATTERN_WORKERS??6));
   run.note("crew",await runColonyTask(server,CREW,{colony_id,y,stageX:0}));
   const chests=Array.from({length:12},(_,i)=>({x:-15+i,y,z:-10}));
   for(const cell of chests)await world.command(server,`setblock ${cell.x} ${cell.y} ${cell.z} minecraft:chest`);
@@ -29,7 +30,7 @@ test("residents construct bundled patterns from real commissions in accelerated 
   const results:any[]=[];
   const selected=process.env.FOLKWAYS_PATTERN_CASES?.split(",");
   for(const one of cases(y).filter(one=>!selected||selected.includes(one.name))){
-   await runColonyTask(server,RESET,{colony_id,y,terrain:one.terrain??"flat",chests});
+   await runColonyTask(server,RESET,{colony_id,y,terrain:one.terrain??"flat",chests,depth:Number(process.env.FOLKWAYS_PATTERN_GROUND_DEPTH??32)});
    const args={colony_id,name:one.name,y};
    const receipt=await runColonyTask(server,COMMISSION,{colony_id,sites:[one.site]});
    run.note(`${one.name}-commission`,receipt);
@@ -41,9 +42,9 @@ test("residents construct bundled patterns from real commissions in accelerated 
    const eye={x:-4,y:y+14,z:-4};const look={x:12,y:y+2,z:14};
    const pose={position:eye,...cameraLookingAt(eye,look),fov:65};
    await world.command(server,`tp ${player} ${eye.x} ${eye.y} ${eye.z}`);
-   await world.command(server,"tick rate 160");
+   await world.command(server,`tick rate ${Number(process.env.FOLKWAYS_PATTERN_TICK_RATE??160)}`);
    const samples:any[]=[];let last=initial;
-   await run.clip(client,server,one.name,{subject:`Real resident construction of bundled ${one.name}; requested 8x simulation; no target staging`,worldState:{...one,initial},camera:pose,seconds:0,fps:30,
+   await run.clip(client,server,one.name,{subject:`Real resident construction of bundled ${one.name}; requested ${Number(process.env.FOLKWAYS_PATTERN_TICK_RATE??160)} TPS; no target staging`,worldState:{...one,initial},camera:pose,seconds:0,fps:30,
     during:async()=>{
      const started=Date.now();
      for(let round=0;round<Number(process.env.FOLKWAYS_PATTERN_ROUNDS??60);round++){
@@ -79,7 +80,7 @@ function cases(y:number):any[]{
   {name:"road",site:{pattern:"folkways:road",points:[p(1,8),p(13,8),p(25,18)]}},
   {name:"terraced_field",terrain:"slope",site:{pattern:"folkways:terraced_field",min:p(2,5),max:p(11,16)}},
   {name:"quarry",site:{pattern:"folkways:quarry",min:p(3,5),max:p(12,14),knobs:{depth:3}}},
-  {name:"mine",site:{pattern:"folkways:mine",min:p(3,5),max:p(13,15),knobs:{y:y-15,branch:4,pairs:1,spacing:2,chase:false}}},
+  {name:"mine",site:{pattern:"folkways:mine",min:p(3,5),max:p(13,15),knobs:process.env.FOLKWAYS_PATTERN_MINE_DEFAULTS==="1"?{}:{y:y-15,branch:4,pairs:1,spacing:2,chase:false}}},
   {name:"railway",site:{pattern:"folkways:railway",points:[p(1,5),p(21,5),p(21,25)]}},
  ];
 }
@@ -89,9 +90,9 @@ const HEIGHT = defineTask<Record<string, any>, Record<string, any>>({
       "net.minecraft.world.level.block.*", "net.minecraft.world.level.block.state.properties.BedPart",
       "net.minecraft.world.Container", "net.minecraft.world.item.*"],
     body: `
-var level=ctx.server().overworld();int y=64;
+var level=ctx.server().overworld();int y=64;int depth=(int)Args.of(ctx).integer("depth");
 // A deep level work yard lets the excavation extend below grade even in the bedrock-only test world.
-for(int x=-32;x<=48;x++)for(int z=-24;z<=40;z++)for(int h=y-32;h<y;h++)
+for(int x=-32;x<=48;x++)for(int z=-24;z<=40;z++)for(int h=y-depth;h<y;h++)
  level.setBlock(new BlockPos(x,h,z),(h==y-1?Blocks.GRASS_BLOCK:Blocks.DIRT).defaultBlockState(),2);
 var members=new ArrayList<Object>();
 for(int x:new int[]{-6,-8}){var at=new BlockPos(x,y,0);level.setBlock(at,Blocks.CHEST.defaultBlockState(),2);
@@ -262,7 +263,7 @@ var level=ctx.server().overworld();var args=Args.of(ctx);int y=(int)args.integer
 for(var raw:args.list("chests")){var m=(Map<?,?>)raw;var chest=(net.minecraft.world.Container)level.getBlockEntity(new BlockPos(((Number)m.get("x")).intValue(),((Number)m.get("y")).intValue(),((Number)m.get("z")).intValue()));chest.clearContent();chest.setChanged();}
 var colony=ColonyGround.of(ctx.server(),UUID.fromString(args.string("colony_id"))).orElseThrow();int residentIndex=0;
 for(var resident:colony.residents()){var entity=level.getEntity(resident.id());if(entity!=null)entity.teleportTo(-10+residentIndex++*2,y,-2.5);}
-for(int x=-2;x<=36;x++)for(int z=1;z<=31;z++)for(int h=y-32;h<=y+24;h++){
+for(int x=-2;x<=36;x++)for(int z=1;z<=31;z++)for(int h=y-(int)args.integer("depth");h<=y+24;h++){
  int top=y-1;if(terrain.equals("slope")&&x>=2&&x<=22&&z>=3&&z<=24)top+=(24-z)/5;
  var state=h<=top?Blocks.STONE.defaultBlockState():Blocks.AIR.defaultBlockState();
  if(h==top)state=Blocks.GRASS_BLOCK.defaultBlockState();

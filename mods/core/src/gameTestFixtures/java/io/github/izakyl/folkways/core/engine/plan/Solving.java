@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.engine.plan;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -12,6 +13,7 @@ public final class Solving {
     private final Scheduler scheduler = new Scheduler();
     private final WeaveView plan = new WeaveView();
     private Map<UUID, Tour> tours = Map.of();
+    private List<Message> feedback = List.of();
 
     public Solving() {
         this(new Claims(), new Cooldowns());
@@ -22,11 +24,14 @@ public final class Solving {
     }
 
     public Planned handle(Known known, List<Message> inbox, long tick) {
-        Planner.Woven woven = planner.handle(known, inbox, tick, tours);
+        List<Message> batch = new ArrayList<>(feedback);
+        batch.addAll(inbox);
+        Planner.Woven woven = planner.handle(known, batch, tick, tours);
         plan.apply(woven.delta());
         Scheduler.Scheduled laid = scheduler.handle(List.of(
             new Scheduler.Input(woven.delta(), woven.crew(), woven.ways(), woven.retry(), tick)));
         tours = laid.all();
+        feedback = laid.stow().stream().<Message>map(Message.PackBusy::new).toList();
         return new Planned(woven, laid, Shown.of(plan, woven.delta()));
     }
 
@@ -39,5 +44,6 @@ public final class Solving {
         scheduler.closed();
         plan.clear();
         tours = Map.of();
+        feedback = List.of();
     }
 }
