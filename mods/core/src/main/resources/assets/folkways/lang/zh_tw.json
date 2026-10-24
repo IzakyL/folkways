@@ -1277,5 +1277,22 @@
   "folkways.raid.status": "第 %1$s/%2$s 波 · 敵軍 %3$s 人 · %4$s 秒",
   "folkways.raid.idle": "距下次可能來襲還有 %s 秒",
   "folkways.raid.unavailable": "現在無法開始襲擊。",
-  "folkways.raid.no_spawn": "城外沒有合適的進攻位置，襲擊已延後。"
+  "folkways.raid.no_spawn": "城外沒有合適的進攻位置，襲擊已延後。",
+  "folkways.raid.help": "敵軍會進攻這片殖民地。可在戰鬥頁部署警衛。襲擊結束後，火災和牆體缺口仍需處理。",
+  "folkways.raid.report": "最近一次襲擊戰報",
+  "folkways.raid.no_report": "尚未遭遇襲擊。",
+  "folkways.raid.no_loot": "沒有物資被劫走。",
+  "folkways.raid.enable": "開啟殖民地襲擊",
+  "folkways.raid.disable": "關閉殖民地襲擊",
+  "folkways.raid.server_disabled": "伺服器已關閉襲擊。",
+  "folkways.raid.opted_out": "這片殖民地已關閉襲擊。",
+  "folkways.raid.plundering": "敵軍正在劫掠 · 尚有 %s 人",
+  "folkways.raid.damage": "破壞方塊 %1$s 個 · 點燃火源 %2$s 處 · 燒毀方塊 %3$s 個",
+  "folkways.raid.loot_taken": "被劫物資：%1$s × %2$s",
+  "folkways.raid.loot_dropped": "可回收掉落物：%1$s × %2$s",
+  "folkways.raid.direction": "來襲方向：%s",
+  "folkways.raid.direction.north": "北方",
+  "folkways.raid.direction.south": "南方",
+  "folkways.raid.direction.east": "東方",
+  "folkways.raid.direction.west": "西方"
 }

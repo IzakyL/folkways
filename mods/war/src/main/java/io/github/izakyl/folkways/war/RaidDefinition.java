@@ -29,6 +29,21 @@ public record RaidDefinition(List<Wave> waves, Limits limits, String snapshot) {
     }
     public RaidDefinition { waves = List.copyOf(waves); }
 
+    RaidDefinition scaled(int strength) {
+        if (strength <= 1) { return this; }
+        JsonObject root = JsonParser.parseString(snapshot).getAsJsonObject();
+        for (var value : root.getAsJsonArray("waves")) {
+            int remaining = 64;
+            var entries = value.getAsJsonObject().getAsJsonArray("entries");
+            for (int index = 0; index < entries.size(); index++) {
+                var entry = entries.get(index).getAsJsonObject();
+                int count = Math.min(remaining - (entries.size() - index - 1), GsonHelper.getAsInt(entry, "count") * strength);
+                entry.addProperty("count", count); remaining -= count;
+            }
+        }
+        return parse(root.toString());
+    }
+
     public static RaidDefinition parse(String json) {
         JsonObject root = JsonParser.parseString(json).getAsJsonObject();
         if (GsonHelper.getAsInt(root, "schemaVersion") != 1) { throw new IllegalArgumentException("Unsupported raid schema"); }

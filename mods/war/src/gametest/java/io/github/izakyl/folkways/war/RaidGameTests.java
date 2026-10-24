@@ -47,6 +47,12 @@ public final class RaidGameTests {
         level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false, level.getServer());
     }
 
+    @net.minecraft.gametest.framework.BeforeBatch(batch = "war_trigger")
+    public static void triggerRules(net.minecraft.server.level.ServerLevel level) { rules(level); }
+
+    @net.minecraft.gametest.framework.AfterBatch(batch = "war_trigger")
+    public static void restoreTriggerRules(net.minecraft.server.level.ServerLevel level) { restoreRules(level); }
+
     static RaidDefinition definition(String entity, int waves) {
         String wave = "{\"delayTicks\":0,\"entries\":[{\"entity\":\"minecraft:" + entity + "\",\"count\":1,\"role\":\"fighter\"}]}";
         return RaidDefinition.parse("{\"schemaVersion\":1,\"waves\":[" + String.join(",", java.util.Collections.nCopies(waves, wave)) + "]}");
@@ -344,7 +350,7 @@ public final class RaidGameTests {
     }
 
     @GameTest(batch = "war", template = "empty_large", timeoutTicks = 300)
-    public static void lootersWalkToARegisteredStoreAndHoldingStoresCausesDefeat(GameTestHelper helper) {
+    public static void lootersWalkToARegisteredStoreBeforeTakingGoods(GameTestHelper helper) {
         Scene scene = new Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
         Mob mob = scene.director.loaded().getFirst(); WorldPos at = scene.store(new BlockPos(15, 1, 3));
         var container = scene.colony.store(helper.getLevel(), at).orElseThrow(); container.setItem(0, new ItemStack(Items.EMERALD, 64));
@@ -355,6 +361,128 @@ public final class RaidGameTests {
             helper.assertTrue(mob.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(at.block(helper.getLevel()))) <= 16, "goods move only at the store");
             helper.assertTrue(RaidPlunder.carrying(mob), "walking looter carries the removed items");
         });
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void holdingAnUndefendedStoreBeginsPhysicalPlunder(GameTestHelper helper) {
+        Scene scene = new Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); WorldPos at = scene.store(mob.blockPosition().east().subtract(helper.absolutePos(BlockPos.ZERO)));
+        scene.colony.store(helper.getLevel(), at).orElseThrow().setItem(0, new ItemStack(Items.DIAMOND, 64));
+        scene.person.mob().setNoGravity(true); scene.person.mob().moveTo(mob.getX() + 40, mob.getY(), mob.getZ());
+        for (int tick = 0; tick < WarConfig.STORE_HOLD.get(); tick += 20) { scene.director.advance(true); }
+        helper.assertTrue(scene.director.raid().phase == RaidInstance.Phase.PLUNDER, "holding an undefended registered store triggers defeat");
+        helper.assertValueEqual(scene.colony.store(helper.getLevel(), at).orElseThrow().getItem(0).getCount(), 64, "defeat itself never deducts abstract goods");
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void mobGriefingFalseBlocksExplosionsAndRealStoreWithdrawal(GameTestHelper helper) {
+        Scene scene = new Scene(helper); scene.begin("creeper", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); WorldPos at = scene.store(mob.blockPosition().east().subtract(helper.absolutePos(BlockPos.ZERO)));
+        var container = scene.colony.store(helper.getLevel(), at).orElseThrow(); container.setItem(0, new ItemStack(Items.DIAMOND, 64)); scene.director.plunder();
+        var rule = helper.getLevel().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_MOBGRIEFING); boolean before = rule.get();
+        try {
+            rule.set(false, helper.getLevel().getServer());
+            helper.assertFalse(RaidPlunder.take(scene.director, mob, at), "mobGriefing=false forbids inventory mutation");
+            var blocks = BlockPos.betweenClosedStream(mob.blockPosition().offset(-4, -1, -4), mob.blockPosition().offset(4, 4, 4)).map(BlockPos::immutable)
+                .collect(java.util.stream.Collectors.toMap(pos -> pos, pos -> helper.getLevel().getBlockState(pos)));
+            helper.getLevel().explode(mob, mob.getX(), mob.getY() + 1, mob.getZ(), 4, net.minecraft.world.level.Level.ExplosionInteraction.MOB);
+            helper.assertTrue(blocks.entrySet().stream().allMatch(entry -> helper.getLevel().getBlockState(entry.getKey()).equals(entry.getValue())), "mobGriefing=false leaves every block intact after an actual explosion");
+            helper.assertValueEqual(container.getItem(0).getCount(), 64, "protected goods remain in their real container");
+        } finally { rule.set(before, helper.getLevel().getServer()); }
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void colonyPageAuthorityIsRecheckedForEverySettingAndReading(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        var keeper = net.neoforged.neoforge.common.util.FakePlayerFactory.get(helper.getLevel(), new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "war_keeper"));
+        var intruder = net.neoforged.neoforge.common.util.FakePlayerFactory.get(helper.getLevel(), new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "war_intruder"));
+        io.github.izakyl.folkways.front.engine.charter.Charters.keep(scene.colony, io.github.izakyl.folkways.front.engine.charter.Charter.founded("war", keeper.getUUID()));
+        keeper.setData(io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments.CURRENT_COLONY, java.util.Optional.of(scene.colony.id()));
+        intruder.setData(io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments.CURRENT_COLONY, java.util.Optional.of(scene.colony.id()));
+        helper.assertFalse(scene.director.setEnabled(intruder, false), "forged current-colony state grants no authority");
+        helper.assertTrue(scene.director.setEnabled(keeper, false), "a keeper can opt out of raids");
+        helper.assertFalse(scene.director.reading(keeper).isEmpty(), "authorized reading carries translated components");
+        helper.assertTrue(scene.director.reading(intruder).isEmpty(), "foreign readers receive no raid details");
+        io.github.izakyl.folkways.front.engine.charter.Charters.keep(scene.colony, io.github.izakyl.folkways.front.engine.charter.Charter.founded("revoked", intruder.getUUID()));
+        helper.assertFalse(scene.director.setEnabled(keeper, true), "revoking membership invalidates an existing page action");
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void looterCargoSurvivesReloadWithoutTakingTheSameShareAgain(GameTestHelper helper) {
+        Scene scene = new Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob original = scene.director.loaded().getFirst(); WorldPos at = scene.store(original.blockPosition().east().subtract(helper.absolutePos(BlockPos.ZERO)));
+        var container = scene.colony.store(helper.getLevel(), at).orElseThrow(); container.setItem(0, new ItemStack(Items.DIAMOND, 64)); scene.director.plunder();
+        helper.assertTrue(RaidPlunder.take(scene.director, original, at), "the initial real withdrawal succeeds");
+        CompoundTag saved = new CompoundTag(); original.save(saved); original.discard();
+        Mob loaded = (Mob) EntityType.loadEntityRecursive(saved, helper.getLevel(), entity -> entity); helper.getLevel().addFreshEntity(loaded);
+        helper.assertTrue(RaidPlunder.carrying(loaded), "actual cargo is serialized on the looter");
+        helper.assertFalse(RaidPlunder.take(scene.director, loaded, at), "the saved manifest marks that share already taken");
+        helper.assertValueEqual(container.getItem(0).getCount(), 52, "reload never repeats the deduction");
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void raidersIgnoreCloserResidentsFromAnotherColony(GameTestHelper helper) {
+        Scene scene = new Scene(helper); scene.begin("vindicator", 1); scene.director.advance(true);
+        scene.person.mob().getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).setBaseValue(1000); scene.person.mob().setHealth(1000);
+        Colony other = Colonies.mint(helper.getLevel().getServer());
+        Body foreign = PersonBody.RESIDENT.get().create(helper.getLevel()); foreign.mob().setNoAi(true);
+        Mob raider = scene.director.loaded().getFirst(); foreign.mob().moveTo(raider.getX() + 1, raider.getY(), raider.getZ());
+        other.hold(PersonContent.ID, Held.Entity.of(foreign.mob())).orElseThrow(); foreign.joinColony(other.id()); helper.getLevel().addFreshEntity(foreign.mob());
+        helper.runAfterDelay(80, () -> {
+            try { helper.assertValueEqual(foreign.mob().getHealth(), foreign.mob().getMaxHealth(), "a closer foreign resident is never a strategic target");
+                helper.assertTrue(raider.getTarget() == scene.person.mob(), "the existing native goal still acquires its own colony's resident"); }
+            finally { foreign.mob().discard(); other.raze(); }
+            helper.succeed();
+        });
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void doubleDoorsNeedBothCellsAuthorizedBeforeBreaking(GameTestHelper helper) {
+        Scene scene = new Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); BlockPos at = mob.blockPosition().east();
+        helper.getLevel().setBlockAndUpdate(at, Blocks.OAK_DOOR.defaultBlockState());
+        helper.getLevel().setBlockAndUpdate(at.above(), Blocks.OAK_DOOR.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF, net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER));
+        java.util.function.Consumer<net.neoforged.neoforge.event.level.BlockEvent.BreakEvent> deny = event -> { if (event.getPos().equals(at.above())) { event.setCanceled(true); } };
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(deny);
+        try { helper.assertFalse(WarEdits.breakBlock(mob, at), "denying the other half prevents the whole door break"); }
+        finally { net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(deny); }
+        helper.assertTrue(helper.getLevel().getBlockState(at).is(Blocks.OAK_DOOR), "the lower half remains intact");
+        helper.assertTrue(WarEdits.breakBlock(mob, at), "both authorized halves may break through vanilla updates");
+        helper.assertValueEqual(scene.director.raid().broken, 2, "both removed door cells consume budget exactly once");
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void burningRaiderArrowsCannotIgniteProtectedTnt(GameTestHelper helper) {
+        Scene scene = new Scene(helper); scene.begin("skeleton", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); BlockPos at = mob.blockPosition().east(); helper.getLevel().setBlockAndUpdate(at, Blocks.TNT.defaultBlockState());
+        var arrow = new net.minecraft.world.entity.projectile.Arrow(helper.getLevel(), mob, new ItemStack(Items.ARROW), null); arrow.igniteForSeconds(30);
+        WarEdits.projectileHit(helper.getLevel().getBlockState(at), helper.getLevel(), new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(at), net.minecraft.core.Direction.WEST, at, false), arrow);
+        helper.assertTrue(helper.getLevel().getBlockState(at).is(Blocks.TNT), "protected TNT cannot become an unbudgeted secondary explosion");
+        helper.assertValueEqual(scene.director.raid().broken, 0, "denied block reactions spend no budget"); arrow.discard();
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war_trigger", template = "empty_large")
+    public static void automaticTriggerWaitsForGracePresenceAndDuskOrDefersSafely(GameTestHelper helper) {
+        int grace = WarConfig.GRACE.get(); int residents = WarConfig.MIN_RESIDENTS.get(); long day = helper.getLevel().getDayTime();
+        try {
+            WarConfig.GRACE.set(20); WarConfig.MIN_RESIDENTS.set(1);
+            Scene scene = new Scene(helper); helper.getLevel().setDayTime(1000);
+            scene.director.advance(false); helper.assertValueEqual(scene.director.countdown(), 20L, "offline grace does not elapse");
+            scene.director.advance(true); helper.assertFalse(scene.director.active(), "eligibility alone does not start a daytime raid");
+            helper.getLevel().setDayTime(12500); scene.director.advance(true);
+            helper.assertTrue(scene.director.active() || scene.director.countdown() == 1200, "dusk either begins a warning or postpones a failed outside spawn search");
+            if (scene.director.active()) {
+                helper.assertTrue(scene.director.raid().phase == RaidInstance.Phase.WARNING, "the automatic trigger begins with a warning");
+                helper.assertTrue(scene.director.raid().origin.cell().distSqr(scene.director.raid().target.cell()) >= 24 * 24, "automatic raids never fall back to spawning inside the colony");
+            }
+        } finally { WarConfig.GRACE.set(grace); WarConfig.MIN_RESIDENTS.set(residents); helper.getLevel().setDayTime(day); }
+        helper.succeed();
     }
 
     static final class Scene implements GameTestListener {

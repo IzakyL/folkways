@@ -2,16 +2,16 @@
 
 [Architecture](architecture.md) · [简体中文](../zh-CN/combat-architecture.md)
 
-This increment continues draft e40ebc7 and incorporates master 506eec3. It provides configurable hostility, defence and escape, server-side orders, groups of up to eight people, formation patrols and real melee, bow and crossbow sessions. War and gun integrations remain separate future modules.
+This increment continues draft e40ebc7 and incorporates master 506eec3. It provides configurable hostility, defence and escape, server-side orders, groups of up to eight people, formation patrols and real melee, bow and crossbow sessions. [War](raids.md) provides optional colony raids; gun integrations remain separate future modules.
 
 ## Module ownership
 
-| Module                            | Responsibility                                                                                       |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Core                              | Residents, labour, item ownership, lifecycle, general travel and exclusive execution                 |
-| Vanilla                           | Everyday hostility, defence, patrol, orders, actual groups, placement, movement and weapon contracts |
-| War, future                       | Raids, PvE/PvP, strategic AI, RTS UI, box selection, dragged lines and numbered shortcut selections  |
-| Separate gun integrations, future | Native TaCZ or Point Blank execution through Vanilla contracts                                       |
+| Module                            | Responsibility                                                                                              |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Core                              | Residents, labour, item ownership, lifecycle, general travel and exclusive execution                        |
+| Vanilla                           | Everyday hostility, defence, patrol, orders, actual groups, placement, movement and weapon contracts        |
+| War                               | Colony raids, damage budgets, attributed fire, plunder and reports; broader RTS controls remain future work |
+| Separate gun integrations, future | Native TaCZ or Point Blank execution through Vanilla contracts                                              |
 
 Core and Vanilla require neither War nor gun mods. Create, Cookery and Modular Golems retain independent extensions.
 

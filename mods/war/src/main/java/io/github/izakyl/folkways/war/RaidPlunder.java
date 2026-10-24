@@ -33,7 +33,7 @@ public final class RaidPlunder {
     static boolean holding(Colony colony, ServerLevel level, RaidInstance raid, List<Mob> mobs) {
         for (var store : colony.storesIn(level.dimension()).stream().limit(128).toList()) {
             for (Mob mob : mobs) {
-                if (mob.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(store.block(level))) > 9 || !WarEdits.loot(level, colony, store, mob)) { continue; }
+                if (mob.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(store.block(level))) > 9 || !io.github.izakyl.folkways.core.engine.travel.MobTravel.sees(mob, store) || !WarEdits.loot(level, colony, store, mob)) { continue; }
                 boolean defended = colony.residents().stream().map(resident -> level.getEntity(resident.id()))
                     .anyMatch(entity -> entity != null && entity.isAlive() && entity.distanceToSqr(mob) < 36);
                 if (defended) { continue; }
@@ -55,7 +55,7 @@ public final class RaidPlunder {
         if (actor == null) { return; }
         for (ServerLevel level : server.getAllLevels()) {
             for (WorldPos store : colony.storesIn(level.dimension()).stream().limit(128).toList()) {
-                if (!WarEdits.loot(level, colony, store, actor)) { continue; }
+                if (!(store.realm() instanceof io.github.izakyl.folkways.core.api.terms.Realm.Dimension) || !WarEdits.loot(level, colony, store, actor)) { continue; }
                 var container = colony.store(level, store).orElse(null);
                 if (container == null) { continue; }
                 for (int slot = 0; slot < Math.min(256, container.getContainerSize()); slot++) {
@@ -91,7 +91,7 @@ public final class RaidPlunder {
     static boolean take(RaidDirector director, Mob mob, WorldPos at) {
         if (!(mob.level() instanceof ServerLevel level) || director.raid().phase != RaidInstance.Phase.PLUNDER
                 || !director.owns(mob) || director.raid().paused || mob.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(at.block(level))) > 9
-                || !WarEdits.loot(level, director.colony(), at, mob)) { return false; }
+                || !io.github.izakyl.folkways.core.engine.travel.MobTravel.sees(mob, at) || !WarEdits.loot(level, director.colony(), at, mob)) { return false; }
         ListTag cargo = mob.getPersistentData().getList(CARGO, Tag.TAG_COMPOUND);
         if (cargo.size() >= Math.min(WarConfig.PLUNDER_PER_RAIDER.get(), director.raid().definition.limits().plunderPerRaider())) { return false; }
         var container = director.colony().store(level, at).orElse(null);
@@ -124,6 +124,14 @@ public final class RaidPlunder {
     static boolean carrying(Mob mob) { return !mob.getPersistentData().getList(CARGO, Tag.TAG_COMPOUND).isEmpty(); }
     static boolean full(RaidDirector director, Mob mob) {
         return mob.getPersistentData().getList(CARGO, Tag.TAG_COMPOUND).size() >= Math.min(WarConfig.PLUNDER_PER_RAIDER.get(), director.raid().definition.limits().plunderPerRaider());
+    }
+
+    static void returnCargo(Mob mob) {
+        for (Tag value : mob.getPersistentData().getList(CARGO, Tag.TAG_COMPOUND)) {
+            ItemStack stack = ItemStack.parseOptional(mob.registryAccess(), (CompoundTag) value);
+            if (!stack.isEmpty()) { mob.spawnAtLocation(stack); }
+        }
+        mob.getPersistentData().remove(CARGO);
     }
 
     @SubscribeEvent

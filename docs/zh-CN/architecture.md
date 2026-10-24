@@ -4,9 +4,9 @@
 
 ## 模组划分
 
-Folkways 包含**两个必装模组和三个可选扩展**，分别对应 `mods/` 下的 Gradle 子项目。
+Folkways 包含**两个必装模组和四个可选扩展**，分别对应 `mods/` 下的 Gradle 子项目。
 它们有独立的模组 ID，共用 `folkways` 内容命名空间。
-根项目负责运行测试和收集 jar，不会构建第六个模组。
+根项目负责运行测试和收集 jar，不会构建另一个模组。
 
 | Gradle 项目                             | 模组 ID                  | 职责                                                     |
 | --------------------------------------- | ------------------------ | -------------------------------------------------------- |
@@ -16,12 +16,15 @@ Folkways 包含**两个必装模组和三个可选扩展**，分别对应 `mods/
 | `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | 傀儡居民                                                 |
 | `:cookery` → `mods/cookery`             | `folkways_cookery`       | 原生 Cookery 农业、厨具、共享工具、森罗酒馆酿酒和教程    |
 
+| `:war` → `mods/war` | `folkways_war` | 可选殖民地袭击、有限破坏、劫掠与战报 |
+
 ```mermaid
 flowchart BT
     Vanilla --> Core
     Create --> Vanilla
     ModularGolems[Modular Golems] --> Vanilla
     Cookery --> Vanilla
+    War --> Vanilla
 ```
 
 为正确理解已存在的世界结构所需的兼容逻辑放入 Core，例如 Sable 子世界和机械动力装置。
@@ -74,3 +77,5 @@ Vanilla 的日常战斗、服务端居民命令和实际小队见[战斗与编�
 Core 的 `src/gameTestFixtures` 提供不注册测试的共享辅助代码，因此其他模组复用准备逻辑时不会顺带发现 Core 的测试。
 选择某个 GameTest 所属模组，不代表移除该场景所需的其他运行时模组。
 筛选参数和 CI 环境见[测试指南](testing.md)。
+
+袭击生命周期、权限和存档见[殖民地袭击](raids.md)。

@@ -5,7 +5,9 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "RavagerMixin",
-    "FireBlockMixin"
+    "FireBlockMixin",
+    "FireRemovalMixin",
+    "ProjectileMixin"
   ],
   "injectors": {
     "defaultRequire": 1

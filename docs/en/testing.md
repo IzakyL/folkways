@@ -27,6 +27,8 @@ Choose a test owner and environment:
 | `./gradlew -PgameTestMod=core -PcookeryTests=true runGameTestServer`    | Core-owned tests with Cookery; also accepts `vanilla`                        |
 | `./gradlew -PgameTestMod=cookery -PcookeryTests=true runGameTestServer` | Cookery-owned tests with Cookery installed                                   |
 
+War: `./gradlew -PwarTests=true -PgameTestMod=war runGameTestServer` runs its focused tests; `./gradlew -PwarTests=true runGameTestServer` also runs the base suites with War installed. See [Colony raids](raids.md).
+
 Ownership is separate from installed mods: selecting Core still loads Vanilla's
 residents and the integrations its scenarios require. Modular Golems is not
 loaded in these runs and has no GameTests. Core also runs the existing LDLib2

@@ -27,9 +27,15 @@ public final class WarEvents {
     }
 
     @SubscribeEvent(priority = net.neoforged.bus.api.EventPriority.LOWEST)
+    public static void trample(net.neoforged.neoforge.event.level.BlockEvent.FarmlandTrampleEvent event) {
+        if (event.getEntity() instanceof net.minecraft.world.entity.Mob mob && RaidMembers.marked(mob)
+                && !WarEdits.reserve(mob, event.getPos(), false)) { event.setCanceled(true); }
+    }
+
+    @SubscribeEvent(priority = net.neoforged.bus.api.EventPriority.LOWEST)
     public static void explosion(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
         if (!(event.getExplosion().getDirectSourceEntity() instanceof net.minecraft.world.entity.Mob mob) || !RaidMembers.marked(mob)) { return; }
-        event.getAffectedBlocks().removeIf(at -> !WarEdits.reserve(mob, at, true));
+        WarEdits.explosion(mob, event.getAffectedBlocks());
         if (mob instanceof net.minecraft.world.entity.monster.Creeper) { RaidMembers.director(mob).ifPresent(director -> director.died(mob.getUUID())); }
     }
 

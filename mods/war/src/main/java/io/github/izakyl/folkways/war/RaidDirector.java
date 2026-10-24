@@ -59,10 +59,46 @@ public final class RaidDirector {
     boolean enabled() { return enabled; }
     long countdown() { return active() ? raid.wait : Math.max(0, next - eligibleTicks); }
 
-    public void enabled(boolean value) {
+    void enabled(boolean value) {
         enabled = value;
         if (!value && active()) { finish(RaidInstance.Phase.CANCELLED); }
         save();
+    }
+
+    public boolean setEnabled(ServerPlayer player, boolean value) {
+        boolean authorized = io.github.izakyl.folkways.front.engine.authority.ColonyAuthority.of(player, Optional.empty())
+            .filter(authority -> authority.colony().id().equals(colony.id())).isPresent();
+        if (!authorized) { return false; }
+        enabled(value); return true;
+    }
+
+    public CompoundTag reading(ServerPlayer player) {
+        CompoundTag tag = new CompoundTag();
+        if (io.github.izakyl.folkways.front.engine.authority.ColonyAuthority.of(player, Optional.empty())
+                .filter(authority -> authority.colony().id().equals(colony.id())).isEmpty()) { return tag; }
+        var registries = player.registryAccess();
+        tag.putBoolean("enabled", enabled);
+        tag.put("status", io.github.izakyl.folkways.front.api.ui.Pages.text(registries, status()));
+        Component direction = raid == null ? Component.empty() : Component.translatable("folkways.raid.direction",
+            Component.translatable("folkways.raid.direction." + net.minecraft.core.Direction.getNearest(
+                raid.origin.cell().getX() - raid.target.cell().getX(), 0, raid.origin.cell().getZ() - raid.target.cell().getZ()).getName()));
+        tag.put("direction", io.github.izakyl.folkways.front.api.ui.Pages.text(registries, direction));
+        int burned = raid == null ? 0 : raid.target.level(server).map(level -> AttributedFires.of(level).burned(raid.id)).orElse(0);
+        Component damage = raid == null ? Component.translatable("folkways.raid.no_report") : Component.translatable("folkways.raid.damage", raid.broken, raid.fires, burned);
+        if (raid != null && !raid.active()) { damage = Component.translatable("folkways.raid." + raid.phase.name().toLowerCase(java.util.Locale.ROOT)).append("\n").append(damage); }
+        tag.put("damage", io.github.izakyl.folkways.front.api.ui.Pages.text(registries, damage));
+        var loot = Component.empty();
+        if (raid != null) {
+            for (var value : raid.plunder) {
+                CompoundTag row = (CompoundTag) value;
+                if (!row.contains("taken")) { continue; }
+                ItemStack stack = ItemStack.parseOptional(registries, row.getCompound("taken"));
+                if (!loot.getSiblings().isEmpty()) { loot.append("\n"); }
+                loot.append(Component.translatable(row.getBoolean("dropped") ? "folkways.raid.loot_dropped" : "folkways.raid.loot_taken", stack.getHoverName(), stack.getCount()));
+            }
+        }
+        tag.put("loot", io.github.izakyl.folkways.front.api.ui.Pages.text(registries, loot.getSiblings().isEmpty() ? Component.translatable("folkways.raid.no_loot") : loot));
+        return tag;
     }
 
     void tick() {
@@ -122,13 +158,15 @@ public final class RaidDirector {
         long seed = colony.id().getMostSignificantBits() ^ colony.id().getLeastSignificantBits() ^ sequence;
         Optional<WorldPos> origin = RaidObjectives.spawn(colony, server, target.get(), seed);
         if (origin.isEmpty()) { next = eligibleTicks + 1200; save(); return Component.translatable("folkways.raid.no_spawn"); }
-        begin(definition, target.get(), origin.get(), seed);
+        int strength = Math.min(WarConfig.MAX_STRENGTH.get(), 1 + colony.residents().size() / 8 + (int) Math.min(2, eligibleTicks / (32L * 24000))
+            + (level.getDifficulty() == Difficulty.HARD ? 1 : 0));
+        begin(definition.scaled(strength), target.get(), origin.get(), seed);
         return Component.translatable("folkways.raid.warning");
     }
 
     void begin(RaidDefinition definition, WorldPos target, WorldPos origin, long seed) {
         sequence++;
-        raid = new RaidInstance(UUID.randomUUID(), seed, target, origin, definition, WarConfig.WARNING.get());
+        raid = new RaidInstance(UUID.randomUUID(), seed, target, origin, definition, WarConfig.WARNING.get() + definition.waves().getFirst().delayTicks());
         tell("folkways.raid.warning"); save();
     }
 
@@ -177,6 +215,7 @@ public final class RaidDirector {
                     if (RaidObjectives.safe(level, mob, at)) { found = true; break; }
                 }
                 if (!found) { mob.discard(); prepared.forEach(Entity::discard); return false; }
+                mob.getRandom().setSeed(random.nextLong());
                 mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), MobSpawnType.EVENT, null);
                 entry.equipment().forEach((slot, item) -> mob.setItemSlot(slot, new ItemStack(item)));
                 mob.setPersistenceRequired(); mob.setCanPickUpLoot(false);
@@ -213,7 +252,7 @@ public final class RaidDirector {
     private void finish(RaidInstance.Phase phase) {
         raid.phase = phase;
         bar.removeAllPlayers();
-        for (Mob mob : loaded()) { mob.discard(); }
+        for (Mob mob : loaded()) { if (phase == RaidInstance.Phase.CANCELLED) { RaidPlunder.returnCargo(mob); } mob.discard(); }
         RandomSource random = RandomSource.create(raid.seed);
         int min = WarConfig.INTERVAL_MIN.get(); int max = Math.max(min, WarConfig.INTERVAL_MAX.get());
         next = eligibleTicks + min + random.nextInt(max - min + 1);
@@ -241,6 +280,10 @@ public final class RaidDirector {
     }
 
     public Component status() {
+        if (!WarConfig.ENABLED.get()) { return Component.translatable("folkways.raid.server_disabled"); }
+        if (!enabled) { return Component.translatable("folkways.raid.opted_out"); }
+        if (active() && raid.paused) { return Component.translatable("folkways.raid.paused", raid.wave, raid.definition.waves().size(), raid.remaining(), (raid.wait + 19) / 20); }
+        if (active() && raid.phase == RaidInstance.Phase.PLUNDER) { return Component.translatable("folkways.raid.plundering", raid.remaining()); }
         return active() ? Component.translatable(raid.paused ? "folkways.raid.paused" : "folkways.raid.status",
             raid.wave, raid.definition.waves().size(), raid.remaining(), (raid.wait + 19) / 20)
             : Component.translatable("folkways.raid.idle", (countdown() + 19) / 20);

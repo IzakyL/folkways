@@ -85,9 +85,10 @@ public final class AttributedFires extends SavedData {
         Context context = TICK.get();
         if (context == null) { return true; }
         Source source = context.source;
-        if (!(level instanceof ServerLevel server) || source.burned >= Math.min(WarConfig.BURNED.get(), source.burnLimit)
-                || !WarEdits.fireRules(server) || !WarEdits.permits(server, at, context.actor, false, 49)) { return false; }
-        source.burned++; context.ledger.setDirty();
+        if (!(level instanceof ServerLevel server)) { return false; }
+        int cost = WarEdits.burnCost(server, at, context.actor, Math.min(WarConfig.BURNED.get(), source.burnLimit) - source.burned);
+        if (cost == 0) { return false; }
+        source.burned += cost; context.ledger.setDirty();
         return true;
     }
 
@@ -95,22 +96,29 @@ public final class AttributedFires extends SavedData {
         Context context = TICK.get();
         if (context == null || at.equals(context.origin)) { return level.setBlock(at, state, flags); }
         Source source = context.source;
-        if (source.spread >= Math.min(WarConfig.FIRE_SPREAD.get(), source.spreadLimit) || !WarEdits.placeFire(level, at, context.actor)) { return false; }
+        if (source.spread >= Math.min(WarConfig.FIRE_SPREAD.get(), source.spreadLimit) || !WarEdits.placeFire(level, at, context.actor, state)) { return false; }
         source.spread++; context.ledger.fires.put(at.immutable(), source.raid); context.ledger.setDirty();
         return true;
     }
 
     public static boolean burningFire(net.minecraft.world.level.Level level, BlockPos at, BlockState state, int flags) {
-        boolean result = level.setBlock(at, state, flags);
         Context context = TICK.get();
+        boolean result = context == null || !(level instanceof ServerLevel server) ? level.setBlock(at, state, flags)
+            : WarEdits.burningFire(server, at, context.actor, state);
         if (result && context != null && state.is(Blocks.FIRE)) {
             context.ledger.fires.put(at.immutable(), context.source.raid); context.ledger.setDirty();
         }
         return result;
     }
 
+    public void forget(BlockPos at) { if (fires.remove(at) != null) { setDirty(); } }
+
     void prune(ServerLevel level) {
         if (fires.entrySet().removeIf(entry -> level.isLoaded(entry.getKey()) && !level.getBlockState(entry.getKey()).is(Blocks.FIRE))) { setDirty(); }
+        java.util.Set<UUID> burning = new java.util.HashSet<>(fires.values());
+        if (sources.entrySet().removeIf(entry -> !burning.contains(entry.getKey())
+                && io.github.izakyl.folkways.core.api.colony.Colonies.of(level.getServer(), entry.getValue().colony)
+                    .flatMap(RaidDirector::of).map(d -> d.raid() == null || !d.raid().id.equals(entry.getKey())).orElse(true))) { setDirty(); }
     }
 
     @Override

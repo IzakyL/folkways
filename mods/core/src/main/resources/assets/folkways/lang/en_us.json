@@ -1277,5 +1277,22 @@
   "folkways.raid.status": "Wave %1$s/%2$s · %3$s enemies · %4$s s",
   "folkways.raid.idle": "Next raid eligible in %s s",
   "folkways.raid.unavailable": "A raid cannot start now.",
-  "folkways.raid.no_spawn": "No safe outside approach; the raid is delayed."
+  "folkways.raid.no_spawn": "No safe outside approach; the raid is delayed.",
+  "folkways.raid.help": "Raids target this colony. Use the Combat page to deploy guards. Fire and broken walls remain after the attack.",
+  "folkways.raid.report": "Last raid report",
+  "folkways.raid.no_report": "No raid has occurred.",
+  "folkways.raid.no_loot": "No goods taken.",
+  "folkways.raid.enable": "Enable raids for this colony",
+  "folkways.raid.disable": "Opt this colony out of raids",
+  "folkways.raid.server_disabled": "Raids are disabled by the server.",
+  "folkways.raid.opted_out": "This colony is opted out of raids.",
+  "folkways.raid.plundering": "The raiders are plundering · %s enemies remain",
+  "folkways.raid.damage": "Broken blocks: %1$s · Fires started: %2$s · Burned blocks: %3$s",
+  "folkways.raid.loot_taken": "Taken: %1$s × %2$s",
+  "folkways.raid.loot_dropped": "Dropped for recovery: %1$s × %2$s",
+  "folkways.raid.direction": "Approach: %s",
+  "folkways.raid.direction.north": "North",
+  "folkways.raid.direction.south": "South",
+  "folkways.raid.direction.east": "East",
+  "folkways.raid.direction.west": "West"
 }

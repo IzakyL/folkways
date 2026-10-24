@@ -85,6 +85,7 @@ final class RaidInstance {
         raid.holdTicks = Math.max(0, tag.getInt("holdTicks")); raid.plunderTicks = Math.max(0, tag.getInt("plunderTicks"));
         raid.heldStore = WorldPos.load(Reader.of(tag.getCompound("heldStore"))).orElse(null);
         for (Tag value : tag.getList("escaped", Tag.TAG_INT_ARRAY)) { raid.escaped.add(net.minecraft.nbt.NbtUtils.loadUUID(value)); }
+        raid.paused = true;
         return raid;
     }
 }

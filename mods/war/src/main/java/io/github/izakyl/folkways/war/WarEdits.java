@@ -39,13 +39,15 @@ public final class WarEdits {
         var state = level.getBlockState(at);
         if (state.getBlock() instanceof net.minecraft.world.level.block.ChestBlock
                 && state.getValue(net.minecraft.world.level.block.ChestBlock.TYPE) != net.minecraft.world.level.block.state.properties.ChestType.SINGLE) {
-            return unlocked(level, at.relative(net.minecraft.world.level.block.ChestBlock.getConnectedDirection(state)));
+            BlockPos other = at.relative(net.minecraft.world.level.block.ChestBlock.getConnectedDirection(state));
+            return unlocked(level, other) && permits(level, other, actor, true, 49);
         }
         return true;
     }
 
     private static boolean unlocked(ServerLevel level, BlockPos at) {
         // Unknown machine security has no common contract; only lockable containers are eligible.
+        if (!level.isLoaded(at)) { return false; }
         var entity = level.getBlockEntity(at);
         return entity instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity
             && entity.saveWithoutMetadata(level.registryAccess()).getString("Lock").isEmpty();
@@ -57,26 +59,85 @@ public final class WarEdits {
     }
 
     static boolean placeFire(ServerLevel level, BlockPos at, Mob actor) {
-        if (!fireRules(level) || !level.getBlockState(at).isAir() || !level.isLoaded(at)
-                || !net.minecraft.world.level.block.Blocks.FIRE.defaultBlockState().canSurvive(level, at)
-                || !permits(level, at, actor, false, 0)) { return false; }
+        return placeFire(level, at, actor, net.minecraft.world.level.block.Blocks.FIRE.defaultBlockState());
+    }
+
+    static boolean placeFire(ServerLevel level, BlockPos at, Mob actor, net.minecraft.world.level.block.state.BlockState state) {
+        if (!fireRules(level) || !level.isLoaded(at) || !level.getBlockState(at).isAir()
+                || !state.canSurvive(level, at) || !permits(level, at, actor, false, 0)) { return false; }
+        return firePlacement(level, at, actor, state);
+    }
+
+    static boolean burningFire(ServerLevel level, BlockPos at, Mob actor, net.minecraft.world.level.block.state.BlockState state) {
+        if (!fireRules(level) || !permits(level, at, actor, false, 49)) { return false; }
+        return firePlacement(level, at, actor, state);
+    }
+
+    private static boolean firePlacement(ServerLevel level, BlockPos at, Mob actor, net.minecraft.world.level.block.state.BlockState state) {
         var snapshot = net.neoforged.neoforge.common.util.BlockSnapshot.create(level.dimension(), level, at);
-        if (!level.setBlock(at, net.minecraft.world.level.block.Blocks.FIRE.defaultBlockState(), 3)) { return false; }
+        if (!level.setBlock(at, state, 3)) { return false; }
         if (net.neoforged.neoforge.event.EventHooks.onBlockPlace(actor, snapshot, net.minecraft.core.Direction.UP)) {
             snapshot.restore(); return false;
         }
         return true;
     }
 
+    static int burnCost(ServerLevel level, BlockPos at, Mob actor, int remaining) {
+        var cells = cells(level, at);
+        if (!fireRules(level) || cells.size() > remaining) { return 0; }
+        for (BlockPos cell : cells) { if (!permits(level, cell, actor, false, 49)) { return 0; } }
+        return cells.size();
+    }
+
+    private static java.util.List<BlockPos> cells(ServerLevel level, BlockPos at) {
+        var state = level.getBlockState(at);
+        var half = net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF;
+        if (state.hasProperty(half)) {
+            BlockPos other = state.getValue(half) == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER ? at.above() : at.below();
+            if (level.getBlockState(other).is(state.getBlock())) { return java.util.List.of(at.immutable(), other); }
+        }
+        return java.util.List.of(at.immutable());
+    }
+
     static boolean reserve(Mob mob, BlockPos at, boolean explosion) {
+        if (!(mob.level() instanceof ServerLevel level)) { return false; }
+        return reserve(mob, cells(level, at), explosion);
+    }
+
+    private static boolean reserve(Mob mob, java.util.List<BlockPos> cells, boolean explosion) {
         var director = RaidMembers.director(mob).filter(d -> d.owns(mob) && !d.raid().paused);
         if (director.isEmpty() || !(mob.level() instanceof ServerLevel level)) { return false; }
         var raid = director.get().raid();
         int limit = Math.min(WarConfig.BREAKS.get(), raid.definition.limits().brokenBlocks());
         double hardness = Math.min(WarConfig.HARDNESS.get(), raid.definition.limits().hardness());
-        if (raid.broken >= limit || !permits(level, at, mob, explosion, hardness) || level.getBlockState(at).isAir()) { return false; }
-        raid.broken++; director.get().save();
-        return true;
+        if (raid.broken + cells.size() > limit) { return false; }
+        for (BlockPos at : cells) {
+            if (!permits(level, at, mob, explosion, hardness) || level.getBlockState(at).isAir()) { return false; }
+        }
+        raid.broken += cells.size(); director.get().save(); return true;
+    }
+
+    static void explosion(Mob mob, java.util.List<BlockPos> affected) {
+        if (!(mob.level() instanceof ServerLevel level)) { affected.clear(); return; }
+        var checked = new java.util.HashSet<BlockPos>(); var allowed = new java.util.LinkedHashSet<BlockPos>();
+        for (BlockPos at : java.util.List.copyOf(affected)) {
+            if (checked.contains(at)) { continue; }
+            var cells = cells(level, at); checked.addAll(cells);
+            if (reserve(mob, cells, true)) { allowed.addAll(cells); }
+        }
+        affected.clear(); affected.addAll(allowed);
+    }
+
+    public static void projectileHit(net.minecraft.world.level.block.state.BlockState state, net.minecraft.world.level.Level level,
+            net.minecraft.world.phys.BlockHitResult hit, net.minecraft.world.entity.projectile.Projectile projectile) {
+        if (!(projectile.getOwner() instanceof Mob mob) || !RaidMembers.marked(mob)) { state.onProjectileHit(level, state, hit, projectile); return; }
+        // Native block reactions may ignite TNT or change blocks even when the arrow only embeds.
+        int cost = level instanceof ServerLevel server ? cells(server, hit.getBlockPos()).size() : 1;
+        if (!reserve(mob, hit.getBlockPos(), false)) { return; }
+        state.onProjectileHit(level, state, hit, projectile);
+        if (level.getBlockState(hit.getBlockPos()).equals(state)) {
+            RaidMembers.director(mob).ifPresent(director -> { director.raid().broken -= cost; director.save(); });
+        }
     }
 
     public static boolean breakBlock(Mob mob, BlockPos at) {

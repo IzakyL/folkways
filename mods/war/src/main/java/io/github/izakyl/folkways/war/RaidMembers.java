@@ -46,6 +46,9 @@ public final class RaidMembers {
         if (!(event.getLevel() instanceof ServerLevel) || !(event.getEntity() instanceof Mob mob) || raid(mob).isEmpty()) { return; }
         if (mob instanceof Raider raider) { raider.setCanJoinRaid(false); }
         if (mob instanceof Zombie zombie) { zombie.setCanBreakDoors(false); }
+        mob.goalSelector.getAvailableGoals().stream().map(goal -> goal.getGoal())
+            .filter(goal -> goal instanceof net.minecraft.world.entity.ai.goal.BreakDoorGoal || goal instanceof net.minecraft.world.entity.ai.goal.RemoveBlockGoal)
+            .toList().forEach(mob.goalSelector::removeGoal);
         NativeHostility.restrictResidents(mob, target -> {
             CompoundTag tag = mob.getPersistentData().getCompound(MARK);
             return Bodies.of(target).flatMap(body -> body.colonyId()).filter(tag.getUUID("colony")::equals).isPresent()
@@ -57,6 +60,15 @@ public final class RaidMembers {
             mob.goalSelector.addGoal(2, new RaidIgniteGoal(mob));
             mob.goalSelector.addGoal(1, new RaidLootGoal(mob));
         }
+    }
+
+    @SubscribeEvent
+    public static void ticking(net.neoforged.neoforge.event.tick.EntityTickEvent.Pre event) {
+        if (!(event.getEntity() instanceof Mob mob) || !(mob.level() instanceof ServerLevel) || !marked(mob) || mob.tickCount % 20 != 0) { return; }
+        var director = director(mob);
+        if (director.filter(d -> d.owns(mob)).isPresent()) { mob.setNoAi(director.get().raid().paused); return; }
+        if (director.isEmpty() || director.get().raid() == null || director.get().raid().phase == RaidInstance.Phase.CANCELLED) { RaidPlunder.returnCargo(mob); }
+        mob.discard();
     }
 
     @SubscribeEvent

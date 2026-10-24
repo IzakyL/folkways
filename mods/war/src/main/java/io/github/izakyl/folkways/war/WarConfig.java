@@ -28,6 +28,7 @@ public final class WarConfig {
     static final ModConfigSpec.IntValue PLUNDER_PER_RAIDER = BUILDER.defineInRange("maximumPlunderStacksPerRaider", 2, 1, 16);
     static final ModConfigSpec.IntValue STORE_HOLD = BUILDER.defineInRange("storeHoldTicks", 200, 20, 24000);
     static final ModConfigSpec.IntValue PLUNDER_DURATION = BUILDER.defineInRange("plunderTicks", 1200, 100, 24000);
+    static final ModConfigSpec.IntValue MAX_STRENGTH = BUILDER.defineInRange("maximumStrength", 3, 1, 8);
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private WarConfig() { }

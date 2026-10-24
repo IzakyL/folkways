@@ -12,6 +12,8 @@ colony, or the [contribution guide](../CONTRIBUTING.md) for development setup.
 | Local checks, GameTests, Blockwright suites and CI                              | [Testing](en/testing.md)               | [测试指南](zh-CN/testing.md)          |
 | Modules, public APIs, source layout and lifecycle                               | [Architecture](en/architecture.md)     | [架构说明](zh-CN/architecture.md)     |
 
+| Colony raids, building damage, plunder and server controls | [Colony raids](en/raids.md) | [殖民地袭击](zh-CN/raids.md) |
+
 ## Maintaining these docs
 
 Keep English and Chinese pages in sync in the same change. Use in-game locale
