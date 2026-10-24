@@ -120,6 +120,16 @@ Vanilla 通过既有 Front 扩展接口，在殖民书注册独立 `folkways:com
 
 页面同时提供撤退、解除及近战／弓／弩偏好。每次操作在服务端重验管理权限；失效或其他聚落的队伍 ID、部署时失联的成员、无效地形和越界目的地均不能接管控制。含卸载成员的队伍仍可解除。点位草稿保留在当前服务端会话中，重启不会恢复运行命令。此页不增加 War 框选工具或快捷键。
 
+### V 入口与个人相机设置
+
+Core 提供 `RegisteringUi.tool(OverheadTools.Tool)`，供扩展声明独立的俯视工具、图标、相机偏好及开页动作。Vanilla 注册 `folkways:combat`，与点选、圈地、画线并列。选中战斗后，右键或“队伍与命令”打开原有战斗页，关闭页面回到原相机；左键不会落入聚落成员登记、圈地或画线逻辑。关闭 V 不解除已下达的命令。
+
+默认只有战斗工具使用新操作：中键拖动在水平面平移，Alt＋中键围绕视线焦点等距旋转。焦点由中心射线的实际碰撞确定，没有有效地面时使用有限距离回退；一次拖动锁定操作及焦点，中途改变 Alt 不切换手势。平移维持世界高度，当前未实现地形高度跟随或建筑避障。其他工具在默认设置下保留原有相机和修饰键行为。
+
+书内设置和 NeoForge 模组配置页均提供“全局战斗视角操作逻辑”，开启后全部 V 工具采用新操作。可自定义快捷键控制同一选项，默认不绑定，输入文字时不触发。该选项注册于 `folkways_core` 的 CLIENT 配置，保存在本地 `config/folkways_core-client.toml` 的 `book.globalTacticalControlUsers`，按启动账号 UUID 分别记录；不写入殖民地、世界或服务器配置。未列出的账号默认关闭，切换聚落不会改变偏好。
+
+`Pages.open(page)` 通过客户端桥请求声明的主书页，服务端重新检查手持书、当前聚落及管理权限，并拒绝未知或隐藏页面。`Overhead.camera()` 仅提供客户端相机观测，不增加居民控制权或命令执行入口。
+
 ## P4：实际原版武器会话
 
 `plugins.combat.weapon` 公开 `WeaponAdapter`、`WeaponSession` 和 `Weapons`。`Weapons.register(id, adapter)` 在模组初始化时注册独立适配器、拒绝重复 ID；默认提供真实近战、弓和弩实现，没有枪械桩。
@@ -161,6 +171,7 @@ npm run test:unit
 npm run typecheck
 npm run test:e2e -- tests/e2e/native-hostility.spec.ts tests/e2e/resident-commands.spec.ts tests/e2e/combat-hostility-policy.spec.ts tests/e2e/formation-patrol.spec.ts tests/e2e/weapon-sessions.spec.ts --workers=1
 npm run test:e2e -- tests/e2e/combat-page.spec.ts tests/e2e/combat-supplies.spec.ts tests/e2e/combat-endurance.spec.ts tests/e2e/formation-terrain.spec.ts tests/e2e/combat-golems.spec.ts --workers=1
+npm run test:e2e -- tests/e2e/combat-camera.spec.ts tests/e2e/overhead-blackbox.spec.ts --workers=1
 ```
 
 GameTestServer 默认关闭全局劳动执行。LaborFixture 仅在测试自己的聚落中显式推进真实劳动和出行，不改变实际游戏运行逻辑。客户端场景覆盖怪物伤害、恐惧接管、命令、窄路编队和保存后重启。
