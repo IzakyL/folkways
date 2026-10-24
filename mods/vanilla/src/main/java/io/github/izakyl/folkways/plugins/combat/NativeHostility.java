@@ -8,14 +8,14 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
-import net.minecraft.world.entity.monster.AbstractSkeleton;
-import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.Spider;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
 /**
- * Gives native zombie and skeleton AI an additional eligible target without replacing their
+ * Gives tagged native monster AI an additional eligible target without replacing their
  * movement, attack goals, or existing targets. War is not required for this world behaviour.
  */
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.GAME)
@@ -33,7 +33,7 @@ public final class NativeHostility {
     }
 
     static void install(Mob mob) {
-        if (!(mob instanceof Zombie || mob instanceof AbstractSkeleton) || mob instanceof NeutralMob) {
+        if (!(mob instanceof Enemy) || mob instanceof NeutralMob) {
             return;
         }
         // An entity can re-enter the level; neither a duplicate target goal nor a stale
@@ -58,10 +58,24 @@ public final class NativeHostility {
         }
 
         @Override
+        public boolean canUse() {
+            // Tag lookup stays in the AI tick, including after /reload. Untagged monsters do not scan.
+            // SpiderAttackGoal retains vanilla's random disengagement after daylight returns.
+            return targetsResidents(mob) && (!(mob instanceof Spider) || mob.getLightLevelDependentMagicValue() < .5F)
+                && super.canUse();
+        }
+
+        @Override
         public boolean canContinueToUse() {
             // TargetGoal only checks combat eligibility, not our enrollment predicate.
             // Leaving a colony must end this pursuit as well as prevent a new one.
-            return mob.getTarget() != null && eligible(mob.getTarget()) && super.canContinueToUse();
+            return targetsResidents(mob) && mob.getTarget() != null && eligible(mob.getTarget()) && super.canContinueToUse();
         }
+    }
+
+    public static boolean targetsResidents(Mob mob) {
+        return mob instanceof Enemy && !(mob instanceof NeutralMob)
+            && Bodies.of(mob).flatMap(body -> body.colonyId()).isEmpty()
+            && mob.getType().is(CombatTags.RESIDENT_ENEMIES) && !mob.getType().is(CombatTags.IGNORED);
     }
 }

@@ -25,6 +25,8 @@ import net.minecraft.world.entity.animal.Cow;
 import net.minecraft.world.entity.monster.EnderMan;
 import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Spider;
 import net.minecraft.world.entity.monster.ZombifiedPiglin;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -76,15 +78,19 @@ public final class NativeHostilityGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void nativeHostilityIsOnlyInstalledOnSupportedMonsters(GameTestHelper helper) {
+    public static void nativeGoalsRemainIdempotentAndNeutralFamiliesUntouched(GameTestHelper helper) {
         Zombie zombie = EntityType.ZOMBIE.create(helper.getLevel());
         Skeleton skeleton = EntityType.SKELETON.create(helper.getLevel());
         EnderMan enderman = EntityType.ENDERMAN.create(helper.getLevel());
         ZombifiedPiglin piglin = EntityType.ZOMBIFIED_PIGLIN.create(helper.getLevel());
         Cow cow = EntityType.COW.create(helper.getLevel());
+        Spider spider = EntityType.SPIDER.create(helper.getLevel());
+        Creeper creeper = EntityType.CREEPER.create(helper.getLevel());
         try {
             check(helper, zombie, true);
             check(helper, skeleton, true);
+            check(helper, spider, true);
+            check(helper, creeper, true);
             check(helper, enderman, false);
             check(helper, piglin, false);
             check(helper, cow, false);
@@ -94,6 +100,8 @@ public final class NativeHostilityGameTests {
             enderman.discard();
             piglin.discard();
             cow.discard();
+            spider.discard();
+            creeper.discard();
         }
         helper.succeed();
     }
@@ -245,6 +253,83 @@ public final class NativeHostilityGameTests {
             "the higher-priority native villager target is still acquired in a resident's presence"));
     }
 
+    @GameTest(template = "empty")
+    public static void nestedEnemyTagsCoverNativeVariantsWithoutMakingAnimalsHostile(GameTestHelper helper) {
+        for (EntityType<?> type : List.of(EntityType.ZOMBIE, EntityType.ZOMBIE_VILLAGER, EntityType.HUSK,
+                EntityType.DROWNED, EntityType.SKELETON, EntityType.STRAY, EntityType.WITHER_SKELETON,
+                EntityType.BOGGED, EntityType.SPIDER, EntityType.CAVE_SPIDER, EntityType.CREEPER)) {
+            helper.assertTrue(type.is(CombatTags.RESIDENT_ENEMIES), "native variant inherits the configured enemy tag: " + type);
+            helper.assertTrue(type.is(CombatTags.PATROL_TARGETS), "patrol tag includes its nested resident enemy tag: " + type);
+        }
+        helper.assertFalse(EntityType.COW.is(CombatTags.RESIDENT_ENEMIES), "livestock is not hostile");
+        helper.assertFalse(EntityType.ENDERMAN.is(CombatTags.RESIDENT_ENEMIES), "endermen are not opted into proactive hostility");
+        helper.assertFalse(EntityType.ZOMBIFIED_PIGLIN.is(CombatTags.RESIDENT_ENEMIES), "neutral zombie relatives are excluded");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 400)
+    public static void aDarkSpiderAcquiresAndBitesAResidentWithNativeAi(GameTestHelper helper) {
+        spiderAttacksInDarkness(helper, EntityType.SPIDER);
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 400)
+    public static void aDarkCaveSpiderAcquiresAndBitesAResidentWithNativeAi(GameTestHelper helper) {
+        spiderAttacksInDarkness(helper, EntityType.CAVE_SPIDER);
+    }
+
+    private static void spiderAttacksInDarkness(GameTestHelper helper, EntityType<? extends Spider> type) {
+        Arena arena = new Arena(helper);
+        Body resident = arena.resident(true, new BlockPos(12, 1, 5));
+        Spider spider = arena.monster(type, new BlockPos(4, 1, 5));
+        spider.setNoAi(true);
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(spider.getLightLevelDependentMagicValue() < .5F,
+                "the enclosed arena really is dark after lighting settles"))
+            .thenExecute(() -> spider.setNoAi(false))
+            .thenWaitUntil(() -> {
+                helper.assertTrue(resident.mob().getHealth() < resident.mob().getMaxHealth(), "a real native spider bite hurts");
+                helper.assertTrue(spider.getTarget() == resident.mob(), "the spider selected the resident without a forced target");
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 400)
+    public static void aBrightSpiderStaysNeutralToResidentsAndPatrollers(GameTestHelper helper) {
+        Arena arena = new Arena(helper);
+        Body resident = arena.resident(true, new BlockPos(12, 1, 5));
+        Spider spider = arena.monster(EntityType.SPIDER, new BlockPos(4, 1, 5));
+        spider.setNoAi(true);
+        for (int x = 1; x < 21; x++) {
+            for (int z = 1; z < 11; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.GLOWSTONE); }
+        }
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(spider.getLightLevelDependentMagicValue() >= .5F,
+                "the arena really is bright after lighting settles"))
+            .thenExecute(() -> spider.setNoAi(false))
+            .thenIdle(120)
+            .thenExecute(() -> {
+                helper.assertTrue(spider.getTarget() == null, "a bright spider does not acquire an unprovoking resident");
+                helper.assertFalse(Threats.hostile(spider, resident.mob()), "patrol does not provoke a bright neutral spider");
+                helper.assertValueEqual(resident.mob().getHealth(), resident.mob().getMaxHealth(), "resident stays unharmed");
+                spider.setTarget(resident.mob());
+                helper.assertTrue(Threats.hostile(spider, resident.mob()), "a spider already fighting can still be defended against");
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 300)
+    public static void aCreeperAcquiresApproachesAndExplodesAtAResident(GameTestHelper helper) {
+        Arena arena = new Arena(helper);
+        Body resident = arena.resident(true, new BlockPos(12, 1, 5));
+        Creeper creeper = arena.monster(EntityType.CREEPER, new BlockPos(4, 1, 5));
+        Vec3 start = creeper.position();
+        helper.succeedWhen(() -> {
+            helper.assertTrue(creeper.isRemoved(), "the native creeper actually exploded");
+            helper.assertTrue(creeper.position().distanceToSqr(start) > 4, "it approached its acquired target");
+            helper.assertTrue(resident.mob().getLastDamageSource() != null
+                    && resident.mob().getLastDamageSource().is(net.minecraft.tags.DamageTypeTags.IS_EXPLOSION),
+                "the resident was damaged by a real explosion");
+        });
+    }
+
     private static final class Arena implements GameTestListener {
         private final GameTestHelper helper;
         private final Colony colony;
@@ -257,6 +342,9 @@ public final class NativeHostilityGameTests {
                 for (int z = 0; z < 12; z++) {
                     helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
                     helper.setBlock(new BlockPos(x, 5, z), Blocks.STONE);
+                    if (x == 0 || x == 21 || z == 0 || z == 11) {
+                        for (int y = 1; y < 5; y++) { helper.setBlock(new BlockPos(x, y, z), Blocks.STONE); }
+                    }
                 }
             }
             helper.testInfo.addListener(this);
