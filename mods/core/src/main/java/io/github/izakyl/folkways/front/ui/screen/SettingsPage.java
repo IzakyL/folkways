@@ -9,6 +9,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import io.github.izakyl.folkways.FolkwaysClientConfig;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
@@ -20,6 +21,7 @@ import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
+import io.github.izakyl.folkways.front.client.PersonalCameraControls;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySchemas;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
@@ -104,6 +106,19 @@ public final class SettingsPage implements Draw {
             Rows.icon(ItemStack.EMPTY),
             Rows.name(Component.translatable("folkways.settings.forget_drawing_settings")),
             forgetDrawingSettings));
+
+        Toggle globalTacticalControls = Controls.tick();
+        if (LDLib2.isRemote()) {
+            globalTacticalControls.setOn(PersonalCameraControls.globalTacticalControls(), false);
+            globalTacticalControls.setOnToggleChanged(PersonalCameraControls::globalTacticalControls);
+            globalTacticalControls.addEventListener(UIEvents.TICK, event ->
+                globalTacticalControls.setOn(PersonalCameraControls.globalTacticalControls(), false));
+        }
+        Tokens.name(globalTacticalControls, "folkways.settings.global_tactical_controls");
+        table.addChildren(Rows.row().addChildren(
+            Rows.icon(ItemStack.EMPTY),
+            Rows.name(Component.translatable("folkways.settings.global_tactical_controls")),
+            globalTacticalControls));
 
         Razing razing = new Razing();
         table.addChildren(Rows.row().addChildren(

@@ -44,4 +44,9 @@ public final class RegisteringUi extends Event implements IModBusEvent {
         writing();
         registry.outline(outline);
     }
+
+    public void tool(OverheadTools.Tool tool) {
+        writing();
+        OverheadTools.register(tool);
+    }
 }

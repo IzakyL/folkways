@@ -2,7 +2,9 @@ package io.github.izakyl.folkways.front.client;
 
 import com.mojang.blaze3d.platform.Window;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
+import java.util.Optional;
 import java.util.Set;
 import net.minecraft.client.Camera;
 import net.minecraft.client.KeyMapping;
@@ -13,6 +15,8 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Marker;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -49,6 +53,25 @@ public final class Overhead {
 
     /** What the camera rides: an entity of this client alone, in no level's lists. */
     private static Entity eye;
+    private static Vec3 focus;
+
+    public record CameraState(Vec3 position, Optional<Vec3> focus, float yaw, float pitch,
+                              boolean tactical, Optional<ResourceLocation> tool) { }
+
+    /** A read-only observation of the local camera; it owns no resident or server command. */
+    public static Optional<CameraState> camera() {
+        return eye == null ? Optional.empty() : Optional.of(new CameraState(eye.position(), Optional.ofNullable(focus),
+            eye.getYRot(), eye.getXRot(), tacticalControls(), OverheadTools.selected().map(OverheadTools.Tool::id)));
+    }
+
+    static boolean tacticalControls() {
+        if (Minecraft.getInstance().screen instanceof OverheadScreen screen) {
+            Optional<Boolean> dragging = screen.dragTacticalControls();
+            if (dragging.isPresent()) { return dragging.get(); }
+        }
+        return PersonalCameraControls.globalTacticalControls() || OverheadTools.selected()
+            .filter(tool -> tool.camera() == OverheadTools.Camera.TACTICAL).isPresent();
+    }
 
     private Overhead() {
     }
@@ -93,6 +116,7 @@ public final class Overhead {
 
     static void forget() {
         eye = null;
+        focus = null;
     }
 
     static void tick(Minecraft minecraft) {
@@ -108,6 +132,9 @@ public final class Overhead {
         if (minecraft.screen == null) {
             minecraft.setScreen(new OverheadScreen());
         }
+        if (tacticalControls()) {
+            if (focus == null) { acquireFocus(minecraft); }
+        } else { focus = null; }
     }
 
     /** The ray under the mouse, out of the camera through the pixel the pointer is on. */
@@ -150,11 +177,18 @@ public final class Overhead {
                 .scale(BLOCKS_A_SECOND * seconds));
         }
         place(eye.position().add(moved), eye.getYRot(), eye.getXRot());
+        if (focus != null) { focus = focus.add(moved); }
     }
 
     /** Moves the camera along its own line of sight, nearer what it looks at or farther off. */
     static void dolly(double notches) {
         if (on()) {
+            if (tacticalControls()) {
+                if (focus == null) { acquireFocus(Minecraft.getInstance()); }
+                double distance = Mth.clamp(eye.position().distanceTo(focus) - notches * BLOCKS_A_NOTCH, 2, 256);
+                place(focus.subtract(eye.getLookAngle().scale(distance)), eye.getYRot(), eye.getXRot());
+                return;
+            }
             place(eye.position().add(eye.getLookAngle().scale(notches * BLOCKS_A_NOTCH)), eye.getYRot(), eye.getXRot());
         }
     }
@@ -163,6 +197,7 @@ public final class Overhead {
     static void lookAt(Vec3 spot) {
         if (on()) {
             place(spot.subtract(eye.getLookAngle().scale(STAND_OFF)), eye.getYRot(), eye.getXRot());
+            if (tacticalControls()) { focus = spot; }
         }
     }
 
@@ -171,6 +206,54 @@ public final class Overhead {
             place(eye.position(), eye.getYRot() + (float) dragX * DEGREES_A_PIXEL,
                 Mth.clamp(eye.getXRot() + (float) dragY * DEGREES_A_PIXEL, -90.0F, 90.0F));
         }
+    }
+
+    /** Refresh once at the start of a gesture, then keep this actual pivot for the entire drag. */
+    static void beginTacticalDrag(Minecraft minecraft) {
+        if (on()) { acquireFocus(minecraft); }
+    }
+
+    private static void acquireFocus(Minecraft minecraft) {
+        Vec3 from = eye.position();
+        Vec3 look = eye.getLookAngle();
+        if (minecraft.level == null) {
+            focus = from.add(look.scale(STAND_OFF));
+            return;
+        }
+        var hit = minecraft.level.clip(new ClipContext(from, from.add(look.scale(128)),
+            ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, minecraft.player));
+        if (hit.getType() == HitResult.Type.BLOCK && hit.getLocation().distanceToSqr(from) >= .25) {
+            focus = hit.getLocation();
+            return;
+        }
+        // Empty sky or unloaded terrain has no surface hit. Use the player's ground plane when it
+        // lies in front of this view, otherwise a finite point along the current centre ray.
+        double ground = minecraft.player == null ? from.y - RISE : minecraft.player.getY();
+        double distance = Math.abs(look.y) < .01 ? STAND_OFF : (ground - from.y) / look.y;
+        if (!Double.isFinite(distance) || distance < 2 || distance > 128) { distance = STAND_OFF; }
+        focus = from.add(look.scale(distance));
+    }
+
+    static void pan(Minecraft minecraft, double dragX, double dragY) {
+        if (!on()) { return; }
+        if (focus == null) { acquireFocus(minecraft); }
+        double perPixel = 2 * eye.position().distanceTo(focus)
+            * Math.tan(Math.toRadians(minecraft.options.fov().get()) / 2)
+            / Math.max(1, minecraft.getWindow().getGuiScaledHeight());
+        Vec3 forward = Vec3.directionFromRotation(0, eye.getYRot());
+        Vec3 right = new Vec3(-forward.z, 0, forward.x);
+        double slope = Math.max(.25, Math.abs(Math.sin(Math.toRadians(eye.getXRot()))));
+        Vec3 moved = right.scale(-dragX * perPixel).add(forward.scale(dragY * perPixel / slope));
+        place(eye.position().add(moved), eye.getYRot(), eye.getXRot());
+        focus = focus.add(moved);
+    }
+
+    static void orbit(double dragX, double dragY) {
+        if (!on() || focus == null) { return; }
+        double distance = eye.position().distanceTo(focus);
+        float yaw = eye.getYRot() + (float) dragX * DEGREES_A_PIXEL;
+        float pitch = Mth.clamp(eye.getXRot() + (float) dragY * DEGREES_A_PIXEL, 10, 85);
+        place(focus.subtract(Vec3.directionFromRotation(pitch, yaw).scale(distance)), yaw, pitch);
     }
 
     // Set down whole, with nothing left to ease in from: it is moved by the frame, not by the tick.

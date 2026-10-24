@@ -77,6 +77,9 @@ public final class FolkwaysUiNetworkEvents {
                     .ifPresent(aimed -> toggleColonyResident(player, authority, aimed.body())))));
         registrar.playToServer(SetBookGesturePacket.TYPE, SetBookGesturePacket.STREAM_CODEC,
             asPlayer(FolkwaysUiNetworkEvents::setBookGesture));
+        registrar.playToServer(OpenBookPagePacket.TYPE, OpenBookPagePacket.STREAM_CODEC,
+            asPlayer((packet, player) -> ColonyAuthority.ofHeldBook(player, packet.colonyId())
+                .ifPresent(authority -> ColonyShell.open(player, packet.page()))));
         registrar.playToServer(CreateZonePacket.TYPE, CreateZonePacket.STREAM_CODEC,
             asPlayer(FolkwaysUiNetworkEvents::createZone));
         registrar.playToServer(CreatePathPacket.TYPE, CreatePathPacket.STREAM_CODEC,
