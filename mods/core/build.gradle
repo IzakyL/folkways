@@ -75,4 +75,3 @@ dependencies {
     cookeryTestImplementation project(":cookery")
     cookeryTestCompileOnly lib("kaleidoscope_cookery")
 }
-
