@@ -20,6 +20,7 @@ import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonyRegistry;
 import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
 import io.github.izakyl.folkways.core.engine.labor.ColonyLabor;
+import io.github.izakyl.folkways.core.engine.travel.Trip;
 import io.github.izakyl.folkways.front.api.PastDay;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
@@ -30,6 +31,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -643,6 +645,7 @@ public final class FillPlanContinuationGameTests {
         private final Method closeLabor;
         private final Object inline;
         private int idleProofSlices;
+        private int diagnosticTicks;
         private boolean changed;
         private boolean closed;
 
@@ -691,6 +694,7 @@ public final class FillPlanContinuationGameTests {
         }
 
         void tick(int remaining) {
+            boolean sample = diagnosticTicks++ % 100 == 0 || remaining <= 0;
             try {
                 helper.assertTrue(bodies.stream().allMatch(body -> body.isAlive() && !body.isInWall()),
                     "all actual workers stay alive and clear of solid blocks");
@@ -703,10 +707,12 @@ public final class FillPlanContinuationGameTests {
                             + changed + "; yields=" + metric("commitBudgetYields") + "; idle=" + idleProofSlices);
                     helper.assertTrue(bodies.stream().mapToInt(body -> body.pack().count(Items.DIRT)).sum() == 21,
                         "the full native pipeline spends exactly three of its original twenty-four dirt");
+                    diagnose("finished", remaining);
                     close();
                     helper.succeed();
                     return;
                 }
+                if (sample) diagnose("before-advance", remaining);
                 helper.assertTrue(remaining > 0, "bounded native fills must finish; phase=" + plan.phase()
                     + "; stage=" + plan.stage() + "; attempts=" + metric("commitAttempts") + "; idle=" + idleProofSlices
                     + "; completion=" + plan.completionStatus() + "; reason=" + plan.completionReason());
@@ -716,6 +722,7 @@ public final class FillPlanContinuationGameTests {
                 boolean queued = cells.stream().anyMatch(plan::proving)
                     || changed && cells.stream().anyMatch(cell -> !level.getBlockState(cell).is(Blocks.DIRT));
                 plan.advance();
+                if (sample) diagnose("after-advance", remaining);
                 long advanced = metric("totalWork") - work;
                 chores.settle(plan.requests());
                 List<Grown> goals = new ArrayList<>();
@@ -733,14 +740,93 @@ public final class FillPlanContinuationGameTests {
                     changed = true;
                 }
                 Dispatch.invoke(run, labor, level, inline);
+                if (sample) diagnose("after-labor", remaining);
                 if (queued && advanced > 0 && attempts == metric("commitAttempts")) {
                     idleProofSlices++;
                 }
                 helper.runAfterDelay(1, () -> tick(remaining - 1));
             } catch (RuntimeException | Error failure) {
+                diagnose("failure", remaining);
                 close();
                 throw failure;
             }
+        }
+
+        // These infrequent snapshots only read fields. In particular, never call Runners.of,
+        // Phases.check, Node.refusal or a planner/native proof operation while observing a stall.
+        private void diagnose(String point, int remainingTicks) {
+            try {
+                Map<String, Object> state = new LinkedHashMap<>();
+                state.put("point", point);
+                state.put("origin", at(helper, 0, 0, 0).toShortString());
+                state.put("worldTick", level.getGameTime());
+                state.put("serverTick", level.getServer().getTickCount());
+                state.put("remainingTicks", remainingTicks);
+                state.put("colony", colony.colonyId());
+                state.put("zone", value(plan, "zone"));
+                state.put("changed", changed);
+                state.put("idleProofSlices", idleProofSlices);
+                state.put("phase", plan.phase());
+                state.put("stage", plan.stage());
+                state.put("plan", fields(plan, "requestVersion", "proving", "commitRequests", "issued", "offered",
+                    "commitAttempts", "commitBudgetYields", "commitRefused", "commitProved", "lastWork", "totalWork"));
+                state.put("targets", cells.stream().map(cell -> Map.of("cell", cell.toShortString(),
+                    "state", level.getBlockState(cell).toString(), "spent", chores.spent().contains(Job.keyOf(cell)))).toList());
+                CompletionRuntime completion = (CompletionRuntime) value(plan, "completion");
+                state.put("completion", completion == null ? Map.of() : completion.diagnostics());
+                Object allowances = value(plan, "ALLOWANCES");
+                Object perLevel = ((Map<?, ?>) allowances).get(level);
+                Object allowance = perLevel instanceof Map<?, ?> map ? map.get(colony.colonyId()) : null;
+                state.put("allowance", allowance == null ? Map.of() : fields(allowance,
+                    "tick", "work", "nanos", "plans", "commitUntil", "commitZone"));
+                Map<?, ?> runners = (Map<?, ?>) value(value(labor, "runners"), "byResident");
+                List<Map<String, Object>> workers = new ArrayList<>();
+                for (ResidentEntity body : bodies) {
+                    Map<String, Object> worker = new LinkedHashMap<>();
+                    worker.put("id", body.getUUID());
+                    worker.put("position", body.position());
+                    worker.put("velocity", body.getDeltaMovement());
+                    worker.put("feet", body.blockPosition().toShortString());
+                    worker.put("onGround", body.onGround());
+                    worker.put("health", body.getHealth());
+                    worker.put("inWall", body.isInWall());
+                    worker.put("doing", body.doing());
+                    worker.put("dirt", body.pack().count(Items.DIRT));
+                    worker.put("navigationDone", body.getNavigation().isDone());
+                    Object runner = runners.get(body.getUUID());
+                    if (runner != null) {
+                        worker.put("runner", fields(runner, "route", "footing", "placement", "own", "windup", "windupTicks",
+                            "stalled", "busy", "waited", "committing", "rerouted", "joining"));
+                        Object current = value(runner, "current");
+                        Object within = value(runner, "within");
+                        worker.put("current", current instanceof Node node ? node.getClass().getSimpleName() + "/" + node.id() : "");
+                        worker.put("within", within instanceof Node node ? node.getClass().getSimpleName() + "/" + node.id() : "");
+                        Object carrying = value(runner, "carrying");
+                        worker.put("carrying", carrying instanceof Trip trip ? trip.describe() : "");
+                    }
+                    workers.add(worker);
+                }
+                state.put("workers", workers);
+                state.put("phases", phaseDiagnostics(value(labor, "phases")));
+                state.put("personal", phaseDiagnostics(value(labor, "personal")));
+                System.out.println("CONSTRUCTION_BACKGROUND_STATE " + state);
+            } catch (RuntimeException | LinkageError broken) {
+                // Diagnostics must not replace the original behavioral result, including its failure.
+                System.out.println("CONSTRUCTION_BACKGROUND_DIAGNOSTIC_ERROR point=" + point + " error=" + broken);
+            }
+        }
+
+        private static Map<String, Object> fields(Object owner, String... names) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            for (String name : names) result.put(name, value(owner, name));
+            return result;
+        }
+
+        private static Map<String, Object> phaseDiagnostics(Object phases) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            ((Map<?, ?>) value(phases, "byNode")).forEach((id, entry) ->
+                result.put(id.toString(), fields(entry, "state", "failure", "waitUntil")));
+            return result;
         }
 
         private long metric(String name) {
