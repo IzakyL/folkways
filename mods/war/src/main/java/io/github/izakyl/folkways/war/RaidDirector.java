@@ -21,7 +21,6 @@ import net.minecraft.world.BossEvent;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
 
@@ -216,10 +215,10 @@ public final class RaidDirector {
                 }
                 if (!found) { mob.discard(); prepared.forEach(Entity::discard); return false; }
                 mob.getRandom().setSeed(random.nextLong());
-                mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), MobSpawnType.EVENT, null);
+                RaidMembers.mark(mob, colony.id(), raid.id, entry.role());
+                RaidMembers.prepareSpawn(mob, level);
                 entry.equipment().forEach((slot, item) -> mob.setItemSlot(slot, new ItemStack(item)));
                 mob.setPersistenceRequired(); mob.setCanPickUpLoot(false);
-                RaidMembers.mark(mob, colony.id(), raid.id, entry.role());
                 prepared.add(mob);
             }
         }

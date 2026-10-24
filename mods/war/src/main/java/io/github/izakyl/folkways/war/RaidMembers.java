@@ -41,11 +41,34 @@ public final class RaidMembers {
         return Colonies.of(level.getServer(), tag.getUUID("colony")).flatMap(RaidDirector::of);
     }
 
+    static net.minecraft.world.entity.SpawnGroupData prepareSpawn(Mob mob, ServerLevel level) {
+        var group = mob instanceof Zombie ? new Zombie.ZombieGroupData(Zombie.getSpawnAsBabyOdds(mob.getRandom()), false) : null;
+        var initialized = mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), net.minecraft.world.entity.MobSpawnType.EVENT, group);
+        if (mob instanceof Zombie zombie) { suppressReinforcements(zombie); }
+        return initialized;
+    }
+
+    private static void suppressReinforcements(Zombie zombie) {
+        var chance = zombie.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.SPAWN_REINFORCEMENTS_CHANCE);
+        chance.removeModifiers(); chance.setBaseValue(0);
+    }
+
+    @SubscribeEvent
+    public static void converting(net.neoforged.neoforge.event.entity.living.LivingConversionEvent.Pre event) {
+        if (event.getEntity() instanceof Mob mob && marked(mob)) {
+            event.setConversionTimer(200); event.setCanceled(true);
+        }
+    }
+
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void joined(EntityJoinLevelEvent event) {
         if (!(event.getLevel() instanceof ServerLevel) || !(event.getEntity() instanceof Mob mob) || raid(mob).isEmpty()) { return; }
         if (mob instanceof Raider raider) { raider.setCanJoinRaid(false); }
-        if (mob instanceof Zombie zombie) { zombie.setCanBreakDoors(false); }
+        if (mob instanceof Zombie zombie) {
+            zombie.setCanBreakDoors(false); suppressReinforcements(zombie);
+            // Older saves can still contain a jockey; its chicken has no recorded ownership.
+            if (zombie.getVehicle() instanceof net.minecraft.world.entity.animal.Chicken) { zombie.stopRiding(); }
+        }
         mob.goalSelector.getAvailableGoals().stream().map(goal -> goal.getGoal())
             .filter(goal -> goal instanceof net.minecraft.world.entity.ai.goal.BreakDoorGoal || goal instanceof net.minecraft.world.entity.ai.goal.RemoveBlockGoal)
             .toList().forEach(mob.goalSelector::removeGoal);
@@ -64,9 +87,13 @@ public final class RaidMembers {
 
     @SubscribeEvent
     public static void ticking(net.neoforged.neoforge.event.tick.EntityTickEvent.Pre event) {
-        if (!(event.getEntity() instanceof Mob mob) || !(mob.level() instanceof ServerLevel) || !marked(mob) || mob.tickCount % 20 != 0) { return; }
+        if (!(event.getEntity() instanceof Mob mob) || !(mob.level() instanceof ServerLevel) || !marked(mob)) { return; }
         var director = director(mob);
-        if (director.filter(d -> d.owns(mob)).isPresent()) { mob.setNoAi(director.get().raid().paused); return; }
+        if (director.filter(d -> d.owns(mob)).isPresent()) {
+            mob.setNoAi(director.get().raid().paused);
+            if (director.get().raid().paused) { event.setCanceled(true); }
+            return;
+        }
         if (director.isEmpty() || director.get().raid() == null || director.get().raid().phase == RaidInstance.Phase.CANCELLED) { RaidPlunder.returnCargo(mob); }
         mob.discard();
     }
