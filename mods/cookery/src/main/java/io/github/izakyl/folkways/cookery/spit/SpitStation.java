@@ -96,7 +96,7 @@ public final class SpitStation implements KitchenStation {
             .filter(holder -> !FolkwaysVanillaConfig.refusedRecipes().contains(holder.id()))
             .flatMap(holder -> holder.value().getIngredients().stream().flatMap(ingredient ->
                 java.util.Arrays.stream(ingredient.getItems()).filter(stack -> !stack.isEmpty()).map(stack ->
-                    new Job(holder.id(), Goods.specOf(stack), holder.value().getResultItem(level.registryAccess()).copyWithCount(1),
+                    new Job(holder.id(), ingredient.isCustom() ? Goods.specOf(stack) : ItemSpec.of(stack.getItem()), holder.value().getResultItem(level.registryAccess()).copyWithCount(1),
                         holder.value().getCookingTime())))).filter(job -> !job.output().isEmpty()).toList();
         return Optional.of(new Bench(key, colony, at, available.get().part(), available.get().stances(), jobs, bookings, changed));
     }

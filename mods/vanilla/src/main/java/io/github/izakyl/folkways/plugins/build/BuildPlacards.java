@@ -5,12 +5,15 @@ import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
+import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.HolderLookup;
 
 final class BuildPlacards {
     private static final String NEEDS = "folkways.card.build.needs";
@@ -30,7 +33,7 @@ final class BuildPlacards {
         };
     }
 
-    static List<Line> building(Line title, Optional<BuildOrderView> seen, Map<ResourceLocation, Long> owed) {
+    static List<Line> building(Line title, Optional<BuildOrderView> seen, Map<ItemSpec, Long> owed, HolderLookup.Provider registries) {
         List<Line> lines = new ArrayList<>();
         lines.add(title);
         seen.ifPresent(view -> {
@@ -41,16 +44,16 @@ final class BuildPlacards {
         if (owed.isEmpty()) {
             return lines;
         }
-        lines.add(Line.told(needs(owed, Line.Goods.MOST_STACKS)));
+        lines.add(Line.told(needs(owed, Line.Goods.MOST_STACKS, registries)));
         return lines;
     }
 
     /** The building glyph, or "Still needs" where it is not drawn, and the most owed of the build's needs. */
-    static Sentence needs(Map<ResourceLocation, Long> owed, int most) {
+    static Sentence needs(Map<ItemSpec, Long> owed, int most, HolderLookup.Provider registries) {
         return Sentence.wares(Sentence.glyph(BUILDING_GLYPH, new Notice(NEEDS, List.of())), owed.entrySet().stream()
-            .sorted(Map.Entry.<ResourceLocation, Long>comparingByValue().reversed())
+            .sorted(Map.Entry.<ItemSpec, Long>comparingByValue().reversed())
             .limit(most)
-            .map(entry -> new Sentence.Token.Ware(entry.getKey(), entry.getValue()))
+            .map(entry -> Sentence.Token.Ware.of(Goods.display(entry.getKey()), entry.getValue(), registries))
             .toList());
     }
 

@@ -64,7 +64,7 @@ public final class TrayStation implements KitchenStation {
         List<Job> jobs = level.getRecipeManager().getAllRecipesFor(ModRecipes.BAMBOO_TRAY_RECIPE).stream()
             .filter(holder -> !FolkwaysVanillaConfig.refusedRecipes().contains(holder.id()))
             .flatMap(holder -> java.util.Arrays.stream(holder.value().getIngredient().getItems()).filter(stack -> !stack.isEmpty()).map(stack ->
-                new Job(holder.id(), Goods.specOf(stack), holder.value().getResultItem(level.registryAccess()), holder.value().getSubtype(),
+                new Job(holder.id(), holder.value().getIngredient().isCustom() ? Goods.specOf(stack) : ItemSpec.of(stack.getItem()), holder.value().getResultItem(level.registryAccess()), holder.value().getSubtype(),
                     holder.value().getDuration(), Math.min(stack.getMaxStackSize(), holder.value().getResult().getMaxStackSize() / holder.value().getResult().getCount()))))
             .filter(job -> !job.output().isEmpty() && job.capacity() > 0).toList();
         return Optional.of(new Bench(key, colony, at, slot, stances, jobs, bookings, changed));

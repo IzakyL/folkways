@@ -105,7 +105,7 @@ public final class MillstoneStation implements KitchenStation {
             .filter(holder -> !FolkwaysVanillaConfig.refusedRecipes().contains(holder.id()))
             .map(holder -> Job.of(holder.id(), holder.value())).flatMap(Optional::stream)
             .flatMap(job -> Goods.members(job.input()).stream().map(item -> new Job(job.recipe(),
-                Goods.specOf(new ItemStack(item)), job.guaranteed(), job.possible()))).toList();
+                ItemSpec.of(item), job.guaranteed(), job.possible()))).toList();
         return Optional.of(new Bench(key, colony, at, stances, jobs, bookings, changed));
     }
     public List<Grown> recovery(UUID colony, ServerLevel level, WorldPos at, Stances stances,

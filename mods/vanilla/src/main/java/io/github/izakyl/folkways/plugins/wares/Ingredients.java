@@ -23,7 +23,7 @@ final class Ingredients {
                 if (value instanceof Ingredient.TagValue tagValue) {
                     alternatives.add(ItemSpec.of(tagValue.tag()));
                 } else if (value instanceof Ingredient.ItemValue itemValue && !itemValue.item().isEmpty()) {
-                    alternatives.add(Goods.specOf(itemValue.item()));
+                    alternatives.add(ItemSpec.of(itemValue.item().getItem()));
                 } else {
                     return acceptedStacks(ingredient);
                 }

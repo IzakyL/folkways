@@ -28,7 +28,6 @@ import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture.Owed;
-import io.github.izakyl.folkways.core.engine.plan.haul.Haul;
 import io.github.izakyl.folkways.core.engine.plan.haul.HaulRefusal;
 import io.github.izakyl.folkways.core.engine.plan.haul.Receipt;
 import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode.Endpoint;
@@ -407,7 +406,7 @@ public final class TransferPlanningGameTests {
         ItemStack second = new ItemStack(Items.NETHERITE_CHESTPLATE);
         second.setDamageValue(58);
         var transfer = new TransferNode(UUID.randomUUID(), Endpoint.pack(), Endpoint.store(new Stash(f.target)),
-            new Manifest(List.of(), List.of(new Need(Goods.specOf(first), 2))),
+            new Manifest(List.of(), List.of(new Need(ItemSpec.of(first.getItem()), 2))),
             Stances.at(f.target), new WorkSite.AtBlock(f.target));
         f.worker.pack().setItem(0, first.copy());
         f.worker.pack().setItem(1, new ItemStack(Items.DIAMOND_CHESTPLATE));
@@ -440,8 +439,7 @@ public final class TransferPlanningGameTests {
         level.setBlockAndUpdate(f.target.cell(), Blocks.BARREL.defaultBlockState());
         var source = Containers.at(level, f.source.cell()).orElseThrow();
         var target = Containers.at(level, f.target.cell()).orElseThrow();
-        var alternatives = ItemSpec.anyOf(List.of(Goods.specOf(new ItemStack(Items.COAL)),
-            Goods.specOf(new ItemStack(Items.OAK_PLANKS))));
+        var alternatives = ItemSpec.anyOf(List.of(ItemSpec.of(Items.COAL), ItemSpec.of(Items.OAK_PLANKS)));
         var cargo = new Stock(List.of(), Map.of()).manifest(new Stash(f.source), alternatives, 0, 2);
         helper.assertTrue(cargo.exact().isEmpty() && cargo.pending().getFirst().spec().equals(alternatives),
             "future supplies retain their alternatives without inventing concrete items");
@@ -498,8 +496,7 @@ public final class TransferPlanningGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void productionWithAlternativesPlansAcrossEmptyStores(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
-        var alternatives = ItemSpec.anyOf(List.of(Goods.specOf(new ItemStack(Items.COAL)),
-            Goods.specOf(new ItemStack(Items.OAK_PLANKS))));
+        var alternatives = ItemSpec.anyOf(List.of(ItemSpec.of(Items.COAL), ItemSpec.of(Items.OAK_PLANKS)));
         var domain = net.minecraft.resources.ResourceLocation.withDefaultNamespace("test_supply");
         var sourceSite = new WorkSite.AtBlock(f.source);
         var targetSite = new WorkSite.AtBlock(f.target);

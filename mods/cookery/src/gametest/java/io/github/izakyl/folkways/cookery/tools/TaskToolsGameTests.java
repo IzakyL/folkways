@@ -3,7 +3,6 @@ package io.github.izakyl.folkways.cookery.tools;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Stats;
 import io.github.izakyl.folkways.effect.perk.Perks;
-import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoardBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
@@ -201,9 +200,9 @@ public final class TaskToolsGameTests {
                 rig.finish(work);
                 helper.assertFalse(rig.level.getBlockState(rig.boardCell).getValue(
                     com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock.LIT), "finishing returns never replays native ignition");
-                long left = Goods.countIn(rig.chest, Goods.specOf(item.getDefaultInstance()))
-                    + Goods.countIn(rig.rack, Goods.specOf(item.getDefaultInstance()))
-                    + Goods.countIn(rig.body.pack(), Goods.specOf(item.getDefaultInstance()));
+                long left = Goods.countIn(rig.chest, ItemSpec.of(item))
+                    + Goods.countIn(rig.rack, ItemSpec.of(item))
+                    + Goods.countIn(rig.body.pack(), ItemSpec.of(item));
                 helper.assertValueEqual(left, item == Items.FIRE_CHARGE ? 0L : 1L,
                     "the consumed last charge is not requested again and the reusable flint returns exactly once");
                 if (item == Items.FLINT_AND_STEEL) helper.assertValueEqual(

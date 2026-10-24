@@ -80,7 +80,7 @@ record StockpotPlan(ResourceLocation id, StockpotRecipe recipe, Tag definition, 
         }
         ItemStack display = soup.getDisplayStack();
         Optional<ItemSpec> soupItem = !display.isEmpty() && soup.isSoupBase(display)
-            ? Optional.of(Goods.specOf(display)) : Goods.accepting(soup::isSoupBase);
+            ? Optional.of(ItemSpec.of(display.getItem())) : Goods.accepting(soup::isSoupBase);
         if (soupItem.isEmpty()) {
             return Optional.empty();
         }
@@ -232,7 +232,7 @@ record StockpotPlan(ResourceLocation id, StockpotRecipe recipe, Tag definition, 
                 if (value instanceof Ingredient.TagValue tag) {
                     alternatives.add(ItemSpec.of(tag.tag()));
                 } else if (value instanceof Ingredient.ItemValue item && !item.item().isEmpty()) {
-                    alternatives.add(Goods.specOf(item.item()));
+                    alternatives.add(ItemSpec.of(item.item().getItem()));
                 }
             }
             if (!alternatives.isEmpty()) {

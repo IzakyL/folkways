@@ -3,7 +3,6 @@ package io.github.izakyl.folkways.cookery.stockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -63,7 +62,7 @@ final class StockpotLoad extends StockpotNode {
     }
 
     static ItemSpec lid() {
-        return Goods.specOf(ModItems.STOCKPOT_LID.get().getDefaultInstance());
+        return ItemSpec.of(ModItems.STOCKPOT_LID.get());
     }
 
     @Override
