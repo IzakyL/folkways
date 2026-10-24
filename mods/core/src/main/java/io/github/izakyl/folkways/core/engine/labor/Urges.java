@@ -43,7 +43,7 @@ final class Urges {
             if (quiet(urge.id(), now) || !available.test(urge)) {
                 continue;
             }
-            if (best == null || urge.weight() > best.weight()) {
+            if (best == null || urge.outranks(best)) {
                 best = urge;
             }
         }

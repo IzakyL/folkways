@@ -312,7 +312,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
         Optional<Urge> keenest = urges.keenest(offered, level.getGameTime(), urge ->
             !personalRequests.containsValue(new Personal(body.id(), urge.id()))
                 && (!runner.executing() || urge.preempts()
-                    && current.map(active -> urge.weight() > active.weight()).orElse(true)));
+                    && current.map(urge::outranks).orElse(true)));
         if (keenest.isEmpty()) {
             return;
         }

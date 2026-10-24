@@ -155,6 +155,32 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void deliberateControlPreemptsAnArbitrarilyHeavyNeedAndKeepsOwnership(GameTestHelper helper) throws Exception {
+        try (Harness h = new Harness(helper)) {
+            Urge need = h.urge("heavy_need", Double.MAX_VALUE, true);
+            h.offers(need);
+            h.interrupt();
+            Urge control = new Urge(id("control"), 1, true,
+                () -> h.node(Workload.Once.of(1000), true, new AtomicInteger()), Urge.Priority.CONTROL);
+            h.offers(need, control);
+            h.interrupt();
+            helper.assertTrue(h.runner.ownUrge().orElseThrow().equals(control.id()),
+                "the control tier takes the same runner immediately, independently of need weights");
+            h.offers(need, control, h.urge("other_need", Double.POSITIVE_INFINITY, true));
+            h.interrupt();
+            helper.assertTrue(h.runner.ownUrge().orElseThrow().equals(control.id()),
+                "an ordinary preemptive need cannot regain the body while deliberate control is active");
+            Urge replacement = new Urge(id("replacement_control"), 1, true,
+                () -> h.node(Workload.Once.of(1000), true, new AtomicInteger()), Urge.Priority.CONTROL);
+            h.offers(need, replacement);
+            h.interrupt();
+            helper.assertTrue(h.runner.ownUrge().orElseThrow().equals(replacement.id()),
+                "a new order identity replaces the cancelled order without a larger numeric weight");
+        }
+        helper.succeed();
+    }
+
     private static ResourceLocation id(String path) {
         return ResourceLocation.fromNamespaceAndPath("folkways_test", path);
     }
