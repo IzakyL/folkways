@@ -102,6 +102,102 @@ public final class TaskToolsGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void sharedSickleDefaultsAndBorrowingBelongToFarming(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            var farming = io.github.izakyl.folkways.plugins.farming.FarmingContent.trade();
+            var crafting = io.github.izakyl.folkways.plugins.wares.WaresContent.trade();
+            var sickle = ModItems.SICKLE.get();
+            helper.assertTrue(io.github.izakyl.folkways.core.api.vocation.KitRules.allows(rig.colony.works(), farming, sickle),
+                "the harvesting vocation includes the shared sickle by default");
+            helper.assertFalse(io.github.izakyl.folkways.core.api.vocation.KitRules.allows(rig.colony.works(), crafting, sickle),
+                "crafting does not inherit farming's shared sickle");
+            helper.assertTrue(io.github.izakyl.folkways.core.api.vocation.KitRules.allows(rig.colony.works(), crafting,
+                ModItems.IRON_KITCHEN_KNIFE.get()), "kitchen defaults belong to crafting");
+            helper.assertFalse(io.github.izakyl.folkways.core.api.vocation.KitRules.allows(rig.colony.works(), farming,
+                ModItems.IRON_KITCHEN_KNIFE.get()), "farming does not inherit kitchen knives");
+            rig.rack.setItem(0, new ItemStack(sickle));
+            var executed = new AtomicInteger();
+            Node work = rig.simple(executed, false, farming,
+                io.github.izakyl.folkways.cookery.farming.CookerySickle.SICKLE);
+            var front = ColonyFront.of(rig.colony.works());
+            front.setSetting(crafting.id(), "tool", new ColonySettings.Value.Items(List.of(
+                ItemFilter.item(BuiltInRegistries.ITEM.getKey(sickle)))));
+            front.setSetting(farming.id(), "tool", new ColonySettings.Value.Items(List.of()));
+            helper.assertTrue(work.planned(rig.level).isPresent() && !work.ready(rig.level),
+                "crafting's allowed sickle cannot be borrowed for a harvesting node");
+            front.resetTool(farming);
+            helper.assertTrue(work.planned(rig.level).isEmpty() && work.ready(rig.level), "farming's own defaults allow the harvest");
+            rig.finish(work);
+            helper.assertValueEqual(executed.get(), 1, "one farming action used the borrowed sickle");
+            helper.assertValueEqual(Goods.countIn(rig.rack, Goods.specOf(sickle.getDefaultInstance())), 1L,
+                "the same physical sickle returns to shared storage");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void sharedBorrowUsesTheWorkVocationAndStillReturnsAfterDisabling(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            var executions = new AtomicInteger();
+            Node work = rig.simple(executions, false);
+            var crafting = io.github.izakyl.folkways.plugins.wares.WaresContent.CRAFTING;
+            var farming = io.github.izakyl.folkways.plugins.farming.FarmingContent.VOCATION;
+            var front = ColonyFront.of(rig.colony.works());
+            var knife = new ColonySettings.Value.Items(List.of(ItemFilter.item(
+                BuiltInRegistries.ITEM.getKey(ModItems.IRON_KITCHEN_KNIFE.get()))));
+            front.setSetting(farming, "tool", knife);
+            front.setSetting(crafting, "tool", new ColonySettings.Value.Items(List.of()));
+            helper.assertTrue(work.planned(rig.level).isPresent(), "farming's allowed knife cannot qualify crafting work");
+            helper.assertFalse(work.ready(rig.level), "no shared knife can be reserved for the forbidden vocation");
+            helper.assertTrue(((ToolWork) work).families().isEmpty(), "a disabled vocation requests no shared-tool replenishment");
+            helper.assertTrue(rig.tools.pool.leases(rig.colony.colonyId()).isEmpty(), "refusal creates no physical lease");
+            front.setSetting(crafting, "tool", knife);
+            helper.assertTrue(work.planned(rig.level).isEmpty() && work.ready(rig.level), "crafting's own list permits borrowing");
+            rig.step(work);
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 1L, "one physical knife was borrowed");
+            front.setSetting(crafting, "tool", new ColonySettings.Value.Items(List.of()));
+            var within = (Workload.Within) work.spec().workload();
+            var turn = within.next(rig.level, rig.worker);
+            helper.assertTrue(turn instanceof Workload.Within.Turn.Piece piece && piece.node() instanceof ToolAction.Return,
+                "disabling after borrowing returns the tool without doing the forbidden work");
+            Node returning = ((Workload.Within.Turn.Piece) turn).node();
+            rig.stand(returning);
+            helper.assertTrue(Commit.run(rig.level, returning, rig.worker) instanceof Outcome.Done, "return is allowed after disabling");
+            within.ended(rig.level, returning, Ending.DONE);
+            helper.assertTrue(within.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Leave, "return settles the wrapper");
+            helper.assertTrue(work.commit(rig.level, rig.worker) instanceof Outcome.Failed, "the forbidden task ends with a refusal");
+            work.ended(rig.level, Ending.REVOKED);
+            helper.assertValueEqual(executions.get(), 0, "no forbidden native action ran");
+            helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "the original knife is back in shared storage");
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 0L, "the pack retains no duplicate");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void disablingWhileTravellingPreventsThePhysicalBorrow(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            Node work = rig.simple(new AtomicInteger(), false);
+            helper.assertTrue(work.ready(rig.level), "the permitted knife can be reserved");
+            var within = (Workload.Within) work.spec().workload();
+            Node borrow = ((Workload.Within.Turn.Piece) within.next(rig.level, rig.worker)).node();
+            ColonyFront.of(rig.colony.works()).setSetting(io.github.izakyl.folkways.plugins.wares.WaresContent.CRAFTING,
+                "tool", new ColonySettings.Value.Items(List.of()));
+            rig.stand(borrow);
+            helper.assertTrue(Commit.run(rig.level, borrow, rig.worker) instanceof Outcome.Failed,
+                "the transfer rechecks the work vocation after travelling");
+            borrow.ended(rig.level, Ending.REVOKED);
+            within.ended(rig.level, borrow, Ending.REVOKED);
+            work.ended(rig.level, Ending.REVOKED);
+            helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "the disallowed tool never leaves storage");
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 0L, "no forbidden borrow enters the pack");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void sharedToolStockRespectsIndependentTakeAndStoreAccess(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -823,13 +919,19 @@ public final class TaskToolsGameTests {
         }
 
         Node simple(AtomicInteger executions, boolean breaks) {
+            return simple(executions, breaks, io.github.izakyl.folkways.plugins.wares.WaresContent.trade(), KNIFE);
+        }
+
+        Node simple(AtomicInteger executions, boolean breaks,
+                io.github.izakyl.folkways.core.api.vocation.Vocation vocation, ToolNeed need) {
             NodeSpec spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(boardAt),
-                Stances.at(level, boardCell.south()), Workload.Once.of(1)).tools(new ToolUse(KNIFE, 0))
+                Stances.at(level, boardCell.south()), Workload.Once.of(1))
+                .vocation(vocation).tools(new ToolUse(need, 0))
                 .gives(new Amount(Goods.specOf(Items.PAPER.getDefaultInstance()), 1)).done();
             Node action = new Node() {
                 public NodeSpec spec() { return spec; }
                 public Outcome commit(ServerLevel level, Worker who) {
-                    ItemStack tool = who.held(KNIFE);
+                    ItemStack tool = who.held(need);
                     helper.assertTrue(!tool.isEmpty(), "the original action sees a physical held shared knife");
                     if (breaks) {
                         tool.hurtAndBreak(1, level, who.body(), ignored -> { });
