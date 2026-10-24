@@ -95,7 +95,7 @@ Deployment accepts level endpoints in the same realm, a horizontal front approxi
 - Dead or dismissed members leave; unloaded members remain missing while present members reform; returning members receive fresh slots.
 - Unreachable deployments report FAILED and release everyone. Fresh deployment after opening a path can retry without teleportation or endless retries.
 
-The concrete acceptance case is four people physically crossing a one-block opening and restoring a line. This is not a guarantee for all bottlenecks, arbitrary terrain, multiple ranks, vehicles or ship deployment. No 16/32/64-unit performance conclusion is claimed. War shortcut selections may overlap; actual group membership cannot.
+The concrete acceptance case is four people physically crossing a one-block opening and restoring a line. This does not guarantee all bottlenecks, arbitrary terrain, multiple ranks, vehicles or ship deployment. The separate 16/32/64-total-entity combat sample does not establish large-group formation performance. War shortcut selections may overlap; actual group membership cannot.
 
 ### Formation patrol and proactive combat
 
@@ -139,6 +139,6 @@ npm run test:e2e -- tests/e2e/native-hostility.spec.ts tests/e2e/resident-comman
 
 GameTestServer disables global labour simulation. LaborFixture explicitly advances real labour/travel only for each test's own colony, without changing game runtime behaviour. Client scenarios cover native damage, fear takeover, orders, narrow formations and a saved-world restart.
 
-With `FOLKWAYS_COMBAT_BENCH=1`, opt-in `combat-performance.spec.ts` records 16/32/64 total entities, half residents and half zombies, after 200 warm-up ticks with 100 sampled ticks. Artifacts contain paired engine and full Pre-to-Post tick durations plus actual target/navigation counts. They impose no invented performance threshold and do not cover arbitrary terrain or mod combinations.
+With `FOLKWAYS_COMBAT_BENCH=1`, opt-in `combat-performance.spec.ts` records 16/32/64 total entities, half residents and half zombies, after 200 warm-up ticks with 100 sampled ticks. Residents receive real swords and GUARD orders, and both sides have 1024 health to retain the population during combat. Artifacts contain paired engine and full Pre-to-Post tick durations plus actual target/navigation counts. They impose no invented performance threshold and do not cover arbitrary terrain or mod combinations.
 
 See [Testing](testing.md) for platform, EULA, dependencies, CI matrix and logs. Local Windows SDK evidence and GitHub Linux CI are recorded separately. Unrun scenarios are not passes.
