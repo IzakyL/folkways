@@ -15,11 +15,11 @@ import net.minecraft.util.Mth;
 
 /** Server-confirmed shortcut and selected-unit cards; clicks submit selection or group operations. */
 final class CombatCards {
-    static final int HEIGHT = 75;
+    static final int HEIGHT = 116;
     private static final int GREEN = 0xFF8FEAC3;
     private static final int TEXT = 0xFFF0EEE6;
     private static final int GOLD = 0xFFFFDC7A;
-    enum Kind { GROUP, UNIT, PREVIOUS, NEXT }
+    enum Kind { GROUP, UNIT, PREVIOUS, NEXT, ATTACK_MOVE, STOP, RELEASE }
     record Action(Kind kind, int slot, UUID resident) { }
     private record Hit(int x, int y, int width, int height, Action action, Component tooltip) {
         boolean contains(double mouseX, double mouseY) {
@@ -44,7 +44,8 @@ final class CombatCards {
     }
 
     void render(GuiGraphics graphics, int mouseX, int mouseY, Set<UUID> selected,
-            Map<UUID, ResidentEntity> residents, Map<Integer, List<UUID>> groups, int points, Component notice) {
+            Map<UUID, ResidentEntity> residents, Map<Integer, List<UUID>> groups, int points,
+            Component status, Component notice, boolean attackMoveArmed) {
         Minecraft minecraft = Minecraft.getInstance();
         drawnWidth = minecraft.getWindow().getGuiScaledWidth();
         drawnHeight = minecraft.getWindow().getGuiScaledHeight();
@@ -104,13 +105,45 @@ final class CombatCards {
             arrow(graphics, 9, top + 42, false);
             arrow(graphics, drawnWidth - 24, top + 42, true);
         }
+        graphics.enableScissor(8, top + 64, drawnWidth - 8, top + 75);
+        graphics.drawString(minecraft.font, status, 9, top + 64, 0xFF9CAFA3, true);
+        graphics.disableScissor();
         if (!notice.getString().isEmpty()) {
-            graphics.enableScissor(8, top + 64, drawnWidth - 8, drawnHeight - 4);
-            graphics.drawString(minecraft.font, notice, 9, top + 64, GOLD, true);
+            graphics.enableScissor(8, top + 75, drawnWidth - 8, top + 86);
+            graphics.drawString(minecraft.font, notice, 9, top + 75, GOLD, true);
             graphics.disableScissor();
         }
+        int buttonY = top + 91;
+        int buttonGap = 4;
+        int attackWidth = Math.min(128, Math.max(84, drawnWidth / 4));
+        int stopWidth = Math.min(76, Math.max(54, drawnWidth / 7));
+        int releaseWidth = Math.min(96, Math.max(68, drawnWidth / 6));
+        int totalWidth = attackWidth + stopWidth + releaseWidth + buttonGap * 2;
+        int buttonX = Math.max(8, (drawnWidth - totalWidth) / 2);
+        button(graphics, buttonX, buttonY, attackWidth, 18,
+            Component.translatable("folkways.war.attack_move"), attackMoveArmed, true,
+            new Action(Kind.ATTACK_MOVE, 0, null), Component.translatable("folkways.war.attack_move.tooltip"));
+        buttonX += attackWidth + buttonGap;
+        button(graphics, buttonX, buttonY, stopWidth, 18,
+            Component.translatable("folkways.war.stop"), false, !selected.isEmpty(),
+            new Action(Kind.STOP, 0, null), Component.translatable("folkways.war.stop.tooltip"));
+        buttonX += stopWidth + buttonGap;
+        button(graphics, buttonX, buttonY, releaseWidth, 18,
+            Component.translatable("folkways.war.release_control"), false, !selected.isEmpty(),
+            new Action(Kind.RELEASE, 0, null), Component.translatable("folkways.war.release_control.tooltip"));
         hits.stream().filter(hit -> hit.contains(mouseX, mouseY)).findFirst().ifPresent(hit ->
             graphics.renderTooltip(minecraft.font, hit.tooltip(), mouseX, Math.min(mouseY, top - 2)));
+    }
+
+    private void button(GuiGraphics graphics, int x, int y, int width, int height, Component label,
+            boolean selected, boolean enabled, Action action, Component tooltip) {
+        int fill = !enabled ? 0xB01C2420 : selected ? 0xFF315943 : 0xE0283931;
+        int edge = !enabled ? 0xFF45544C : selected ? GREEN : 0xFF718C7D;
+        int color = !enabled ? 0xFF849087 : selected ? GOLD : TEXT;
+        graphics.fill(x, y, x + width, y + height, fill);
+        graphics.renderOutline(x, y, width, height, edge);
+        graphics.drawCenteredString(Minecraft.getInstance().font, label, x + width / 2, y + 5, color);
+        hits.add(new Hit(x, y, width, height, action, tooltip));
     }
 
     private void arrow(GuiGraphics graphics, int x, int y, boolean forward) {

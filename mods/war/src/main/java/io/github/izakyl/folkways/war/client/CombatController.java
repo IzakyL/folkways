@@ -10,9 +10,12 @@ import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.front.api.ui.Cue;
 import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.client.Overhead;
+import io.github.izakyl.folkways.plugins.combat.net.CombatControlPacket;
 import io.github.izakyl.folkways.plugins.combat.net.CombatPackets;
+import io.github.izakyl.folkways.plugins.combat.net.CombatWaypointReply;
 import io.github.izakyl.folkways.plugins.combat.ui.CombatContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -22,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -55,6 +59,10 @@ final class CombatController implements OverheadTools.Handler {
     private long controlRevision = -1, routeRevision = -1;
     private int cycleStart = -1;
     private boolean routeOpen;
+    private boolean routeAttackMove;
+    private boolean attackMoveArmed;
+    private int attackMoveArmGeneration;
+    private PendingRoute pendingReplacement;
     private boolean dragging;
     private boolean additiveSelection;
     private double startX, startY, endX, endY;
@@ -64,6 +72,29 @@ final class CombatController implements OverheadTools.Handler {
     private long markerUntil;
 
     private record Context(UUID player, UUID colony, Realm realm) { }
+
+    /** Input-only route context while a replacement is waiting for its authoritative reply. */
+    private static final class PendingRoute {
+        final boolean attackMove;
+        final int armGeneration;
+        final CombatWaypointReply.Intent initialIntent;
+        final List<WorldPos> points = new ArrayList<>();
+        final ArrayDeque<WorldPos> additions = new ArrayDeque<>();
+        int cycleStart = -1;
+        long initialRequest;
+        long additionRequest;
+        boolean awaitingInitialAck = true;
+        boolean awaitingAdditionAck;
+
+        PendingRoute(WorldPos first, boolean attackMove, int armGeneration,
+                CombatWaypointReply.Intent initialIntent, long initialRequest) {
+            this.points.add(first);
+            this.attackMove = attackMove;
+            this.armGeneration = armGeneration;
+            this.initialIntent = initialIntent;
+            this.initialRequest = initialRequest;
+        }
+    }
 
     private boolean active() {
         return Overhead.activeScreen() && OverheadTools.selected().filter(tool -> tool.id().equals(CombatContent.ID)).isPresent();
@@ -106,12 +137,26 @@ final class CombatController implements OverheadTools.Handler {
         CombatPackets.controls().filter(state -> state.colonyId().equals(context.colony())
             && state.at().realm().equals(context.realm())).ifPresent(state -> {
                 Set<UUID> next = new LinkedHashSet<>(state.selection());
-                if (!selected.equals(next)) { clearRoute(); cards.reset(); }
+                int previousSelectionSize = selected.size();
+                boolean selectionChanged = !selected.equals(next);
+                if (selectionChanged) { clearRoute(); cards.reset(); }
                 selected.clear(); selected.addAll(next);
+                if (selected.isEmpty()) { disarmAttackMove(); }
                 shortcuts.clear();
                 for (int slot = 1; slot <= 9; slot++) { shortcuts.put(slot, state.groups().get(slot - 1)); }
-                route.clear(); route.addAll(state.points());
-                cycleStart = state.cycleStart(); routeOpen = state.open();
+                boolean routeSnapshot = selectionChanged || state.accepted() && (
+                    state.operation() == CombatControlPacket.Operation.SELECT
+                    || state.operation() == CombatControlPacket.Operation.RECALL
+                    || state.operation() == CombatControlPacket.Operation.RELEASE);
+                if (routeSnapshot) {
+                    route.clear(); route.addAll(state.points());
+                    cycleStart = state.cycleStart(); routeOpen = state.open();
+                    routeAttackMove = state.attackMove();
+                }
+                if (state.operation() == CombatControlPacket.Operation.RELEASE) {
+                    if (state.accepted()) { tell("folkways.war.release_accepted", Math.max(0, previousSelectionSize - next.size())); }
+                    else { tell("folkways.combat.error.rejected"); }
+                }
             });
         controlRevision = CombatPackets.controlRevision();
     }
@@ -122,16 +167,57 @@ final class CombatController implements OverheadTools.Handler {
             && state.at().realm().equals(context.realm()) && Set.copyOf(state.residents()).equals(selected)).ifPresent(state -> {
                 route.clear(); route.addAll(state.points());
                 cycleStart = state.cycleStart(); routeOpen = state.open();
+                routeAttackMove = state.state().attackMove();
+                resolvePendingRoute(state);
                 if (state.accepted()) {
                     switch (state.intent()) {
                         case MOVE -> tell("folkways.war.move_accepted", selected.size());
                         case ATTACK -> tell("folkways.war.attack_accepted", selected.size());
                         case WAYPOINT -> tell(cycleStart >= 0 ? "folkways.war.patrol_sent" : "folkways.war.waypoint_added",
                             cycleStart >= 0 ? selected.size() : route.size());
+                        case STOP -> tell("folkways.war.stop_accepted", selected.size());
                     }
                 } else { moveMarker = null; tell("folkways.combat.error.rejected"); }
             });
         routeRevision = CombatPackets.routeRevision();
+    }
+
+    private void resolvePendingRoute(CombatWaypointReply reply) {
+        PendingRoute pending = pendingReplacement;
+        if (pending == null) { return; }
+        if (pending.awaitingInitialAck && reply.request() == pending.initialRequest
+                && reply.intent() == pending.initialIntent) {
+            pending.awaitingInitialAck = false;
+            if (!reply.accepted()) { pendingReplacement = null; return; }
+            if (pending.attackMove && reply.attackMove() && attackMoveArmed
+                    && pending.armGeneration == attackMoveArmGeneration) {
+                attackMoveArmed = false;
+                attackMoveArmGeneration++;
+            }
+            sendNextPendingAddition(pending);
+            return;
+        }
+        if (pending.awaitingAdditionAck && reply.request() == pending.additionRequest
+                && reply.intent() == CombatWaypointReply.Intent.WAYPOINT) {
+            pending.awaitingAdditionAck = false;
+            if (!reply.accepted()) { pendingReplacement = null; return; }
+            pending.additions.removeFirst();
+            sendNextPendingAddition(pending);
+        }
+    }
+
+    private void sendNextPendingAddition(PendingRoute pending) {
+        if (pendingReplacement != pending || pending.awaitingInitialAck || pending.awaitingAdditionAck) { return; }
+        if (pending.additions.isEmpty()) { pendingReplacement = null; return; }
+        WorldPos point = pending.additions.peekFirst();
+        long request = sendRouteRequest(() -> CombatPackets.append(List.copyOf(selected), point, pending.attackMove));
+        if (request < 0) { pendingReplacement = null; tell("folkways.war.syncing"); return; }
+        pending.additionRequest = request;
+        pending.awaitingAdditionAck = true;
+    }
+
+    private long sendRouteRequest(BooleanSupplier submit) {
+        return submit.getAsBoolean() ? CombatPackets.lastRouteRequest() : -1;
     }
 
     private boolean rosterReady() {
@@ -155,8 +241,16 @@ final class CombatController implements OverheadTools.Handler {
     @Override
     public boolean mouseClicked(double x, double y, int button) {
         if (y >= cards.top()) {
-            if (button == InputConstants.MOUSE_BUTTON_LEFT && ready()) {
+            if (button == InputConstants.MOUSE_BUTTON_LEFT) {
                 CombatCards.Action action = cards.clicked(x, y);
+                if (action != null && action.kind() == CombatCards.Kind.ATTACK_MOVE) {
+                    attackMoveArmed = !attackMoveArmed;
+                    attackMoveArmGeneration++;
+                    return true;
+                }
+                if (action != null && (action.kind() == CombatCards.Kind.STOP || action.kind() == CombatCards.Kind.RELEASE)
+                        && selected.isEmpty()) { return true; }
+                if (!ready()) { return true; }
                 if (action != null) {
                     switch (action.kind()) {
                         case GROUP -> shortcut(action.slot(), Screen.hasControlDown());
@@ -165,6 +259,15 @@ final class CombatController implements OverheadTools.Handler {
                         }
                         case PREVIOUS -> cards.page(false, selected.size());
                         case NEXT -> cards.page(true, selected.size());
+                        case ATTACK_MOVE -> { }
+                        case STOP -> {
+                            if (!selected.isEmpty() && sendRouteRequest(() -> CombatPackets.stop(List.copyOf(selected))) < 0) {
+                                tell("folkways.war.syncing");
+                            } else if (!selected.isEmpty()) { cancelPendingRoute(); }
+                        }
+                        case RELEASE -> {
+                            if (!selected.isEmpty() && !CombatPackets.release(List.copyOf(selected))) { tell("folkways.war.syncing"); }
+                        }
                     }
                 }
             }
@@ -179,19 +282,33 @@ final class CombatController implements OverheadTools.Handler {
         // Always consume RMB here: even an invalid command must not fall through to opening the book.
         if (!ready()) { return true; }
         if (selected.isEmpty()) { tell("folkways.war.select_first"); return true; }
-        if (Screen.hasControlDown() && cycleStart >= 0 && !CombatPackets.routePending()) {
+        PendingRoute pending = pendingReplacement;
+        List<WorldPos> inputRoute = pending == null ? route : pending.points;
+        int inputCycleStart = pending == null ? cycleStart : pending.cycleStart;
+        boolean inputOpen = pending == null ? routeOpen : inputCycleStart < 0;
+        if (Screen.hasControlDown() && inputCycleStart >= 0) {
             tell("folkways.war.route_closed"); return true;
         }
-        int closing = Screen.hasControlDown() ? nearWaypoint(x, y) : -1;
+        int closing = Screen.hasControlDown() ? nearWaypoint(x, y, inputRoute, inputOpen) : -1;
         if (closing >= 0) {
-            if (closing >= route.size() - 1) { tell("folkways.war.cycle_too_short"); return true; }
-            if (!CombatPackets.append(List.copyOf(selected), route.get(closing))) { tell("folkways.war.syncing"); }
+            if (closing >= inputRoute.size() - 1) { tell("folkways.war.cycle_too_short"); return true; }
+            if (pending != null) {
+                pending.cycleStart = closing;
+                pending.additions.addLast(inputRoute.get(closing));
+                sendNextPendingAddition(pending);
+                return true;
+            }
+            if (attackMoveArmed && !routeAttackMove) { tell("folkways.war.attack_move_new_route"); return true; }
+            if (sendRouteRequest(() -> CombatPackets.append(List.copyOf(selected), inputRoute.get(closing), routeAttackMove)) < 0) {
+                tell("folkways.war.syncing");
+            }
             return true;
         }
         if (!Screen.hasControlDown()) {
             Optional<Mob> target = target(x, y);
             if (target.isPresent()) {
-                if (CombatPackets.attack(List.copyOf(selected), target.get().getUUID())) {
+                if (sendRouteRequest(() -> CombatPackets.attack(List.copyOf(selected), target.get().getUUID())) >= 0) {
+                    cancelPendingRoute();
                     tell("folkways.war.attack_sent", selected.size(), target.get().getDisplayName());
                 } else { tell("folkways.war.syncing"); }
                 return true;
@@ -200,9 +317,32 @@ final class CombatController implements OverheadTools.Handler {
         Optional<WorldPos> point = ground(x, y);
         if (point.isEmpty()) { tell("folkways.war.ground_required"); return true; }
         if (Screen.hasControlDown()) {
-            if (!CombatPackets.append(List.copyOf(selected), point.get())) { tell("folkways.war.syncing"); }
+            if (pending != null) {
+                if (pending.cycleStart >= 0) { tell("folkways.war.route_closed"); return true; }
+                if (pending.points.size() >= CombatPackets.MAX_POINTS) {
+                    tell("folkways.war.route_full", CombatPackets.MAX_POINTS); return true;
+                }
+                pending.points.add(point.get());
+                pending.additions.addLast(point.get());
+                sendNextPendingAddition(pending);
+                return true;
+            }
+            if (!route.isEmpty() && attackMoveArmed && !routeAttackMove) {
+                tell("folkways.war.attack_move_new_route"); return true;
+            }
+            boolean mode = route.isEmpty() ? attackMoveArmed : routeAttackMove;
+            long request = sendRouteRequest(() -> CombatPackets.append(List.copyOf(selected), point.get(), mode));
+            if (request < 0) { tell("folkways.war.syncing"); }
+            else if (route.isEmpty()) {
+                pendingReplacement = new PendingRoute(point.get(), mode, attackMoveArmGeneration,
+                    CombatWaypointReply.Intent.WAYPOINT, request);
+            }
         } else {
-            if (CombatPackets.submit(List.copyOf(selected), List.of(point.get()), -1)) {
+            boolean mode = attackMoveArmed;
+            long request = sendRouteRequest(() -> CombatPackets.submit(List.copyOf(selected), List.of(point.get()), -1, mode));
+            if (request >= 0) {
+                pendingReplacement = new PendingRoute(point.get(), mode, attackMoveArmGeneration,
+                    CombatWaypointReply.Intent.MOVE, request);
                 moveMarker = point.get(); markerUntil = Util.getMillis() + 3000;
                 tell("folkways.war.move_sent", selected.size());
             } else { tell("folkways.war.syncing"); }
@@ -278,6 +418,7 @@ final class CombatController implements OverheadTools.Handler {
     private void replaceSelection(Set<UUID> next) {
         if (next.size() > CombatPackets.MAX_MEMBERS) { tell("folkways.war.selection_limit", CombatPackets.MAX_MEMBERS); return; }
         if (!CombatPackets.select(List.copyOf(next))) { tell("folkways.war.syncing"); return; }
+        if (next.isEmpty()) { disarmAttackMove(); }
         if (!selected.equals(next)) { clearRoute(); }
         selected.clear(); selected.addAll(next);
         cards.reset();
@@ -332,14 +473,14 @@ final class CombatController implements OverheadTools.Handler {
         });
     }
 
-    private int nearWaypoint(double x, double y) {
-        if (!routeOpen) { return -1; }
+    private int nearWaypoint(double x, double y, List<WorldPos> points, boolean open) {
+        if (!open || points.size() < 2) { return -1; }
         Minecraft minecraft = Minecraft.getInstance();
         CombatProjection projection = new CombatProjection(minecraft);
         double nearest = CLOSE_RADIUS;
         int found = -1;
-        for (int index = 0; index < route.size(); index++) {
-            Optional<CombatProjection.Pixel> pixel = WorldSpaces.world(minecraft.level, route.get(index))
+        for (int index = 0; index < points.size(); index++) {
+            Optional<CombatProjection.Pixel> pixel = WorldSpaces.world(minecraft.level, points.get(index))
                 .flatMap(world -> projection.point(world.add(0, .12, 0)));
             if (pixel.isPresent()) {
                 double distance = Math.hypot(pixel.get().x() - x, pixel.get().y() - y);
@@ -372,13 +513,15 @@ final class CombatController implements OverheadTools.Handler {
         }
         Component status = Util.getMillis() <= noticeUntil ? notice : !rosterReady()
             ? Component.translatable("folkways.war.syncing") : Component.empty();
-        cards.render(graphics, mouseX, mouseY, selected, residents, shortcuts, route.size(), status);
+        cards.render(graphics, mouseX, mouseY, selected, residents, shortcuts, route.size(),
+            routeStatus(), status, attackMoveArmed);
     }
 
     private void drawRoute(GuiGraphics graphics, CombatProjection projection, int mouseX, int mouseY) {
         Minecraft minecraft = Minecraft.getInstance();
         CombatProjection.Pixel previous = null;
-        int closing = Screen.hasControlDown() ? nearWaypoint(mouseX, mouseY) : -1;
+        int closing = pendingReplacement == null && Screen.hasControlDown()
+            ? nearWaypoint(mouseX, mouseY, route, routeOpen) : -1;
         for (int index = 0; index < route.size(); index++) {
             Optional<Vec3> world = WorldSpaces.world(minecraft.level, route.get(index));
             Optional<CombatProjection.Pixel> point = world.flatMap(at -> projection.point(at.add(0, 0.12, 0)));
@@ -418,9 +561,28 @@ final class CombatController implements OverheadTools.Handler {
 
     private void tell(String key, Object... args) { notice = Component.translatable(key, args); noticeUntil = Util.getMillis() + 5000; }
 
+    private void disarmAttackMove() {
+        attackMoveArmed = false;
+        attackMoveArmGeneration++;
+    }
+
+    private void cancelPendingRoute() { pendingReplacement = null; }
+
+    private Component routeStatus() {
+        var state = CombatPackets.state();
+        Component command = Component.translatable("folkways.war.command." + state.command());
+        Component phase = Component.translatable("folkways.war.phase." + state.phase());
+        if ("none".equals(state.result())) {
+            return Component.translatable("folkways.war.status", command, phase);
+        }
+        Component result = Component.translatable("folkways.war.result." + state.result());
+        return Component.translatable("folkways.war.status_result", command, phase, result);
+    }
+
     @Override
     public void cancel() {
         dragging = false;
+        disarmAttackMove();
         if (!selected.isEmpty()) {
             if (Minecraft.getInstance().getConnection() != null) { replaceSelection(Set.of()); }
             else { selected.clear(); }
@@ -432,7 +594,8 @@ final class CombatController implements OverheadTools.Handler {
     public void cancelPointer() { dragging = false; }
 
     private void clearRoute() {
-        route.clear(); cycleStart = -1; routeOpen = false;
+        route.clear(); cycleStart = -1; routeOpen = false; routeAttackMove = false;
+        cancelPendingRoute();
         CombatPackets.clearRoute();
     }
 
@@ -443,6 +606,7 @@ final class CombatController implements OverheadTools.Handler {
         requestIn = 0; heartbeatIn = 0; controlRevision = -1; routeRevision = -1;
         CombatPackets.clearRoster();
         moveMarker = null; markerUntil = 0;
+        disarmAttackMove(); routeAttackMove = false;
         notice = Component.empty(); noticeUntil = 0;
     }
 }
