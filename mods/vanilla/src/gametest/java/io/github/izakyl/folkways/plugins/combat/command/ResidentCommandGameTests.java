@@ -114,6 +114,13 @@ public final class ResidentCommandGameTests {
             .thenExecute(() -> {
                 helper.assertTrue(body.mob().distanceToSqr(net.minecraft.world.phys.Vec3.atBottomCenterOf(
                     f.at(2, 1, 2).block(f.level))) < 2, "the body stays at the retreat destination");
+                body.mob().setDeltaMovement(1.2, .3, 0);
+            })
+            .thenIdle(10)
+            .thenWaitUntil(() -> helper.assertTrue(io.github.izakyl.folkways.core.api.terms.Reach.standingAt(
+                    body.mob().position(), f.at(2, 1, 2).block(f.level)),
+                "a held resident displaced by an impulse walks back to its stance"))
+            .thenExecute(() -> {
                 retreat.get().close();
                 helper.assertTrue(f.commands.current(body.id()).isEmpty(), "release relinquishes the command");
             })
@@ -164,6 +171,11 @@ public final class ResidentCommandGameTests {
         Fixture f = new Fixture(helper);
         Body dying = f.resident(new BlockPos(2, 1, 2));
         Body other = f.resident(new BlockPos(5, 1, 2));
+        dying.pack().insert(new ItemStack(Items.IRON_INGOT, 8));
+        ItemStack axe = new ItemStack(Items.IRON_AXE);
+        axe.setDamageValue(7);
+        dying.pack().insert(axe);
+        dying.presentHeldItem(axe.copy());
         ResidentCommands.Order dead = f.commands.hold(dying, f.at(2, 1, 2));
         ResidentCommands.Order closing = f.commands.hold(other, f.at(5, 1, 2));
         helper.runAfterDelay(5, () -> dying.mob().kill());
@@ -171,6 +183,12 @@ public final class ResidentCommandGameTests {
             .thenWaitUntil(() -> helper.assertTrue(dead.status() == ResidentCommands.Status.RELEASED,
                 "death releases the command without waiting for a trip timeout"))
             .thenExecute(() -> {
+                var drops = f.level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                    dying.mob().getBoundingBox().inflate(2));
+                helper.assertValueEqual(drops.stream().filter(item -> item.getItem().is(Items.IRON_INGOT))
+                    .mapToInt(item -> item.getItem().getCount()).sum(), 8, "death drops each material exactly once");
+                helper.assertValueEqual(drops.stream().filter(item -> item.getItem().is(Items.IRON_AXE))
+                    .mapToInt(item -> item.getItem().getCount()).sum(), 1, "the presentation copy creates no duplicate tool");
                 f.colony.raze();
                 helper.assertTrue(closing.status() == ResidentCommands.Status.RELEASED, "colony close releases holds");
             }).thenSucceed();

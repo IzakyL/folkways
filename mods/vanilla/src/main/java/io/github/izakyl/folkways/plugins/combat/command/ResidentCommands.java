@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.plugins.combat.command;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -18,6 +19,7 @@ import java.util.UUID;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.Vec3;
 
 /** Server-side orders executed exclusively by Core's existing labour runner. */
 public final class ResidentCommands {
@@ -31,14 +33,16 @@ public final class ResidentCommands {
         private final Body body;
         private final WorldPos destination;
         private final Mode mode;
-        private final long issued = server.overworld().getGameTime();
+        private final Optional<Vec3> facing;
+        private long movingSince = server.overworld().getGameTime();
         private volatile Status status = Status.MOVING;
         private volatile RefusalKind failure;
 
-        private Order(Body body, WorldPos destination, Mode mode) {
+        private Order(Body body, WorldPos destination, Mode mode, Optional<Vec3> facing) {
             this.body = body;
             this.destination = destination;
             this.mode = mode;
+            this.facing = facing;
         }
 
         public UUID id() { return id; }
@@ -63,16 +67,23 @@ public final class ResidentCommands {
         return colony.service(CommandContent.ID, ResidentCommands.class).orElseThrow();
     }
 
-    public Order move(Body body, WorldPos destination) { return issue(body, destination, Mode.MOVE); }
-    public Order hold(Body body, WorldPos destination) { return issue(body, destination, Mode.HOLD); }
-    public Order retreat(Body body, WorldPos destination) { return issue(body, destination, Mode.RETREAT); }
+    public Order move(Body body, WorldPos destination) { return issue(body, destination, Mode.MOVE, Optional.empty()); }
+    public Order hold(Body body, WorldPos destination) { return issue(body, destination, Mode.HOLD, Optional.empty()); }
+    public Order hold(Body body, WorldPos destination, Vec3 facing) {
+        if (!Double.isFinite(facing.lengthSqr()) || facing.horizontalDistanceSqr() < .01) {
+            throw new IllegalArgumentException("hold facing must have a finite horizontal direction");
+        }
+        return issue(body, destination, Mode.HOLD, Optional.of(facing.normalize()));
+    }
+    public Order retreat(Body body, WorldPos destination) { return issue(body, destination, Mode.RETREAT, Optional.empty()); }
 
     public Optional<Order> current(UUID resident) {
         requireServerThread();
         return Optional.ofNullable(active.get(resident));
     }
 
-    private Order issue(Body body, WorldPos destination, Mode mode) {
+    /** Validates a proposed order without interrupting anything; groups validate every member first. */
+    public void validate(Body body, WorldPos destination) {
         requireServerThread();
         Objects.requireNonNull(destination);
         if (!valid(body) || !body.kind().id().equals(PersonBody.ID)) {
@@ -84,7 +95,11 @@ public final class ResidentCommands {
                 || !level.hasChunkAt(destination.block(level)) || destination.cell().distSqr(from.cell()) > 128 * 128) {
             throw new IllegalArgumentException("order destination must be loaded, in the same realm and within 128 blocks");
         }
-        Order next = new Order(body, destination, mode);
+    }
+
+    private Order issue(Body body, WorldPos destination, Mode mode, Optional<Vec3> facing) {
+        validate(body, destination);
+        Order next = new Order(body, destination, mode, facing);
         Order previous = active.put(body.id(), next);
         if (previous != null) { previous.status = Status.RELEASED; }
         return next;
@@ -111,7 +126,13 @@ public final class ResidentCommands {
     }
 
     boolean active(Order order) {
-        return active.get(order.resident()) == order && valid(order.body);
+        boolean activeNow = active.get(order.resident()) == order && valid(order.body);
+        if (activeNow && order.status == Status.HOLDING
+                && !Reach.standingAt(order.body.mob().position(), order.destination.block(order.body.mob().level()))) {
+            order.status = Status.MOVING;
+            order.movingSince = server.overworld().getGameTime();
+        }
+        return activeNow;
     }
 
     boolean arrived(Order order) {
@@ -122,6 +143,8 @@ public final class ResidentCommands {
             return false;
         }
         order.status = Status.HOLDING;
+        order.facing.ifPresent(front -> order.body.mob().getLookControl().setLookAt(
+            order.body.mob().getX() + front.x * 10, order.body.mob().getEyeY(), order.body.mob().getZ() + front.z * 10));
         return true;
     }
 
@@ -136,7 +159,7 @@ public final class ResidentCommands {
         for (Order order : List.copyOf(active.values())) {
             if (!valid(order.body)) {
                 release(order);
-            } else if (order.status == Status.MOVING && server.overworld().getGameTime() - order.issued >= 1200) {
+            } else if (order.status == Status.MOVING && server.overworld().getGameTime() - order.movingSince >= 1200) {
                 active.remove(order.resident(), order);
                 order.status = Status.FAILED;
             }
@@ -151,6 +174,7 @@ public final class ResidentCommands {
     private boolean valid(Body body) {
         return body.mob().level() instanceof ServerLevel level && level.getServer() == server
             && body.mob().isAlive() && !body.mob().isRemoved()
+            && !body.mob().isPassenger()
             && body.colonyId().filter(colony.id()::equals).isPresent()
             && colony.holdingOf(body.id()).isPresent();
     }

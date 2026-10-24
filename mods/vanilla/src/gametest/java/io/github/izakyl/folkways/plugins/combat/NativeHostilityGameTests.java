@@ -217,6 +217,34 @@ public final class NativeHostilityGameTests {
         });
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 300)
+    public static void aLoadedSkeletonKeepsItsBowAndAttacksWithNativeAi(GameTestHelper helper) {
+        Arena arena = new Arena(helper);
+        Body resident = arena.resident(true, new BlockPos(12, 1, 3));
+        Skeleton original = arena.monster(EntityType.SKELETON, new BlockPos(2, 1, 3));
+        original.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+        CompoundTag saved = new CompoundTag();
+        original.save(saved);
+        original.discard();
+        Skeleton loaded = (Skeleton) EntityType.loadEntityRecursive(saved, helper.getLevel(), entity -> entity);
+        helper.getLevel().addFreshEntity(loaded);
+        arena.entities.add(loaded);
+        helper.assertTrue(loaded.getMainHandItem().is(Items.BOW), "native bow equipment survives entity reload");
+        helper.succeedWhen(() -> helper.assertTrue(resident.mob().getHealth() < resident.mob().getMaxHealth(),
+            "a skeleton loaded from NBT acquires and shoots the resident itself"));
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 180)
+    public static void aZombieRetainsItsNativeVillagerTarget(GameTestHelper helper) {
+        Arena arena = new Arena(helper);
+        arena.resident(true, new BlockPos(6, 1, 3));
+        var villager = arena.monster(EntityType.VILLAGER, new BlockPos(10, 1, 3));
+        villager.setNoAi(true);
+        Zombie zombie = arena.monster(EntityType.ZOMBIE, new BlockPos(2, 1, 3));
+        helper.succeedWhen(() -> helper.assertTrue(zombie.getTarget() == villager,
+            "the higher-priority native villager target is still acquired in a resident's presence"));
+    }
+
     private static final class Arena implements GameTestListener {
         private final GameTestHelper helper;
         private final Colony colony;

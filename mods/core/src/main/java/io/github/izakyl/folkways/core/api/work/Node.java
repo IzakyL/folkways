@@ -47,6 +47,10 @@ public interface Node {
         return false;
     }
 
+    default boolean staysAtWorkSite() {
+        return false;
+    }
+
     default boolean ready(ServerLevel level) {
         return true;
     }

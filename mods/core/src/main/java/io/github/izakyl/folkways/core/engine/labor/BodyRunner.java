@@ -631,6 +631,10 @@ final class BodyRunner {
     }
 
     private void hold(ColonyLabor labor, ServerLevel level, Body body) {
+        if (current.staysAtWorkSite() && !standing(body)) {
+            setOff(labor, level, body);
+            return;
+        }
         perform(body);
         if (!ongoing.holds(level, labor.hands(body, placement))) {
             commit(labor, level, body);

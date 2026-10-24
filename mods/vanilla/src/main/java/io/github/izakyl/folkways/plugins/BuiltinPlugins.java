@@ -29,6 +29,8 @@ public final class BuiltinPlugins {
         PatrolPlugin.install(modBus);
         modBus.addListener(io.github.izakyl.folkways.core.api.Declaring.class,
             io.github.izakyl.folkways.plugins.combat.command.CommandContent::declare);
+        modBus.addListener(io.github.izakyl.folkways.core.api.Declaring.class,
+            io.github.izakyl.folkways.plugins.combat.group.GroupContent::declare);
         OrdersPlugin.install(modBus);
         io.github.izakyl.folkways.plugins.supply.SupplyContent.install(modBus);
     }
