@@ -43,6 +43,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
@@ -339,6 +340,12 @@ public final class FillPlanContinuationGameTests {
         new BackgroundDispatch(helper, cells).tick(1900);
     }
 
+    @GameTest(template = "empty_large", batch = "fill_continuation_flat_turn", timeoutTicks = 1400)
+    public static void aRealFlatArrivalTurnKeepsItsActualSupportAndSettlesThreeFills(GameTestHelper helper) {
+        floor(helper);
+        new FlatTurnDispatch(helper).begin();
+    }
+
     @GameTest(template = "empty_large", batch = "fill_continuation_background")
     public static void aFinishedBackgroundCounterexampleCannotBecomeAnEndlessZeroBudgetWait(GameTestHelper helper) {
         floor(helper);
@@ -594,7 +601,7 @@ public final class FillPlanContinuationGameTests {
         return new FillNode(new Chores.Chore(UUID.randomUUID(), job, chores), MATERIAL, plan);
     }
 
-    private static Worker worker(Mob body, SimpleContainer pack) {
+    private static Worker worker(Mob body, Container pack) {
         return (Worker) Proxy.newProxyInstance(FillPlanContinuationGameTests.class.getClassLoader(), new Class<?>[] {Worker.class},
             (proxy, method, args) -> switch (method.getName()) {
                 case "body" -> body;
@@ -847,6 +854,176 @@ public final class FillPlanContinuationGameTests {
             } finally {
                 plan.close();
                 bodies.forEach(ResidentEntity::discard);
+                colony.works().raze();
+                ColonyWays.forget(colony.colonyId());
+            }
+        }
+    }
+
+    private static final class FlatTurnDispatch {
+        private final GameTestHelper helper;
+        private final ServerLevel level;
+        private final ColonyData colony;
+        private final ColonyLabor labor;
+        private final ResidentEntity body;
+        private final Asking asking;
+        private final FillPlan plan;
+        private final Chores chores;
+        private final Set<BlockPos> cells;
+        private final BlockPos anchor;
+        private final Method run;
+        private final Method closeLabor;
+        private final Object inline;
+        private final Vec3 start;
+        private final CompletionRuntime completion;
+        private boolean closed;
+        private boolean firstFrame;
+
+        FlatTurnDispatch(GameTestHelper helper) {
+            this.helper = helper;
+            level = helper.getLevel();
+            anchor = at(helper, 1, 1, 8);
+            cells = Set.of(at(helper, 8, 1, 8), at(helper, 10, 1, 8), at(helper, 12, 1, 8));
+            // A known, one-block-lower landing lies beside the flat support. The witnessed centering
+            // segment stays on the upper FULL block and needs no descent into this separate channel.
+            for (int x = 6; x <= 14; x++) {
+                level.setBlock(at(helper, x, -1, 7), Blocks.STONE.defaultBlockState(), 3);
+                level.setBlock(at(helper, x, 0, 7), Blocks.AIR.defaultBlockState(), 3);
+            }
+            try {
+                run = java.util.Arrays.stream(ColonyLabor.class.getMethods())
+                    .filter(method -> method.getName().equals("run") && method.getParameterCount() == 2).findFirst().orElseThrow();
+                Field field = run.getParameterTypes()[1].getDeclaredField("INLINE");
+                field.setAccessible(true);
+                inline = field.get(null);
+                closeLabor = ColonyLabor.class.getDeclaredMethod("close");
+                closeLabor.setAccessible(true);
+            } catch (ReflectiveOperationException broken) {
+                throw new IllegalStateException(broken);
+            }
+            colony = ColonyRegistry.get(level.getServer()).mint(level.getServer());
+            labor = new ColonyLabor(colony, level.dimension());
+            body = PersonBody.RESIDENT.get().create(level);
+            asking = new Asking(colony.works(), GroundworkContent.ID, () -> { });
+            // This fixture isolates native steering, not the independent computation-budget tests.
+            plan = new FillPlan(level, UUID.randomUUID(), colony.colonyId(), cells,
+                () -> List.of(anchor), () -> { }, false, new FillPlan.Limits(Integer.MAX_VALUE, 0));
+            chores = new Chores(UUID.randomUUID(), "fill", (at, chore) -> new FillNode(chore, MATERIAL, plan),
+                () -> { }, new PastDay());
+            try {
+                body.setPos(Vec3.atBottomCenterOf(at(helper, 11, 1, 8)));
+                body.pack().setItem(0, new ItemStack(Items.DIRT, 8));
+                body.pack().setItem(1, new ItemStack(Items.DIAMOND_SHOVEL));
+                body.pack().setItem(2, new ItemStack(Items.DIAMOND_AXE));
+                body.pack().setItem(3, new ItemStack(Items.DIAMOND_PICKAXE));
+                helper.assertTrue(level.addFreshEntity(body), "the turn uses a real resident with its native controller and all normal AI");
+                colony.works().hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+                body.joinColony(colony.colonyId());
+                colony.works().entered(body);
+                List<Job> heads = refresh(plan, helper, cells);
+                Job head = heads.getFirst();
+                BlockPos stance = head.footings().cells().iterator().next().block(level);
+                helper.assertTrue(heads.size() == 1 && head.footings().cells().size() == 1
+                        && stance.getY() == at(helper, 0, 1, 0).getY()
+                        && stance.getZ() == at(helper, 0, 0, 8).getZ()
+                        && head.cell().equals(stance.east()),
+                    "the complete three-fill witness selects the real adjacent flat upper support; head=" + head);
+                start = Vec3.atLowerCornerOf(stance).add(0.91D, 0.0D, -0.28D);
+                Vec3 delta = Vec3.atBottomCenterOf(stance).subtract(start);
+                float wantedYaw = (float)(Math.toDegrees(Math.atan2(delta.z, delta.x)) - 90.0D);
+                // Creation-time pose only. The 170-degree heading difference deterministically makes
+                // an unaligned native MAX_TURN frame point toward the channel, not along the proof.
+                body.setPos(start);
+                body.setYRot(wantedYaw + 170.0F);
+                body.setOnGround(true);
+                completion = (CompletionRuntime) value(plan, "completion");
+                helper.assertTrue(!body.isNoAi() && Reach.standingAt(start, stance)
+                        && level.getBlockState(body.blockPosition().below()).isAir()
+                        && level.getBlockState(stance.below()).is(Blocks.STONE) && supported(),
+                    "the actual unsupported-centre arrival still rests on the same known FULL support as its centre");
+                chores.settle(plan.requests());
+                List<Grown> first = new ArrayList<>();
+                chores.goals(level, first);
+                Node initial = first.getFirst().nodes().getFirst();
+                Outcome pending = Commit.run(level, initial, worker(body, body.pack()));
+                helper.assertTrue(pending instanceof Outcome.Failed && plan.proving(head.cell())
+                        && body.pack().count(Items.DIRT) == 8 && cells.stream().allMatch(cell -> level.getBlockState(cell).isAir()),
+                    "the real arrival commit yields with its complete material refunded before any physical movement");
+                Map<String, Object> diagnostic = completion.diagnostics();
+                helper.assertTrue(((Number) diagnostic.get("approachCommands")).longValue()
+                        + ((Number) diagnostic.get("approachAlignCommands")).longValue() > 0,
+                    "the fresh permit reached a real native steering intent rather than only unfinished preparation");
+                System.out.println("CONSTRUCTION_FLAT_TURN_INITIAL actor=" + body.getUUID() + " position=" + body.position()
+                    + " yaw=" + body.getYRot() + " support=" + supported() + " completion=" + diagnostic);
+            } catch (RuntimeException | Error failure) {
+                close();
+                throw failure;
+            }
+        }
+
+        void begin() {
+            // Observe the first actual controller/physics frame before normal task dispatch continues.
+            helper.runAfterDelay(1, () -> tick(1300));
+        }
+
+        void tick(int remaining) {
+            try {
+                helper.assertTrue(body.isAlive() && body.getHealth() == body.getMaxHealth()
+                        && !body.isInWall() && level.noCollision(body, body.getBoundingBox()),
+                    "the real native turn and construction never hurt or embed the worker");
+                if (!firstFrame) {
+                    firstFrame = true;
+                    boolean supported = supported();
+                    System.out.println("CONSTRUCTION_FLAT_TURN_FIRST_FRAME actor=" + body.getUUID() + " position=" + body.position()
+                        + " velocity=" + body.getDeltaMovement() + " yaw=" + body.getYRot() + " onGround=" + body.onGround()
+                        + " support=" + supported + " completion=" + completion.diagnostics());
+                    helper.assertTrue(supported && body.getY() >= start.y - 0.00001D,
+                        "the first real flat-centering frame must keep actual support instead of turning sideways into the channel");
+                }
+                if (cells.stream().allMatch(cell -> level.getBlockState(cell).is(Blocks.DIRT)) && plan.complete()) {
+                    Dispatch.invoke(run, labor, level, inline);
+                    helper.assertTrue(cells.stream().allMatch(cell -> chores.spent().contains(Job.keyOf(cell))),
+                        "the ordinary BodyRunner settles all three real placements as Done after the seeded pending arrival");
+                    helper.assertTrue(body.pack().count(Items.DIRT) == 5,
+                        "the complete actual pipeline consumes exactly three of the original eight dirt");
+                    helper.assertTrue(Reach.standingAt(body.position(), anchor)
+                            && completion.worker().filter(body.getUUID()::equals).isPresent(),
+                        "the original real actor performs its terminal retreat to the original trusted safe anchor");
+                    close();
+                    helper.succeed();
+                    return;
+                }
+                helper.assertTrue(remaining > 0, "the same normal-AI pipeline must finish its three physical fills and retreat; body="
+                    + body.position() + "; doing=" + body.doing() + "; completion=" + completion.diagnostics());
+                plan.refresh(new Survey(level, cells).fill(), cells.stream().map(Job::keyOf).collect(Collectors.toSet()), DIRT);
+                plan.advance();
+                chores.settle(plan.requests());
+                List<Grown> goals = new ArrayList<>();
+                chores.goals(level, goals);
+                goals.addAll(plan.steppingAside());
+                asking.offer(Map.of(level.dimension(), goals));
+                ColonyWays.advance(colony, level);
+                Dispatch.invoke(run, labor, level, inline);
+                helper.runAfterDelay(1, () -> tick(remaining - 1));
+            } catch (RuntimeException | Error failure) {
+                close();
+                throw failure;
+            }
+        }
+
+        private boolean supported() {
+            return level.noCollision(body, body.getBoundingBox()) && level.getBlockCollisions(body,
+                body.getBoundingBox().move(0.0D, -0.0001D, 0.0D)).iterator().hasNext();
+        }
+
+        private void close() {
+            if (closed) return;
+            closed = true;
+            try {
+                Dispatch.invoke(closeLabor, labor);
+            } finally {
+                plan.close();
+                body.discard();
                 colony.works().raze();
                 ColonyWays.forget(colony.colonyId());
             }

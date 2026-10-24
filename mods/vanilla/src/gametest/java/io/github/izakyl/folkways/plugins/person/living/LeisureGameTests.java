@@ -6,6 +6,11 @@ import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Holding;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
+import io.github.izakyl.folkways.core.engine.travel.Faring;
+import io.github.izakyl.folkways.core.engine.travel.Trip;
+import io.github.izakyl.folkways.core.engine.travel.Ways;
 import io.github.izakyl.folkways.core.api.work.*;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
@@ -200,6 +205,145 @@ public final class LeisureGameTests {
             first.clearDoing(); second.clearDoing();
         } finally { first.discard(); second.discard(); leisure.clear(); colony.raze(); }
         helper.succeed();
+    }
+
+    @GameTest(template = "empty_large")
+    public static void anActiveIdleTripYieldsToNewlyQueuedWorkBeforeTheLeisureArrival(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos at = helper.absolutePos(new BlockPos(8, 2, 8));
+        for (BlockPos floor : BlockPos.betweenClosed(at.offset(-7, -1, -7), at.offset(7, -1, 7))) {
+            level.setBlockAndUpdate(floor, Blocks.STONE.defaultBlockState());
+        }
+        for (boolean awaiting : List.of(true, false)) {
+            Colony colony = Colonies.mint(level.getServer());
+            LivingPresence living = new LivingPresence(colony);
+            Leisure leisure = new Leisure(colony, living);
+            ResidentEntity actor = travellingPerson(helper, at);
+            Trip trip = null;
+            try {
+                TestWorker who = new TestWorker(actor);
+                seedChoice(level, 2);
+                Node action = leisure.urge(who, colony.view(level)).orElseThrow().take().get();
+                helper.assertTrue(action.spec().doing().getPath().equals("strolling"),
+                    "the seeded ordinary activity is a real stroll, not a mandatory rest break");
+                trip = leisureTrip(actor, action, awaiting);
+                trip.setOut(level, actor, action.spec().stances().cells());
+                // Match BodyRunner's publication of the actual Trip's WAITING/WALKING state.
+                actor.setDoing(trip.doing().orElseThrow().headingFor(action.spec().doing(),
+                    action.spec().about(), Doing.Wares.NONE));
+                helper.assertTrue(actor.doing().orElseThrow().what().equals(awaiting ? Doings.WAITING : Doings.WALKING),
+                    "the ordinary activity has an actual native trip still waiting or walking before arrival");
+                System.out.println("LEISURE_TRIP_FIXTURE awaiting=" + awaiting + " position=" + actor.position()
+                    + " onGround=" + actor.onGround() + " target=" + action.spec().stances().cells()
+                    + " nativeNavigationDone=" + actor.getNavigation().isDone());
+                helper.assertTrue(awaiting || !actor.getNavigation().isDone(),
+                    "the walking control has a real native path toward its supported activity destination");
+                helper.assertTrue(leisure.urge(who, colony.view(level)).orElseThrow().weight() == Urge.IDLE,
+                    "the same active ordinary trip remains available while there is no queued work");
+                Node queued = queuedWork(actor);
+                who.route = List.of(queued);
+                System.out.println("LEISURE_ROUTE_HANDOFF awaiting=" + awaiting + " actor=" + actor.getUUID()
+                    + " doing=" + actor.doing() + " trip=" + trip.describe() + " queued=" + queued.id());
+                helper.assertTrue(leisure.urge(who, colony.view(level)).isEmpty(),
+                    "an active ordinary idle trip must yield to real queued work before arrival instead of waiting for session expiry; awaiting=" + awaiting);
+                helper.assertFalse(((Workload.Continuous) action.spec().workload()).holds(level, who),
+                    "the cancelled session releases the previous action and its reservation");
+                action.released(level, who, Ending.DROPPED);
+            } finally {
+                if (trip != null) trip.release(level, actor);
+                actor.discard(); leisure.clear(); colony.raze();
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large")
+    public static void arrivedLeisureKeepsItsFortyTickGraceAndATravellingRestBreakKeepsSpare(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos at = helper.absolutePos(new BlockPos(8, 2, 8));
+        for (BlockPos clear : BlockPos.betweenClosed(at.offset(-7, -2, -7), at.offset(7, 1, 7))) {
+            level.setBlockAndUpdate(clear, Blocks.AIR.defaultBlockState());
+        }
+        level.setBlockAndUpdate(at.below(), Blocks.STONE.defaultBlockState());
+        Colony colony = Colonies.mint(level.getServer());
+        LivingPresence living = new LivingPresence(colony);
+        Leisure leisure = new Leisure(colony, living);
+        ResidentEntity actor = travellingPerson(helper, at);
+        Trip trip = null;
+        try {
+            TestWorker who = new TestWorker(actor);
+            seedChoice(level, 2);
+            Node arrived = leisure.urge(who, colony.view(level)).orElseThrow().take().get();
+            helper.assertTrue(arrived.spec().stances().cells().stream().allMatch(cell -> cell.block(level).equals(actor.blockPosition())),
+                "the fallback activity is already at the actual resident's sole supported cell");
+            actor.setDoing(Doing.open(arrived.spec().doing()));
+            who.route = List.of(queuedWork(actor));
+            helper.assertTrue(leisure.urge(who, colony.view(level)).isPresent(),
+                "already-arrived recreation keeps its existing minimum enjoyment instead of being cancelled as a trip");
+            Workload.Continuous holding = (Workload.Continuous) arrived.spec().workload();
+            for (int tick = 0; tick < 40; tick++) {
+                helper.assertTrue(holding.holds(level, who), "the arrived activity retains its original forty work ticks");
+            }
+            helper.assertFalse(holding.holds(level, who), "the arrived ordinary activity then returns queued work");
+            arrived.released(level, who, Ending.DROPPED);
+            leisure.clear();
+            actor.clearDoing();
+            who.route = List.of();
+            living.mood(actor.getUUID()).leisure = 10;
+            living.mood(actor.getUUID()).nextBreak = level.getGameTime();
+            for (BlockPos floor : BlockPos.betweenClosed(at.offset(-7, -1, -7), at.offset(7, -1, 7))) {
+                level.setBlockAndUpdate(floor, Blocks.STONE.defaultBlockState());
+            }
+            seedChoice(level, 2);
+            Node rest = leisure.urge(who, colony.view(level)).orElseThrow().take().get();
+            trip = leisureTrip(actor, rest, true);
+            trip.setOut(level, actor, rest.spec().stances().cells());
+            actor.setDoing(trip.doing().orElseThrow().headingFor(rest.spec().doing(), rest.spec().about(), Doing.Wares.NONE));
+            who.route = List.of(queuedWork(actor));
+            Urge offered = leisure.urge(who, colony.view(level)).orElseThrow();
+            helper.assertTrue(offered.weight() == Urge.SPARE && !offered.preempts(),
+                "a genuinely exhausted traveller keeps its existing non-preemptive rest-break policy with work queued");
+            rest.released(level, who, Ending.DROPPED);
+        } finally {
+            if (trip != null) trip.release(level, actor);
+            actor.discard(); leisure.clear(); colony.raze();
+        }
+        helper.succeed();
+    }
+
+    private static Trip leisureTrip(ResidentEntity actor, Node action, boolean awaiting) {
+        Set<WorldPos> target = action.spec().stances().cells();
+        if (!awaiting) return Trip.afoot(actor.kind().locomotion(), target, 0.75, LaborRefusal.NO_WAY_THERE).orElseThrow();
+        // Keep the real Awaiting conveyance unresolved deterministically, as in the captured CI case.
+        Ways pending = new Ways() {
+            public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) { return Faring.LATER; }
+            public Faring anyoneReaches(Set<WorldPos> goals) { return Faring.LATER; }
+        };
+        return Trip.to(() -> pending, actor.resident(), actor.kind().locomotion(), actor,
+            target, 0.75, LaborRefusal.NO_WAY_THERE).orElseThrow();
+    }
+
+    private static Node queuedWork(ResidentEntity actor) {
+        return new Node() {
+            final NodeSpec spec = NodeSpec.of(UUID.randomUUID(), LivingContent.ID,
+                WorkSite.on(actor), Stances.WHEREVER, Workload.Once.of(20)).done();
+            public NodeSpec spec() { return spec; }
+            public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
+        };
+    }
+
+    private static ResidentEntity travellingPerson(GameTestHelper helper, BlockPos at) {
+        ServerLevel level = helper.getLevel();
+        ResidentEntity actor = PersonBody.RESIDENT.get().create(level);
+        actor.moveTo(at.getX() + 0.5D, at.getY(), at.getZ() + 0.5D);
+        helper.assertTrue(level.noCollision(actor, actor.getBoundingBox()) && level.getBlockCollisions(actor,
+                actor.getBoundingBox().move(0.0D, -0.0001D, 0.0D)).iterator().hasNext(),
+            "the new traveller's initial actual body is collision-free and physically rests on a real floor");
+        // This synchronous guard fixture asks for a path before the first physics tick. Initialize
+        // only its truthfully grounded creation pose, which native GroundPathNavigation requires.
+        actor.setOnGround(true);
+        level.addFreshEntity(actor);
+        return actor;
     }
 
     private static void seedChoice(ServerLevel level, int choice) {

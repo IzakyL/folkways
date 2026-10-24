@@ -872,15 +872,18 @@ final class CompletionRuntime implements AutoCloseable {
         // This is an ordinary local movement intent, never a position write. The short lease is
         // canceled by any other named activity/urge and rechecked against live terrain every tick.
         body.getNavigation().stop();
-        if (body.onGround() && (approachStep != null && motion.y > 0.05D || approachDrop != null)) {
-            // MoveControl turns at most ninety degrees before immediately jumping, and its JUMPING
-            // branch does not turn again. Let that same native control align at zero speed first.
+        boolean flatApproach = Math.abs(motion.y) <= 0.05D;
+        if (body.onGround() && (flatApproach || approachStep != null && motion.y > 0.05D || approachDrop != null)) {
+            // MoveControl turns at most ninety degrees before moving. A flat approach from a
+            // support edge must not start sideways; jumping also cannot turn again in JUMPING.
+            // Let that same native control align at zero speed before either proved local move.
             double yaw = Math.toDegrees(Math.atan2(motion.z, motion.x)) - 90.0D;
             double turn = Math.IEEEremainder(yaw - body.getYRot(), 360.0D);
-            if (Math.abs(turn) > (approachDrop == null ? 10.0D : 1.0D)) {
+            if (Math.abs(turn) > (flatApproach || approachDrop != null ? 1.0D : 10.0D)) {
                 body.getMoveControl().setWantedPosition(wanted.x, body.getY(), wanted.z, 0.0D);
                 approachAlignCommands++;
-                approachStatus = approachDrop == null ? "native zero-speed alignment before the proved one-block jump"
+                approachStatus = flatApproach ? "native zero-speed alignment before the proved flat approach"
+                    : approachDrop == null ? "native zero-speed alignment before the proved one-block jump"
                     : "native zero-speed alignment before the proved projected corner descent";
                 return ApproachResult.MOVING;
             }
