@@ -130,7 +130,7 @@ for (const installed of [false, true]) test(`display search with JEC ${installed
     expect((await optInViaBook(server, client, player, barrel, "chest")).member).toBe(true);
     await openColonyPanelViaBook(server, client, player, founded.standBlock);
     await clickTab(client, "folkways.tab.settings");
-    await clickElement(client, { id: "folkways.settings.open.tool" }, { scrollIntoView: true });
+    await clickElement(client, { id: "folkways.settings.open.tool.folkways.building" }, { scrollIntoView: true });
     await waitForElement(client, { id: "folkways.selector.search" });
     for (const query of ["tieding", "td", "tie锭", "@minecraft TIEDING"]) {
       await search(client, "folkways.selector.search", query);

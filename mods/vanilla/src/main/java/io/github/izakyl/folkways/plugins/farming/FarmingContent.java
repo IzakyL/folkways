@@ -45,7 +45,7 @@ public final class FarmingContent {
         ResourceLocation.fromNamespaceAndPath("folkways", "farm");
 
     private static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.farm",
-        ResourceLocation.withDefaultNamespace("wheat"));
+        ResourceLocation.withDefaultNamespace("wheat")).tools(VOCATION);
 
     public static final String QUICK_HANDS = "farming_quick_hands";
     public static final String REPLANT = "farming_replant";

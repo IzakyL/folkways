@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.engine.labor;
 
+import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
@@ -31,6 +32,13 @@ public final class Commit {
     }
 
     public static Outcome run(ServerLevel level, Node node, Worker who) {
+        if (!ResidentKinds.barehanded(who.resident().kind(), node.spec().vocation())) {
+            for (var use : node.spec().tools()) {
+                if (!(use.need() instanceof ToolNeed.None) && who.held(use.need()).isEmpty()) {
+                    return Outcome.failed(LaborRefusal.NO_ONE_FIT);
+                }
+            }
+        }
         if (node instanceof Staged staged) {
             return switch (staged.draw(level, who)) {
                 case Staged.Short(var why) -> Outcome.failed(why);

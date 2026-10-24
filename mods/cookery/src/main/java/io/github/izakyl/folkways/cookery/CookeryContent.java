@@ -15,6 +15,7 @@ import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
+import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
@@ -29,7 +30,7 @@ public final class CookeryContent {
     public static final ResourceLocation TAKING = id("serving_food");
 
     private static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.cookery",
-        ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "stockpot"));
+        ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "stockpot")).tools(WaresContent.CRAFTING);
 
     private CookeryContent() {
     }

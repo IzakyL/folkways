@@ -550,17 +550,19 @@ public final class HaulExecutionGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
-    public static void aToolOffTheColonyListIsCarriedAsCargo(GameTestHelper helper) {
+    public static void aToolOffEveryVocationListIsCarriedAsCargo(GameTestHelper helper) {
         var resident = PersonBody.RESIDENT.get().create(helper.getLevel());
         var body = io.github.izakyl.folkways.core.api.resident.body.Bodies.of(resident).orElseThrow();
         var colony = new io.github.izakyl.folkways.core.engine.colony.ColonyData().works();
         var front = io.github.izakyl.folkways.front.engine.colony.ColonyFront.of(colony);
-        helper.assertTrue(front.setSetting(io.github.izakyl.folkways.front.api.CoreSettings.CORE,
+        for (var vocation : io.github.izakyl.folkways.core.api.vocation.Vocations.all()) {
+            helper.assertTrue(front.setSetting(vocation.id(),
                 io.github.izakyl.folkways.front.api.CoreSettings.TOOL_KEY,
                 new io.github.izakyl.folkways.front.engine.colony.ColonySettings.Value.Items(List.of(
                     io.github.izakyl.folkways.core.api.terms.ItemFilter.item(
                         net.minecraft.resources.ResourceLocation.withDefaultNamespace("stone_axe"))))),
-            "the colony's tool list should take a narrower list");
+                "each vocation's tool list should take a narrower list");
+        }
         var kit = Kit.of(colony, body);
         var iron = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_AXE);
         var stone = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE_AXE);

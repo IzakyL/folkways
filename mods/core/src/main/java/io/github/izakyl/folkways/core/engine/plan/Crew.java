@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Keenness;
 import io.github.izakyl.folkways.core.api.resident.body.Licence;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import java.util.List;
 import java.util.Optional;
@@ -18,12 +19,18 @@ public record Crew(List<Hand> hands) {
 
     public record Hand(Resident who, WorldPos at, int packCells, int packCapacity, double pace,
                        List<Licence> licences, List<ItemStack> tools, Optional<UUID> holding,
-                       List<ItemStack> cargo) {
+                       List<ItemStack> cargo, KitRules.Snapshot toolRules) {
 
         public Hand {
             licences = List.copyOf(licences);
             tools = tools.stream().map(ItemStack::copy).toList();
             cargo = cargo.stream().map(ItemStack::copy).toList();
+        }
+
+        public Hand(Resident who, WorldPos at, int packCells, int packCapacity, double pace,
+                    List<Licence> licences, List<ItemStack> tools, Optional<UUID> holding, List<ItemStack> cargo) {
+            this(who, at, packCells, packCapacity, pace, licences, tools, holding, cargo,
+                KitRules.defaults());
         }
 
         public Hand(Resident who, WorldPos at, int packCells, int packCapacity, double pace,

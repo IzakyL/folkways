@@ -6,7 +6,6 @@ import io.github.izakyl.folkways.core.api.resident.body.Pack;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.ToolUse;
-import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.effect.Stats;
 import java.util.function.Consumer;
@@ -32,16 +31,11 @@ final class Wear {
             if (points <= 0) {
                 continue;
             }
-            for (int slot = 0; slot < pack.getContainerSize(); slot++) {
-                ItemStack stack = pack.getItem(slot);
-                if (stack.isEmpty() || !stack.isDamageableItem()
-                    || !Tools.answers(stack, use.need())) {
-                    continue;
-                }
+            ItemStack stack = who.held(use.need());
+            if (!stack.isEmpty() && stack.isDamageableItem()) {
                 stack.hurtAndBreak(points, level, body.mob(),
                     gone -> broke.accept(BuiltInRegistries.ITEM.getKey(gone).toString()));
                 pack.setChanged();
-                break;
             }
         }
     }

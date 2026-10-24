@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.front.api;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.api.work.Tools;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,23 +19,21 @@ public final class CoreSettings {
     private CoreSettings() {
     }
 
-    public static Schema.Setting.Items tool() {
+    public static Schema.Setting.Items tool(Vocation vocation) {
         return new Schema.Setting.Items(
-            TOOL_KEY, "folkways.settings.tool", vanilla("iron_pickaxe"), declaredKit());
+            TOOL_KEY, "folkways.settings.tool", vanilla("iron_pickaxe"), declaredKit(vocation));
     }
 
     public static Schema schema() {
-        return new Schema(List.of(tool()));
+        return Schema.none();
     }
 
-    private static List<ItemFilter> declaredKit() {
+    private static List<ItemFilter> declaredKit(Vocation vocation) {
         Set<ItemFilter> kit = new LinkedHashSet<>();
-        for (Vocation trade : Vocations.all()) {
-            for (ItemSpec tool : trade.kit()) {
-                collect(tool, kit);
-            }
+        for (ItemSpec tool : vocation.kit()) {
+            collect(tool, kit);
         }
-        io.github.izakyl.folkways.core.api.work.Tools.sharedGoods().forEach(tool -> collect(tool, kit));
+        Tools.sharedGoods(vocation.id()).forEach(tool -> collect(tool, kit));
         return List.copyOf(kit);
     }
 

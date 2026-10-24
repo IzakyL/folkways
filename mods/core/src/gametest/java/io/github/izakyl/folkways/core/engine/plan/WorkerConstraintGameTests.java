@@ -1,5 +1,10 @@
 package io.github.izakyl.folkways.core.engine.plan;
 
+import net.neoforged.neoforge.common.ItemAbilities;
+import io.github.izakyl.folkways.core.api.work.ToolNeed;
+import io.github.izakyl.folkways.core.api.work.ToolUse;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.resident.body.Keenness;
 import io.github.izakyl.folkways.core.api.resident.body.Licence;
@@ -46,6 +51,31 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class WorkerConstraintGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(WorkerConstraintGameTests.class); }
+    @GameTest(template = "empty")
+    public static void multiVocationFitnessChecksEveryStepsOwnToolList(GameTestHelper helper) {
+        var fixture = new PlanningFixture(helper);
+        var base = fixture.crew.hands().getFirst();
+        var building = Vocations.required(ResourceLocation.fromNamespaceAndPath("folkways", "building"));
+        var patrol = Vocations.required(ResourceLocation.fromNamespaceAndPath("folkways", "patrolling"));
+        var resident = PersonBody.RESIDENT.get().create(helper.getLevel());
+        var licences = List.of(resident.licences().of(building).orElseThrow(), resident.licences().of(patrol).orElseThrow());
+        var rules = new KitRules.Snapshot(Map.of(
+            building.id(), Set.of(Items.STONE_AXE), patrol.id(), Set.of(Items.IRON_AXE)));
+        var hand = new Crew.Hand(base.who(), base.at(), 6, 6, 1, licences,
+            List.of(new ItemStack(Items.STONE_AXE)), Optional.empty(), List.of(), rules);
+        var step = NodeSpec.of(UUID.randomUUID(), building.id(), new WorkSite.AtBlock(fixture.source),
+            Stances.WHEREVER, Workload.Once.of(1)).vocation(patrol)
+            .tools(new ToolUse(new ToolNeed.Ability(ItemAbilities.AXE_DIG), 1)).done();
+        var work = new Fitness.Work(List.of(step), Set.of(), 0);
+        helper.assertTrue(Fitness.of(hand, work).equals(Optional.of(Fitness.Unfit.NO_TOOL)),
+            "another licensed vocation's matching axe cannot qualify a patrol step");
+        var equipped = new Crew.Hand(hand.who(), hand.at(), 6, 6, 1, licences,
+            List.of(new ItemStack(Items.STONE_AXE), new ItemStack(Items.IRON_AXE)), Optional.empty(), List.of(), rules);
+        helper.assertTrue(Fitness.of(equipped, work).isEmpty(), "the patrol's own allowed axe qualifies the same resident");
+        resident.mob().discard();
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void workNoOneWasFitForGrowsOnceSomeoneIs(GameTestHelper helper) throws Exception {
         var f = new PlanningFixture(helper);

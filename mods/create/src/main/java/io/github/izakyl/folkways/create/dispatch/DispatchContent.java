@@ -48,7 +48,7 @@ public final class DispatchContent {
     public static final String QUICK_HANDS = "dispatch_quick_hands";
 
     static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.dispatch",
-        ResourceLocation.withDefaultNamespace("chest_minecart"));
+        ResourceLocation.withDefaultNamespace("chest_minecart")).tools(VOCATION);
 
     private static final VocationSpec SPEC =
         new VocationSpec(VOCATION, List.of(

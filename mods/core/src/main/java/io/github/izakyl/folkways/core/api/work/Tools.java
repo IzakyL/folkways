@@ -1,54 +1,69 @@
 package io.github.izakyl.folkways.core.api.work;
 
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
+import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.common.ItemAbility;
 
 public final class Tools {
 
-    private static volatile Map<ToolNeed, ItemSpec> suppliedTools =
+    private record Shared(ResourceLocation vocation, ItemSpec goods) {
+    }
+
+    private static volatile Map<ToolNeed, Shared> suppliedTools =
         Map.of();
 
-    public static synchronized void shared(ToolNeed need, ItemSpec goods) {
-        Map<ToolNeed, ItemSpec> next =
+    public static synchronized void shared(ResourceLocation vocation, ToolNeed need, ItemSpec goods) {
+        Map<ToolNeed, Shared> next =
             new LinkedHashMap<>(suppliedTools);
-        next.put(Objects.requireNonNull(need), Objects.requireNonNull(goods));
+        next.put(Objects.requireNonNull(need), new Shared(Objects.requireNonNull(vocation), Objects.requireNonNull(goods)));
         suppliedTools = Map.copyOf(next);
     }
 
     public static Optional<ItemSpec> shared(ToolNeed need) {
-        return Optional.ofNullable(suppliedTools.get(need));
+        return Optional.ofNullable(suppliedTools.get(need)).map(Shared::goods);
     }
 
     public static List<ItemSpec> sharedGoods() {
-        return List.copyOf(new LinkedHashSet<>(suppliedTools.values()));
+        return suppliedTools.values().stream().map(Shared::goods).distinct().toList();
+    }
+
+    public static List<ItemSpec> sharedGoods(ResourceLocation vocation) {
+        return suppliedTools.values().stream().filter(tool -> tool.vocation().equals(vocation))
+            .map(Shared::goods).distinct().toList();
     }
 
     // A task-owned tool is reserved for its declared family, even if it also inherits a generic shovel or sword tag.
     public static boolean sharedItem(ItemStack stack) {
         return !stack.isEmpty() && suppliedTools.values().stream()
-            .anyMatch(goods -> io.github.izakyl.folkways.core.api.terms.Goods.matches(stack, goods));
+            .anyMatch(tool -> Goods.matches(stack, tool.goods()));
     }
 
     // Planning may schedule a missing shared tool only when its physical delivery is a declared prerequisite.
-    public static boolean canPrepare(ResourceLocation kind, NodeSpec spec, List<ItemStack> held) {
+    public static boolean canPrepare(ResourceLocation kind, NodeSpec spec, List<ItemStack> held,
+            KitRules.Snapshot rules) {
         if (ResidentKinds.barehanded(kind, spec.vocation())) {
             return true;
         }
         for (ToolUse use : spec.tools()) {
-            if (from(held, use.need()).isPresent()) {
+            if (from(held, use.need(), item -> rules.allows(spec.vocation(), item)).isPresent()) {
                 continue;
             }
-            var goods = suppliedTools.get(use.need());
-            if (goods == null || spec.needs().stream().noneMatch(need ->
+            var goods = shared(use.need()).orElse(null);
+            if (goods == null || Goods.members(goods).stream()
+                    .noneMatch(item -> rules.allows(spec.vocation(), item)) || spec.needs().stream().noneMatch(need ->
                     need.carried() && need.count() > 0 && need.spec().equals(goods))) {
                 return false;
             }
@@ -85,12 +100,25 @@ public final class Tools {
         return true;
     }
 
+    public static Optional<ItemStack> from(Container held, ToolNeed need, Predicate<Item> allowed) {
+        List<ItemStack> stacks = new ArrayList<>();
+        for (int slot = 0; slot < held.getContainerSize(); slot++) {
+            stacks.add(held.getItem(slot));
+        }
+        return from(stacks, need, allowed);
+    }
+
     public static Optional<ItemStack> from(List<ItemStack> held, ToolNeed need) {
+        return from(held, need, item -> true);
+    }
+
+    public static Optional<ItemStack> from(List<ItemStack> held, ToolNeed need,
+            Predicate<Item> allowed) {
         if (need instanceof ToolNeed.None) {
             return Optional.of(ItemStack.EMPTY);
         }
         for (ItemStack stack : held) {
-            if (answers(stack, need)) {
+            if (!stack.isEmpty() && allowed.test(stack.getItem()) && answers(stack, need)) {
                 return Optional.of(stack);
             }
         }

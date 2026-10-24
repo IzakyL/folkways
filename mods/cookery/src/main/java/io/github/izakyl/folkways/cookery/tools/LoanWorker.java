@@ -1,5 +1,8 @@
 package io.github.izakyl.folkways.cookery.tools;
 
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
+import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -10,13 +13,20 @@ import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 
 // A worker may carry another knife too. Native actions must use the exact borrowed tool, including its components.
 record LoanWorker(Worker delegate, TaskTools service,
-                  Map<io.github.izakyl.folkways.core.api.terms.ItemSpec, KitchenTools.Lease> loans) implements Worker {
+                  Map<ItemSpec, KitchenTools.Lease> loans,
+                  Optional<Vocation> vocation) implements Worker {
+
+    LoanWorker(Worker delegate, TaskTools service,
+            Map<ItemSpec, KitchenTools.Lease> loans) {
+        this(delegate, service, loans, Optional.empty());
+    }
 
     public Resident resident() { return delegate.resident(); }
     public Mob body() { return delegate.body(); }
@@ -43,7 +53,9 @@ record LoanWorker(Worker delegate, TaskTools service,
                 continue;
             }
             int slot = service.carriedSlot(pack(), lease, service.tool(lease).orElse(ItemStack.EMPTY));
-            if (slot >= 0 && Tools.answers(pack().getItem(slot), need)) {
+            if (slot >= 0 && Tools.answers(pack().getItem(slot), need)
+                    && KitRules.allows(
+                        service.colony, vocation, pack().getItem(slot).getItem())) {
                 return pack().getItem(slot);
             }
         }

@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -791,13 +792,14 @@ public final class Weaver {
 
     // What one resident could do, as far as fitness reads it: whom, which trades and tools, how big a pack.
     private record Able(UUID id, ResourceLocation kind, int pack, Set<ResourceLocation> trades,
-                        List<ResourceLocation> tools) {
+                        List<ResourceLocation> tools,
+                        KitRules.Snapshot toolRules) {
 
         static Able of(Crew.Hand hand) {
             Set<ResourceLocation> trades = new LinkedHashSet<>();
             hand.licences().forEach(licence -> trades.add(licence.vocation().id()));
             return new Able(hand.id(), hand.who().kind(), hand.packCapacity(), trades,
-                hand.tools().stream().map(tool -> BuiltInRegistries.ITEM.getKey(tool.getItem())).toList());
+                hand.tools().stream().map(tool -> BuiltInRegistries.ITEM.getKey(tool.getItem())).toList(), hand.toolRules());
         }
     }
 

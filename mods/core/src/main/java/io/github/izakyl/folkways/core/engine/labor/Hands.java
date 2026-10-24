@@ -1,5 +1,8 @@
 package io.github.izakyl.folkways.core.engine.labor;
 
+import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
+import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
@@ -14,8 +17,11 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.plan.Stands;
 import io.github.izakyl.folkways.core.engine.plan.Stores;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 import net.minecraft.server.level.ServerLevel;
@@ -31,13 +37,19 @@ final class Hands implements Worker {
         void fell(ItemEntity drop);
     }
 
+    private final Colony colony;
+    private final Optional<Vocation> vocation;
+    private final Map<ToolNeed, ItemStack> selected = new HashMap<>();
     private final Body body;
     private final Stands stands;
     private final Placement placement;
     private final Spill spill;
     private final Supplier<List<Node>> route;
 
-    Hands(Body body, Stands stands, Placement placement, Spill spill, Supplier<List<Node>> route) {
+    Hands(Colony colony, Optional<Vocation> vocation, Body body, Stands stands, Placement placement,
+            Spill spill, Supplier<List<Node>> route) {
+        this.colony = colony;
+        this.vocation = vocation;
         this.body = body;
         this.stands = stands;
         this.placement = placement;
@@ -88,7 +100,9 @@ final class Hands implements Worker {
 
     @Override
     public ItemStack held(ToolNeed need) {
-        return Tools.from(body.pack().contents(), need).orElse(ItemStack.EMPTY);
+        return selected.computeIfAbsent(need, asked -> Tools.from(body.pack(), asked,
+            item -> KitRules.allows(colony, vocation, item))
+            .orElse(ItemStack.EMPTY));
     }
 
     @Override
