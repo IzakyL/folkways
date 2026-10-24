@@ -72,11 +72,13 @@ order.close();
 | current     | Reads the active order and its MOVING/HOLDING state                    |
 | validate    | Checks without takeover, for validating a complete group first         |
 
-Trusted server-thread callers must supply actually enrolled, loaded, unmounted PersonBodies and loaded destinations within 128 blocks in the same realm. There is no player network endpoint. Future endpoints must validate book authority, colony membership and target bounds. Commands for other ResidentKinds require separate validation.
+Trusted server-thread callers must supply actually enrolled, loaded, unmounted PersonBodies and loaded destinations within 128 blocks in the same realm. The combat page resolves the current keeper authority again for each server UI action, then validates colony membership and target bounds before calling these APIs. Commands for other ResidentKinds require separate validation.
 
 Orders reuse Core's Urge → ColonyLabor → BodyRunner safety lifecycle. The old node releases its tool presentation and travel before the same runner takes the order. Release resumes the latest plan instead of replaying withdrawn work. Core only adds cleanup of expired temporary urge backoffs and the general Node.directTravel() option. Direct travel uses the resident's existing Locomotion; ordinary labour keeps its multimodal journey planning.
 
 Orders are transient. Death, unloading, disenrollment and colony closure release them. Movement that has not completed after 1200 ticks reports FAILED and releases control. Holds and completed retreats wait for explicit release and may suppress everyday needs. The general `Node.staysAtWorkSite()` option has the same runner restore a stance after displacement. Terminal or saved handles confer no control.
+
+GUARD time spent yielding the same runner to fear or combat does not consume its movement budget. Actual command execution resumes that budget; an order that never acquires the runner still has a finite timeout.
 
 ## P3: actual UnitGroups and deployment intents
 
@@ -91,11 +93,15 @@ Deployment accepts level endpoints in the same realm, a horizontal front approxi
 
 - move sends members into their target column in sequence, then restores the line, preventing followers from blocking leaders. If column slots have no footing, it tries the line directly.
 - hold establishes a line; gather assembles around a centre; release relinquishes all member orders.
+- guard establishes an interruptible guard post, using real GUARD orders and the same group lifecycle as patrol.
+- retreat keeps high-priority retreat orders in the actual group and holds on arrival. Other authorized keepers can release them from the combat page; stale group handles cannot override later individual orders.
 - Individual replacement orders or releases detach that member. Old formation handles cannot overwrite a new individual order.
 - Dead or dismissed members leave; unloaded members remain missing while present members reform; returning members receive fresh slots.
 - Unreachable deployments report FAILED and release everyone. Fresh deployment after opening a path can retry without teleportation or endless retries.
 
 The concrete acceptance case is four people physically crossing a one-block opening and restoring a line. This does not guarantee all bottlenecks, arbitrary terrain, multiple ranks, vehicles or ship deployment. The separate 16/32/64-total-entity combat sample does not establish large-group formation performance. War shortcut selections may overlap; actual group membership cannot.
+
+Temporary transit-column slots may follow safe local footing up to two blocks above or below their planned height. Final line slots remain exact. An unreachable height-adjusted transit slot permits one freshly validated attempt at the final line; failure there releases the orders. A separate four-person acceptance scene covers two single-file bends and two steps, followed by a return patrol.
 
 ### Formation patrol and proactive combat
 
@@ -106,6 +112,12 @@ The concrete acceptance case is four people physically crossing a one-block open
 - Healthy guards renew a short engagement lease; ENGAGING pauses route progress and travel timeout. Wounded combat does not renew it, allowing fear to preempt.
 - After combat, present members return to their original slots and assemble for 20 ticks before advancing. Existing death, missing-member, return and individual-order rules apply.
 - All stops validate before replacing control. Unreachable movement releases as FAILED; a fully unloaded group waits and reforms at its current stop when members return.
+
+### Combat page and point configuration
+
+Vanilla registers `folkways:combat` as a dedicated colony-book page through the existing Front extension API. The page selects loaded residents, creates or chooses an actual group, adds points at the player's feet or a verified aimed support surface, and submits explicit orders. A single point configures a guard post; two to sixteen points configure looping patrol stops. Each point is a formation centre, not one endpoint of a deployment line.
+
+The page also provides retreat, release and melee/bow/crossbow preferences. Actions recheck the authorized colony on the server; stale or foreign group IDs, missing members during deployment, invalid terrain and out-of-range destinations cannot acquire control. Release can still clear a group with unloaded members. Draft points remain in the current server session; restarting does not restore orders. This page does not add War selection tools or hotkeys.
 
 ## P4: real native weapon sessions
 
@@ -125,6 +137,18 @@ Entity serializes attachments before addAdditionalSaveData, so ResidentEntity cl
 
 Native equipment sessions currently support ResidentEntity. Other ResidentKinds retain their original ToolUse melee and declared barehanded combat, including while carrying weapons; actual hand sessions need their owning extension. TaCZ, Point Blank and asynchronous gun actions need actual adapters and separate validation. Core Equipment continues owning armour.
 
+### Finite patrol supplies
+
+`PatrolSupplies.of(colony)` exposes `loadout(body, Loadout)`, `clear(body)`, `preference(id)` and `status(id)`. Explicit preferences choose an available matching actual weapon before ordinary pack order; unavailable or unready equipment retains the existing fallback. Changing the preference safely closes the current native session before a new choice can fire.
+
+Guards and patrollers collect at most one requested weapon and eight arrows, counting loaded crossbow projectiles. An existing bow or crossbow can infer ammunition replenishment without a new preference. A supply urge yields to combat, fear and retreat, walks to registered storage within 32 blocks, and rechecks access rules, reservations, real capacity and stock at collection. It uses the same BodyRunner and Staged settlement, preserving item components. Each trip has a 200-tick limit; stockouts and full packs expose status and retry after a bounded delay. New orders revoke old requests. PackKeeps retains the finite loadout through ordinary cargo stowing.
+
+The stock goal does not remove an existing player-given weapon. Extension adapters that throw after inventory mutations require readable component-identical counts for rollback; arbitrary unreadable or externally mutating inventories remain outside the validated compatibility scope.
+
+Bows and crossbows use the general `CoreSettings.defaultTool(ItemSpec)` declaration for default permission, without becoming a mandatory vocation kit for every patroller. Saved colony tool lists remain authoritative; existing colonies may need to allow ranged weapons in production settings, with actual stock in registered storage.
+
+Core's declaration-time `KitRules.supplyPolicy(owner, policy)` extension only controls ordinary automatic equipment deliveries. Vanilla pauses these deliveries during manual orders or a real weapon loan. Existing requests withdraw through the normal planning path and resume after control returns. Survey observes policy changes even when inventory has not changed. Tool retention and other tasks' stock reservations remain in effect.
+
 ## Validation entry points
 
 ```sh
@@ -135,6 +159,7 @@ Native equipment sessions currently support ResidentEntity. Other ResidentKinds 
 npm run test:unit
 npm run typecheck
 npm run test:e2e -- tests/e2e/native-hostility.spec.ts tests/e2e/resident-commands.spec.ts tests/e2e/combat-hostility-policy.spec.ts tests/e2e/formation-patrol.spec.ts tests/e2e/weapon-sessions.spec.ts --workers=1
+npm run test:e2e -- tests/e2e/combat-page.spec.ts tests/e2e/combat-supplies.spec.ts tests/e2e/combat-endurance.spec.ts tests/e2e/formation-terrain.spec.ts tests/e2e/combat-golems.spec.ts --workers=1
 ```
 
 GameTestServer disables global labour simulation. LaborFixture explicitly advances real labour/travel only for each test's own colony, without changing game runtime behaviour. Client scenarios cover native damage, fear takeover, orders, narrow formations and a saved-world restart.
