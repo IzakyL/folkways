@@ -175,6 +175,49 @@ public final class ResidentCommandGameTests {
             }).thenSucceed();
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 220)
+    public static void aBowGuardCancelsAnEscapingTargetBeforeDrawingOnAnotherEnemy(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body body = f.resident(new BlockPos(7, 1, 2));
+        body.pack().insert(new ItemStack(Items.BOW));
+        body.pack().insert(new ItemStack(Items.ARROW, 8));
+        Zombie first = EntityType.ZOMBIE.create(f.level);
+        Zombie second = EntityType.ZOMBIE.create(f.level);
+        for (Zombie enemy : List.of(first, second)) {
+            enemy.setNoAi(true);
+            enemy.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.CARVED_PUMPKIN));
+            f.enemies.add(enemy);
+        }
+        BlockPos near = f.at(13, 1, 2).block(f.level);
+        BlockPos other = f.at(7, 1, 10).block(f.level);
+        first.moveTo(near.getX() + .5, near.getY(), near.getZ() + .5);
+        second.moveTo(other.getX() + .5, other.getY(), other.getZ() + .5);
+        f.level.addFreshEntity(first);
+        f.level.addFreshEntity(second);
+        ResidentCommands.Order guard = f.commands.guard(body, f.at(7, 1, 2), new Vec3(1, 0, 0));
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(body.mob().isUsingItem()
+                    && body.mob().getUseItem().is(Items.BOW),
+                "the real runner starts drawing at the nearest enemy"))
+            .thenExecute(() -> {
+                helper.assertValueEqual(first.getHealth(), first.getMaxHealth(), "the first draw has not discharged");
+                BlockPos outside = f.at(20, 1, 2).block(f.level);
+                // Thirteen blocks leaves the guard's twelve-block leash but remains inside bow range.
+                first.moveTo(outside.getX() + .5, outside.getY(), outside.getZ() + .5);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(second.getHealth() < second.getMaxHealth(),
+                "the in-leash enemy receives a real arrow after the original draw is cancelled"))
+            .thenExecute(() -> {
+                helper.assertValueEqual(first.getHealth(), first.getMaxHealth(),
+                    "a different enemy cannot keep the escaping target's old attack alive");
+                helper.assertValueEqual(body.pack().count(Items.ARROW), 7,
+                    "the cancelled escaping-target draw spends no arrow");
+                helper.assertTrue(f.commands.current(body.id()).orElseThrow() == guard,
+                    "switching enemies preserves the same guard return order");
+                guard.close();
+            }).thenSucceed();
+    }
+
     @GameTest(template = "empty_large", timeoutTicks = 260)
     public static void replacingATripCannotBeCancelledByItsOldHandle(GameTestHelper helper) {
         Fixture f = new Fixture(helper);

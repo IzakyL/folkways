@@ -129,6 +129,7 @@ final class NativeWeaponSession implements WeaponSession {
             ItemStack actual = weapon();
             actual.releaseUsing(body.level(), body, actual.getUseDuration(body) - elapsed);
             body.stopUsingItem();
+            if (state == State.CLOSED || state == State.STOPPING) { return; }
             elapsed = 0;
             state = CrossbowItem.isCharged(actual) && target != null ? State.FIRING : State.READY;
             if (state == State.READY) {
@@ -175,7 +176,8 @@ final class NativeWeaponSession implements WeaponSession {
         target = null;
         elapsed = 0;
         body.stopUsingItem();
-        state = State.READY;
+        // Native durability breakage can close the hand lease during shoot(). Keep terminal states terminal.
+        if (state != State.CLOSED && state != State.STOPPING) { state = State.READY; }
     }
 
     private void aim(LivingEntity foe) {

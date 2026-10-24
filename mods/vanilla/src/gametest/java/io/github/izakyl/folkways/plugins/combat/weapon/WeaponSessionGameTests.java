@@ -280,6 +280,83 @@ public final class WeaponSessionGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void replacingADrawnBowWithAnotherBowClosesTheOldLoan(GameTestHelper helper) {
+        replacingDuringDraw(helper, Items.BOW);
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void replacingADrawnBowWithANonWeaponKeepsBothActualItemsOnce(GameTestHelper helper) {
+        replacingDuringDraw(helper, Items.STICK);
+    }
+
+    private static void replacingDuringDraw(GameTestHelper helper, Item replacementItem) {
+        Fixture fixture = fixture(helper, Items.BOW, 9);
+        ResidentEntity body = fixture.body();
+        body.pack().insert(new ItemStack(Items.ARROW, 3));
+        WeaponSession session = Weapons.open(worker(body)).orElseThrow();
+        helper.assertTrue(session.fire(fixture.target()), "the original real bow begins drawing");
+        ItemStack replacement = new ItemStack(replacementItem);
+        int replacementDamage = replacement.isDamageableItem() ? 23 : 0;
+        replacement.setDamageValue(replacementDamage);
+        replacement.set(DataComponents.CUSTOM_NAME, Component.literal("external replacement"));
+        AtomicInteger seen = ticking(helper, fixture, session);
+        helper.runAfterDelay(10, () -> {
+            body.setItemSlot(EquipmentSlot.MAINHAND, replacement);
+            helper.assertValueEqual(session.state(), WeaponSession.State.CLOSED, "external replacement closes the old pending session immediately");
+            helper.assertTrue(body.getMainHandItem() == replacement && !body.hasWeaponSession(),
+                "the replacement is installed without becoming owned by the previous session");
+            helper.assertFalse(session.fire(fixture.target()), "the old session cannot adopt the replacement for another shot");
+            helper.assertValueEqual(find(body, Items.BOW).getDamageValue(), 9, "the original loan returns with its exact durability");
+        });
+        helper.runAfterDelay(40, () -> {
+            try {
+                session.close(); session.tick();
+                helper.assertValueEqual(seen.get(), 0, "replacing the hand cancels the original pending projectile");
+                helper.assertValueEqual(body.pack().count(Items.ARROW), 3, "replacement spends no ammunition");
+                var original = body.pack().contents().stream().filter(stack ->
+                    Component.literal("actual weapon").equals(stack.get(DataComponents.CUSTOM_NAME))).toList();
+                var external = body.pack().contents().stream().filter(stack ->
+                    Component.literal("external replacement").equals(stack.get(DataComponents.CUSTOM_NAME))).toList();
+                helper.assertValueEqual(original.size(), 1, "the original components identify exactly one returned weapon");
+                helper.assertValueEqual(original.getFirst().getDamageValue(), 9, "the original durability remains unchanged");
+                helper.assertValueEqual(external.size(), 1, "normal stray-hand recovery retains the replacement exactly once");
+                helper.assertTrue(external.getFirst().is(replacementItem), "the replacement keeps its own item identity");
+                helper.assertValueEqual(external.getFirst().getDamageValue(), replacementDamage, "the replacement keeps its own durability");
+                helper.assertTrue(body.getMainHandItem().isEmpty(), "neither actual item leaves a duplicate in the hand");
+            } finally { fixture.close(); }
+            helper.succeed();
+        });
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void nativeBowBreakageDoesNotReturnAnExhaustedWeapon(GameTestHelper helper) {
+        Fixture fixture = fixture(helper, Items.BOW, new ItemStack(Items.BOW).getMaxDamage() - 1);
+        fixture.body().pack().insert(new ItemStack(Items.ARROW, 1));
+        WeaponSession session = Weapons.open(worker(fixture.body())).orElseThrow();
+        helper.assertTrue(session.fire(fixture.target()), "the last real arrow can discharge the nearly broken bow");
+        AtomicInteger seen = ticking(helper, fixture, session);
+        helper.onEachTick(() -> {
+            if (!fixture.body().hasWeaponSession()) {
+                helper.assertValueEqual(session.state(), WeaponSession.State.CLOSED,
+                    "native breakage leaves the old session terminal in the same tick");
+            }
+        });
+        helper.runAfterDelay(40, () -> {
+            try {
+                session.close(); session.close();
+                helper.assertTrue(seen.get() > 0, "native shooting occurs before native breakage");
+                helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 0, "closing never resurrects the exhausted bow");
+                helper.assertValueEqual(fixture.body().pack().count(Items.ARROW), 0, "native shooting spends the last actual arrow");
+                helper.assertTrue(fixture.body().getMainHandItem().isEmpty(), "no exhausted weapon remains in the hand");
+                helper.assertTrue(helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                    fixture.body().getBoundingBox().inflate(3), item -> item.getItem().is(Items.BOW)).isEmpty(),
+                    "native breakage cannot spill a replacement copy");
+            } finally { fixture.close(); }
+            helper.succeed();
+        });
+    }
+
     private static AtomicInteger ticking(GameTestHelper helper, Fixture fixture, WeaponSession session) {
         AtomicInteger seen = new AtomicInteger();
         helper.onEachTick(() -> {

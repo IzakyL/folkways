@@ -298,8 +298,15 @@ public final class NativeHostilityGameTests {
         Body resident = arena.resident(true, new BlockPos(12, 1, 5));
         Spider spider = arena.monster(EntityType.SPIDER, new BlockPos(4, 1, 5));
         spider.setNoAi(true);
-        for (int x = 1; x < 21; x++) {
-            for (int z = 1; z < 11; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.GLOWSTONE); }
+        // Spiders can climb into dim corners. Keep every boundary bright, not just their initial footing.
+        for (int x = 0; x < 22; x++) {
+            for (int z = 0; z < 12; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.GLOWSTONE);
+                helper.setBlock(new BlockPos(x, 5, z), Blocks.GLOWSTONE);
+                if (x == 0 || x == 21 || z == 0 || z == 11) {
+                    for (int y = 1; y < 5; y++) { helper.setBlock(new BlockPos(x, y, z), Blocks.GLOWSTONE); }
+                }
+            }
         }
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(spider.getLightLevelDependentMagicValue() >= .5F,
@@ -307,6 +314,7 @@ public final class NativeHostilityGameTests {
             .thenExecute(() -> spider.setNoAi(false))
             .thenIdle(120)
             .thenExecute(() -> {
+                helper.assertTrue(spider.getLightLevelDependentMagicValue() >= .5F, "the spider stayed in a bright arena");
                 helper.assertTrue(spider.getTarget() == null, "a bright spider does not acquire an unprovoking resident");
                 helper.assertFalse(Threats.hostile(spider, resident.mob()), "patrol does not provoke a bright neutral spider");
                 helper.assertValueEqual(resident.mob().getHealth(), resident.mob().getMaxHealth(), "resident stays unharmed");

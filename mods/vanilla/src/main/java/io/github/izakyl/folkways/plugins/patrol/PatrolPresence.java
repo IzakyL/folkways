@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.Threats;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
+import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.core.api.colony.Asking;
 import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Closing;
@@ -255,7 +256,10 @@ final class PatrolPresence implements Facing {
             alerts.put(target.getUUID(), level.getGameTime() + 100);
         }
         Stances stances = reach.get();
-        return List.of(new Urge(ENGAGE, weight, true, () -> new StrikeNode(level, target, stances)));
+        ResourceLocation intent = ResourceLocation.fromNamespaceAndPath(ENGAGE.getNamespace(),
+            ENGAGE.getPath() + "/" + target.getUUID());
+        return List.of(new Urge(intent, weight, true, () -> body instanceof ResidentEntity
+            ? new StrikeNode(level, target, stances) : new ToolStrikeNode(level, target, stances)));
     }
 
     private boolean onDuty(UUID resident, long now) {

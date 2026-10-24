@@ -232,6 +232,16 @@ public class ResidentEntity extends PathfinderMob implements Body {
         return weaponSession == session;
     }
 
+    @Override
+    public void setItemSlot(EquipmentSlot slot, ItemStack stack) {
+        if (slot == EquipmentSlot.MAINHAND && weaponSession != null && stack != getMainHandItem()) {
+            // Commands and other mods may replace the hand. Return the previous actual item before
+            // installing the replacement; the stopped session must never adopt or fire the new item.
+            closeWeaponSession();
+        }
+        super.setItemSlot(slot, stack);
+    }
+
     public void claimWeaponHand(WeaponSession session, ItemStack actual) {
         if (weaponSession != null || !(level() instanceof ServerLevel)) {
             throw new IllegalStateException("resident main hand is already owned or is not on the server");
@@ -239,7 +249,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
         clearHandPresentation();
         weaponSession = session;
         handIsPresentation = false;
-        setItemInHand(InteractionHand.MAIN_HAND, actual);
+        super.setItemSlot(EquipmentSlot.MAINHAND, actual);
     }
 
     public void releaseWeaponHand(WeaponSession session) {
@@ -248,7 +258,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
         }
         stopUsingItem();
         ItemStack actual = getMainHandItem();
-        setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+        super.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         weaponSession = null;
         ItemStack remainder = pack().insert(actual);
         if (!remainder.isEmpty()) {

@@ -145,9 +145,14 @@ public final class UnitGroup {
         List<Body> bodies = loaded();
         for (Body body : List.copyOf(bodies)) {
             ResidentCommands.Order order = orders.get(body.id());
-            if (order != null && (order.status() == ResidentCommands.Status.RELEASED
-                    || owner.commands.current(body.id()).filter(current -> current != order).isPresent())) {
+            if (order != null && owner.commands.current(body.id()).filter(current -> current != order).isPresent()) {
                 // A direct individual order takes the member out of formation without touching its new handle.
+                owner.remove(this, body.id());
+            } else if (order != null && !order.boundTo(body)) {
+                // Unload and reload can occur between group ticks. The old entity's released handle is not
+                // an individual release of the newly loaded entity with the same persistent membership.
+                changed = true;
+            } else if (order != null && order.status() == ResidentCommands.Status.RELEASED) {
                 owner.remove(this, body.id());
             }
         }

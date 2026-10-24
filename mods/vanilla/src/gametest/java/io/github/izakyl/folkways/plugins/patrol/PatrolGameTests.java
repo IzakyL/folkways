@@ -268,7 +268,8 @@ public final class PatrolGameTests {
             helper.assertTrue(patrol.urges(worker(guard, ItemStack.EMPTY), colony.view(level)).isEmpty(),
                 "a resident on patrol with no weapon does not go for a monster");
             List<Urge> urges = patrol.urges(worker(guard, sword), colony.view(level));
-            helper.assertTrue(urges.size() == 1 && urges.get(0).id().equals(PatrolPresence.ENGAGE),
+            helper.assertTrue(urges.size() == 1 && urges.get(0).id().equals(ResourceLocation.fromNamespaceAndPath(
+                    PatrolPresence.ENGAGE.getNamespace(), PatrolPresence.ENGAGE.getPath() + "/" + zombie.getUUID())),
                 "an armed resident on patrol goes for the zombie beside it");
             helper.assertTrue(urges.get(0).weight() > Urge.DIRE && urges.get(0).preempts(),
                 "a patroller at full health stands its ground over fleeing");

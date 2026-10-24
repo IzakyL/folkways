@@ -211,6 +211,45 @@ public final class UnitGroupGameTests {
             .thenSucceed();
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 650)
+    public static void unloadingAndReloadingWithinOneTickPreservesPatrolMembership(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(2);
+        UnitGroup group = scene.groups.create(people);
+        group.patrol(List.of(scene.line(8), scene.line(18)));
+        Body previous = people.getFirst();
+        AtomicReference<Body> returned = new AtomicReference<>();
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.HOLDING,
+                "the initial patrol has active guard handles"))
+            .thenExecute(() -> {
+                ResidentCommands.Order old = scene.commands.current(previous.id()).orElseThrow();
+                CompoundTag saved = new CompoundTag();
+                previous.mob().save(saved);
+                previous.mob().remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
+                helper.assertTrue(old.status() == ResidentCommands.Status.RELEASED,
+                    "unload releases the old entity's transient order");
+                Body replacement = (Body) EntityType.loadEntityRecursive(saved, scene.level, entity -> entity);
+                returned.set(replacement);
+                scene.bodies.add(replacement);
+                scene.level.addFreshEntity(replacement.mob());
+                helper.assertTrue(replacement.id().equals(previous.id()) && replacement.mob() != previous.mob(),
+                    "the replacement has the same persistent resident identity and a distinct entity instance");
+            })
+            .thenWaitUntil(() -> {
+                helper.assertValueEqual(group.members().size(), 2,
+                    "same-tick reload is not mistaken for an individual release or detachment");
+                helper.assertTrue(group.phase() == UnitGroup.Phase.HOLDING && group.missing().isEmpty()
+                        && group.destinations().size() == 2,
+                    "both members physically reform after a same-tick entity replacement");
+                helper.assertTrue(scene.commands.current(returned.get().id())
+                    .filter(order -> order.mode() == ResidentCommands.Mode.GUARD && order.boundTo(returned.get())).isPresent(),
+                    "the replacement entity owns a fresh guard order");
+            })
+            .thenExecute(() -> scene.assertLine(helper, group, List.of(returned.get(), people.get(1))))
+            .thenSucceed();
+    }
+
     @GameTest(template = "empty_large", timeoutTicks = 1500)
     public static void anUnreachablePatrolFailsAndReleasesEverySurvivingMember(GameTestHelper helper) {
         Scene scene = new Scene(helper);

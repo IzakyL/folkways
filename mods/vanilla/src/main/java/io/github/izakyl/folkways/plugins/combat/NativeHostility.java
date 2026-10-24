@@ -42,8 +42,10 @@ public final class NativeHostility {
             .anyMatch(goal -> goal.getGoal() instanceof ResidentTargetGoal)) {
             return;
         }
-        // Keep retaliation, players, villagers, golems and baby turtles ahead of residents.
-        mob.targetSelector.addGoal(6, new ResidentTargetGoal(mob));
+        // Keep every existing native target ahead, including modded Enemy subclasses with later priorities.
+        int last = mob.targetSelector.getAvailableGoals().stream().mapToInt(goal -> goal.getPriority()).max().orElse(0);
+        int priority = Math.max(6, Math.min(Integer.MAX_VALUE - 1, last) + 1);
+        mob.targetSelector.addGoal(priority, new ResidentTargetGoal(mob));
     }
 
     static boolean eligible(LivingEntity target) {

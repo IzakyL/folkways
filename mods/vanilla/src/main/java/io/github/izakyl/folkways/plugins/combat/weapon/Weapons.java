@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.plugins.combat.weapon;
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,6 +19,7 @@ import net.neoforged.neoforge.common.Tags;
 
 public final class Weapons {
     private static final ResourceLocation PATROLLING = ResourceLocation.fromNamespaceAndPath("folkways", "patrolling");
+    private static final ToolNeed LEGACY_MELEE = new ToolNeed.Tagged(Tags.Items.MELEE_WEAPON_TOOLS);
 
     public static final WeaponAdapter BOW = new NativeAdapter(NativeWeaponSession.Kind.BOW, 15);
     public static final WeaponAdapter CROSSBOW = new NativeAdapter(NativeWeaponSession.Kind.CROSSBOW, 8);
@@ -44,18 +46,25 @@ public final class Weapons {
     }
 
     public static boolean armed(Worker worker) {
+        if (!(worker.body() instanceof ResidentEntity)) {
+            return barehanded(worker) || !worker.held(LEGACY_MELEE).isEmpty();
+        }
         return adapter(worker).isPresent() || barehanded(worker);
     }
 
     public static boolean ranged(Worker worker) {
+        if (!(worker.body() instanceof ResidentEntity)) { return false; }
         return adapter(worker).filter(WeaponAdapter::ranged).isPresent();
     }
 
     public static double range(Worker worker) {
+        if (!(worker.body() instanceof ResidentEntity)) { return 4.5; }
         return adapter(worker).map(WeaponAdapter::range).orElse(4.5);
     }
 
     public static Optional<WeaponSession> open(Worker worker) {
+        // Other ResidentKinds retain Core ToolUse combat until their own native hand ownership is adapted.
+        if (!(worker.body() instanceof ResidentEntity)) { return Optional.empty(); }
         Optional<WeaponAdapter> adapter = adapter(worker);
         if (adapter.isPresent()) {
             return adapter.get().open(worker);

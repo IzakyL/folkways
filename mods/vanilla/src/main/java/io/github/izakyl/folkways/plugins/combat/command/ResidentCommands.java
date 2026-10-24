@@ -51,6 +51,8 @@ public final class ResidentCommands {
         public WorldPos destination() { return destination; }
         public Mode mode() { return mode; }
         public Status status() { return status; }
+        /** A reloaded entity with the same resident UUID needs a fresh transient order. */
+        public boolean boundTo(Body candidate) { return body.mob() == candidate.mob(); }
         /** A short, renewed combat lease; never survives a cancelled or replaced order. */
         public boolean engaged() {
             return mode == Mode.GUARD && active.get(resident()) == this
