@@ -83,6 +83,27 @@ final class FieldChores {
         }
     }
 
+    List<BlockPos> neighbors(Job origin, int extra) {
+        java.util.LinkedHashSet<BlockPos> found = new java.util.LinkedHashSet<>(origin.cells());
+        int added = 0;
+        boolean changed;
+        do {
+            changed = false;
+            for (Job candidate : standing) {
+                if (added >= extra) { break; }
+                if (busy.containsKey(candidate.cell()) || found.containsAll(candidate.cells())) { continue; }
+                if (candidate.cells().stream().anyMatch(at -> found.stream().anyMatch(old ->
+                        Math.abs(at.getX() - old.getX()) + Math.abs(at.getZ() - old.getZ()) == 1
+                        && at.getY() == old.getY()))) {
+                    found.addAll(candidate.cells());
+                    added++;
+                    changed = true;
+                }
+            }
+        } while (changed && added < extra);
+        return List.copyOf(found);
+    }
+
     void planned(FarmNode.Chore chore) {
         busy.putIfAbsent(chore.job().cell(), new Busy(chore.crop(), chore.job()));
         changed.run();

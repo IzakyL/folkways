@@ -116,7 +116,7 @@ public final class BoardRecipeMatrixGameTests {
             recipe = level.getRecipeManager().getAllRecipesFor(ModRecipes.CHOPPING_BOARD_RECIPE).stream().filter(holder -> holder.id().equals(id)).findFirst().orElseThrow();
             input = recipe.value().getIngredient().getItems()[0].copyWithCount(1);
             for (int x = -1; x <= 1; x++) { for (int z = -1; z <= 1; z++) { level.setBlockAndUpdate(cell.offset(x, -1, z), Blocks.STONE.defaultBlockState()); } }
-            level.setBlockAndUpdate(cell, ModBlocks.CHOPPING_BOARD.get().defaultBlockState()); at = WorldPos.of(level, cell);
+            level.setBlockAndUpdate(cell, ModBlocks.CHOPPING_BOARD.get().defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.SOUTH)); at = WorldPos.of(level, cell);
             actor = PersonBody.RESIDENT.get().create(level); actor.setPos(Vec3.atBottomCenterOf(cell.south())); actor.setNoAi(true); level.addFreshEntity(actor);
             stances = Stances.at(level, actor.blockPosition()); pack.setItem(0, input.copy()); pack.setItem(1, new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get()));
             helper.assertTrue(level.getRecipeManager().getRecipeFor(ModRecipes.CHOPPING_BOARD_RECIPE, new SingleRecipeInput(input), level)

@@ -43,7 +43,7 @@ public final class Signs {
     // own colour is what they say are left as they are.
     private static final String LEDGER = "ledger/";
     private static final Set<ResourceLocation> COLOURED = Set.of(ours("glyph/admits"), ours("glyph/refuses"),
-        ours("glyph/lacks"));
+        ours("glyph/lacks"), ours("glyph/mood_happy"), ours("glyph/mood_neutral"), ours("glyph/mood_sad"));
     private static final float INK_RED = (Rows.INK >> 16 & 0xFF) / 255f;
     private static final float INK_GREEN = (Rows.INK >> 8 & 0xFF) / 255f;
     private static final float INK_BLUE = (Rows.INK & 0xFF) / 255f;

@@ -56,8 +56,12 @@ final class WatchNode implements Node {
     @Override
     public Outcome commit(ServerLevel level, Worker who) {
         long now = level.getGameTime();
-        Wards.ward(level, stop.block(level), now + FolkwaysVanillaConfig.patrolWardTicks());
-        presence.watched(who.resident().id(), now);
+        Wards.ward(level, stop.block(level), now + Math.round(FolkwaysVanillaConfig.patrolWardTicks()
+                * who.effects().value(PatrolContent.WARD_DURATION)),
+            FolkwaysVanillaConfig.patrolWardRadius() + (int) who.effects().value(PatrolContent.WARD_RADIUS),
+            (int) who.effects().value(PatrolContent.COMFORT));
+        presence.watched(who.resident().id(), now, Math.round(FolkwaysVanillaConfig.patrolWardTicks()
+            * who.effects().value(PatrolContent.WARD_DURATION)));
         return new Outcome.Done(List.of(), List.of(), Optional.of(new Xp(PatrolContent.trade(), 1)));
     }
 }

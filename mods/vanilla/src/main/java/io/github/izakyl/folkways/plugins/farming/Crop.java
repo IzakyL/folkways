@@ -231,7 +231,9 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
     }
 
     boolean sowsAt(LevelReader level, Plot plot, BlockPos ground) {
-        return habit.sowsAt(plot, ground) && !(inTheWay(level, ground.above()) && plot.aisle(ground));
+        return behavior.map(b -> b.sowsAt(ground, plot.minX(), plot.minZ(), plot.cells())).orElse(true)
+            && habit.sowsAt(plot, ground) && !(behavior.map(CropBehavior::aisles).orElse(true)
+                && inTheWay(level, ground.above()) && plot.aisle(ground));
     }
 
     boolean roomAt(LevelReader level, List<BlockPos> stand) {

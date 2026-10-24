@@ -421,10 +421,36 @@ public final class LivingEatingGameTests {
         hunger.load(io.github.izakyl.folkways.base.persist.Reader.of(
             Writer.of().integer("FoodLevel", 0).tag()));
         FoodProperties food = new FoodProperties.Builder().nutrition(24).build();
-        helper.assertTrue(hunger.canEatWithoutWaste(food), "quality can raise a meal past twenty points");
+        helper.assertTrue(hunger.canEatMeal(food), "quality can raise a meal past twenty points");
         hunger.eat(food);
         helper.assertValueEqual(hunger.foodLevel(), Hunger.MAX_FOOD_LEVEL, "fullness is capped at twenty");
-        helper.assertFalse(hunger.canEatWithoutWaste(food), "an oversized meal still waits while full");
+        helper.assertFalse(hunger.canEatMeal(food), "an oversized meal still waits while full");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void largeMealsAllowBoundedWasteButSmallPortionsStillFit(GameTestHelper helper) {
+        Hunger hunger = new Hunger();
+        for (int nutrition : new int[] {5, 9, 10, 14, 20, 24}) {
+            var food = new FoodProperties.Builder().nutrition(nutrition).build();
+            int effective = Math.min(20, nutrition);
+            int threshold = 20 - effective + (effective >= 10 ? effective * 3 / 10 : 0);
+            hunger.load(io.github.izakyl.folkways.base.persist.Reader.of(
+                Writer.of().integer("FoodLevel", threshold).tag()));
+            helper.assertTrue(hunger.canEatMeal(food), "meal fits at its waste allowance: " + nutrition);
+            hunger.load(io.github.izakyl.folkways.base.persist.Reader.of(
+                Writer.of().integer("FoodLevel", threshold + 1).tag()));
+            helper.assertFalse(hunger.canEatMeal(food), "meal exceeding its waste allowance waits: " + nutrition);
+        }
+        var large = new ItemStack(Items.BREAD);
+        large.set(net.minecraft.core.component.DataComponents.FOOD,
+            new FoodProperties.Builder().nutrition(20).build());
+        try (EatingFixture meal = new EatingFixture(helper, large, 6)) {
+            meal.eat();
+            helper.assertTrue(meal.pack.getItem(0).isEmpty(), "the large meal is consumed once");
+            helper.assertValueEqual(meal.living.foodLevelOf(meal.body.id()).orElseThrow(), 20,
+                "overflow nutrition is discarded and fullness remains capped");
+        }
         helper.succeed();
     }
 

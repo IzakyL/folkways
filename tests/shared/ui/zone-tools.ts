@@ -122,6 +122,7 @@ export async function markBox(
 
 export const ZONE_KIND_ID = {
   farm: "folkways:farm",
+  dining: "folkways:dining",
   pasture: "folkways:pasture",
   fish: "folkways:fish",
   ground: "folkways:ground",

@@ -44,6 +44,12 @@ public final class PerkPool {
         }
     }
 
+    public static void legacy(Perk perk) {
+        if (BY_ID.putIfAbsent(perk.id(), perk) != null) {
+            throw new IllegalStateException("perk " + perk.id() + " is already registered");
+        }
+    }
+
     private static void claim(Perk perk) {
         Ledger.writing("perk " + perk.id());
         Perk existing = BY_ID.putIfAbsent(perk.id(), perk);
@@ -107,7 +113,7 @@ public final class PerkPool {
             if (perk == null || rank < 1) {
                 return;
             }
-            for (Modifier modifier : perk.grant().at(rank)) {
+            for (Modifier modifier : perk.grant().at(Math.min(rank, perk.maxRank()))) {
                 parts.add(new Effects.Part(id, modifier));
             }
         });
@@ -116,6 +122,16 @@ public final class PerkPool {
 
     public static List<String> vocationCandidates(ResourceLocation vocation, Map<String, Integer> ranks) {
         return candidates(VOCATION_POOLS.getOrDefault(vocation, List.of()), ranks);
+    }
+
+    public static List<String> candidatesFor(ResourceLocation vocation, Map<String, Integer> ranks) {
+        List<String> pool = new ArrayList<>(VOCATION_POOLS.getOrDefault(vocation, List.of()));
+        pool.addAll(GLOBAL_POOL);
+        return candidates(pool, ranks);
+    }
+
+    public static boolean global(String id) {
+        return GLOBAL_POOL.contains(id) || id.equals(GlobalPerks.PACKMULE);
     }
 
     public static List<String> globalCandidates(Map<String, Integer> ranks) {

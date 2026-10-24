@@ -4,14 +4,13 @@ import path from "node:path";
 export const REPO_ROOT = process.cwd();
 export const OUT_ROOT = "tests/out";
 
-export type Suite = "e2e" | "sable" | "visual" | "ponder" | "pattern" | "promo" | "bench";
+export type Suite = "e2e" | "sable" | "visual" | "pattern" | "promo" | "bench";
 export type Bucket = "traces" | "shots" | "reports" | "takes" | "film" | "keep" | "playwright";
 
 const BUCKETS: Record<Suite, Bucket[]> = {
   e2e: ["traces", "shots", "reports"],
   sable: ["traces", "shots", "reports"],
   visual: ["traces", "takes"],
-  ponder: ["traces", "takes"],
   pattern: ["traces", "takes"],
   promo: ["traces", "takes", "film"],
   bench: ["traces", "reports"],

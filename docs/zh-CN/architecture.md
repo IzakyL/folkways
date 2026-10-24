@@ -12,9 +12,9 @@ Folkways 包含**两个必装模组和三个可选扩展**，分别对应 `mods/
 | --------------------------------------- | ------------------------ | -------------------------------------------------------- |
 | `:core` → `mods/core`                   | `folkways_core`          | 殖民地引擎、公共 API、界面与教程；单独安装不提供居民工作 |
 | `:vanilla` → `mods/vanilla`             | `folkways_vanilla`       | 居民及其在原版方块中的工作                               |
-| `:create` → `mods/create`               | `folkways_create`        | 列车、调度、轨道接缝与机械动力蓝图交接                   |
+| `:create` → `mods/create`               | `folkways_create`        | 列车、调度、电梯、轨道接缝与机械动力蓝图交接             |
 | `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | 傀儡居民                                                 |
-| `:cookery` → `mods/cookery`             | `folkways_cookery`       | 原生 Cookery 农业、厨具、共享工具和教程                  |
+| `:cookery` → `mods/cookery`             | `folkways_cookery`       | 原生 Cookery 农业、厨具、共享工具、森罗酒馆酿酒和教程    |
 
 ```mermaid
 flowchart BT
@@ -39,9 +39,9 @@ flowchart BT
 | Core / `core`                    | 居民、规划、劳动与出行；公共 API 位于 `core/api`，世界适配位于 `core/shell` |
 | Core / `front`                   | 界面、殖民书、网络与教程；公共 API 位于 `front/api`                         |
 | Vanilla / `plugins`              | 基于公共 API 实现的农业、牧场、建筑等插件                                   |
-| Create / `create`                | 列车、调度与 `create/build`                                                 |
+| Create / `create`                | 列车、调度、`create/elevator` 与 `create/build`                             |
 | Modular Golems / `modulargolems` | 傀儡居民                                                                    |
-| Cookery / `cookery`              | 原生厨具和农业适配、工具与教程                                              |
+| Cookery / `cookery`              | 原生厨具和农业适配、工具、`cookery/tavern` 与教程                           |
 
 内置样式位于 [`mods/vanilla/src/main/resources/data/folkways/folkways/pattern/`](../../mods/vanilla/src/main/resources/data/folkways/folkways/pattern/)。
 集成依赖与模组 ID 以各模组的 `build.gradle` 和 `src/main/resources/META-INF/neoforge.mods.toml` 为准。

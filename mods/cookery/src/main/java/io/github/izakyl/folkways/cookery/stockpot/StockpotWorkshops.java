@@ -136,7 +136,7 @@ public final class StockpotWorkshops {
                 long runs = produce.runs(site(), plan.perRunNeeds(), plan.portions(),
                     Optional.of(WaresContent.trade()), Integer.MAX_VALUE);
                 StockpotWork work = new StockpotWork(colony, at, stances, plan, (int) runs, hasLid, bookings, changed);
-                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));
+                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id(), work.spec().estimate())));
             }
             return List.copyOf(options);
         }

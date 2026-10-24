@@ -233,6 +233,10 @@ final class Survey {
             List.copyOf(hands.values()));
     }
 
+    List<Crew.Hand> hands() {
+        return List.copyOf(hands.values());
+    }
+
     Stands stands() {
         gather();
         return stands;

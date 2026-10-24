@@ -601,7 +601,8 @@ public final class ChoppingBoardGameTests {
             this.level = helper.getLevel();
             this.pos = helper.absolutePos(relative);
             level.setBlock(pos.below(), Blocks.STONE.defaultBlockState(), 3);
-            level.setBlock(pos, ModBlocks.CHOPPING_BOARD.get().defaultBlockState(), 3);
+            level.setBlock(pos.east().below(), Blocks.STONE.defaultBlockState(), 3);
+            level.setBlock(pos, ModBlocks.CHOPPING_BOARD.get().defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.EAST), 3);
             this.at = WorldPos.of(level, pos);
             this.body = PersonBody.RESIDENT.get().create(level);
             body.mob().moveTo(pos.getX() + 1.5, pos.getY(), pos.getZ() + 0.5, 0, 0);

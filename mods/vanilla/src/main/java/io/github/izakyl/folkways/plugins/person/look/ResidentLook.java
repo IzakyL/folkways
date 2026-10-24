@@ -3,6 +3,8 @@ package io.github.izakyl.folkways.plugins.person.look;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import java.util.Map;
+import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.ExtraCodecs;
 import net.minecraft.util.StringRepresentable;
@@ -49,9 +51,35 @@ public record ResidentLook(Appearance appearance, int weight) {
             ResourceLocation texture,
             String idleAnimation,
             String walkAnimation,
-            java.util.Optional<String> workAnimation,
+            Optional<String> workAnimation,
+            Optional<String> seatedAnimation,
             Skin fallback,
-            float scale) implements Appearance {
+            float scale,
+            Map<String, String> leisureAnimations) implements Appearance {
+
+        // Old callers retain both the original signature and the leisure-animation extension.
+        public Model(ResourceLocation geometry, ResourceLocation animations, ResourceLocation texture,
+                String idleAnimation, String walkAnimation, Optional<String> workAnimation,
+                Skin fallback, float scale) {
+            this(geometry, animations, texture, idleAnimation, walkAnimation, workAnimation,
+                Optional.empty(), fallback, scale, Map.of());
+        }
+
+        public Model(ResourceLocation geometry, ResourceLocation animations, ResourceLocation texture,
+                String idleAnimation, String walkAnimation, Optional<String> workAnimation,
+                Skin fallback, float scale, Map<String, String> leisureAnimations) {
+            this(geometry, animations, texture, idleAnimation, walkAnimation, workAnimation,
+                Optional.empty(), fallback, scale, leisureAnimations);
+        }
+
+        public Model(ResourceLocation geometry, ResourceLocation animations, ResourceLocation texture,
+                String idleAnimation, String walkAnimation, Optional<String> workAnimation,
+                Optional<String> seatedAnimation, Skin fallback, float scale) {
+            this(geometry, animations, texture, idleAnimation, walkAnimation, workAnimation,
+                seatedAnimation, fallback, scale, Map.of());
+        }
+
+        public Model { leisureAnimations = Map.copyOf(leisureAnimations); }
 
         public static final MapCodec<Model> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             ResourceLocation.CODEC.fieldOf("geometry").forGetter(Model::geometry),
@@ -60,8 +88,11 @@ public record ResidentLook(Appearance appearance, int weight) {
             Codec.STRING.optionalFieldOf("idle_animation", "animation.resident.idle").forGetter(Model::idleAnimation),
             Codec.STRING.optionalFieldOf("walk_animation", "animation.resident.walk").forGetter(Model::walkAnimation),
             Codec.STRING.optionalFieldOf("work_animation").forGetter(Model::workAnimation),
+            Codec.STRING.optionalFieldOf("seated_animation").forGetter(Model::seatedAnimation),
             Skin.CODEC.fieldOf("fallback").forGetter(Model::fallback),
-            ExtraCodecs.POSITIVE_FLOAT.optionalFieldOf("scale", 1.0F).forGetter(Model::scale)
+            ExtraCodecs.POSITIVE_FLOAT.optionalFieldOf("scale", 1.0F).forGetter(Model::scale),
+            Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("leisure_animations", Map.of())
+                .forGetter(Model::leisureAnimations)
         ).apply(instance, Model::new));
 
         @Override

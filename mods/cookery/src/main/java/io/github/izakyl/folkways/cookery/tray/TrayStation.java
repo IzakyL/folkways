@@ -107,7 +107,7 @@ public final class TrayStation implements KitchenStation {
                 if (!Goods.matches(job.output(), produce.wanted())) { continue; }
                 int count = (int) produce.runs(site(), List.of(new Need(job.input(), 1)), job.output().getCount(), Optional.of(WaresContent.trade()), job.capacity());
                 var work = new TrayWork(colony, at, slot, stances, job, count, bookings, changed, null);
-                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));
+                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id(), work.spec().estimate())));
             }
             return List.copyOf(options);
         }

@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.front.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import io.github.izakyl.folkways.front.api.ui.Signs;
 import io.github.izakyl.folkways.front.client.ColonyLookCard.Row;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -112,11 +113,19 @@ final class WorldCards {
             CardBackdrop.grey(Math.round(Mth.lerp(INK_EASE, was.bodyColor() & 0xFF, wanted.bodyColor() & 0xFF))));
     }
 
-    // A card is known across frames by its title, which for a resident is the name. A placard stays where it is
-    // and shares its title with others, a chest's with every chest's, so it is known by where it stands.
+    // A card is known across frames by its title, which for a resident is the name, marks after it or not. A
+    // placard stays where it is and shares its title with others, a chest's with every chest's, so it is known by
+    // where it stands.
     private static String key(Queued card) {
-        return card.look() != Look.PLACARD && !card.rows().isEmpty() && card.rows().getFirst() instanceof Row.Text title
-            ? title.text() : card.anchor().toString();
+        if (card.look() == Look.PLACARD || card.rows().isEmpty()) {
+            return card.anchor().toString();
+        }
+        return switch (card.rows().getFirst()) {
+            case Row.Text title -> title.text();
+            case Row.Signs title when !title.signs().isEmpty()
+                && title.signs().getFirst() instanceof Signs.Sign.Word name -> name.text();
+            default -> card.anchor().toString();
+        };
     }
 
     /**

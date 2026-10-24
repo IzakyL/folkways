@@ -41,6 +41,10 @@ final class Beds {
         return Optional.ofNullable(bedsByResident.get(resident));
     }
 
+    Optional<UUID> sleeperOf(WorldPos bed) {
+        return Optional.ofNullable(residentsByBed.get(bed));
+    }
+
     boolean sweep(ColonyView colony, Set<UUID> belonging) {
         ServerLevel level = colony.level();
         Set<BlockPos> members = colony.blocks(LivingContent.BED);

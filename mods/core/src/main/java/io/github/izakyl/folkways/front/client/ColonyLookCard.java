@@ -30,7 +30,9 @@ public final class ColonyLookCard {
             switch (lines.get(i)) {
                 case Line.Said said -> rows.add(new Row.Text((said.notice().component()).getString(), color));
                 case Line.Literal literal -> rows.add(new Row.Text(literal.text(), color));
-                case Line.Text text -> rows.add(new Row.Text(text.component().getString(), color));
+                case Line.Text text -> rows.add(text.after().isEmpty()
+                    ? new Row.Text(text.component().getString(), color)
+                    : new Row.Signs(named(text, color)));
                 case Line.Blocked blocked -> rows.add(blocked(blocked));
                 case Line.Told told -> rows.add(new Row.Signs(Signs.of(told.sentence(), color)));
                 case Line.Busy busy -> {
@@ -45,6 +47,13 @@ public final class ColonyLookCard {
             }
         }
         return rows;
+    }
+
+    private static List<Sign> named(Line.Text text, int color) {
+        List<Sign> signs = new ArrayList<>();
+        signs.add(new Sign.Word(text.component().getString(), color));
+        signs.addAll(Signs.of(text.after(), color));
+        return signs;
     }
 
     // What stands in the way, in words, then told in pictures when it is.

@@ -9,13 +9,13 @@ project under `mods/`. They use separate mod IDs and share the `folkways`
 content namespace. The root project runs tests and collects jars rather than
 building a sixth mod.
 
-| Gradle project                          | Mod ID                   | Responsibility                                                                        |
-| --------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------- |
-| `:core` → `mods/core`                   | `folkways_core`          | Colony engine, public APIs, screens and lessons; supplies no resident work on its own |
-| `:vanilla` → `mods/vanilla`             | `folkways_vanilla`       | Residents and their work among vanilla blocks                                         |
-| `:create` → `mods/create`               | `folkways_create`        | Rail, dispatch, track joints and schematic hand-off                                   |
-| `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | Golems as residents                                                                   |
-| `:cookery` → `mods/cookery`             | `folkways_cookery`       | Native Cookery farming, appliances, shared tools and lessons                          |
+| Gradle project                          | Mod ID                   | Responsibility                                                                         |
+| --------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| `:core` → `mods/core`                   | `folkways_core`          | Colony engine, public APIs, screens and lessons; supplies no resident work on its own  |
+| `:vanilla` → `mods/vanilla`             | `folkways_vanilla`       | Residents and their work among vanilla blocks                                          |
+| `:create` → `mods/create`               | `folkways_create`        | Rail, dispatch, elevators, track joints and schematic hand-off                         |
+| `:modulargolems` → `mods/modulargolems` | `folkways_modulargolems` | Golems as residents                                                                    |
+| `:cookery` → `mods/cookery`             | `folkways_cookery`       | Native Cookery farming, appliances, shared tools, Kaleidoscope Tavern wine and lessons |
 
 ```mermaid
 flowchart BT
@@ -42,9 +42,9 @@ Java package paths below are relative to
 | Core / `core`                    | Residents, planning, labor and travel; public `core/api` and world integration in `core/shell` |
 | Core / `front`                   | Screens, Colony Book, networking and lessons; public `front/api`                               |
 | Vanilla / `plugins`              | Farming, pasture, building and other plugins over the public APIs                              |
-| Create / `create`                | Rail, dispatch and `create/build`                                                              |
+| Create / `create`                | Rail, dispatch, `create/elevator` and `create/build`                                           |
 | Modular Golems / `modulargolems` | Golem residents                                                                                |
-| Cookery / `cookery`              | Native appliance and farming adapters, tools and lessons                                       |
+| Cookery / `cookery`              | Native appliance and farming adapters, tools, `cookery/tavern` and lessons                     |
 
 Built-in patterns live under
 [`mods/vanilla/src/main/resources/data/folkways/folkways/pattern/`](../../mods/vanilla/src/main/resources/data/folkways/folkways/pattern/).

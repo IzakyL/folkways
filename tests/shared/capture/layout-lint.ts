@@ -1,5 +1,6 @@
 import { type Element, type PanelHolder, readPanel, ancestorsOf, clippingAncestors, LDLIB2_SYMBOLS, symbolPath } from "../../ldlib2";
-import { reflect, type MinecraftClient } from "@izakyl/blockwright-minecraft";
+import { defineTask, reflect, type MinecraftClient } from "@izakyl/blockwright-minecraft";
+import { REFLECT_QUERY } from "@izakyl/blockwright-minecraft/internal";
 import { PANEL_ROUTES, contentBox } from "../harness/bw-helpers";
 
 const MINECRAFT = "net.minecraft.client.Minecraft";
@@ -20,6 +21,12 @@ const WINDOW_PREFIX = "folkways.window.";
 const WIDE_SCROLL = "folkways_wide_scroll";
 
 const CHILDREN = "getChildren()";
+
+/**
+ * reflect.query with the agent's output budget raised to its ceiling: the default 100000 JSON nodes ends a big
+ * panel's tree at about 12500 elements, which would read as a panel that kept changing.
+ */
+const WRAP_QUERY = defineTask({ ...REFLECT_QUERY, name: "folkways.layout-lint.wraps", limits: { maxNodes: 10_000_000 } });
 
 /** How many times lint re-reads when the panel changed between its element read and its text-wrap read. */
 const WRAP_READS = 3;
@@ -156,12 +163,15 @@ export class LayoutProbe {
 
   /** The panel's elements in preorder, as a reflect query reads them, each with its wrap and id. */
   async wraps(holder: PanelHolder): Promise<reflect.QueryNode[]> {
-    const result = await reflect.query(this.#client, {
+    const result = await this.#client.run(WRAP_QUERY, {
       root: { kind: "static", className: MINECRAFT, path: symbolPath(PANEL_ROUTES[holder]) },
       select: { wrap: "getTextStyle().textWrap().name()", id: ELEMENT_ID },
       expand: { path: CHILDREN },
       limits: { maxDepth: 64, maxNodes: 32_000, maxItems: 500 },
     });
+    if (result.truncated) {
+      throw new Error(`the text-wrap query was cut short at ${result.nodeCount} nodes; a lint over a partial tree would miss whatever was cut`);
+    }
     const nodes: reflect.QueryNode[] = [];
     if (result.found !== false && result.tree) {
       preorder(result.tree, nodes);

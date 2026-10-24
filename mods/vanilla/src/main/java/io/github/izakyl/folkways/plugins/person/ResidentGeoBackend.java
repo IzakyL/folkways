@@ -66,6 +66,10 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
             VertexConsumer buffer, boolean isReRender, float partialTick, int light, int overlay, int colour) {
         withScale(getCurrentEntity() == null ? 1.0F
             : modelOf(getCurrentEntity()).map(ResidentLook.Model::scale).orElse(1.0F));
+        // Animation names such as YSM ride are shared by different models. Resolve them in this
+        // resident's file first, rather than borrowing the first model in the pool's skeleton.
+        ((Rig) getGeoModel()).currentModel = getCurrentEntity() == null ? null
+            : modelOf(getCurrentEntity()).orElse(null);
         super.preRender(pose, crew, baked, buffers, buffer, isReRender, partialTick, light, overlay, colour);
     }
 
@@ -116,7 +120,7 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
             }
             return modelOf(resident)
                 .map(model -> state.setAndContinue(
-                    loop(state.isMoving() ? model.walkAnimation() : model.idleAnimation())))
+                    loop(ResidentAnimation.loop(resident, model, state.isMoving()))))
                 .orElse(PlayState.STOP);
         }
 
@@ -125,6 +129,10 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
         private static PlayState chooseWork(AnimationState<Crew> state) {
             Entity entity = state.getData(DataTickets.ENTITY);
             if (!(entity instanceof ResidentEntity resident)) {
+                return PlayState.STOP;
+            }
+            if (ResidentAnimation.seated(resident)) {
+                state.getController().forceAnimationReset();
                 return PlayState.STOP;
             }
             Optional<String> work = modelOf(resident).flatMap(ResidentLook.Model::workAnimation);
@@ -162,6 +170,7 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
     private static final class Rig extends GeoModel<Crew> {
 
         private static final String HEAD_BONE = "head";
+        private ResidentLook.Model currentModel;
 
         @Override
         public ResourceLocation getModelResource(Crew crew) {
@@ -175,7 +184,7 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
 
         @Override
         public ResourceLocation getAnimationResource(Crew crew) {
-            return firstModelInPool().animations();
+            return (currentModel == null ? firstModelInPool() : currentModel).animations();
         }
 
         @Override
@@ -189,13 +198,48 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
         @Override
         public void setCustomAnimations(Crew crew, long instanceId, AnimationState<Crew> state) {
             super.setCustomAnimations(crew, instanceId, state);
+            Entity entity = state.getData(DataTickets.ENTITY);
+            if (entity instanceof ResidentEntity resident && ResidentAnimation.seated(resident)
+                    && modelOf(resident).flatMap(ResidentLook.Model::seatedAnimation).isEmpty()) {
+                // Old humanoid packs can ride without adding an authored animation. GeckoLib resets
+                // these bones on dismount, so the ordinary idle/walk motion resumes normally.
+                for (GeoBone bone : getAnimationProcessor().getRegisteredBones()) {
+                    String name = bone.getName().replace("_", "").toLowerCase(java.util.Locale.ROOT);
+                    if (name.equals("leftleg") || name.equals("legleft") || name.equals("rightleg")
+                            || name.equals("legright")) {
+                        bone.setRotX(-1.4137167F);
+                        bone.setRotY(name.contains("left") ? -Mth.PI / 10 : Mth.PI / 10);
+                    }
+                }
+            }
             EntityModelData look = state.getData(DataTickets.ENTITY_MODEL_DATA);
             if (look == null) {
                 return;
             }
+            String motion = entity instanceof ResidentEntity resident ? resident.leisureMotion() : "";
+            boolean ownAnimation = entity instanceof ResidentEntity resident
+                && modelOf(resident).map(model -> model.leisureAnimations().containsKey(motion)).orElse(false);
+            float age = entity == null ? 0 : entity.tickCount + state.getPartialTick();
+            if (!ownAnimation && (motion.equals("dining") || motion.equals("drinking"))) {
+                // Keep the model's seated legs while bringing food to the mouth. Packs without
+                // a dining clip otherwise show only their static ride pose throughout a meal.
+                float wave = Mth.sin(age * 0.09F);
+                for (GeoBone bone : getAnimationProcessor().getRegisteredBones()) {
+                    switch (bone.getName().replace("_", "").toLowerCase(java.util.Locale.ROOT)) {
+                        case "rightarm", "armright" -> bone.setRotX(-1.0F + wave * 0.18F);
+                        case "rightforearm", "forearmright" -> bone.setRotX(-0.9F + wave * 0.12F);
+                        case "leftarm", "armleft" -> bone.setRotX(-0.65F);
+                        case "leftforearm", "forearmleft" -> bone.setRotX(-0.5F);
+                        default -> { }
+                    }
+                }
+            }
             headBone().ifPresent(head -> {
-                head.setRotX(look.headPitch() * Mth.DEG_TO_RAD);
-                head.setRotY(look.netHeadYaw() * Mth.DEG_TO_RAD);
+                head.setRotX((ownAnimation ? head.getRotX() : 0) + look.headPitch() * Mth.DEG_TO_RAD);
+                head.setRotY((ownAnimation ? head.getRotY() : 0) + look.netHeadYaw() * Mth.DEG_TO_RAD);
+                if (!ownAnimation && motion.equals("chatting")) { head.setRotX(head.getRotX() + Mth.sin(age * 0.15F) * 0.08F); }
+                if (!ownAnimation && motion.equals("petting")) { head.setRotX(0.5F); }
+                if (!ownAnimation && (motion.equals("dining") || motion.equals("drinking"))) { head.setRotX(head.getRotX() + 0.15F); }
             });
         }
 

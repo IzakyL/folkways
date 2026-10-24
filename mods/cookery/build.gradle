@@ -13,6 +13,7 @@ evaluationDependsOn(":vanilla")
 dependencies {
     api project(":vanilla")
     compileOnly lib("kaleidoscope_cookery")
+    compileOnly lib("kaleidoscope_tavern")
     compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
         transitive = false
     }

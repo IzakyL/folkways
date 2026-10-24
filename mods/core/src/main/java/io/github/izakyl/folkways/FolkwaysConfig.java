@@ -13,7 +13,6 @@ public final class FolkwaysConfig {
 
     private static final ModConfigSpec.EnumValue<Mode> MODE;
 
-    private static final ModConfigSpec.ConfigValue<List<? extends Number>> HAULING_HASTE;
     private static final ModConfigSpec.ConfigValue<List<? extends Number>> ASCETIC_APPETITE;
 
     private static final ModConfigSpec.IntValue HAUL_REACH_TICKS;
@@ -51,17 +50,12 @@ public final class FolkwaysConfig {
         BUILDER.pop();
 
         BUILDER.push("perks");
-        HAULING_HASTE = BUILDER
-            .comment("The hauler's quick hands, as a multiplier on the wind-up of reaching into a chest,",
-                "stooping for a dropped stack or handing goods to somebody. Hauling underpins every other",
-                "trade, so this ladder is felt everywhere. One entry per rank, below 1 for faster.")
-            .<Number>defineList("haulingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
         ASCETIC_APPETITE = BUILDER
             .comment("What one rank of ascetic does to how fast a resident tires, as a multiplier on the",
                 "vanilla exhaustion rate. Below 1 means a smaller appetite and fewer meals; above 1 means",
                 "a hungrier resident. One entry per rank, and a rank past the end of the list counts as no",
                 "change at all.")
-            .<Number>defineList("asceticAppetite", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("asceticAppetite", List.of(0.90D, 0.80D, 0.70D), () -> 1.0D, HASTE_STEP);
         BUILDER.pop();
 
         BUILDER.push("labor");
@@ -134,10 +128,6 @@ public final class FolkwaysConfig {
         int asked = read(SOLVE_THREADS);
         return asked > 0 ? asked
             : Math.clamp(Runtime.getRuntime().availableProcessors() / 4, 2, 4);
-    }
-
-    public static List<? extends Number> haulingHaste() {
-        return read(HAULING_HASTE);
     }
 
     public static List<? extends Number> asceticAppetite() {

@@ -46,12 +46,15 @@ final class PasturePresence implements Facing {
 
     private final Herd herd;
 
+    private final Apiaries apiaries;
+
     private final Map<UUID, Map<Herd.Job, PenChores>> pens = new LinkedHashMap<>();
 
     PasturePresence(Colony colony) {
         this.colony = colony;
         this.sweep = new Sweep(colony, PastureContent.ID, 100);
         this.herd = new Herd(this::remember, made);
+        this.apiaries = new Apiaries(colony, made, sweep::nudge);
         Reader kept = Reader.of(colony.kept(PastureContent.ID));
         herd.load(kept);
         kept.child(TAG_MADE).ifPresent(made::load);
@@ -59,6 +62,11 @@ final class PasturePresence implements Facing {
 
     @Override
     public List<Line> zoneLines(ZoneView zone, ColonyView view) {
+        if (zone.delegation().equals(PastureContent.APIARY)) {
+            List<Line> lines = new ArrayList<>(apiaries.lines(zone));
+            lines.addAll(made.lines(zone, view));
+            return List.copyOf(lines);
+        }
         if (!zone.delegation().equals(PastureContent.PASTURE)) {
             return List.of();
         }
@@ -89,6 +97,7 @@ final class PasturePresence implements Facing {
         herd.begin();
         Set<UUID> standing = new LinkedHashSet<>();
         for (ColonyView view : colony.views(server)) {
+            apiaries.refresh(view, front);
             List<Workshop> udders = new ArrayList<>();
             for (Herd.Tally tally : herd.reconcile(view, front, udders)) {
                 standing.add(tally.pen().zone());
@@ -105,6 +114,7 @@ final class PasturePresence implements Facing {
 
     public void closed(Closing why) {
         retireAllBut(Set.of());
+        apiaries.close();
         if (made.changed()) {
             remember();
         }
@@ -122,9 +132,15 @@ final class PasturePresence implements Facing {
     }
 
     public List<Grown> goals(ColonyView view) {
-        List<Grown> goals = new ArrayList<>();
+        List<Grown> goals = new ArrayList<>(apiaries.goals(view));
+        Optional<UUID> nurturer = view.residents().stream().filter(resident -> {
+            var entity = view.level().getEntity(resident.id());
+            return entity instanceof net.minecraft.world.entity.LivingEntity living
+                && io.github.izakyl.folkways.core.api.resident.body.Bodies.of(living)
+                    .map(body -> body.perks().rank(PastureContent.NURTURE) > 0).orElse(false);
+        }).map(resident -> resident.id()).findFirst();
         for (Map<Herd.Job, PenChores> pen : pens.values()) {
-            pen.values().forEach(chores -> chores.goals(view.level(), goals));
+            pen.values().forEach(chores -> chores.goals(view.level(), goals, nurturer));
         }
         return goals;
     }

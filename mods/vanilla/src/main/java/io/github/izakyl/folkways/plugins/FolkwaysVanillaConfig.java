@@ -1,11 +1,13 @@
 package io.github.izakyl.folkways.plugins;
 
 import io.github.izakyl.folkways.FolkwaysConfig;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.function.Predicate;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.DyeColor;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 // The settings of the work residents do: zones, blueprints, crafting, settlers and the trades' quick hands.
@@ -36,6 +38,7 @@ public final class FolkwaysVanillaConfig {
     private static final ModConfigSpec.ConfigValue<List<? extends Number>> FARMING_HASTE;
     private static final ModConfigSpec.ConfigValue<List<? extends Number>> FISHING_HASTE;
     private static final ModConfigSpec.DoubleValue PATH_SEARCH_BUDGET;
+    private static final ModConfigSpec.IntValue DINING_MEAL_TICKS;
 
     public static final ModConfigSpec SPEC;
 
@@ -132,23 +135,23 @@ public final class FolkwaysVanillaConfig {
                 "as a multiplier on the base wind-up: the first entry is rank 1, the second rank 2, and so",
                 "on. Below 1 is faster, above 1 slower, and a rank past the end of the list counts as no",
                 "change at all. Shorten the list to cap how far the perk carries.")
-            .<Number>defineList("buildingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("buildingHaste", List.of(1.0D / 1.1D, 1.0D / 1.2D, 1.0D / 1.35D), () -> 1.0D, HASTE_STEP);
         CRAFTING_HASTE = BUILDER
             .comment("The crafter's quick hands, as a multiplier on the wind-up of a craft, a furnace load",
                 "or a fetch from an output slot. One entry per rank, below 1 for faster.")
-            .<Number>defineList("craftingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("craftingHaste", List.of(1.0D / 1.15D, 1.0D / 1.3D, 1.0D / 1.5D), () -> 1.0D, HASTE_STEP);
         HERDING_HASTE = BUILDER
             .comment("The herder's quick hands, as a multiplier on the wind-up of shearing, milking,",
                 "feeding and culling. One entry per rank, below 1 for faster.")
-            .<Number>defineList("herdingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("herdingHaste", List.of(1.0D / 1.1D, 1.0D / 1.2D, 1.0D / 1.35D), () -> 1.0D, HASTE_STEP);
         FARMING_HASTE = BUILDER
             .comment("The farmer's quick hands, as a multiplier on the wind-up of tilling, sowing, reaping",
                 "and felling. One entry per rank, below 1 for faster.")
-            .<Number>defineList("farmingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("farmingHaste", List.of(1.0D / 1.1D, 1.0D / 1.2D, 1.0D / 1.35D), () -> 1.0D, HASTE_STEP);
         FISHING_HASTE = BUILDER
             .comment("The fisher's quick hands, as a multiplier on how long a cast waits for a bite. One",
                 "entry per rank, below 1 for faster.")
-            .<Number>defineList("fishingHaste", List.of(0.85D, 0.70D, 0.55D, 0.40D), () -> 1.0D, HASTE_STEP);
+            .<Number>defineList("fishingHaste", List.of(0.9D, 0.8D, 0.7D), () -> 1.0D, HASTE_STEP);
         BUILDER.pop();
 
         BUILDER.push("navigation");
@@ -157,6 +160,13 @@ public final class FolkwaysVanillaConfig {
                 "Higher routes through more convoluted structures and costs more per search. The cap on",
                 "path *length* is the resident's follow range, a separate quantity.")
             .defineInRange("pathSearchBudget", 8.0D, 1.0D, 32.0D);
+        BUILDER.pop();
+
+        BUILDER.push("living");
+        DINING_MEAL_TICKS = BUILDER
+            .comment("Ticks a resident spends eating a serving at a dining table. Food is consumed only",
+                "when the meal finishes; leaving early releases the seat and preserves the serving.")
+            .defineInRange("diningMealTicks", 100, 20, 1200);
         BUILDER.pop();
 
         SPEC = BUILDER.build();
@@ -256,9 +266,13 @@ public final class FolkwaysVanillaConfig {
         return read(PATH_SEARCH_BUDGET).floatValue();
     }
 
+    public static int diningMealTicks() {
+        return read(DINING_MEAL_TICKS);
+    }
+
     // The wasteful recipes refused unless a server says otherwise.
     private static List<String> refusedByDefault() {
-        List<String> refused = new java.util.ArrayList<>(List.of(
+        List<String> refused = new ArrayList<>(List.of(
             "minecraft:bamboo_planks",
             "minecraft:stick_from_bamboo_item",
             "minecraft:iron_nugget_from_smelting",
@@ -266,7 +280,7 @@ public final class FolkwaysVanillaConfig {
             "minecraft:gold_nugget_from_smelting",
             "minecraft:gold_nugget_from_blasting",
             "minecraft:copper_ingot_from_waxed_copper_block"));
-        for (net.minecraft.world.item.DyeColor colour : net.minecraft.world.item.DyeColor.values()) {
+        for (DyeColor colour : DyeColor.values()) {
             for (String dyed : List.of("wool", "bed", "carpet")) {
                 refused.add("minecraft:dye_" + colour.getName() + "_" + dyed);
             }

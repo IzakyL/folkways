@@ -2,20 +2,24 @@ package io.github.izakyl.folkways.plugins.person.walk;
 
 import io.github.izakyl.folkways.core.api.resident.Conveyance;
 import io.github.izakyl.folkways.core.api.resident.Going;
+import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.Structures;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Doing;
 import io.github.izakyl.folkways.core.api.work.Doings;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkExertion;
+import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.pathfinder.Path;
@@ -39,6 +43,7 @@ public final class OnFoot implements Conveyance {
     private int sinceProgress;
     private Float walked;
     private double distanceWalked;
+    private int activeWalkingTicks;
 
     public OnFoot(double speed, RefusalKind lost) {
         this.speed = speed;
@@ -84,6 +89,7 @@ public final class OnFoot implements Conveyance {
         distanceWalked = 0;
         settling = 0;
         walkingTicks = 0;
+        activeWalkingTicks = 0;
         closest = Double.MAX_VALUE;
         sinceProgress = 0;
         repath(body, here(level, to));
@@ -101,6 +107,21 @@ public final class OnFoot implements Conveyance {
         double distance = distanceWalked;
         distanceWalked = 0;
         WorkExertion.performed(body, 0, 0, distance);
+        if (activeWalkingTicks > 0) {
+            Bodies.of(body).ifPresent(resident ->
+                resident.doing().map(doing -> doing.toward().orElse(doing.what()).getPath()).ifPresent(doing -> {
+                    ResourceLocation trade = switch (doing) {
+                        case "fetching", "stowing", "picking_up" -> Vocations.HAULING;
+                        case "patrolling" -> PatrolContent.VOCATION;
+                        default -> null;
+                    };
+                    if (trade != null) {
+                        Bodies.worked(resident,
+                            Vocations.required(trade), activeWalkingTicks, level.random);
+                    }
+                }));
+        }
+        activeWalkingTicks = 0;
         body.getNavigation().stop();
     }
 
@@ -113,6 +134,7 @@ public final class OnFoot implements Conveyance {
         walked = body.walkDist;
         if (distance > 0 && !body.isPassenger() && !body.isSleeping()) {
             distanceWalked += distance;
+            activeWalkingTicks++;
         }
     }
 

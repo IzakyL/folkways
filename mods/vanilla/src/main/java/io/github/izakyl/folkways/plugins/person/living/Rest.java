@@ -26,7 +26,7 @@ final class Rest {
         return SPENT - tiredness();
     }
 
-    void spend(int laborTicks, double blocksWalked) {
+    void spend(double laborTicks, double blocksWalked) {
         tired = Math.min(SPENT, tired
             + laborTicks * PER_LABOR_TICK
             + blocksWalked * PER_BLOCK_WALKED);

@@ -264,11 +264,11 @@ public final class SpitGameTests {
     @GameTest(template = "empty", timeoutTicks = 850)
     public static void upperSpitPlansAndRecoversOnlyStancesThatPerformItsActualNativeAction(GameTestHelper helper) {
         Rig rig = new Rig(helper, true); BlockPos edge = boundaryApron(rig);
-        BlockPos near = rig.cell.south(2);
+        BlockPos near = rig.cell.south();
         var provider = new SpitStation();
         var published = provider.stances(rig.level, rig.at).orElseThrow();
-        helper.assertTrue(published.cells().contains(WorldPos.of(rig.level, edge))
-            && published.cells().contains(WorldPos.of(rig.level, near)), "the real provider publishes both original lower and valid upper approaches");
+        helper.assertTrue(!published.cells().contains(WorldPos.of(rig.level, edge))
+            && published.cells().contains(WorldPos.of(rig.level, near)), "the real provider excludes the remote lower-only edge and publishes the adjacent operating cell");
         rig.stances = Stances.at(WorldPos.of(rig.level, edge), WorldPos.of(rig.level, near));
         rig.actor.setPos(Vec3.atBottomCenterOf(near));
         SpitWork original = rig.plan();
@@ -380,7 +380,7 @@ public final class SpitGameTests {
             for (int x = -1; x <= 1; x++) { for (int z = -1; z <= 1; z++) {
                 level.setBlockAndUpdate(cell.offset(x, -1, z), Blocks.STONE.defaultBlockState());
             } }
-            var state = ModBlocks.SHAWARMA_SPIT.get().defaultBlockState();
+            var state = ModBlocks.SHAWARMA_SPIT.get().defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.SOUTH);
             level.setBlockAndUpdate(cell, state);
             state.getBlock().setPlacedBy(level, cell, state, null, new ItemStack(ModItems.SHAWARMA_SPIT.get()));
             at = WorldPos.of(level, cell);

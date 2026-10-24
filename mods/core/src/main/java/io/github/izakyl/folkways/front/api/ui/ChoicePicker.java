@@ -39,7 +39,7 @@ public final class ChoicePicker {
     private static final float WIDTH = 180f;
     private static final float ROW = 20f;
     private static final float ROW_GAP = 2f;
-    private static final float CHROME = 76f;
+    private static final float CHROME = 61f;
     private static final int MOST_ROWS = 8;
     private static final float HOST_GAP = 4f;
 
@@ -164,8 +164,7 @@ public final class ChoicePicker {
         dialog.addContent(new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
                 .widthPercent(100).heightPercent(100).gapAll(3))
-            .addChildren(Rows.text(Component.translatable(many ? "folkways.choice.hint.many" : "folkways.choice.hint")),
-                scroller));
+            .addChildren(scroller));
         dialog.addButton(cancel);
         dialog.addButton(confirm);
         Tokens.name(dialog, "folkways.choice");

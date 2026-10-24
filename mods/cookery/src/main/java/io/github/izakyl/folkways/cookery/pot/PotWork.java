@@ -7,7 +7,6 @@ import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -114,7 +113,7 @@ final class PotWork implements Node, Workload.Within {
         if (generation != bookings.generation(at) || !bookings.free(at) || current(level).isEmpty()) {
             return Optional.of(CookeryRefusal.STATION_BUSY);
         }
-        recoveryHold = bookings.hold(at, id());
+        recoveryHold = bookings.hold(at, id(), spec().estimate());
         var refused = recoveryHold.take();
         if (refused.isEmpty()) PotStation.rememberRecovery(colony, at, this);
         return refused;
@@ -188,9 +187,9 @@ final class PotWork implements Node, Workload.Within {
     }
 
     private boolean reaches(ServerLevel level, Worker who) {
-        return at.in(level) && level.isLoaded(at.block(level)) && Reach.stanceHolding(who.body(), spec.stances())
-            .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
-            .filter(feet -> Reach.withinReach(feet, at.block(level)) && Reach.inSight(level, feet, at.block(level))).isPresent();
+        return at.in(level) && level.isLoaded(at.block(level)) && Reach.standingIn(who.body(), spec.stances())
+            && PotStation.operatingFeet(level, at, who.body())
+                .filter(feet -> Reach.withinReach(feet, at.block(level)) && Reach.inSight(level, feet, at.block(level))).isPresent();
     }
 
     private abstract class Action implements Node {

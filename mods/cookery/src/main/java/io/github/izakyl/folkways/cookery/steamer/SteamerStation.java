@@ -108,7 +108,7 @@ public final class SteamerStation implements KitchenStation {
         return any;
     }
     public Optional<Stances> stances(ServerLevel level, WorldPos at) {
-        return KitchenStation.around(level, parts(level, at));
+        return KitchenStation.super.stances(level, at);
     }
     private record Approach(WorldPos part, Stances stances) { }
     public Optional<Workshop> freeze(UUID key, UUID colony, ServerLevel level, WorldPos at,
@@ -196,7 +196,7 @@ public final class SteamerStation implements KitchenStation {
                 if (!Goods.matches(job.output(), produce.wanted())) { continue; }
                 int count = (int) produce.runs(site(), List.of(new Need(job.input(), 1)), job.output().getCount(), Optional.of(WaresContent.trade()), capacity);
                 var work = new SteamerWork(colony, at, part, stances, job, count, bookings, changed, null);
-                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));
+                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id(), work.spec().estimate())));
             }
             return List.copyOf(options);
         }

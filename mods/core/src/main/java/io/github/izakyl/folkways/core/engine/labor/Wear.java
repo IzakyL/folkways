@@ -3,10 +3,12 @@ package io.github.izakyl.folkways.core.engine.labor;
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.resident.body.Pack;
+import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.ToolUse;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.effect.Stats;
 import java.util.function.Consumer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
@@ -25,7 +27,8 @@ final class Wear {
         }
         Pack pack = body.pack();
         for (ToolUse use : spec.tools()) {
-            int points = points(use.wearFor(who), level.getRandom());
+            int points = points(use.wearFor(who) * who.effects().value(Stats.TOOL_WEAR,
+                spec.vocation().map(Vocation::id)), level.getRandom());
             if (points <= 0) {
                 continue;
             }

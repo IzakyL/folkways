@@ -9,6 +9,7 @@ public final class CookeryPlugin {
     }
 
     public static void install(IEventBus modBus) {
+        if (net.neoforged.fml.ModList.get().isLoaded("kaleidoscope_tavern")) io.github.izakyl.folkways.cookery.tavern.TavernCounters.register(modBus);
         if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) modBus.addListener(CookeryScenes::declare);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
             io.github.izakyl.folkways.cookery.millstone.MillstoneDrive::joined);

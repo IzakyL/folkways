@@ -348,4 +348,59 @@ public final class DeliveryPlanningGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void heavyHaulingDeliversMoreThanOneStackButStillFitsItsActualPack(GameTestHelper helper) {
+        for (int rank : new int[]{0, 3}) {
+            var effects = io.github.izakyl.folkways.effect.perk.PerkPool.effects(rank == 0 ? Map.of()
+                : Map.of(io.github.izakyl.folkways.core.engine.plan.haul.Haul.HEAVY, rank));
+            var pack = new io.github.izakyl.folkways.core.api.resident.body.Pack(1);
+            pack.applyCapacityMultiplier(effects.value(io.github.izakyl.folkways.effect.Stats.PACK_ROOM));
+            int cells = pack.getContainerSize();
+            helper.assertTrue(cells == (rank == 0 ? 1 : 2), "the real heavy-hauling perk expands this pack's capacity");
+            PlanningFixture fixture = new PlanningFixture(helper, cells);
+            var level = helper.getLevel();
+            level.setBlockAndUpdate(fixture.source.cell(), Blocks.BARREL.defaultBlockState());
+            level.setBlockAndUpdate(fixture.target.cell(), Blocks.BARREL.defaultBlockState());
+            var source = Containers.at(level, fixture.source.cell()).orElseThrow();
+            var target = Containers.at(level, fixture.target.cell()).orElseThrow();
+            source.clearContent(); target.clearContent();
+            for (int slot = 0; slot < 5; slot++) source.setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
+            ItemSpec cobblestone = ItemSpec.of(ResourceLocation.withDefaultNamespace("cobblestone"));
+            List<Stock.Holding> holdings = new java.util.ArrayList<>();
+            for (int slot = 0; slot < 5; slot++) holdings.add(new Stock.Holding(new Stash(fixture.source), source.getItem(slot).copy()));
+            Owed task = new Owed(new WorkSite.AtBlock(fixture.target), Stances.at(fixture.target), cobblestone, 320);
+            PlanningFixture.Rounds solver = new PlanningFixture.Rounds();
+            try {
+                var solved = solver.solve(fixture.situation(new Stock(holdings,
+                    Map.of(new Stash(fixture.source), 22, new Stash(fixture.target), 27)), List.of()),
+                    fixture.crew, task.goals(), List.of(), 0);
+                helper.assertTrue(solved.diagnosis().shortfalls().isEmpty(), "the first batch must be satisfiable");
+                var tour = solved.schedule().tours().get(fixture.worker.resident().id());
+                helper.assertTrue(tour != null && tour.nodes().size() == 2, "one delivery is one fetch and one put");
+                long planned = solved.weave().vertices().get(tour.nodes().getFirst()).plan().carrying()
+                    .stream().mapToLong(amount -> amount.count()).sum();
+                helper.assertTrue(planned == cells * 64L, "batch uses every available cell and does not exceed pack capacity");
+                long peak = 0;
+                for (UUID id : tour.nodes()) {
+                    var node = solved.weave().vertices().get(id).node();
+                    Outcome outcome = Commit.run(level, node, fixture.worker);
+                    helper.assertTrue(outcome instanceof Outcome.Done, "the planned load executes in the actual pack");
+                    for (ItemStack made : ((Outcome.Done) outcome).made()) {
+                        helper.assertTrue(Containers.insert(fixture.worker.pack(), made).isEmpty(), "every returned item fits");
+                    }
+                    node.ended(level, Ending.DONE);
+                    peak = Math.max(peak, Goods.countIn(fixture.worker.pack(), cobblestone));
+                }
+                helper.assertTrue(peak == cells * 64L && Goods.countIn(target, cobblestone) == peak
+                    && Goods.countIn(source, cobblestone) == 320 - peak && task.remaining() == 320 - peak,
+                    "real transfer commits conserve goods, settle the batch, and leave overflow for later");
+                helper.assertTrue(rank == 0 ? peak == 64 : peak > 64, "heavy hauling removes the former one-stack delivery ceiling");
+            } finally {
+                solver.closed();
+            }
+        }
+        helper.succeed();
+    }
+
+
 }

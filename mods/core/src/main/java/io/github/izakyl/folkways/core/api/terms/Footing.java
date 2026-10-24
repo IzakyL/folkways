@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.core.api.terms;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -14,6 +15,9 @@ public final class Footing {
     }
 
     public static boolean withFeetAt(BlockGetter blocks, BlockPos feet) {
+        if (blocks instanceof Level level && Keepouts.forbidden(level, feet)) {
+            return false;
+        }
         return (holdsInPlace(blocks, feet) || holdsAbove(blocks, feet.below()))
             && isPassable(blocks, feet) && isPassable(blocks, feet.above());
     }

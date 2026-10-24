@@ -25,7 +25,9 @@ final class PackCraftNode extends CraftNode {
     PackCraftNode(WorldPos at, Block block, Stances stances, List<Ingredients.Demand> demands,
                   ItemSpec produces, long perRun, int runs, Assembly assembly) {
         super(specOf(at, stances,
-                Workload.Once.of(runs * Stations.LABOR_TICKS, WaresContent::haste))
+                Workload.Once.of(runs * Stations.LABOR_TICKS,
+                    who -> WaresContent.haste(who)
+                        * Math.ceil(runs / who.effects().value(WaresContent.BATCH)) / runs))
                 .needs(needsFor(demands, runs))
                 .gives(new Amount(produces, perRun * runs))
                 .leaves(assembly.remainders().stream().map(amount -> new Amount(amount.spec(), amount.count() * runs)).toList())
@@ -62,7 +64,7 @@ final class PackCraftNode extends CraftNode {
         }
         List<ItemStack> made = new ArrayList<>();
         for (int run = 0; run < runs; run++) {
-            Optional<List<ItemStack>> ran = assembly.runOnce(level, pool);
+            Optional<List<ItemStack>> ran = assembly.runOnce(level, pool, who);
             if (ran.isEmpty()) {
                 return Outcome.failed(WaresRefusal.NOTHING_TO_WORK_WITH);
             }

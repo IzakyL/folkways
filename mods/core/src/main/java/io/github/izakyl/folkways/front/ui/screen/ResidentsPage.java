@@ -14,6 +14,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvent;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
+import dev.vfyjxf.taffy.style.FlexWrap;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.effect.perk.PerkPool;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
@@ -22,6 +23,7 @@ import io.github.izakyl.folkways.core.api.resident.body.Keenness;
 import io.github.izakyl.folkways.core.api.resident.body.Licences;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.ui.Bay;
@@ -41,6 +43,7 @@ import io.github.izakyl.folkways.front.engine.colony.Residents;
 import io.github.izakyl.folkways.front.ui.panel.Inlays;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -62,7 +65,6 @@ public final class ResidentsPage implements Draw {
     private static final int ROWS = 24;
     // Every resident is sent, so the search finds those past the rows on show.
     private static final int SENT = 512;
-    private static final int TRACK_ROWS = 16;
     private static final int UUID_HEAD = 8;
 
     private static final int NAME_WIDTH = 78;
@@ -99,6 +101,8 @@ public final class ResidentsPage implements Draw {
     private boolean detailShown;
     private UIElement tracks;
     private UIElement doing;
+    private Label residentName;
+    private UIElement marks;
     private TextField nameField;
     private Button renameButton;
     private final List<Inlay> inlays = new ArrayList<>();
@@ -106,6 +110,7 @@ public final class ResidentsPage implements Draw {
     @Override
     public void windows(Player player, io.github.izakyl.folkways.front.api.ui.Windows desk) {
         detail = desk.add("resident", Component.translatable("folkways.tab.residents"), detail(player));
+        if (detail instanceof Window window) { window.preferSize(Rows.CONTENT_WIDTH + 20, 440); }
         detail.onDismiss(() -> state.selected = null);
     }
 
@@ -191,14 +196,17 @@ public final class ResidentsPage implements Draw {
         renameButton = rename;
 
         doing = SignLine.of();
-        tracks = Rows.table();
+        residentName = Rows.name(Component.empty());
+        marks = SignLine.of();
+        tracks = Rows.page();
+        Tokens.name(tracks, "folkways.resident.vocations");
         ScrollerView scroller = Rows.fills(Rows.box());
-        scroller.addScrollViewChild(tracks);
+        scroller.addScrollViewChild(Rows.page().addChildren(bay(player), tracks));
 
         UIElement body = Rows.page().addChildren(
-            Rows.strip().addChildren(back, nameField, rename),
-            Rows.strip().addChildren(doing),
-            bay(player),
+            Rows.strip().addChildren(residentName, marks, back, rename),
+            nameField,
+            Rows.strip().addChildren(Rows.value(Component.translatable("folkways.ui.residents.doing")), doing),
             scroller);
         body.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
         return body;
@@ -395,19 +403,41 @@ public final class ResidentsPage implements Draw {
         tag.put(NAME, Pages.text(player.registryAccess(), body.get().mob().getDisplayName()));
         tag.putBoolean(NAMED, inlays.stream().anyMatch(inlay -> inlay.names(body.get())));
         tag.put(DOING, told(body.get()).save());
+        Sentence marks = Sentence.EMPTY;
+        Optional<Colony> colony = Pages.colonyOf(player);
+        Optional<ServerLevel> level = Pages.levelOf(player);
+        if (colony.isPresent() && level.isPresent()) {
+            for (Facing facing : Facing.all(colony.get())) {
+                marks = marks.then(facing.nameMarks(body.get().id(), colony.get().view(level.get())));
+            }
+        }
+        tag.put("marks", marks.save());
         ListTag tracks = new ListTag();
         for (ResourceLocation vocation : Vocations.ids()) {
-            if (tracks.size() >= TRACK_ROWS) {
-                break;
-            }
             CompoundTag track = new CompoundTag();
             track.putString(TRADE, vocation.toString());
             track.putInt(LEVEL, body.get().perks().level(vocation));
-            track.putInt(MAX, PerkPool.depth(vocation));
+            track.putInt(MAX, body.get().perks().maxLevel(vocation));
+            track.putInt("xp", body.get().perks().xp(vocation));
+            track.putInt("next", body.get().perks().nextLevelXp(vocation));
+            track.put("perks", perkTag(body.get().perks().ranks(vocation)));
             tracks.add(track);
         }
         tag.put(TRACKS, tracks);
+        tag.put("shared", perkTag(body.get().perks().globalRanks()));
         return tag;
+    }
+
+    private static ListTag perkTag(Map<String, Integer> ranks) {
+        ListTag perks = new ListTag();
+        ranks.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            CompoundTag perk = new CompoundTag();
+            perk.putString(ID, entry.getKey());
+            perk.putInt("rank", entry.getValue());
+            perk.putInt(MAX, PerkPool.maxRank(entry.getKey()));
+            perks.add(perk);
+        });
+        return perks;
     }
 
     @Override
@@ -611,6 +641,8 @@ public final class ResidentsPage implements Draw {
             return;
         }
         String showing = compound.getString(ID);
+        residentName.setText(Pages.readText(registries, compound.get(NAME)));
+        SignLine.show(marks, Sentence.load(compound.getList("marks", Tag.TAG_COMPOUND)));
         boolean ownRename = !compound.getBoolean(NAMED);
         if (nameField != null) {
             nameField.setDisplay(ownRename);
@@ -632,13 +664,47 @@ public final class ResidentsPage implements Draw {
             return;
         }
         tracks.clearAllChildren();
+        tracks.addChildren(Rows.heading(Component.translatable("folkways.resident.vocations")));
         ListTag lines = compound.getList(TRACKS, Tag.TAG_COMPOUND);
         for (int index = 0; index < lines.size(); index++) {
             CompoundTag line = lines.getCompound(index);
             ResourceLocation trade = ResourceLocation.parse(line.getString(TRADE));
-            tracks.addChildren(Rows.row().addChildren(
-                Rows.name(vocationName(trade)),
-                Rows.value(Component.literal(line.getInt(LEVEL) + " / " + line.getInt(MAX)))));
+            if (line.getInt(LEVEL) == 0) {
+                continue;
+            }
+            UIElement group = Rows.page();
+            group.addChildren(Rows.strip().addChildren(Rows.name(vocationName(trade)),
+                Rows.value(Component.translatable("folkways.resident.level", line.getInt(LEVEL), line.getInt(MAX)))));
+            int xp = line.getInt("xp"), next = line.getInt("next");
+            UIElement meter = Rows.meter();
+            Rows.meterFill(meter, next > 0 ? 100f * xp / next : 100, 0xFF7F943F);
+            group.addChildren(Rows.strip().addChildren(meter, Rows.value(next > 0
+                ? Component.literal(xp + "/" + next) : Component.translatable("folkways.resident.max_level"))));
+            showPerks(group, line.getList("perks", Tag.TAG_COMPOUND));
+            tracks.addChildren(group);
         }
+        ListTag shared = compound.getList("shared", Tag.TAG_COMPOUND);
+        if (!shared.isEmpty()) {
+            tracks.addChildren(Rows.group(Component.translatable("folkways.resident.shared")));
+            showPerks(tracks, shared);
+        }
+    }
+
+    private static void showPerks(UIElement group, ListTag perks) {
+        UIElement line = Rows.strip();
+        line.layout(layout -> layout.flexWrap(FlexWrap.WRAP).alignItems(AlignItems.FLEX_START).gapAll(Rows.GAP));
+        for (int index = 0; index < perks.size(); index++) {
+            CompoundTag perk = perks.getCompound(index);
+            String id = perk.getString(ID);
+            int max = Math.max(0, perk.getInt(MAX));
+            int rank = Math.clamp(perk.getInt("rank"), 0, max);
+            Label name = Rows.text(Component.translatable("folkways.perk.ranked",
+                Component.translatable("folkways.perk." + id), "●".repeat(rank) + "○".repeat(max - rank)));
+            name.layout(layout -> layout.widthPercent(48));
+            name.style(style -> style.tooltips(Component.translatable("folkways.perk." + id + ".desc")));
+            Tokens.name(name, "folkways.resident.perk." + id);
+            line.addChildren(name);
+        }
+        group.addChildren(line);
     }
 }

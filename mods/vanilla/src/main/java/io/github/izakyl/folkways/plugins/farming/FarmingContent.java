@@ -1,15 +1,16 @@
 package io.github.izakyl.folkways.plugins.farming;
 
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.effect.Flag;
-import io.github.izakyl.folkways.effect.perk.Perk;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.vocation.VocationSpec;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.effect.Flag;
+import io.github.izakyl.folkways.effect.Stat;
+import io.github.izakyl.folkways.effect.Modifier;
+import io.github.izakyl.folkways.effect.perk.Perk;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Facing;
@@ -17,6 +18,8 @@ import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
@@ -47,6 +50,18 @@ public final class FarmingContent {
     public static final String QUICK_HANDS = "farming_quick_hands";
     public static final String REPLANT = "farming_replant";
 
+    public static final String CHAIN_HARVEST = "farming_chain_harvest";
+    public static final String BOUNTIFUL = "farming_bountiful";
+    public static final String CARE = "farming_care";
+    public static final Stat CHAIN = stat("chain_harvest", 7);
+    public static final Stat HARVEST_BONUS = stat("harvest_bonus", 1);
+    public static final Stat SEED_SAVING = stat("seed_saving", 1);
+    public static final Stat GROWTH = stat("crop_growth", 1);
+
+    private static Stat stat(String name, double max) {
+        return new Stat(ResourceLocation.fromNamespaceAndPath("folkways", name), 0, 0, max);
+    }
+
     // Whether a crop cut whole is sown again from its own seed as it is cut.
     public static final Flag REPLANTS = new Flag(ResourceLocation.fromNamespaceAndPath("folkways", "replants"));
 
@@ -74,8 +89,12 @@ public final class FarmingContent {
 
     private static final VocationSpec SPEC = new VocationSpec(VOCATION,
         List.of(
-            new Perk(QUICK_HANDS, 4, Perk.Grant.haste(VOCATION, FolkwaysVanillaConfig::farmingHaste)),
-            new Perk(REPLANT, 1, Perk.Grant.flag(REPLANTS))),
+            new Perk(QUICK_HANDS, 3, Perk.Grant.haste(VOCATION, FolkwaysVanillaConfig::farmingHaste)),
+            new Perk(CHAIN_HARVEST, 3, Perk.Grant.added(CHAIN, () -> List.of(1, 2, 4))),
+            new Perk(BOUNTIFUL, 3, Perk.Grant.added(HARVEST_BONUS, () -> List.of(.1, .2, .35))),
+            new Perk(REPLANT, 3, rank -> List.of(Modifier.grant(REPLANTS),
+                Modifier.add(SEED_SAVING, new double[] {0, .15, .3}[rank - 1]))),
+            new Perk(CARE, 3, Perk.Grant.added(GROWTH, () -> List.of(.1, .2, .35)))),
         List.of(ItemSpec.of(ItemTags.HOES)));
 
     private static final Workload.Haste HASTE = Workload.Haste.of(VOCATION);

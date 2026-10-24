@@ -26,6 +26,26 @@
 
 车万女仆模型包的安装方法见[玩法指南](gameplay.md#女仆模型包)。
 
+## 居民数据
+
+数据包可以调整居民的饮食、居住和特长：
+
+| 数据                                                                                                   | 用途                                                                                                        |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `folkways:resident_food` 及其 `_vanilla`、`_cookery`、`_farmers_delight` 物品标签                      | 默认随身口粮，见[随身口粮与食物名单](gameplay.md#随身口粮与食物名单)                                        |
+| `folkways:unsafe_food` 物品标签                                                                        | 启用安全检查时拒绝的食物                                                                                    |
+| `folkways:food_groups/*`（meat、fish、stew、grain、vegetable、fruit）与 `folkways:fine_meals` 物品标签 | 心情中食物一项的多样性与精致餐点                                                                            |
+| `folkways:husbandry_products` 物品标签                                                                 | 「物尽其用」特长会增加的屠宰掉落                                                                            |
+| `folkways:housing/*` 方块标签                                                                          | 住房评级使用的陈设类别和生产方块；桌子标签默认为空                                                          |
+| `folkways:prospecting_stone`、`folkways:prospectable_minerals` 方块标签                                | 「寻矿」适用的石头和可找到的矿物；后者包含 `c:ores`                                                         |
+| `data/<配方命名空间>/crafting_perks/<配方路径>.json`                                                   | 让某个配方参与「节料」返还和「副产物」，例如 `{"refund": true, "byproduct": "minecraft:stick", "count": 1}` |
+| `folkways:gameplay/fishing_discoveries` 战利品表                                                       | 「寻宝」的发现，带有实际钓鱼位置，可按生物群系和维度设置条件                                                |
+
+容器和方块名称的后备规则也能识别常见的储物、地毯、盆栽和桌子方块。默认的制作特长规则只覆盖部分普通配方，可逆的存储和打包配方不参与。
+
+居民皮肤有专门的娱乐动作。自定义模型清单和外观条目可以通过 `leisure_animations` 对象映射 `chatting`、`petting`、`relaxing` 和 `strolling`；
+缺少的动画会退回基础的待机和头部动作。
+
 ## 服务器配置
 
 每个世界的配置位于 `<world>/serverconfig/`：

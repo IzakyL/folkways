@@ -811,7 +811,8 @@ public final class DomainPage implements Draw {
                 CompoundTag entry = list.getCompound(index);
                 row.cell.setDisplay(true);
                 Tokens.name(row.element, "folkways.board.row." + Tokens.of(page.id()) + "." + index);
-                row.title.setText(Pages.readText(registries, entry.get(TITLE)));
+                Component title = Pages.readText(registries, entry.get(TITLE));
+                row.title.setText(title);
                 row.detail.setText(Pages.readText(registries, entry.get(DETAIL)));
                 boolean heading = entry.getBoolean(HEADING);
                 Board.Row.Style presentation = rowStyle(entry);
@@ -837,7 +838,8 @@ public final class DomainPage implements Draw {
                 acceptIcon(registries, row, entry.getCompound(ICON));
                 acceptMeter(row, entry);
                 ListTag acts = entry.getList(ACTS, Tag.TAG_COMPOUND);
-                acceptActs(registries, row, index, acts, form && presentation != Board.Row.Style.DEFAULT);
+                acceptActs(registries, row, index, acts, form && presentation != Board.Row.Style.DEFAULT,
+                    !title.getString().isBlank());
                 if (form) {
                     acceptForm(row, presentation, heading, acts.size());
                 }
@@ -1117,7 +1119,7 @@ public final class DomainPage implements Draw {
         }
 
         private void acceptActs(HolderLookup.Provider registries, Row row, int index, ListTag list,
-                boolean readable) {
+                boolean readable, boolean titled) {
             for (int slot = 0; slot < row.presses.size(); slot++) {
                 TextField number = row.numbers.isEmpty() ? null : row.numbers.get(slot);
                 if (slot >= list.size()) {
@@ -1187,11 +1189,17 @@ public final class DomainPage implements Draw {
                 boolean flag = entry.contains(CHECKED) && !readable;
                 Toggle checkbox = row.checkboxes.get(slot);
                 checkbox.setDisplay(flag);
-                if (flag) {
+                if (flag && titled) {
+                    // The row's own title already names the flag; the box alone sits where an act would.
+                    checkbox.noText();
+                    checkbox.layout(layout -> layout.widthAuto().flexShrink(0));
+                    checkbox.setOn(entry.getBoolean(CHECKED), false);
+                } else if (flag) {
                     checkbox.enableText().setText(caption);
                     int width = Minecraft.getInstance().font.width(caption) + 22;
-                    checkbox.layout(layout -> layout.width(width).flexShrink(0));
-                    checkbox.toggleLabel.textStyle(style -> style.adaptiveWidth(true));
+                    // A narrow column rolls the caption rather than pushing the box out of the row.
+                    checkbox.layout(layout -> layout.width(width).flexShrink(1).minWidth(Rows.ACT_SIZE));
+                    checkbox.toggleLabel.textStyle(style -> style.adaptiveWidth(false).textWrap(TextWrap.HOVER_ROLL));
                     checkbox.setOn(entry.getBoolean(CHECKED), false);
                 }
                 Tokens.name(checkbox, flag ? token(kinds[index][slot], index, slot) : Tokens.NONE);

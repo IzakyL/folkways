@@ -39,12 +39,16 @@ abstract class BuildNode implements Node {
     private final Ends ends;
     private final NodeSpec spec;
     private Predicate<BlockPos> met = cell -> false;
+    private boolean onlyReplaceable;
 
     BuildNode(BuildJob job, Ends ends) {
         this.job = job;
         this.ends = ends;
         this.spec = NodeSpec.of(UUID.randomUUID(), BuildContent.ID, new WorkSite.AtBlock(job.focus()),
-                job.footings(), Workload.Once.of(job.laborTicks(), BuildContent::haste))
+                job.footings(), Workload.Once.of(job.laborTicks(), worker -> job.kind() == BuildJob.Kind.STRIP
+                    ? BuildContent.haste(worker) / BuildingPerks.momentum(worker,
+                        worker.body().level().getBlockState(job.focus().block(worker.body().level())))
+                    : BuildingPerks.constructionHaste(worker)))
             .needs(job.feed())
             .leaves(job.leaves())
             .tools(job.tools())
@@ -71,6 +75,11 @@ abstract class BuildNode implements Node {
         return this;
     }
 
+    final BuildNode onlyReplaceable() {
+        onlyReplaceable = true;
+        return this;
+    }
+
     @Override
     public final NodeSpec spec() {
         return spec;
@@ -88,6 +97,13 @@ abstract class BuildNode implements Node {
         }
         if (finished(level)) {
             return new Outcome.Done(List.of(), List.of(), Optional.empty(), who.supplied());
+        }
+        if (onlyReplaceable && job.after().entrySet().stream().anyMatch(entry -> {
+            BlockPos cell = entry.getKey().block(level);
+            return !level.getBlockState(cell).canBeReplaced() || !level.getFluidState(cell).isEmpty()
+                || !entry.getValue().canSurvive(level, cell);
+        })) {
+            return refuse(BuildRefusal.NO_WAY_TO_BUILD);
         }
         return work(level, who);
     }

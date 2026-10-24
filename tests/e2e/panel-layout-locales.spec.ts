@@ -75,7 +75,7 @@ test("every colony page fits its words in each language on a large interface", a
     // A queue at its cap tells the longest line the person page has: that nobody new is coming.
     await tryCommand(server, "time add 240000");
     await tick.sprint(server, 200);
-    const pages = await discoverPages(server);
+    const pages = await discoverPages(server, grounded.name);
 
     for (const code of LOCALES) {
       await client.run(LANGUAGE, { code });
