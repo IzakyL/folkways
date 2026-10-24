@@ -79,23 +79,50 @@ public final class RaidPlunder {
     }
 
     static WorldPos target(RaidDirector director, Mob mob) {
+        if (!(mob.level() instanceof ServerLevel level)) { return null; }
+        boolean changed = false;
         for (Tag value : director.raid().plunder) {
             CompoundTag row = (CompoundTag) value;
             if (row.getBoolean("done")) { continue; }
             WorldPos at = WorldPos.load(Reader.of(row.getCompound("store"))).orElse(null);
-            if (at != null && at.in(mob.level())) { return at; }
+            if (at == null) { row.putBoolean("done", true); changed = true; continue; }
+            if (!at.in(level)) { continue; }
+            if (!director.colony().storesIn(level.dimension()).contains(at)) { row.putBoolean("done", true); changed = true; continue; }
+            // Unloaded stores can return later; they must not block other loaded targets.
+            if (!level.isLoaded(at.block(level))) { continue; }
+            var container = director.colony().store(level, at).orElse(null);
+            int slot = row.getInt("slot");
+            ItemStack requested = ItemStack.parseOptional(level.registryAccess(), row.getCompound("stack"));
+            if (!WarEdits.loot(level, director.colony(), at, mob) || container == null || slot < 0 || slot >= container.getContainerSize()
+                    || requested.isEmpty() || !ItemStack.isSameItemSameComponents(requested, container.getItem(slot)) || container.getItem(slot).isEmpty()) {
+                row.putBoolean("done", true); changed = true; continue;
+            }
+            if (changed) { director.save(); }
+            return at;
         }
+        if (changed) { director.save(); }
         return null;
+    }
+
+    private static void abandon(RaidDirector director, WorldPos at) {
+        for (Tag value : director.raid().plunder) {
+            CompoundTag row = (CompoundTag) value;
+            if (!row.getBoolean("done") && WorldPos.load(Reader.of(row.getCompound("store"))).filter(at::equals).isPresent()) { row.putBoolean("done", true); }
+        }
+        director.save();
     }
 
     static boolean take(RaidDirector director, Mob mob, WorldPos at) {
         if (!(mob.level() instanceof ServerLevel level) || director.raid().phase != RaidInstance.Phase.PLUNDER
-                || !director.owns(mob) || director.raid().paused || mob.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(at.block(level))) > 9
-                || !io.github.izakyl.folkways.core.engine.travel.MobTravel.sees(mob, at) || !WarEdits.loot(level, director.colony(), at, mob)) { return false; }
+                || !director.owns(mob) || director.raid().paused || !at.in(level)) { return false; }
+        if (!director.colony().storesIn(level.dimension()).contains(at)) { abandon(director, at); return false; }
+        if (!level.isLoaded(at.block(level))) { return false; }
+        var container = director.colony().store(level, at).orElse(null);
+        if (container == null || !WarEdits.loot(level, director.colony(), at, mob)) { abandon(director, at); return false; }
+        if (mob.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(at.block(level))) > 9
+                || !io.github.izakyl.folkways.core.engine.travel.MobTravel.sees(mob, at)) { return false; }
         ListTag cargo = mob.getPersistentData().getList(CARGO, Tag.TAG_COMPOUND);
         if (cargo.size() >= Math.min(WarConfig.PLUNDER_PER_RAIDER.get(), director.raid().definition.limits().plunderPerRaider())) { return false; }
-        var container = director.colony().store(level, at).orElse(null);
-        if (container == null) { return false; }
         int spentItems = 0; int spentStacks = 0;
         for (Tag value : director.raid().plunder) {
             CompoundTag row = (CompoundTag) value;
@@ -126,12 +153,24 @@ public final class RaidPlunder {
         return mob.getPersistentData().getList(CARGO, Tag.TAG_COMPOUND).size() >= Math.min(WarConfig.PLUNDER_PER_RAIDER.get(), director.raid().definition.limits().plunderPerRaider());
     }
 
+    static void forfeitCargo(Mob mob) { mob.getPersistentData().remove(CARGO); }
+
     static void returnCargo(Mob mob) {
+        boolean carrying = carrying(mob);
         for (Tag value : mob.getPersistentData().getList(CARGO, Tag.TAG_COMPOUND)) {
             ItemStack stack = ItemStack.parseOptional(mob.registryAccess(), (CompoundTag) value);
             if (!stack.isEmpty()) { mob.spawnAtLocation(stack); }
         }
         mob.getPersistentData().remove(CARGO);
+        if (carrying) { dropped(mob); }
+    }
+
+    private static void dropped(Mob mob) {
+        RaidMembers.director(mob).ifPresent(director -> {
+            if (director.raid() == null || RaidMembers.raid(mob).filter(director.raid().id::equals).isEmpty()) { return; }
+            for (Tag value : director.raid().plunder) { CompoundTag row = (CompoundTag) value; if (row.hasUUID("looter") && row.getUUID("looter").equals(mob.getUUID())) { row.putBoolean("dropped", true); } }
+            director.save();
+        });
     }
 
     @SubscribeEvent
@@ -142,10 +181,7 @@ public final class RaidPlunder {
             if (!stack.isEmpty()) { event.getDrops().add(new ItemEntity(mob.level(), mob.getX(), mob.getY(), mob.getZ(), stack)); }
         }
         mob.getPersistentData().remove(CARGO);
-        RaidMembers.director(mob).ifPresent(director -> {
-            if (director.raid() == null || RaidMembers.raid(mob).filter(director.raid().id::equals).isEmpty()) { return; }
-            for (Tag value : director.raid().plunder) { CompoundTag row = (CompoundTag) value; if (row.hasUUID("looter") && row.getUUID("looter").equals(mob.getUUID())) { row.putBoolean("dropped", true); } }
-            director.save();
-        });
+        dropped(mob);
+        RaidMembers.director(mob).ifPresent(director -> director.returned(mob));
     }
 }

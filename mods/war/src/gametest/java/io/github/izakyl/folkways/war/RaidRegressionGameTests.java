@@ -167,4 +167,121 @@ public final class RaidRegressionGameTests {
         helper.succeed();
     }
 
+    private static io.github.izakyl.folkways.core.api.terms.WorldPos giveCargo(RaidGameTests.Scene scene, Mob mob) {
+        var at = scene.store(new BlockPos(8, 1, 3));
+        var container = scene.colony.store(scene.helper.getLevel(), at).orElseThrow();
+        var diamonds = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 64);
+        diamonds.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal("raid recovery")); container.setItem(0, diamonds);
+        scene.director.plunder(); BlockPos beside = at.block(scene.helper.getLevel()).west(); mob.moveTo(beside.getX() + .5, beside.getY(), beside.getZ() + .5);
+        scene.helper.assertTrue(RaidPlunder.take(scene.director, mob, at), "a looter carries an actual warehouse share"); return at;
+    }
+
+    private static int droppedDiamonds(GameTestHelper helper, Mob mob) {
+        return helper.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, mob.getBoundingBox().inflate(4)).stream()
+            .map(net.minecraft.world.entity.item.ItemEntity::getItem).filter(stack -> stack.is(net.minecraft.world.item.Items.DIAMOND)).mapToInt(net.minecraft.world.item.ItemStack::getCount).sum();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void cancelledUnloadedCargoReturnsBeforeAiEvenAfterANewRaidAndSaveReload(GameTestHelper helper) {
+        var scene = new RaidGameTests.Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob original = scene.director.loaded().getFirst(); giveCargo(scene, original);
+        var attack = scene.director.raid().id; var saved = new net.minecraft.nbt.CompoundTag(); original.save(saved); original.discard(); scene.director.stop();
+        helper.assertTrue(scene.director.pendingReturn(attack, original.getUUID()), "cancel records unresolved cargo by old raid and member UUID");
+        scene.begin("zombie", 1);
+        var restored = new RaidDirector(scene.colony, helper.getLevel().getServer());
+        helper.assertTrue(restored.pendingReturn(attack, original.getUUID()), "starting another raid and reloading retain the old pending return");
+        Mob loaded = (Mob) net.minecraft.world.entity.EntityType.loadEntityRecursive(saved, helper.getLevel(), entity -> entity);
+        loaded.tickCount = 1; loaded.setNoAi(false); helper.getLevel().addFreshEntity(loaded); scene.extra.add(loaded);
+        loaded.goalSelector.getAvailableGoals().stream().filter(goal -> goal.getGoal().getClass().getName().contains("RaidMembers$Approach")).forEach(goal -> goal.canUse());
+        helper.assertTrue(!loaded.isRemoved() && RaidPlunder.carrying(loaded), "goal eligibility cannot discard an unsettled entity");
+        var event = net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.tick.EntityTickEvent.Pre(loaded));
+        helper.assertTrue(event.isCanceled() && loaded.isRemoved(), "the first entity tick settles cargo before any native AI");
+        helper.assertValueEqual(droppedDiamonds(helper, loaded), 12, "cancelled cargo is dropped once without waiting twenty ticks");
+        helper.assertFalse(scene.director.pendingReturn(attack, original.getUUID()), "settlement acknowledges the durable pending return");
+        RaidMembers.retire(loaded);
+        helper.assertValueEqual(droppedDiamonds(helper, loaded), 12, "repeated retirement cannot duplicate recovery goods");
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void versionOneCancelledSavesMigratePendingReturnsWithoutResettingSettings(GameTestHelper helper) {
+        var scene = new RaidGameTests.Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); giveCargo(scene, mob); var attack = scene.director.raid().id; mob.discard(); scene.director.enabled(false);
+        var legacy = scene.colony.kept(FolkwaysWarMod.RAIDS).copy(); legacy.putInt("schemaVersion", 1); legacy.remove("pendingReturns");
+        long next = legacy.getLong("next"); scene.colony.keep(FolkwaysWarMod.RAIDS, legacy);
+        var restored = new RaidDirector(scene.colony, helper.getLevel().getServer());
+        helper.assertTrue(restored.pendingReturn(attack, mob.getUUID()), "version one cancellation migrates unresolved members into pending returns");
+        helper.assertFalse(restored.enabled(), "migration preserves the opt-out");
+        helper.assertValueEqual(scene.colony.kept(FolkwaysWarMod.RAIDS).getLong("next"), next, "migration preserves the cooldown");
+        helper.assertValueEqual(scene.colony.kept(FolkwaysWarMod.RAIDS).getInt("schemaVersion"), 2, "the migrated ledger is explicitly versioned");
+        helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void plunderTimeoutDropsCargoThatHasNotReachedTheExit(GameTestHelper helper) {
+        var scene = new RaidGameTests.Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); giveCargo(scene, mob);
+        scene.director.raid().plunderTicks = WarConfig.PLUNDER_DURATION.get() - 20; scene.director.advance(true);
+        helper.assertTrue(scene.director.raid().phase == RaidInstance.Phase.DEFEAT && mob.isRemoved(), "the bounded plunder ends with forced cleanup");
+        helper.assertFalse(scene.director.raid().escaped.contains(mob.getUUID()), "timeout never invents a successful escape");
+        helper.assertValueEqual(droppedDiamonds(helper, mob), 12, "forced cleanup leaves the actual cargo recoverable at the carrier");
+        helper.assertTrue(scene.director.raid().plunder.getCompound(0).getBoolean("dropped"), "the report records the forced recovery drop"); helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void plunderTimeoutAlsoRetainsReturnsForMissingCarriers(GameTestHelper helper) {
+        var scene = new RaidGameTests.Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); giveCargo(scene, mob); var attack = scene.director.raid().id;
+        var saved = new net.minecraft.nbt.CompoundTag(); mob.save(saved); mob.discard();
+        scene.director.raid().plunderTicks = WarConfig.PLUNDER_DURATION.get() - 20; scene.director.advance(true);
+        helper.assertTrue(scene.director.pendingReturn(attack, mob.getUUID()), "forced cleanup preserves missing carriers rather than deleting their cargo");
+        Mob loaded = (Mob) net.minecraft.world.entity.EntityType.loadEntityRecursive(saved, helper.getLevel(), entity -> entity); helper.getLevel().addFreshEntity(loaded); scene.extra.add(loaded);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.tick.EntityTickEvent.Pre(loaded));
+        helper.assertValueEqual(droppedDiamonds(helper, loaded), 12, "a returning timed-out carrier drops its real cargo");
+        helper.assertFalse(scene.director.pendingReturn(attack, loaded.getUUID()), "the return is settled exactly once"); helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void onlyCarriersThatReachTheExitKeepStolenGoods(GameTestHelper helper) {
+        var scene = new RaidGameTests.Scene(helper); scene.begin("zombie", 1); scene.director.advance(true);
+        Mob mob = scene.director.loaded().getFirst(); giveCargo(scene, mob);
+        BlockPos exit = scene.director.raid().origin.block(helper.getLevel()); mob.moveTo(exit.getX() + .5, exit.getY(), exit.getZ() + .5); scene.director.escaped(mob);
+        helper.assertTrue(scene.director.raid().escaped.contains(mob.getUUID()) && mob.isRemoved(), "reaching the exit records an actual escape");
+        helper.assertFalse(RaidPlunder.carrying(mob), "escaped goods are settled before the carrier is discarded");
+        scene.director.advance(true); helper.assertValueEqual(droppedDiamonds(helper, mob), 0, "successful escape does not create a recovery drop"); helper.succeed();
+    }
+
+    @GameTest(batch = "war", template = "empty_large")
+    public static void removedStoresDoNotBlockLaterPlunder(GameTestHelper helper) { skipInvalidStore(helper, "removed"); }
+    @GameTest(batch = "war", template = "empty_large")
+    public static void unregisteredStoresDoNotBlockLaterPlunder(GameTestHelper helper) { skipInvalidStore(helper, "unregistered"); }
+    @GameTest(batch = "war", template = "empty_large")
+    public static void lockedStoresDoNotBlockLaterPlunder(GameTestHelper helper) { skipInvalidStore(helper, "locked"); }
+    @GameTest(batch = "war", template = "empty_large")
+    public static void forbiddenStoresDoNotBlockLaterPlunder(GameTestHelper helper) { skipInvalidStore(helper, "forbidden"); }
+
+    private static void skipInvalidStore(GameTestHelper helper, String reason) {
+        var scene = new RaidGameTests.Scene(helper); scene.begin("zombie", 1); scene.director.advance(true); Mob mob = scene.director.loaded().getFirst();
+        var first = scene.store(new BlockPos(8, 1, 3)); var second = scene.store(new BlockPos(12, 1, 3));
+        scene.colony.stores(FolkwaysWarMod.RAIDS, helper.getLevel().dimension(), java.util.List.of(first, second));
+        scene.colony.store(helper.getLevel(), first).orElseThrow().setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 64));
+        var remaining = scene.colony.store(helper.getLevel(), second).orElseThrow(); remaining.setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIRT, 64)); scene.director.plunder();
+        helper.assertValueEqual(RaidPlunder.target(scene.director, mob), first, "the valuable store is selected before it becomes invalid");
+        switch (reason) {
+            case "removed" -> helper.setBlock(new BlockPos(8, 1, 3), Blocks.AIR);
+            case "unregistered" -> scene.colony.stores(FolkwaysWarMod.RAIDS, helper.getLevel().dimension(), java.util.List.of(second));
+            case "locked" -> {
+                var block = helper.getLevel().getBlockEntity(first.block(helper.getLevel())); var tag = block.saveWithoutMetadata(helper.getLevel().registryAccess());
+                tag.putString("Lock", "sealed"); block.loadWithComponents(tag, helper.getLevel().registryAccess());
+            }
+            case "forbidden" -> scene.colony.rule(FolkwaysWarMod.RAIDS, helper.getLevel().dimension(), java.util.List.of(new io.github.izakyl.folkways.core.api.terms.StoreRule.Access(first, false, true)));
+            default -> throw new IllegalArgumentException(reason);
+        }
+        helper.assertFalse(RaidPlunder.take(scene.director, mob, first), "a stale in-flight target cannot withdraw stock");
+        helper.assertValueEqual(RaidPlunder.target(scene.director, mob), second, "invalid entries cannot starve a later accessible store");
+        BlockPos beside = second.block(helper.getLevel()).west(); mob.moveTo(beside.getX() + .5, beside.getY(), beside.getZ() + .5);
+        helper.assertTrue(RaidPlunder.take(scene.director, mob, second), "looting continues at the next actual container");
+        helper.assertValueEqual(remaining.getItem(0).getCount(), 52, "only the valid store supplies the next share"); helper.succeed();
+    }
+
 }

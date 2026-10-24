@@ -34,6 +34,7 @@ public final class RaidDirector {
     private long next;
     private long sequence;
     private RaidInstance raid;
+    private final java.util.Map<UUID, java.util.Set<UUID>> pendingReturns = new java.util.LinkedHashMap<>();
 
     RaidDirector(Colony colony, MinecraftServer server) {
         this.colony = colony;
@@ -41,13 +42,22 @@ public final class RaidDirector {
         CompoundTag saved = colony.kept(FolkwaysWarMod.RAIDS);
         // Missing plugin data starts a full grace period, including colonies founded before War was installed.
         if (saved.contains("schemaVersion")) {
-            if (saved.getInt("schemaVersion") != 1) { throw new IllegalArgumentException("Unsupported raid save schema"); }
+            int version = saved.getInt("schemaVersion");
+            if (version != 1 && version != 2) { throw new IllegalArgumentException("Unsupported raid save schema"); }
             enabled = saved.getBoolean("enabled"); eligibleTicks = saved.getLong("eligibleTicks");
             next = saved.getLong("next"); sequence = saved.getLong("sequence");
             if (saved.contains("raid")) {
                 try { raid = RaidInstance.load(saved.getCompound("raid")); }
                 catch (RuntimeException exception) { LogUtils.getLogger().error("Cannot restore raid for {}", colony.id(), exception); }
             }
+            for (var value : saved.getList("pendingReturns", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+                var row = (CompoundTag) value;
+                var members = new java.util.LinkedHashSet<UUID>();
+                for (var member : row.getList("members", net.minecraft.nbt.Tag.TAG_INT_ARRAY)) { members.add(net.minecraft.nbt.NbtUtils.loadUUID(member)); }
+                if (!members.isEmpty()) { pendingReturns.put(row.getUUID("raid"), members); }
+            }
+            // Version one retained only the latest raid. Recover its unresolved exits without resetting its clocks.
+            if (version == 1 && raid != null && !raid.active()) { rememberReturns(); }
         } else { next = WarConfig.GRACE.get(); }
         save();
     }
@@ -176,7 +186,32 @@ public final class RaidDirector {
     }
 
     Colony colony() { return colony; }
-    void escaped(Mob mob) { raid.escaped.add(mob.getUUID()); mob.discard(); save(); }
+    void escaped(Mob mob) { raid.escaped.add(mob.getUUID()); save(); RaidMembers.retire(mob); }
+
+    private void rememberReturns() {
+        for (var member : raid.members) {
+            if (!member.dead() && !raid.escaped.contains(member.id())) {
+                pendingReturns.computeIfAbsent(raid.id, id -> new java.util.LinkedHashSet<>()).add(member.id());
+            }
+        }
+    }
+
+    boolean pendingReturn(UUID attack, UUID member) { return pendingReturns.getOrDefault(attack, java.util.Set.of()).contains(member); }
+
+    boolean returnsCargo(Mob mob) {
+        UUID attack = RaidMembers.raid(mob).orElse(null);
+        if (pendingReturn(attack, mob.getUUID())) { return true; }
+        return raid == null || !raid.id.equals(attack) || !raid.escaped.contains(mob.getUUID());
+    }
+
+    void returned(Mob mob) {
+        UUID attack = RaidMembers.raid(mob).orElse(null);
+        var pending = pendingReturns.get(attack);
+        if (pending != null && pending.remove(mob.getUUID())) {
+            if (pending.isEmpty()) { pendingReturns.remove(attack); }
+            save();
+        }
+    }
 
     private boolean defeated() {
         return colony.residents().stream().allMatch(resident -> {
@@ -250,8 +285,9 @@ public final class RaidDirector {
 
     private void finish(RaidInstance.Phase phase) {
         raid.phase = phase;
+        rememberReturns(); save();
         bar.removeAllPlayers();
-        for (Mob mob : loaded()) { if (phase == RaidInstance.Phase.CANCELLED) { RaidPlunder.returnCargo(mob); } mob.discard(); }
+        for (Mob mob : loaded()) { RaidMembers.retire(mob); }
         RandomSource random = RandomSource.create(raid.seed);
         int min = WarConfig.INTERVAL_MIN.get(); int max = Math.max(min, WarConfig.INTERVAL_MAX.get());
         next = eligibleTicks + min + random.nextInt(max - min + 1);
@@ -296,9 +332,16 @@ public final class RaidDirector {
 
     void save() {
         CompoundTag saved = new CompoundTag();
-        saved.putInt("schemaVersion", 1); saved.putBoolean("enabled", enabled);
+        saved.putInt("schemaVersion", 2); saved.putBoolean("enabled", enabled);
         saved.putLong("eligibleTicks", eligibleTicks); saved.putLong("next", next); saved.putLong("sequence", sequence);
         if (raid != null) { saved.put("raid", raid.save()); }
+        var returns = new net.minecraft.nbt.ListTag();
+        pendingReturns.forEach((attack, members) -> {
+            var row = new CompoundTag(); row.putUUID("raid", attack);
+            var ids = new net.minecraft.nbt.ListTag(); members.forEach(member -> ids.add(net.minecraft.nbt.NbtUtils.createUUID(member)));
+            row.put("members", ids); returns.add(row);
+        });
+        saved.put("pendingReturns", returns);
         colony.keep(FolkwaysWarMod.RAIDS, saved);
     }
     void close() { bar.removeAllPlayers(); }

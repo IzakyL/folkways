@@ -94,7 +94,15 @@ public final class RaidMembers {
             if (director.get().raid().paused) { event.setCanceled(true); }
             return;
         }
-        if (director.isEmpty() || director.get().raid() == null || director.get().raid().phase == RaidInstance.Phase.CANCELLED) { RaidPlunder.returnCargo(mob); }
+        retire(mob); event.setCanceled(true);
+    }
+
+    static void retire(Mob mob) {
+        if (mob.isRemoved()) { return; }
+        var director = director(mob);
+        if (director.isEmpty() || director.get().returnsCargo(mob)) { RaidPlunder.returnCargo(mob); }
+        else { RaidPlunder.forfeitCargo(mob); }
+        director.ifPresent(state -> state.returned(mob));
         mob.discard();
     }
 
@@ -109,7 +117,7 @@ public final class RaidMembers {
         @Override
         public boolean canUse() {
             var director = director(mob);
-            if (director.isEmpty() || !director.get().owns(mob)) { mob.discard(); return false; }
+            if (director.isEmpty() || !director.get().owns(mob)) { return false; }
             return !director.get().raid().paused && mob.getTarget() == null;
         }
         @Override
