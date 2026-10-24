@@ -16,7 +16,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
 public final class UnitGroup {
-    public enum Phase { IDLE, COLUMN, LINE, HOLDING, WAITING, FAILED }
+    public enum Phase { IDLE, COLUMN, LINE, HOLDING, ENGAGING, WAITING, FAILED }
+
+    private static final int PATROL_PAUSE = 20;
 
     private final UnitGroups owner;
     private final UUID id;
@@ -26,13 +28,22 @@ public final class UnitGroup {
     private Phase phase = Phase.IDLE;
     private List<WorldPos> column = List.of();
     private int columnAt;
+    private List<Deployment> patrol = List.of();
+    private int patrolAt = -1;
+    private long assembledSince = Long.MIN_VALUE;
     boolean changed;
 
     UnitGroup(UnitGroups owner, UUID id) { this.owner = owner; this.id = id; }
 
     public UUID id() { return id; }
     public Set<UUID> members() { return Set.copyOf(members); }
-    public Phase phase() { return phase; }
+    public Phase phase() {
+        return !patrol.isEmpty() && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)
+            ? Phase.ENGAGING : phase;
+    }
+    /** Transient route and current stop; membership alone is persisted. */
+    public List<Deployment> patrolRoute() { return patrol; }
+    public int patrolStop() { return patrolAt; }
     public Set<UUID> missing() {
         owner.requireGroup(this);
         Set<UUID> missing = new LinkedHashSet<>(members);
@@ -52,6 +63,27 @@ public final class UnitGroup {
     /** Establish a line at the given endpoints without a preliminary column. */
     public void hold(Deployment intent) { deploy(intent, false); }
 
+    /** Cycle through two to sixteen formations, assembling before leaving each stop. */
+    public void patrol(List<Deployment> route) {
+        owner.requireGroup(this);
+        List<Deployment> next = List.copyOf(route);
+        if (next.size() < 2 || next.size() > 16) {
+            throw new IllegalArgumentException("a patrol needs two to sixteen stops");
+        }
+        // Reject the whole route before replacing any current member order.
+        for (Deployment stop : next) {
+            if (!next.getFirst().left().sameRealm(stop.left())) {
+                throw new IllegalArgumentException("patrol stops must be in the same realm");
+            }
+            List<Body> bodies = loaded(stop);
+            List<WorldPos> cells = stop.line(Math.max(1, bodies.size()));
+            validate(bodies, cells);
+        }
+        begin(next.getFirst(), true, true);
+        patrol = next;
+        patrolAt = 0;
+    }
+
     public void gather(WorldPos center, Vec3 front) {
         owner.requireGroup(this);
         Vec3 facing = new Vec3(front.x, 0, front.z).normalize();
@@ -63,12 +95,20 @@ public final class UnitGroup {
     }
 
     private void deploy(Deployment intent, boolean column) {
+        begin(intent, column, false);
+        patrol = List.of();
+        patrolAt = -1;
+    }
+
+    private void begin(Deployment intent, boolean column, boolean guarding) {
         owner.requireGroup(this);
         List<Body> bodies = loaded(intent);
         if (bodies.isEmpty()) {
-            release();
+            orders.values().forEach(ResidentCommands.Order::close);
+            orders.clear();
             deployment = intent;
             phase = Phase.WAITING;
+            assembledSince = Long.MIN_VALUE;
             return;
         }
         List<WorldPos> line = intent.line(bodies.size());
@@ -79,7 +119,7 @@ public final class UnitGroup {
             catch (IllegalArgumentException unavailable) { cells = line; column = false; }
         }
         deployment = intent;
-        issue(bodies, cells, column ? Phase.COLUMN : Phase.LINE);
+        issue(bodies, cells, column ? Phase.COLUMN : Phase.LINE, guarding);
     }
 
     public void release() {
@@ -87,6 +127,9 @@ public final class UnitGroup {
         orders.values().forEach(ResidentCommands.Order::close);
         orders.clear();
         deployment = null;
+        patrol = List.of();
+        patrolAt = -1;
+        assembledSince = Long.MIN_VALUE;
         phase = Phase.IDLE;
     }
 
@@ -113,15 +156,18 @@ public final class UnitGroup {
         bodies.forEach(body -> present.add(body.id()));
         if (changed || !present.equals(orders.keySet())) {
             changed = false;
-            try { deploy(deployment, true); }
+            try { begin(deployment, true, !patrol.isEmpty()); }
             catch (IllegalArgumentException unavailable) { fail(); }
             return;
         }
         if (orders.values().stream().anyMatch(order -> order.status() == ResidentCommands.Status.FAILED)) {
             fail();
+        } else if (!patrol.isEmpty() && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)) {
+            assembledSince = Long.MIN_VALUE;
         } else if (phase == Phase.HOLDING && orders.values().stream()
                 .anyMatch(order -> order.status() == ResidentCommands.Status.MOVING)) {
             phase = Phase.LINE;
+            assembledSince = Long.MIN_VALUE;
         } else if (!orders.isEmpty() && orders.values().stream()
                 .allMatch(order -> order.status() == ResidentCommands.Status.HOLDING)) {
             if (phase == Phase.COLUMN) {
@@ -129,18 +175,31 @@ public final class UnitGroup {
                     if (++columnAt < bodies.size()) {
                         Body next = bodies.get(columnAt);
                         orders.get(next.id()).close();
-                        orders.put(next.id(), order(next, column.get(columnAt)));
+                        orders.put(next.id(), order(next, column.get(columnAt), !patrol.isEmpty()));
                         return;
                     }
                     List<WorldPos> line = deployment.line(bodies.size());
                     validate(bodies, line);
-                    issue(bodies, line, Phase.LINE);
+                    issue(bodies, line, Phase.LINE, !patrol.isEmpty());
                 } catch (IllegalArgumentException unavailable) { fail(); }
-            } else { phase = Phase.HOLDING; }
+            } else {
+                phase = Phase.HOLDING;
+                if (!patrol.isEmpty()) {
+                    long now = owner.server.overworld().getGameTime();
+                    if (assembledSince == Long.MIN_VALUE) { assembledSince = now; }
+                    if (now - assembledSince >= PATROL_PAUSE) {
+                        int next = (patrolAt + 1) % patrol.size();
+                        try {
+                            begin(patrol.get(next), true, true);
+                            patrolAt = next;
+                        } catch (IllegalArgumentException unavailable) { fail(); }
+                    }
+                }
+            }
         }
     }
 
-    private void issue(List<Body> bodies, List<WorldPos> cells, Phase next) {
+    private void issue(List<Body> bodies, List<WorldPos> cells, Phase next, boolean guarding) {
         orders.values().forEach(ResidentCommands.Order::close);
         orders.clear();
         column = next == Phase.COLUMN ? List.copyOf(cells) : List.of();
@@ -149,19 +208,20 @@ public final class UnitGroup {
             Body body = bodies.get(n);
             // Followers hold clear of the approach until their predecessor reaches its column slot.
             WorldPos target = next == Phase.COLUMN && n > 0 ? WorldSpaces.at(body.mob()) : cells.get(n);
-            orders.put(body.id(), order(body, target));
+            orders.put(body.id(), order(body, target, guarding));
         }
         phase = next;
         changed = false;
+        assembledSince = Long.MIN_VALUE;
     }
 
-    private ResidentCommands.Order order(Body body, WorldPos destination) {
+    private ResidentCommands.Order order(Body body, WorldPos destination, boolean guarding) {
         ServerLevel level = (ServerLevel) body.mob().level();
         var point = deployment.left();
         Vec3 from = WorldSpaces.world(level, point).orElseThrow();
         var offset = net.minecraft.core.BlockPos.containing(Vec3.atLowerCornerOf(point.cell()).add(deployment.front().scale(10)));
         Vec3 front = WorldSpaces.world(level, point.at(offset)).orElseThrow().subtract(from).normalize();
-        return owner.commands.hold(body, destination, front);
+        return guarding ? owner.commands.guard(body, destination, front) : owner.commands.hold(body, destination, front);
     }
 
     private void validate(List<Body> bodies, List<WorldPos> cells) {

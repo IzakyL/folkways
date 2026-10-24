@@ -21,6 +21,7 @@ import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
+import io.github.izakyl.folkways.plugins.person.fear.FearContent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -40,9 +41,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -125,6 +129,50 @@ public final class ResidentCommandGameTests {
                 helper.assertTrue(f.commands.current(body.id()).isEmpty(), "release relinquishes the command");
             })
             .thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 650)
+    public static void aWoundedGuardYieldsToFearAndRetreatStillTakesPriorityOverCombat(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body body = f.resident(new BlockPos(10, 1, 5));
+        body.pack().insert(new ItemStack(Items.IRON_SWORD));
+        body.mob().getRandom().setSeed(42L);
+        Zombie enemy = EntityType.ZOMBIE.create(f.level);
+        enemy.setNoAi(true);
+        enemy.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.CARVED_PUMPKIN));
+        BlockPos at = f.at(13, 1, 5).block(f.level);
+        enemy.moveTo(at.getX() + .5, at.getY(), at.getZ() + .5);
+        f.level.addFreshEntity(enemy);
+        f.enemies.add(enemy);
+        ResidentCommands.Order guard = f.commands.guard(body, f.at(10, 1, 5), new Vec3(1, 0, 0));
+        AtomicReference<ResidentCommands.Order> retreat = new AtomicReference<>();
+        AtomicReference<Float> health = new AtomicReference<>();
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(enemy.getHealth() < enemy.getMaxHealth(),
+                "a healthy guard initiates a real weapon strike"))
+            .thenExecute(() -> {
+                body.mob().hurt(f.level.damageSources().mobAttack(enemy), 1);
+                body.mob().setHealth(body.mob().getMaxHealth() * .25F);
+                enemy.setTarget(body.mob());
+            })
+            .thenWaitUntil(() -> helper.assertTrue(body.doing()
+                    .filter(doing -> doing.toward().orElse(doing.what()).equals(FearContent.FLEEING)).isPresent(),
+                "low-health fear interrupts both the guard slot and its combat urge"))
+            .thenExecute(() -> {
+                helper.assertTrue(f.commands.current(body.id()).orElseThrow() == guard,
+                    "fear temporarily yields the same guard handle rather than deleting its return slot");
+                retreat.set(f.commands.retreat(body, f.at(4, 1, 5)));
+                helper.assertFalse(guard.engaged(), "a replaced guard cannot retain an engagement lease");
+            })
+            .thenWaitUntil(() -> helper.assertTrue(retreat.get().status() == ResidentCommands.Status.HOLDING,
+                "explicit retreat safely stops combat and fear and walks to its requested point"))
+            .thenExecute(() -> health.set(enemy.getHealth()))
+            .thenIdle(30)
+            .thenExecute(() -> {
+                helper.assertValueEqual(enemy.getHealth(), health.get(), "retreat keeps holding without new strikes");
+                retreat.get().close();
+                helper.assertTrue(f.commands.current(body.id()).isEmpty(), "release relinquishes the retreat command");
+            }).thenSucceed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 260)
@@ -236,6 +284,7 @@ public final class ResidentCommandGameTests {
         final ResidentCommands commands;
         final LaborFixture simulation;
         final List<Body> bodies = new ArrayList<>();
+        final List<Zombie> enemies = new ArrayList<>();
 
         Fixture(GameTestHelper helper) {
             this.helper = helper;
@@ -267,7 +316,12 @@ public final class ResidentCommandGameTests {
             helper.assertTrue(body.pack().contents().stream().filter(stack -> stack.is(Items.IRON_AXE))
                 .allMatch(stack -> stack.getDamageValue() == 7), "the tool keeps its component state");
         }
-        void close() { simulation.close(); bodies.forEach(body -> body.mob().discard()); colony.raze(); }
+        void close() {
+            simulation.close();
+            bodies.forEach(body -> body.mob().discard());
+            enemies.forEach(Entity::discard);
+            colony.raze();
+        }
         public void testStructureLoaded(GameTestInfo info) { }
         public void testPassed(GameTestInfo info, GameTestRunner runner) { close(); }
         public void testFailed(GameTestInfo info, GameTestRunner runner) { close(); }

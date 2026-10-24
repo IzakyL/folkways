@@ -24,7 +24,7 @@ import net.minecraft.world.phys.Vec3;
 /** Server-side orders executed exclusively by Core's existing labour runner. */
 public final class ResidentCommands {
 
-    public enum Mode { MOVE, HOLD, RETREAT }
+    public enum Mode { MOVE, HOLD, RETREAT, GUARD }
     public enum Status { MOVING, HOLDING, ARRIVED, RELEASED, FAILED }
 
     /** A handle can release only its own order, including after a replacement was issued. */
@@ -35,6 +35,7 @@ public final class ResidentCommands {
         private final Mode mode;
         private final Optional<Vec3> facing;
         private long movingSince = server.overworld().getGameTime();
+        private long engagedUntil = Long.MIN_VALUE;
         private volatile Status status = Status.MOVING;
         private volatile RefusalKind failure;
 
@@ -50,6 +51,18 @@ public final class ResidentCommands {
         public WorldPos destination() { return destination; }
         public Mode mode() { return mode; }
         public Status status() { return status; }
+        /** A short, renewed combat lease; never survives a cancelled or replaced order. */
+        public boolean engaged() {
+            return mode == Mode.GUARD && active.get(resident()) == this
+                && server.overworld().getGameTime() < engagedUntil;
+        }
+        /** Patrol renews this only while offering a valid enemy inside the guard's leash. */
+        public void engaging() {
+            requireServerThread();
+            if (mode == Mode.GUARD && active.get(resident()) == this) {
+                engagedUntil = server.overworld().getGameTime() + 20;
+            }
+        }
         public Optional<RefusalKind> failure() { return Optional.ofNullable(failure); }
         public void close() { release(this); }
     }
@@ -76,6 +89,13 @@ public final class ResidentCommands {
         return issue(body, destination, Mode.HOLD, Optional.of(facing.normalize()));
     }
     public Order retreat(Body body, WorldPos destination) { return issue(body, destination, Mode.RETREAT, Optional.empty()); }
+    /** Yield to combat and fear, then return to this same slot through the existing labour runner. */
+    public Order guard(Body body, WorldPos destination, Vec3 facing) {
+        if (!Double.isFinite(facing.lengthSqr()) || facing.horizontalDistanceSqr() < .01) {
+            throw new IllegalArgumentException("guard facing must have a finite horizontal direction");
+        }
+        return issue(body, destination, Mode.GUARD, Optional.of(facing.normalize()));
+    }
 
     public Optional<Order> current(UUID resident) {
         requireServerThread();
@@ -121,7 +141,9 @@ public final class ResidentCommands {
         if (order == null || !valid(order.body)) { return List.of(); }
         // A replacement has its own urge identity: it safely interrupts even a trip already in progress.
         ResourceLocation intent = ResourceLocation.fromNamespaceAndPath("folkways", "command/" + order.id);
-        return List.of(new Urge(intent, Urge.DIRE + (order.mode == Mode.RETREAT ? 2 : 1), true,
+        double weight = order.mode == Mode.GUARD ? Urge.DIRE - .5
+            : Urge.DIRE + (order.mode == Mode.RETREAT ? 2 : 1);
+        return List.of(new Urge(intent, weight, true,
             () -> new CommandNode(this, order)));
     }
 
@@ -159,10 +181,14 @@ public final class ResidentCommands {
         for (Order order : List.copyOf(active.values())) {
             if (!valid(order.body)) {
                 release(order);
+            } else if (order.engaged() && order.status == Status.MOVING) {
+                // Combat is not failed travel. Resume the timeout budget only after it yields the body back.
+                order.movingSince++;
             } else if (order.status == Status.MOVING && server.overworld().getGameTime() - order.movingSince >= 1200) {
                 active.remove(order.resident(), order);
                 order.status = Status.FAILED;
             }
+            if (active.get(order.resident()) == order) { active(order); }
         }
     }
 

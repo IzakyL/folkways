@@ -29,6 +29,10 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -66,6 +70,172 @@ public final class UnitGroupGameTests {
             }).thenSucceed();
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 1600)
+    public static void fourResidentsPhysicallyPatrolThreeStopsAndLoopUntilReleased(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(4);
+        UnitGroup group = scene.groups.create(people);
+        List<Deployment> route = List.of(scene.line(8), scene.line(18), scene.line(4));
+        group.patrol(route);
+        var sequence = helper.startSequence();
+        for (int stop : new int[] {0, 1, 2, 0}) {
+            sequence.thenWaitUntil(() -> helper.assertTrue(group.patrolStop() == stop
+                    && group.phase() == UnitGroup.Phase.HOLDING,
+                "the entire patrol physically assembles at stop " + stop + "; phase=" + group.phase()))
+                .thenExecute(() -> {
+                    scene.assertLine(helper, group, people);
+                    helper.assertTrue(group.destinations().values().containsAll(route.get(stop).line(people.size())),
+                        "every member uses the current route formation");
+                    helper.assertTrue(people.stream().allMatch(body -> scene.commands.current(body.id())
+                        .filter(order -> order.mode() == ResidentCommands.Mode.GUARD).isPresent()),
+                        "patrol uses interruptible guard orders in the same runner");
+                });
+        }
+        sequence.thenExecute(group::release).thenIdle(30).thenExecute(() -> {
+            helper.assertTrue(group.phase() == UnitGroup.Phase.IDLE && group.patrolRoute().isEmpty(),
+                "release forgets the transient patrol and cannot restart it");
+            helper.assertTrue(people.stream().allMatch(body -> scene.commands.current(body.id()).isEmpty()),
+                "release leaves no member under group control");
+        }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 1000)
+    public static void patrolAttacksAnUnprovokedEnemyThenReformsBeforeContinuing(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(2);
+        people.forEach(body -> body.pack().insert(new ItemStack(Items.IRON_SWORD)));
+        UnitGroup group = scene.groups.create(people);
+        group.patrol(List.of(scene.line(8), scene.line(18)));
+        AtomicReference<Zombie> enemy = new AtomicReference<>();
+        AtomicReference<Map<UUID, WorldPos>> slots = new AtomicReference<>();
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(group.patrolStop() == 0 && group.phase() == UnitGroup.Phase.HOLDING,
+                "both guards first assemble at the initial stop"))
+            .thenExecute(() -> {
+                slots.set(group.destinations());
+                Zombie zombie = EntityType.ZOMBIE.create(scene.level);
+                zombie.setNoAi(true);
+                zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.CARVED_PUMPKIN));
+                BlockPos at = scene.at(15, 1, 10).block(scene.level);
+                zombie.moveTo(at.getX() + .5, at.getY(), at.getZ() + .5);
+                scene.level.addFreshEntity(zombie);
+                scene.enemies.add(zombie);
+                enemy.set(zombie);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(enemy.get().getHealth() < enemy.get().getMaxHealth(),
+                "real runner movement and weapon use damage an enemy that has never attacked"))
+            .thenExecute(() -> {
+                helper.assertTrue(people.stream().allMatch(body -> body.mob().getLastHurtByMob() == null),
+                    "the patrol initiates combat without needing retaliation");
+                helper.assertTrue(group.patrolStop() == 0 && group.phase() == UnitGroup.Phase.ENGAGING,
+                    "enemy contact pauses route advancement");
+                helper.assertTrue(group.destinations().equals(slots.get()), "combat retains each original return slot");
+                enemy.get().discard();
+            })
+            .thenWaitUntil(() -> helper.assertTrue(group.patrolStop() == 0 && group.phase() == UnitGroup.Phase.HOLDING,
+                "after combat all survivors return before the route advances"))
+            .thenExecute(() -> scene.assertLine(helper, group, people))
+            .thenWaitUntil(() -> helper.assertTrue(group.patrolStop() == 1 && group.phase() == UnitGroup.Phase.HOLDING,
+                "the patrol resumes its next formation after regrouping"))
+            .thenExecute(() -> scene.assertLine(helper, group, people))
+            .thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 900)
+    public static void anIndividualRetreatDetachesFromAPatrolAndKeepsItsOwnControl(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(2);
+        UnitGroup group = scene.groups.create(people);
+        group.patrol(List.of(scene.line(8), scene.line(18)));
+        Body individual = people.getFirst();
+        AtomicReference<ResidentCommands.Order> retreat = new AtomicReference<>();
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.HOLDING, "patrol assembles"))
+            .thenExecute(() -> retreat.set(scene.commands.retreat(individual, scene.at(2, 1, 3))))
+            .thenWaitUntil(() -> {
+                helper.assertFalse(group.members().contains(individual.id()), "individual retreat leaves actual membership");
+                helper.assertTrue(retreat.get().status() == ResidentCommands.Status.HOLDING,
+                    "the individual walks to and holds its retreat point");
+                helper.assertTrue(group.patrolStop() == 1 && group.phase() == UnitGroup.Phase.HOLDING,
+                    "the remaining patrol reforms and continues its route");
+            })
+            .thenExecute(() -> {
+                group.release();
+                helper.assertTrue(scene.commands.current(individual.id()).orElseThrow() == retreat.get(),
+                    "releasing the group cannot cancel the detached resident's newer order");
+                retreat.get().close();
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 1100)
+    public static void aPatrolKeepsMovingAfterDeathAndRejoinsAnUnloadedMember(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(3);
+        UnitGroup group = scene.groups.create(people);
+        group.patrol(List.of(scene.line(8), scene.line(18)));
+        Body away = people.getFirst();
+        Body dying = people.get(1);
+        CompoundTag saved = new CompoundTag();
+        AtomicReference<Body> returned = new AtomicReference<>();
+        AtomicReference<Integer> rejoinedAt = new AtomicReference<>();
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.HOLDING, "the initial patrol assembles"))
+            .thenExecute(() -> {
+                away.mob().save(saved);
+                away.mob().remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
+                dying.mob().kill();
+            })
+            .thenWaitUntil(() -> {
+                helper.assertValueEqual(group.members().size(), 2, "death removes actual membership during patrol");
+                helper.assertTrue(group.missing().equals(Set.of(away.id())), "unloaded membership remains missing");
+                helper.assertTrue(group.destinations().size() == 1 && group.phase() == UnitGroup.Phase.HOLDING,
+                    "the surviving loaded resident reforms without waiting for missing members");
+            })
+            .thenExecute(() -> {
+                Body body = (Body) EntityType.loadEntityRecursive(saved, scene.level, entity -> entity);
+                returned.set(body);
+                scene.bodies.add(body);
+                scene.level.addFreshEntity(body.mob());
+            })
+            .thenWaitUntil(() -> helper.assertTrue(group.destinations().size() == 2 && group.missing().isEmpty()
+                    && group.phase() == UnitGroup.Phase.HOLDING,
+                "a reloaded member receives a new guard slot in the active route"))
+            .thenExecute(() -> {
+                scene.assertLine(helper, group, List.of(returned.get(), people.get(2)));
+                rejoinedAt.set(group.patrolStop());
+            })
+            .thenWaitUntil(() -> helper.assertTrue(group.patrolStop() != rejoinedAt.get()
+                    && group.phase() == UnitGroup.Phase.HOLDING,
+                "surviving members continue to the next patrol stop after reforming"))
+            .thenExecute(() -> scene.assertLine(helper, group, List.of(returned.get(), people.get(2))))
+            .thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 1500)
+    public static void anUnreachablePatrolFailsAndReleasesEverySurvivingMember(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(2);
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 10; x <= 20; x++) {
+                helper.setBlock(new BlockPos(x, y, 5), Blocks.STONE);
+                helper.setBlock(new BlockPos(x, y, 15), Blocks.STONE);
+            }
+            for (int z = 5; z <= 15; z++) {
+                helper.setBlock(new BlockPos(10, y, z), Blocks.STONE);
+                helper.setBlock(new BlockPos(20, y, z), Blocks.STONE);
+            }
+        }
+        UnitGroup group = scene.groups.create(people);
+        group.patrol(List.of(scene.line(18), scene.line(4)));
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.FAILED,
+                "an unreachable patrol has a visible bounded failure; phase=" + group.phase()))
+            .thenIdle(30)
+            .thenExecute(() -> helper.assertTrue(people.stream().allMatch(body -> scene.commands.current(body.id()).isEmpty()),
+                "failed patrol does not reclaim members or leave navigation orders behind"))
+            .thenSucceed();
+    }
+
     @GameTest(template = "empty_large")
     public static void actualMembershipIsExclusiveAndPersistsWithoutRestoringOrders(GameTestHelper helper) {
         Scene scene = new Scene(helper);
@@ -75,6 +245,7 @@ public final class UnitGroupGameTests {
         helper.assertValueEqual(first.members().size(), 3, "transfer removes previous actual membership");
         helper.assertTrue(scene.groups.ofResident(people.getFirst().id()).orElseThrow() == second,
             "one resident has exactly one actual group");
+        first.patrol(List.of(scene.line(8), scene.line(18)));
         UnitGroups loaded = new UnitGroups(scene.colony, scene.level.getServer());
         helper.assertTrue(loaded.group(first.id()).orElseThrow().members().equals(first.members()),
             "group identity and membership are restored from colony NBT");
@@ -82,6 +253,8 @@ public final class UnitGroupGameTests {
             "exclusive membership survives reload");
         helper.assertTrue(loaded.group(first.id()).orElseThrow().phase() == UnitGroup.Phase.IDLE,
             "transient deployment control is not restored from a save");
+        helper.assertTrue(loaded.group(first.id()).orElseThrow().patrolRoute().isEmpty(),
+            "patrol routes and in-progress stops are not restored from saved membership");
         loaded.clear();
         helper.succeed();
     }
@@ -154,6 +327,13 @@ public final class UnitGroupGameTests {
         } catch (IllegalArgumentException expected) {
             helper.assertTrue(group.destinations().equals(original), "all old destinations remain intact on rejection");
         }
+        try {
+            group.patrol(List.of(scene.line(4), scene.line(18)));
+            helper.fail("a later blocked patrol stop must reject the whole route before it begins");
+        } catch (IllegalArgumentException expected) {
+            helper.assertTrue(group.destinations().equals(original) && group.patrolRoute().isEmpty(),
+                "later-stop rejection preserves all previous formation handles and mode");
+        }
         helper.succeed();
     }
 
@@ -197,6 +377,7 @@ public final class UnitGroupGameTests {
         final UnitGroups groups;
         final LaborFixture simulation;
         final List<Body> bodies = new ArrayList<>();
+        final List<Zombie> enemies = new ArrayList<>();
 
         Scene(GameTestHelper helper) {
             this.helper = helper;
@@ -234,7 +415,12 @@ public final class UnitGroupGameTests {
                     "each member physically stands in its assigned slot");
             }
         }
-        void close() { simulation.close(); bodies.forEach(body -> body.mob().discard()); colony.raze(); }
+        void close() {
+            simulation.close();
+            bodies.forEach(body -> body.mob().discard());
+            enemies.forEach(Entity::discard);
+            colony.raze();
+        }
         public void testStructureLoaded(GameTestInfo info) { }
         public void testPassed(GameTestInfo info, GameTestRunner runner) { close(); }
         public void testFailed(GameTestInfo info, GameTestRunner runner) { close(); }

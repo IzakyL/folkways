@@ -2,13 +2,16 @@ package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.Threats;
+import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
 import io.github.izakyl.folkways.core.api.colony.Asking;
 import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
+import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Reach;
+import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -230,17 +233,23 @@ final class PatrolPresence implements Facing {
         if (!(body.level() instanceof ServerLevel level)) {
             return List.of();
         }
-        Optional<Mob> foe = onDuty(who.resident().id(), level.getGameTime())
-            ? nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE))
+        Optional<ResidentCommands.Order> guard = ResidentCommands.of(colony).current(who.resident().id())
+            .filter(order -> order.mode() == ResidentCommands.Mode.GUARD);
+        Optional<Mob> foe = guard.isPresent() || onDuty(who.resident().id(), level.getGameTime())
+            ? nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE), guard)
             : attacker(body);
-        if (foe.isEmpty() || !armed(who)) {
+        if (foe.isEmpty() || !Weapons.armed(who)) {
             return List.of();
         }
-        Optional<Stances> reach = Stances.of(level, Reach.workableCells(level, cellOf(level, foe.get())));
+        Optional<Stances> reach = battleStances(level, who, foe.get(), guard);
         if (reach.isEmpty()) {
             return List.of();
         }
-        double weight = body.getHealth() > body.getMaxHealth() * WOUNDED ? STAND_GROUND : Urge.NOW;
+        boolean standsGround = body.getHealth() > body.getMaxHealth() * WOUNDED;
+        double weight = standsGround ? STAND_GROUND : Urge.NOW;
+        // A wounded guard's combat urge cannot displace its position order. Only actual combat priority
+        // renews the group pause; fear remains free to take over independently.
+        if (standsGround) { guard.ifPresent(ResidentCommands.Order::engaging); }
         Mob target = foe.get();
         if (who.effects().value(PatrolContent.ALERT_RANGE) > 0) {
             alerts.put(target.getUUID(), level.getGameTime() + 100);
@@ -254,11 +263,6 @@ final class PatrolPresence implements Facing {
         return at != null && now <= dutyUntil.getOrDefault(resident, Long.MIN_VALUE);
     }
 
-    private static boolean armed(Worker who) {
-        return ResidentKinds.barehanded(who.resident().kind(), Optional.of(PatrolContent.trade()))
-            || !who.held(PatrolContent.WEAPON).isEmpty();
-    }
-
     // An armed resident away from patrol may defend itself, without becoming a roaming hunter.
     private static Optional<Mob> attacker(Mob body) {
         return Optional.ofNullable(body.getLastHurtByMob())
@@ -268,10 +272,11 @@ final class PatrolPresence implements Facing {
                 && body.hasLineOfSight(mob));
     }
 
-    private Optional<Mob> nearestFoe(ServerLevel level, Mob body, double range) {
+    private Optional<Mob> nearestFoe(ServerLevel level, Mob body, double range, Optional<ResidentCommands.Order> guard) {
         alerts.values().removeIf(until -> until < level.getGameTime());
         List<Mob> near = level.getEntitiesOfClass(Mob.class, body.getBoundingBox().inflate(Math.max(range, 24)),
             mob -> Threats.hostile(mob, body)
+                && insideLeash(level, guard, WorldSpaces.at(mob))
                 && (body.distanceToSqr(mob) <= range * range
                     || alerts.containsKey(mob.getUUID()) && body.distanceToSqr(mob) <= 24 * 24));
         near.sort(Comparator.comparingDouble(body::distanceToSqr));
@@ -281,6 +286,45 @@ final class PatrolPresence implements Facing {
             }
         }
         return Optional.empty();
+    }
+
+    private static boolean insideLeash(ServerLevel level, Optional<ResidentCommands.Order> guard,
+            WorldPos at) {
+        return guard.isEmpty() || guard.get().destination().sameRealm(at)
+            && WorldSpaces.world(level, guard.get().destination()).flatMap(origin -> WorldSpaces.world(level, at)
+                .map(point -> origin.distanceToSqr(point) <= ENGAGE_RANGE * ENGAGE_RANGE)).orElse(false);
+    }
+
+    private static Optional<Stances> battleStances(ServerLevel level, Worker who, Mob foe,
+            Optional<ResidentCommands.Order> guard) {
+        Mob body = who.body();
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        if (Weapons.ranged(who)) {
+            double range = Weapons.range(who);
+            BlockPos here = cellOf(level, body);
+            if (body.distanceTo(foe) <= range && body.hasLineOfSight(foe) && Footing.withFeetAt(level, here)) {
+                // Ranged guards fire from their existing footing instead of walking into melee.
+                cells.add(here);
+            } else {
+                BlockPos target = cellOf(level, foe);
+                var towardBody = body.position().subtract(foe.position()).multiply(1, 0, 1).normalize();
+                for (int distance = 2; distance < range; distance++) {
+                    for (double turn : new double[] {-.5, 0, .5}) {
+                        var feet = net.minecraft.world.phys.Vec3.atBottomCenterOf(target)
+                            .add(towardBody.yRot((float) turn).scale(distance));
+                        for (int dy = -2; dy <= 2; dy++) {
+                            BlockPos cell = BlockPos.containing(feet).offset(0, dy, 0);
+                            if (level.hasChunkAt(cell) && Footing.withFeetAt(level, cell)
+                                    && Reach.inSight(level, cell, target)) { cells.add(cell); }
+                        }
+                    }
+                }
+            }
+        } else {
+            cells.addAll(Reach.workableCells(level, cellOf(level, foe)));
+        }
+        cells.removeIf(cell -> !insideLeash(level, guard, WorldSpaces.at(level, cell)));
+        return Stances.of(cells.stream().map(cell -> WorldSpaces.at(level, cell)).toList());
     }
 
     // The block a mob stands in, where the level stores it: the ship's cell when it stands on one, as the cells
