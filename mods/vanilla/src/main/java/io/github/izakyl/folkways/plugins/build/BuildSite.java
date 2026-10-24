@@ -62,8 +62,8 @@ import net.minecraft.world.level.pathfinder.Path;
  * the ground as it stands then lets it be done from; so a piece never waits on work queued behind something else
  * in another worker's day. From then on it is heard: a piece done, or a block set in the site by anyone, meets its
  * cells, a cell met is met for good, and what that frees comes up. The order is built when every cell has been met
- * and every joint made. While it stands the shared ways are closed over the site; residents walk to the work
- * using the ground as it is.
+ * and every joint made. While it stands the shared ways are closed over the site; residents may relocate
+ * between safe standing places inside it, and walk normally outside it.
  *
  * <p>A piece that ends undone comes up again as it was, the pieces after it waiting on it meanwhile, unless its
  * cells were met some other way. Nothing is looked at again on a clock.
@@ -234,12 +234,20 @@ final class BuildSite {
     private long toldAt = NEVER;
     @Nullable
     private ServerLevel standing;
+    @Nullable
+    private final BoundingBox workArea;
 
     BuildSite(UUID order, Asks asks, BuildTarget target, TemporaryScaffolds temporary) {
+        this(order, asks, target, temporary, null);
+    }
+
+    BuildSite(UUID order, Asks asks, BuildTarget target, TemporaryScaffolds temporary,
+            @Nullable BoundingBox workArea) {
         this.order = order;
         this.asks = asks;
         this.target = target;
         this.temporary = temporary;
+        this.workArea = workArea;
     }
 
     /** Infrastructure work on existing floors never needs temporary access structures. */
@@ -320,13 +328,14 @@ final class BuildSite {
     }
 
     // The shared ways are closed over the site and a little past it while it stands. Residents use ordinary
-    // navigation to their tasks inside it; the changing work does not become a route through the shared graph.
+    // travel outside it and may relocate inside it; the changing work does not become a route through the shared graph.
     private void closeOff(ServerLevel level) {
         if (!(target.realm() instanceof Realm.Dimension) || target.cells().isEmpty()) {
             return;
         }
-        BlockPos min = null;
-        BlockPos max = null;
+        // A growing structure remains one site: earlier flights of a mine are still on the way out.
+        BlockPos min = workArea == null ? null : new BlockPos(workArea.minX(), workArea.minY(), workArea.minZ());
+        BlockPos max = workArea == null ? null : new BlockPos(workArea.maxX(), workArea.maxY(), workArea.maxZ());
         for (BlockPos cell : target.cells().keySet()) {
             min = min == null ? cell : BlockPos.min(min, cell);
             max = max == null ? cell : BlockPos.max(max, cell);
@@ -889,6 +898,10 @@ final class BuildSite {
     private void walk(Stay stay, ServerLevel level, Mob body, Piece piece, Approach route) {
         stay.repathAt = level.getGameTime() + REPATH_TICKS;
         stay.aim = route.aim();
+        if (route.aim() != null && SiteTravel.place(level, body, route.aim())) {
+            stay.walking = null;
+            return;
+        }
         stay.walking = route.path();
         // Reuse a partial route when none reaches a pose; do not launch another unbudgeted path search.
         if (route.path() != null) {

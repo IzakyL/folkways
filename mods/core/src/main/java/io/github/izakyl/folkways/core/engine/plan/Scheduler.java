@@ -44,9 +44,10 @@ public final class Scheduler {
     }
 
     // The routes that changed, by resident (an empty route where one ended), the work left unassigned and why,
-    // whether the crew is worth reading again for it, when to wake for work past the horizon, and every route laid.
+    // whether the crew is worth reading again for it, when to wake for work past the horizon, every route laid, and
+    // the residents with no route whose full packs keep work waiting.
     public record Scheduled(Map<UUID, Tour> changed, List<Unassigned> unassigned, boolean hands, long wakeAt,
-                            Map<UUID, Tour> all, Timing timing, long tick) {
+                            Map<UUID, Tour> all, Set<UUID> overloaded, Timing timing, long tick) {
     }
 
     public Scheduled handle(List<Input> inputs) {
@@ -67,7 +68,7 @@ public final class Scheduler {
         }
         long applied = System.nanoTime();
         if (ways == null) {
-            return new Scheduled(Map.of(), List.of(), false, Long.MAX_VALUE, Map.of(),
+            return new Scheduled(Map.of(), List.of(), false, Long.MAX_VALUE, Map.of(), Set.of(),
                 new Timing(applied - started, 0), tick);
         }
         Schedule schedule;
@@ -97,7 +98,7 @@ public final class Scheduler {
         for (Unassigned nobody : schedule.unassigned()) {
             hands |= CREW_COULD_ANSWER.contains(nobody.why());
         }
-        return new Scheduled(changed, schedule.unassigned(), hands, tours.wakeAt(), laid,
+        return new Scheduled(changed, schedule.unassigned(), hands, tours.wakeAt(), laid, tours.overloaded(),
             new Timing(applied - started, System.nanoTime() - applied), tick);
     }
 
