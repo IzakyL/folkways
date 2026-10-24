@@ -48,39 +48,43 @@ public final class GroundworkScene {
         scene.idle(15);
 
         scene.overlay().showText(90)
-            .text("A groundwork zone does whichever work is ticked in its settings, one or several: clear, fill, weed, fell and haul. Cleared and filled together, the box is dug out and laid with the fill block; the fill block already there stays.")
+            .text("Clear or Fill turns the zone into one build order, then erases the zone. Clear and Fill together replace every marked cell with the chosen block. Other work ticked is ignored.")
             .pointAt(util.vector().topOf(4, 0, 4))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
 
-        scene.overlay().showOutline(PonderPalette.RED, "clear", boulder, 90);
+        scene.overlay().showOutline(PonderPalette.RED, "clear", boulder, 30);
         scene.overlay().showText(90)
-            .text("Clear takes out every block in the box, from the top down, and only in the box: mark it as deep as you mean to dig. Builders do it, with the tool each block wants, and leave the colony's own blocks alone.")
+            .text("Clear orders air at every marked cell. The zone disappears as soon as the order is filed; builders then excavate it as an ordinary build site, leaving the colony's own blocks alone.")
             .colored(PonderPalette.RED)
             .pointAt(util.vector().topOf(2, 0, 2))
             .placeNearTarget()
             .attachKeyFrame();
-        scene.idle(50);
+        scene.idle(30);
+        scene.overlay().showOutline(PonderPalette.BLUE, "clear_order", boulder, 60);
+        scene.idle(20);
         scene.world().setBlocks(util.select().fromTo(1, 2, 1, 2, 2, 2), Blocks.AIR.defaultBlockState(), true);
         scene.idle(20);
         scene.world().setBlocks(util.select().fromTo(1, 1, 1, 2, 1, 2), Blocks.AIR.defaultBlockState(), true);
         scene.idle(30);
 
-        scene.overlay().showOutline(PonderPalette.GREEN, "fill", pit, 90);
+        scene.overlay().showOutline(PonderPalette.GREEN, "fill", pit, 30);
         scene.overlay().showText(90)
-            .text("Fill lays the block chosen in its settings into every open cell, from the bottom up, brought from the colony's stores.")
+            .text("Fill orders the chosen block only where the ground is open now, never directly above a flower. The zone disappears when filed; builders bring the blocks from the colony's stores.")
             .colored(PonderPalette.GREEN)
             .pointAt(util.vector().topOf(2, 0, 6))
             .placeNearTarget()
             .attachKeyFrame();
-        scene.idle(50);
+        scene.idle(30);
+        scene.overlay().showOutline(PonderPalette.BLUE, "fill_order", pit, 60);
+        scene.idle(20);
         scene.world().setBlocks(pit, Blocks.DIRT.defaultBlockState(), true);
         scene.idle(50);
 
         scene.overlay().showOutline(PonderPalette.GREEN, "weed", weeds, 80);
         scene.overlay().showText(80)
-            .text("Weed pulls the grass and ferns in the box. Flowers are pulled only with Pull flowers ticked, and a fill never buries one. Farmers do it.")
+            .text("With Clear and Fill off, Weed pulls grass and ferns. Flowers are pulled only with Pull flowers ticked. Farmers do it.")
             .pointAt(util.vector().topOf(6, 0, 1))
             .placeNearTarget()
             .attachKeyFrame();

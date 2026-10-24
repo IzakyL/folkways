@@ -1,13 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { defineTask, javaTask } from "@izakyl/blockwright-minecraft";
 import {
   foundColonyFast, foundingBox, probe, stockToolsForResidents, TRADE_TOOLS, waitForGroundedPlayer, type Vec,
 } from "../shared/colony/colony-founding";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import {
-  applyZoneSetting, createMarkedZone, holdZoneAndOpen, releaseHeldZone, setBookGesture, zoneSettingToken,
+  openBookPage, setBookGesture, zoneKindToken,
 } from "../shared/ui/zone-tools";
+import { clickElement } from "../ldlib2";
+import { settlePanel } from "../shared/ui/site-panel";
 import { aimAndWorldLeftClick, blockHasItem } from "../shared/ui/world-ui";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
@@ -17,10 +19,9 @@ import { commandPos, tryCommand, waitForElement } from "../shared/harness/bw-hel
 import { newRunId } from "../shared/harness/run-id";
 import { GROUND, twins, type Stage } from "../shared/harness/stage";
 
-// Issue #10: groundwork zones, each doing every work ticked in its settings. A boulder is cleared down to the ground
-// and no further, a pit is filled with the block the zone names, grass is weeded, a tree is felled and a beam beside it
-// is not, and a stack lying loose is carried off to the colony's stores. Two zones tick more than one: the wood is
-// felled and weeded, and a patch cleared and filled together is dug out and laid with dirt, the dirt in it kept.
+// Clear and fill zones become ordinary build orders and disappear before the work starts. Weed, fell and haul
+// retain their zone chores. The orders must finish, leave holes outside their marked cells alone, and discard
+// their synthetic blueprints rather than keeping them in the colony's book.
 
 const RESIDENT_COUNT = 6;
 const WORK_TICKS = 9_000;
@@ -85,30 +86,28 @@ for (const on of twins()) test(on.title("groundwork end-to-end: clear, fill, wee
     await tick.sprint(server, 2);
     expect(await probe(server, `if entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:emerald"}}]`), "the stack lies there before anyone hauls it").toBe(true);
 
-    // Groundwork discovers its targets once. Prepare each scene before confirming its zone, so UI ticks
-    // cannot capture an unfinished fixture or finish and erase an empty zone between setting edits.
+    // Prepare each scene before confirmation: the next sweep files its current target and erases the zone.
     await setBookGesture(server, client, player, "box");
     await tryCommand(server, `setblock ${at(boulder.min)} minecraft:stone`);
     await tryCommand(server, `setblock ${at(boulder.max)} minecraft:stone`);
     await mark(server, client, player, boulder.min, boulder.max);
     await tryCommand(server, `fill ${at(boulder.min)} ${at(boulder.max)} minecraft:stone`);
-    await createMarkedZone(server, client, player, founded.standBlock, "ground", stage);
-    // Keep stone awaiting a pickaxe while its live zone is configured. Enable fill before clearing is
-    // disabled, and excavate before that last setting discovers the final fill targets.
-    await tryCommand(server, `fill ${at(pit.min)} ${at(pit.max)} minecraft:stone`);
-    await mark(server, client, player, pit.min, pit.max);
-    await createMarkedZone(server, client, player, founded.standBlock, "ground", stage);
-    await configureFillZone(server, client, player, founded.standBlock, pit);
+    await confirmClearOrder(server, client, player, founded.standBlock);
     const colony = founded.evidence.colonyId;
+    await tryCommand(server, `fill ${at(pit.min)} ${at(pit.max)} minecraft:air`);
+    await draw(server, colony, ["fill"], pit, "minecraft:cobblestone");
     await draw(server, colony, ["weed"], { min: cell(-4, ground, 6), max: weeds[2] });
     await draw(server, colony, ["fell", "weed"], woods);
     await draw(server, colony, ["haul"], yard);
     await draw(server, colony, ["clear", "fill"], patch);
-    const filling = await runColonyTask(server, FILL_BLOCKS, { colony_id: colony });
-    expect(filling.blocks, `the pit fills with what was picked, the patch with the dirt it was drawn with: ${JSON.stringify(filling)}`)
-      .toEqual(["minecraft:cobblestone", "minecraft:dirt"]);
+    await expect.poll(async () => {
+      await tick.sprint(server, 100);
+      return runColonyTask(server, GROUND_ORDERS, { colony_id: colony });
+    }, { timeout: 20_000, message: "clear and fill zones are erased as their three ordinary orders are filed" })
+      .toMatchObject({ orders: 3, constructionZones: 0, synthetic: 3,
+        blocks: ["minecraft:cobblestone", "minecraft:dirt"] });
 
-    // Supply work only after all zones have captured the prepared scene and their settings were checked.
+    // Supply work only after the orders have captured the prepared scene.
     await stockToolsForResidents(server, stage.at(store), [...TRADE_TOOLS.building, ...TRADE_TOOLS.farming], 2, 4);
     await tryCommand(server, `item replace block ${at(store)} container.20 with minecraft:dirt 16`);
     await tryCommand(server, `item replace block ${at(store)} container.21 with minecraft:cobblestone 16`);
@@ -141,6 +140,11 @@ for (const on of twins()) test(on.title("groundwork end-to-end: clear, fill, wee
       cleared: true, groundKept: true, filled: true, weeded: true, replaced: true, felled: true, hauled: true,
       beamKept: true, stored: true,
     });
+    await expect.poll(async () => {
+      await tick.sprint(server, STEP_TICKS);
+      return runColonyTask(server, GROUND_ORDERS, { colony_id: colony });
+    }, { timeout: 20_000, message: "completed build orders discard their synthetic blueprints" })
+      .toMatchObject({ orders: 0, constructionZones: 0, synthetic: 0, blocks: [] });
   } catch (error) {
     pair?.failing(error);
     throw error;
@@ -158,30 +162,23 @@ async function mark(server: MinecraftServer, client: MinecraftClient, player: st
   await tick.sprint(server, 5);
 }
 
-async function configureFillZone(server: MinecraftServer, client: MinecraftClient, player: string,
-    standBlock: Vec, pit: { min: Vec; max: Vec }) {
-  await holdZoneAndOpen(server, client, player, pit, stage);
-  try {
-    for (const edit of [{ key: "fill", toggle: true },
-      { key: "block", item: "minecraft:cobblestone", query: "cobblestone" }] as const) {
-      await waitForElement(client, { id: zoneSettingToken(edit.key) }, { timeoutMs: 8_000 });
-      await applyZoneSetting(server, client, edit);
-    }
-    await tryCommand(server, `fill ${at(pit.min)} ${at(pit.max)} minecraft:air`);
-    await applyZoneSetting(server, client, { key: "clear", toggle: true });
-  } finally {
-    await releaseHeldZone(client);
-    const stand = stage.stand(standBlock);
-    await tryCommand(server, `tp ${player} ${stand.x + 0.5} ${stand.y} ${stand.z + 1.5}`);
-    await tick.sprint(server, 5);
-  }
+async function confirmClearOrder(server: MinecraftServer, client: MinecraftClient, player: string, standBlock: Vec) {
+  await openBookPage(server, client, player, standBlock, stage);
+  const token = zoneKindToken("ground");
+  await waitForElement(client, { id: token }, { timeoutMs: 8_000 });
+  await clickElement(client, { id: token });
+  await settlePanel(server, client);
+  await waitForElement(client, { id: "folkways.zoneconfig.confirm" }, { timeoutMs: 8_000 });
+  await clickElement(client, { id: "folkways.zoneconfig.confirm" });
+  await screen.dismiss(client);
+  await tick.sprint(server, 10);
 }
 
-async function draw(server: MinecraftServer, colony: string, works: string[], box: { min: Vec; max: Vec }) {
+async function draw(server: MinecraftServer, colony: string, works: string[], box: { min: Vec; max: Vec }, fillBlock = "minecraft:dirt") {
   const min = stage.at(box.min);
   const max = stage.at(box.max);
   const drawn = await runColonyTask(server, DRAW_ZONE, {
-    colony_id: colony, works: works.join(","), box: [min.x, min.y, min.z, max.x, max.y, max.z],
+    colony_id: colony, works: works.join(","), fill_block: fillBlock, box: [min.x, min.y, min.z, max.x, max.y, max.z],
   });
   expect(drawn.drawn, `the ${works.join(" and ")} zone is drawn: ${JSON.stringify(drawn)}`).toBe(true);
 }
@@ -208,7 +205,7 @@ async function allAre(server: MinecraftServer, cells: Vec[], block: string): Pro
 }
 
 // A groundwork zone drawn onto the colony as the book's confirm draws one, with these works ticked and no others.
-const DRAW_ZONE = defineTask<{ colony_id: string; works: string; box: number[] }, Record<string, any>>({
+const DRAW_ZONE = defineTask<{ colony_id: string; works: string; fill_block: string; box: number[] }, Record<string, any>>({
   name: "folkways.groundwork.draw-zone",
   side: "server",
   timeoutMs: 20_000,
@@ -221,6 +218,7 @@ const DRAW_ZONE = defineTask<{ colony_id: string; works: string; box: number[] }
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
       "java.util.Arrays",
+      "io.github.izakyl.folkways.core.api.terms.ItemFilter",
     ],
     body: `
 Args args = Args.of(ctx);
@@ -240,6 +238,8 @@ ColonySettings chosen = ColonySettings.byDefault(ColonySchemas.ofDelegation(grou
 for (String work : List.of("clear", "fill", "weed", "fell", "haul")) {
     chosen = chosen.with(work, new ColonySettings.Value.Flag(ticked.contains(work)));
 }
+chosen = chosen.with("block", new ColonySettings.Value.Items(List.of(
+    ItemFilter.item(ResourceLocation.parse(args.string("fill_block"))))));
 var drawn = ColonyFront.of(colony).addZone(ctx.server().overworld(), ground, cells, chosen);
 Map<String, Object> out = new LinkedHashMap<String, Object>();
 out.put("drawn", Boolean.valueOf(drawn.isPresent()));
@@ -249,33 +249,43 @@ return Sync.stamp(out);
   }),
 });
 
-// What the fill zones lay, as their settings hold it, sorted.
-const FILL_BLOCKS = defineTask<{ colony_id: string }, Record<string, any>>({
-  name: "folkways.groundwork.fill-blocks",
+// Read the actual filed orders and their private drawings after the source zones have gone.
+const GROUND_ORDERS = defineTask<{ colony_id: string }, Record<string, any>>({
+  name: "folkways.groundwork.orders",
   side: "server",
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.terms.ItemFilter",
       "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyZone",
+      "io.github.izakyl.folkways.plugins.build.BuildContent",
+      "net.minecraft.nbt.Tag",
     ],
     body: `
 Args args = Args.of(ctx);
 var colony = ColonyGround.of(ctx.server(), UUID.fromString(args.string("colony_id")))
     .orElseThrow(() -> Fail.notFound("no colony"));
-List<String> blocks = new ArrayList<String>();
-for (ColonyZone zone : ColonyFront.of(colony).zones()) {
-    if (zone.settings().flag("fill")) {
-        for (ItemFilter rule : zone.settings().entries("block")) {
-            blocks.add(rule.describe());
-        }
+var book = colony.kept(BuildContent.ID).getCompound("book");
+Set<String> blocks = new java.util.TreeSet<String>();
+int synthetic = 0;
+for (Tag entry : book.getList("blueprints", Tag.TAG_COMPOUND)) {
+    var drawing = (net.minecraft.nbt.CompoundTag) entry;
+    if (!drawing.getBoolean("singleUse")) continue;
+    synthetic++;
+    for (Tag cell : drawing.getList("blocks", Tag.TAG_COMPOUND)) {
+        String block = ((net.minecraft.nbt.CompoundTag) cell).getCompound("state").getString("Name");
+        if (!block.equals("minecraft:air")) blocks.add(block);
     }
 }
-blocks.sort(null);
+int zones = 0;
+for (var zone : ColonyFront.of(colony).zones()) {
+    if (zone.settings().flag("clear") || zone.settings().flag("fill")) zones++;
+}
 Map<String, Object> out = new LinkedHashMap<String, Object>();
-out.put("blocks", blocks);
+out.put("orders", book.getList("buildOrders", Tag.TAG_COMPOUND).size());
+out.put("constructionZones", zones);
+out.put("synthetic", synthetic);
+out.put("blocks", new ArrayList<String>(blocks));
 return Sync.stamp(out);
 `,
   }),
