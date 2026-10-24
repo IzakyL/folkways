@@ -2,9 +2,10 @@ package io.github.izakyl.folkways.core.api.terms;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 
 // Ground nobody sets foot on however open it looks, such as the line a train runs along. Paths go around it, and
 // nobody is asked to stand in it.
@@ -12,6 +13,10 @@ public final class Keepouts {
 
     public interface Keepout {
         boolean forbids(Level level, int x, int y, int z);
+
+        // Dynamic sources refresh their geometry here, then call changed() if their answers changed.
+        default void refresh(Level level) {
+        }
 
         default boolean forbids(Level level, BlockGetter context, int x, int y, int z) {
             return forbids(level, x, y, z);
@@ -26,13 +31,33 @@ public final class Keepouts {
     }
 
     private static final List<Keepout> SOURCES = new CopyOnWriteArrayList<>();
+    private static final AtomicLong REVISION = new AtomicLong();
 
     private Keepouts() {
     }
 
     public static Runnable install(Keepout source) {
         SOURCES.add(source);
-        return () -> SOURCES.remove(source);
+        REVISION.incrementAndGet();
+        return () -> {
+            if (SOURCES.remove(source)) {
+                REVISION.incrementAndGet();
+            }
+        };
+    }
+
+    public static long revision() {
+        return REVISION.get();
+    }
+
+    public static void changed() {
+        REVISION.incrementAndGet();
+    }
+
+    public static void refresh(Level level) {
+        for (Keepout source : SOURCES) {
+            source.refresh(level);
+        }
     }
 
     public static boolean forbidden(Level level, int x, int y, int z) {

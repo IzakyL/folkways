@@ -50,7 +50,15 @@ final class Leisure {
             boolean invitedToWork = id.equals(active.peer) && !who.route().isEmpty()
                 && Bodies.of(who.body()).flatMap(body -> body.doing())
                     .filter(doing -> doing.what().getPath().equals("chatting")).isEmpty();
-            if (active.cancelled || invitedToWork || unsafe(who, view.level(), true)
+            // Optional recreation must yield before arrival too: its Continuous.holds grace
+            // only runs after travelling, so an unresolved idle Trip could otherwise block work
+            // until the entire session expires. Real rest breaks retain their existing policy.
+            boolean workWhileTravelling = !active.restBreak && !who.route().isEmpty()
+                && Bodies.of(who.body()).flatMap(body -> body.doing()).filter(doing ->
+                    (doing.what().equals(Doings.WAITING) || doing.what().equals(Doings.WALKING))
+                        && doing.toward().filter(toward -> toward.getNamespace().equals(URGE.getNamespace())
+                            && toward.getPath().equals(active.kind)).isPresent()).isPresent();
+            if (active.cancelled || invitedToWork || workWhileTravelling || unsafe(who, view.level(), true)
                     || view.level().getGameTime() > active.expires) {
                 cancel(id); return Optional.empty();
             }

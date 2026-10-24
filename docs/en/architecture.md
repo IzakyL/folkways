@@ -67,6 +67,34 @@ that matcher. Mod IDs, tags, whole item IDs and wildcard patterns retain their
 registry semantics. Saved rules use the original overload without display names,
 so client language and optional integrations cannot change server filtering.
 
+## Incremental ground proofs
+
+`Grounds.Watch.now(body)` keeps each body's ordinary reach origins separate. Explicit exit proofs from
+`Ground.beginAccess(exits)` share surveyed sections and search results only when locomotion, entity type,
+dimensions, step/fall limits, fire immunity, rail/keepout permissions and path maluses agree. Virtual block
+overlays and exit sets are part of the cache key. `Ground.with(changes)` leaves the real world unchanged.
+Rail-origin permissions also include the exact origin; rail overlays conservatively isolate origins.
+Custom locomotions are isolated per body until they can declare all evaluator-dependent capabilities.
+
+Advance an `Access` with one `Ground.Budget` shared by all planning loops in that colony tick. Both section
+surveying and graph expansion consume it. Non-positive nanoseconds disable the time limit; `unlimited()`
+retains the synchronous `accessFrom` behavior. An unfinished proof is not a negative accessibility result.
+`Access.complete()` also becomes true at the fixed cell cap so proved positive routes remain usable;
+negative distances establish disconnection only when `Access.exhaustive()` is true.
+Use `Ground.prepare(feet, budget)` before a `standable` query that has not already been surveyed.
+
+Terrain writes, chunk availability, moving structure barriers and keepout changes invalidate
+`Watch.revision()` and old proofs. Dynamic keepout sources implement `Keepout.refresh(level)` and call
+`Keepouts.changed()` when their answers change; installing or removing a source also changes its revision.
+Call `Watch.refresh()` once when starting a batch of views, and again before an actual placement, to check
+same-tick environment changes. Ordinary body views reuse one environment scan per server tick.
+A finished `Access` describes its captured movement profile even after
+the original body moves; callers must also check `Ground.valid()` for current body capabilities and obtain
+a fresh body view before committing a placement. All world reads and final checks run on the server thread.
+Caches have fixed entry/cell bounds; eviction does not cancel retained searches, and closing clears lookup
+caches. `Watch.stats()` exposes cumulative requests, hits, section builds, work and invalidations plus
+current cache sizes and environment-scan counts without enabling chat logs.
+
 ## Lifecycle and test ownership
 
 [`ColonyLifecycle`](../../mods/core/src/main/java/io/github/izakyl/folkways/core/api/colony/ColonyLifecycle.java)

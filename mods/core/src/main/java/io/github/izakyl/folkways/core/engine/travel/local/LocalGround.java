@@ -18,6 +18,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
@@ -49,11 +50,15 @@ final class LocalGround implements Ground, LevelReader {
     private static final int MOST_REACHED = 1 << 20;
 
     private final LocalWatch watch;
+    private final long revision;
     private final List<Walker> walkers;
     private final List<Mob> bodies;
     private final Map<BlockPos, BlockState> changes;
+    private final List<BlockPos> railOverlayOrigins;
     private final LongOpenHashSet changedSections = new LongOpenHashSet();
-    private final Map<Walker.Kind, Long2ObjectOpenHashMap<Section>> trial = new HashMap<>();
+    private final Map<Walker.Kind, LocalWatch.Geometry> base = new HashMap<>();
+    private final Map<Walker.Kind, LocalWatch.Geometry> trial = new HashMap<>();
+    private final Map<Walker.Kind, Preparation> preparing = new HashMap<>();
     private final Long2ObjectOpenHashMap<List<BlockPos>> stances = new Long2ObjectOpenHashMap<>();
     private final Long2ObjectOpenHashMap<List<BlockPos>> inReach = new Long2ObjectOpenHashMap<>();
     // Each cell come to, and the stretch it is in.
@@ -62,10 +67,54 @@ final class LocalGround implements Ground, LevelReader {
 
     LocalGround(LocalWatch watch, List<Walker> walkers, List<Mob> bodies, Map<BlockPos, BlockState> changes) {
         this.watch = watch;
+        this.revision = watch.revision();
         this.walkers = walkers;
         this.bodies = bodies;
-        this.changes = changes;
+        this.changes = Map.copyOf(changes);
+        railOverlayOrigins = changes.values().stream().anyMatch(state -> state.is(BlockTags.RAILS))
+            ? walkers.stream().map(walker -> walker.source().blockPosition().immutable()).toList() : List.of();
         changes.keySet().forEach(cell -> Section.touchedBy(cell, changedSections));
+        for (Walker walker : walkers) {
+            base.put(walker.kind(), watch.geometry(walker, Map.of()));
+            if (!changes.isEmpty()) {
+                trial.put(walker.kind(), watch.geometry(walker, this.changes));
+            }
+        }
+    }
+
+    @Override
+    public boolean valid() {
+        if (!watch.valid(revision) || !walkers.stream().allMatch(Walker::current)) {
+            return false;
+        }
+        for (int i = 0; i < railOverlayOrigins.size(); i++) {
+            if (!railOverlayOrigins.get(i).equals(walkers.get(i).source().blockPosition())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    boolean terrainValid() {
+        return watch.valid(revision);
+    }
+
+    @Override
+    public boolean prepare(BlockPos feet, Ground.Budget budget) {
+        if (!valid()) {
+            return false;
+        }
+        int before = budget.used();
+        try {
+            for (Walker walker : walkers) {
+                if (section(walker, Section.keyOf(feet.asLong()), budget) == null) {
+                    return false;
+                }
+            }
+            return true;
+        } finally {
+            watch.worked(budget.used() - before);
+        }
     }
 
     @Override
@@ -173,18 +222,47 @@ final class LocalGround implements Ground, LevelReader {
         return new LocalGround(watch, walkers, bodies, merged);
     }
 
+    @Override
+    public Ground.Access accessFrom(Collection<BlockPos> exits) {
+        Ground.Access access = beginAccess(exits);
+        access.advance(Ground.Budget.unlimited());
+        return access;
+    }
+
+    @Override
+    public Ground.Access beginAccess(Collection<BlockPos> exits) {
+        return watch.access(this, walkers.size() == 1 ? walkers.getFirst() : null, changes, exits);
+    }
+
     private Section section(Walker walker, long key) {
-        if (!changedSections.contains(key)) {
-            return watch.section(walker, key);
+        return section(walker, key, Ground.Budget.unlimited());
+    }
+
+    @Nullable
+    Section section(Walker walker, long key, Ground.Budget budget) {
+        Preparation pending = preparing.get(walker.kind());
+        if (pending == null || pending.key() != key) {
+            if (budget.exhausted()) {
+                return null;
+            }
+            pending = new Preparation(key, read(walker, key));
+            preparing.put(walker.kind(), pending);
         }
-        Long2ObjectOpenHashMap<Section> sections =
-            trial.computeIfAbsent(walker.kind(), kind -> new Long2ObjectOpenHashMap<>());
-        Section known = sections.get(key);
-        if (known == null) {
-            known = Survey.of(watch.level(), key, walker, changes);
-            sections.put(key, known);
+        pending.read().use(walker);
+        pending.read().advance(budget);
+        Section result = pending.read().result();
+        if (result != null) {
+            preparing.remove(walker.kind());
         }
-        return known;
+        return result;
+    }
+
+    Survey.Read read(Walker walker, long key) {
+        LocalWatch.Geometry geometry = (changedSections.contains(key) ? trial : base).get(walker.kind());
+        return geometry.read(key);
+    }
+
+    private record Preparation(long key, Survey.Read read) {
     }
 
     private Long2IntOpenHashMap reached() {
@@ -273,7 +351,7 @@ final class LocalGround implements Ground, LevelReader {
         }
     }
 
-    private boolean inSight(BlockPos feet, BlockPos target) {
+    boolean inSight(BlockPos feet, BlockPos target) {
         if (Math.abs(feet.getX() - target.getX()) <= 1 && Math.abs(feet.getY() - target.getY()) <= 1
             && Math.abs(feet.getZ() - target.getZ()) <= 1) {
             return true;

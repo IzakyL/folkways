@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.colony.Holding;
 import io.github.izakyl.folkways.core.api.passage.Hop;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.resident.Locomotion;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Closures;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -27,6 +28,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.entity.Mob;
 
 public final class ColonyWays {
 
@@ -87,6 +89,16 @@ public final class ColonyWays {
         GRAPHS.forEach((track, graph) -> {
             if (track.server() == level.getServer() && track.dimension().equals(level.dimension())) {
                 graph.walkedEdge(from, to, ticks);
+            }
+        });
+    }
+
+    /** Failure of an actual intermediate walk, with the native body and movement rules that failed. */
+    public static void wrongEdge(ServerLevel level, Resident who, Locomotion moving, Mob body,
+            WorldPos from, WorldPos to) {
+        GRAPHS.forEach((track, graph) -> {
+            if (track.server() == level.getServer() && track.dimension().equals(level.dimension())) {
+                graph.wrongEdge(who, moving, body, from, to);
             }
         });
     }

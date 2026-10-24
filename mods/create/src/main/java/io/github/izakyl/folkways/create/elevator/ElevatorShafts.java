@@ -6,6 +6,7 @@ import com.simibubi.create.content.contraptions.elevator.ElevatorContactBlock;
 import com.simibubi.create.content.contraptions.elevator.ElevatorContraption;
 import io.github.izakyl.folkways.core.api.terms.Keepouts;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -39,10 +40,19 @@ final class ElevatorShafts implements Keepouts.Keepout {
     }
 
     static void unload(LevelEvent.Unload event) {
-        if (event.getLevel() instanceof ServerLevel level) SNAPSHOTS.remove(level);
+        if (event.getLevel() instanceof ServerLevel level) {
+            var removed = SNAPSHOTS.remove(level);
+            if (removed != null && !removed.isEmpty()) Keepouts.changed();
+        }
+    }
+
+    @Override
+    public void refresh(Level level) {
+        if (level instanceof ServerLevel server && server.getServer().isSameThread()) refresh(server);
     }
 
     static void refresh(ServerLevel level) {
+        if (!level.getServer().isSameThread()) return;
         Map<Long, List<Shaft>> byChunk = new HashMap<>();
         for (var entity : level.getAllEntities()) {
             if (!(entity instanceof AbstractContraptionEntity vehicle) || !vehicle.isAlive()
@@ -74,8 +84,16 @@ final class ElevatorShafts implements Keepouts.Keepout {
                 maxFloor + maxBlock + 1 - contraption.getContactYOffset());
             for (long chunk : chunks) byChunk.computeIfAbsent(chunk, ignored -> new ArrayList<>()).add(shaft);
         }
-        byChunk.replaceAll((chunk, shafts) -> List.copyOf(shafts));
-        SNAPSHOTS.put(level, Map.copyOf(byChunk));
+        byChunk.replaceAll((chunk, shafts) -> {
+            shafts.sort(Comparator.comparing(Shaft::vehicle));
+            return List.copyOf(shafts);
+        });
+        Map<Long, List<Shaft>> next = Map.copyOf(byChunk);
+        var previous = SNAPSHOTS.get(level);
+        if (previous == null ? next.isEmpty() : previous.equals(next)) return;
+        // Publish before advancing the version, so a fresh certificate sees this geometry.
+        SNAPSHOTS.put(level, next);
+        Keepouts.changed();
     }
 
     @Override

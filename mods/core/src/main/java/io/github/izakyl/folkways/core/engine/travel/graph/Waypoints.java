@@ -565,6 +565,14 @@ final class Waypoints {
         forget(id);
     }
 
+    void blockedAt(long cell) {
+        int id = byCell.get(cell);
+        if (id < 0) return;
+        drop(id);
+        // A suspended Quest must not harvest an old search into the just-invalidated net.
+        era++;
+    }
+
     private void dropBetween(int id, int left, int right) {
         out.get(left).removeIf(link -> link.to == id);
         out.get(right).removeIf(link -> link.to == id);

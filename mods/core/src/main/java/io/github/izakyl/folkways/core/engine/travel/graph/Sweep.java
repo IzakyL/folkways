@@ -12,6 +12,8 @@ import net.minecraft.world.level.PathNavigationRegion;
 import net.minecraft.world.level.pathfinder.BinaryHeap;
 import net.minecraft.world.level.pathfinder.Node;
 import net.minecraft.world.level.pathfinder.NodeEvaluator;
+import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.pathfinder.PathfindingContext;
 
 final class Sweep {
 
@@ -61,7 +63,9 @@ final class Sweep {
         evaluator.prepare(region, sizing);
         try {
             Node start = evaluator.getStart();
-            if (start == null || shut.test(BlockPos.asLong(start.x, start.y, start.z))) {
+            if (start == null || shut.test(BlockPos.asLong(start.x, start.y, start.z))
+                    || evaluator.getPathTypeOfMob(new PathfindingContext(region, sizing),
+                        start.x, start.y, start.z, sizing) == PathType.BLOCKED) {
                 return new Swept(List.of(), List.of(), false, false, null, 0);
             }
             List<Node> settled = wide ? new ArrayList<>() : List.of();

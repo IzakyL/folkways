@@ -1,4 +1,4 @@
-package io.github.izakyl.folkways.plugins.build;
+package io.github.izakyl.folkways.core.api.terms;
 
 import java.util.HashMap;
 import java.util.List;
@@ -29,29 +29,29 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * The world as it would be with some cells drawn over, changed in place: a plan asks whether a block stays with one
  * neighbour taken away, and puts it back after, without copying every cell it has drawn.
  */
-final class Sketch implements LevelReader {
+public final class BlockSketch implements LevelReader {
 
     private final LevelReader world;
     private final Map<BlockPos, BlockState> drawn = new HashMap<>();
 
-    Sketch(LevelReader world) {
+    public BlockSketch(LevelReader world) {
         this.world = world;
     }
 
-    void draw(BlockPos cell, BlockState state) {
+    public void draw(BlockPos cell, BlockState state) {
         drawn.put(cell.immutable(), state);
     }
 
-    void drawAll(Map<BlockPos, BlockState> cells) {
+    public void drawAll(Map<BlockPos, BlockState> cells) {
         cells.forEach(this::draw);
     }
 
     @Nullable
-    BlockState lift(BlockPos cell) {
+    public BlockState lift(BlockPos cell) {
         return drawn.remove(cell);
     }
 
-    void restore(BlockPos cell, @Nullable BlockState was) {
+    public void restore(BlockPos cell, @Nullable BlockState was) {
         if (was == null) {
             drawn.remove(cell);
         } else {

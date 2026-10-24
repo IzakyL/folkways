@@ -36,6 +36,7 @@ final class Survey {
 
     // How far a body stands from the cell it works: as far as its hands reach.
     private static final int REACH = (int) Math.floor(Reach.PLAYER_BLOCK_REACH);
+    private static final int CLEAR_REACH = (int) Math.ceil(Reach.PLAYER_BLOCK_REACH);
 
     private static final Comparator<BlockPos> DOWNWARD =
         Comparator.comparingInt((BlockPos cell) -> -cell.getY())
@@ -57,10 +58,12 @@ final class Survey {
     private final ServerLevel level;
     private final Set<BlockPos> cells;
     private final Map<BlockPos, Boolean> footed = new HashMap<>();
+    private final ClearOrder clearing;
 
     Survey(ServerLevel level, Set<BlockPos> cells) {
         this.level = level;
         this.cells = cells;
+        this.clearing = new ClearOrder(level);
     }
 
     List<Job> clear(Predicate<BlockPos> member) {
@@ -68,19 +71,47 @@ final class Survey {
     }
 
     // Every block in the box goes, but a colony's own blocks, liquids, what no hand breaks and what the zone keeps.
-    // A cell waits for the one over it, and nobody digs out the block they stand on. A cell other work of the zone
-    // has taken is left to it, and what lies under it waits for that work too.
+    // Attachments go first and their supports wait. Ordinary cells still go top down, and nobody digs out the
+    // block they stand on. A cell other work has taken is left to it, including any supports it still needs.
     List<Job> clear(Predicate<BlockPos> member, Predicate<BlockState> kept, Set<BlockPos> claimed) {
         Predicate<BlockPos> wanted = toClear(member, kept);
         List<Job> jobs = new ArrayList<>();
+        Set<BlockPos> grouped = new HashSet<>();
         for (BlockPos cell : sorted(DOWNWARD)) {
-            if (!wanted.test(cell) || claimed.contains(cell)
-                || !discovering && cells.contains(cell.above()) && wanted.test(cell.above())) {
+            if (!wanted.test(cell) || claimed.contains(cell) || grouped.contains(cell)) {
                 continue;
             }
-            stances(cell, Set.of(cell.above())).ifPresent(where -> jobs.add(Job.at(cell, site(cell), where)));
+            List<BlockPos> parts = ClearOrder.parts(level, cell);
+            boolean whole = parts.stream().allMatch(part -> cells.contains(part) && wanted.test(part)
+                && !claimed.contains(part));
+            if (!whole && !discovering) {
+                continue;
+            }
+            // Keep blocked work in the initial target snapshot so the zone cannot complete around it.
+            if (!whole) {
+                parts = List.of(cell);
+            }
+            grouped.addAll(parts);
+            BlockPos anchor = parts.getFirst();
+            Set<BlockPos> own = Set.copyOf(parts);
+            if (!discovering && (clearing.blocked(parts)
+                    || clearing.priority(parts) == ClearOrder.ORDINARY && parts.stream().anyMatch(part ->
+                        cells.contains(part.above()) && !own.contains(part.above()) && wanted.test(part.above())))) {
+                continue;
+            }
+            Set<BlockPos> barred = new HashSet<>(parts);
+            parts.forEach(part -> barred.add(part.above()));
+            List<BlockPos> affected = parts;
+            clearStances(anchor, barred).ifPresent(where -> jobs.add(new Job(Job.keyOf(anchor), site(anchor), anchor,
+                affected, List.of(), where)));
         }
-        return jobs;
+        if (discovering || jobs.isEmpty()) {
+            return jobs;
+        }
+        // The planner may reorder independent jobs. Offer only the highest executable tier, rather than relying
+        // on list order to make side attachments precede vertical dependents and then ordinary clearing.
+        int first = jobs.stream().mapToInt(job -> clearing.priority(job.cells())).min().orElse(ClearOrder.ORDINARY);
+        return jobs.stream().filter(job -> clearing.priority(job.cells()) == first).toList();
     }
 
     List<Job> fill() {
@@ -217,6 +248,31 @@ final class Survey {
 
     private WorkSite site(BlockPos cell) {
         return new WorkSite.AtBlock(WorldPos.of(level, cell));
+    }
+
+    // High attachments can be reached from the ground without climbing onto their support. Use the same
+    // reach, sight and standing checks as other block work, while keeping the cells this break removes barred.
+    private Optional<Stances> clearStances(BlockPos target, Set<BlockPos> barred) {
+        if (discovering) {
+            return Optional.of(Stances.WHEREVER);
+        }
+        if (!level.isLoaded(target)) {
+            return Optional.empty();
+        }
+        Set<BlockPos> found = new LinkedHashSet<>();
+        for (int dx = -CLEAR_REACH; dx <= CLEAR_REACH; dx++) {
+            for (int dy = -CLEAR_REACH; dy <= CLEAR_REACH; dy++) {
+                for (int dz = -CLEAR_REACH; dz <= CLEAR_REACH; dz++) {
+                    BlockPos feet = target.offset(dx, dy, dz);
+                    if (!barred.contains(feet) && Reach.withinReach(feet, target) && footed.computeIfAbsent(feet,
+                            at -> level.isLoaded(at) && Footing.withFeetAt(level, at))
+                            && Reach.inSight(level, feet, target)) {
+                        found.add(feet);
+                    }
+                }
+            }
+        }
+        return Stances.of(level, found);
     }
 
     // Everywhere a body stands in reach of the cell, from a level below it to one above, but the cells the work
