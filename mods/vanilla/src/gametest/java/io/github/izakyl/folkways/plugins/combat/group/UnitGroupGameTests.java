@@ -70,6 +70,93 @@ public final class UnitGroupGameTests {
             }).thenSucceed();
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 1500)
+    public static void fourResidentsRoundSingleFileBendsAndClimbTwoStepsBeforeReforming(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(4);
+        // A solid barrier leaves one L-shaped, single-cell route between the two rooms.
+        for (int x = 6; x <= 17; x++) {
+            for (int z = 0; z < 22; z++) {
+                for (int y = 1; y <= 5; y++) { helper.setBlock(new BlockPos(x, y, z), Blocks.STONE); }
+            }
+        }
+        for (int x = 6; x <= 10; x++) {
+            for (int y = 1; y <= 4; y++) { helper.setBlock(new BlockPos(x, y, 10), Blocks.AIR); }
+        }
+        for (int z = 10; z <= 15; z++) {
+            for (int y = 1; y <= 4; y++) { helper.setBlock(new BlockPos(10, y, z), Blocks.AIR); }
+        }
+        for (int x = 10; x <= 17; x++) {
+            int floor = x < 15 ? 0 : x == 15 ? 1 : 2;
+            for (int y = 1; y <= 5; y++) {
+                helper.setBlock(new BlockPos(x, y, 15), y <= floor ? Blocks.STONE : Blocks.AIR);
+            }
+        }
+        for (int x = 18; x < 22; x++) {
+            for (int z = 12; z <= 18; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+                helper.setBlock(new BlockPos(x, 2, z), Blocks.STONE);
+            }
+        }
+        Set<UUID> firstBend = new HashSet<>();
+        Set<UUID> secondBend = new HashSet<>();
+        helper.onEachTick(() -> {
+            for (Body body : people) {
+                if (Reach.standingAt(body.mob().position(), scene.at(10, 1, 10).block(scene.level))) { firstBend.add(body.id()); }
+                if (Reach.standingAt(body.mob().position(), scene.at(10, 1, 15).block(scene.level))) { secondBend.add(body.id()); }
+            }
+        });
+        UnitGroup group = scene.groups.create(people);
+        group.move(new Deployment(scene.at(20, 3, 12), scene.at(20, 3, 18),
+            new Vec3(1, 0, 0), new Deployment.Formation(2)));
+        helper.assertTrue(group.phase() == UnitGroup.Phase.COLUMN,
+            "a two-block drop at the rear transit slot must preserve sequential column entry");
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.HOLDING,
+                "all four residents must round both bends and climb the steps; phase=" + group.phase()))
+            .thenExecute(() -> {
+                helper.assertValueEqual(firstBend.size(), 4, "every resident physically passes the first narrow bend");
+                helper.assertValueEqual(secondBend.size(), 4, "every resident physically passes the second narrow bend");
+                scene.assertLine(helper, group, people);
+                helper.assertTrue(people.stream().allMatch(body -> Math.abs(body.mob().getY()
+                    - scene.at(20, 3, 15).block(scene.level).getY()) < .1),
+                    "the complete formation stands on the raised destination floor");
+                group.release();
+                helper.assertTrue(people.stream().allMatch(body -> scene.commands.current(body.id()).isEmpty()),
+                    "terrain traversal leaves no independent navigator after release");
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 900)
+    public static void anUnreachableAdjustedTransitSlotFallsBackOnceToTheReachableFinalLine(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(4);
+        // The last projected column cell has safe standing room two blocks down, sealed under a low roof.
+        // The requested final line at x=18 remains unobstructed and is reachable around this single-cell pit.
+        for (int x = 11; x <= 13; x++) {
+            for (int z = 9; z <= 11; z++) {
+                for (int y = -2; y <= 0; y++) { helper.setBlock(new BlockPos(x, y, z), Blocks.STONE); }
+            }
+        }
+        for (int y = -1; y <= 1; y++) { helper.setBlock(new BlockPos(12, y, 10), Blocks.AIR); }
+        helper.setBlock(new BlockPos(12, 2, 10), Blocks.STONE);
+        UnitGroup group = scene.groups.create(people);
+        group.move(scene.line(18));
+        helper.assertTrue(group.phase() == UnitGroup.Phase.COLUMN, "the initially safe adjusted column is tried sequentially");
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.LINE,
+                "failure of the optional lowered transit slot must issue the already validated final line once; phase=" + group.phase()))
+            .thenExecute(() -> helper.assertTrue(group.destinations().values().stream()
+                .allMatch(at -> at.cell().getY() == scene.at(18, 1, 10).cell().getY()),
+                "the inaccessible staging height is abandoned rather than retried"))
+            .thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.HOLDING,
+                "all four residents physically reach the original final line after the bounded fallback"))
+            .thenExecute(() -> {
+                scene.assertLine(helper, group, people);
+                group.release();
+            }).thenSucceed();
+    }
+
     @GameTest(template = "empty_large", timeoutTicks = 1600)
     public static void fourResidentsPhysicallyPatrolThreeStopsAndLoopUntilReleased(GameTestHelper helper) {
         Scene scene = new Scene(helper);
@@ -139,6 +226,50 @@ public final class UnitGroupGameTests {
                 "the patrol resumes its next formation after regrouping"))
             .thenExecute(() -> scene.assertLine(helper, group, people))
             .thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 750)
+    public static void oneGuardFormationFightsReformsAndReleasesThroughItsActualGroup(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(2);
+        people.forEach(body -> body.pack().insert(new ItemStack(Items.IRON_SWORD)));
+        UnitGroup group = scene.groups.create(people);
+        group.guard(scene.line(8));
+        AtomicReference<Zombie> foe = new AtomicReference<>();
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.HOLDING, "one guard formation assembles"))
+            .thenExecute(() -> {
+                helper.assertTrue(group.patrolRoute().isEmpty(), "one post does not become a disguised looping patrol");
+                helper.assertTrue(people.stream().allMatch(body -> scene.commands.current(body.id())
+                    .filter(order -> order.mode() == ResidentCommands.Mode.GUARD).isPresent()), "the whole actual group uses guard priority");
+                Zombie enemy = EntityType.ZOMBIE.create(scene.level);
+                enemy.setNoAi(true);
+                enemy.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.CARVED_PUMPKIN));
+                BlockPos at = scene.at(14, 1, 10).block(scene.level);
+                enemy.moveTo(at.getX() + .5, at.getY(), at.getZ() + .5);
+                scene.level.addFreshEntity(enemy); scene.enemies.add(enemy); foe.set(enemy);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(foe.get().getHealth() < foe.get().getMaxHealth()
+                && group.phase() == UnitGroup.Phase.ENGAGING, "a single guard post initiates real combat"))
+            .thenExecute(() -> {
+                helper.assertTrue(people.stream().allMatch(body -> scene.groups.ofResident(body.id()).orElseThrow() == group),
+                    "combat keeps actual membership under the same squad");
+                foe.get().discard();
+            })
+            .thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.HOLDING, "guards return to the same post after combat"))
+            .thenExecute(() -> {
+                scene.assertLine(helper, group, people);
+                group.remove(people.getFirst().id());
+            })
+            .thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.HOLDING
+                    && group.destinations().size() == 1, "the remaining guard reforms after a member leaves"))
+            .thenExecute(() -> {
+                helper.assertTrue(scene.commands.current(people.get(1).id()).orElseThrow().mode() == ResidentCommands.Mode.GUARD,
+                    "member changes preserve guard semantics");
+                group.release();
+                helper.assertTrue(people.stream().allMatch(body -> scene.commands.current(body.id()).isEmpty()),
+                    "one group release relinquishes every guard handle");
+            }).thenSucceed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 900)

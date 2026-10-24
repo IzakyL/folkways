@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.plugins.combat.command;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
+import io.github.izakyl.folkways.core.api.work.NodeState;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
@@ -29,6 +30,9 @@ final class CommandNode implements Node {
     public boolean directTravel() { return true; }
     public boolean staysAtWorkSite() { return true; }
     public boolean ready(ServerLevel level) { return commands.active(order); }
+    public void changed(ServerLevel level, NodeState state) {
+        if (state == NodeState.WORKING) { commands.taking(order); }
+    }
     public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
     public void released(ServerLevel level, Worker who, Ending how) { commands.ended(order, how); }
 }

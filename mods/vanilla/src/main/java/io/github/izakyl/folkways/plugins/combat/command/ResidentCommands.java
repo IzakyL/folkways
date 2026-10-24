@@ -36,6 +36,7 @@ public final class ResidentCommands {
         private final Optional<Vec3> facing;
         private long movingSince = server.overworld().getGameTime();
         private long engagedUntil = Long.MIN_VALUE;
+        private boolean yielded;
         private volatile Status status = Status.MOVING;
         private volatile RefusalKind failure;
 
@@ -176,15 +177,22 @@ public final class ResidentCommands {
         if (how instanceof Ending.Failed failed && active.remove(order.resident(), order)) {
             order.failure = failed.why();
             order.status = Status.FAILED;
+        } else if (active.get(order.resident()) == order && order.mode == Mode.GUARD) {
+            // Only a command that actually owned the runner can yield it. A never-started order
+            // still has its original bounded timeout instead of waiting forever for execution.
+            order.yielded = true;
         }
     }
+
+    void taking(Order order) { order.yielded = false; }
 
     void tick(MinecraftServer ignored) {
         for (Order order : List.copyOf(active.values())) {
             if (!valid(order.body)) {
                 release(order);
-            } else if (order.engaged() && order.status == Status.MOVING) {
-                // Combat is not failed travel. Resume the timeout budget only after it yields the body back.
+            } else if (order.mode == Mode.GUARD && (order.engaged() || order.yielded)
+                    && order.status == Status.MOVING) {
+                // Combat and fear borrow this same runner. Only time owned by the command is travel time.
                 order.movingSince++;
             } else if (order.status == Status.MOVING && server.overworld().getGameTime() - order.movingSince >= 1200) {
                 active.remove(order.resident(), order);

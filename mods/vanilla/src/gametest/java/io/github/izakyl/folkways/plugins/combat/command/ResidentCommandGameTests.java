@@ -218,6 +218,54 @@ public final class ResidentCommandGameTests {
             }).thenSucceed();
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 1900)
+    public static void repeatedFearInterruptionsDoNotConsumeTheGuardsTravelTimeout(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body body = f.resident(new BlockPos(2, 1, 5));
+        body.mob().getRandom().setSeed(42L);
+        WorldPos slot = f.at(18, 1, 5);
+        ResidentCommands.Order guard = f.commands.guard(body, slot, new Vec3(1, 0, 0));
+        AtomicBoolean burning = new AtomicBoolean();
+        AtomicInteger burns = new AtomicInteger();
+        helper.onEachTick(() -> {
+            if (burning.get() && f.level.getGameTime() % 20 == 0) {
+                body.mob().hurt(f.level.damageSources().campfire(), .01F);
+                burns.incrementAndGet();
+            }
+        });
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(guard.status() == ResidentCommands.Status.MOVING
+                    && body.mob().getX() > f.at(3, 1, 5).block(f.level).getX() + .5
+                    && !io.github.izakyl.folkways.core.api.terms.Reach.standingAt(body.mob().position(), slot.block(f.level)),
+                "the guard physically starts its long trip and has not arrived when danger begins"))
+            .thenExecute(() -> {
+                burning.set(true);
+                body.mob().hurt(f.level.damageSources().campfire(), .01F);
+                burns.incrementAndGet();
+            })
+            .thenWaitUntil(() -> helper.assertTrue(body.doing()
+                    .filter(doing -> doing.toward().orElse(doing.what()).equals(FearContent.FLEEING)).isPresent()
+                    && guard.status() == ResidentCommands.Status.MOVING
+                    && !io.github.izakyl.folkways.core.api.terms.Reach.standingAt(body.mob().position(), slot.block(f.level)),
+                "actual repeated fire damage makes fear take the runner away from the guard slot"))
+            .thenIdle(1280)
+            .thenExecute(() -> {
+                helper.assertTrue(burns.get() >= 60, "more than a minute of repeated danger has really elapsed");
+                helper.assertTrue(body.mob().isAlive(), "tiny real burns keep the long interruption nonlethal");
+                helper.assertTrue(f.commands.current(body.id()).filter(order -> order == guard).isPresent()
+                        && guard.status() != ResidentCommands.Status.FAILED,
+                    "time spent in fear must not exhaust the guard's finite travel budget");
+                burning.set(false);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(guard.status() == ResidentCommands.Status.HOLDING
+                    && io.github.izakyl.folkways.core.api.terms.Reach.standingAt(body.mob().position(), slot.block(f.level)),
+                "after danger ends the same guard handle returns through the same runner"))
+            .thenExecute(() -> {
+                guard.close();
+                helper.assertTrue(f.commands.current(body.id()).isEmpty(), "release relinquishes the recovered guard");
+            }).thenSucceed();
+    }
+
     @GameTest(template = "empty_large", timeoutTicks = 260)
     public static void replacingATripCannotBeCancelledByItsOldHandle(GameTestHelper helper) {
         Fixture f = new Fixture(helper);

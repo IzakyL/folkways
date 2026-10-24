@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -13,6 +14,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.pathfinder.PathfindingContext;
+import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 import net.minecraft.world.phys.Vec3;
 
 public final class UnitGroup {
@@ -28,9 +32,11 @@ public final class UnitGroup {
     private Phase phase = Phase.IDLE;
     private List<WorldPos> column = List.of();
     private int columnAt;
+    private boolean adjustedColumn;
     private List<Deployment> patrol = List.of();
     private int patrolAt = -1;
     private long assembledSince = Long.MIN_VALUE;
+    private ResidentCommands.Mode mode = ResidentCommands.Mode.HOLD;
     boolean changed;
 
     UnitGroup(UnitGroups owner, UUID id) { this.owner = owner; this.id = id; }
@@ -38,7 +44,7 @@ public final class UnitGroup {
     public UUID id() { return id; }
     public Set<UUID> members() { return Set.copyOf(members); }
     public Phase phase() {
-        return !patrol.isEmpty() && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)
+        return mode == ResidentCommands.Mode.GUARD && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)
             ? Phase.ENGAGING : phase;
     }
     /** Transient route and current stop; membership alone is persisted. */
@@ -62,6 +68,18 @@ public final class UnitGroup {
     public void move(Deployment intent) { deploy(intent, true); }
     /** Establish a line at the given endpoints without a preliminary column. */
     public void hold(Deployment intent) { deploy(intent, false); }
+    /** Establish one interruptible guard formation, returning to its slots after combat or fear. */
+    public void guard(Deployment intent) {
+        begin(intent, false, ResidentCommands.Mode.GUARD);
+        patrol = List.of();
+        patrolAt = -1;
+    }
+    /** Retreat as one actual squad; release and later deployments retain ownership of every retreat handle. */
+    public void retreat(Deployment intent) {
+        begin(intent, false, ResidentCommands.Mode.RETREAT);
+        patrol = List.of();
+        patrolAt = -1;
+    }
 
     /** Cycle through two to sixteen formations, assembling before leaving each stop. */
     public void patrol(List<Deployment> route) {
@@ -79,7 +97,7 @@ public final class UnitGroup {
             List<WorldPos> cells = stop.line(Math.max(1, bodies.size()));
             validate(bodies, cells);
         }
-        begin(next.getFirst(), true, true);
+        begin(next.getFirst(), true, ResidentCommands.Mode.GUARD);
         patrol = next;
         patrolAt = 0;
     }
@@ -95,31 +113,35 @@ public final class UnitGroup {
     }
 
     private void deploy(Deployment intent, boolean column) {
-        begin(intent, column, false);
+        begin(intent, column, ResidentCommands.Mode.HOLD);
         patrol = List.of();
         patrolAt = -1;
     }
 
-    private void begin(Deployment intent, boolean column, boolean guarding) {
+    private void begin(Deployment intent, boolean column, ResidentCommands.Mode mode) {
         owner.requireGroup(this);
         List<Body> bodies = loaded(intent);
         if (bodies.isEmpty()) {
             orders.values().forEach(ResidentCommands.Order::close);
             orders.clear();
             deployment = intent;
+            this.mode = mode;
             phase = Phase.WAITING;
             assembledSince = Long.MIN_VALUE;
+            adjustedColumn = false;
             return;
         }
         List<WorldPos> line = intent.line(bodies.size());
         validate(bodies, line);
-        List<WorldPos> cells = column ? intent.column(bodies.size()) : line;
+        List<WorldPos> cells = line;
         if (column) {
-            try { validate(bodies, cells); }
+            try { cells = terrainColumn(bodies, intent.column(bodies.size())); }
             catch (IllegalArgumentException unavailable) { cells = line; column = false; }
         }
         deployment = intent;
-        issue(bodies, cells, column ? Phase.COLUMN : Phase.LINE, guarding);
+        this.mode = mode;
+        adjustedColumn = column && !cells.equals(intent.column(bodies.size()));
+        issue(bodies, cells, column ? Phase.COLUMN : Phase.LINE, mode);
     }
 
     public void release() {
@@ -130,6 +152,8 @@ public final class UnitGroup {
         patrol = List.of();
         patrolAt = -1;
         assembledSince = Long.MIN_VALUE;
+        mode = ResidentCommands.Mode.HOLD;
+        adjustedColumn = false;
         phase = Phase.IDLE;
     }
 
@@ -161,13 +185,21 @@ public final class UnitGroup {
         bodies.forEach(body -> present.add(body.id()));
         if (changed || !present.equals(orders.keySet())) {
             changed = false;
-            try { begin(deployment, true, !patrol.isEmpty()); }
+            try { begin(deployment, true, mode); }
             catch (IllegalArgumentException unavailable) { fail(); }
             return;
         }
         if (orders.values().stream().anyMatch(order -> order.status() == ResidentCommands.Status.FAILED)) {
-            fail();
-        } else if (!patrol.isEmpty() && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)) {
+            if (phase == Phase.COLUMN && adjustedColumn) {
+                // Local standing room is not proof that a height-adjusted transit slot is reachable.
+                // Abandon that optional staging once; the exact final line still gets only one attempt.
+                try {
+                    List<WorldPos> line = deployment.line(bodies.size());
+                    validate(bodies, line);
+                    issue(bodies, line, Phase.LINE, mode);
+                } catch (IllegalArgumentException unavailable) { fail(); }
+            } else { fail(); }
+        } else if (mode == ResidentCommands.Mode.GUARD && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)) {
             assembledSince = Long.MIN_VALUE;
         } else if (phase == Phase.HOLDING && orders.values().stream()
                 .anyMatch(order -> order.status() == ResidentCommands.Status.MOVING)) {
@@ -180,12 +212,12 @@ public final class UnitGroup {
                     if (++columnAt < bodies.size()) {
                         Body next = bodies.get(columnAt);
                         orders.get(next.id()).close();
-                        orders.put(next.id(), order(next, column.get(columnAt), !patrol.isEmpty()));
+                        orders.put(next.id(), order(next, column.get(columnAt), mode));
                         return;
                     }
                     List<WorldPos> line = deployment.line(bodies.size());
                     validate(bodies, line);
-                    issue(bodies, line, Phase.LINE, !patrol.isEmpty());
+                    issue(bodies, line, Phase.LINE, mode);
                 } catch (IllegalArgumentException unavailable) { fail(); }
             } else {
                 phase = Phase.HOLDING;
@@ -195,7 +227,7 @@ public final class UnitGroup {
                     if (now - assembledSince >= PATROL_PAUSE) {
                         int next = (patrolAt + 1) % patrol.size();
                         try {
-                            begin(patrol.get(next), true, true);
+                            begin(patrol.get(next), true, ResidentCommands.Mode.GUARD);
                             patrolAt = next;
                         } catch (IllegalArgumentException unavailable) { fail(); }
                     }
@@ -204,29 +236,34 @@ public final class UnitGroup {
         }
     }
 
-    private void issue(List<Body> bodies, List<WorldPos> cells, Phase next, boolean guarding) {
+    private void issue(List<Body> bodies, List<WorldPos> cells, Phase next, ResidentCommands.Mode mode) {
         orders.values().forEach(ResidentCommands.Order::close);
         orders.clear();
         column = next == Phase.COLUMN ? List.copyOf(cells) : List.of();
+        if (next != Phase.COLUMN) { adjustedColumn = false; }
         columnAt = 0;
         for (int n = 0; n < bodies.size(); n++) {
             Body body = bodies.get(n);
             // Followers hold clear of the approach until their predecessor reaches its column slot.
             WorldPos target = next == Phase.COLUMN && n > 0 ? WorldSpaces.at(body.mob()) : cells.get(n);
-            orders.put(body.id(), order(body, target, guarding));
+            orders.put(body.id(), order(body, target, mode));
         }
         phase = next;
         changed = false;
         assembledSince = Long.MIN_VALUE;
     }
 
-    private ResidentCommands.Order order(Body body, WorldPos destination, boolean guarding) {
+    private ResidentCommands.Order order(Body body, WorldPos destination, ResidentCommands.Mode mode) {
         ServerLevel level = (ServerLevel) body.mob().level();
         var point = deployment.left();
         Vec3 from = WorldSpaces.world(level, point).orElseThrow();
         var offset = net.minecraft.core.BlockPos.containing(Vec3.atLowerCornerOf(point.cell()).add(deployment.front().scale(10)));
         Vec3 front = WorldSpaces.world(level, point.at(offset)).orElseThrow().subtract(from).normalize();
-        return guarding ? owner.commands.guard(body, destination, front) : owner.commands.hold(body, destination, front);
+        return switch (mode) {
+            case GUARD -> owner.commands.guard(body, destination, front);
+            case RETREAT -> owner.commands.retreat(body, destination);
+            default -> owner.commands.hold(body, destination, front);
+        };
     }
 
     private void validate(List<Body> bodies, List<WorldPos> cells) {
@@ -238,6 +275,33 @@ public final class UnitGroup {
                 throw new IllegalArgumentException("a formation slot has no standing room");
             }
         }
+    }
+
+    /** Transit slots may follow at most two blocks of local rise/drop; the final line remains exact. */
+    private List<WorldPos> terrainColumn(List<Body> bodies, List<WorldPos> planned) {
+        List<WorldPos> cells = new ArrayList<>(bodies.size());
+        for (int n = 0; n < bodies.size(); n++) {
+            Body body = bodies.get(n);
+            ServerLevel level = (ServerLevel) body.mob().level();
+            WorldPos desired = planned.get(n);
+            WorldPos found = null;
+            for (int dy : new int[] {0, -1, 1, -2, 2}) {
+                WorldPos candidate = desired.at(desired.cell().offset(0, dy, 0));
+                if (!candidate.sameRealm(WorldSpaces.at(body.mob())) || !candidate.in(level)) { continue; }
+                var feet = candidate.block(level);
+                if (!level.hasChunksAt(feet.offset(-1, -1, -1), feet.offset(1, 2, 1))
+                        || !Footing.withFeetAt(level, feet)
+                        || !level.getFluidState(feet).isEmpty() || !level.getFluidState(feet.above()).isEmpty()
+                        || WalkNodeEvaluator.getPathTypeStatic(new PathfindingContext(level, body.mob()), feet.mutable())
+                            != PathType.WALKABLE || cells.contains(candidate)) { continue; }
+                owner.commands.validate(body, candidate);
+                found = candidate;
+                break;
+            }
+            if (found == null) { throw new IllegalArgumentException("a transit column slot has no safe local footing"); }
+            cells.add(found);
+        }
+        return List.copyOf(cells);
     }
 
     private List<Body> loaded() { return loaded(deployment); }
