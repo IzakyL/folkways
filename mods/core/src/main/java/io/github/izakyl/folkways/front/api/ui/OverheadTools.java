@@ -23,6 +23,8 @@ public final class OverheadTools {
         default List<Cue> cues() { return List.of(); }
         /** Space reserved at the bottom of the overhead view for this tool's controls. */
         default int bottomInset() { return 0; }
+        /** A pointer gesture can reserve the descent modifier without changing the camera's global bindings. */
+        default boolean blocksCameraDescent() { return false; }
         default boolean mouseClicked(double mouseX, double mouseY, int button) { return false; }
         default boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
             return false;

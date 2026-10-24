@@ -187,7 +187,8 @@ public final class Overhead {
         double aside = (Pressed.held(minecraft.options.keyRight) ? 1.0D : 0.0D)
             - (Pressed.held(minecraft.options.keyLeft) ? 1.0D : 0.0D);
         double climb = (Pressed.held(minecraft.options.keyJump) ? 1.0D : 0.0D)
-            - (Pressed.held(minecraft.options.keyShift) ? 1.0D : 0.0D);
+            - (Pressed.held(minecraft.options.keyShift)
+                && !OverheadTools.selectedHandler().map(OverheadTools.Handler::blocksCameraDescent).orElse(false) ? 1.0D : 0.0D);
         if (ahead == 0.0D && aside == 0.0D && climb == 0.0D) {
             return;
         }

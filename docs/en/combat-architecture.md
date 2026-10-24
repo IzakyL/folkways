@@ -122,20 +122,32 @@ The page also provides retreat, release and melee/bow/crossbow preferences. Acti
 
 ### Optional War inputs in the V combat tool
 
-Core exposes generic OverheadTools.Handler callbacks and Overhead.screenRay(); Vanilla owns CombatPackets, SelectionOrders and UnitGroups.commandSelection(). Optional folkways_war installs the interaction handler onto Vanilla's existing combat tool and never owns navigation. Without War, the previous book action remains available.
+Core exposes generic OverheadTools.Handler callbacks and Overhead.screenRay(); Vanilla owns CombatPackets, SelectionOrders, CombatSelectionOwnership and actual UnitGroups. Optional folkways_war supplies the interaction handler without owning navigation.
 
-| Input                     | Result                                                                                         |
-| ------------------------- | ---------------------------------------------------------------------------------------------- |
-| LMB drag / click          | Select loaded colony residents by their projected screen rectangles / select one               |
-| Ctrl+1–9 / 1–9            | Save the exact current selection / recall currently available members                          |
-| RMB ground                | Move the logical captain to the clicked point while the whole squad advances around it         |
-| RMB nonfriendly mob       | Order the selection to attack that explicit target; residents, allies and players are excluded |
-| Ctrl+RMB                  | Mark mandatory waypoints; click any earlier marker to run the prefix then loop from that point |
-| Backspace / Esc or Delete | Undo the last point / cancel the draft                                                         |
+| Input                  | Result                                                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------- |
+| LMB drag / click       | Replace the visible selection with loaded, available colony residents                                           |
+| Shift+LMB              | Add boxed residents; toggle a single clicked resident; latch this choice on pointer press                       |
+| Ctrl+1–9               | Replace that shortcut with the exact selection; an identical set clears the shortcut while preserving selection |
+| 1–9                    | Recall the server's current members of that shortcut; top-row and numeric-pad keys are supported                |
+| RMB ground             | Immediately replace the route and move around the clicked logical captain destination                           |
+| RMB nonfriendly mob    | Order an explicit native attack; residents, allies and players are excluded                                     |
+| Ctrl+RMB               | Immediately execute or append one mandatory waypoint; revisit an earlier point to close a patrol                |
+| Esc / empty-ground LMB | Clear the visible selection; a second Esc can leave the overhead screen                                         |
 
-Shortcut sets can overlap and do not alter actual membership or labour. They last for this client session and clear on colony/realm change or logout. Drafts do not issue orders until closure; selection changes, missing members and leaving the tool or screen cancel them. MMB camera movement retains the route draft. Consumed shortcuts are latched until key release, preventing repeats and hotbar changes. The existing page remains available for guard posts, retreat, release and loadouts.
+Shortcuts may overlap, while each resident has at most one controlling player and one actual action squad. Vanilla retains a transient server-authoritative selection and nine shortcuts per player. Selection or any shortcut reference reserves that resident from ordinary planned labour; clearing one reference does not release another. Exact replacement ABC→AB releases C when C has no other reference. Rebinding ABC to an already identical shortcut clears only that shortcut; ABC remains selected and reserved.
 
-Marking A, B, C, D, then B submits `[A,B,C,D]` with `cycleStart=1`: visit A, then loop B→C→D→B. Every designated stop assembles present members and waits 20 ticks. A separate transient PointRoute uses a logical captain with no extra entity, connected dry nearby slots and shared advances of at most three blocks; everyone assembles before the next advance. Slots tolerate two blocks of local rise/drop. Explicit Deployment endpoints retain their previous meaning. Unsafe progress or a 2400-tick leg timeout releases control; existing missing/death/unload handling remains in effect.
+The active selection pointer gesture suppresses camera descent through Handler.blocksCameraDescent(). Shift is latched at LMB press; releasing it before the mouse cannot turn an additive selection into replacement. Shift outside the selection gesture still lowers the camera. MMB pan and Alt+MMB orbit retain their existing ownership rules.
+
+Core's passive Urge.reserve excludes reserved residents from the labour survey and safely lets go of existing ordinary graph work through the same BodyRunner. The reservation creates no movement destination, formation or navigation owner. Personal needs, fear and autonomous combat still use that runner. Vanilla tracks only the RTS point-route generation or attack handle issued by that controlling session: losing the resident's last reference releases that old control without cancelling a newer replacement or a book-page deployment.
+
+Closing V or switching tools clears visible selection, preserving shortcuts and their commands. Retained shortcuts renew a 100-tick server lease every 40 client ticks, even outside the combat screen. Heartbeats do not block commands on an acknowledged selection. Loss of authority, realm change, disconnect, death, unloading or lease expiry clears affected ownership. Shortcuts are not persistent yet.
+
+Each Ctrl click is committed immediately. A, B, C, D, B visits A and then loops B→C→D→B. Open routes wait at their last point after the full squad assembles and dwells 20 ticks; a later point continues without repeating the prefix or completed dwell. A still-valid ordinary single move A can be extended by Ctrl B. Closed patrol editing is temporarily frozen: further Ctrl clicks explain that RMB must replace the route. Ordinary RMB always replaces the complete route.
+
+Only accepted server route snapshots draw markers. Selection and recall acknowledgements restore the exact actual squad's route; rejected replacement orders retain and report the previous route. Mutable control operations and movement orders have monotonic request identities, with stale replies rejected. A combat-specific network protocol version 3 requires matching clients and servers.
+
+PointRoute uses no extra captain entity. Connected, dry local slots tolerate two blocks of rise/drop and advance at most three blocks before regrouping; 2400 effective travel ticks bound each leg, excluding combat and unloaded waiting. This is a bounded first implementation, not continuous formation motion or general bottleneck recovery. Declared stops assemble and dwell 20 ticks.
 
 Core's Urge.Priority.CONTROL separates deliberate control from ordinary numeric needs. Move, hold, retreat and explicit attack preempt through the same safe BodyRunner, preserving tool and material settlement. New point-patrol GUARD orders use Order.deliberateGuard(), yielding only for actual combat or wounded danger; legacy autonomous guards retain their previous rules. Extension stun and lifecycle locks remain authoritative.
 
@@ -146,6 +158,12 @@ Explicit attacks approach and fire through the same runner and a real WeaponSess
 The client obtains an authorized roster instead of inferring enrollment from unsynchronized Body attachments. Commands carry an explicit colony ID, resident UUIDs and WorldPos points. The server checks authority, every selected resident, every stop and every final slot before replacing control. Selected members may come from multiple groups; unselected members retain their original group intent, and old handles cannot close replacement orders. Packet safety limits are 256 selected residents and 16 stops, rejecting the whole request on overflow rather than selecting only eight. These limits do not establish large-group performance or terrain reliability.
 
 Camera controls remain MMB pan and Alt+MMB orbit in the combat tool, with the existing account-specific persistent global option controlling other tools. This iteration compiles all mods and GameTest sources before daily-instance replacement and manual testing. Three new GameTests cover twelve-person ranks, partial transfers across groups and rejection preserving original commands; compilation is not execution. Run GameTests and Blockwright before updating the PR, including shortcut conflicts, route closure, bottlenecks, death/unload and world reload.
+
+### RTS design audit and next stage
+
+Player-facing RTS design changes receive an independent specialist audit first; reuse rts_design_auditor in this conversation and recreate that role in later sessions. Record command semantics, input conflicts, server authority, completion rules and acceptance scenarios. A design audit is separate from engineering or gameplay verification.
+
+Next implement explicit attacks that preserve squad identity and regroup after target loss, then attack-move and resuming the unfinished route after combat. Stop and release control must be distinct. Continuous cohesion, bottleneck recovery, stranded-member retry/wait, detailed cards and persistence follow. Validate 16–32 residents against equal enemies first; 256 is a packet safety limit. Keep personal camera settings and other tools unchanged.
 
 ## P4: real native weapon sessions
 

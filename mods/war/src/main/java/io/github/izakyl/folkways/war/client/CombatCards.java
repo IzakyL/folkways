@@ -13,7 +13,7 @@ import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
-/** Local shortcut and selected-unit cards. Clicking a card only changes selection. */
+/** Server-confirmed shortcut and selected-unit cards; clicks submit selection or group operations. */
 final class CombatCards {
     static final int HEIGHT = 75;
     private static final int GREEN = 0xFF8FEAC3;
@@ -54,8 +54,8 @@ final class CombatCards {
         graphics.fill(4, top, drawnWidth - 4, top + 1, 0xFF557A68);
         graphics.drawString(minecraft.font, Component.translatable("folkways.war.selected", selected.size()), 9, top + 4, GREEN, true);
         if (points > 0) {
-            Component draft = Component.translatable("folkways.war.route_draft", points);
-            graphics.drawString(minecraft.font, draft, drawnWidth - minecraft.font.width(draft) - 9, top + 4, GOLD, true);
+            Component queue = Component.translatable("folkways.war.route_queue", points);
+            graphics.drawString(minecraft.font, queue, drawnWidth - minecraft.font.width(queue) - 9, top + 4, GOLD, true);
         }
 
         int groupWidth = Math.min(54, (drawnWidth - 18) / 9 - 2);

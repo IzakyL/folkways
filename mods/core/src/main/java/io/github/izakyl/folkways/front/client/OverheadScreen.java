@@ -336,7 +336,8 @@ final class OverheadScreen extends Screen {
             cycleGestureOrTool();
             return true;
         }
-        if (getFocused() == null && handler().filter(handler -> handler.keyPressed(keyCode, scanCode, modifiers)).isPresent()) {
+        // Tool shortcuts precede button focus: selecting a toolbar chip must not disable its hotkeys.
+        if (handler().filter(handler -> handler.keyPressed(keyCode, scanCode, modifiers)).isPresent()) {
             toolKeys.add(keyCode);
             return true;
         }
