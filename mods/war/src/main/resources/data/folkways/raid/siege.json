@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "waves": [
+    {
+      "delayTicks": 0,
+      "entries": [
+        { "entity": "minecraft:zombie", "role": "breacher", "count": 3, "equipment": { "mainhand": "minecraft:iron_axe" } },
+        { "entity": "minecraft:skeleton", "role": "fighter", "count": 2, "equipment": { "mainhand": "minecraft:bow" } }
+      ]
+    },
+    {
+      "delayTicks": 200,
+      "entries": [
+        { "entity": "minecraft:pillager", "role": "fighter", "count": 3, "equipment": { "mainhand": "minecraft:crossbow" } },
+        { "entity": "minecraft:vindicator", "role": "breacher", "count": 2, "equipment": { "mainhand": "minecraft:iron_axe" } }
+      ]
+    },
+    {
+      "delayTicks": 300,
+      "entries": [
+        { "entity": "minecraft:zombie", "role": "arsonist", "count": 2, "equipment": { "mainhand": "minecraft:flint_and_steel" } },
+        { "entity": "minecraft:vindicator", "role": "fighter", "count": 3, "equipment": { "mainhand": "minecraft:iron_axe" } }
+      ]
+    }
+  ]
+}

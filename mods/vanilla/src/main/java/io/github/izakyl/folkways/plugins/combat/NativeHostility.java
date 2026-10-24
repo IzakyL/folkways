@@ -53,10 +53,21 @@ public final class NativeHostility {
             && Bodies.of(target).flatMap(body -> body.colonyId()).isPresent();
     }
 
+    // Strategic extensions may narrow resident acquisition without replacing native attack AI.
+    public static void restrictResidents(Mob mob, java.util.function.Predicate<LivingEntity> permits) {
+        install(mob);
+        mob.targetSelector.getAvailableGoals().stream().map(goal -> goal.getGoal())
+            .filter(ResidentTargetGoal.class::isInstance).map(ResidentTargetGoal.class::cast)
+            .forEach(goal -> goal.permits = permits);
+    }
+
     private static final class ResidentTargetGoal extends NearestAttackableTargetGoal<Mob> {
+
+        private java.util.function.Predicate<LivingEntity> permits = target -> true;
 
         private ResidentTargetGoal(Mob mob) {
             super(mob, Mob.class, 10, true, false, NativeHostility::eligible);
+            targetConditions.selector(target -> eligible(target) && permits.test(target));
         }
 
         @Override
@@ -71,7 +82,7 @@ public final class NativeHostility {
         public boolean canContinueToUse() {
             // TargetGoal only checks combat eligibility, not our enrollment predicate.
             // Leaving a colony must end this pursuit as well as prevent a new one.
-            return targetsResidents(mob) && mob.getTarget() != null && eligible(mob.getTarget()) && super.canContinueToUse();
+            return targetsResidents(mob) && mob.getTarget() != null && eligible(mob.getTarget()) && permits.test(mob.getTarget()) && super.canContinueToUse();
         }
     }
 

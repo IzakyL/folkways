@@ -12,7 +12,7 @@ properties = { "online-mode" = "false", "level-seed" = "folkways-e2e", "allow-fl
 connect = "127.0.0.1:25565"
 options = { guiScale = "1", fullscreen = "false", overrideWidth = "1280", overrideHeight = "720" }
 
-# The four Folkways mods, as gradle build gathers them.
+# The Folkways mods, as gradle build gathers them.
 [mods.folkways_core]
 path = "build/libs/folkways-core-*.jar"
 
@@ -40,6 +40,10 @@ target = []
 [mods.kaleidoscope_tavern]
 url = "https://cdn.modrinth.com/data/r9RZvhiJ/versions/W9ILsQt7/kaleidoscopetavern-1.2.0-neoforge%2Bmc1.21.1.jar"
 sha512 = "2481f11727ee303004d2e849739651f63bc28493a79d2e6a784f45632fc92e27ce4a43cc3b08b71740aa1f2a1879c15cc097c65d7a95d9d642c4a9958df6c473"
+target = []
+
+[mods.folkways_war]
+path = "build/libs/folkways-war-*.jar"
 target = []
 
 [mods.ldlib2]

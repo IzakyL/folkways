@@ -1265,5 +1265,17 @@
   "folkways.combat.stock.no_room": "背包已满",
   "folkways.combat.stock.failed": "补给失败",
   "folkways.combat.stock.cancelled": "补给已取消",
-  "folkways.combat.stock.timed_out": "补给超时"
+  "folkways.combat.stock.timed_out": "补给超时",
+  "folkways.page.raids": "袭击",
+  "folkways.raid.warning": "敌军正向殖民地逼近！",
+  "folkways.raid.wave": "新一波敌军开始进攻。",
+  "folkways.raid.victory": "殖民地击退了袭击。",
+  "folkways.raid.defeat": "殖民地未能抵挡袭击。",
+  "folkways.raid.withdrawn": "敌军已撤退。",
+  "folkways.raid.cancelled": "袭击已结束。",
+  "folkways.raid.paused": "袭击暂停 · 第 %1$s/%2$s 波 · 敌军 %3$s 人 · %4$s 秒",
+  "folkways.raid.status": "第 %1$s/%2$s 波 · 敌军 %3$s 人 · %4$s 秒",
+  "folkways.raid.idle": "距下次可能来袭还有 %s 秒",
+  "folkways.raid.unavailable": "现在无法开始袭击。",
+  "folkways.raid.no_spawn": "城外没有合适的进攻位置，袭击已延后。"
 }

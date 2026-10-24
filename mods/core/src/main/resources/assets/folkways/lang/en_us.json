@@ -1265,5 +1265,17 @@
   "folkways.combat.stock.no_room": "Pack full",
   "folkways.combat.stock.failed": "Supply failed",
   "folkways.combat.stock.cancelled": "Supply cancelled",
-  "folkways.combat.stock.timed_out": "Supply timed out"
+  "folkways.combat.stock.timed_out": "Supply timed out",
+  "folkways.page.raids": "Raids",
+  "folkways.raid.warning": "Raiders are approaching the colony!",
+  "folkways.raid.wave": "Another wave is attacking.",
+  "folkways.raid.victory": "The colony defeated the raid.",
+  "folkways.raid.defeat": "The colony lost the raid.",
+  "folkways.raid.withdrawn": "The raiders withdrew.",
+  "folkways.raid.cancelled": "The raid has ended.",
+  "folkways.raid.paused": "Raid paused · wave %1$s/%2$s · %3$s enemies · %4$s s",
+  "folkways.raid.status": "Wave %1$s/%2$s · %3$s enemies · %4$s s",
+  "folkways.raid.idle": "Next raid eligible in %s s",
+  "folkways.raid.unavailable": "A raid cannot start now.",
+  "folkways.raid.no_spawn": "No safe outside approach; the raid is delayed."
 }
