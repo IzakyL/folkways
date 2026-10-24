@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:fishing",
+  "pools": [{
+    "rolls": 1,
+    "entries": [
+      {"type": "minecraft:item", "name": "minecraft:iron_nugget", "weight": 12, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 2, "max": 8}}]},
+      {"type": "minecraft:item", "name": "minecraft:gold_nugget", "weight": 6, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 5}}]},
+      {"type": "minecraft:item", "name": "minecraft:nautilus_shell", "weight": 3},
+      {"type": "minecraft:item", "name": "minecraft:prismarine_shard", "weight": 8, "conditions": [{"condition": "minecraft:location_check", "predicate": {"biomes": "#minecraft:is_ocean"}}]},
+      {"type": "minecraft:item", "name": "minecraft:quartz", "weight": 8, "conditions": [{"condition": "minecraft:location_check", "predicate": {"dimension": "minecraft:the_nether"}}]},
+      {"type": "minecraft:loot_table", "value": "minecraft:gameplay/fishing/treasure", "weight": 2}
+    ]
+  }]
+}

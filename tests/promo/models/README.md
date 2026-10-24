@@ -9,7 +9,7 @@ derivatives under the same licence. Each folder keeps its original `ysm.json`, w
 the authors to credit. Wine Fox variants marked "All Rights Reserved" upstream
 (`09_hailuo`, `10_zhiban`, `17_mini`) are deliberately left out.
 
-The model folders are downloaded on demand and ignored by Git. The models take runs
+The model folders are downloaded on demand and ignored by Git. The models and elevator takes run
 `vendor.py` before launching Minecraft; other takes and ordinary tests do not download them.
 To prepare them manually (Python 3, Linux, network access on the first run):
 
@@ -36,6 +36,12 @@ Downloader checks run offline with
 
 The picks are the variants with the most cubes left after stripping; `08_sta` has about 4,500
 cubes upstream, but nearly all of them are its tank.
+
+The Cookery inn casts only `wine_fox_momo`, `wine_fox_tactics` and `wine_fox_matured`.
+These have uncovered heads and compact single-tail silhouettes. The survivor's helmet,
+the nine-tail spread, large wedding dress and other oversized accessories obscure the
+food and neighbouring actors in the crowded dining scene, so those variants remain
+available to the other takes without entering this cast.
 
 | Folder                 | Upstream         | Skin            |
 | ---------------------- | ---------------- | --------------- |

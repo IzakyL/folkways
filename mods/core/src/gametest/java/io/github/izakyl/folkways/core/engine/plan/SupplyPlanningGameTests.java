@@ -59,7 +59,7 @@ public final class SupplyPlanningGameTests {
     }
     private record Guarded(NodeSpec spec, Hold hold) implements Intent { }
 
-    private static final class Counted implements Hold {
+    private static class Counted implements Hold {
         private final boolean grants;
         int taken;
         final List<Ending> released = new ArrayList<>();
@@ -107,6 +107,156 @@ public final class SupplyPlanningGameTests {
                 return List.of(Refinement.Change.of(Grown.of(oven)).holding(hold));
             }
         };
+    }
+
+    private static final class QueuedBakery implements Workshop {
+        private final PlanningFixture fixture;
+        private final UUID key = UUID.randomUUID();
+        private final int capacity;
+        final Map<UUID, Long> queue = new java.util.LinkedHashMap<>();
+        final List<Integer> enlargedQueueSizes = new ArrayList<>();
+
+        QueuedBakery(PlanningFixture fixture, int capacity) { this.fixture = fixture; this.capacity = capacity; }
+        public ResourceLocation id() { return OWNER; }
+        public UUID key() { return key; }
+        public WorkSite site() { return new WorkSite.AtBlock(fixture.source); }
+        public List<Refinement.Change> options(Intent intent, Grown graph) {
+            if (!(intent instanceof Produce produce) || !produce.wanted().admits(BREAD)) return List.of();
+            if (produce.count() > 1) enlargedQueueSizes.add(queue.size());
+            long count = Math.min(capacity, produce.count());
+            var oven = new Action(NodeSpec.of(UUID.randomUUID(), OWNER, site(), Stances.at(fixture.source),
+                Workload.Once.of(20)).estimate(1200).gives(new Amount(BREAD, count)).done());
+            var hold = new Hold() {
+                private Set<UUID> before = Set.of();
+                public Optional<RefusalKind> take() {
+                    before = Set.copyOf(queue.keySet());
+                    queue.put(oven.id(), 1200L);
+                    return Optional.empty();
+                }
+                public Set<UUID> after() { return before; }
+                public long estimatedWaitTicks() {
+                    long ticks = 0;
+                    for (var entry : queue.entrySet()) {
+                        if (entry.getKey().equals(oven.id())) break;
+                        ticks += entry.getValue();
+                    }
+                    return ticks;
+                }
+                public void release(Ending how) { queue.remove(oven.id()); }
+            };
+            return List.of(Refinement.Change.of(Grown.of(oven)).holding(hold));
+        }
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void aFreeSecondWorkshopBeatsQueueingBehindTheFirst(GameTestHelper helper) {
+        var f = new PlanningFixture(helper);
+        var first = new QueuedBakery(f, 1);
+        var second = new QueuedBakery(f, 1);
+        var weaver = new Weaver(new Claims(), new Cooldowns());
+        try {
+            weaver.know(known(f, List.of(), List.of(first, second)).world(), f.crew);
+            weaver.submit(OWNER, Grown.of(consumer(f, new Need(BREAD, 1))));
+            var grown = new WeaveView();
+            grown.apply(weaver.grow(false));
+            helper.assertValueEqual(first.queue.size(), 1, "the equally priced first station gets the first demand");
+            weaver.submit(OWNER, Grown.of(consumer(f, new Need(BREAD, 1))));
+            grown.apply(weaver.grow(false));
+            helper.assertTrue(first.queue.size() == 1 && second.queue.size() == 1,
+                "a second unit goes to the free station instead of joining the first station's serial queue");
+            helper.assertTrue(baked(grown).size() == 2 && weaver.shortfalls().isEmpty(),
+                "both real production nodes feed their respective demand");
+        } finally {
+            weaver.closed();
+        }
+        helper.assertTrue(first.queue.isEmpty() && second.queue.isEmpty(), "closing releases every station booking");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void enlargingACookingBatchQuotesAfterReleasingItsOldBooking(GameTestHelper helper) {
+        var f = new PlanningFixture(helper);
+        var oven = new QueuedBakery(f, 8);
+        var weaver = new Weaver(new Claims(), new Cooldowns());
+        try {
+            weaver.know(known(f, List.of(), List.of(oven)).world(), f.crew);
+            weaver.submit(OWNER, Grown.of(consumer(f, new Need(BREAD, 1))));
+            var grown = new WeaveView();
+            grown.apply(weaver.grow(false));
+            weaver.submit(OWNER, Grown.of(consumer(f, new Need(BREAD, 1))));
+            grown.apply(weaver.grow(false));
+            helper.assertTrue(baked(grown).size() == 1 && baked(grown).getFirst().count() == 2,
+                "separate one-serving demands share a real two-serving cooking batch");
+            helper.assertTrue(!oven.enlargedQueueSizes.isEmpty() && oven.enlargedQueueSizes.stream().allMatch(size -> size == 0),
+                "quoting the enlarged batch cannot count its retired booking as a predecessor");
+            helper.assertTrue(oven.queue.size() == 1 && weaver.shortfalls().isEmpty(),
+                "the enlarged batch holds only one turn and feeds both consumers");
+        } finally {
+            weaver.closed();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void rejectedBatchJoinsCannotReverseQueuedWorkshopDependencies(GameTestHelper helper) {
+        var f = new PlanningFixture(helper);
+        var first = new QueuedBakery(f, 1);
+        var second = new QueuedBakery(f, 1);
+        var weaver = new Weaver(new Claims(), new Cooldowns());
+        var grown = new WeaveView();
+        try {
+            weaver.know(known(f, List.of(), List.of(first, second)).world(), f.crew);
+            for (int round = 0; round < 12; round++) {
+                weaver.submit(OWNER, Grown.of(consumer(f, new Need(BREAD, 1))));
+                grown.apply(weaver.grow(false));
+                for (UUID id : grown.vertices().keySet()) {
+                    var pending = new java.util.ArrayDeque<>(grown.after(id));
+                    var seen = new java.util.HashSet<UUID>();
+                    while (!pending.isEmpty()) {
+                        UUID next = pending.removeFirst();
+                        helper.assertTrue(!next.equals(id), "rejected join must leave an acyclic graph in round " + round);
+                        if (seen.add(next)) pending.addAll(grown.after(next));
+                    }
+                }
+                helper.assertTrue(weaver.shortfalls().isEmpty(), "every original and new demand remains supplied");
+            }
+            helper.assertTrue(first.queue.size() > 1 && second.queue.size() > 1,
+                "multiple real turns exercise both stations across repeated growth rounds");
+            helper.assertValueEqual(baked(grown).size(), 12, "capacity-one ovens preserve all twelve production turns");
+        } finally {
+            weaver.closed();
+        }
+        helper.assertTrue(first.queue.isEmpty() && second.queue.isEmpty(), "closing releases every restored turn");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void independentWorkshopHoldsWaitInParallel(GameTestHelper helper) {
+        var f = new PlanningFixture(helper);
+        var parallelA = new Counted(true) { public long estimatedWaitTicks() { return 100; } };
+        var parallelB = new Counted(true) { public long estimatedWaitTicks() { return 100; } };
+        var serial = new Counted(true) { public long estimatedWaitTicks() { return 150; } };
+        var first = bakery(f, parallelA);
+        UUID togetherKey = UUID.randomUUID();
+        Workshop together = new Workshop() {
+            public ResourceLocation id() { return OWNER; }
+            public UUID key() { return togetherKey; }
+            public WorkSite site() { return first.site(); }
+            public List<Refinement.Change> options(Intent intent, Grown graph) {
+                return first.options(intent, graph).stream().map(change -> change.holding(parallelB)).toList();
+            }
+        };
+        var weaver = new Weaver(new Claims(), new Cooldowns());
+        try {
+            weaver.know(known(f, List.of(), List.of(together, bakery(f, serial))).world(), f.crew);
+            weaver.submit(OWNER, Grown.of(consumer(f, new Need(BREAD, 1))));
+            weaver.grow(false);
+            helper.assertTrue(parallelA.taken == 1 && parallelB.taken == 1 && serial.taken == 0,
+                "two independent 100-tick holds cost 100 ticks of waiting, less than a 150-tick alternative");
+        } finally {
+            weaver.closed();
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)

@@ -22,7 +22,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 final class FellNode extends FarmNode {
 
-    private static final int CANOPY_KINDS = 3;
+    private static final int CANOPY_KINDS = 5;
     private static final ItemSpec LOGS = ItemSpec.of(ItemTags.LOGS);
 
     private final Crop crop;
@@ -49,6 +49,13 @@ final class FellNode extends FarmNode {
         List<ItemStack> logs = new ArrayList<>();
         List<WorkNoise> heard = new ArrayList<>();
         Set<Block> voiced = new HashSet<>();
+        for (BlockPos vine : tree.canopy()) {
+            if (!level.isLoaded(vine)) continue;
+            BlockState state = level.getBlockState(vine);
+            if (!Felling.attachment(state)) continue;
+            logs.addAll(Yield.take(level, who.body(), vine, state));
+            shed(heard, voiced, vine, state);
+        }
         int cut = 0;
         for (BlockPos cell : tree.cells()) {
             if (!level.isLoaded(cell)) {

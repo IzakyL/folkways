@@ -114,7 +114,7 @@ public final class StoveWorkshops {
             if (generation != bookings.generation(at)) {
                 return Optional.of(CookeryRefusal.STATION_CHANGED);
             }
-            hold = bookings.hold(at, id());
+            hold = bookings.hold(at, id(), spec().estimate());
             Optional<RefusalKind> refused = hold.take();
             if (refused.isEmpty()) { ACTIVE.put(new Key(colony, at), new Kept(goal, generation)); }
             return refused;

@@ -1,11 +1,13 @@
 package io.github.izakyl.folkways.plugins.person;
 
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.ResidentKind;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Reach;
+import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.plugins.person.living.LivingContent;
 import io.github.izakyl.folkways.plugins.person.look.LookPool;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLook;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLooks;
@@ -40,10 +42,12 @@ import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ResidentEntity extends PathfinderMob implements Body {
 
-    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("folkways-labor");
+    private static final Logger LOGGER = LoggerFactory.getLogger("folkways-labor");
 
     private static final String TAG_LOOK = "Look";
     private static final String TAG_GIVEN = "GivenName";
@@ -57,6 +61,25 @@ public class ResidentEntity extends PathfinderMob implements Body {
         SynchedEntityData.defineId(ResidentEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Optional<BlockPos>> DATA_CAST_LINE =
         SynchedEntityData.defineId(ResidentEntity.class, EntityDataSerializers.OPTIONAL_BLOCK_POS);
+
+    private static final EntityDataAccessor<String> DATA_LEISURE =
+        SynchedEntityData.defineId(ResidentEntity.class, EntityDataSerializers.STRING);
+
+    private static final EntityDataAccessor<Integer> DATA_LEISURE_PHASE =
+        SynchedEntityData.defineId(ResidentEntity.class, EntityDataSerializers.INT);
+
+    public void leisureMotion(String motion) { leisureMotion(motion, 0); }
+    public void leisureMotion(String motion, int phase) {
+        entityData.set(DATA_LEISURE, motion);
+        entityData.set(DATA_LEISURE_PHASE, phase);
+    }
+    public int leisurePhase() { return entityData.get(DATA_LEISURE_PHASE); }
+    public String leisureMotion() { return entityData.get(DATA_LEISURE); }
+
+    @Override
+    public Effects effects() {
+        return Body.super.effects().with(LivingContent.effects(this));
+    }
 
     private boolean handIsPresentation;
 
@@ -75,6 +98,8 @@ public class ResidentEntity extends PathfinderMob implements Body {
         builder.define(DATA_GIVEN, "");
         builder.define(DATA_SURNAME, "");
         builder.define(DATA_CAST_LINE, Optional.empty());
+        builder.define(DATA_LEISURE, "");
+        builder.define(DATA_LEISURE_PHASE, 0);
     }
 
     public static AttributeSupplier.Builder createAttributes() {

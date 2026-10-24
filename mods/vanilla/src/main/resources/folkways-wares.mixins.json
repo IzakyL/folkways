@@ -6,7 +6,9 @@
   "mixins": [
     "CraftingTableBlockMixin",
     "StonecutterBlockMixin",
-    "FurnaceAccessor"
+    "FurnaceAccessor",
+    "FurnaceTrainingMixin",
+    "FurnaceRemovalMixin"
   ],
   "injectors": {
     "defaultRequire": 1

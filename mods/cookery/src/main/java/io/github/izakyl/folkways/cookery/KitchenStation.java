@@ -12,6 +12,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
@@ -26,7 +29,44 @@ public interface KitchenStation {
     }
 
     default Optional<Stances> stances(ServerLevel level, WorldPos at) {
+        if (!at.in(level) || !level.isLoaded(at.block(level))) { return Optional.empty(); }
+        BlockState state = level.getBlockState(at.block(level));
+        if (state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)) {
+            Direction side = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
+            // The stockpot and steamer have their handles across the model's facing axis.
+            if (state.is(ModBlocks.STOCKPOT.get()) || state.is(ModBlocks.STEAMER.get())) {
+                side = side.getClockWise();
+            }
+            return operating(level, at, side);
+        }
         return Stances.of(level, Reach.workableCells(level, at.block(level)));
+    }
+
+    // A counter-top appliance is worked from the handle's adjacent column. The same
+    // column also supports appliances placed directly on the floor; never borrow another side.
+    static Optional<Stances> operating(ServerLevel level, WorldPos at, Direction side) {
+        if (!at.in(level) || !level.isLoaded(at.block(level))) { return Optional.empty(); }
+        BlockPos target = at.block(level);
+        BlockPos adjacent = target.relative(side);
+        return Stances.of(List.of(adjacent.below(), adjacent).stream()
+            .filter(cell -> level.isLoaded(cell) && Footing.withFeetAt(level, cell))
+            .map(cell -> at.at(at.cell().offset(cell.subtract(target)))).toList());
+    }
+
+    static boolean canOperate(ServerLevel level, WorldPos at, net.minecraft.world.entity.Mob body) {
+        if (!at.in(level) || !level.isLoaded(at.block(level))) { return false; }
+        BlockState state = level.getBlockState(at.block(level));
+        Direction side;
+        if (state.is(ModBlocks.TEAPOT.get())) {
+            // The native tea block has no rotation property. Keep a fixed serving side.
+            side = Direction.SOUTH;
+        } else if (state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)) {
+            side = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
+            if (state.is(ModBlocks.STOCKPOT.get()) || state.is(ModBlocks.STEAMER.get())) {
+                side = side.getClockWise();
+            }
+        } else { return false; }
+        return operating(level, at, side).filter(current -> Reach.standingIn(body, current)).isPresent();
     }
 
     // A multi-block appliance may operate above its registered anchor. Publish all candidate

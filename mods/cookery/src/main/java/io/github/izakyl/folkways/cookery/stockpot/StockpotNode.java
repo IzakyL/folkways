@@ -48,7 +48,8 @@ abstract class StockpotNode implements Node {
     }
 
     final boolean canWork(ServerLevel level, Worker who) {
-        return at.in(level) && Reach.stanceHolding(who.body(), spec.stances())
+        return io.github.izakyl.folkways.cookery.KitchenStation.canOperate(level, at, who.body())
+            && Reach.stanceHolding(who.body(), spec.stances())
             .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
             .filter(feet -> Reach.withinReach(feet, at.block(level)) && Reach.inSight(level, feet, at.block(level)))
             .isPresent();

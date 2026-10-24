@@ -90,7 +90,7 @@ final class StockpotTake extends StockpotNode {
         if (!bookings.free(at)) {
             return Optional.of(CookeryRefusal.STATION_BUSY);
         }
-        Hold claim = bookings.hold(at, turn);
+        Hold claim = bookings.hold(at, turn, spec().estimate());
         Optional<RefusalKind> refused = claim.take();
         if (refused.isEmpty()) {
             held = claim;

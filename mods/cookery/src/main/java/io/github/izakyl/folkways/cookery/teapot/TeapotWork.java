@@ -31,6 +31,7 @@ import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.cookery.KitchenStation;
 import io.github.izakyl.folkways.cookery.KitchenDelivery;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
@@ -92,7 +93,7 @@ final class TeapotWork implements Node, Workload.Within {
         if (!recovering) { return Optional.empty(); }
         if (hold != null) return bookings.valid(at, id(), generation) ? Optional.empty() : Optional.of(CookeryRefusal.STATION_CHANGED);
         if (generation != bookings.generation(at) || !bookings.free(at)) { return Optional.of(CookeryRefusal.STATION_CHANGED); }
-        hold = bookings.hold(at, id());
+        hold = bookings.hold(at, id(), spec().estimate());
         var refused = hold.take();
         if (refused.isEmpty()) TeapotStation.rememberRecovery(colony, at, this);
         return refused;
@@ -143,6 +144,7 @@ final class TeapotWork implements Node, Workload.Within {
             .flatMap(footing -> WorldSpaces.storage(level, new WorldPos(at.realm(), footing)));
     }
     private boolean reachable(ServerLevel level, Worker who, BlockPos target) {
+        if (!KitchenStation.canOperate(level, at, who.body())) { return false; }
         return feet(level, who).filter(feet -> Reach.withinReach(feet, target) && Reach.inSight(level, feet, target)).isPresent();
     }
     private Optional<BlockPos> cupPlace(ServerLevel level, Worker who) {

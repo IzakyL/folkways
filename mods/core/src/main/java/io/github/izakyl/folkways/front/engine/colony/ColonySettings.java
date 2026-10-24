@@ -167,7 +167,7 @@ public final class ColonySettings implements Settings {
             return choice;
         }
         List<ItemFilter> entries = Entries.of(reader, "items", ColonySettings::readEntry);
-        return entries.isEmpty() && reader.children("items").isEmpty()
+        return entries.isEmpty() && !reader.keys().contains("items")
             ? Optional.empty()
             : Optional.of(new Value.Items(entries));
     }

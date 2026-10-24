@@ -300,12 +300,46 @@ final class MaidAssets {
     static JsonObject animations(MaidLooks.Maid maid, JsonObject merged) {
         JsonObject animations = new JsonObject();
         for (String name : MaidLooks.PLAYED) {
-            animations.add(maid.animation(name),
-                merged.get(name) instanceof JsonObject animation ? portable(animation, false) : new JsonObject());
+            if (merged.get(name) instanceof JsonObject animation) {
+                animations.add(maid.animation(name), portable(animation, false));
+            } else if (List.of("idle", "walk", "swing_hand").contains(name)) {
+                animations.add(maid.animation(name), new JsonObject());
+            }
+        }
+        for (String motion : List.of("dining", "drinking")) {
+            String use = motion.equals("dining") ? "use_mainhand:eat" : "use_mainhand:drink";
+            if (merged.get(use) instanceof JsonObject gesture) {
+                JsonObject seated = seatedGesture(merged.get("chair") instanceof JsonObject chair ? chair : new JsonObject(), gesture);
+                animations.add(maid.animation(motion + "_seated"), portable(seated, false));
+            }
         }
         JsonObject written = new JsonObject();
         written.addProperty("format_version", "1.8.0");
         written.add("animations", animations);
         return written;
     }
+
+    static JsonObject seatedGesture(JsonObject chair, JsonObject gesture) {
+        JsonObject seated = chair.deepCopy();
+        // Item-use clips usually animate only the arm. Retain the authored chair's legs and
+        // merge individual channels so a hand gesture does not discard its seated position.
+        JsonObject bones = seated.get("bones") instanceof JsonObject existing ? existing : new JsonObject();
+        if (gesture.get("bones") instanceof JsonObject arms) {
+            arms.entrySet().forEach(bone -> {
+                JsonObject channels = bones.get(bone.getKey()) instanceof JsonObject existing
+                    ? existing.deepCopy() : new JsonObject();
+                if (bone.getValue() instanceof JsonObject added) {
+                    added.entrySet().forEach(channel -> channels.add(channel.getKey(), channel.getValue()));
+                }
+                bones.add(bone.getKey(), channels);
+            });
+        }
+        seated.add("bones", bones);
+        seated.addProperty("loop", true);
+        double chairLength = seated.has("animation_length") ? seated.get("animation_length").getAsDouble() : 0;
+        double useLength = gesture.has("animation_length") ? gesture.get("animation_length").getAsDouble() : 0;
+        seated.addProperty("animation_length", Math.max(chairLength, useLength));
+        return seated;
+    }
+
 }

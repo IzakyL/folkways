@@ -62,7 +62,7 @@ public final class TeapotStation implements KitchenStation {
     }
     @Override
     public Optional<Stances> stances(ServerLevel level, WorldPos at) {
-        return KitchenStation.super.stances(level, at).flatMap(offered -> servingStances(level, at, offered));
+        return KitchenStation.operating(level, at, net.minecraft.core.Direction.SOUTH).flatMap(offered -> servingStances(level, at, offered));
     }
     static Optional<Stances> servingStances(ServerLevel level, WorldPos at, Stances offered) {
         var working = new LinkedHashSet<WorldPos>();
@@ -150,7 +150,7 @@ public final class TeapotStation implements KitchenStation {
                 if (!Goods.matches(job.output(), produce.wanted())
                         || job.mode() != Mode.RECIPE && produce.wanted().item().isEmpty()) { continue; }
                 TeapotWork work = new TeapotWork(colony, at, stances, job, bookings, changed, null);
-                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));
+                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id(), work.spec().estimate())));
             }
             return List.copyOf(options);
         }

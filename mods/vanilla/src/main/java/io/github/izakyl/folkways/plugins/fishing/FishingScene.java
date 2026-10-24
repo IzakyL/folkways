@@ -100,7 +100,7 @@ public final class FishingScene {
 
         fisher.hold(scene, new ItemStack(Items.COD));
         scene.overlay().showText(80)
-            .text("Practice shortens the wait: the Quick hands perk brings the bite on sooner.")
+            .text("Practice shortens the wait: the Skilled Angler perk brings the bite on sooner.")
             .pointAt(util.vector().topOf(4, 0, 3).add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();

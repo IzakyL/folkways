@@ -10,7 +10,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 
-public final class ObstructedPathRegion extends PathNavigationRegion {
+public class ObstructedPathRegion extends PathNavigationRegion {
 
     private final PathNavigationRegion world;
     private final Map<BlockPos, BlockState> obstructions;

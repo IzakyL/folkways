@@ -51,6 +51,7 @@ final class LoadNode extends CraftNode {
         if (machine.isEmpty()) {
             return Outcome.failed(WaresRefusal.NOT_A_STATION);
         }
+        int previousCount = machine.get().getItem(Machines.INPUT_SLOT).getCount();
         List<ItemStack> rejected = new ArrayList<>();
         for (ItemStack drawn : who.supplied()) {
             ItemStack left = Machines.insertIntoSlot(machine.get(), Machines.INPUT_SLOT, drawn);
@@ -60,6 +61,10 @@ final class LoadNode extends CraftNode {
         }
         if (rejected.stream().mapToInt(ItemStack::getCount).sum() == load) {
             return Outcome.failed(WaresRefusal.STATION_FULL);
+        }
+        if (machine.get() instanceof FurnaceTraining training) {
+            training.folkways$loaded(previousCount, machine.get().getItem(Machines.INPUT_SLOT).getCount() - previousCount,
+                who.effects().value(WaresContent.FURNACE));
         }
         return new Outcome.Done(worked(), List.of(), Optional.empty(), rejected);
     }

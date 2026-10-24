@@ -21,8 +21,11 @@ public sealed interface Line {
         }
     }
 
-    /** A display name whose translations are resolved by the client that reads it. */
-    record Text(Component component) implements Line {
+    /** A display name whose translations are resolved by the client that reads it, and pictures told after it. */
+    record Text(Component component, Sentence after) implements Line {
+        public Text(Component component) {
+            this(component, Sentence.EMPTY);
+        }
     }
 
     /** What stands in the way, in words, and after them in pictures when {@code told}: "Can't eat: ✗ bread". */
@@ -159,6 +162,7 @@ public sealed interface Line {
                 case Text text -> {
                     buffer.writeVarInt(8);
                     ComponentSerialization.STREAM_CODEC.encode(buffer, text.component());
+                    text.after().encode(buffer);
                 }
             }
         }
@@ -176,7 +180,7 @@ public sealed interface Line {
                 case 5 -> bar(buffer.readVarInt(), buffer.readVarInt());
                 case 6 -> goods(decodeStacks(buffer));
                 case 7 -> told(Sentence.decode(buffer));
-                case 8 -> text(ComponentSerialization.STREAM_CODEC.decode(buffer));
+                case 8 -> new Text(ComponentSerialization.STREAM_CODEC.decode(buffer), Sentence.decode(buffer));
                 default -> said(Notice.decode(buffer));
             };
             if (i < max) {

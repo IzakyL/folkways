@@ -1,13 +1,12 @@
 package io.github.izakyl.folkways.core.api.resident.body;
 
+import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.perk.PerkPool;
 import io.github.izakyl.folkways.effect.perk.Perks;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.function.Supplier;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -17,7 +16,7 @@ import net.minecraft.util.RandomSource;
 
 final class BodyPerks implements Perks {
 
-    private static final int XP_STEP = 32;
+    private static final int[] XP_LEVELS = {0, 180, 480, 900, 1500, 2400, 3300, 4500, 6000, 7800, 9600};
 
     private static final String TAG_VOCATIONS = "vocations";
     private static final String TAG_GLOBAL = "global";
@@ -30,6 +29,7 @@ final class BodyPerks implements Perks {
     private static final class Track {
         int xp;
         int level;
+        int laborRemainder;
         final Map<String, Integer> ranks = new LinkedHashMap<>();
     }
 
@@ -39,23 +39,56 @@ final class BodyPerks implements Perks {
     private int effectsGranted;
 
     public static int xpForLevel(int level) {
-        return XP_STEP * level * (level + 1) / 2;
+        return XP_LEVELS[Math.clamp(level, 0, 10)];
     }
 
-    public static int maxLevel(ResourceLocation vocation) {
-        return PerkPool.depth(vocation);
+    public int maxLevel(ResourceLocation vocation) {
+        return 10;
     }
 
     public static int maxGlobalLevel() {
         return PerkPool.globalDepth();
     }
 
-    public void addXp(ResourceLocation vocation, int amount, RandomSource random) {
+    public void worked(ResourceLocation vocation, int ticks, RandomSource random) {
         Track track = track(vocation);
-        advance(track, amount, maxLevel(vocation),
-            () -> PerkPool.vocationCandidates(vocation, track.ranks), random);
-        advance(global, amount, maxGlobalLevel(),
-            () -> PerkPool.globalCandidates(global.ranks), random);
+        long total = (long) track.laborRemainder + Math.max(0, ticks);
+        track.laborRemainder = (int) (total % 20);
+        addXp(vocation, (int) Math.min(Integer.MAX_VALUE, total / 20), random);
+    }
+
+    public void addXp(ResourceLocation vocation, int amount, RandomSource random) {
+        if (amount <= 0) {
+            return;
+        }
+        Track track = track(vocation);
+        global.xp = (int) Math.min(Integer.MAX_VALUE, (long) global.xp + amount);
+        track.xp = (int) Math.min(Integer.MAX_VALUE, (long) track.xp + amount);
+        int level = levelForXp(track.xp, maxLevel(vocation));
+        while (track.level < level) {
+            int next = track.level + 1;
+            List<String> pool = PerkPool.vocationCandidates(vocation, track.ranks);
+            long known = track.ranks.keySet().stream().filter(id -> !PerkPool.global(id)).count();
+            // Leave enough of the first five draws to discover three distinct specialities.
+            int missing = 3 - (int) known;
+            if (next == 1 || next <= 5 && missing >= 6 - next) {
+                List<String> unseen = pool.stream().filter(id -> !track.ranks.containsKey(id)).toList();
+                if (!unseen.isEmpty()) { pool = unseen; }
+            }
+            if (!pool.isEmpty()) {
+                String id = pool.get(random.nextInt(pool.size()));
+                track.ranks.merge(id, 1, Integer::sum);
+            }
+            track.level = next;
+            if (next == 3 || next == 6 || next == 10) {
+                List<String> shared = PerkPool.globalCandidates(global.ranks);
+                if (!shared.isEmpty()) {
+                    String id = shared.get(random.nextInt(shared.size()));
+                    global.ranks.merge(id, 1, Integer::sum);
+                    global.level++;
+                }
+            }
+        }
         effects = null;
     }
 
@@ -63,24 +96,25 @@ final class BodyPerks implements Perks {
         return byVocation.computeIfAbsent(vocation, key -> new Track());
     }
 
-    private static void advance(Track track, int amount, int maxLevel, Supplier<List<String>> candidates,
-                                RandomSource random) {
-        track.xp = Math.max(0, track.xp + amount);
-        int newLevel = levelForXp(track.xp, maxLevel);
-        while (track.level < newLevel) {
-            track.level++;
-            pick(candidates.get(), random).ifPresent(id -> track.ranks.merge(id, 1, Integer::sum));
-        }
-    }
-
-    private static Optional<String> pick(List<String> candidates, RandomSource random) {
-        return candidates.isEmpty()
-            ? Optional.empty()
-            : Optional.of(candidates.get(random.nextInt(candidates.size())));
-    }
-
     public int level(ResourceLocation vocation) {
         return track(vocation).level;
+    }
+
+    public int xp(ResourceLocation vocation) {
+        return track(vocation).xp;
+    }
+
+    public int nextLevelXp(ResourceLocation vocation) {
+        int level = level(vocation);
+        return level < maxLevel(vocation) ? xpForLevel(level + 1) : 0;
+    }
+
+    public Map<String, Integer> ranks(ResourceLocation vocation) {
+        return Map.copyOf(track(vocation).ranks);
+    }
+
+    public Map<String, Integer> globalRanks() {
+        return Map.copyOf(global.ranks);
     }
 
     public int rank(String perkId) {
@@ -128,6 +162,7 @@ final class BodyPerks implements Perks {
         byVocation.forEach((vocation, track) -> vocations.put(vocation.toString(), saveTrack(track)));
         tag.put(TAG_VOCATIONS, vocations);
         tag.put(TAG_GLOBAL, saveTrack(global));
+        tag.putInt("version", 3);
         return tag;
     }
 
@@ -135,17 +170,28 @@ final class BodyPerks implements Perks {
         effects = null;
         byVocation.clear();
         CompoundTag vocations = tag.getCompound(TAG_VOCATIONS);
-        for (ResourceLocation vocation : PerkPool.vocations()) {
+        for (ResourceLocation vocation : Vocations.ids()) {
             Track track = new Track();
             loadTrack(track, vocations, vocation.toString(), maxLevel(vocation));
             byVocation.put(vocation, track);
         }
         loadTrack(global, tag, TAG_GLOBAL, maxGlobalLevel());
+        byVocation.values().forEach(track -> {
+            for (String id : List.copyOf(track.ranks.keySet())) {
+                if (PerkPool.global(id)) {
+                    global.ranks.merge(id, track.ranks.remove(id), Math::max);
+                }
+            }
+        });
+        if (tag.getInt("version") < 3) {
+            byVocation.values().forEach(track -> track.xp = xpForLevel(track.level));
+        }
     }
 
     private static CompoundTag saveTrack(Track track) {
         CompoundTag tag = new CompoundTag();
         tag.putInt(TAG_XP, track.xp);
+        tag.putInt("labor_remainder", track.laborRemainder);
         tag.putInt(TAG_LEVEL, track.level);
         ListTag owned = new ListTag();
         track.ranks.forEach((id, rank) -> {
@@ -161,12 +207,14 @@ final class BodyPerks implements Perks {
     private static void loadTrack(Track track, CompoundTag parent, String key, int maxLevel) {
         track.xp = 0;
         track.level = 0;
+        track.laborRemainder = 0;
         track.ranks.clear();
         if (!parent.contains(key, Tag.TAG_COMPOUND)) {
             return;
         }
         CompoundTag tag = parent.getCompound(key);
         track.xp = Math.max(0, tag.getInt(TAG_XP));
+        track.laborRemainder = Math.clamp(tag.getInt("labor_remainder"), 0, 19);
         track.level = Mth.clamp(tag.getInt(TAG_LEVEL), 0, maxLevel);
         ListTag owned = tag.getList(TAG_OWNED, Tag.TAG_COMPOUND);
         for (int i = 0; i < owned.size(); i++) {
@@ -174,7 +222,7 @@ final class BodyPerks implements Perks {
             String id = entry.getString(TAG_ID);
             int maxRank = PerkPool.maxRank(id);
             if (maxRank > 0) {
-                track.ranks.put(id, Mth.clamp(entry.getInt(TAG_RANK), 1, maxRank));
+                track.ranks.merge(id, Mth.clamp(entry.getInt(TAG_RANK), 1, maxRank), Math::max);
             }
         }
     }

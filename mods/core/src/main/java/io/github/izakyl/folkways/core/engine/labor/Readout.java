@@ -8,6 +8,8 @@ import io.github.izakyl.folkways.core.engine.plan.Schedule;
 import io.github.izakyl.folkways.core.engine.plan.Shortfall;
 import io.github.izakyl.folkways.core.engine.plan.Unassigned;
 import io.github.izakyl.folkways.core.engine.plan.Vertex;
+import io.github.izakyl.folkways.core.engine.plan.Crew;
+import io.github.izakyl.folkways.core.engine.plan.WeaveView;
 import io.github.izakyl.folkways.core.engine.plan.Why;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -161,6 +163,45 @@ final class Readout {
         if (!heads.isEmpty()) {
             lines.add("stallHeads=" + heads);
             lines.add("stallRoutes=" + routes);
+        }
+        return lines;
+    }
+
+    List<String> unassigned(WeaveView graph, Diagnosis diagnosis, List<Crew.Hand> hands) {
+        if (diagnosis.unassigned().isEmpty()) return List.of();
+        List<String> lines = new ArrayList<>();
+        Map<UUID, Unassigned> waiting = new LinkedHashMap<>();
+        diagnosis.unassigned().forEach(each -> waiting.put(each.node(), each));
+        Map<UUID, Integer> roots = new LinkedHashMap<>();
+        for (Unassigned each : diagnosis.unassigned()) {
+            UUID root = each.node();
+            java.util.Set<UUID> seen = new java.util.LinkedHashSet<>();
+            while (seen.add(root)) {
+                Unassigned held = waiting.get(root);
+                if (held == null || held.blockedBy() == null) break;
+                root = held.blockedBy();
+            }
+            roots.merge(root, 1, Integer::sum);
+            lines.add("unassigned node=" + each.node() + " why=" + each.why()
+                + " blockedBy=" + each.blockedBy() + " root=" + root);
+        }
+        roots.forEach((id, count) -> {
+            Vertex vertex = graph.vertex(id);
+            if (vertex == null) {
+                lines.add("unassignedRoot node=" + id + " dependents=" + count + " offGraph=true");
+                return;
+            }
+            Node node = vertex.node();
+            lines.add("unassignedRoot node=" + id + " dependents=" + count
+                + " kind=" + node.getClass().getSimpleName() + " site=" + node.spec().site()
+                + " stances=" + node.spec().stances().cells() + " placement=" + vertex.plan()
+                + " before=" + graph.before(id) + " group=" + graph.group(id) + " pin=" + graph.pin(id)
+                + " needs=" + node.spec().needs() + " gives=" + node.spec().gives());
+        });
+        for (Crew.Hand hand : hands) {
+            lines.add("unassignedHand resident=" + hand.id() + " at=" + hand.at()
+                + " pack=" + hand.packCells() + "/" + hand.packCapacity()
+                + " holding=" + hand.holding() + " cargo=" + hand.cargo() + " tools=" + hand.tools());
         }
         return lines;
     }

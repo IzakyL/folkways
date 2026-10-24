@@ -47,6 +47,32 @@ public final class ResidentModelGameTests {
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void wineFoxControllerPlaceholdersAndItemGesturesAreAdapted(GameTestHelper helper) {
+        // The promo tactics pack leaves walk empty and authors walk_slow. Matured's gait
+        // uses short conditionals and ysm.has_offhand; both must survive the shared importer.
+        DataPack files = new DataPack();
+        files.model("fox", """
+            {"animations":{"idle":{},"walk":{"loop":true},
+             "walk_slow":{"loop":true,"bones":{"RightArm":{"rotation":["ysm.has_offhand ? 0 : 20",0,0]}}},
+             "ride":{"bones":{"LeftLeg":{"rotation":[-80,0,0]}}},
+             "use_mainhand":{"animation_length":0.5,"bones":{"RightArm":{"rotation":[-70,0,0]}}}}}
+            """, "main");
+        ModelLibrary library = ModelLibrary.read(files.held);
+        ResidentLook.Model model = onlyModel(helper, library);
+        helper.assertValueEqual(model.walkAnimation(), "walk_slow", "use the authored gait instead of its empty controller");
+        helper.assertValueEqual(model.leisureAnimations().get("dining"), "use_mainhand", "map YSM's item-use gesture");
+        helper.assertValueEqual(model.leisureAnimations().get("drinking_seated"), "folkways.drinking_seated",
+            "compose a seated drink clip");
+        String carried = new String(library.assets().get(
+            "assets/folkways/animations/resident_models/fox.animation.json"), StandardCharsets.UTF_8);
+        helper.assertTrue(!carried.contains("ysm.has_offhand"), "walking expressions must be portable too");
+        var animations = com.google.gson.JsonParser.parseString(carried).getAsJsonObject().getAsJsonObject("animations");
+        var meal = animations.getAsJsonObject("folkways.dining_seated").getAsJsonObject("bones");
+        helper.assertTrue(meal.has("LeftLeg") && meal.has("RightArm"), "seated item use keeps legs and hand gesture");
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
     public static void everyTextureInAModelFolderIsItsOwnEntry(GameTestHelper helper) {
         DataPack files = new DataPack();
         files.model("ranger", YSM_ANIMATIONS, "green", "red");
@@ -87,6 +113,54 @@ public final class ResidentModelGameTests {
         helper.assertValueEqual(model.walkAnimation(), "model.walk_loop", "the file's own walk name");
         helper.assertValueEqual(model.workAnimation(), Optional.empty(),
             "this file has no work loop, and absent has to be sayable");
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void vehicleSeatsPreferTheAuthoredRidePoseOverTheFloorSitPose(GameTestHelper helper) {
+        DataPack files = new DataPack();
+        files.model("rider", """
+            {"animations":{"idle":{},"walk":{},"ride":{"bones":{"Head":{"rotation":
+            ["-13+ysm.head_pitch","math.clamp(ysm.head_yaw,-60,60)",0]}}},"sit":{}}}
+            """, "main");
+        ModelLibrary library = ModelLibrary.read(files.held);
+        helper.assertValueEqual(onlyModel(helper, library).seatedAnimation(), Optional.of("ride"),
+            "a vehicle uses the model's chair pose rather than kneeling on the floor");
+        String carried = new String(library.assets().get(
+            "assets/folkways/animations/resident_models/rider.animation.json"), StandardCharsets.UTF_8);
+        helper.assertTrue(!carried.contains("ysm.head"),
+            "the carried riding pose must use portable Molang instead of unsupported YSM queries");
+        helper.assertTrue(carried.contains("-13"), "keep the authored head angle while neutralizing its query");
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void seatedAnimationIsOptionalAndCanBeOverridden(GameTestHelper helper) {
+        DataPack files = new DataPack();
+        files.model("rider", "{\"animations\":{\"idle\":{},\"walk\":{},\"sit\":{},\"custom.chair\":{}}}", "main");
+        helper.assertValueEqual(onlyModel(helper, ModelLibrary.read(files.held)).seatedAnimation(), Optional.of("sit"),
+            "a model without ride can still supply its native sitting pose");
+        files.put("rider", "folkways.json", "{\"seated_animation\":\"custom.chair\"}");
+        helper.assertValueEqual(onlyModel(helper, ModelLibrary.read(files.held)).seatedAnimation(), Optional.of("custom.chair"),
+            "a pack can select a pose with its own name");
+        files.put("rider", "folkways.json", "{\"seated_animation\":\"absent.chair\"}");
+        ModelLibrary rejected = ModelLibrary.read(files.held);
+        helper.assertTrue(rejected.entries().isEmpty() && rejected.rejected().getFirst().contains("absent.chair"),
+            "explicit invalid seated animations are refused rather than silently rendering standing");
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void oldModelEntriesStillDecodeWithoutASeatedAnimation(GameTestHelper helper) {
+        DataPack files = new DataPack();
+        files.model("ranger", YSM_ANIMATIONS, "main");
+        ResidentLook look = ModelLibrary.read(files.held).entries().values().iterator().next();
+        var json = ResidentLook.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE, look).getOrThrow();
+        json.getAsJsonObject().remove("seated_animation");
+        ResidentLook restored = ResidentLook.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE, json).getOrThrow();
+        helper.assertValueEqual(((ResidentLook.Model) restored.appearance()).seatedAnimation(), Optional.empty(),
+            "old saved and networked entries retain the generic humanoid rider fallback");
+        helper.assertValueEqual(restored, look, "all old fields must survive the codec round trip");
         helper.succeed();
     }
 
@@ -175,6 +249,21 @@ public final class ResidentModelGameTests {
         }
         helper.assertValueEqual(ResidentLooks.pool(registries).size(), before,
             "the pool must be back to the registry half alone");
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void leisureClipsAreOptionalAndValidatedAgainstTheModel(GameTestHelper helper) {
+        DataPack files = new DataPack();
+        files.model("friend", YSM_ANIMATIONS, "main");
+        helper.assertTrue(onlyModel(helper, ModelLibrary.read(files.held)).leisureAnimations().isEmpty(),
+            "existing models need no new clips");
+        files.put("friend", "folkways.json", "{\"leisure_animations\":{\"petting\":\"sneak\"}}");
+        helper.assertValueEqual(onlyModel(helper, ModelLibrary.read(files.held)).leisureAnimations().get("petting"),
+            "sneak", "the optional clip mapping reaches the renderer");
+        files.put("friend", "folkways.json", "{\"leisure_animations\":{\"petting\":\"missing\"}}");
+        ModelLibrary invalid = ModelLibrary.read(files.held);
+        helper.assertTrue(!invalid.rejected().isEmpty() && invalid.entries().isEmpty(), "missing declared clips are rejected");
         helper.succeed();
     }
 

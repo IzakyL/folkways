@@ -1,0 +1,13 @@
+# 森罗物语联动宣传片的文字。改完在仓库根目录运行：python3 tests/promo/film/cookery-cut.py
+#
+# 镜头顺序：厨房备餐与用餐 → 葡萄园、压榨发酵、装瓶、吧台小酌 → 电梯。
+# 每段字幕只在该段第一个镜头上出现。captions = 这一段显示的文字，一项一行。删掉某段 = 那一段不出字。
+
+[scenes.kitchen]
+captions = ["已支持：森罗厨房"]
+
+[scenes.tavern]
+captions = ["已支持：森罗酒馆"]
+
+[scenes.elevator]
+captions = ["已支持：电梯"]

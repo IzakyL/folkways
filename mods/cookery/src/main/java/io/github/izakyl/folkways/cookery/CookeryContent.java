@@ -44,7 +44,12 @@ public final class CookeryContent {
         io.github.izakyl.folkways.plugins.compost.SeedReserves.register(List.of(
             com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.WILD_RICE_SEED.get(),
             com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.RICE_SEED.get()));
+        io.github.izakyl.folkways.cookery.dining.CookeryDiningTables.register();
         BuiltinKitchenStations.register();
+        CookeryDining.register();
+        if (net.neoforged.fml.ModList.get().isLoaded("kaleidoscope_tavern")) {
+            io.github.izakyl.folkways.cookery.tavern.TavernSupport.register();
+        }
         io.github.izakyl.folkways.cookery.racks.KitchenRacks.register();
         io.github.izakyl.folkways.cookery.oil.PlacedOilStore.register();
         io.github.izakyl.folkways.cookery.farming.CookeryCrops.register();

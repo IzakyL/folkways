@@ -67,8 +67,6 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
 
     static final int LAY_TICKS = 10;
 
-    static final int STRIP_TICKS = 14;
-
     static final ItemSpec SCAFFOLDING = ItemSpec.of(ResourceLocation.withDefaultNamespace("scaffolding"));
 
     static final ItemSpec BUCKET = ItemSpec.of(ResourceLocation.withDefaultNamespace("bucket"));

@@ -24,6 +24,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
@@ -35,7 +36,7 @@ final class CastNode implements Node {
     private static final ToolNeed ROD = new ToolNeed.Ability(ItemAbilities.FISHING_ROD_CAST);
 
     // A fish, or a boot, or a book: what comes up is known only once it does.
-    private static final List<Amount> CATCH = Leaves.room(1);
+    private static final List<Amount> CATCH = Leaves.room(5);
 
     private final NodeSpec spec;
     private final WorldPos water;
@@ -85,9 +86,20 @@ final class CastNode implements Node {
             .withParameter(LootContextParams.THIS_ENTITY, body)
             .withLuck(0.0F)
             .create(LootContextParamSets.FISHING);
-        List<ItemStack> caught = level.getServer().reloadableRegistries()
-            .getLootTable(BuiltInLootTables.FISHING)
-            .getRandomItems(params);
+        List<ItemStack> caught = new java.util.ArrayList<>(level.getServer().reloadableRegistries()
+            .getLootTable(BuiltInLootTables.FISHING).getRandomItems(params));
+        for (int i = 0; i < caught.size(); i++) {
+            ItemStack stack = WaterLoot.uncommon(level, params, caught.get(i),
+                who.effects().value(FishingContent.RARE_FISH));
+            caught.set(i, stack);
+            if (WaterLoot.fish(stack)
+                    && level.random.nextDouble() < who.effects().value(FishingContent.EXTRA_FISH)) {
+                stack.grow((int) who.effects().value(FishingContent.SCHOOL_SIZE));
+            }
+        }
+        if (level.random.nextDouble() < who.effects().value(FishingContent.TREASURE_CHANCE)) {
+            caught.addAll(WaterLoot.discoveries(level, params));
+        }
         Outcome done = new Outcome.Done(List.of(WorkNoise.stowed()), List.copyOf(caught),
             Optional.of(new Xp(FishingContent.trade(), 1)));
         made.record(spec, done, level.getGameTime());

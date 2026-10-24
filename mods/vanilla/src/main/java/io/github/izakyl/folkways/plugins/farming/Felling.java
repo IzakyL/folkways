@@ -10,6 +10,35 @@ public final class Felling {
 
     private static final Habit.Tree TREE = new Habit.Tree(2, 9);
 
+    private static final List<java.util.function.Predicate<BlockState>> ATTACHMENTS = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public static void registerAttachment(java.util.function.Predicate<BlockState> attachment) {
+        ATTACHMENTS.add(attachment);
+    }
+
+    public static boolean attachment(BlockState state) {
+        return ATTACHMENTS.stream().anyMatch(rule -> rule.test(state));
+    }
+
+    // Gather hanging plants before removing the leaves that support them. Bottom first prevents
+    // neighbor updates from deleting the remaining vine before its native loot can be collected.
+    static List<BlockPos> withAttachments(LevelReader level, List<BlockPos> supports, List<BlockPos> leaves) {
+        java.util.Set<BlockPos> hanging = new java.util.LinkedHashSet<>();
+        java.util.List<BlockPos> anchors = new java.util.ArrayList<>(supports);
+        anchors.addAll(leaves);
+        for (BlockPos anchor : anchors) {
+            BlockPos below = anchor.below();
+            for (int depth = 0; depth < 64 && level.hasChunkAt(below) && attachment(level.getBlockState(below)); depth++) {
+                hanging.add(below.immutable());
+                below = below.below();
+            }
+        }
+        java.util.List<BlockPos> result = new java.util.ArrayList<>(hanging);
+        result.sort(java.util.Comparator.comparingInt(BlockPos::getY));
+        result.addAll(leaves);
+        return List.copyOf(result);
+    }
+
     private Felling() {
     }
 

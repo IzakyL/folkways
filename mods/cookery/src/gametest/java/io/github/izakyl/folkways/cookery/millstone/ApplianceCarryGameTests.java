@@ -182,12 +182,17 @@ public final class ApplianceCarryGameTests {
     private static void run(GameTestHelper helper, KitchenStation station, Block block, List<ItemStack> ingredients, ItemStack result, int loads) {
         var fixture = new PlanningFixture(helper, 36); ServerLevel level = helper.getLevel(); UUID colony = UUID.randomUUID();
         BlockPos cell = helper.absolutePos(new BlockPos(3, 1, 3)); WorldPos at = WorldPos.of(level, cell);
-        WorldPos footing = WorldPos.of(level, cell.west(2)); KitchenBookings bookings = new KitchenBookings();
+        WorldPos footing = WorldPos.of(level, station instanceof SpitStation || station instanceof SteamerStation || station instanceof TeapotStation ? cell.south() : cell.west(2)); KitchenBookings bookings = new KitchenBookings();
         for (int x = -4; x <= 4; x++) { for (int z = -4; z <= 4; z++) {
             level.setBlockAndUpdate(cell.offset(x, -1, z), Blocks.STONE.defaultBlockState());
         } }
         level.setBlockAndUpdate(cell.below(), Blocks.MAGMA_BLOCK.defaultBlockState());
-        level.setBlockAndUpdate(cell, block.defaultBlockState());
+        var state = block.defaultBlockState();
+        if (station instanceof SpitStation || station instanceof SteamerStation) {
+            state = state.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING,
+                station instanceof SteamerStation ? net.minecraft.core.Direction.EAST : net.minecraft.core.Direction.SOUTH);
+        }
+        level.setBlockAndUpdate(cell, state);
         block.setPlacedBy(level, cell, level.getBlockState(cell), null, new ItemStack(block));
         if (station instanceof SpitStation) {
             level.setBlockAndUpdate(cell.east(), Blocks.REDSTONE_BLOCK.defaultBlockState());

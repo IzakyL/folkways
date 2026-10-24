@@ -1020,7 +1020,7 @@ public final class StockpotGameTests {
             this.originalLid = originalLid;
             level.setBlockAndUpdate(cell.below(), Blocks.CAMPFIRE.defaultBlockState());
             level.setBlockAndUpdate(cell.east().below(), Blocks.STONE.defaultBlockState());
-            level.setBlockAndUpdate(cell, ModBlocks.STOCKPOT.get().defaultBlockState());
+            level.setBlockAndUpdate(cell, ModBlocks.STOCKPOT.get().defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.NORTH));
             pot = (StockpotBlockEntity) level.getBlockEntity(cell);
             pot.getPersistentData();
             body = newBody();

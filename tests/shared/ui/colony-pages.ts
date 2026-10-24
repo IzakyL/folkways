@@ -6,16 +6,25 @@ import { frames } from "../harness/bw-helpers";
 
 export type Page = { name: string; token: string };
 
-/** Every registered colony page: its name (id with dots) and its title key. */
-export const PAGES = defineTask<Record<string, never>, { ok: true; pages: Page[] }>({
+/**
+ * Every registered colony page: its name (id with dots) and its title key. Given a player, only the pages their
+ * colony's navigation shows; a page such as supply stays out of it until the colony has something to show there.
+ */
+export const PAGES = defineTask<{ player?: string }, { ok: true; pages: Page[] }>({
   name: "folkways.visual.pages",
   side: "server",
   timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.ui.screen.PageKinds"],
+    imports: ["net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.api.colony.Colony",
+      "io.github.izakyl.folkways.front.api.ui.Pages",
+      "io.github.izakyl.folkways.front.ui.screen.PageKinds"],
     body: `
+var name = Args.of(ctx).string("player");
+var player = name.isEmpty() ? null : ((MinecraftServer)ctx.server()).getPlayerList().getPlayerByName(name);
+Optional<Colony> colony = player == null ? Optional.empty() : Pages.colonyOf(player);
 var pages = new ArrayList<Map<String, Object>>();
 for (var page : PageKinds.all()) {
+    if (colony.isPresent() && !PageKinds.shows(colony.get(), page.id())) continue;
     pages.add(Map.of("name", page.id().toString().replace(':', '.').replace('/', '.'), "token", page.nameKey()));
 }
 return Map.of("ok", true, "pages", pages);
@@ -23,8 +32,8 @@ return Map.of("ok", true, "pages", pages);
   }),
 });
 
-export async function discoverPages(server: MinecraftServer): Promise<Page[]> {
-  const result = await runColonyTask(server, PAGES, {});
+export async function discoverPages(server: MinecraftServer, player?: string): Promise<Page[]> {
+  const result = await runColonyTask(server, PAGES, { player: player ?? "" });
   expect(result.pages.length, "The runtime page registry is empty").toBeGreaterThan(0);
   return result.pages;
 }
@@ -35,6 +44,9 @@ export async function clickTab(client: MinecraftClient, id: string) {
     const target = elements.find(element => element.id === id);
     const nav = elements.find(element => element.id === "folkways.navigation");
     if (!target || !nav) throw new Error(`Missing navigation or registered page ${id}`);
+    if (nav.displayed !== false && target.displayed === false) {
+      throw new Error(`The navigation hides page ${id} for this colony; discover pages with the player to skip it`);
+    }
     // On a narrow panel the list of pages is folded behind the menu button.
     const menu = elements.find(element => element.id === "folkways.navigation.menu");
     if (nav.displayed === false && menu && menu.displayed !== false) {

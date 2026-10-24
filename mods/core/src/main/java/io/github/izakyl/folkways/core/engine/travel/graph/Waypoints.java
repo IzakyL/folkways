@@ -123,8 +123,13 @@ final class Waypoints {
     }
 
     void room(long area, int places) {
+        room(area, places, 1);
+    }
+
+    void room(long area, int places, int layers) {
         long skeleton = Math.max(1L, area / ((long) SPACING * SPACING)) * 4L;
-        mostPoints = (int) Math.clamp(skeleton + 2L * places, FEWEST_POINTS, MOST_POINTS_EVER);
+        long floor = Math.min((long) FEWEST_POINTS * Math.max(1, layers), MOST_POINTS_EVER);
+        mostPoints = (int) Math.clamp(skeleton + 2L * places, floor, MOST_POINTS_EVER);
         mostAttached = mostPoints * ATTACHED_PER_POINT;
     }
 
@@ -1021,7 +1026,11 @@ final class Waypoints {
     }
 
     boolean trim(long now) {
-        if (cells.size() <= mostPoints) {
+        // Platforms and work sites must survive a busy neighbouring floor. Leave enough headroom
+        // for their pins, while keeping the same hard ceiling even if sites alone exceed it.
+        int pins = pinned.cardinality();
+        int budget = (int) Math.min(MOST_POINTS_EVER, Math.max(mostPoints, (4L * pins + 2) / 3));
+        if (cells.size() <= budget) {
             return false;
         }
         IntArrayList order = new IntArrayList();
@@ -1030,8 +1039,11 @@ final class Waypoints {
                 order.add(id);
             }
         }
-        order.sort((left, right) -> Long.compare(used.getLong(right), used.getLong(left)));
-        int keep = Math.min(order.size(), mostPoints * 3 / 4);
+        order.sort((left, right) -> {
+            int anchored = Boolean.compare(pinned.get(right), pinned.get(left));
+            return anchored != 0 ? anchored : Long.compare(used.getLong(right), used.getLong(left));
+        });
+        int keep = Math.min(order.size(), Math.max(budget * 3 / 4, Math.min(pins, MOST_POINTS_EVER)));
         int[] renumbered = new int[cells.size()];
         java.util.Arrays.fill(renumbered, -1);
         for (int rank = 0; rank < keep; rank++) {

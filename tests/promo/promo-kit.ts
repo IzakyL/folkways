@@ -72,6 +72,10 @@ export async function setWalkSpeed(server: MinecraftServer, playerName: string, 
 // The takes call this in pairs, as F1 is pressed: once to clear the picture, once more to bring the GUI back.
 const hudHidden = new WeakSet<MinecraftClient>();
 
+export function hudShown(client: MinecraftClient) {
+  return !hudHidden.has(client);
+}
+
 export async function hideHud(client: MinecraftClient) {
   const hide = !hudHidden.has(client);
   const result = await safeAction(() => camera.hud(client, !hide));

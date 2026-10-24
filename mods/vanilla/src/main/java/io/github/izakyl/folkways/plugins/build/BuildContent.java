@@ -1,20 +1,23 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.core.api.Declaring;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.effect.perk.Perk;
+import io.github.izakyl.folkways.core.api.Declaring;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.vocation.VocationSpec;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.effect.Modifier;
+import io.github.izakyl.folkways.effect.Scope;
+import io.github.izakyl.folkways.effect.Stats;
+import io.github.izakyl.folkways.effect.perk.Perk;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
@@ -43,7 +46,15 @@ public final class BuildContent {
 
     private static final VocationSpec SPEC =
         new VocationSpec(VOCATION, List.of(
-            new Perk(QUICK_HANDS, 4, Perk.Grant.haste(VOCATION, FolkwaysVanillaConfig::buildingHaste))),
+            new Perk(QUICK_HANDS, 3, Perk.Grant.haste(VOCATION, FolkwaysVanillaConfig::buildingHaste)),
+            new Perk("building_prospecting", 3, rank -> List.of(
+                Modifier.add(BuildingPerks.PROSPECTING, new double[]{0.04, 0.07, 0.11}[rank - 1]),
+                Modifier.add(BuildingPerks.SECOND_FIND, rank == 3 ? 0.15 : 0))),
+            new Perk("building_fortune", 3, Perk.Grant.perRank(BuildingPerks.FORTUNE, 1)),
+            new Perk("building_quarrying", 3, rank -> List.of(
+                Modifier.add(BuildingPerks.QUARRY_MOMENTUM, new double[]{0.15, 0.30, 0.50}[rank - 1]))),
+            new Perk("building_tool_expert", 3, rank -> List.of(new Modifier.Multiply(
+                Stats.TOOL_WEAR, 1.0 - rank * 0.15, Scope.trade(VOCATION))))),
             List.of(ItemSpec.of(ItemTags.PICKAXES), ItemSpec.of(ItemTags.AXES),
                 ItemSpec.of(ItemTags.SHOVELS)));
 

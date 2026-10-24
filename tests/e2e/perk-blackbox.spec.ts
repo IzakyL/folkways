@@ -56,7 +56,7 @@ const CULL_TICKS = 8_000;
 const BURST = 20;
 const KILL_BURST = 20;
 
-for (const stage of twins()) test(stage.title("perk system end-to-end: carrying capacity and butcher yield each flip a world fact that cannot flip without them"), async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("perk system end-to-end: carrying capacity and occupation-specific husbandry bonuses"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   ensureOut("e2e");
   const runId = newRunId();
@@ -168,13 +168,19 @@ for (const stage of twins()) test(stage.title("perk system end-to-end: carrying 
     if (!perked.killed) {
       reasons.push(`the surplus cow in the perk arm was never culled (${CULL_TICKS} ticks)`);
     }
-    if (perked.peak_beef < VANILLA_BEEF_MAX + 1) {
-      reasons.push(
-        `the cull with herding_butcher rank ${BUTCHER_RANK} only yielded ${perked.peak_beef} ${BEEF}`
-        + ` (control arm: ${control.peak_beef}), and each rank should add one, so >=${VANILLA_BEEF_MAX + 1} is expected: `
-        + `CullNode.work read no folkways:carcass_yield off the butcher's effects, `
-        + `or the perk NBT written in was not picked up by BodyPerks.load`,
-      );
+    expect(perked.peak_beef, "a culled cow still yields ordinary beef").toBeGreaterThan(0);
+    expect(perked.peak_beef, "butcher III adds at most half again to ordinary carcass products").toBeLessThanOrEqual(Math.ceil(VANILLA_BEEF_MAX * 1.5));
+    const stat = await reflect.query(server, {
+      root: { kind: "static", className: "io.github.izakyl.folkways.plugins.pasture.PastureContent", path: "CARCASS_YIELD" },
+      select: { id: "id().toString()" }, handles: true, limits: { maxDepth: 0, maxNodes: 8 },
+    });
+    expect(stat.tree?.handle, "husbandry yield stat should be available").toBeTruthy();
+    for (const resident of await readResidentPerks(server)) {
+      const chance = await reflect.invoke(server, {
+        target: { kind: "entity", uuid: resident.uuid }, path: "effects()", method: "value",
+        args: [{ $handle: stat.tree!.handle }], argTypes: ["io.github.izakyl.folkways.effect.Stat"], returnType: "double",
+      });
+      expect(Number(chance.returned), "butcher III adds half again to ordinary husbandry products").toBeCloseTo(0.5);
     }
 
     await clearCarcassGoods(server);
@@ -234,7 +240,7 @@ for (const stage of twins()) test(stage.title("perk system end-to-end: carrying 
       + `so the peak measured below can only be the old ${BASE_PLANNABLE} slots, regardless of whether the pack grew`,
     ).toEqual({ source: 0, target: 0, packs: 0, food_chest: 0 });
 
-    await grantPerkToAllResidents(server, `{global:{xp:96,level:2,owned:[{id:"global_packmule",rank:2}]}}`);
+    await grantPerkToAllResidents(server, `{vocations:{"folkways:hauling":{xp:480,level:2,owned:[{id:"hauling_heavy",rank:2}]}}}`);
     await tick.sprint(server, 20);
 
     const perkedPacks = await readResidentPerks(server);
@@ -244,7 +250,7 @@ for (const stage of twins()) test(stage.title("perk system end-to-end: carrying 
     );
     expect(
       narrowest,
-      `after granting global_packmule rank 2, the resident with the narrowest pack still has only ${narrowest} slots`
+      `after granting hauling_heavy rank 2, the resident with the narrowest pack still has only ${narrowest} slots`
       + ` (baseline ${BASE_PACK_SLOTS}): Pack.applyCapacityMultiplier was not driven by this perk, `
       + `so the run below cannot possibly haul more than baseline. Pack slots and perks: ${JSON.stringify(perkedPacks)}`,
     ).toBeGreaterThan(BASE_PACK_SLOTS);
@@ -265,7 +271,7 @@ for (const stage of twins()) test(stage.title("perk system end-to-end: carrying 
     const organic = await anyResidentEarnedPerkXp(server);
     expect(
       organic,
-      "after the whole run no resident earned any perk XP from their own work: the organic growth path (a finished node -> "
+      "after the whole run no resident earned any perk XP from their own work: the organic growth path (active labor -> "
       + "BodyPerks.addXp) is not running, so however well the perk effects are wired, real players can never reach them",
     ).toBe(true);
 

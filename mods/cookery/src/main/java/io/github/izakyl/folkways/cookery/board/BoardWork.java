@@ -115,7 +115,7 @@ final class BoardWork implements Node, Workload.Within {
         if (generation != bookings.generation(at) || !bookings.free(at) || !owned(level)) {
             return Optional.of(CookeryRefusal.STATION_BUSY);
         }
-        recoveryHold = bookings.hold(at, id());
+        recoveryHold = bookings.hold(at, id(), spec().estimate());
         Optional<RefusalKind> why = recoveryHold.take();
         if (why.isEmpty()) {
             changed.run();
@@ -201,7 +201,8 @@ final class BoardWork implements Node, Workload.Within {
     }
 
     private boolean reachable(ServerLevel level, Worker who) {
-        return Reach.stanceHolding(who.body(), spec.stances())
+        return io.github.izakyl.folkways.cookery.KitchenStation.canOperate(level, at, who.body())
+            && Reach.stanceHolding(who.body(), spec.stances())
             .flatMap(footing -> WorldSpaces.storage(level, new WorldPos(at.realm(), footing)))
             .filter(feet -> Reach.withinReach(feet, at.block(level))
                 && Reach.inSight(level, feet, at.block(level)))

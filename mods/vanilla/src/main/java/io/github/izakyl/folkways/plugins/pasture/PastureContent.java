@@ -1,23 +1,29 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.effect.Stat;
-import io.github.izakyl.folkways.effect.perk.Perk;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.vocation.VocationSpec;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.effect.Modifier;
+import io.github.izakyl.folkways.effect.Stat;
+import io.github.izakyl.folkways.effect.perk.Perk;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
+import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.Item;
 
 public final class PastureContent {
 
@@ -41,11 +47,23 @@ public final class PastureContent {
 
     public static final String QUICK_HANDS = "herding_quick_hands";
 
+    public static final TagKey<Item> EXTRA_PRODUCTS =
+        TagKey.create(Registries.ITEM,
+            ResourceLocation.fromNamespaceAndPath("folkways", "husbandry_products"));
+
     public static final String BUTCHER = "herding_butcher";
 
-    // How many more of each good a felled beast gives.
-    public static final Stat CARCASS_YIELD =
-        new Stat(ResourceLocation.fromNamespaceAndPath("folkways", "carcass_yield"), 0.0, 0.0, 64.0);
+    public static final String FLEECE = "herding_fleece";
+    public static final String BREEDER = "herding_breeder";
+    public static final String NURTURE = "herding_nurture";
+    public static final Stat CARCASS_YIELD = stat("carcass_yield", 1);
+    public static final Stat EXTRA_WOOL = stat("extra_wool", 3);
+    public static final Stat TWINS = stat("twins", 1);
+    public static final Stat BABY_GROWTH = stat("baby_growth", 1);
+
+    private static Stat stat(String name, double max) {
+        return new Stat(ResourceLocation.fromNamespaceAndPath("folkways", name), 0, 0, max);
+    }
 
     public static final Schema.Setting ANIMAL = new Schema.Setting.Choice(
         "animal",
@@ -71,8 +89,11 @@ public final class PastureContent {
 
     private static final VocationSpec VOCATION =
         new VocationSpec(HERDING, List.of(
-                new Perk(QUICK_HANDS, 4, Perk.Grant.haste(HERDING, FolkwaysVanillaConfig::herdingHaste)),
-                new Perk(BUTCHER, 3, Perk.Grant.perRank(CARCASS_YIELD, 1.0))),
+                new Perk(QUICK_HANDS, 3, Perk.Grant.haste(HERDING, FolkwaysVanillaConfig::herdingHaste)),
+                new Perk(BUTCHER, 3, Perk.Grant.added(CARCASS_YIELD, () -> List.of(.15, .3, .5))),
+                new Perk(FLEECE, 3, Perk.Grant.added(EXTRA_WOOL, () -> List.of(.5, 1, 1.5))),
+                new Perk(BREEDER, 3, Perk.Grant.added(TWINS, () -> List.of(.05, .1, .2))),
+                new Perk(NURTURE, 3, Perk.Grant.added(BABY_GROWTH, () -> List.of(.1, .2, .3)))),
             List.of(ItemSpec.of(ResourceLocation.withDefaultNamespace("shears"))));
 
     private static final Workload.Haste HASTE = Workload.Haste.of(HERDING);
@@ -93,7 +114,7 @@ public final class PastureContent {
 
     public static void enroll(Registering registering) {
         registering.facing(ID, colony -> colony.service(ID, PasturePresence.class)
-            .map(value -> (io.github.izakyl.folkways.front.api.Facing) value));
+            .map(value -> (Facing) value));
         registering.enrollment(ID, new Enrollment(List.of(pen()), Schema.none(), List.of(PAGE)));
     }
 

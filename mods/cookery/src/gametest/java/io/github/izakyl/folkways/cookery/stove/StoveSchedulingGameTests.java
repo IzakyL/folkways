@@ -127,8 +127,8 @@ public final class StoveSchedulingGameTests {
                 set(cell.offset(x, -1, z), Blocks.STONE.defaultBlockState());
                 set(cell.offset(x, 0, z), Blocks.AIR.defaultBlockState()); set(cell.offset(x, 1, z), Blocks.AIR.defaultBlockState());
             }
-            set(cell, ModBlocks.STOVE.get().defaultBlockState());
-            actor = PersonBody.RESIDENT.get().create(level); actor.setPos(Vec3.atBottomCenterOf(cell.south(2))); actor.setNoAi(true); level.addFreshEntity(actor);
+            set(cell, ModBlocks.STOVE.get().defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.SOUTH));
+            actor = PersonBody.RESIDENT.get().create(level); actor.setPos(Vec3.atBottomCenterOf(cell.south())); actor.setNoAi(true); level.addFreshEntity(actor);
             pack.setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
             Holding holding = new Holding(UUID.randomUUID(), CookeryContent.STATION, new Held.Block(at));
             view = (ColonyView) Proxy.newProxyInstance(ColonyView.class.getClassLoader(), new Class<?>[] { ColonyView.class },

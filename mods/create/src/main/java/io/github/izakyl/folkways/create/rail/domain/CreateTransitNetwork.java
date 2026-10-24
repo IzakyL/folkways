@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.create.rail.domain;
 
 import com.simibubi.create.Create;
-import com.simibubi.create.content.contraptions.Contraption;
 import com.simibubi.create.content.trains.GlobalRailwayManager;
 import com.simibubi.create.content.trains.display.GlobalTrainDisplayData;
 import com.simibubi.create.content.trains.entity.Carriage;
@@ -22,6 +21,7 @@ import com.simibubi.create.content.trains.schedule.destination.ScheduleInstructi
 import com.simibubi.create.content.trains.station.GlobalStation;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.create.CreateMod;
+import io.github.izakyl.folkways.create.transport.ContraptionSeats;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -33,7 +33,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.createmod.catnip.data.Couple;
 import net.createmod.catnip.data.Glob;
-import net.createmod.catnip.math.VecHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.MinecraftServer;
@@ -186,58 +185,25 @@ final class CreateTransitNetwork implements TransitNetwork {
 
     @Override
     public Optional<UUID> occupant(MinecraftServer server, SeatRef seat) {
-        return carriageEntity(server, seat.vehicleId()).flatMap(entity -> {
-            Contraption contraption = entity.getContraption();
-            if (contraption == null || seat.seatIndex() < 0 || seat.seatIndex() >= contraption.getSeats().size()) {
-                return Optional.empty();
-            }
-            return contraption.getSeatMapping().entrySet().stream()
-                .filter(entry -> entry.getValue() == seat.seatIndex())
-                .map(Map.Entry::getKey)
-                .findFirst();
-        });
+        return carriageEntity(server, seat.vehicleId())
+            .flatMap(entity -> ContraptionSeats.occupant(entity, seat.seatIndex()));
     }
 
     @Override
     public Optional<WorldPos> seatPosition(MinecraftServer server, SeatRef seat) {
-        return carriageEntity(server, seat.vehicleId()).flatMap(entity -> {
-            Contraption contraption = entity.getContraption();
-            if (contraption == null || seat.seatIndex() < 0 || seat.seatIndex() >= contraption.getSeats().size()) {
-                return Optional.empty();
-            }
-            BlockPos local = contraption.getSeats().get(seat.seatIndex());
-            return Optional.of(WorldPos.of(entity.level(), BlockPos.containing(
-                entity.toGlobalVector(VecHelper.getCenterOf(local), 1.0F))));
-        });
+        return carriageEntity(server, seat.vehicleId())
+            .flatMap(entity -> ContraptionSeats.position(entity, seat.seatIndex()));
     }
 
     @Override
     public boolean board(MinecraftServer server, SeatRef seat, Entity rider) {
-        Optional<CarriageContraptionEntity> entity = carriageEntity(server, seat.vehicleId());
-        if (entity.isEmpty()) {
-            return false;
-        }
-        Contraption contraption = entity.get().getContraption();
-        if (contraption == null || seat.seatIndex() < 0 || seat.seatIndex() >= contraption.getSeats().size()
-                || rider.level() != entity.get().level() || occupant(server, seat).isPresent()) {
-            return false;
-        }
-        Vec3 previous = rider.position();
-        Vec3 position = entity.get().toGlobalVector(
-            Vec3.atCenterOf(contraption.getSeats().get(seat.seatIndex())), 1.0F);
-        rider.teleportTo(position.x, position.y, position.z);
-        entity.get().addSittingPassenger(rider, seat.seatIndex());
-        if (!contraption.getSeatMapping().containsKey(rider.getUUID())) {
-            rider.teleportTo(previous.x, previous.y, previous.z);
-        }
-        return contraption.getSeatMapping().containsKey(rider.getUUID());
+        return carriageEntity(server, seat.vehicleId())
+            .map(entity -> ContraptionSeats.board(entity, seat.seatIndex(), rider)).orElse(false);
     }
 
     @Override
     public void disembark(MinecraftServer server, SeatRef seat, Entity rider) {
-        if (rider.isPassenger()) {
-            rider.stopRiding();
-        }
+        ContraptionSeats.disembark(rider);
     }
 
     // The stop on the schedule the train is standing at, named as the schedule names it: the entry it is carrying out

@@ -233,7 +233,7 @@ public final class SettingsPage implements Draw {
             case Schema.Setting.Choice choice -> ChoicePicker.labelOf(choiceOf(held, choice));
             case Schema.Setting.Items items -> items.single()
                 ? itemsOf(held, items).stream().findFirst().map(ItemPicker::labelOf).orElse(Component.empty())
-                : Component.translatable("folkways.settings.entries", itemsOf(held, items).size());
+                : Component.translatable("folkways.settings.rules", itemsOf(held, items).size());
         };
     }
 

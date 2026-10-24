@@ -2,9 +2,12 @@ package io.github.izakyl.folkways.plugins.person.walk;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.terms.ClimbableBlocks;
+import io.github.izakyl.folkways.core.api.terms.Keepouts;
+import io.github.izakyl.folkways.core.api.terms.Structures;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -18,6 +21,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.PathComputationType;
+import net.minecraft.world.level.pathfinder.PathFinder;
 import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.PathfindingContext;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
@@ -39,6 +43,39 @@ public final class ResidentNodeEvaluatorGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(ResidentNodeEvaluatorGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void escapingOneKeepoutDoesNotPermitEnteringAnother(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos start = helper.absolutePos(new BlockPos(1, 1, 1));
+        BlockPos other = start.offset(3, 0, 0);
+        for (BlockPos floor : BlockPos.betweenClosed(start.offset(-1, -1, -1), other.offset(1, -1, 2))) {
+            level.setBlockAndUpdate(floor, Blocks.STONE.defaultBlockState());
+        }
+        Runnable remove = Keepouts.install((host, x, y, z) -> host == level && start.equals(new BlockPos(x, y, z)));
+        Runnable removeOther = Keepouts.install((host, x, y, z) -> host == level
+            && (start.north().equals(new BlockPos(x, y, z)) || other.equals(new BlockPos(x, y, z))));
+        try {
+            var mob = EntityType.VILLAGER.create(level);
+            mob.setPos(Vec3.atBottomCenterOf(start));
+            var region = Structures.region(level, start.offset(-2, -2, -2), other.offset(2, 3, 3));
+            var escape = new PathFinder(new ResidentNodeEvaluator(start), 512)
+                .findPath(region, mob, Set.of(start.south()), 12, 0, 1);
+            helper.assertTrue(escape != null && escape.canReach(), "a resident in a keepout can walk out");
+            var shortcut = new PathFinder(new ResidentNodeEvaluator(start), 512)
+                .findPath(region, mob, Set.of(other), 12, 0, 1);
+            helper.assertTrue(shortcut == null || !shortcut.canReach(),
+                "leaving one keepout never grants entry into a separate keepout");
+            var adjacent = new PathFinder(new ResidentNodeEvaluator(start), 512)
+                .findPath(region, mob, Set.of(start.north()), 12, 0, 1);
+            helper.assertTrue(adjacent == null || !adjacent.canReach(),
+                "an adjoining keepout from another source stays blocked during escape");
+            helper.succeed();
+        } finally {
+            remove.run();
+            removeOther.run();
+        }
     }
 
     // Vanilla walks through any block short of a full cube unless the block says otherwise. A modded machine a

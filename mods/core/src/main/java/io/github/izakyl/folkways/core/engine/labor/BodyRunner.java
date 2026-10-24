@@ -31,6 +31,9 @@ import io.github.izakyl.folkways.core.api.work.WorkEffort;
 import io.github.izakyl.folkways.core.api.work.WorkExertion;
 import io.github.izakyl.folkways.core.api.work.Xp;
 import io.github.izakyl.folkways.core.engine.travel.Trip;
+import io.github.izakyl.folkways.core.engine.plan.haul.Haul;
+import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
+import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -85,6 +88,7 @@ final class BodyRunner {
     private Trip carrying;
     private Workload.Continuous ongoing;
     private Node justDone;
+    private int haulBatch;
     private boolean joining;
     private int windup;
     private int windupTicks;
@@ -411,18 +415,18 @@ final class BodyRunner {
     }
 
     private void take(ColonyLabor labor, ServerLevel level, Body body) {
+        gather(labor, level, body);
         Iterator<UUID> queued = route.iterator();
         boolean owed = false;
         while (queued.hasNext()) {
             UUID next = queued.next();
-            Optional<Node> ready = labor.takeable(next, level);
-            // Work may be taken ahead of work still waiting before it, but only while the pack holds the route
-            // done in that order: the schedule counted its loads in route order, and a step taken early must not
-            // fill the cells the waiting work needs.
-            if (ready.isPresent() && owed && !labor.fitsAhead(body, next, route)) {
+            // Readiness may enter an owner's execution queue (shared kitchen tools, for example).
+            // Check pack safety first, so work we cannot start never reserves ahead of runnable work.
+            if (owed && labor.onTheGraph(next) && !labor.fitsAhead(body, next, route)) {
                 labor.packBlocked(next);
                 continue;
             }
+            Optional<Node> ready = labor.takeable(next, level);
             if (ready.isPresent()) {
                 queued.remove();
                 stalled = 0;
@@ -452,6 +456,31 @@ final class BodyRunner {
         }
     }
 
+    // Gather compatible loads sharing a source or nearby destination. Every moved step is ready and its
+    // inventory effect must fit the entire remaining route; reservations still commit separately.
+    private void gather(ColonyLabor labor, ServerLevel level, Body body) {
+        if (!(justDone instanceof TransferNode previous) || !previous.fetching()
+                || haulBatch >= (int) body.effects().value(Haul.BATCH_SIZE)) {
+            return;
+        }
+        int checked = 0;
+        for (UUID id : List.copyOf(route)) {
+            if (++checked > 32) { break; }
+            // Inspect only actual compatible fetches. Merely probing a non-hauling node's readiness
+            // can reserve its shared tools even though gathering will never execute that node.
+            if (!(labor.node(id).orElse(null) instanceof TransferNode next) || !next.fetching()
+                    || !(next.joins(previous) || labor.sharesDelivery(previous.id(), id, route, body))
+                    || !labor.fitsAhead(body, id, route)) {
+                continue;
+            }
+            if (labor.takeable(id, level).isPresent()) {
+                route.remove(id);
+                route.addFirst(id);
+                return;
+            }
+        }
+    }
+
     private void begin(ColonyLabor labor, ServerLevel level, Body body, Node node,
             Placement plan) {
         busy = 0;
@@ -462,6 +491,8 @@ final class BodyRunner {
         placement = plan;
         footing = footingOf(node, plan);
         joining = justDone != null && node.joins(justDone);
+        haulBatch = node instanceof TransferNode transfer && transfer.fetching()
+            ? justDone instanceof TransferNode previous && previous.fetching() ? haulBatch + 1 : 1 : 0;
         justDone = null;
         NodeSpec spec = node.spec();
         switch (spec.workload()) {
@@ -525,10 +556,14 @@ final class BodyRunner {
     private Optional<Trip> setOut(ColonyLabor labor, ServerLevel level, Body body) {
         Set<WorldPos> footings = footings();
         double speed = PACE * current.spec().pace();
+        if (current.spec().vocation().filter(trade -> trade.id().equals(Vocations.HAULING)).isPresent()) {
+            speed *= body.effects().value(Haul.TRAVEL_SPEED);
+        }
+        double travelSpeed = speed;
         return labor.ways(level)
             .map(ways -> Trip.to(() -> labor.ways(level).orElse(ways), body.resident(), body.kind().locomotion(), body.mob(),
-                footings, speed, LaborRefusal.NO_WAY_THERE))
-            .orElseGet(() -> Trip.afoot(body.kind().locomotion(), footings, speed,
+                footings, travelSpeed, LaborRefusal.NO_WAY_THERE))
+            .orElseGet(() -> Trip.afoot(body.kind().locomotion(), footings, travelSpeed,
                 LaborRefusal.NO_WAY_THERE));
     }
 
@@ -707,7 +742,7 @@ final class BodyRunner {
                 Wear.from(level, body, node.spec(), who, item -> labor.broke(resident, item));
                 WorkYield.gave(body.mob(), node, made);
                 Stowing.put(who, placement, made);
-                xp.ifPresent(gained -> reward(level, body, gained));
+                xp.ifPresent(gained -> Bodies.worked(body, gained.vocation(), windup, level.getRandom()));
                 handIn(labor, level, body, node);
             }
             case Outcome.Failed(List<WorkNoise> ignored, RefusalKind why) ->
@@ -777,10 +812,7 @@ final class BodyRunner {
         }
     }
 
-    private static void reward(ServerLevel level, Body body, Xp gained) {
-        Bodies.credit(body, gained.vocation(), gained.amount(), level.getRandom());
-        body.refreshEffects();
-    }
+
 
     private void present(Body body) {
         NodeSpec spec = current.spec();

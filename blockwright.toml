@@ -30,10 +30,16 @@ path = "build/libs/folkways-modulargolems-*.jar"
 path = "build/libs/folkways-cookery-*.jar"
 target = []
 
-# Compiled against, and installed only by the cookery test profiles.
+# Compiled against, and installed only by the cookery test and promo profiles.
 [mods.kaleidoscope_cookery]
 url = "https://cdn.modrinth.com/data/v17FatAc/versions/g8w0b2ly/kaleidoscopecookery-1.6.0-neoforge%2Bmc1.21.1.jar"
 sha512 = "b562f73395f70d39fb26d89ca62a5b5cebe7d66b11e8930217f0daf03fdcea617629728f55e4c8ced690406204c44462a8a568e5c15f05f5940274904ce0b77f"
+target = []
+
+# Optional wine production and dining drinks, installed by the tavern promo profile.
+[mods.kaleidoscope_tavern]
+url = "https://cdn.modrinth.com/data/r9RZvhiJ/versions/W9ILsQt7/kaleidoscopetavern-1.2.0-neoforge%2Bmc1.21.1.jar"
+sha512 = "2481f11727ee303004d2e849739651f63bc28493a79d2e6a784f45632fc92e27ce4a43cc3b08b71740aa1f2a1879c15cc097c65d7a95d9d642c4a9958df6c473"
 target = []
 
 [mods.ldlib2]
@@ -265,6 +271,32 @@ iris = { target = ["client"] }
 sable = { target = ["server", "client"] }
 create-aeronautics = { target = ["server", "client"] }
 
+# The same light, camera and sound as the other promos, with the native kitchen installed.
+[profile.promo-cookery.neoforge]
+jvm_args = ["-Xmx3G"]
+
+[profile.promo-cookery.neoforge.server]
+world = "vanilla"
+properties = { "level-seed" = "folkways-promo", "view-distance" = "12", "spawn-monsters" = "false", "level-type" = "minecraft:flat", "generator-settings" = '{"biome":"minecraft:plains","features":false,"lakes":false,"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":3},{"block":"minecraft:grass_block","height":1}],"structure_overrides":[]}' }
+
+[profile.promo-cookery.neoforge.client]
+game_args = ["--width", "1920", "--height", "1080"]
+options = { lang = "zh_cn", guiScale = "2", overrideWidth = "1920", overrideHeight = "1080", maxFps = "260", renderDistance = "12", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "4.0", biomeBlendRadius = "3", ao = "true", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", fovEffectScale = "0.0", soundCategory_music = "0.0", soundCategory_record = "0.0", soundCategory_ambient = "0.0" }
+
+[profile.promo-cookery.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+[profile.promo-cookery.mods]
+sodium = { target = ["client"] }
+iris = { target = ["client"] }
+sable = { target = ["server", "client"] }
+create-aeronautics = { target = ["server", "client"] }
+folkways_cookery = { target = ["server", "client"] }
+kaleidoscope_cookery = { target = ["server", "client"] }
+kaleidoscope_tavern = { target = ["server", "client"] }
+
 # The promo profile with Touhou Little Maid installed on both sides, for the shot that shows its models lent to
 # residents as looks. Nothing else of it is used, and every other promo take stays without it. The game is in
 # Chinese, as the film's viewers read it.
@@ -372,3 +404,9 @@ architectury = { target = ["server", "client"] }
 # Native Cookery alone must not activate the separately installed Folkways extension.
 [profile.cookery-native.mods]
 kaleidoscope_cookery = { target = ["server", "client"] }
+
+# Visual coverage includes every Cookery lesson, including the optional Tavern.
+[profile.cookery-tavern.mods]
+folkways_cookery = { target = ["server", "client"] }
+kaleidoscope_cookery = { target = ["server", "client"] }
+kaleidoscope_tavern = { target = ["server", "client"] }

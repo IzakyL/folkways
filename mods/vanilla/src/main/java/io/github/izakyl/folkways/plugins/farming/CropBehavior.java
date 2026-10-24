@@ -31,6 +31,39 @@ public interface CropBehavior {
 
     boolean needsFarmland();
 
+    default List<io.github.izakyl.folkways.core.api.work.Need> plantingMaterials(int plants) {
+        return List.of();
+    }
+
+    default boolean sowsAt(BlockPos ground, int minX, int minZ, java.util.Set<BlockPos> plot) {
+        return true;
+    }
+
+    // A stalk in the way keeps the field's aisles bare, unless the crop's own sowsAt already spaces it.
+    default boolean aisles() {
+        return true;
+    }
+
+    // What the plot is framed with before it is sown, such as a pergola's posts and roof. The frame goes up a cell
+    // at a time, each cell its own piece of work done from where a body can reach it.
+    default Optional<io.github.izakyl.folkways.core.api.terms.ItemSpec> frame() {
+        return Optional.empty();
+    }
+
+    // The frame cells that can be laid now, each against what already stands. The plot is its ground cells.
+    default List<BlockPos> frameCells(LevelReader level, java.util.Set<BlockPos> plot) {
+        return List.of();
+    }
+
+    // Lays one frame cell from the supplied frame goods, using up exactly what it lays.
+    default boolean lay(ServerLevel level, Worker who, BlockPos at, List<ItemStack> supplied) {
+        return false;
+    }
+
+    default boolean plant(ServerLevel level, Worker who, BlockPos base, ItemStack seed, List<ItemStack> supplied) {
+        return plant(level, who, base, seed);
+    }
+
     // Native preparation that does not go through a hoe's usual tool action, such as a flooded rice paddy.
     // Planning and work ask the same question without changing the soil or the block above it.
     default Optional<BlockState> tilled(Level level, BlockPos ground, ItemStack hoe) {

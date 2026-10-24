@@ -18,6 +18,8 @@ import net.minecraft.world.level.pathfinder.Node;
 import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.PathfindingContext;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
+import net.minecraft.world.phys.shapes.BooleanOp;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
@@ -28,6 +30,7 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
     @Nullable
     private BlockPos start;
     private boolean outOfBounds;
+    private Keepouts.Keepout escapeWalls;
 
     public ResidentNodeEvaluator(@Nullable BlockPos start) {
         this.start = start;
@@ -41,7 +44,9 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
     @Override
     public void prepare(PathNavigationRegion region, Mob mob) {
         super.prepare(region, mob);
-        outOfBounds = Keepouts.forbidden(mob.level(), start != null ? start : mob.blockPosition());
+        BlockPos feet = start != null ? start : mob.blockPosition();
+        outOfBounds = Keepouts.forbidden(mob.level(), region, feet.getX(), feet.getY(), feet.getZ());
+        escapeWalls = outOfBounds ? Keepouts.blockingEscapeFrom(mob.level(), region, feet) : null;
     }
 
     // Off the ground, vanilla starts a path on the floor under the mob, through anything it could walk through: for
@@ -85,7 +90,8 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
                 || context.getBlockState(probePos.set(x, y - 1, z)).is(Blocks.BARRIER)) {
             return PathType.BLOCKED;
         }
-        if (!outOfBounds && mob != null && Keepouts.forbidden(mob.level(), x, y, z)) {
+        if (mob != null && (outOfBounds ? escapeWalls.forbids(mob.level(), x, y, z)
+                : Keepouts.forbidden(mob.level(), context.level(), x, y, z))) {
             return PathType.BLOCKED;
         }
         PathType type = super.getPathType(context, x, y, z);
@@ -107,10 +113,22 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
         if ((type == PathType.OPEN || type == PathType.WALKABLE) && isSolidInside(context, x, y, z)) {
             return PathType.BLOCKED;
         }
-        if (type == PathType.OPEN && isSolidInside(context, x, y - 1, z)) {
+        if (type == PathType.OPEN && (isSolidInside(context, x, y - 1, z) || topsAClimb(context, x, y - 1, z))) {
             return PathType.WALKABLE;
         }
         return type;
+    }
+
+    // A climb is walked in, so it never counts as solid inside; one with a floor of its own still holds up whoever
+    // climbs out on top of it, as the ways (Footing) have it. A stepladder against a barrel is climbed to its top
+    // step, and the barrel's lid is a step up from there.
+    private boolean topsAClimb(PathfindingContext context, int x, int y, int z) {
+        BlockState state = context.getBlockState(probePos.set(x, y, z));
+        if (!ClimbableBlocks.isClimbable(state) || ClimbableBlocks.offersFloor(state)) {
+            return false;
+        }
+        VoxelShape shape = state.getCollisionShape(context.level(), probePos);
+        return !shape.isEmpty() && shape.max(Direction.Axis.Y) > STEP;
     }
 
     // Vanilla walks through any block that is not a full cube unless the block says otherwise, and every vanilla
@@ -156,12 +174,73 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
     public int getNeighbors(Node[] neighbors, Node node) {
         Searches.expanded();
         int count = super.getNeighbors(neighbors, node);
-        if (!inColumn(node)) {
-            return count;
+        count = keepOpenSides(neighbors, count, node);
+        if (inColumn(node)) {
+            count = append(neighbors, count, climbNode(node.x, node.y + 1, node.z), node);
+            count = append(neighbors, count, climbNode(node.x, node.y - 1, node.z), node);
         }
-        count = append(neighbors, count, climbNode(node.x, node.y + 1, node.z), node);
-        count = append(neighbors, count, climbNode(node.x, node.y - 1, node.z), node);
+        // A misplaced resident may leave the forbidden area it starts in. Once outside,
+        // its route cannot enter that area again or use another keepout as a shortcut.
+        if (outOfBounds && !forbidden(node)) {
+            int kept = 0;
+            for (int i = 0; i < count; i++) {
+                Node next = neighbors[i];
+                if (forbidden(next)) continue;
+                if (node.x != next.x && node.z != next.z
+                        && (Keepouts.forbidden(mob.level(), currentContext.level(), next.x, node.y, node.z)
+                            || Keepouts.forbidden(mob.level(), currentContext.level(), node.x, node.y, next.z))) continue;
+                neighbors[kept++] = next;
+            }
+            count = kept;
+        }
         return count;
+    }
+
+    // A climb is walked into from beside it, but only through a side that is open at the feet. A ladder's plate
+    // leaves three, and scaffolding is walked through on every side; a stepladder is stepped only on its low side and stands a block high on the others, where a body
+    // sent to its middle pushed against the step above for good.
+    private int keepOpenSides(Node[] neighbors, int count, Node from) {
+        int kept = 0;
+        for (int i = 0; i < count; i++) {
+            Node next = neighbors[i];
+            if (sidesOpen(next, from) && sidesOpen(from, next)) {
+                neighbors[kept++] = next;
+            }
+        }
+        return kept;
+    }
+
+    private boolean sidesOpen(Node cell, Node toward) {
+        if ((cell.x == toward.x && cell.z == toward.z) || !isClimbable(currentContext, cell.x, cell.y, cell.z)) {
+            return true;
+        }
+        int dx = Integer.signum(toward.x - cell.x);
+        int dz = Integer.signum(toward.z - cell.z);
+        return (dx == 0 || openAtFeet(cell, dx > 0 ? Direction.EAST : Direction.WEST))
+            && (dz == 0 || openAtFeet(cell, dz > 0 ? Direction.SOUTH : Direction.NORTH));
+    }
+
+    // The face of the cell a body steps through: a sliver of the cell along that face, the body's width across it.
+    private boolean openAtFeet(Node cell, Direction side) {
+        BlockState state = currentContext.getBlockState(probePos.set(cell.x, cell.y, cell.z));
+        if (ClimbableBlocks.offersFloor(state)) {
+            return true;
+        }
+        VoxelShape shape = state.getCollisionShape(currentContext.level(), probePos);
+        if (shape.isEmpty()) {
+            return true;
+        }
+        double half = mob.getBbWidth() / 2.0D;
+        double lo = side.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 15.0D / 16.0D : 0.0D;
+        VoxelShape face = side.getAxis() == Direction.Axis.X
+            ? Shapes.box(lo, 0.0D, 0.5D - half, lo + 1.0D / 16.0D, 1.0D, 0.5D + half)
+            : Shapes.box(0.5D - half, 0.0D, lo, 0.5D + half, 1.0D, lo + 1.0D / 16.0D);
+        VoxelShape met = Shapes.join(shape, face, BooleanOp.AND);
+        return met.isEmpty() || met.max(Direction.Axis.Y) <= STEP;
+    }
+
+    private boolean forbidden(Node node) {
+        return Keepouts.forbidden(mob.level(), currentContext.level(), node.x, node.y, node.z);
     }
 
     private int append(Node[] neighbors, int count, @Nullable Node candidate, Node from) {

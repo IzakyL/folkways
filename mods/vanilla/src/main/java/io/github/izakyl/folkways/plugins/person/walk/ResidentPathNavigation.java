@@ -77,11 +77,30 @@ public final class ResidentPathNavigation extends GroundPathNavigation {
 
     @Override
     protected void followThePath() {
+        passClimbedNodes();
         if (isBelowColumnNode(path.getNextNodePos())) {
             doStuckDetection(getTempMobPos());
             return;
         }
         super.followThePath();
+    }
+
+    // Up a stepladder the body walks its steps and rises through the column's nodes without waiting at any: past
+    // the foot it was already a block over the node vanilla still steered it to, and it paced the top for good.
+    // Nodes of the column it has already risen to are passed, up to the first one still above it.
+    private void passClimbedNodes() {
+        while (path.getNextNodeIndex() + 1 < path.getNodeCount()) {
+            Vec3i next = path.getNextNodePos();
+            Vec3i after = path.getNodePos(path.getNextNodeIndex() + 1);
+            if (!inColumn(next) || !inColumn(after) || after.getY() <= next.getY() || mob.getY() < after.getY() - ARRIVED) {
+                return;
+            }
+            path.advance();
+        }
+    }
+
+    private boolean inColumn(Vec3i node) {
+        return node.getX() == mob.getBlockX() && node.getZ() == mob.getBlockZ();
     }
 
     private boolean isBelowColumnNode(Vec3i node) {

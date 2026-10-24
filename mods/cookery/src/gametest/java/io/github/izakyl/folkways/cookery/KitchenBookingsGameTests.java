@@ -91,6 +91,33 @@ public final class KitchenBookingsGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void candidatesPriceTheQueueWithoutCountingTheirOwnOrLaterTurns(GameTestHelper helper) {
+        var bookings = new KitchenBookings();
+        var at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
+        var one = bookings.hold(at, UUID.randomUUID(), 1200);
+        var two = bookings.hold(at, UUID.randomUUID(), 600);
+        var three = bookings.hold(at, UUID.randomUUID(), 200);
+        helper.assertValueEqual(one.estimatedWaitTicks(), 0L, "the first proposal has no queue ahead of it");
+        one.take();
+        helper.assertValueEqual(one.estimatedWaitTicks(), 0L, "a held turn never counts its own cooking time as waiting");
+        helper.assertValueEqual(two.estimatedWaitTicks(), 1200L, "a candidate sees the already booked long cooking batch");
+        two.take();
+        helper.assertValueEqual(three.estimatedWaitTicks(), 1800L, "a new candidate sees the complete serial queue");
+        three.take();
+        helper.assertValueEqual(two.estimatedWaitTicks(), 1200L, "a held turn does not wait for later turns");
+        helper.assertValueEqual(one.estimatedWaitTicks(), 0L, "the first turn is still first after others book behind it");
+        one.release(Ending.DONE);
+        helper.assertValueEqual(two.estimatedWaitTicks(), 0L, "finishing the predecessor releases its waiting cost");
+        helper.assertValueEqual(three.estimatedWaitTicks(), 600L, "only the surviving predecessor contributes cost");
+        bookings.withdraw(at);
+        helper.assertValueEqual(three.estimatedWaitTicks(), 0L, "a removed station cannot retain a stale waiting estimate");
+        bookings.admit(at);
+        var next = bookings.hold(at, UUID.randomUUID(), 500);
+        helper.assertValueEqual(next.estimatedWaitTicks(), 0L, "a new generation starts without the old queue");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void clearingBookingsInvalidatesOldHoldsWithoutDisablingNewUnmanagedStations(GameTestHelper helper) {
         KitchenBookings bookings = new KitchenBookings();
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));

@@ -11,6 +11,8 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Xp;
 import io.github.izakyl.folkways.plugins.build.BuildContent;
+import io.github.izakyl.folkways.plugins.build.BuildingPerks;
+import java.util.ArrayList;
 import io.github.izakyl.folkways.plugins.farming.FarmingContent;
 import java.util.List;
 import java.util.Optional;
@@ -37,8 +39,9 @@ final class BreakNode extends GroundNode {
             return this == CLEAR ? GroundworkContent.CLEARING : GroundworkContent.WEEDING;
         }
 
-        Workload.Haste haste() {
-            return this == CLEAR ? BuildContent::haste : FarmingContent::haste;
+        Workload.Haste haste(Chores.Chore chore) {
+            return this == CLEAR ? worker -> BuildContent.haste(worker) / BuildingPerks.momentum(worker,
+                worker.body().level().getBlockState(chore.job().cell())) : FarmingContent::haste;
         }
     }
 
@@ -58,7 +61,7 @@ final class BreakNode extends GroundNode {
 
     private static NodeSpec declared(Chores.Chore chore, Way way,
             BlockState seen) {
-        var spec = GroundNode.declare(chore, way.by(), Workload.Once.of(ticksFor(way, seen), way.haste()))
+        var spec = GroundNode.declare(chore, way.by(), Workload.Once.of(ticksFor(way, seen), way.haste(chore)))
             .leaves(Leaves.ofBlocks(List.of(seen)));
         if (way == Way.CLEAR && seen.requiresCorrectToolForDrops()) {
             spec.tools(new ToolUse(new ToolNeed.SuitableFor(seen), 1));
@@ -85,8 +88,13 @@ final class BreakNode extends GroundNode {
         if (state.getDestroySpeed(level, cell) < 0.0F || spared.test(cell, state)) {
             return refuse(GroundRefusal.NOTHING_TO_WORK);
         }
-        ItemStack tool = way == Way.CLEAR ? who.held(new ToolNeed.SuitableFor(state)) : ItemStack.EMPTY;
-        List<ItemStack> drops = take(level, who.body(), cell, state, tool);
+        ItemStack tool = way == Way.CLEAR
+            ? BuildingPerks.fortunate(level, who, who.held(new ToolNeed.SuitableFor(state))) : ItemStack.EMPTY;
+        List<ItemStack> drops = new ArrayList<>(take(level, who.body(), cell, state, tool));
+        if (way == Way.CLEAR && level.getBlockState(cell).isAir()) {
+            drops.addAll(BuildingPerks.discoveries(level, who, cell, state));
+            BuildingPerks.mined(who, state);
+        }
         return new Outcome.Done(List.of(WorkNoise.broke(cell, state)), drops,
             Optional.of(new Xp(way.by(), 1)));
     }

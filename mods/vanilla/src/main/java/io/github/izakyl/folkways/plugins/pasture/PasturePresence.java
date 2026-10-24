@@ -123,8 +123,14 @@ final class PasturePresence implements Facing {
 
     public List<Grown> goals(ColonyView view) {
         List<Grown> goals = new ArrayList<>();
+        Optional<UUID> nurturer = view.residents().stream().filter(resident -> {
+            var entity = view.level().getEntity(resident.id());
+            return entity instanceof net.minecraft.world.entity.LivingEntity living
+                && io.github.izakyl.folkways.core.api.resident.body.Bodies.of(living)
+                    .map(body -> body.perks().rank(PastureContent.NURTURE) > 0).orElse(false);
+        }).map(resident -> resident.id()).findFirst();
         for (Map<Herd.Job, PenChores> pen : pens.values()) {
-            pen.values().forEach(chores -> chores.goals(view.level(), goals));
+            pen.values().forEach(chores -> chores.goals(view.level(), goals, nurturer));
         }
         return goals;
     }

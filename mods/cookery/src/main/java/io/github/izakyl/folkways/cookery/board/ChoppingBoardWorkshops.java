@@ -149,7 +149,7 @@ public final class ChoppingBoardWorkshops {
                     continue;
                 }
                 BoardWork work = new BoardWork(colonyId, at, stances, job, bookings, changed, null);
-                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id())));
+                options.add(Refinement.Change.of(Grown.of(work)).holding(bookings.hold(at, work.id(), work.spec().estimate())));
             }
             return List.copyOf(options);
         }

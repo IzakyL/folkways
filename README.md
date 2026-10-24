@@ -34,9 +34,14 @@ versions. Back up your world before trying a nightly build.
 - **Build from drawings.** Choose patterns for roads, arch bridges, walls, docks,
   mines, railways, arcades and terraced fields. Builders clear the site and use
   the colony's stores.
-- **Care for residents.** They sleep in their own beds, carry meals, tire from work
-  and travel, learn trades, gain perks and flee danger. Data packs can replace
+- **Care for residents.** They sleep in their own beds, carry three days of
+  rations, tire from work and travel, and flee danger. Data packs can replace
   colony name and appearance pools.
+- **Let them grow with practice.** Each trade has ten levels, and every level
+  draws a speciality; levels 3, 6 and 10 also draw a shared perk.
+- **Set tables and build homes.** Dining areas serve table meals, beds grade their
+  rooms, and mood moves work speed between 75% and 115%. Idle residents stroll,
+  chat and pet animals; cats, wolves and parrots move in as the colony grows.
 
 ## Installation
 
@@ -78,22 +83,23 @@ Vanilla. They do not need separate installation.
 
 The panel's **Lessons** tab contains Ponder tutorials for the rest of the mod.
 See the [gameplay guide](docs/en/gameplay.md) for colony membership, storage rules,
-composting, buildings and resident looks.
+perks, food, dining, housing, composting, buildings and resident looks.
 
 ## Optional integrations
 
-| Mod                                                                                                                         | What it adds                                                                                                                                                             |
-| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Create](https://modrinth.com/mod/create) 6.0+, with Folkways × Create                                                      | Schematic building, train driving, track laying and orders through a stock keeper's package network. Core handles walking around contraptions even without the extension |
-| [Sable](https://modrinth.com/mod/sable)                                                                                     | Residents path onto and off sub-levels, including Create Aeronautics ships                                                                                               |
-| [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems                           | Golems join the roster and take trades alongside people                                                                                                                  |
-| [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0, with Folkways × Kaleidoscope Cookery | Flooded-rice farming, ingredient preparation, native appliances, shared tools, kitchen racks, grass-seed gathering and thirteen lessons                                  |
-| [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                          | Bedrock-format resident models                                                                                                                                           |
-| [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib                                       | Built-in and installed add-on models become selectable resident looks, individually or by pack                                                                           |
-| [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                      | Colony Book aiming follows its third-person crosshair                                                                                                                    |
-| [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                   | Item filters open the recipe viewer's ingredient list                                                                                                                    |
-| [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                           | A founder can hand the colony to their party; party members keep it and the party owner holds the founder's rights                                                       |
-| [Just Enough Characters (JEC)](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                    | Pinyin, initials and mixed-input searches in item and folder pickers, Workforce and stock; install on the client only                                                    |
+| Mod                                                                                                                         | What it adds                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Create](https://modrinth.com/mod/create) 6.0+, with Folkways × Create                                                      | Schematic building, train driving, elevator rides, track laying and orders through a stock keeper's package network. Core handles walking around contraptions even without the extension |
+| [Sable](https://modrinth.com/mod/sable)                                                                                     | Residents path onto and off sub-levels, including Create Aeronautics ships                                                                                                               |
+| [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems                           | Golems join the roster and take trades alongside people                                                                                                                                  |
+| [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0, with Folkways × Kaleidoscope Cookery | Flooded-rice farming, ingredient preparation, native appliances, shared tools, kitchen racks, grass-seed gathering and thirteen lessons                                                  |
+| [Kaleidoscope Tavern](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0, with the Cookery extension             | Grape vineyards under pergolas, pressing, fermenting and bottling wine, and dining-area bar counters residents stock and drink at; one lesson                                            |
+| [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                          | Bedrock-format resident models                                                                                                                                                           |
+| [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib                                       | Built-in and installed add-on models become selectable resident looks, individually or by pack                                                                                           |
+| [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                      | Colony Book aiming follows its third-person crosshair                                                                                                                                    |
+| [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                   | Item filters open the recipe viewer's ingredient list                                                                                                                                    |
+| [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                           | A founder can hand the colony to their party; party members keep it and the party owner holds the founder's rights                                                                       |
+| [Just Enough Characters (JEC)](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                    | Pinyin, initials and mixed-input searches in item and folder pickers, Workforce and stock; install on the client only                                                                    |
 
 JEC searches follow its keyboard and fuzzy-spelling settings. See [Searching](docs/en/gameplay.md#searching)
 for examples and how item searches differ from saved filter rules.
@@ -101,7 +107,7 @@ For Touhou Little Maid add-on installation, see [Maid model packs](docs/en/gamep
 
 ## Documentation
 
-- [Gameplay](docs/en/gameplay.md): members, work, storage, composting and resident looks.
+- [Gameplay](docs/en/gameplay.md): members, work, perks, food, dining, housing, recreation, storage, composting and resident looks.
 - [Custom content](docs/en/custom-content.md): patterns, blueprints, skins, models and server configuration.
 - [Testing](docs/en/testing.md): local checks, game tests, Cookery fixtures and CI.
 - [Architecture](docs/en/architecture.md): modules, public APIs, source layout and lifecycle.

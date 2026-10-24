@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.plugins.person.look.LookPicker;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLooks;
 import io.github.izakyl.folkways.plugins.person.name.ColonyNames;
 import java.util.Optional;
+import java.util.function.Consumer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
@@ -105,7 +106,7 @@ public final class PersonInlay implements Inlay {
         return inlay;
     }
 
-    private static TextField field(String token, java.util.function.Consumer<String> typed) {
+    private static TextField field(String token, Consumer<String> typed) {
         TextField field = new TextField();
         field.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
         field.bind(DataBindingBuilder.stringC2S(typed::accept).build());

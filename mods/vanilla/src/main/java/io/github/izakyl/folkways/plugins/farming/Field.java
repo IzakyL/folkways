@@ -21,6 +21,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.FarmBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 final class Field {
 
@@ -36,6 +37,7 @@ final class Field {
     private final FieldChores harvesting;
     private final FieldChores tilling;
     private final FieldChores sowing;
+    private final FieldChores framing;
 
     private final Tillage.Clearing clearing;
 
@@ -45,6 +47,7 @@ final class Field {
     private final List<Job> harvest = new ArrayList<>();
     private final List<Job> till = new ArrayList<>();
     private final List<Job> plant = new ArrayList<>();
+    private final List<Job> frame = new ArrayList<>();
     private long sweep = Long.MIN_VALUE;
 
     Field(Crop crop, Tillage.Clearing clearing, WorldPos anchor, Runnable changed, PastDay made) {
@@ -54,14 +57,15 @@ final class Field {
         this.harvesting = new FieldChores("harvest", Field::cutOrFell, changed, made);
         this.tilling = new FieldChores("till", chore -> new TillNode(chore, clearing), changed, made);
         this.sowing = new FieldChores("sow", PlantNode::new, changed, made);
+        this.framing = new FieldChores("frame", FrameNode::new, changed, made);
     }
 
-    // What one zone's scan found wanting: stands ripe to cut, ground to till, and stands to sow.
+    // What one zone's scan found wanting: stands ripe to cut, ground to till, and stands to sow or frame to lay first.
     record Tally(int ripe, int till, int sow) {
     }
 
     List<FieldChores> chores() {
-        return List.of(harvesting, tilling, sowing);
+        return List.of(harvesting, tilling, sowing, framing);
     }
 
     Tally scan(ServerLevel level, ZoneView zone, Crop parsed, long stamp) {
@@ -69,7 +73,7 @@ final class Field {
         crop = parsed;
         int ripeBefore = harvest.size();
         int tillBefore = till.size();
-        int sowBefore = plant.size();
+        int sowBefore = plant.size() + frame.size();
         Set<BlockPos> sown = new LinkedHashSet<>();
         Set<BlockPos> claimed = new LinkedHashSet<>();
         List<BlockPos> ground = new ArrayList<>(zone.cells());
@@ -103,7 +107,8 @@ final class Field {
                 till.add(new Job(at, List.of(cell), footings.get(), cell));
             }
         }
-        return new Tally(harvest.size() - ripeBefore, till.size() - tillBefore, plant.size() - sowBefore);
+        stakeFrame(level, plot);
+        return new Tally(harvest.size() - ripeBefore, till.size() - tillBefore, plant.size() + frame.size() - sowBefore);
     }
 
     void settle(long stamp) {
@@ -111,6 +116,7 @@ final class Field {
         harvesting.settle(crop, harvest, allowed);
         tilling.settle(crop, till, allowed);
         sowing.settle(crop, plant, allowed);
+        framing.settle(crop, frame, allowed);
     }
 
     List<CropSeeds.Sowing> sowingPlans(ServerLevel level) {
@@ -133,6 +139,7 @@ final class Field {
         harvest.clear();
         till.clear();
         plant.clear();
+        frame.clear();
     }
 
     // Every footing in reach of the cell, so the work can be done from wherever the way there is easiest. Whether a
@@ -210,6 +217,39 @@ final class Field {
             sown.add(ground.above());
         }
         return Optional.of(new Job(WorldPos.of(level, cell), bare, footings.get(), cell));
+    }
+
+    // Each frame cell ready to lay is its own work, kept under the plot cell it stands over, and done from wherever in
+    // reach of it a body can see it.
+    private void stakeFrame(ServerLevel level, Plot plot) {
+        if (crop.behavior().isEmpty()) {
+            return;
+        }
+        Map<Long, BlockPos> columns = new HashMap<>();
+        for (BlockPos ground : plot.cells()) {
+            columns.put(BlockPos.asLong(ground.getX(), 0, ground.getZ()), ground);
+        }
+        for (BlockPos at : crop.behavior().get().frameCells(level, plot.cells())) {
+            BlockPos ground = columns.get(BlockPos.asLong(at.getX(), 0, at.getZ()));
+            if (ground == null || !level.isLoaded(at)) {
+                continue;
+            }
+            Stances.of(level, overhead(level, at))
+                .ifPresent(footings -> frame.add(new Job(WorldPos.of(level, at), List.of(at), footings, ground)));
+        }
+    }
+
+    // A frame goes up over the heads of those laying it, so it is reached from the eyes, as a hand reaches.
+    private static Set<BlockPos> overhead(ServerLevel level, BlockPos target) {
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        Vec3 aim = Vec3.atCenterOf(target);
+        for (BlockPos feet : Reach.footingsAround(level, target, REACH + 1, REACH + 1)) {
+            if (Vec3.atBottomCenterOf(feet).add(0, Reach.EYE_HEIGHT, 0).distanceToSqr(aim)
+                    <= Reach.PLAYER_BLOCK_REACH * Reach.PLAYER_BLOCK_REACH && Reach.inSight(level, feet, target)) {
+                cells.add(feet);
+            }
+        }
+        return cells;
     }
 
     private static Node cutOrFell(FarmNode.Chore chore) {

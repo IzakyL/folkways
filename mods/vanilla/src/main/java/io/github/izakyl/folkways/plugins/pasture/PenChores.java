@@ -37,20 +37,26 @@ final class PenChores {
     }
 
     void goals(ServerLevel level, List<Grown> into) {
+        goals(level, into, java.util.Optional.empty());
+    }
+
+    void goals(ServerLevel level, List<Grown> into, java.util.Optional<UUID> nurturer) {
+        if (job == Herd.Job.NURTURE && nurturer.isEmpty()) { return; }
         for (Quarry beast : standing) {
             if (!worked.contains(beast.subject()) && beast.at().where().in(level)) {
                 into.add(Grown.of(node(level, new PenNode.Chore(idOf(beast), beast,
                     () -> {
                         worked.add(beast.subject());
                         changed.run();
-                    }, made))));
+                    }, made), nurturer)));
             }
         }
     }
 
-    private Node node(ServerLevel level, PenNode.Chore chore) {
+    private Node node(ServerLevel level, PenNode.Chore chore, java.util.Optional<UUID> nurturer) {
         return switch (job) {
             case SHEAR -> new ShearNode(chore);
+            case NURTURE -> new NurtureNode(chore, pen.keeps().feed(), nurturer.orElseThrow());
             case FEED -> new FeedNode(chore, pen.keeps().feed(), pen);
             case CULL -> new CullNode(chore);
             case GLEAN -> new GleanNode(level, chore);
