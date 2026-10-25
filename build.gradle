@@ -47,6 +47,11 @@ java {
 
 def ldlib2Coordinate = "com.lowdragmc.ldlib2:ldlib2-neoforge-${project.minecraft_version}:${project.ldlib_version}:all"
 def core = project(":core")
+def ftbCompat = project.hasProperty("ftbCompat")
+if (ftbCompat) {
+    core.sourceSets.gametest.java.srcDir("src/ftbGametest/java")
+    core.sourceSets.gametest.resources.srcDir("src/ftbGametest/resources")
+}
 
 neoForge {
     version = project.neoforge_version
@@ -76,7 +81,8 @@ neoForge {
             programArgument "--nogui"
             // Keep the existing dependency tests with Core, without repeating them in every mod's check.
             systemProperty "neoforge.enabledGameTestNamespaces",
-                !gameTestMod || gameTestMod == "core" ? "folkways,ldlib2" : "folkways"
+                ftbCompat ? "folkways_compat" :
+                    (!gameTestMod || gameTestMod == "core" ? "folkways,ldlib2" : "folkways")
         }
     }
 }
@@ -101,6 +107,12 @@ dependencies {
     }
     runtimeOnly ldlib2Coordinate
     runtimeOnly core.lib("create")
+    if (ftbCompat) {
+        runtimeOnly core.lib("ftbchunks")
+        runtimeOnly core.lib("ftblibrary")
+        runtimeOnly core.lib("ftbteams")
+        runtimeOnly core.lib("architectury")
+    }
     if (cookeryTests) { runtimeOnly core.lib("kaleidoscope_cookery") }
     if (tavernTests) { runtimeOnly core.lib("kaleidoscope_tavern") }
     additionalRuntimeClasspath("com.eed3si9n.starlark:starlark:${project.starlark_version}") {

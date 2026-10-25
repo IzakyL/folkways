@@ -26,6 +26,7 @@ import io.github.izakyl.folkways.core.api.work.WorkNoise;
 import io.github.izakyl.folkways.core.api.work.WorkYield;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.WorkProtection;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.WorkEffort;
 import io.github.izakyl.folkways.core.api.work.WorkExertion;
@@ -361,7 +362,9 @@ final class BodyRunner {
         Node node = current;
         Outcome outcome;
         try {
-            outcome = node.commit(level, labor.hands(body, placement));
+            Worker who = labor.hands(body, placement);
+            outcome = WorkProtection.work(level, node, who)
+                ? node.commit(level, who) : Outcome.failed(LaborRefusal.PROTECTED);
         } catch (RuntimeException | LinkageError broken) {
             Labor.LOGGER.error("node {} threw on commit", node.id(), broken);
             refuse(labor, level, body, LaborRefusal.WORK_BROKE);

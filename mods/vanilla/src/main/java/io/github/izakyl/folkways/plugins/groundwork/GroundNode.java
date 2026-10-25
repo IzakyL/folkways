@@ -8,7 +8,9 @@ import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.WorkGesture;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.WorkProtection;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -59,6 +61,16 @@ abstract class GroundNode implements Node {
 
     @Override
     public final Outcome commit(ServerLevel level, Worker who) {
+        for (BlockPos cell : chore.job().cells()) {
+            if (!WorkProtection.edit(level, who, cell)) {
+                return Outcome.failed(LaborRefusal.PROTECTED);
+            }
+        }
+        for (BlockPos cell : chore.job().canopy()) {
+            if (!WorkProtection.edit(level, who, cell)) {
+                return Outcome.failed(LaborRefusal.PROTECTED);
+            }
+        }
         Outcome done = work(level, who, chore.job());
         chore.tending().made().record(spec, done, level.getGameTime());
         return done;

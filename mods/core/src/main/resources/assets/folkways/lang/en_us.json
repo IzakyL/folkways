@@ -636,6 +636,7 @@
   "folkways.refusal.labor.no_room_for": "nowhere to put %s",
   "folkways.refusal.labor.no_way_for": "%s cannot be brought here",
   "folkways.refusal.labor.no_one_makes": "no resident can make %s",
+  "folkways.refusal.labor.protected": "the colony has no permission here",
   "folkways.refusal.labor.work_broke": "the work broke",
   "folkways.refusal.living.not_on_the_books": "No longer one of this colony's people",
   "folkways.refusal.living.nothing_to_eat": "Nothing left in the pack to eat",

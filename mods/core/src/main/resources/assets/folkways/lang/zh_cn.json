@@ -636,6 +636,7 @@
   "folkways.refusal.labor.no_room_for": "%s 没有地方放",
   "folkways.refusal.labor.no_way_for": "%s 无法运到这里",
   "folkways.refusal.labor.no_one_makes": "没有居民能做出 %s",
+  "folkways.refusal.labor.protected": "殖民地没有在这里操作的权限",
   "folkways.refusal.labor.work_broke": "工作出错",
   "folkways.refusal.living.not_on_the_books": "已不是这个殖民地的居民",
   "folkways.refusal.living.nothing_to_eat": "背包里已经没有能吃的东西",
