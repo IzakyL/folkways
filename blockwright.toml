@@ -35,6 +35,16 @@ target = []
 path = "build/libs/folkways-war-neoforge-*.jar"
 target = []
 
+# Native animation integration is optional and pinned to its verified runtime.
+[mods.folkways_epicfight]
+path = "build/libs/folkways-epicfight-*.jar"
+target = []
+
+[mods.epicfight]
+url = "https://cdn.modrinth.com/data/vu3NZ5Ma/versions/8HHhJt6i/epic-fight-21.17.3.1-mc1.21.1-neoforge.jar"
+sha512 = "d39c1d4a2198e7f2080cdc98de890d26d658a02b44c8399a301c7c0005d9991ff97cc94881823a9daa8952f3b89eb3d9197c2f83cf0fbba9c7992c77921b2122"
+target = []
+
 # Compiled against, and installed only by the cookery test and promo profiles.
 [mods.kaleidoscope_cookery]
 url = "https://cdn.modrinth.com/data/v17FatAc/versions/g8w0b2ly/kaleidoscopecookery-1.6.0-neoforge%2Bmc1.21.1.jar"
@@ -382,6 +392,15 @@ touhou_little_maid = { target = ["server", "client"] }
 
 # The optional RTS selection and command handler must be present for battle input tests.
 [profile.combat.mods]
+folkways_war = { target = ["server", "client"] }
+
+[profile.epicfight.mods]
+epicfight = { target = ["server", "client"] }
+folkways_epicfight = { target = ["server", "client"] }
+
+[profile.epicfight_combat.mods]
+epicfight = { target = ["server", "client"] }
+folkways_epicfight = { target = ["server", "client"] }
 folkways_war = { target = ["server", "client"] }
 
 # The e2e pair with Shoulder Surfing Reloaded on the client, for the book's aim under its camera.
