@@ -103,6 +103,42 @@ public final class ResidentCommandGameTests {
             .thenSucceed();
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 800)
+    public static void playerCommandsRunBothWaysAndReleaseResumesRealWorkWithoutPermanentSpeedChanges(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body body = f.resident(new BlockPos(2, 1, 2));
+        body.pack().insert(new ItemStack(Items.IRON_AXE));
+        body.pack().insert(new ItemStack(Items.BREAD, 8));
+        double movement = body.mob().getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED);
+        var order = f.commands.hold(body, f.at(20, 1, 2));
+        AtomicReference<ResidentCommands.Order> retreat = new AtomicReference<>();
+        Job returnedWork = new Job(f.at(2, 1, 2), body);
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(body.doing().filter(doing ->
+                doing.toward().orElse(doing.what()).equals(CommandContent.ID)).isPresent()
+                && body.mob().getMoveControl().getSpeedModifier() >= 1.29
+                && body.mob().distanceToSqr(net.minecraft.world.phys.Vec3.atBottomCenterOf(f.at(2, 1, 2).block(f.level))) > 1,
+                "the actual command navigator moves the resident at running pace"))
+            .thenWaitUntil(() -> helper.assertTrue(order.status() == ResidentCommands.Status.HOLDING,
+                "the running command physically reaches the distant post"))
+            .thenExecute(() -> retreat.set(f.commands.retreat(body, f.at(2, 1, 2))))
+            .thenWaitUntil(() -> helper.assertTrue(body.doing().filter(doing ->
+                doing.toward().orElse(doing.what()).equals(CommandContent.ID)).isPresent()
+                && body.mob().getMoveControl().getSpeedModifier() >= 1.29,
+                "the replacement retreat uses the same running navigation rule"))
+            .thenWaitUntil(() -> helper.assertTrue(retreat.get().status() == ResidentCommands.Status.HOLDING,
+                "the resident physically returns before release"))
+            .thenExecute(() -> {
+                retreat.get().close();
+                f.submit(returnedWork);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(returnedWork.working.get(), "the released runner starts actual ordinary tool work"))
+            .thenExecute(() -> helper.assertTrue(Math.abs(body.mob().getAttributeValue(
+                net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED) - movement) < .0001,
+                "command running never leaves a permanent movement attribute modifier on returned workers"))
+            .thenSucceed();
+    }
+
     @GameTest(template = "empty_large", timeoutTicks = 400)
     public static void moveFinishesAndRetreatHoldsUntilReleased(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
@@ -450,7 +486,6 @@ public final class ResidentCommandGameTests {
         final AtomicInteger committed = new AtomicInteger();
         final NodeSpec spec;
         final UUID worker;
-
         Job(WorldPos at, Body body) {
             worker = body.id();
             Workload.Continuous load = (level, who) -> { working.set(true); return !finish.get(); };

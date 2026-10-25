@@ -4,11 +4,13 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponAdapter;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
+import io.github.izakyl.folkways.plugins.combat.weapon.WeaponScores;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.person.equipment.ResidentEquipment;
 import java.util.Optional;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.AxeItem;
 import net.minecraft.world.item.ProjectileWeaponItem;
 import net.neoforged.neoforge.common.Tags;
 import yesman.epicfight.world.capabilities.EpicFightCapabilities;
@@ -32,7 +34,7 @@ public final class EpicFightWeaponAdapter implements WeaponAdapter {
                 || capability.isWeaponCategory(WeaponCategories.SHIELD)) {
             return false;
         }
-        return stack.is(Tags.Items.MELEE_WEAPON_TOOLS)
+        return stack.is(Tags.Items.MELEE_WEAPON_TOOLS) || stack.getItem() instanceof AxeItem
             || !capability.isEmpty() && !capability.isWeaponCategory(WeaponCategories.FIST);
     }
 
@@ -44,6 +46,17 @@ public final class EpicFightWeaponAdapter implements WeaponAdapter {
 
     @Override
     public boolean supportsAssignment() { return true; }
+
+    @Override
+    public double sustainedDamagePerSecond(Worker worker, ItemStack actual) {
+        if (!(worker.body() instanceof ResidentEntity resident)) return 0;
+        ResidentEpicFightPatch patch = ResidentEpicFightPatch.of(resident);
+        if (patch == null) return 0;
+        // EF AttackAnimation scales its real clip by this native capability/weight-adjusted speed.
+        float speed = patch.getModifiedAttackSpeedOfItem(EpicFightCapabilities.getItemStackCapability(actual),
+            (float) WeaponScores.attackSpeed(resident, actual));
+        return WeaponScores.meleeDamage(resident, actual) * Math.max(0, speed);
+    }
 
     @Override
     public boolean usable(Worker worker, ItemStack stack) {
@@ -62,15 +75,10 @@ public final class EpicFightWeaponAdapter implements WeaponAdapter {
         ResidentEpicFightPatch patch = readyPatch(worker);
         if (patch == null) { return Optional.empty(); }
         ResidentEntity resident = (ResidentEntity) worker.body();
-        ItemStack assigned = ResidentEquipment.assigned(resident);
-        if (!assigned.isEmpty()) { return openAssigned(worker, assigned); }
-        for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
-            ItemStack stack = worker.pack().getItem(slot);
-            if (ResidentEquipment.weaponCandidate(resident, stack) && usable(worker, stack)) {
-                return borrow(worker, resident, patch, slot, stack);
-            }
-        }
-        if (!acceptsBarehanded(worker)) { return Optional.empty(); }
+        var selected = Weapons.selection(worker);
+        if (selected.isPresent()) return selected.filter(choice -> choice.adapter() == this)
+            .flatMap(choice -> openAssigned(worker, choice.actual()));
+        if (ResidentEquipment.mainLocked(resident) || !acceptsBarehanded(worker)) { return Optional.empty(); }
         EpicFightWeaponSession session = new EpicFightWeaponSession(worker, resident, patch, ItemStack.EMPTY);
         resident.claimWeaponHand(session, ItemStack.EMPTY);
         return Optional.of(session);
@@ -81,7 +89,7 @@ public final class EpicFightWeaponAdapter implements WeaponAdapter {
         ResidentEpicFightPatch patch = readyPatch(worker);
         if (patch == null || selected.isEmpty()) { return Optional.empty(); }
         ResidentEntity resident = (ResidentEntity) worker.body();
-        if (ResidentEquipment.assigned(resident) != selected || !ResidentEquipment.weaponCandidate(resident, selected)
+        if (!ResidentEquipment.selectedForCombat(resident, selected)
                 || !usable(worker, selected)) { return Optional.empty(); }
         for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
             if (worker.pack().getItem(slot) == selected) { return borrow(worker, resident, patch, slot, selected); }

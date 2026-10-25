@@ -189,18 +189,18 @@ public final class ResidentShieldGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 80)
-    public static void anUnshieldedMeleeAttackKeepsItsOriginalTenTickHitFrame(GameTestHelper helper) {
+    public static void anUnshieldedMeleeAttackUsesItsActualItemSpeedWithoutAddingShieldPreparation(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.IRON_SWORD, 2);
         fixture.body().setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
         WeaponSession session = Weapons.open(worker(fixture.body())).orElseThrow();
         helper.assertTrue(session.fire(fixture.target()), "an unshielded melee attack starts normally");
         helper.onEachTick(session::tick);
-        helper.runAfterDelay(7, () -> helper.assertValueEqual(fixture.target().getHealth(), fixture.target().getMaxHealth(),
-            "the original ten tick windup still prevents an early hit"));
-        helper.runAfterDelay(12, () -> {
+        helper.runAfterDelay(11, () -> helper.assertValueEqual(fixture.target().getHealth(), fixture.target().getMaxHealth(),
+            "the actual iron sword's attack speed prevents the old fixed ten-tick hit"));
+        helper.runAfterDelay(15, () -> {
             try {
                 helper.assertTrue(fixture.target().getHealth() < fixture.target().getMaxHealth(),
-                    "removing the shield preserves the original ten tick melee hit frame");
+                    "the sword's own cycle lands before the twenty-tick shield preparation window");
                 helper.assertFalse(fixture.body().isBlocking(), "an absent shield does not create defense");
             } finally { session.close(); fixture.close(); }
             helper.succeed();

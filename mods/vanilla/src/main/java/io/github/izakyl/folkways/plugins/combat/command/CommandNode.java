@@ -22,7 +22,8 @@ final class CommandNode implements Node {
         Workload.Continuous hold = (level, who) -> commands.arrived(order);
         spec = NodeSpec.of(order.id(), CommandContent.ID, new WorkSite.AtBlock(order.destination()),
                 Stances.at(order.destination()), hold)
-            .pace(order.mode() == ResidentCommands.Mode.RETREAT ? 1.3 : 1.0)
+            .doing(CommandContent.ID)
+            .pace(1.3)
             .done();
     }
 

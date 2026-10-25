@@ -32,6 +32,7 @@ final class NativeWeaponSession implements WeaponSession {
     private LivingEntity defendedTarget;
     private int elapsed;
     private int meleeDuration = 10;
+    private boolean meleeDefense;
     private long lastTick = Long.MIN_VALUE;
     private LivingEntity explicitTarget;
     private java.util.function.BooleanSupplier explicitPermission;
@@ -76,7 +77,8 @@ final class NativeWeaponSession implements WeaponSession {
         defendedTarget = null;
         elapsed = 0;
         // Snapshot the cycle: gaining, breaking or disabling a shield cannot move a pending hit frame.
-        meleeDuration = 10;
+        meleeDuration = WeaponScores.meleeCycleTicks(body, weapon());
+        meleeDefense = false;
         if (kind == Kind.CROSSBOW && !CrossbowItem.isCharged(weapon())) {
             if (!beginReload()) {
                 target = null;
@@ -92,7 +94,8 @@ final class NativeWeaponSession implements WeaponSession {
                 body.startUsingItem(InteractionHand.MAIN_HAND);
                 if (!mainHandUse()) { finish(); return false; }
             } else if (kind == Kind.MELEE && resident != null) {
-                if (ResidentShields.guard(resident, target)) meleeDuration = 20;
+                meleeDefense = ResidentShields.guard(resident, target);
+                if (meleeDefense) meleeDuration = Math.max(meleeDuration, 20);
             }
         }
         return true;
@@ -155,7 +158,7 @@ final class NativeWeaponSession implements WeaponSession {
         elapsed++;
         if (kind == Kind.MELEE && resident != null) {
             // Five final ticks leave the shield down for the physical swing and actual damage frame.
-            if (meleeDuration == 20 && elapsed < meleeDuration - 5) ResidentShields.guard(resident, target);
+            if (meleeDefense && elapsed < meleeDuration - 5) ResidentShields.guard(resident, target);
             else ResidentShields.lower(resident);
         }
         if (state == State.RELOADING) {
@@ -273,7 +276,8 @@ final class NativeWeaponSession implements WeaponSession {
         return body.level() instanceof ServerLevel level && level.getServer().isSameThread() && body.isAlive() && !body.isRemoved()
             && (resident == null || resident.colonyId().equals(colony))
             && colony.filter(id -> Colonies.razed(level.getServer(), id)).isEmpty()
-            && (barehanded || resident != null && resident.ownsWeaponHand(this) && adapter.accepts(weapon()));
+            && (barehanded || resident != null && resident.ownsWeaponHand(this) && adapter.accepts(weapon())
+                && ResidentEquipment.selectedForCombat(resident, weapon()));
     }
 
     private ItemStack weapon() {

@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
 import io.github.izakyl.folkways.plugins.combat.weapon.ResidentShields;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.plugins.person.equipment.ResidentEquipment;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -220,7 +221,7 @@ public final class EpicFightWeaponSession implements WeaponSession {
             && worker.body() == resident && worker.pack() == resident.pack() && worker.resident().id().equals(resident.id())
             && resident.ownsWeaponHand(this) && resident.getMainHandItem() == loan
             && (barehanded ? loan.isEmpty() && Weapons.barehanded(worker)
-                : EpicFightWeaponAdapter.INSTANCE.accepts(loan));
+                  : EpicFightWeaponAdapter.INSTANCE.accepts(loan) && ResidentEquipment.selectedForCombat(resident, loan));
     }
 
     @Override

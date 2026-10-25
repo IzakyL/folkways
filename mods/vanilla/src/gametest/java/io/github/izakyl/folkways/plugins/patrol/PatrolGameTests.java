@@ -502,9 +502,11 @@ public final class PatrolGameTests {
     }
 
     private static Worker worker(Body body, ItemStack weapon) {
-        Container pack = new SimpleContainer(1);
-        pack.setItem(0, weapon);
-        return worker(body, pack);
+        // Policy offers inspect the same physical inventory that a real combat session would
+        // borrow. A detached one-cell container cannot stand in for this resident's real pack.
+        body.pack().clearContent();
+        body.pack().setItem(0, weapon.copy());
+        return worker(body, body.pack());
     }
 
     private static Worker worker(Body body, Container pack) {

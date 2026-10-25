@@ -485,7 +485,7 @@ public final class WeaponSessionGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void changingPreferenceStopsTheOldDrawAndAnEmptyPreferredBowFallsBackToASword(GameTestHelper helper) {
+    public static void changingLegacyPreferenceStopsTheOldDrawButUsableRangedStillWinsUntilItsAmmunitionRunsOut(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.IRON_SWORD, 3);
         Colony colony = enroll(helper, fixture.body());
         ResidentEntity body = fixture.body();
@@ -505,7 +505,7 @@ public final class WeaponSessionGameTests {
             helper.assertTrue(!body.hasWeaponSession() && body.getMainHandItem().isEmpty(), "normal closure returns the old actual weapon before reselection");
             helper.assertValueEqual(body.pack().count(Items.BOW), 1, "the cancelled bow returns once");
             WeaponSession melee = Weapons.open(worker(body)).orElseThrow();
-            helper.assertTrue(body.getMainHandItem().is(Items.IRON_SWORD), "the changed preference selects the actual melee weapon");
+            helper.assertTrue(body.getMainHandItem().is(Items.BOW), "an unlocked usable ranged weapon outranks the legacy melee supply preference");
             melee.close();
             for (int slot = 0; slot < body.pack().getContainerSize(); slot++) {
                 if (body.pack().getItem(slot).is(Items.ARROW)) { body.pack().removeItemNoUpdate(slot); }

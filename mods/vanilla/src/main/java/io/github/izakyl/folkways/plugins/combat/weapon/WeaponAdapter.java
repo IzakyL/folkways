@@ -19,6 +19,11 @@ public interface WeaponAdapter {
     /** Inventory-dependent readiness, such as an actual compatible projectile or a loaded chamber. */
     default boolean usable(Worker worker, ItemStack stack) { return accepts(stack); }
 
+    /** Expected sustained single-target damage per second, not a material/rarity rank.
+     * Called only for a real usable candidate during bounded selection. Unknown adapters tie at zero.
+     */
+    default double sustainedDamagePerSecond(Worker worker, ItemStack actual) { return 0; }
+
     /** An optional native animation bridge may also execute this body's permitted unarmed attacks. */
     default boolean acceptsBarehanded(Worker worker) { return false; }
 

@@ -44,6 +44,8 @@ final class AttackNode implements Node {
         reachable = stances.isPresent();
         Workload.Continuous attack = this::advance;
         spec = NodeSpec.of(step, CommandContent.ID, WorkSite.on(target), stances.orElse(Stances.WHEREVER), attack)
+            .doing(CommandContent.ID)
+            .pace(1.3)
             .done();
     }
 

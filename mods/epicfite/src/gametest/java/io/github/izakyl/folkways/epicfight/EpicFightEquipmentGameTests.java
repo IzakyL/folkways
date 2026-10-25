@@ -58,6 +58,35 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(FolkwaysMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class EpicFightEquipmentGameTests {
+    @GameTest(template = "empty_large")
+    public static void epicFightBorrowsTheAutomaticallyChosenActualAxeButStillHonorsAManualSwordLock(GameTestHelper helper) {
+        try (Scene s = new Scene(helper)) {
+            ItemStack sword = new ItemStack(Items.WOODEN_SWORD);
+            sword.set(DataComponents.CUSTOM_NAME, Component.literal("unlocked default sword"));
+            PersonalItems.mark(s.resident, sword, "mainhand"); s.resident.pack().setItem(0, sword);
+            ItemStack axe = new ItemStack(Items.DIAMOND_AXE); axe.setDamageValue(17);
+            axe.set(DataComponents.CUSTOM_NAME, Component.literal("automatic exact EF axe"));
+            PersonalItems.mark(s.resident, axe, "spare"); s.resident.pack().setItem(1, axe);
+            Equipment.lock(s.resident, EquipmentSlot.MAINHAND, false);
+            var selected = Weapons.open(s.worker);
+            helper.assertTrue(selected.isPresent(), "EF accepts a safe automatically chosen physical spare");
+            try (WeaponSession session = selected.get()) {
+                helper.assertTrue(session instanceof EpicFightWeaponSession && s.resident.getMainHandItem() == axe,
+                    "the EF adapter borrows the precise higher-DPS actual axe instead of rescanning the first sword");
+                helper.assertTrue(ResidentEquipment.assigned(s.resident) == sword, "automatic use does not rewrite the original assignment");
+            }
+            Equipment.lock(s.resident, EquipmentSlot.MAINHAND, true);
+            var locked = Weapons.open(s.worker);
+            helper.assertTrue(locked.isPresent(), "the original manual designation is still available");
+            try (WeaponSession session = locked.get()) {
+                helper.assertTrue(s.resident.getMainHandItem() == sword, "the manual lock overrides EF's automatic damage ranking");
+            }
+            helper.assertValueEqual(s.resident.pack().count(Items.DIAMOND_AXE), 1, "both EF acquisitions return only one actual axe");
+            helper.assertValueEqual(axe.getDamageValue(), 17, "selection and cancellation spend no fake attack durability");
+        }
+        helper.succeed();
+    }
+
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(EpicFightEquipmentGameTests.class); }
 
