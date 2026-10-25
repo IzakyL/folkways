@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.resident.body.Equipment;
 import io.github.izakyl.folkways.core.api.resident.body.Licences;
 import io.github.izakyl.folkways.core.api.resident.body.PackKeeps;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.resident.body.TaskTools;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
@@ -80,7 +81,7 @@ final class Kit {
     }
 
     static long carried(Body body, ItemSpec spec) {
-        return Goods.countIn(body.pack(), spec);
+        return body.pack().countMatching(stack -> !PersonalItems.marked(stack) && Goods.matches(stack, spec));
     }
 
     boolean holds(ItemStack stack) {
@@ -98,7 +99,7 @@ final class Kit {
     List<ItemStack> inPack(Body body) {
         List<ItemStack> found = new ArrayList<>();
         for (ItemStack stack : body.pack().contents()) {
-            if (holds(stack)) {
+            if (holds(stack) && !PersonalItems.marked(stack)) {
                 found.add(stack.copy());
             }
         }
@@ -133,6 +134,12 @@ final class Kit {
     private void split(Body body, ObjIntConsumer<ItemStack> each) {
         long[] left = kept.stream().mapToLong(Amount::count).toArray();
         for (ItemStack stack : body.pack().contents()) {
+            if (PersonalItems.marked(stack)) {
+                // Ordinary tool cells were already subtracted by Pack.plannableCells. Other personal
+                // stacks occupy one kept cell regardless of count, never appearing as plan cargo.
+                if (!holds(stack.getItem().getDefaultInstance())) each.accept(stack, stack.getCount());
+                continue;
+            }
             if (holds(stack)) {
                 continue;
             }

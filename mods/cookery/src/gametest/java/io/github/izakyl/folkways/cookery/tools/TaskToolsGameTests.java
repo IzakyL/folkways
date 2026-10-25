@@ -12,6 +12,8 @@ import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.Equipment;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Facings;
@@ -80,6 +82,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -99,6 +102,55 @@ public final class TaskToolsGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(TaskToolsGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void markedKitchenToolsCannotBeBorrowedFromStorageOrTakenFromTheirOwner(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            PersonalItems.mark(rig.body, rig.rack.getItem(0), "mainhand");
+            var stored = rig.tools.stock.read(rig.level, KNIVES);
+            helper.assertTrue(stored.sources().isEmpty() && stored.inventory().tools().isEmpty(),
+                "personal tools in a shared rack are never offered to the kitchen borrowing pool");
+            ItemStack actual = rig.rack.removeItemNoUpdate(0);
+            rig.body.pack().setItem(0, actual);
+            var carried = rig.tools.stock.read(rig.level, KNIVES);
+            helper.assertTrue(carried.inventory().tools().isEmpty(), "a resident's marked physical tool is outside the shared pool too");
+            var lease = new KitchenTools.Lease(UUID.randomUUID(),
+                new KitchenTools.Request(rig.colony.colonyId(), UUID.randomUUID(), KNIVES), UUID.randomUUID(), rig.body.id(), KitchenTools.Phase.BORROWED);
+            helper.assertValueEqual(rig.tools.carriedSlot(rig.body.pack(), lease, actual.copy()), -1,
+                "even stale component-identical loan metadata cannot take or return a personal tool");
+            PersonalItems.clear(actual);
+            helper.assertTrue(rig.tools.stock.read(rig.level, KNIVES).inventory().tools().size() == 1,
+                "explicitly releasing ownership restores ordinary physical tool observation");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void temporaryClothingHonorsAnEmptyLockedSlotUntilItIsUnlocked(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            ItemStack helmet = new ItemStack(Items.LEATHER_HELMET);
+            helmet.setDamageValue(17);
+            helmet.set(DataComponents.CUSTOM_NAME, Component.literal("the physical loan"));
+            ItemStack expected = helmet.copy();
+            rig.body.pack().setItem(0, helmet);
+            var family = Goods.specOf(helmet);
+            var lease = new KitchenTools.Lease(UUID.randomUUID(),
+                new KitchenTools.Request(rig.colony.colonyId(), UUID.randomUUID(), family), UUID.randomUUID(), rig.body.id(), KitchenTools.Phase.BORROWED);
+            rig.tools.record(lease, helmet);
+            Equipment.lock(rig.body, EquipmentSlot.HEAD, true);
+            helper.assertTrue(!LoanClothing.equip(rig.tools, rig.worker, Map.of(EquipmentSlot.HEAD, lease)),
+                "the kitchen cannot put temporary clothes into a deliberately locked empty slot");
+            helper.assertTrue(rig.body.mob().getItemBySlot(EquipmentSlot.HEAD).isEmpty()
+                && ItemStack.matches(rig.body.pack().getItem(0), expected), "rejected equipping preserves the single physical loan");
+            Equipment.lock(rig.body, EquipmentSlot.HEAD, false);
+            helper.assertTrue(LoanClothing.equip(rig.tools, rig.worker, Map.of(EquipmentSlot.HEAD, lease)),
+                "unlocking permits the existing temporary clothing operation");
+            helper.assertTrue(rig.body.pack().isEmpty() && ItemStack.matches(rig.body.mob().getItemBySlot(EquipmentSlot.HEAD), expected),
+                "the actual native armor slot owns the unchanged loan without a pack copy");
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")

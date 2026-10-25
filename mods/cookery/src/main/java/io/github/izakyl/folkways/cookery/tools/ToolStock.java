@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.cookery.tools;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
@@ -88,7 +89,7 @@ final class ToolStock {
                 Optional<Stances> approach = Stances.of(level, Reach.workableCells(level, at.block(level)));
                 for (int slot = 0; slot < store.getContainerSize(); slot++) {
                     ItemStack stack = store.getItem(slot);
-                    if (!Goods.matches(stack, family)) {
+                    if (PersonalItems.marked(stack) || !Goods.matches(stack, family)) {
                         continue;
                     }
                     UUID id = physical.computeIfAbsent(stack, ignored -> UUID.randomUUID());
@@ -114,7 +115,7 @@ final class ToolStock {
                 List<UUID> seenLoans = new ArrayList<>();
                 for (int slot = 0; slot < body.get().pack().getContainerSize(); slot++) {
                     ItemStack stack = body.get().pack().getItem(slot);
-                    if (stack.isEmpty()) {
+                    if (stack.isEmpty() || PersonalItems.marked(stack)) {
                         continue;
                     }
                     Optional<KitchenTools.Lease> loan = loans.stream()
@@ -140,6 +141,7 @@ final class ToolStock {
                 lastCarried.put(resident.id(), List.copyOf(carried));
             }
             lastCarried.getOrDefault(resident.id(), List.of()).stream()
+                .filter(tool -> !PersonalItems.marked(tool.stack()))
                 .filter(tool -> Goods.matches(tool.stack(), family)).forEach(tools::add);
         }
         List<ItemStack> known = new ArrayList<>(lastCarried.values().stream().flatMap(List::stream)
@@ -155,7 +157,7 @@ final class ToolStock {
             ServerLevel level = observed.get();
             WorldSpaces.world(level, at).ifPresent(center -> {
                 for (ItemEntity drop : level.getEntitiesOfClass(ItemEntity.class, new AABB(center, center).inflate(8),
-                        entity -> entity.isAlive() && Goods.matches(entity.getItem(), family)
+                        entity -> entity.isAlive() && !PersonalItems.marked(entity.getItem()) && Goods.matches(entity.getItem(), family)
                             && known.stream().anyMatch(stack -> ItemStack.isSameItemSameComponents(stack, entity.getItem())))) {
                     ItemStack stack = drop.getItem();
                     UUID id = physical.computeIfAbsent(stack, ignored -> UUID.randomUUID());

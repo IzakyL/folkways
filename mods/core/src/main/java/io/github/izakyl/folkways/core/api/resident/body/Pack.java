@@ -203,6 +203,7 @@ public final class Pack implements Container {
     public void dropContents(LivingEntity owner) {
         for (ItemStack stack : container.removeAllItems()) {
             if (!stack.isEmpty()) {
+                PersonalItems.clear(stack);
                 owner.spawnAtLocation(stack);
             }
         }

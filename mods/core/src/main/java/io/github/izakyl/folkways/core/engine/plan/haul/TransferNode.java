@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.engine.plan.haul;
 
 import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
@@ -217,7 +218,7 @@ public final class TransferNode implements Node, Staged {
         List<ItemStack> moved = new ArrayList<>();
         for (ItemStack exact : goods) {
             ItemStack lifted = Containers.extract(taken,
-                stack -> ItemStack.isSameItemSameComponents(stack, exact), exact.getCount());
+                stack -> !PersonalItems.marked(stack) && ItemStack.isSameItemSameComponents(stack, exact), exact.getCount());
             if (lifted.getCount() != exact.getCount()) {
                 return new Short(HaulRefusal.NOTHING_TO_TAKE);
             }
@@ -227,7 +228,8 @@ public final class TransferNode implements Node, Staged {
             long left = expected.count();
             while (left > 0) {
                 ItemStack lifted = Containers.extract(taken,
-                    stack -> Goods.matches(stack, expected.spec()), (int) Math.min(left, Integer.MAX_VALUE));
+                    stack -> !PersonalItems.marked(stack) && Goods.matches(stack, expected.spec()),
+                    (int) Math.min(left, Integer.MAX_VALUE));
                 if (lifted.isEmpty()) {
                     return new Short(HaulRefusal.NOTHING_TO_TAKE);
                 }

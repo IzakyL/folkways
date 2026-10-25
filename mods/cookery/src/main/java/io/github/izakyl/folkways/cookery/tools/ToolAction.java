@@ -117,7 +117,8 @@ abstract class ToolAction implements Node {
             }
             Container inventory = found.get();
             ItemStack actual = inventory.getItem(source.slot());
-            if (!ItemStack.isSameItemSameComponents(actual, source.expected()) || actual.isEmpty()) {
+            if (!ItemStack.isSameItemSameComponents(actual, source.expected()) || actual.isEmpty()
+                    || io.github.izakyl.folkways.core.api.resident.body.PersonalItems.marked(actual)) {
                 return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             }
             if (!move(inventory, source.slot(), who.pack())) {

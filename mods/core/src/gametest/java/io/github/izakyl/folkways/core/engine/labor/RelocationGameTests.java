@@ -114,8 +114,13 @@ public final class RelocationGameTests {
                 Salvage oldSalvage = (Salvage) salvageField.get(labor);
                 helper.assertTrue(oldSalvage.dropped(drop).isPresent(), "the loose item must be tracked before migration");
                 oldSurvey.asked(new Asks(true, Set.of(), true, Set.of(), Long.MAX_VALUE));
-                oldSurvey.answer(level, data, Map.of(body.id(), body), ignored -> { });
                 WorldPos old = WorldPos.of(level, cell);
+                // Survey may spend its first time slice on the resident before reaching storage.
+                // Advance the same pending read without assuming one slice completes the snapshot.
+                for (int pass = 0; pass < 32; pass++) {
+                    oldSurvey.answer(level, data, Map.of(body.id(), body), ignored -> { });
+                    if (oldSurvey.known(WayGraph.UNBUILT, List.of()).world().stock().holds(Stash.at(old))) break;
+                }
                 helper.assertTrue(oldSurvey.known(WayGraph.UNBUILT, List.of()).world().stock().holds(Stash.at(old)),
                     "the old store reading must exist before relocation");
                 AtomicInteger accepted = new AtomicInteger();
@@ -163,7 +168,14 @@ public final class RelocationGameTests {
                 helper.assertTrue(fresh.answer(level, data, Map.of(body.id(), body), ignored -> { }),
                     "a delayed entity realm change must refresh the resident even with no pending asks");
                 fresh.asked(new Asks(true, Set.of(), false, Set.of(), Long.MAX_VALUE));
-                fresh.answer(level, data, Map.of(body.id(), body), ignored -> { });
+                for (int pass = 0; pass < 32; pass++) {
+                    fresh.answer(level, data, Map.of(body.id(), body), ignored -> { });
+                    var reading = fresh.known(WayGraph.UNBUILT, List.of());
+                    if (reading.hands().stream().anyMatch(hand -> hand.id().equals(body.id())
+                            && hand.at().equals(WorldSpaces.at(body)))
+                            && reading.world().stock().holds(Stash.at(moved))
+                            && !reading.world().stock().holds(Stash.at(old))) break;
+                }
                 var known = fresh.known(WayGraph.UNBUILT, List.of());
                 helper.assertTrue(known.hands().stream().anyMatch(hand -> hand.id().equals(body.id())
                         && hand.at().equals(WorldSpaces.at(body)))

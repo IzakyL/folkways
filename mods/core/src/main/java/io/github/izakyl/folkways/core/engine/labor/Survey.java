@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.core.engine.labor;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.resident.body.Equipment;
 import io.github.izakyl.folkways.core.api.resident.body.Licence;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
@@ -327,7 +328,7 @@ final class Survey {
             ItemStack stack = container.getItem(slot);
             if (stack.isEmpty()) {
                 free++;
-            } else {
+            } else if (!PersonalItems.marked(stack)) {
                 stacks.add(stack.copy());
             }
         }

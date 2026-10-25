@@ -187,7 +187,8 @@ public final class TaskTools {
         }
         for (int slot = 0; slot < pack.getContainerSize(); slot++) {
             var stack = pack.getItem(slot);
-            if (!stack.isEmpty() && ItemStack.isSameItemSameComponents(stack, expected)) {
+            if (!stack.isEmpty() && !io.github.izakyl.folkways.core.api.resident.body.PersonalItems.marked(stack)
+                    && ItemStack.isSameItemSameComponents(stack, expected)) {
                 return slot;
             }
         }

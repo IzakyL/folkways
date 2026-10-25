@@ -205,7 +205,8 @@ final class ClothingWork implements Node, Workload.Within {
         }
         boolean blocked = garments.entrySet().stream().anyMatch(entry -> {
             ItemStack existing = body.mob().getItemBySlot(entry.getKey());
-            return !existing.isEmpty() && (!Goods.matches(existing, entry.getValue())
+            return existing.isEmpty() && io.github.izakyl.folkways.core.api.resident.body.Equipment.locked(body, entry.getKey())
+                || !existing.isEmpty() && (!Goods.matches(existing, entry.getValue())
                 || !CookeryGear.allowed(service.colony, existing));
         });
         if (blocked) {
@@ -233,7 +234,8 @@ final class ClothingWork implements Node, Workload.Within {
     private boolean blocked(io.github.izakyl.folkways.core.api.resident.body.Body body) {
         return garments.entrySet().stream().anyMatch(entry -> {
             ItemStack existing = body.mob().getItemBySlot(entry.getKey());
-            return !existing.isEmpty() && (!Goods.matches(existing, entry.getValue())
+            return existing.isEmpty() && io.github.izakyl.folkways.core.api.resident.body.Equipment.locked(body, entry.getKey())
+                || !existing.isEmpty() && (!Goods.matches(existing, entry.getValue())
                 || !CookeryGear.allowed(service.colony, existing));
         });
     }

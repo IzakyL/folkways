@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.core.engine.labor;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
@@ -88,7 +89,8 @@ final class Hands implements Worker {
 
     @Override
     public ItemStack held(ToolNeed need) {
-        return Tools.from(body.pack().contents(), need).orElse(ItemStack.EMPTY);
+        return Tools.from(body.pack().contents().stream().filter(stack -> !PersonalItems.marked(stack)).toList(), need)
+            .orElse(ItemStack.EMPTY);
     }
 
     @Override

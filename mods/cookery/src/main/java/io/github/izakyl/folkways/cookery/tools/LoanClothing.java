@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.cookery.tools;
 
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
+import io.github.izakyl.folkways.core.api.resident.body.Equipment;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -56,6 +57,7 @@ final class LoanClothing {
         for (var entry : clothes.entrySet()) {
             KitchenTools.Lease lease = entry.getValue();
             if (slot(service, who.body(), lease).filter(entry.getKey()::equals).isPresent()) continue;
+            if (Bodies.of(who.body()).filter(body -> Equipment.locked(body, entry.getKey())).isPresent()) return false;
             if (!who.body().getItemBySlot(entry.getKey()).isEmpty()
                     || service.carriedSlot(who.pack(), lease, service.tool(lease).orElse(ItemStack.EMPTY)) < 0) return false;
         }

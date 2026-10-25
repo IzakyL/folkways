@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.engine.labor;
 
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.Stash;
@@ -135,7 +136,8 @@ public final class Commit {
     // Draws up to `left` matching goods from one container; answers what is still to draw.
     private static long drawFrom(Container source, Predicate<ItemStack> matching, long left, List<Drawn> drawn) {
         while (left > 0) {
-            ItemStack taken = Containers.extract(source, matching, (int) Math.min(left, Integer.MAX_VALUE));
+            ItemStack taken = Containers.extract(source, stack -> !PersonalItems.marked(stack) && matching.test(stack),
+                (int) Math.min(left, Integer.MAX_VALUE));
             if (taken.isEmpty()) {
                 break;
             }

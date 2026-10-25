@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.resident.Going;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.Stand;
@@ -836,7 +837,9 @@ final class BodyRunner {
         NodeSpec spec = current.spec();
         List<ToolUse> uses = ResidentKinds.barehanded(body.kind().id(), spec.vocation()) ? List.of() : spec.tools();
         for (ToolUse use : uses) {
-            ItemStack tool = Tools.from(body.pack().contents(), use.need()).orElse(ItemStack.EMPTY);
+            ItemStack tool = Tools.from(body.pack().contents().stream()
+                .filter(stack -> !PersonalItems.marked(stack)).toList(),
+                use.need()).orElse(ItemStack.EMPTY);
             if (!tool.isEmpty()) {
                 body.presentHeldItem(tool.copy());
                 break;

@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.core.engine.labor;
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.resident.body.Pack;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.ToolUse;
@@ -34,7 +35,7 @@ final class Wear {
             }
             for (int slot = 0; slot < pack.getContainerSize(); slot++) {
                 ItemStack stack = pack.getItem(slot);
-                if (stack.isEmpty() || !stack.isDamageableItem()
+                if (stack.isEmpty() || PersonalItems.marked(stack) || !stack.isDamageableItem()
                     || !Tools.answers(stack, use.need())) {
                     continue;
                 }

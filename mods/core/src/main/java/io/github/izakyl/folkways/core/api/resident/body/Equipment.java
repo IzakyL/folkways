@@ -19,6 +19,7 @@ import net.minecraft.world.item.ItemStack;
 /** Real clothing slots, independent from borrowed tools and the copies shown in a working hand. */
 public final class Equipment {
     private static final String TAG = "folkways:managed_equipment";
+    private static final String LOCKS = "folkways:equipment_locks";
     private static volatile Map<ResourceLocation, Provider> providers = Map.of();
 
     @FunctionalInterface
@@ -52,6 +53,7 @@ public final class Equipment {
         Map<EquipmentSlot, Demand> chosen = new LinkedHashMap<>();
         for (Provider provider : providers.values()) {
             for (Demand demand : provider.wanted(colony, body)) {
+                if (locked(body, demand.slot())) continue;
                 ItemStack worn = body.mob().getItemBySlot(demand.slot());
                 // An unrelated player-given helmet is not permission to replace it or buy a spare to hoard.
                 if (worn.isEmpty() || managed(body, demand.slot()) || Goods.matches(worn, demand.items())) {
@@ -75,7 +77,7 @@ public final class Equipment {
 
     public static long carried(Body body, Demand demand) {
         ItemStack inSlot = body.mob().getItemBySlot(demand.slot());
-        return Goods.countIn(body.pack(), demand.items())
+        return body.pack().countMatching(stack -> !PersonalItems.marked(stack) && Goods.matches(stack, demand.items()))
             + (Goods.matches(inSlot, demand.items()) ? inSlot.getCount() : 0);
     }
 
@@ -85,6 +87,7 @@ public final class Equipment {
         boolean changed = false;
         for (EquipmentSlot slot : EquipmentSlot.values()) {
             if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) continue;
+            if (locked(body, slot)) continue;
             if (managed(body, slot) && desired.stream().noneMatch(demand -> demand.slot() == slot
                     && Goods.matches(body.mob().getItemBySlot(slot), demand.items()))) {
                 changed |= unwear(body, slot);
@@ -92,7 +95,8 @@ public final class Equipment {
         }
         for (Demand demand : desired) {
             if (!body.mob().getItemBySlot(demand.slot()).isEmpty()) continue;
-            ItemStack taken = Containers.extract(body.pack(), stack -> Goods.matches(stack, demand.items()), 1);
+            ItemStack taken = Containers.extract(body.pack(), stack -> !PersonalItems.marked(stack)
+                && Goods.matches(stack, demand.items()), 1);
             if (taken.isEmpty()) continue;
             try {
                 body.mob().setItemSlot(demand.slot(), taken);
@@ -117,7 +121,7 @@ public final class Equipment {
     public static boolean release(Body body) {
         boolean changed = false;
         for (EquipmentSlot slot : EquipmentSlot.values()) {
-            if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR && managed(body, slot)) {
+            if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR && !locked(body, slot) && managed(body, slot)) {
                 changed |= unwear(body, slot);
             }
         }
@@ -129,6 +133,27 @@ public final class Equipment {
         ItemStack stack = body.mob().getItemBySlot(slot);
         return !stack.isEmpty() && held.getString(slot.getName())
             .equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+    }
+
+    public static boolean locked(Body body, EquipmentSlot slot) {
+        return body.mob().getPersistentData().getCompound(LOCKS).getBoolean(slot.getName());
+    }
+
+    /** A generic slot lock, including an intentionally empty slot, persisted with the resident. */
+    public static void lock(Body body, EquipmentSlot slot, boolean locked) {
+        CompoundTag locks = body.mob().getPersistentData().getCompound(LOCKS);
+        if (locked) locks.putBoolean(slot.getName(), true);
+        else locks.remove(slot.getName());
+        if (locks.isEmpty()) body.mob().getPersistentData().remove(LOCKS);
+        else body.mob().getPersistentData().put(LOCKS, locks);
+    }
+
+    /** A manual transaction has replaced this slot: forget bookkeeping without moving its real item. */
+    public static void manual(Body body, EquipmentSlot slot) {
+        CompoundTag held = body.mob().getPersistentData().getCompound(TAG);
+        held.remove(slot.getName());
+        if (held.isEmpty()) body.mob().getPersistentData().remove(TAG);
+        else body.mob().getPersistentData().put(TAG, held);
     }
 
     private static boolean unwear(Body body, EquipmentSlot slot) {
