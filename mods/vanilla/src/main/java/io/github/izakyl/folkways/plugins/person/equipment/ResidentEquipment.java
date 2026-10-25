@@ -103,6 +103,7 @@ public final class ResidentEquipment {
         // Display-only defense timers do not invalidate inventory tickets on every cooldown tick.
         data.putBoolean("shieldGuard", resident.isBlocking());
         data.putInt("shieldCooldown", resident.shieldCooldownTicks());
+        data.putString("recovery", io.github.izakyl.folkways.plugins.person.living.LivingContent.recoveryStatus(colony(actor, resident).orElseThrow(), resident.id()));
         return data;
     }
 

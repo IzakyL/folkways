@@ -33,14 +33,15 @@ final class EquipmentRefillNode implements Node, Staged {
     private final EquipmentPlans.Demand demand;
     private final EquipmentPlans.Offer offer;
     private final long deadline;
+    private final boolean automatic;
     private final NodeSpec spec;
     private Container borrowed;
     private String failure;
 
     EquipmentRefillNode(EquipmentPlans plans, ResidentEntity body, long revision, ResidentCommands.Order order,
-            EquipmentPlans.Demand demand, EquipmentPlans.Offer offer, long deadline) {
+            EquipmentPlans.Demand demand, EquipmentPlans.Offer offer, long deadline, boolean automatic) {
         this.plans = plans; this.body = body; this.revision = revision; this.order = order;
-        this.demand = demand; this.offer = offer; this.deadline = deadline;
+        this.demand = demand; this.offer = offer; this.deadline = deadline; this.automatic = automatic;
         WorkSite site = offer.store().<WorkSite>map(WorkSite.AtBlock::new)
             .orElseGet(() -> WorkSite.on(body.level(), body.id(), body.blockPosition()));
         spec = NodeSpec.of(UUID.randomUUID(), EquipmentPlans.ID, site, offer.stances(), Workload.Once.of(5))
@@ -53,6 +54,7 @@ final class EquipmentRefillNode implements Node, Staged {
     EquipmentPlans.Demand demand() { return demand; }
     EquipmentPlans.Offer offer() { return offer; }
     long deadline() { return deadline; }
+    boolean automatic() { return automatic; }
     Urge urge() { return new Urge(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways", "equipment_refill/" + spec.id()),
         Urge.DIRE - .25, true, () -> this); }
     @Override public NodeSpec spec() { return spec; }
@@ -77,7 +79,7 @@ final class EquipmentRefillNode implements Node, Staged {
         Container free = plans.free(level, offer.store(), body);
         ItemStack actual = source.getItem(offer.cell());
         ItemStack available = free.getItem(offer.cell());
-        if (actual.isEmpty() || available.getCount() < offer.count()
+        if (actual.isEmpty() || !demand.accepts(actual) || available.getCount() < offer.count()
                 || !ItemStack.isSameItemSameComponents(actual, offer.expected())
                 || !ItemStack.isSameItemSameComponents(available, offer.expected())
                 || TaskTools.holds(body.id(), actual)

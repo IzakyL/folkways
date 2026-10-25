@@ -59,7 +59,10 @@ public final class PatrolSupplies {
     public enum Loadout { MELEE, BOW, CROSSBOW }
     public enum State { INACTIVE, READY, FETCHING, NO_STOCK, NO_ROOM, FAILED, CANCELLED, TIMED_OUT }
     public record Status(State state, String reason, long missing, Optional<WorldPos> source, long retryAt) { }
-    record Demand(ItemSpec goods, int target, boolean weapon) { }
+    record Demand(ItemSpec goods, int target, boolean weapon, Optional<WeaponAdapter.Ammunition> ammunition) {
+        Demand(ItemSpec goods, int target, boolean weapon) { this(goods, target, weapon, Optional.empty()); }
+        boolean accepts(ItemStack actual) { return Goods.matches(actual, goods) && ammunition.map(ammo -> ammo.accepts(actual)).orElse(true); }
+    }
     record Authority(ResidentEntity body, ResidentCommands.Order order, long duty, long until, long revision) { }
 
     private final Colony colony;
@@ -68,6 +71,7 @@ public final class PatrolSupplies {
     private final Map<UUID, Long> duties = new HashMap<>();
     private final Map<UUID, Status> statuses = new HashMap<>();
     private final Map<UUID, PatrolSupplyNode> pending = new HashMap<>();
+    private final Set<UUID> ammunitionCycle = new HashSet<>();
 
     public PatrolSupplies(Colony colony) {
         this.colony = colony;
@@ -153,12 +157,13 @@ public final class PatrolSupplies {
         // Pending cancellation can report one final status. Remove departed residents afterwards,
         // while retaining unloaded residents whose holdings remain in the colony's roster.
         statuses.keySet().retainAll(roster);
+        ammunitionCycle.retainAll(roster);
         revisions.keySet().retainAll(roster);
         duties.keySet().retainAll(roster);
         if (changed) { save(); }
     }
 
-    public void close() { pending.clear(); statuses.clear(); duties.clear(); }
+    public void close() { pending.clear(); statuses.clear(); duties.clear(); ammunitionCycle.clear(); }
 
     public List<Amount> keeps(Body body) {
         if (!(body.mob() instanceof ResidentEntity person)) { return List.of(); }
@@ -177,7 +182,9 @@ public final class PatrolSupplies {
 
     public List<Urge> urges(Worker who, Optional<ResidentCommands.Order> order, long duty, long until) {
         if (!(who.body() instanceof ResidentEntity body) || !(body.level() instanceof ServerLevel level)) { return List.of(); }
-        if (EquipmentPlans.manages(colony, body.id())) { pending.remove(body.id()); return List.of(); }
+        if (EquipmentPlans.manages(colony, body.id()) || !ResidentEquipment.assigned(body).isEmpty() && Weapons.ammunition(body).isPresent()) {
+            pending.remove(body.id()); ammunitionCycle.remove(body.id()); return List.of();
+        }
         boolean authorized = order.map(current -> current.mode() == ResidentCommands.Mode.GUARD).orElse(level.getGameTime() <= until);
         if (!authorized) {
             duties.remove(body.id());
@@ -189,7 +196,7 @@ public final class PatrolSupplies {
         PatrolSupplyNode current = pending.get(body.id());
         if (current != null) {
             if (!current.authority().equals(authority) || !valid(current.authority())
-                    || !current.demand().equals(wanted(body))) {
+                    || !sameDemand(current.demand(), wanted(body))) {
                 pending.remove(body.id());
             } else if (level.getGameTime() >= current.deadline()) {
                 pending.remove(body.id());
@@ -261,8 +268,9 @@ public final class PatrolSupplies {
 
     boolean active(PatrolSupplyNode request) {
         return !EquipmentPlans.manages(colony, request.authority().body().id())
+            && (request.demand().weapon() || ResidentEquipment.assigned(request.authority().body()).isEmpty())
             && pending.get(request.authority().body().id()) == request && valid(request.authority())
-            && request.demand().equals(wanted(request.authority().body()));
+            && sameDemand(request.demand(), wanted(request.authority().body()));
     }
 
     Optional<Container> source(ServerLevel level, WorldPos source) {
@@ -280,14 +288,18 @@ public final class PatrolSupplies {
                 take(free, claim.goods(), (int) Math.min(Integer.MAX_VALUE, claim.count()), false);
             }
         }
-        return take(free, demand.goods(), count, demand.weapon());
+        return take(free, demand.goods(), count, demand.weapon(), demand::accepts);
     }
 
     private List<ItemStack> take(Container source, ItemSpec goods, int count, boolean weapon) {
+        return take(source, goods, count, weapon, stack -> true);
+    }
+
+    private List<ItemStack> take(Container source, ItemSpec goods, int count, boolean weapon, java.util.function.Predicate<ItemStack> compatible) {
         List<ItemStack> taken = new ArrayList<>();
         int left = count;
         while (left > 0) {
-            ItemStack stack = Containers.extract(source, item -> !PersonalItems.marked(item) && Goods.matches(item, goods)
+            ItemStack stack = Containers.extract(source, item -> !PersonalItems.marked(item) && compatible.test(item) && Goods.matches(item, goods)
                 && (!weapon || KitRules.allows(colony, item.getItem())), left);
             if (stack.isEmpty()) { break; }
             taken.add(stack); left -= stack.getCount();
@@ -319,18 +331,34 @@ public final class PatrolSupplies {
         Demand arm = new Demand(weapon(selected), 1, true);
         if (explicit != null && !Equipment.locked(body, net.minecraft.world.entity.EquipmentSlot.MAINHAND)
                 && ResidentEquipment.assigned(body).isEmpty() && missing(body, arm) > 0) { return arm; }
-        Demand ammo = new Demand(AMMUNITION, ResidentEquipment.ammoTarget(body), false);
-        return selected != Loadout.MELEE && missing(body, ammo) > 0 ? ammo : null;
+        if (!EquipmentPlans.ammoEnabled(colony, body.id())) { ammunitionCycle.remove(body.id()); return null; }
+        Optional<Weapons.AmmunitionSupply> supply = Weapons.ammunition(body);
+        if (supply.isEmpty()) return null;
+        var declared = supply.get().demand();
+        Demand ammo = new Demand(declared.stock(), declared.target(), false, Optional.of(declared));
+        int missing = missing(body, ammo);
+        if (missing == 0) { ammunitionCycle.remove(body.id()); return null; }
+        int carriedAndLoaded = declared.target() - missing;
+        if (carriedAndLoaded < Math.max(1, declared.target() / 2)) ammunitionCycle.add(body.id());
+        return ammunitionCycle.contains(body.id()) ? ammo : null;
     }
-
     int missing(ResidentEntity body, Demand demand) {
         long carried = body.pack().countMatching(stack -> ResidentEquipment.ammoCandidate(body, stack)
-            && Goods.matches(stack, demand.goods()));
+            && demand.accepts(stack));
         if (body.hasWeaponSession() && Goods.matches(body.getMainHandItem(), demand.goods())) { carried += body.getMainHandItem().getCount(); }
         if (!demand.weapon()) {
-            carried += ResidentEquipment.loadedAmmo(body);
+            carried += demand.ammunition().map(WeaponAdapter.Ammunition::loaded).orElse(0);
         }
         return (int) Math.max(0, demand.target() - carried);
+    }
+
+    private static boolean sameDemand(Demand first, Demand second) {
+        return second != null && first.weapon() == second.weapon() && first.target() == second.target() && first.goods().equals(second.goods());
+    }
+
+    boolean compatible(ResidentEntity body, Demand demand, ItemStack actual) {
+        Demand current = wanted(body);
+        return sameDemand(demand, current) && current.accepts(actual);
     }
 
     private Loadout selected(ResidentEntity body) {

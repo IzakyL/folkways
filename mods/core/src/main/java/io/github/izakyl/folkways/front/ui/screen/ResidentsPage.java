@@ -70,6 +70,8 @@ public final class ResidentsPage implements Draw {
     private static final int NAME_WIDTH = 78;
     private static final int DOING_WIDTH = 112;
     private static final int CELL_WIDTH = 24;
+    private static final int RESIDENT_DETAIL_WIDTH = 420;
+    private static final int RESIDENT_DETAIL_CONTENT_WIDTH = RESIDENT_DETAIL_WIDTH - 20;
 
     private static final int ABBREVIATION = 2;
 
@@ -115,7 +117,7 @@ public final class ResidentsPage implements Draw {
     @Override
     public void windows(Player player, io.github.izakyl.folkways.front.api.ui.Windows desk) {
         detail = desk.add("resident", Component.translatable("folkways.tab.residents"), detail(player));
-        if (detail instanceof Window window) { window.preferSize(Rows.CONTENT_WIDTH + 20, 440); }
+        if (detail instanceof Window window) { window.preferSize(RESIDENT_DETAIL_WIDTH, 440); }
         detail.onDismiss(() -> state.selected = null);
     }
 
@@ -302,7 +304,7 @@ public final class ResidentsPage implements Draw {
         return new Nook() {
             @Override
             public int width() {
-                return Rows.CONTENT_WIDTH;
+                return RESIDENT_DETAIL_CONTENT_WIDTH;
             }
 
             @Override

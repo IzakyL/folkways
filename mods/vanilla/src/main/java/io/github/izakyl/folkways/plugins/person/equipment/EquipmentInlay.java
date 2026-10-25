@@ -7,6 +7,8 @@ import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvent;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.FlexWrap;
 import io.github.izakyl.folkways.front.api.ui.Inlay;
 import io.github.izakyl.folkways.front.api.ui.Nook;
@@ -16,6 +18,7 @@ import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -50,9 +53,12 @@ public final class EquipmentInlay implements Inlay {
     private Button unequip;
     private Button fill;
     private Button ammoFill;
+    private Button ammoAuto;
     private Label selection;
     private Label current;
     private Label ammo;
+    private Label ammoAutoInfo;
+    private Label recovery;
     private Label status;
     private Label feedback;
     private UIElement manual;
@@ -60,6 +66,13 @@ public final class EquipmentInlay implements Inlay {
     private boolean showingPlans;
     private String template = "melee_guard";
     private String scope = "self";
+    private DragPayload pressedCell;
+    private double pressedX;
+    private double pressedY;
+    private Button pressedElement;
+    private ItemStack dragPreview = ItemStack.EMPTY;
+    private double dragDistance;
+    private boolean dragging;
     private Button manualTab;
     private Button plansTab;
     private Button templatePrevious;
@@ -85,6 +98,11 @@ public final class EquipmentInlay implements Inlay {
         page = Rows.page();
         Tokens.name(page, "folkways.resident.equipment");
         page.setDisplay(false);
+        // LDLib2 drag events are client-side preview events. Only a validated drop below sends
+        // the existing one-shot, server-checked equip action.
+        page.addEventListener(UIEvents.MOUSE_MOVE, this::moveDrag, true);
+        page.addEventListener(UIEvents.MOUSE_UP, this::endPress, true);
+        page.addEventListener(UIEvents.DRAG_END, event -> clearPress(), true);
         heading = button("open", "open", () -> { expanded = !expanded; refresh(); });
         selection = Rows.text(Component.empty());
         current = Rows.note(Component.empty());
@@ -123,13 +141,26 @@ public final class EquipmentInlay implements Inlay {
             choices.addChildren(target);
         }
         ammoFill = button("ammo_fill", "ammo_fill", () -> send(action("ammo_fill")));
-        packGrid = grid();
-        playerGrid = grid();
+        ammoAuto = button("ammo_auto", "ammo_auto.enabled", () -> {
+            CompoundTag ammunition = snapshot.getCompound("plans").getCompound("ammunition");
+            CompoundTag action = action("ammo_auto");
+            action.putBoolean("value", !ammunition.getBoolean("enabled"));
+            action.putString("scope", "self");
+            send(action);
+        });
+        ammoAutoInfo = Rows.note(Component.empty());
+        recovery = Rows.note(Component.empty());
+        Tokens.name(ammoAuto, "folkways.equipment.ammo_auto");
+        Tokens.name(ammoAutoInfo, "folkways.equipment.ammo_auto.state");
+        Tokens.name(recovery, "folkways.resident.recovery");
+        packGrid = inventoryGrid();
+        playerGrid = inventoryGrid();
         Tokens.name(packGrid, "folkways.equipment.resident_pack");
         Tokens.name(playerGrid, "folkways.equipment.player_pack");
         manual = Rows.page().addChildren(Rows.note(word("hint")), equipment, selection,
             Rows.strip().addChildren(lock, unequip), fill, current, ammo,
-            choices, ammoFill, Rows.heading(word("resident_pack")), packGrid,
+            choices, ammoFill, ammoAuto, ammoAutoInfo, recovery,
+            Rows.heading(word("resident_pack")), packGrid,
             Rows.heading(word("player_pack")), Rows.note(word("player_near")), playerGrid);
         manualTab = button("tab.manual", "plan.manual", () -> { showingPlans = false; refresh(); });
         plansTab = button("tab.plans", "plan.open", () -> { showingPlans = true; refresh(); });
@@ -174,12 +205,16 @@ public final class EquipmentInlay implements Inlay {
     }
 
     private CompoundTag action(String kind) {
+        return action(kind, selected);
+    }
+
+    private CompoundTag action(String kind, String targetSlot) {
         CompoundTag action = new CompoundTag();
         for (String key : List.of("resident", "ticket")) {
             if (snapshot.contains(key)) { action.put(key, snapshot.get(key).copy()); }
         }
         action.putString("kind", kind);
-        action.putString("slot", selected);
+        action.putString("slot", targetSlot);
         return action;
     }
 
@@ -191,15 +226,91 @@ public final class EquipmentInlay implements Inlay {
         refresh();
     }
 
-    private void equip(String source, CompoundTag entry) {
-        CompoundTag action = action("equip");
+    private void equip(String source, int index, String targetSlot) {
+        CompoundTag action = action("equip", targetSlot);
         action.putString("source", source);
-        action.putInt("index", entry.getInt("index"));
+        action.putInt("index", index);
         send(action);
+    }
+
+    private void beginPress(UIEvent event, Button sourceElement, String source, CompoundTag entry) {
+        if (event.button != 0 || pending || !snapshot.getBoolean("editable")
+                || !snapshot.hasUUID("resident") || !snapshot.hasUUID("ticket")
+                || !snapshot.contains("resident")) {
+            return;
+        }
+        ItemStack stack = stack(entry.getCompound("stack"));
+        if (stack.isEmpty() || !entry.getBoolean("usable") || entry.getBoolean("borrowed")
+                || entry.getBoolean("remote") || source.equals("player") && !snapshot.getBoolean("near")) {
+            return;
+        }
+        clearPress();
+        pressedCell = new DragPayload(snapshot.getUUID("resident"), snapshot.getUUID("ticket"),
+            source, entry.getInt("index"));
+        pressedElement = sourceElement;
+        dragPreview = stack.copy();
+        dragDistance = 0;
+        pressedX = event.x;
+        pressedY = event.y;
+        dragging = false;
+    }
+
+    private void moveDrag(UIEvent event) {
+        if (pressedCell == null || dragging) { return; }
+        if (!Client.leftDown() || !current(pressedCell) || pending || !snapshot.getBoolean("editable")) {
+            clearPress();
+            return;
+        }
+        dragDistance = Math.hypot(event.x - pressedX, event.y - pressedY);
+        if (dragDistance >= 5) {
+            dragging = true;
+            pressedElement.startDrag(pressedCell, new ItemStackTexture(dragPreview));
+        }
+    }
+
+    private void endPress(UIEvent event) {
+        if (pressedCell == null) { return; }
+        if (!dragging) {
+            if (event.button == 0 && event.target != null
+                    && (event.target == pressedElement || pressedElement.isAncestorOf(event.target))
+                    && current(pressedCell)) {
+                equip(pressedCell.source(), pressedCell.index(), selected);
+            }
+            clearPress();
+        }
+        // A drag remains live until DRAG_END, which follows DRAG_PERFORM when a slot accepts it.
+    }
+
+    private void drop(UIEvent event, String targetSlot) {
+        if (event.dragHandler == null) { return; }
+        Object value = event.dragHandler.getDraggingObject();
+        if (value instanceof DragPayload payload && dragging && payload.equals(pressedCell)
+                && current(payload) && !pending
+                && snapshot.getBoolean("editable") && !slot(targetSlot).getBoolean("busy")) {
+            equip(payload.source(), payload.index(), targetSlot);
+        }
+        event.stopPropagation();
+    }
+
+    private boolean current(DragPayload payload) {
+        return snapshot.hasUUID("resident") && snapshot.hasUUID("ticket")
+            && payload.resident().equals(snapshot.getUUID("resident"))
+            && payload.ticket().equals(snapshot.getUUID("ticket"));
+    }
+
+    private void clearPress() {
+        pressedCell = null;
+        pressedElement = null;
+        dragPreview = ItemStack.EMPTY;
+        dragDistance = 0;
+        dragging = false;
     }
 
     private void refresh() {
         boolean present = snapshot.contains("resident");
+        if (pressedCell != null && (!present || !current(pressedCell) || pending || !expanded || showingPlans)) {
+            clearPress();
+        }
         page.setDisplay(present);
         content.setDisplay(expanded && present);
         heading.setText(word(expanded ? "close" : "open"));
@@ -219,6 +330,27 @@ public final class EquipmentInlay implements Inlay {
         current.setText(word("current", tool.isEmpty() ? word("empty") : tool.getHoverName()));
         current.style(style -> style.tooltips(word("current_hint")));
         ammo.setText(word("ammo", snapshot.getInt("ammoCount"), snapshot.getInt("ammoTarget"), snapshot.getInt("loadedAmmo")));
+        CompoundTag ammunition = snapshot.getCompound("plans").getCompound("ammunition");
+        boolean autoEnabled = ammunition.getBoolean("enabled");
+        boolean declared = ammunition.getBoolean("declared");
+        boolean automatic = ammunition.getBoolean("automatic");
+        String ammoStatus = ammunition.getString("status");
+        if (ammoStatus.isEmpty()) { ammoStatus = "none"; }
+        ammoAuto.setText(word(autoEnabled ? "ammo_auto.enabled" : "ammo_auto.disabled"));
+        ammoAuto.setActive(!pending && editable);
+        ammoAuto.style(style -> style.tooltips(word("ammo_auto.hint")));
+        Component ammoAvailability = word(!declared ? "ammo_auto.unavailable"
+            : !automatic ? "ammo_auto.unsupported" : "ammo_auto.state." + ammoStatus);
+        Component weapon = ammunition.getString("weapon").isEmpty()
+            ? word("empty") : Client.itemName(ammunition.getString("weapon"));
+        Component ammoItem = ammunition.getString("item").isEmpty()
+            ? word("empty") : Client.itemName(ammunition.getString("item"));
+        ammoAutoInfo.setText(word("ammo_auto.summary", ammoAvailability, weapon, ammoItem,
+            ammunition.getInt("carried"), ammunition.getInt("loaded"), ammunition.getInt("total"),
+            ammunition.getInt("target"), ammunition.getInt("needed")));
+        String recoveryKey = snapshot.getString("recovery");
+        recovery.setText(recoveryKey.isEmpty() ? Component.empty() : Component.translatable(recoveryKey));
+        recovery.setDisplay(!recoveryKey.isEmpty());
         for (int index = 0; index < targets.size(); index++) {
             int count = List.of(8, 16, 32).get(index);
             targets.get(index).setText(Component.literal((snapshot.getInt("ammoTarget") == count ? "● " : "") + count));
@@ -420,6 +552,14 @@ public final class EquipmentInlay implements Inlay {
         return grid;
     }
 
+    private static UIElement inventoryGrid() {
+        UIElement grid = grid();
+        // Keep the familiar 9-column inventory shape when there is room, while allowing the
+        // layout to wrap earlier on a narrow screen.
+        grid.layout(layout -> layout.widthPercent(100).maxWidth(9 * 24 + 8 * 2).flexShrink(1));
+        return grid;
+    }
+
     private Button button(String token, String key, Runnable clicked) {
         Button button = new Button().setText(word(key)).setOnClick(event -> clicked.run());
         button.layout(layout -> layout.height(20).flexShrink(0));
@@ -439,8 +579,14 @@ public final class EquipmentInlay implements Inlay {
         return Client.tooltip(stack, reason);
     }
 
+    private record DragPayload(UUID resident, UUID ticket, String source, int index) { }
+
     // RegisteringUi also runs on dedicated servers. Only received client snapshots may touch ClientLevel.
     private static final class Client {
+        private static boolean leftDown() {
+            return org.lwjgl.glfw.GLFW.glfwGetMouseButton(Minecraft.getInstance().getWindow().getWindow(),
+                org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+        }
         private static Component itemName(String id) {
             var key = net.minecraft.resources.ResourceLocation.tryParse(id);
             return key == null ? Component.literal(id) : new ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.get(key)).getHoverName();
@@ -474,6 +620,7 @@ public final class EquipmentInlay implements Inlay {
             choose.layout(layout -> layout.width(98));
             Tokens.name(item, "folkways.equipment.worn." + name);
             row = Rows.strip().addChildren(choose, icon, item);
+            row.addEventListener(UIEvents.DRAG_PERFORM, event -> drop(event, name));
         }
 
         private void refresh() {
@@ -499,7 +646,12 @@ public final class EquipmentInlay implements Inlay {
             press = Rows.act();
             press.layout(layout -> layout.width(24).height(24));
             press.addChildren(icon);
-            press.setOnClick(event -> equip(source, entry));
+            press.addEventListener(UIEvents.MOUSE_DOWN, event -> beginPress(event, press, source, entry));
+            press.setOnClick(event -> {
+                // Button activation is immediate on mouse-down. Defer pointer use until release so
+                // a drag never mutates either inventory before a slot accepts the drop.
+                if (pressedElement != press) { equip(source, entry.getInt("index"), selected); }
+            });
         }
 
         private void refresh(CompoundTag entry) {

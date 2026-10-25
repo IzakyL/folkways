@@ -69,7 +69,7 @@ public final class PatrolSupplyGameTests {
     @SubscribeEvent public static void register(RegisterGameTestsEvent event) { event.register(PatrolSupplyGameTests.class); }
 
     @GameTest(template = "empty_large")
-    public static void manualEquipmentAndCarryTargetChangesInvalidateOldSupplyDemands(GameTestHelper helper) {
+    public static void legacyCarriedWeaponAndCarryTargetChangesInvalidateOldSupplyDemands(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         try {
             scene.store.setItem(0, new ItemStack(Items.BOW));
@@ -81,10 +81,10 @@ public final class PatrolSupplyGameTests {
             Node oldWeapon = scene.supplies.urges(worker, order, Long.MIN_VALUE, Long.MIN_VALUE).getFirst().take().get();
             helper.assertTrue(oldWeapon.ready(scene.level), "the original automatic weapon request is initially live");
             ItemStack bow = new ItemStack(Items.BOW);
-            io.github.izakyl.folkways.core.api.resident.body.PersonalItems.mark(scene.body, bow, "mainhand");
+            // Raw legacy stock stays on this batch transaction path; assigned weapons are covered by AmmunitionGameTests.
             scene.body.pack().insert(bow);
-            io.github.izakyl.folkways.core.api.resident.body.Equipment.lock(scene.body, EquipmentSlot.MAINHAND, true);
-            helper.assertFalse(oldWeapon.ready(scene.level), "manual assignment invalidates the obsolete automatic weapon collection");
+
+            helper.assertFalse(oldWeapon.ready(scene.level), "an existing raw carried weapon invalidates the obsolete legacy weapon collection; assigned maintenance has its own quiet-runner tests");
             Node eight = scene.supplies.urges(worker, order, Long.MIN_VALUE, Long.MIN_VALUE).getFirst().take().get();
             helper.assertValueEqual(eight.spec().needs().getFirst().count(), 8L, "the new request only asks for the current ammunition goal");
             var settings = new net.minecraft.nbt.CompoundTag(); settings.putInt("ammoTarget", 32);
@@ -275,7 +275,8 @@ public final class PatrolSupplyGameTests {
     @GameTest(template = "empty_large", timeoutTicks = 450)
     public static void losingTheLastArrowDuringTheWindupDoesNotDuplicateOrSpendCarriedAmmo(GameTestHelper helper) {
         Scene scene = new Scene(helper);
-        scene.body.pack().insert(new ItemStack(Items.BOW)); scene.body.pack().insert(new ItemStack(Items.ARROW, 7));
+        // Three of the target eight arrows starts a refill below the half-reserve threshold.
+        scene.body.pack().insert(new ItemStack(Items.BOW)); scene.body.pack().insert(new ItemStack(Items.ARROW, 3));
         scene.store.setItem(0, new ItemStack(Items.ARROW)); scene.guard();
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(scene.supplyState() == PatrolSupplies.State.FETCHING && scene.nearStore(),
@@ -284,7 +285,7 @@ public final class PatrolSupplyGameTests {
             .thenWaitUntil(() -> helper.assertTrue(scene.supplyState() == PatrolSupplies.State.NO_STOCK,
                 "an execution-time competitor taking the last arrow creates a bounded stockout" + scene.debug()))
             .thenExecute(() -> {
-                helper.assertValueEqual(scene.body.pack().count(Items.ARROW), 7, "failed collection does not consume or refund copies of carried ammunition");
+                helper.assertValueEqual(scene.body.pack().count(Items.ARROW), 3, "failed collection does not consume or refund copies of carried ammunition");
                 helper.assertValueEqual(scene.countInStore(Items.ARROW), 0, "the competing withdrawal remains the only source mutation");
                 helper.assertValueEqual(scene.weaponCount(), 1, "failed collection leaves the actual weapon intact");
             }).thenSucceed();

@@ -25,6 +25,9 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.front.engine.authority.ColonyAuthority;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.plugins.combat.Threats;
+import io.github.izakyl.folkways.plugins.combat.CombatReadiness;
+import io.github.izakyl.folkways.plugins.combat.weapon.WeaponAdapter;
+import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
 import io.github.izakyl.folkways.plugins.combat.control.CombatSelectionOwnership;
 import io.github.izakyl.folkways.plugins.combat.group.UnitGroups;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -77,11 +80,12 @@ public final class EquipmentPlans {
         Goal(Template template, boolean active, String status) { this.template = template; this.active = active; this.status = status; }
     }
 
-    record Demand(EquipmentSlot slot, ResourceLocation item, int count) {
+    record Demand(EquipmentSlot slot, ResourceLocation item, int count, Optional<WeaponAdapter.Ammunition> supply) {
+        Demand(EquipmentSlot slot, ResourceLocation item, int count) { this(slot, item, count, Optional.empty()); }
         boolean ammunition() { return slot == null; }
-        ItemSpec spec() { return ItemSpec.of(item); }
+        ItemSpec spec() { return supply.map(WeaponAdapter.Ammunition::stock).orElseGet(() -> ItemSpec.of(item)); }
+        boolean accepts(ItemStack actual) { return supply.map(ammo -> ammo.accepts(actual)).orElseGet(() -> matches(actual, item)); }
     }
-
     record Offer(Optional<WorldPos> store, int cell, ItemStack expected, int count, Stances stances) {
         Offer { expected = expected.copy(); }
     }
@@ -91,6 +95,9 @@ public final class EquipmentPlans {
     private final Map<String, Template> templates = new LinkedHashMap<>();
     private final Map<UUID, Goal> goals = new LinkedHashMap<>();
     private final Map<UUID, EquipmentRefillNode> pending = new LinkedHashMap<>();
+    private record AutomaticAmmo(ItemStack weapon, Goal goal) { }
+    private final Map<UUID, AutomaticAmmo> automaticAmmo = new LinkedHashMap<>();
+    private final Set<UUID> ammunitionDisabled = new java.util.LinkedHashSet<>();
     private record Preview(String kind, String scope, ListTag members) { }
     private final Map<ServerPlayer, Preview> previews = new WeakHashMap<>();
 
@@ -105,6 +112,10 @@ public final class EquipmentPlans {
             EquipmentSlot.CHEST, item("leather_chestplate"), EquipmentSlot.LEGS, item("leather_leggings"),
             EquipmentSlot.FEET, item("leather_boots")), 16));
         CompoundTag saved = colony.kept(ID);
+        for (Tag value : saved.getList("ammunitionDisabled", Tag.TAG_COMPOUND)) {
+            CompoundTag row = (CompoundTag) value;
+            if (row.hasUUID("resident")) ammunitionDisabled.add(row.getUUID("resident"));
+        }
         for (Tag value : saved.getList("templates", Tag.TAG_COMPOUND)) {
             if (templates.size() >= 18) break;
             Template template = readTemplate((CompoundTag) value, false);
@@ -124,11 +135,15 @@ public final class EquipmentPlans {
         event.colony(ID, scope -> {
             EquipmentPlans plans = new EquipmentPlans(scope.colony(), scope.server());
             scope.share(plans); scope.urges(plans::urges); scope.tick(plans::tick);
-            scope.closed(why -> { plans.pending.clear(); plans.previews.clear(); });
+            scope.closed(why -> { plans.pending.clear(); plans.previews.clear(); plans.automaticAmmo.clear(); });
         });
     }
 
     public static EquipmentPlans of(Colony colony) { return colony.service(ID, EquipmentPlans.class).orElseThrow(); }
+    public static boolean ammoEnabled(Colony colony, UUID resident) {
+        return colony.service(ID, EquipmentPlans.class).map(plans -> !plans.ammunitionDisabled.contains(resident)).orElse(true);
+    }
+
     public static boolean manages(Colony colony, UUID resident) {
         return colony.service(ID, EquipmentPlans.class).map(plans -> plans.goals.containsKey(resident)).orElse(false);
     }
@@ -142,7 +157,7 @@ public final class EquipmentPlans {
     }
 
     public static boolean handles(String kind) {
-        return Set.of("plan_select", "template_save", "template_apply", "template_preview", "refill", "refill_cancel").contains(kind);
+        return Set.of("plan_select", "template_save", "template_apply", "template_preview", "refill", "refill_cancel", "ammo_auto").contains(kind);
     }
 
     /** Read-only metadata: no warehouse scanning, item removal, or preview refresh on sync ticks. */
@@ -150,6 +165,7 @@ public final class EquipmentPlans {
         CompoundTag data = new CompoundTag();
         ListTag choices = new ListTag(); templates.values().forEach(template -> choices.add(writeTemplate(template)));
         data.put("templates", choices);
+        data.put("ammunition", ammunitionSnapshot(resident));
         data.putBoolean("shared", true);
         CompoundTag scopes = new CompoundTag();
         for (String scope : List.of("self", "selection", "group")) {
@@ -196,6 +212,14 @@ public final class EquipmentPlans {
     public String act(ServerPlayer actor, ResidentEntity resident, CompoundTag action) {
         if (!authorized(actor, resident.id()) || loaded(resident.id()).orElse(null) != resident) return "forbidden";
         String kind = action.getString("kind");
+        if (kind.equals("ammo_auto")) {
+            if (action.getBoolean("value")) ammunitionDisabled.remove(resident.id());
+            else ammunitionDisabled.add(resident.id());
+            automaticAmmo.remove(resident.id());
+            EquipmentRefillNode old = pending.get(resident.id());
+            if (old != null && old.automatic()) pending.remove(resident.id());
+            save(); return "ok";
+        }
         if (kind.equals("template_save")) {
             String name = action.getString("name").strip();
             if (name.isBlank() || name.length() > 48 || templates.size() >= 18) return "invalid";
@@ -324,19 +348,10 @@ public final class EquipmentPlans {
             ResourceLocation target = template.targets().get(slot);
             if (target != null && !matches(equipped(body, slot), target)) wanted.add(new Demand(slot, target, 1));
         }
-        // A melee template has no ammunition demand; custom templates retain the real ranged choice.
         ResourceLocation main = template.targets().get(EquipmentSlot.MAINHAND);
-        ItemStack weapon = main == null ? ResidentEquipment.assigned(body) : new ItemStack(BuiltInRegistries.ITEM.get(main));
-        if (weapon.is(Items.BOW) || weapon.is(Items.CROSSBOW)) {
-            Container unreserved = free((ServerLevel) body.level(), Optional.empty(), body);
-            int count = 0;
-            for (int cell = 0; cell < unreserved.getContainerSize(); cell++) {
-                ItemStack stack = unreserved.getItem(cell);
-                if (ResidentEquipment.ammoCandidate(body, stack) && stack.is(ItemTags.ARROWS)) count += stack.getCount();
-            }
-            int missing = Math.max(0, template.ammo() - count - ResidentEquipment.loadedAmmo(body));
-            if (missing > 0) wanted.add(new Demand(null, item("arrow"), missing));
-        }
+        ItemStack assigned = ResidentEquipment.assigned(body);
+        ItemStack weapon = main == null || matches(assigned, main) ? assigned : new ItemStack(BuiltInRegistries.ITEM.get(main));
+        Weapons.ammunition(weapon, template.ammo()).flatMap(ammo -> ammunitionDemand(body, ammo)).ifPresent(wanted::add);
         return List.copyOf(wanted);
     }
 
@@ -344,9 +359,11 @@ public final class EquipmentPlans {
         return slot == EquipmentSlot.MAINHAND ? ResidentEquipment.assigned(body) : body.getItemBySlot(slot);
     }
 
-    private boolean safe(ResidentEntity body) { return safe(body, null); }
+    private boolean safe(ResidentEntity body) { return safe(body, null, false); }
 
-    private boolean safe(ResidentEntity body, ResidentCommands.Order lease) {
+    private boolean safe(ResidentEntity body, ResidentCommands.Order lease) { return safe(body, lease, true); }
+
+    private boolean safe(ResidentEntity body, ResidentCommands.Order lease, boolean existingLease) {
         if (danger(body) || body.hasWeaponSession() || !body.getMainHandItem().isEmpty() || body.doing().filter(doing ->
                 doing.toward().orElse(doing.what()).equals(FearContent.FLEEING)).isPresent()) return false;
         Optional<ResidentCommands.Order> order = ResidentCommands.of(colony).current(body.id());
@@ -359,7 +376,7 @@ public final class EquipmentPlans {
                 && !held.engaged() && !held.yieldingToDanger();
         }
         return !CombatSelectionOwnership.of(colony).reserved(body.id())
-            && (body.doing().isEmpty() || body.doing().filter(doing -> doing.what().equals(ID)).isPresent());
+            && (body.doing().isEmpty() || body.doing().filter(doing -> doing.what().equals(ID) || existingLease && doing.what().equals(io.github.izakyl.folkways.plugins.person.living.LivingContent.EATING)).isPresent());
     }
 
     private static boolean danger(ResidentEntity body) {
@@ -373,13 +390,22 @@ public final class EquipmentPlans {
 
     public List<Urge> urges(Worker who, ColonyView view) {
         if (!(who.body() instanceof ResidentEntity body) || !(body.level() instanceof ServerLevel level)) return List.of();
-        Goal goal = goals.get(body.id()); if (goal == null || !goal.active) return List.of();
+        AutomaticAmmo automatic = automatic(body);
+        boolean quiet = automatic == null || CombatReadiness.quiet(body);
+        Goal explicit = goals.get(body.id());
+        boolean automaticRequest = explicit == null || !explicit.active;
+        Goal goal = automaticRequest ? automatic == null ? null : automatic.goal() : explicit;
         EquipmentRefillNode current = pending.get(body.id());
         if (current != null && valid(current) && level.getGameTime() < current.deadline()) return List.of(current.urge());
         pending.remove(body.id());
-        if (!safe(body)) { status(goal, "busy"); return List.of(); }
-        List<Demand> demands = demands(body, goal.template);
-        if (demands.isEmpty()) { goal.active = false; status(goal, "equipped"); save(); return List.of(); }
+        if (goal == null || !goal.active) return List.of();
+        if (!safe(body) || body.doing().filter(doing -> doing.what().equals(io.github.izakyl.folkways.plugins.person.living.LivingContent.EATING)).isPresent()
+                || automaticRequest && (!quiet || UnitGroups.of(colony).ofResident(body.id())
+                    .filter(group -> !group.maintenanceAllowed(false)).isPresent())) { status(goal, "busy"); return List.of(); }
+        List<Demand> demands = automaticRequest ? automaticDemands(body) : demands(body, goal.template);
+        if (demands.isEmpty()) {
+            goal.active = false; status(goal, "equipped"); if (!automaticRequest) save(); return List.of();
+        }
         if (level.getGameTime() < goal.retryAt) return List.of();
         boolean locked = false;
         for (Demand demand : demands) {
@@ -387,30 +413,116 @@ public final class EquipmentPlans {
             Optional<Offer> offer = offer(body, demand);
             if (offer.isEmpty()) continue;
             var order = ResidentCommands.of(colony).current(body.id()).orElse(null);
-            EquipmentRefillNode request = new EquipmentRefillNode(this, body, goal.revision, order, demand, offer.get(), level.getGameTime() + 240);
+            EquipmentRefillNode request = new EquipmentRefillNode(this, body, goal.revision, order, demand, offer.get(), level.getGameTime() + 240, automaticRequest);
             pending.put(body.id(), request); status(goal, "fetching"); return List.of(request.urge());
         }
         goal.retryAt = level.getGameTime() + RETRY; status(goal, locked ? "locked" : "missing");
         return List.of();
     }
 
+    private Goal requestGoal(EquipmentRefillNode request) {
+        AutomaticAmmo automatic = automaticAmmo.get(request.body().id());
+        return request.automatic() ? automatic == null ? null : automatic.goal() : goals.get(request.body().id());
+    }
+
     boolean valid(EquipmentRefillNode request) {
-        Goal goal = goals.get(request.body().id());
+        Goal goal = requestGoal(request);
+        if (request.automatic()) {
+            if (!CombatReadiness.quiet(request.body())) return false;
+            AutomaticAmmo automatic = automaticAmmo.get(request.body().id());
+            Goal explicit = goals.get(request.body().id());
+            ItemStack actual = ResidentEquipment.assigned(request.body());
+            if (ammunitionDisabled.contains(request.body().id()) || automatic == null || explicit != null && explicit.active || actual.isEmpty()
+                    || !ItemStack.isSameItemSameComponents(actual, automatic.weapon())
+                    || automatic.goal().template.ammo() != ResidentEquipment.ammoTarget(request.body())) return false;
+        }
         return goal != null && goal.active && goal.revision == request.revision()
             && pending.get(request.body().id()) == request && loaded(request.body().id()).orElse(null) == request.body()
             && safe(request.body(), request.order()) && ResidentCommands.of(colony).current(request.body().id()).orElse(null) == request.order()
-            && demands(request.body(), goal.template).stream().anyMatch(demand -> demand.slot() == request.demand().slot()
-                && demand.item().equals(request.demand().item()) && demand.count() >= request.offer().count())
+            && (request.automatic() ? automaticDemands(request.body()) : demands(request.body(), goal.template)).stream()
+                .anyMatch(demand -> demand.slot() == request.demand().slot() && demand.accepts(request.offer().expected())
+                    && demand.count() >= request.offer().count())
             && (request.demand().ammunition() || !Equipment.locked(request.body(), request.demand().slot()));
     }
 
+    private Optional<Demand> ammunitionDemand(ResidentEntity body, WeaponAdapter.Ammunition ammo) {
+        int missing = Math.max(0, ammo.target() - ammunitionCarried(body, ammo) - ammo.loaded());
+        return missing == 0 ? Optional.empty() : Optional.of(new Demand(null, ammunitionIcon(ammo), missing, Optional.of(ammo)));
+    }
+
+    private int ammunitionCarried(ResidentEntity body, WeaponAdapter.Ammunition ammo) {
+        Container available = free((ServerLevel) body.level(), Optional.empty(), body);
+        int carried = 0;
+        for (int cell = 0; cell < available.getContainerSize(); cell++) {
+            ItemStack actual = available.getItem(cell);
+            if (ResidentEquipment.ammoCandidate(body, actual) && ammo.accepts(actual)) carried += actual.getCount();
+        }
+        return carried;
+    }
+
+    private static ResourceLocation ammunitionIcon(WeaponAdapter.Ammunition ammo) {
+        return ammo.stock().item().orElseGet(() -> Goods.members(ammo.stock()).stream()
+            .map(BuiltInRegistries.ITEM::getKey).sorted().findFirst().orElse(item("air")));
+    }
+
+    private List<Demand> automaticDemands(ResidentEntity body) {
+        return Weapons.ammunition(body).flatMap(supply -> ammunitionDemand(body, supply.demand())).map(List::of).orElse(List.of());
+    }
+
+    /** Only a real assignment opts into persistent maintenance; raw task cargo is not a second loadout. */
+    private AutomaticAmmo automatic(ResidentEntity body) {
+        Optional<Weapons.AmmunitionSupply> supply = ammunitionDisabled.contains(body.id()) || ResidentEquipment.assigned(body).isEmpty() ? Optional.empty() : Weapons.ammunition(body);
+        if (supply.isEmpty()) {
+            automaticAmmo.remove(body.id());
+            EquipmentRefillNode old = pending.get(body.id()); if (old != null && old.automatic()) pending.remove(body.id());
+            return null;
+        }
+        int reserve = ResidentEquipment.ammoTarget(body);
+        AutomaticAmmo previous = automaticAmmo.get(body.id());
+        if (previous == null || !ItemStack.isSameItemSameComponents(previous.weapon(), supply.get().weapon())
+                || previous.goal().template.ammo() != reserve) {
+            Goal next = new Goal(new Template("automatic_ammo", "", false, Map.of(), reserve), false, "waiting");
+            next.revision = previous == null ? 1 : previous.goal().revision + 1;
+            previous = new AutomaticAmmo(supply.get().weapon().copy(), next); automaticAmmo.put(body.id(), previous);
+        }
+        var ammo = supply.get().demand();
+        int total = ammunitionCarried(body, ammo) + ammo.loaded();
+        if (total >= ammo.target()) { previous.goal().active = false; previous.goal().status = "equipped"; }
+        else if (!previous.goal().active && total < Math.max(1, ammo.target() / 2)) {
+            previous.goal().active = true; previous.goal().retryAt = 0; previous.goal().revision++;
+            previous.goal().status = "waiting";
+        }
+        return previous;
+    }
+
+    /** Stable, read-only UI metadata: this inspects the pack, never warehouse contents. */
+    public CompoundTag ammunitionSnapshot(ResidentEntity body) {
+        CompoundTag data = new CompoundTag();
+        Optional<Weapons.AmmunitionSupply> supply = Weapons.ammunition(body);
+        data.putBoolean("enabled", !ammunitionDisabled.contains(body.id()));
+        data.putBoolean("declared", supply.isPresent()); data.putString("status", "none");
+        if (supply.isEmpty()) return data;
+        var ammo = supply.get().demand(); int carried = ammunitionCarried(body, ammo); int total = carried + ammo.loaded();
+        int trigger = Math.max(1, ammo.target() / 2);
+        AutomaticAmmo automatic = automaticAmmo.get(body.id());
+        boolean eligible = !ResidentEquipment.assigned(body).isEmpty();
+        boolean active = eligible && automatic != null && automatic.goal().active;
+        data.putString("weapon", BuiltInRegistries.ITEM.getKey(supply.get().weapon().getItem()).toString());
+        data.putString("item", ammunitionIcon(ammo).toString()); data.put("stock", ammo.stock().save());
+        data.putInt("carried", carried); data.putInt("loaded", ammo.loaded()); data.putInt("total", total);
+        data.putInt("target", ammo.target()); data.putInt("trigger", trigger); data.putInt("needed", Math.max(0, ammo.target() - total));
+        data.putBoolean("automatic", eligible); data.putBoolean("active", active);
+        data.putString("status", active ? automatic.goal().status.equals("equipped") ? "ready" : automatic.goal().status
+            : total < trigger ? "waiting" : "ready");
+        return data;
+    }
     Optional<Offer> offer(ResidentEntity body, Demand demand) {
         if (!(body.level() instanceof ServerLevel level)) return Optional.empty();
         if (!demand.ammunition()) {
             Container carried = free(level, Optional.empty(), body);
             for (int cell = 0; cell < carried.getContainerSize(); cell++) {
                 ItemStack stack = carried.getItem(cell);
-                if (usable(body, stack) && !PersonalItems.purpose(body, stack).filter(EquipmentSlot.MAINHAND.getName()::equals).isPresent() && matches(stack, demand.item())) {
+                if (usable(body, stack) && !PersonalItems.purpose(body, stack).filter(EquipmentSlot.MAINHAND.getName()::equals).isPresent() && demand.accepts(stack)) {
                     return Optional.of(new Offer(Optional.empty(), cell, stack, 1, Stances.WHEREVER));
                 }
             }
@@ -423,7 +535,7 @@ public final class EquipmentPlans {
             if (stances.isEmpty()) continue;
             for (int cell = 0; cell < available.getContainerSize(); cell++) {
                 ItemStack stack = available.getItem(cell);
-                if (!PersonalItems.marked(stack) && matches(stack, demand.item())) {
+                if (!PersonalItems.marked(stack) && demand.accepts(stack)) {
                     return Optional.of(new Offer(Optional.of(at), cell, stack, Math.min(demand.count(), stack.getCount()), stances.get()));
                 }
             }
@@ -451,8 +563,16 @@ public final class EquipmentPlans {
             boolean applies = at.isEmpty() ? claim.store().isEmpty() && claim.resident().filter(body.id()::equals).isPresent()
                 : claim.store().filter(pos -> pos.equals(at.get()) || pos.in(level) && level.isLoaded(pos.block(level))
                     && Containers.anchor(level, pos.block(level)).equals(Containers.anchor(level, at.get().block(level)))).isPresent();
-            if (applies && !claim.pending()) Containers.extract(free, stack -> !PersonalItems.marked(stack)
-                && Goods.matches(stack, claim.goods()), (int) Math.min(Integer.MAX_VALUE, claim.count()));
+            if (applies && !claim.pending()) {
+                // A material obligation spans component variants; Containers.extract returns just one variant.
+                long remaining = claim.count();
+                for (int cell = 0; cell < free.getContainerSize() && remaining > 0; cell++) {
+                    ItemStack stack = free.getItem(cell);
+                    if (PersonalItems.marked(stack) || !Goods.matches(stack, claim.goods())) continue;
+                    int claimed = (int) Math.min(remaining, stack.getCount());
+                    stack.shrink(claimed); remaining -= claimed;
+                }
+            }
         }
         return free;
     }
@@ -465,7 +585,7 @@ public final class EquipmentPlans {
     String install(EquipmentRefillNode request, List<ItemStack> supplied) {
         if (!valid(request) || supplied.size() != 1) return "busy";
         ItemStack incoming = supplied.getFirst();
-        if (!matches(incoming, request.demand().item()) || incoming.getCount() != request.offer().count()) return "invalid";
+        if (!request.demand().accepts(incoming) || incoming.getCount() != request.offer().count()) return "invalid";
         if (!request.demand().ammunition()) return ResidentEquipment.automatic(request.body(), request.demand().slot(), incoming);
         SimpleContainer pack = copy(request.body().pack());
         ItemStack actual = incoming.copy(); PersonalItems.mark(request.body(), actual, "ammo");
@@ -475,7 +595,7 @@ public final class EquipmentPlans {
 
     void finished(EquipmentRefillNode request, Ending ending, String failure) {
         if (!pending.remove(request.body().id(), request)) return;
-        Goal goal = goals.get(request.body().id()); if (goal == null) return;
+        Goal goal = requestGoal(request); if (goal == null) return;
         goal.retryAt = request.body().level().getGameTime() + (ending instanceof Ending.Done ? 0 : RETRY);
         status(goal, ending instanceof Ending.Done ? "waiting" : failure == null ? "busy" : failure);
     }
@@ -483,12 +603,14 @@ public final class EquipmentPlans {
     private void tick(MinecraftServer ignored) {
         Set<UUID> roster = colony.residents().stream().map(resident -> resident.id()).collect(java.util.stream.Collectors.toSet());
         boolean removed = goals.keySet().removeIf(id -> !roster.contains(id));
+        automaticAmmo.keySet().retainAll(roster);
+        removed |= ammunitionDisabled.removeIf(id -> !roster.contains(id));
         pending.entrySet().removeIf(entry -> !valid(entry.getValue()));
         if (removed) save();
     }
 
     private void status(Goal goal, String status) {
-        if (!goal.status.equals(status)) { goal.status = status; save(); }
+        if (!goal.status.equals(status)) { goal.status = status; if (goals.containsValue(goal)) save(); }
     }
 
     private void save() {
@@ -499,7 +621,10 @@ public final class EquipmentPlans {
             CompoundTag row = new CompoundTag(); row.putUUID("resident", id); row.put("target", writeTemplate(goal.template));
             row.putBoolean("active", goal.active); targets.add(row);
         });
-        saved.put("goals", targets); colony.keep(ID, saved);
+        saved.put("goals", targets);
+        ListTag disabled = new ListTag();
+        ammunitionDisabled.forEach(id -> { CompoundTag row = new CompoundTag(); row.putUUID("resident", id); disabled.add(row); });
+        saved.put("ammunitionDisabled", disabled); colony.keep(ID, saved);
     }
 
     private static ResourceLocation item(String path) { return ResourceLocation.withDefaultNamespace(path); }

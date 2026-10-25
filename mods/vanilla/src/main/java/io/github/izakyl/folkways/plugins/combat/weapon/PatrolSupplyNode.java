@@ -104,6 +104,7 @@ final class PatrolSupplyNode implements Node, Staged {
                 ItemStack actual;
                 try {
                     actual = Containers.extract(borrowed, stack -> !io.github.izakyl.folkways.core.api.resident.body.PersonalItems.marked(stack)
+                        && supplies.compatible(authority.body(), demand, stack)
                         && ItemStack.isSameItemSameComponents(stack, wanted), wanted.getCount());
                 } catch (RuntimeException | LinkageError broken) {
                     // removeItem/setChanged can throw after the physical mutation but before returning
@@ -133,6 +134,9 @@ final class PatrolSupplyNode implements Node, Staged {
                 || !withinReach(level) || supplies.source(level, source).isEmpty()) {
             failure = PatrolSupplies.State.CANCELLED;
             return Outcome.failed(LaborRefusal.GOODS_GONE);
+        }
+        if (who.supplied().stream().anyMatch(stack -> !supplies.compatible(authority.body(), demand, stack))) {
+            failure = PatrolSupplies.State.NO_STOCK; return Outcome.failed(LaborRefusal.GOODS_GONE);
         }
         if (!PatrolSupplies.fits(authority.body(), who.supplied())) {
             failure = PatrolSupplies.State.NO_ROOM;
