@@ -4,11 +4,13 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.ResidentKind;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
 import io.github.izakyl.folkways.plugins.person.living.LivingContent;
+import io.github.izakyl.folkways.plugins.person.equipment.ResidentEquipment;
 import io.github.izakyl.folkways.plugins.person.look.LookPool;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLook;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLooks;
@@ -285,7 +287,9 @@ public class ResidentEntity extends PathfinderMob implements Body {
         if (weaponSession != null && weapon.getItem() instanceof ProjectileWeaponItem projectile) {
             for (int slot = 0; slot < pack().getContainerSize(); slot++) {
                 ItemStack candidate = pack().getItem(slot);
-                if (!candidate.isEmpty() && projectile.getAllSupportedProjectiles(weapon).test(candidate)) {
+                if (!candidate.isEmpty() && (!PersonalItems.marked(candidate) || PersonalItems.belongsTo(this, candidate))
+                        && !io.github.izakyl.folkways.core.api.resident.body.TaskTools.holds(id(), candidate)
+                        && projectile.getAllSupportedProjectiles(weapon).test(candidate)) {
                     return candidate;
                 }
             }
@@ -363,6 +367,15 @@ public class ResidentEntity extends PathfinderMob implements Body {
         }
         closeWeaponSession();
         io.github.izakyl.folkways.core.api.resident.body.Equipment.release(this);
+        for (EquipmentSlot slot : ResidentEquipment.SLOTS) {
+            if (slot == EquipmentSlot.MAINHAND) continue;
+            ItemStack actual = getItemBySlot(slot);
+            if (actual.isEmpty()) continue;
+            setItemSlot(slot, ItemStack.EMPTY);
+            ResidentEquipment.released(actual);
+            spawnAtLocation(actual);
+        }
+        for (int cell = 0; cell < pack().getContainerSize(); cell++) ResidentEquipment.released(pack().getItem(cell));
         pack().dropContents(this);
         leaveColony();
         discard();
@@ -446,11 +459,21 @@ public class ResidentEntity extends PathfinderMob implements Body {
     @Override
     protected void dropCustomDeathLoot(ServerLevel level, DamageSource damageSource, boolean recentlyHit) {
         closeWeaponSession();
+        for (EquipmentSlot slot : ResidentEquipment.SLOTS) {
+            if (slot == EquipmentSlot.MAINHAND) continue;
+            ItemStack actual = getItemBySlot(slot);
+            if (PersonalItems.belongsTo(this, actual)) {
+                ResidentEquipment.released(actual);
+                setDropChance(slot, 2.0F);
+            }
+        }
+        for (int cell = 0; cell < pack().getContainerSize(); cell++) ResidentEquipment.released(pack().getItem(cell));
         super.dropCustomDeathLoot(level, damageSource, recentlyHit);
         pack().dropContents(this);
         ItemStack stray = getMainHandItem();
         if (!handIsPresentation && !stray.isEmpty()) {
             setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            ResidentEquipment.released(stray);
             spawnAtLocation(stray);
         }
     }

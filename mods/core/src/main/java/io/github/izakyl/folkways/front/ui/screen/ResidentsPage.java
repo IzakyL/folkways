@@ -105,6 +105,11 @@ public final class ResidentsPage implements Draw {
     private UIElement marks;
     private TextField nameField;
     private Button renameButton;
+    private Button previousButton;
+    private Button nextButton;
+    private CompoundTag navigation = new CompoundTag();
+    private int navigationNumber;
+    private int heardNavigation;
     private final List<Inlay> inlays = new ArrayList<>();
 
     @Override
@@ -195,6 +200,13 @@ public final class ResidentsPage implements Draw {
         Tokens.name(rename, "folkways.resident.rename");
         renameButton = rename;
 
+        previousButton = new Button().setText(Component.translatable("folkways.equipment.previous"))
+            .setOnClick(event -> navigate(-1));
+        nextButton = new Button().setText(Component.translatable("folkways.equipment.next"))
+            .setOnClick(event -> navigate(1));
+        Tokens.name(previousButton, "folkways.resident.previous");
+        Tokens.name(nextButton, "folkways.resident.next");
+
         doing = SignLine.of();
         residentName = Rows.name(Component.empty());
         marks = SignLine.of();
@@ -205,11 +217,36 @@ public final class ResidentsPage implements Draw {
 
         UIElement body = Rows.page().addChildren(
             Rows.strip().addChildren(residentName, marks, back, rename),
+            Rows.strip().addChildren(previousButton, nextButton),
             nameField,
             Rows.strip().addChildren(Rows.value(Component.translatable("folkways.ui.residents.doing")), doing),
             scroller);
         body.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
+        var navigating = DataBindingBuilder.tagC2S(tag -> {
+            if (!(tag instanceof CompoundTag request) || request.getInt("number") <= heardNavigation) {
+                return;
+            }
+            heardNavigation = request.getInt("number");
+            if (state.selected == null || !state.selected.toString().equals(request.getString("resident"))) {
+                return;
+            }
+            int direction = request.getInt("direction");
+            int index = state.order.indexOf(state.selected) + direction;
+            if ((direction == -1 || direction == 1) && index >= 0 && index < state.order.size()) {
+                state.selected = state.order.get(index);
+            }
+        }).build();
+        navigating.setRemoteDataSource(IDataSource.of(ignored -> { }, () -> navigation));
+        body.addSyncValue(navigating.getSyncValue());
         return body;
+    }
+
+    private void navigate(int direction) {
+        CompoundTag request = new CompoundTag();
+        request.putString("resident", state.filled);
+        request.putInt("direction", direction);
+        request.putInt("number", ++navigationNumber);
+        navigation = request;
     }
 
     /** A vocation's column is headed by its glyph, or the first letters of its name where it has none. */
@@ -271,6 +308,11 @@ public final class ResidentsPage implements Draw {
             @Override
             public Optional<Body> subject() {
                 return selected(player, state);
+            }
+
+            @Override
+            public Optional<Player> viewer() {
+                return Optional.of(player);
             }
 
             @Override
@@ -400,6 +442,9 @@ public final class ResidentsPage implements Draw {
             return tag;
         }
         tag.putString(ID, state.selected.toString());
+        int position = state.order.indexOf(state.selected);
+        tag.putBoolean("previous", position > 0);
+        tag.putBoolean("next", position >= 0 && position + 1 < state.order.size());
         tag.put(NAME, Pages.text(player.registryAccess(), body.get().mob().getDisplayName()));
         tag.putBoolean(NAMED, inlays.stream().anyMatch(inlay -> inlay.names(body.get())));
         tag.put(DOING, told(body.get()).save());
@@ -641,6 +686,8 @@ public final class ResidentsPage implements Draw {
             return;
         }
         String showing = compound.getString(ID);
+        previousButton.setActive(compound.getBoolean("previous"));
+        nextButton.setActive(compound.getBoolean("next"));
         residentName.setText(Pages.readText(registries, compound.get(NAME)));
         SignLine.show(marks, Sentence.load(compound.getList("marks", Tag.TAG_COMPOUND)));
         boolean ownRename = !compound.getBoolean(NAMED);

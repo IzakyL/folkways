@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.plugins.person.equipment.ResidentEquipment;
 import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +34,10 @@ public final class Weapons {
         new Registered(ResourceLocation.fromNamespaceAndPath("folkways", "melee"), MELEE));
 
     private Weapons() { }
+
+    public static boolean accepts(ItemStack stack) {
+        return registered.stream().anyMatch(entry -> entry.adapter().supportsAssignment() && entry.adapter().accepts(stack));
+    }
 
     /** Register a native extension during mod setup. Explicit adapters precede the common melee tag. */
     public static synchronized void register(ResourceLocation id, WeaponAdapter adapter) {
@@ -69,6 +74,8 @@ public final class Weapons {
         if (!(worker.body() instanceof ResidentEntity)) { return Optional.empty(); }
         Optional<WeaponAdapter> adapter = adapter(worker);
         if (adapter.isPresent()) {
+            ItemStack assigned = ResidentEquipment.assigned((ResidentEntity) worker.body());
+            if (!assigned.isEmpty()) return adapter.get().openAssigned(worker, assigned);
             return adapter.get().open(worker);
         }
         return barehanded(worker) ? Optional.of(NativeWeaponSession.barehanded(worker)) : Optional.empty();
@@ -83,6 +90,15 @@ public final class Weapons {
             return registered.stream().map(Registered::adapter)
                 .filter(adapter -> adapter.usable(worker, resident.getMainHandItem())).findFirst();
         }
+        if (worker.body() instanceof ResidentEntity resident) {
+            ItemStack assigned = ResidentEquipment.assigned(resident);
+            if (!assigned.isEmpty()) {
+                return registered.stream().map(Registered::adapter)
+                    .filter(WeaponAdapter::supportsAssignment)
+                    .filter(adapter -> adapter.usable(worker, assigned)).findFirst();
+            }
+            if (ResidentEquipment.mainLocked(resident)) { return Optional.empty(); }
+        }
         if (worker.body() instanceof ResidentEntity resident && resident.level() instanceof ServerLevel level) {
             Optional<PatrolSupplies.Loadout> preference = resident.colonyId()
                 .flatMap(id -> Colonies.of(level.getServer(), id)).flatMap(PatrolContent::suppliesOf)
@@ -90,6 +106,7 @@ public final class Weapons {
             if (preference.isPresent()) {
                 for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
                     ItemStack stack = worker.pack().getItem(slot);
+                    if (!ResidentEquipment.weaponCandidate(resident, stack)) { continue; }
                     if (!PatrolSupplies.prefers(preference.get(), stack)) { continue; }
                     Optional<WeaponAdapter> preferred = registered.stream().map(Registered::adapter)
                         .filter(adapter -> adapter.usable(worker, stack)).findFirst();
@@ -100,6 +117,8 @@ public final class Weapons {
         // Keep pack order: a resident deliberately carrying a sword before a bow uses its sword.
         for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
             ItemStack stack = worker.pack().getItem(slot);
+            if (worker.body() instanceof ResidentEntity resident
+                    && !ResidentEquipment.weaponCandidate(resident, stack)) { continue; }
             Optional<WeaponAdapter> found = registered.stream().map(Registered::adapter)
                 .filter(adapter -> adapter.usable(worker, stack)).findFirst();
             if (found.isPresent()) {
@@ -110,6 +129,16 @@ public final class Weapons {
     }
 
     private record NativeAdapter(NativeWeaponSession.Kind kind, double range) implements WeaponAdapter {
+        @Override
+        public boolean supportsAssignment() { return true; }
+
+        @Override
+        public Optional<WeaponSession> openAssigned(Worker worker, ItemStack selected) {
+            if (!(worker.body() instanceof ResidentEntity resident)
+                    || ResidentEquipment.assigned(resident) != selected || !usable(worker, selected)) return Optional.empty();
+            return open(worker);
+        }
+
         @Override
         public boolean ranged() { return kind != NativeWeaponSession.Kind.MELEE; }
 
@@ -124,7 +153,9 @@ public final class Weapons {
             ProjectileWeaponItem item = (ProjectileWeaponItem) stack.getItem();
             for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
                 ItemStack ammunition = worker.pack().getItem(slot);
-                if (!ammunition.isEmpty() && item.getAllSupportedProjectiles(stack).test(ammunition)) {
+                if (!ammunition.isEmpty() && (!(worker.body() instanceof ResidentEntity resident)
+                        || ResidentEquipment.ammoCandidate(resident, ammunition))
+                        && item.getAllSupportedProjectiles(stack).test(ammunition)) {
                     return true;
                 }
             }
@@ -149,7 +180,8 @@ public final class Weapons {
             }
             int selected = -1;
             for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
-                if (accepts(worker.pack().getItem(slot))) {
+                if (ResidentEquipment.weaponCandidate(resident, worker.pack().getItem(slot))
+                        && accepts(worker.pack().getItem(slot))) {
                     if (selected < 0) { selected = slot; }
                     if (usable(worker, worker.pack().getItem(slot))) { selected = slot; break; }
                 }

@@ -5,6 +5,8 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.resident.body.Equipment;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.ToolNeed;
@@ -24,6 +26,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -50,6 +53,41 @@ public final class WeaponSessionGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(WeaponSessionGameTests.class);
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 100)
+    public static void assignedWeaponCannotBeStolenByLegacyAdapter(GameTestHelper helper) {
+        Fixture fixture = fixture(helper, Items.IRON_SWORD, 0);
+        ResidentEntity body = fixture.body();
+        ItemStack desired = body.pack().removeItemNoUpdate(0);
+        ItemStack earlier = new ItemStack(Items.WOODEN_SWORD);
+        body.pack().insert(earlier);
+        PersonalItems.mark(body, desired, EquipmentSlot.MAINHAND.getName());
+        body.pack().insert(desired);
+        ItemStack selected = body.pack().getItem(1);
+        Equipment.lock(body, EquipmentSlot.MAINHAND, true);
+
+        AtomicBoolean legacyOpened = new AtomicBoolean();
+        Weapons.register(ResourceLocation.fromNamespaceAndPath("folkways", "legacy_assignment_test_" + body.getUUID()),
+            new WeaponAdapter() {
+                @Override public boolean accepts(ItemStack stack) { return stack.is(Items.IRON_SWORD); }
+                @Override public double range() { return 4.5; }
+                @Override public boolean usable(Worker worker, ItemStack stack) {
+                    return worker.body() == body && accepts(stack);
+                }
+                @Override public java.util.Optional<WeaponSession> open(Worker worker) {
+                    legacyOpened.set(true);
+                    return java.util.Optional.empty();
+                }
+            });
+
+        try (WeaponSession session = Weapons.open(worker(body)).orElseThrow()) {
+            helper.assertFalse(legacyOpened.get(), "assignment does not call the legacy adapter that rescans the pack");
+            helper.assertTrue(body.getMainHandItem() == selected, "the exact assigned physical pack stack is borrowed");
+        } finally { fixture.close(); }
+        helper.assertValueEqual(body.pack().count(Items.IRON_SWORD), 1, "the assigned sword returns once");
+        helper.assertValueEqual(body.pack().count(Items.WOODEN_SWORD), 1, "the earlier sword remains in the pack");
+        helper.succeed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)

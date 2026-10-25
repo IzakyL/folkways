@@ -68,6 +68,38 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class PatrolSupplyGameTests {
     @SubscribeEvent public static void register(RegisterGameTestsEvent event) { event.register(PatrolSupplyGameTests.class); }
 
+    @GameTest(template = "empty_large")
+    public static void manualEquipmentAndCarryTargetChangesInvalidateOldSupplyDemands(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        try {
+            scene.store.setItem(0, new ItemStack(Items.BOW));
+            scene.store.setItem(1, new ItemStack(Items.ARROW, 32));
+            scene.supplies.loadout(scene.body, PatrolSupplies.Loadout.BOW);
+            scene.guard();
+            Worker worker = worker(scene.body);
+            var order = scene.commands.current(scene.body.id());
+            Node oldWeapon = scene.supplies.urges(worker, order, Long.MIN_VALUE, Long.MIN_VALUE).getFirst().take().get();
+            helper.assertTrue(oldWeapon.ready(scene.level), "the original automatic weapon request is initially live");
+            ItemStack bow = new ItemStack(Items.BOW);
+            io.github.izakyl.folkways.core.api.resident.body.PersonalItems.mark(scene.body, bow, "mainhand");
+            scene.body.pack().insert(bow);
+            io.github.izakyl.folkways.core.api.resident.body.Equipment.lock(scene.body, EquipmentSlot.MAINHAND, true);
+            helper.assertFalse(oldWeapon.ready(scene.level), "manual assignment invalidates the obsolete automatic weapon collection");
+            Node eight = scene.supplies.urges(worker, order, Long.MIN_VALUE, Long.MIN_VALUE).getFirst().take().get();
+            helper.assertValueEqual(eight.spec().needs().getFirst().count(), 8L, "the new request only asks for the current ammunition goal");
+            var settings = new net.minecraft.nbt.CompoundTag(); settings.putInt("ammoTarget", 32);
+            scene.body.getPersistentData().put("folkways:resident_equipment", settings);
+            helper.assertFalse(eight.ready(scene.level), "raising the goal invalidates the captured eight-arrow request");
+            Node thirtyTwo = scene.supplies.urges(worker, order, Long.MIN_VALUE, Long.MIN_VALUE).getFirst().take().get();
+            helper.assertValueEqual(thirtyTwo.spec().needs().getFirst().count(), 32L, "the new request uses the actual updated goal");
+            settings.putInt("ammoTarget", 8);
+            helper.assertFalse(thirtyTwo.ready(scene.level), "a lower target prevents the old trip from collecting excess ammunition");
+            helper.assertValueEqual(scene.countInStore(Items.BOW), 1, "changing equipment never consumes the unneeded warehouse bow");
+            helper.assertValueEqual(scene.countInStore(Items.ARROW), 32, "changing goals does not debit stock early");
+        } finally { scene.close(); }
+        helper.succeed();
+    }
+
     @GameTest(template = "empty_large", timeoutTicks = 550)
     public static void optionalWeaponsRespectAnExplicitToolBanWithoutBecomingEveryResidentsKit(GameTestHelper helper) {
         Scene scene = new Scene(helper);

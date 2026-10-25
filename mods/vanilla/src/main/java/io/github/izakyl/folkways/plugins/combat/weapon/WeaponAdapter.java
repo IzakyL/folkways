@@ -16,4 +16,10 @@ public interface WeaponAdapter {
     default boolean usable(Worker worker, ItemStack stack) { return accepts(stack); }
 
     Optional<WeaponSession> open(Worker worker);
+
+    /** Legacy adapters may rescan the pack. They must opt in before accepting an exact assignment. */
+    default boolean supportsAssignment() { return false; }
+
+    /** Transfer this actual selected stack, or decline; never substitute a different carried item. */
+    default Optional<WeaponSession> openAssigned(Worker worker, ItemStack selected) { return Optional.empty(); }
 }

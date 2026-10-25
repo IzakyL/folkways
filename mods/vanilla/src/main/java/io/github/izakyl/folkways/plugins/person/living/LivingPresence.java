@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.core.api.colony.Sweep;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -314,7 +315,8 @@ final class LivingPresence implements Facing {
 
     boolean wouldEat(UUID resident, ItemStack stack, FoodProperties food) {
         Hunger belly = bellies.get(resident);
-        return belly != null && FoodSafety.usable(Fronts.of(colony).settings(LivingContent.ID), stack, food)
+        return belly != null && !PersonalItems.marked(stack)
+            && FoodSafety.usable(Fronts.of(colony).settings(LivingContent.ID), stack, food)
             && belly.canEatMeal(food)
             && FoodSafety.matches(Fronts.of(colony).settings(LivingContent.ID), stack);
     }
@@ -422,7 +424,8 @@ final class LivingPresence implements Facing {
         for (int slot = 0; slot < pack.getContainerSize(); slot++) {
             ItemStack stack = pack.getItem(slot);
             FoodProperties eaten = stack.isEmpty() ? null : stack.getFoodProperties(body);
-            if (FoodSafety.usable(Fronts.of(colony).settings(LivingContent.ID), stack, eaten) && Goods.matches(stack, food)) {
+            if (!PersonalItems.marked(stack)
+                    && FoodSafety.usable(Fronts.of(colony).settings(LivingContent.ID), stack, eaten) && Goods.matches(stack, food)) {
                 points += eaten.nutrition() * stack.getCount();
             }
         }

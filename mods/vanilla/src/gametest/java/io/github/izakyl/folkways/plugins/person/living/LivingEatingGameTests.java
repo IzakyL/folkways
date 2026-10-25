@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.plugins.person.living;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.work.Outcome;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Fronts;
@@ -32,6 +33,27 @@ public final class LivingEatingGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(LivingEatingGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void foodKeptAsPersonalEquipmentIsNeverAnEatingCandidateOrConsumedByAStaleMeal(GameTestHelper helper) {
+        try (EatingFixture meal = new EatingFixture(helper, 0, new ItemStack(Items.BREAD, 3), new ItemStack(Items.BREAD, 3))) {
+            PersonalItems.mark(meal.body, meal.pack.getItem(0), "spare");
+            ItemStack equipment = meal.pack.getItem(0).copy();
+            meal.pack.setItem(1, ItemStack.EMPTY);
+            helper.assertTrue(meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
+                .noneMatch(urge -> urge.id().equals(LivingPresence.EAT)), "a hungry resident does not queue eating its personal spare equipment");
+            helper.assertTrue(meal.action().commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
+                "an already queued pocket meal cannot select marked equipment");
+            helper.assertTrue(EatAction.consume(helper.getLevel(), meal.worker, meal.living, meal.pack, 0) instanceof Outcome.Failed,
+                "even a stale served-meal slot is rechecked before native consumption");
+            helper.assertValueEqual(meal.living.foodLevelOf(meal.body.id()).orElseThrow(), 0, "rejected equipment never nourishes the resident");
+            meal.pack.setItem(1, new ItemStack(Items.BREAD, 3));
+            meal.eat();
+            helper.assertTrue(ItemStack.matches(meal.pack.getItem(0), equipment), "eating ordinary rations preserves all components and count of personal food equipment");
+            helper.assertValueEqual(meal.pack.getItem(1).getCount(), 2, "the existing unmarked ration mechanism still consumes exactly one ordinary meal");
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")

@@ -8,6 +8,8 @@ import io.github.izakyl.folkways.front.api.ui.Bay;
 import io.github.izakyl.folkways.front.api.ui.RegisteringUi;
 import io.github.izakyl.folkways.library.Shelves;
 import io.github.izakyl.folkways.plugins.person.fear.FearContent;
+import io.github.izakyl.folkways.plugins.person.equipment.EquipmentInlay;
+import io.github.izakyl.folkways.plugins.person.equipment.ResidentEquipment;
 import io.github.izakyl.folkways.plugins.person.living.Housing;
 import io.github.izakyl.folkways.plugins.person.living.LivingContent;
 import io.github.izakyl.folkways.plugins.person.living.LivingInlay;
@@ -23,6 +25,7 @@ import io.github.izakyl.folkways.plugins.person.name.ResidentNames;
 import io.github.izakyl.folkways.plugins.person.walk.Doorways;
 import io.github.izakyl.folkways.plugins.person.walk.Walking;
 import net.neoforged.bus.api.IEventBus;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.level.BlockEvent;
@@ -53,6 +56,7 @@ public final class PersonPlugin {
             event.page(PersonContent.LOOKS.id(), LooksPage::new);
             event.page(PersonContent.NAMES.id(), NamesPage::new);
             event.inlay(Bay.RESIDENT, LookPool.OWNER, PersonInlay::new);
+            event.inlay(Bay.RESIDENT, ResourceLocation.fromNamespaceAndPath("folkways", "equipment"), EquipmentInlay::new);
             event.inlay(Bay.RESIDENT, LivingContent.ID, LivingInlay::new);
             event.outline(Housing::pillow);
         });
@@ -71,6 +75,7 @@ public final class PersonPlugin {
         NeoForge.EVENT_BUS.addListener(ServerStoppingEvent.class, event -> ResidentModels.forgetServer());
         NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> ResidentModels.forgetServer());
         NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> Doorways.forgetServer());
+        NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> ResidentEquipment.clear());
         NeoForge.EVENT_BUS.addListener(Doorways::onLeaveLevel);
         if (FMLEnvironment.dist.isClient()) {
             PersonClient.install(modBus);

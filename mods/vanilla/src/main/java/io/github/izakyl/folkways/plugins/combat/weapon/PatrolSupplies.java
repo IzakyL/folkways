@@ -2,6 +2,8 @@ package io.github.izakyl.folkways.plugins.combat.weapon;
 
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.Equipment;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
@@ -17,6 +19,7 @@ import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.plugins.person.equipment.ResidentEquipment;
 import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -88,7 +91,8 @@ public final class PatrolSupplies {
         validate(body);
         java.util.Objects.requireNonNull(loadout);
         if (loadouts.get(body.id()) == loadout) { return; }
-        ((ResidentEntity) body.mob()).stopWeaponSession();
+        ResidentEntity person = (ResidentEntity) body.mob();
+        if (ResidentEquipment.assigned(person).isEmpty() && !ResidentEquipment.mainLocked(person)) person.stopWeaponSession();
         loadouts.put(body.id(), loadout);
         invalidate(body.id());
         save();
@@ -98,7 +102,8 @@ public final class PatrolSupplies {
     public void clear(Body body) {
         validate(body);
         if (!loadouts.containsKey(body.id())) { return; }
-        ((ResidentEntity) body.mob()).stopWeaponSession();
+        ResidentEntity person = (ResidentEntity) body.mob();
+        if (ResidentEquipment.assigned(person).isEmpty() && !ResidentEquipment.mainLocked(person)) person.stopWeaponSession();
         loadouts.remove(body.id());
         invalidate(body.id());
         save();
@@ -157,14 +162,14 @@ public final class PatrolSupplies {
     public List<Amount> keeps(Body body) {
         if (!(body.mob() instanceof ResidentEntity person)) { return List.of(); }
         Loadout explicit = loadouts.get(body.id());
-        Loadout selected = explicit != null ? explicit : inferred(person);
+        Loadout selected = selected(person);
         if (selected == null) { return List.of(); }
         List<Amount> kept = new ArrayList<>();
         if (explicit != null || selected != Loadout.MELEE) {
             kept.add(new Amount(weapon(selected), 1));
         }
         if (selected != Loadout.MELEE) {
-            kept.add(new Amount(AMMUNITION, ARROWS));
+            kept.add(new Amount(AMMUNITION, ResidentEquipment.ammoTarget(person)));
         }
         return List.copyOf(kept);
     }
@@ -181,7 +186,8 @@ public final class PatrolSupplies {
         Authority authority = new Authority(body, order.orElse(null), duty, until, revisions.getOrDefault(body.id(), 0L));
         PatrolSupplyNode current = pending.get(body.id());
         if (current != null) {
-            if (!current.authority().equals(authority) || !valid(current.authority())) {
+            if (!current.authority().equals(authority) || !valid(current.authority())
+                    || !current.demand().equals(wanted(body))) {
                 pending.remove(body.id());
             } else if (level.getGameTime() >= current.deadline()) {
                 pending.remove(body.id());
@@ -216,7 +222,7 @@ public final class PatrolSupplies {
             List<ItemStack> preview = preview(level, source, store.get(), demand, missing);
             if (preview.isEmpty()) { continue; }
             stocked++;
-            if (!fits(body.pack(), preview)) {
+            if (!fits(body, preview)) {
                 noRoom = source;
                 continue;
             }
@@ -252,7 +258,8 @@ public final class PatrolSupplies {
     }
 
     boolean active(PatrolSupplyNode request) {
-        return pending.get(request.authority().body().id()) == request && valid(request.authority());
+        return pending.get(request.authority().body().id()) == request && valid(request.authority())
+            && request.demand().equals(wanted(request.authority().body()));
     }
 
     Optional<Container> source(ServerLevel level, WorldPos source) {
@@ -277,7 +284,7 @@ public final class PatrolSupplies {
         List<ItemStack> taken = new ArrayList<>();
         int left = count;
         while (left > 0) {
-            ItemStack stack = Containers.extract(source, item -> Goods.matches(item, goods)
+            ItemStack stack = Containers.extract(source, item -> !PersonalItems.marked(item) && Goods.matches(item, goods)
                 && (!weapon || KitRules.allows(colony, item.getItem())), left);
             if (stack.isEmpty()) { break; }
             taken.add(stack); left -= stack.getCount();
@@ -290,6 +297,12 @@ public final class PatrolSupplies {
         return goods.stream().allMatch(stack -> Containers.insert(copy, stack).isEmpty());
     }
 
+    static boolean fits(ResidentEntity body, List<ItemStack> goods) {
+        SimpleContainer copy = copy(body.pack());
+        return goods.stream().allMatch(stack -> Containers.insert(copy, stack).isEmpty())
+            && (!body.hasWeaponSession() || Containers.insert(copy, body.getMainHandItem().copy()).isEmpty());
+    }
+
     private static SimpleContainer copy(Container source) {
         SimpleContainer copy = new SimpleContainer(source.getContainerSize());
         for (int slot = 0; slot < source.getContainerSize(); slot++) { copy.setItem(slot, source.getItem(slot).copy()); }
@@ -298,33 +311,43 @@ public final class PatrolSupplies {
 
     private Demand wanted(ResidentEntity body) {
         Loadout explicit = loadouts.get(body.id());
-        Loadout selected = explicit != null ? explicit : inferred(body);
+        Loadout selected = selected(body);
         if (selected == null) { return null; }
         Demand arm = new Demand(weapon(selected), 1, true);
-        if (explicit != null && missing(body, arm) > 0) { return arm; }
-        Demand ammo = new Demand(AMMUNITION, ARROWS, false);
+        if (explicit != null && !Equipment.locked(body, net.minecraft.world.entity.EquipmentSlot.MAINHAND)
+                && ResidentEquipment.assigned(body).isEmpty() && missing(body, arm) > 0) { return arm; }
+        Demand ammo = new Demand(AMMUNITION, ResidentEquipment.ammoTarget(body), false);
         return selected != Loadout.MELEE && missing(body, ammo) > 0 ? ammo : null;
     }
 
     int missing(ResidentEntity body, Demand demand) {
-        long carried = Goods.countIn(body.pack(), demand.goods());
+        long carried = body.pack().countMatching(stack -> ResidentEquipment.ammoCandidate(body, stack)
+            && Goods.matches(stack, demand.goods()));
         if (body.hasWeaponSession() && Goods.matches(body.getMainHandItem(), demand.goods())) { carried += body.getMainHandItem().getCount(); }
         if (!demand.weapon()) {
-            List<ItemStack> weapons = new ArrayList<>(body.pack().contents());
-            if (body.hasWeaponSession()) { weapons.add(body.getMainHandItem()); }
-            for (ItemStack weapon : weapons) {
-                var loaded = weapon.get(net.minecraft.core.component.DataComponents.CHARGED_PROJECTILES);
-                if (loaded != null) { carried += loaded.getItems().stream().filter(stack -> Goods.matches(stack, demand.goods())).mapToInt(ItemStack::getCount).sum(); }
-            }
+            carried += ResidentEquipment.loadedAmmo(body);
         }
         return (int) Math.max(0, demand.target() - carried);
     }
 
+    private Loadout selected(ResidentEntity body) {
+        if (!ResidentEquipment.assigned(body).isEmpty() || ResidentEquipment.mainLocked(body)) return inferred(body);
+        return loadouts.getOrDefault(body.id(), inferred(body));
+    }
+
     private static Loadout inferred(ResidentEntity body) {
+        ItemStack assigned = ResidentEquipment.assigned(body);
+        if (!assigned.isEmpty()) {
+            if (assigned.is(Items.BOW)) return Loadout.BOW;
+            if (assigned.is(Items.CROSSBOW)) return Loadout.CROSSBOW;
+            return Loadout.MELEE;
+        }
+        if (ResidentEquipment.mainLocked(body)) return null;
         List<ItemStack> carried = new ArrayList<>();
         if (body.hasWeaponSession()) { carried.add(body.getMainHandItem()); }
         carried.addAll(body.pack().contents());
         for (ItemStack stack : carried) {
+            if (!ResidentEquipment.weaponCandidate(body, stack)) continue;
             if (stack.is(Items.BOW)) { return Loadout.BOW; }
             if (stack.is(Items.CROSSBOW)) { return Loadout.CROSSBOW; }
         }

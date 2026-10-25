@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
 import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.ItemDrops;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
@@ -62,6 +63,7 @@ final class EatAction implements Node {
     // Table displays and pocket rations use the same native food interaction and remainder handling.
     static Outcome consume(ServerLevel level, Worker who, LivingPresence works, Container pack, int slot) {
         ItemStack stack = pack.getItem(slot);
+        if (PersonalItems.marked(stack)) return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);
         FoodProperties food = stack.isEmpty() ? null : stack.getFoodProperties(who.body());
         if (food == null || !works.wouldEat(who.resident().id(), food)) {
             return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);

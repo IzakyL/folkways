@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.plugins.combat.Threats;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.plugins.person.equipment.ResidentEquipment;
 import io.github.izakyl.folkways.plugins.person.mixin.ProjectileWeaponInvoker;
 import java.util.List;
 import java.util.Optional;
@@ -170,14 +171,24 @@ final class NativeWeaponSession implements WeaponSession {
                 case BOW -> {
                     aim(target);
                     List<ItemStack> projectiles = ProjectileWeaponInvoker.folkways$draw(actual, body.getProjectile(actual), body);
+                    projectiles.forEach(ResidentEquipment::released);
                     if (!projectiles.isEmpty()) {
                         ((ProjectileWeaponInvoker) actual.getItem()).folkways$shoot(level, body,
                             InteractionHand.MAIN_HAND, actual, projectiles, BowItem.getPowerForTime(elapsed) * 3,
                             1, elapsed >= BowItem.MAX_DRAW_DURATION, target);
                     }
                 }
-                case CROSSBOW -> ((CrossbowItem) actual.getItem()).performShooting(level, body,
-                    InteractionHand.MAIN_HAND, actual, CrossbowItem.MOB_ARROW_POWER, 1, target);
+                case CROSSBOW -> {
+                    var loaded = actual.get(net.minecraft.core.component.DataComponents.CHARGED_PROJECTILES);
+                    if (loaded != null) {
+                        List<ItemStack> cleaned = loaded.getItems().stream().map(ItemStack::copy).toList();
+                        cleaned.forEach(ResidentEquipment::released);
+                        actual.set(net.minecraft.core.component.DataComponents.CHARGED_PROJECTILES,
+                            net.minecraft.world.item.component.ChargedProjectiles.of(cleaned));
+                    }
+                    ((CrossbowItem) actual.getItem()).performShooting(level, body,
+                        InteractionHand.MAIN_HAND, actual, CrossbowItem.MOB_ARROW_POWER, 1, target);
+                }
             }
         }
         finish();

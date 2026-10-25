@@ -92,7 +92,7 @@ final class PatrolSupplyNode implements Node, Staged {
             failure = PatrolSupplies.State.NO_STOCK;
             return new Short(LaborRefusal.GOODS_GONE);
         }
-        if (!PatrolSupplies.fits(who.pack(), incoming)) {
+        if (!PatrolSupplies.fits(authority.body(), incoming)) {
             failure = PatrolSupplies.State.NO_ROOM;
             return new Short(LaborRefusal.NOWHERE_TO_PUT_IT);
         }
@@ -103,7 +103,8 @@ final class PatrolSupplyNode implements Node, Staged {
                 long before = sameCount(borrowed, wanted);
                 ItemStack actual;
                 try {
-                    actual = Containers.extract(borrowed, stack -> ItemStack.isSameItemSameComponents(stack, wanted), wanted.getCount());
+                    actual = Containers.extract(borrowed, stack -> !io.github.izakyl.folkways.core.api.resident.body.PersonalItems.marked(stack)
+                        && ItemStack.isSameItemSameComponents(stack, wanted), wanted.getCount());
                 } catch (RuntimeException | LinkageError broken) {
                     // removeItem/setChanged can throw after the physical mutation but before returning
                     // its stack. The missing component-identical units still belong to this transaction.
@@ -133,7 +134,7 @@ final class PatrolSupplyNode implements Node, Staged {
             failure = PatrolSupplies.State.CANCELLED;
             return Outcome.failed(LaborRefusal.GOODS_GONE);
         }
-        if (!PatrolSupplies.fits(who.pack(), who.supplied())) {
+        if (!PatrolSupplies.fits(authority.body(), who.supplied())) {
             failure = PatrolSupplies.State.NO_ROOM;
             return Outcome.failed(LaborRefusal.NOWHERE_TO_PUT_IT);
         }
