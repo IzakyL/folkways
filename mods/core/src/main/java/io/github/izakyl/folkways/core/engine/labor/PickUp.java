@@ -46,6 +46,8 @@ final class PickUp implements Node {
         return UUID.nameUUIDFromBytes(("salvage|" + drop).getBytes(StandardCharsets.UTF_8));
     }
 
+    UUID drop() { return drop; }
+
     private static Optional<Vocation> hauling() {
         return Vocations.of(Vocations.HAULING);
     }

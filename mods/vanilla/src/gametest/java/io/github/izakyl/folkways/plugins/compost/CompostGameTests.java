@@ -322,6 +322,75 @@ public final class CompostGameTests {
         });
     }
 
+    @GameTest(template = "empty")
+    public static void twoFeedOffersFromOnePreviewCannotConsumeTheSingleSurplusTwice(GameTestHelper helper) {
+        try (Fixture fixture = new Fixture(helper)) {
+            var secondPos = fixture.pos.east(2);
+            var secondAt = WorldPos.of(fixture.level, secondPos);
+            fixture.level.setBlock(secondPos, Blocks.COMPOSTER.defaultBlockState(), Block.UPDATE_ALL);
+            fixture.bookings.admit(secondAt);
+            try {
+                fixture.pack.clearContent();
+                fixture.pack.setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
+                fixture.pack.setItem(1, new ItemStack(Items.WHEAT_SEEDS, 21));
+                var planning = fixture.station.planning(fixture.colony);
+                Node first = fixture.station.recovery(fixture.colony, fixture.level, fixture.at, Stances.WHEREVER,
+                    fixture.bookings, () -> { }, planning).getFirst().nodes().getFirst();
+                Node second = fixture.station.recovery(fixture.colony, fixture.level, secondAt, Stances.WHEREVER,
+                    fixture.bookings, () -> { }, planning).getFirst().nodes().getFirst();
+                fixture.step(first);
+                helper.assertValueEqual(fixture.seeds(), 64L, "only the first batch may spend the twenty-one surplus seeds");
+                fixture.step(second);
+                helper.assertValueEqual(fixture.fill(), 7, "the first real station received its batch");
+                helper.assertValueEqual(fixture.level.getBlockState(secondPos).getValue(ComposterBlock.LEVEL), 0,
+                    "the second station cannot reuse the shared preview after the first consumed its surplus");
+                helper.assertValueEqual(fixture.seeds(), 64L, "core returns the second full escrow, preserving the seed reserve exactly");
+            } finally {
+                fixture.level.setBlock(secondPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void sharedPreviewStillRechecksClaimsConfigurationAndPhysicalRemovalAtCommit(GameTestHelper helper) {
+        try (Fixture fixture = new Fixture(helper)) {
+            var secondPos = fixture.pos.east(2);
+            var secondAt = WorldPos.of(fixture.level, secondPos);
+            fixture.level.setBlock(secondPos, Blocks.COMPOSTER.defaultBlockState(), Block.UPDATE_ALL);
+            fixture.bookings.admit(secondAt);
+            try {
+                fixture.pack.clearContent();
+                fixture.pack.setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
+                fixture.pack.setItem(1, new ItemStack(Items.WHEAT_SEEDS, 21));
+                var planning = fixture.station.planning(fixture.colony);
+                Node first = fixture.station.recovery(fixture.colony, fixture.level, fixture.at, Stances.WHEREVER,
+                    fixture.bookings, () -> { }, planning).getFirst().nodes().getFirst();
+                Node second = fixture.station.recovery(fixture.colony, fixture.level, secondAt, Stances.WHEREVER,
+                    fixture.bookings, () -> { }, planning).getFirst().nodes().getFirst();
+                fixture.claims = List.of(new SeedBudget.Claim(UUID.randomUUID(), SeedBudget.Location.pack(fixture.body.id()),
+                    Goods.specOf(Items.WHEAT_SEEDS.getDefaultInstance()), 1));
+                fixture.step(first);
+                helper.assertValueEqual(fixture.seeds(), 85L, "a newly bound sowing seed returns the first stale escrow intact");
+                fixture.claims = List.of();fixture.retained = 65;
+                fixture.step(second);
+                helper.assertValueEqual(fixture.seeds(), 85L, "a changed live configuration returns the second stale escrow intact");
+                fixture.retained = 64;
+                fixture.pack.setItem(1, new ItemStack(Items.WHEAT_SEEDS, 20));
+                Node removed = fixture.station.recovery(fixture.colony, fixture.level, fixture.at, Stances.WHEREVER,
+                    fixture.bookings, () -> { }, planning).getFirst().nodes().getFirst();
+                fixture.step(removed);
+                helper.assertValueEqual(fixture.seeds(), 84L, "physical removal after preview cannot fund a nonexistent final seed");
+                helper.assertValueEqual(fixture.fill(), 0, "none of the stale feed proofs mutates the original composter");
+                helper.assertValueEqual(fixture.level.getBlockState(secondPos).getValue(ComposterBlock.LEVEL), 0,
+                    "the second composter also remains empty");
+            } finally {
+                fixture.level.setBlock(secondPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            }
+        }
+        helper.succeed();
+    }
+
     private static void commitAfterRepeatedOffers(GameTestHelper helper, Fixture fixture) {
         var colony = io.github.izakyl.folkways.core.api.colony.Colonies.mint(fixture.level.getServer());
         var works = (io.github.izakyl.folkways.core.engine.colony.ColonyWorks) colony;

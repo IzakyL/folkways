@@ -12,7 +12,6 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
-import dev.vfyjxf.taffy.style.TaffyPosition;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
@@ -315,13 +314,13 @@ public final class ColonyShell
         nav.layout(layout -> layout.width(NAV_WIDTH).flexShrink(0).minHeight(0));
         nav.addScrollViewChild(groups);
         Tokens.name(nav, "folkways.navigation");
-        NavFold fold = new NavFold(nav);
-        menu.setOnClick(event -> fold.toggle());
-
         UIElement pane = new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
                 .flexGrow(1).flexShrink(1).minWidth(0).minHeight(0));
         pane.setOverflowVisible(false);
+        Tokens.name(pane, "folkways.page.content");
+        NavFold fold = new NavFold(nav, pane);
+        menu.setOnClick(event -> fold.toggle());
 
         Windows windows = (id, title, body) -> {
             Window window = desk.add(Window.of(id, title,
@@ -356,6 +355,7 @@ public final class ColonyShell
             .layout(layout -> layout.flexDirection(FlexDirection.ROW)
                 .flexGrow(1).flexShrink(1).minHeight(0).gapAll(Rows.GAP))
             .addChildren(nav, pane);
+        Tokens.name(workspace, "folkways.workspace");
         workspace.addEventListener(com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents.LAYOUT_CHANGED,
             event -> fold.lay(workspace.getSizeWidth()));
 
@@ -467,16 +467,19 @@ public final class ColonyShell
         return menu;
     }
 
-    // With less room than a page needs beside it, the list of pages folds away behind the menu button and opens over
-    // the page when it is pressed; choosing a page folds it again. The room is counted in the interface's own units,
-    // so a larger interface folds it on a wider screen.
+    // With less room than a page needs beside it, navigation and the selected page take turns using the workspace.
+    // Hiding the page also removes its controls from input while the navigation is open. Choosing a page brings it
+    // back; widening the workspace restores both columns. Room is counted in the interface's own units.
     private static final class NavFold {
 
         private final UIElement nav;
+        private final UIElement pane;
         private boolean folded;
+        private boolean open;
 
-        private NavFold(UIElement nav) {
+        private NavFold(UIElement nav, UIElement pane) {
             this.nav = nav;
+            this.pane = pane;
         }
 
         private void lay(float width) {
@@ -489,22 +492,34 @@ public final class ColonyShell
                 return;
             }
             folded = narrow;
-            nav.layout(layout -> layout.positionType(folded ? TaffyPosition.ABSOLUTE : TaffyPosition.RELATIVE)
-                .left(0).top(0).bottom(0));
-            nav.style(style -> style.zIndex(folded ? 1 : 0));
-            nav.setDisplay(!folded);
+            open = false;
+            nav.layout(layout -> {
+                if (folded) {
+                    layout.widthPercent(100);
+                } else {
+                    layout.width(NAV_WIDTH);
+                }
+            });
+            display();
         }
 
         private void toggle() {
             if (folded) {
-                nav.setDisplay(!nav.isDisplayed());
+                open = !open;
+                display();
             }
         }
 
         private void close() {
             if (folded) {
-                nav.setDisplay(false);
+                open = false;
+                display();
             }
+        }
+
+        private void display() {
+            nav.setDisplay(!folded || open);
+            pane.setDisplay(!folded || !open);
         }
     }
 

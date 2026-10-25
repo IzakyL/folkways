@@ -135,6 +135,10 @@ final class BodyRunner {
         return current != null || within != null;
     }
 
+    Optional<Node> interruptedWork() {
+        return Optional.ofNullable(current == null ? within : current);
+    }
+
     List<UUID> queued() {
         return List.copyOf(route);
     }
@@ -262,6 +266,10 @@ final class BodyRunner {
             comeOut();
         }
         Node node = current;
+        if (why.equals("urge-gone")) {
+            LaborIncident.work(labor.colony().id(), level, body, node, why,
+                () -> net.minecraft.network.chat.Component.translatable("folkways.debug.incident.urge_ended"));
+        }
         if (LET_GO_DEBUG) {
             Labor.LOGGER.info("let go node={} doing={} body={} at={} why={}", node.id(), node.spec().doing(),
                 body.mob().getUUID(), body.mob().blockPosition().toShortString(), why);
@@ -771,6 +779,9 @@ final class BodyRunner {
 
     private void failed(ColonyLabor labor, ServerLevel level, Body body, Node node,
             RefusalKind why) {
+        LaborIncident.work(labor.colony().id(), level, body, node, why.translationKey(),
+            () -> net.minecraft.network.chat.Component.translatable("folkways.debug.incident.refused",
+                net.minecraft.network.chat.Component.translatable(why.translationKey())));
         NodeSpec spec = node.spec();
         body.balked(new Balk(Doing.open(spec.doing()).about(spec.about()).with(node.wares()), why,
             level.getGameTime()));

@@ -84,6 +84,7 @@ public final class Planner {
                     weaver.left(resident);
                 }
                 case Message.Idle(UUID resident) -> weaver.stow(resident);
+                case Message.PackBusy(UUID resident) -> weaver.stow(resident);
                 case Message.Offered ignored -> retry = true;
                 case Message.Answered ignored -> retry = true;
             }

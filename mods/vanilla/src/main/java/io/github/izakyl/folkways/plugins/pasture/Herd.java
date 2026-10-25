@@ -22,7 +22,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -136,10 +135,13 @@ final class Herd {
             work.put(Job.NURTURE, workable.stream().filter(Animal::isBaby)
                 .filter(beast -> !beast.getPersistentData().getBoolean(BreedingPerks.NURTURED))
                 .map(beast -> quarry(level, beast)).toList());
-            if (standing.size() > pen.target()) {
-                work.put(Job.CULL, cull(level, workable, standing.size() - pen.target()));
-            } else if (standing.size() < pen.target()) {
-                work.put(Job.FEED, feed(level, workable, pen.target() - standing.size()));
+            int surplus = adults - pen.target();
+            if (surplus > 0) {
+                work.put(Job.CULL, cull(level, workable, surplus));
+            }
+            int feedings = pen.feedings(standing);
+            if (feedings > 0) {
+                work.put(Job.FEED, feed(level, workable, feedings));
             }
             tallies.add(new Tally(pen, Map.copyOf(work)));
         }
@@ -196,10 +198,7 @@ final class Herd {
     }
 
     private List<Animal> standingIn(ServerLevel level, Pen pen) {
-        List<Animal> found = level.getEntitiesOfClass(Animal.class, pen.reach(level),
-            beast -> beast.isAlive() && !beast.isRemoved()
-                && BuiltInRegistries.ENTITY_TYPE.getKey(beast.getType()).equals(pen.keeps().type())
-                && pen.holds(beast));
+        List<Animal> found = pen.stock(level);
         found.sort(Comparator.comparing(Animal::getUUID));
         found.removeIf(beast -> !claimed.add(beast.getUUID()));
         return found;

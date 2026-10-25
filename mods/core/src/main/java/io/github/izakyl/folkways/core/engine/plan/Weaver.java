@@ -1779,25 +1779,27 @@ public final class Weaver {
         }
     }
 
-    // ---- the cargo a pack holds when nothing is asked of it ----
+    // ---- cargo put away to tidy an idle pack or make room for waiting work ----
 
     private record RecoveryStore(Stash stash, Set<Stand> at, int ticks) {
     }
 
-    // An idle worker's unclaimed cargo goes into the nearest stores with room.
+    // Unclaimed cargo goes into the nearest stores with room. Owning pending work must not prevent the very
+    // unloading it waits on, but work already in hand keeps its pack until settlement.
     private void recover(boolean retry) {
         for (Crew.Hand hand : crew.hands()) {
             if (!stowing.contains(hand.id()) || !(retry || stowFresh.contains(hand.id()))) {
                 continue;
             }
-            stowFresh.remove(hand.id());
             if (hand.cargo().isEmpty() || standing(hand.id())) {
+                stowFresh.remove(hand.id());
                 stowing.remove(hand.id());
                 continue;
             }
-            if (occupied.contains(hand.id())) {
+            if (hand.holding().isPresent()) {
                 continue;
             }
+            stowFresh.remove(hand.id());
             gapsOf.remove(hand.id());
             List<RecoveryStore> stores = new ArrayList<>();
             for (Stash stash : now.stock().stashes()) {

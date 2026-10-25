@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.api.work.Xp;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import javax.annotation.Nullable;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.animal.Animal;
@@ -20,11 +21,13 @@ final class FeedNode extends PenNode {
 
     private final UUID mate;
     private final Pen pen;
+    private final Function<ServerLevel, Optional<Pen>> current;
 
-    FeedNode(Chore chore, ItemSpec feed, Pen pen) {
+    FeedNode(Chore chore, ItemSpec feed, Pen pen, Function<ServerLevel, Optional<Pen>> current) {
         super(PenNode.declare(chore, Herd.Job.FEED).needs(new Need(feed, 2)).doing(PastureContent.FEEDING).done(), chore);
         this.mate = chore.beast().mate().orElseThrow();
         this.pen = pen;
+        this.current = current;
     }
 
     static boolean willing(Animal beast) {
@@ -33,15 +36,19 @@ final class FeedNode extends PenNode {
 
     @Override
     public boolean ready(ServerLevel level) {
-        return pair(level) != null;
+        return pair(level, pen) != null;
     }
 
     @Override
     public Outcome commit(ServerLevel level, Worker who) {
-        Pair pair = pair(level);
+        Pen now = current.apply(level).orElse(null);
+        Pair pair = now == null ? null : pair(level, now);
         if (pair == null || !Reach.standingIn(who.body(), spec().stances())
                 || !inReach(level, who, pair.first()) || !inReach(level, who, pair.second())) {
             return refuse(PastureRefusal.NOT_FEEDABLE);
+        }
+        if (now.feedings(now.stock(level)) == 0) {
+            return refuse(PastureRefusal.HERD_CHANGED);
         }
         List<ItemStack> food = who.supplied();
         if (food.stream().mapToInt(ItemStack::getCount).sum() != 2
@@ -49,8 +56,8 @@ final class FeedNode extends PenNode {
             return refuse(PastureRefusal.NOTHING_TO_WORK_WITH);
         }
         // One commit feeds both: a separate trip for the partner can outlast the first animal's love timer.
-        BreedingPerks.fed(level, who, pair.first(), pair.second(), pen);
-        BreedingPerks.fed(level, who, pair.second(), pair.first(), pen);
+        BreedingPerks.fed(level, who, pair.first(), pair.second(), now);
+        BreedingPerks.fed(level, who, pair.second(), pair.first(), now);
         pair.first().setInLove(null);
         pair.second().setInLove(null);
         return counted(level, new Outcome.Done(List.of(), List.of(), Optional.of(new Xp(PastureContent.trade(), 2))));
@@ -66,10 +73,10 @@ final class FeedNode extends PenNode {
     }
 
     @Nullable
-    private Pair pair(ServerLevel level) {
+    private Pair pair(ServerLevel level, Pen pen) {
         if (!(level.getEntity(subject()) instanceof Animal first) || !(level.getEntity(mate) instanceof Animal second)
                 || !willing(first) || !willing(second) || first.getType() != second.getType()
-                || !pen.holds(first) || !pen.holds(second) || first.distanceToSqr(second) > PARTNER_RANGE_SQR) {
+                || !pen.keeps(first) || !pen.keeps(second) || first.distanceToSqr(second) > PARTNER_RANGE_SQR) {
             return null;
         }
         return new Pair(first, second);

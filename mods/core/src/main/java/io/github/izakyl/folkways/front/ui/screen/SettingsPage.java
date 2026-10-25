@@ -26,6 +26,7 @@ import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySchemas;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.front.engine.colony.ColonyZone;
+import io.github.izakyl.folkways.front.engine.colony.LaborDebug;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -121,6 +122,12 @@ public final class SettingsPage implements Draw {
             globalTacticalControls));
 
         Razing razing = new Razing();
+        Toggle debugLogs = Controls.tick();
+        debugLogs.bind(DataBindingBuilder.bool(() -> LaborDebug.enabled(player), on -> LaborDebug.set(player, on)).build());
+        Tokens.name(debugLogs, "folkways.settings.debug_logs");
+        debugLogs.style(style -> style.tooltips(Component.translatable("folkways.settings.debug_logs.tip")));
+        table.addChildren(Rows.row().addChildren(
+            Rows.icon(ItemStack.EMPTY), Rows.name(Component.translatable("folkways.settings.debug_logs")), debugLogs));
         table.addChildren(Rows.row().addChildren(
             Rows.icon(ItemStack.EMPTY),
             Rows.name(Component.translatable("folkways.settings.colony")),
