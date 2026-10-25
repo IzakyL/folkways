@@ -308,7 +308,7 @@ const BIND = defineTask<{ slot: number }, { sent: boolean }>({
   side: "client",
   source: javaTask({
     imports: ["io.github.izakyl.folkways.plugins.combat.net.CombatPackets"],
-    body: `return java.util.Map.of("sent",CombatPackets.bind(Args.of(ctx).integer("slot")));`,
+    body: `return java.util.Map.of("sent",CombatPackets.bind(Math.toIntExact(Args.of(ctx).integer("slot"))));`,
   }),
 });
 
