@@ -11,7 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 /** Ordered selection and shortcut operations, resolved against the server's current selection. */
 public record CombatControlPacket(long request, UUID colonyId, Operation operation, int slot,
         List<UUID> residents) implements CustomPacketPayload {
-    public enum Operation { SELECT, BIND, RECALL, HEARTBEAT, CLEAR, RELEASE }
+    public enum Operation { SELECT, BIND, RECALL, HEARTBEAT, CLEAR, RELEASE, SUSPEND }
     public static final Type<CombatControlPacket> TYPE = new Type<>(
         ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "combat_control"));
     public static final StreamCodec<RegistryFriendlyByteBuf, CombatControlPacket> STREAM_CODEC =

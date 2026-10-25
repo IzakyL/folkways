@@ -40,7 +40,10 @@ public final class CombatSelectionOwnership {
         }
     }
 
-    private interface TrackedControl { void release(UUID resident); }
+    private interface TrackedControl {
+        boolean current(UUID resident);
+        void release(UUID resident);
+    }
 
     private final class GroupControl implements TrackedControl {
         private final UnitGroup group;
@@ -48,10 +51,14 @@ public final class CombatSelectionOwnership {
 
         GroupControl(UnitGroup group, UUID command) { this.group = group; this.command = command; }
 
+        public boolean current(UUID resident) {
+            return UnitGroups.of(colony).ofResident(resident).filter(current -> current == group).isPresent()
+                && group.commandId().filter(command::equals).isPresent();
+        }
+
         public void release(UUID resident) {
             // A newer group, a new point route on this group, or a book-page deployment owns its own controls.
-            if (UnitGroups.of(colony).ofResident(resident).filter(current -> current == group).isPresent()
-                    && group.commandId().filter(command::equals).isPresent()) {
+            if (current(resident)) {
                 // remove closes only this group's actual handle, whose identity cannot cancel an individual replacement.
                 group.remove(resident);
                 if (group.members().isEmpty()) { UnitGroups.of(colony).dissolve(group); }
@@ -59,7 +66,8 @@ public final class CombatSelectionOwnership {
         }
     }
 
-    private record AttackControl(ResidentCommands.Order order) implements TrackedControl {
+    private record AttackControl(ResidentCommands commands, ResidentCommands.Order order) implements TrackedControl {
+        public boolean current(UUID resident) { return commands.current(resident).filter(current -> current == order).isPresent(); }
         public void release(UUID ignored) { order.close(); }
     }
 
@@ -72,6 +80,7 @@ public final class CombatSelectionOwnership {
         final Map<UUID, Body> bodies = new LinkedHashMap<>();
         final Map<UUID, TrackedControl> controls = new LinkedHashMap<>();
         long until;
+        boolean suspended;
 
         Context(ServerPlayer player) {
             this.player = player;
@@ -123,7 +132,7 @@ public final class CombatSelectionOwnership {
             changed(player.getUUID());
         }
         reconcile(context);
-        renew(context);
+        activate(context);
         return true;
     }
 
@@ -140,7 +149,7 @@ public final class CombatSelectionOwnership {
             changed(player.getUUID());
         }
         reconcile(context);
-        renew(context);
+        activate(context);
         return true;
     }
 
@@ -155,7 +164,7 @@ public final class CombatSelectionOwnership {
             changed(player.getUUID());
         }
         reconcile(context);
-        renew(context);
+        activate(context);
         return true;
     }
 
@@ -164,9 +173,30 @@ public final class CombatSelectionOwnership {
         requireThread();
         prune();
         Context context = contexts.get(player.getUUID());
-        if (context == null || !valid(context)) { return false; }
+        if (context == null || !valid(context) || context.members().isEmpty()) { return false; }
         renew(context);
         return true;
+    }
+
+    /** Leaving interaction retains only current accepted commands and the existing shortcut references. */
+    public boolean suspend(ServerPlayer player) {
+        requireThread();
+        prune();
+        Context context = contexts.get(player.getUUID());
+        if (context == null || !valid(context)) { return false; }
+        suspend(context);
+        return true;
+    }
+
+    private void suspend(Context context) {
+        boolean changedSelection = context.selection.removeIf(id -> {
+            TrackedControl control = context.controls.get(id);
+            return control == null || !control.current(id);
+        });
+        if (!context.suspended || changedSelection) { changed(context.player.getUUID()); }
+        context.suspended = true;
+        // This is still the old selection/shortcut union, not a permanent third mission reference.
+        reconcile(context);
     }
 
     public void clearContext(ServerPlayer player) {
@@ -177,6 +207,7 @@ public final class CombatSelectionOwnership {
     /** Atomically forget the selected residents from every reference before releasing their tracked controls. */
     public boolean releaseSelected(ServerPlayer player, List<UUID> residents) {
         requireThread();
+        if (!authorized(player)) { return false; }
         prune();
         Context context = contexts.get(player.getUUID());
         Set<UUID> selected = new LinkedHashSet<>(residents);
@@ -187,7 +218,7 @@ public final class CombatSelectionOwnership {
         context.groups.forEach(group -> group.removeAll(selected));
         changed(player.getUUID());
         reconcile(context);
-        renew(context);
+        activate(context);
         return true;
     }
 
@@ -245,13 +276,14 @@ public final class CombatSelectionOwnership {
         prune();
         Context context = contexts.get(player.getUUID());
         UUID command = group.commandId().orElseThrow(() -> new IllegalArgumentException("not an active group command"));
-        if (context == null || !valid(context) || group.members().isEmpty()
+        if (context == null || !authorized(player) || !valid(context) || group.members().isEmpty()
                 || group.members().stream().anyMatch(id -> !player.getUUID().equals(owners.get(id))
                     || UnitGroups.of(colony).ofResident(id).filter(current -> current == group).isEmpty())) {
             throw new IllegalArgumentException("RTS group is not controlled by this session");
         }
         TrackedControl control = new GroupControl(group, command);
         group.members().forEach(id -> context.controls.put(id, control));
+        activate(context);
     }
 
     /** Track the exact accepted attack handles; closing an old handle cannot release a later replacement. */
@@ -259,13 +291,14 @@ public final class CombatSelectionOwnership {
         requireThread();
         prune();
         Context context = contexts.get(player.getUUID());
-        if (context == null || !valid(context) || orders.isEmpty()
+        if (context == null || !authorized(player) || !valid(context) || orders.isEmpty()
                 || orders.stream().anyMatch(order -> order.mode() != ResidentCommands.Mode.ATTACK
                     || !player.getUUID().equals(owners.get(order.resident()))
                     || ResidentCommands.of(colony).current(order.resident()).filter(current -> current == order).isEmpty())) {
             throw new IllegalArgumentException("RTS attacks are not controlled by this session");
         }
-        orders.forEach(order -> context.controls.put(order.resident(), new AttackControl(order)));
+        orders.forEach(order -> context.controls.put(order.resident(), new AttackControl(ResidentCommands.of(colony), order)));
+        activate(context);
     }
 
     private boolean claimable(ServerPlayer player, Body body) {
@@ -277,7 +310,7 @@ public final class CombatSelectionOwnership {
         // Mutating selection/shortcut operations recheck current owners even after this tick's cached scan.
         // A keeper who just lost authority cannot block a new claimant until the next simulation tick.
         prune(true);
-        // A player cannot keep controls alive in a previous colony by switching their current book.
+        // Choosing a different colony keeps the previous session's cancellation boundary.
         for (Colony other : Colonies.all(server)) {
             if (!other.id().equals(colony.id())) {
                 other.service(SelectionControlContent.ID, CombatSelectionOwnership.class)
@@ -301,6 +334,11 @@ public final class CombatSelectionOwnership {
     }
 
     private void renew(Context context) { context.until = now() + LEASE_TICKS; }
+    private void activate(Context context) {
+        if (context.suspended) { changed(context.player.getUUID()); }
+        context.suspended = false;
+        renew(context);
+    }
     private long now() { return server.overworld().getGameTime(); }
     private void changed(UUID player) { revisions.merge(player, 1L, Long::sum); }
 
@@ -340,7 +378,8 @@ public final class CombatSelectionOwnership {
 
     private boolean valid(Context context) {
         ServerPlayer player = context.player;
-        return context.until > now() && authorized(player) && player.serverLevel() == context.level
+        return player.getServer() == server && SelectionOrders.continuing(player, colony.id()).isPresent()
+            && player.serverLevel() == context.level
             && WorldSpaces.at(player).realm().equals(context.realm);
     }
 
@@ -361,6 +400,9 @@ public final class CombatSelectionOwnership {
                     clear(player.getUUID());
                     continue;
                 }
+                // The short lease belongs to input. Accepted orders and shortcuts continue while
+                // their actual keeper remains valid; an old heartbeat cannot reactivate selection.
+                if (context.suspended || context.until <= tick) { suspend(context); }
                 for (UUID id : List.copyOf(context.members())) {
                     if (body(player, id).filter(found -> found == context.bodies.get(id)).isEmpty()) { removed(id); }
                 }

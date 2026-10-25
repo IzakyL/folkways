@@ -160,8 +160,8 @@ public final class CombatSelectionOwnershipGameTests {
         Body body = f.resident(2);
         f.ownership.select(f.first, List.of(body.id()));
         f.ownership.bindGroup(f.first, 0);
-        f.first.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
-        helper.assertFalse(f.ownership.owns(f.first, body), "loss of the held book immediately invalidates ownership");
+        Charters.keep(f.colony, Charter.founded("new keeper", f.second.getUUID()));
+        helper.assertFalse(f.ownership.owns(f.first, body), "loss of actual charter authority invalidates ownership");
         f.ownership.select(f.second, List.of(body.id()));
         f.ownership.bindGroup(f.second, 2);
         body.mob().remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
@@ -172,14 +172,11 @@ public final class CombatSelectionOwnershipGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 140)
-    public static void expiredLeaseCannotBeResurrectedByHeartbeat(GameTestHelper helper) {
+    public static void expiredTemporaryInputSelectionCannotBeResurrectedByHeartbeat(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         f.renew = false;
         Body body = f.resident(2);
         f.ownership.select(f.first, List.of(body.id()));
-        f.ownership.bindGroup(f.first, 0);
-        UnitGroups.of(f.colony).commandSelectionPoints(List.of(body), List.of(f.at(8)), -1);
-        f.ownership.trackGroup(f.first, UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow());
         long revision = f.ownership.snapshot(f.first).revision();
         helper.runAfterDelay(CombatSelectionOwnership.LEASE_TICKS + 1, () -> {
             helper.assertFalse(f.ownership.heartbeat(f.first), "a heartbeat cannot resurrect an expired selection union");
@@ -187,11 +184,124 @@ public final class CombatSelectionOwnershipGameTests {
             helper.assertTrue(snapshot.revision() > revision && snapshot.selection().isEmpty()
                 && snapshot.groups().stream().allMatch(List::isEmpty), "expiry publishes a new empty authoritative state");
             helper.assertTrue(ResidentCommands.of(f.colony).current(body.id()).isEmpty()
-                && UnitGroups.of(f.colony).ofResident(body.id()).isEmpty(), "expiry releases the tracked RTS route and its latest leg handle");
+                && UnitGroups.of(f.colony).ofResident(body.id()).isEmpty(), "temporary input never invents a task or survives its input lease");
             f.ownership.select(f.second, List.of(body.id()));
             helper.assertTrue(f.ownership.owns(f.second, body), "expired ownership is immediately claimable by another keeper");
             helper.succeed();
         });
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 180)
+    public static void suspendedCommandWithoutShortcutOrBookContinuesPastItsInputLease(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        f.renew = false;
+        Body body = f.resident(2), temporary = f.resident(4);
+        f.ownership.select(f.first, List.of(body.id(), temporary.id()));
+        helper.assertTrue(SelectionOrders.submit(f.first, f.colony.id(), List.of(body.id()), List.of(f.at(8)), -1),
+            "the real selection command creates and tracks an actual squad without requiring a numeric shortcut");
+        UnitGroup group = UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow();
+        UUID generation = group.commandId().orElseThrow();
+        helper.assertTrue(f.ownership.suspend(f.first), "leaving interaction suspends its existing references");
+        f.first.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+        helper.assertTrue(SelectionOrders.continuing(f.first, f.colony.id()).isPresent()
+                && SelectionOrders.authorized(f.first, f.colony.id()).isEmpty(),
+            "a real keeper retains continuation authority while new input still requires the book");
+        helper.assertFalse(f.ownership.select(f.first, List.of(temporary.id())) || f.ownership.bindGroup(f.first, 0)
+                || f.ownership.recallGroup(f.first, 0) || f.ownership.releaseSelected(f.first, List.of(body.id()))
+                || SelectionOrders.submit(f.first, f.colony.id(), List.of(body.id()), List.of(f.at(10)), -1)
+                || SelectionOrders.attack(f.first, f.colony.id(), List.of(body.id()), UUID.randomUUID())
+                || SelectionOrders.stop(f.first, f.colony.id(), List.of(body.id())),
+            "putting the book away cannot issue new selection, group, release, move, attack or stop input");
+        helper.runAfterDelay(CombatSelectionOwnership.LEASE_TICKS + 30, () -> {
+            helper.assertTrue(UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow() == group
+                    && group.commandId().filter(generation::equals).isPresent()
+                    && ResidentCommands.of(f.colony).current(body.id()).isPresent(),
+                "the same actual squad and accepted command continue without a book, shortcut or heartbeat");
+            var state = f.ownership.snapshot(f.first);
+            helper.assertTrue(state.selection().equals(List.of(body.id())) && state.groups().stream().allMatch(List::isEmpty),
+                "suspension preserves the task's original selection and discards only the uncommanded temporary resident");
+            helper.assertTrue(f.ownership.owns(f.first, body) && !f.ownership.owns(f.first, temporary)
+                    && !f.ownership.canSelect(f.second, body) && f.ownership.canSelect(f.second, temporary),
+                "background tasks retain exclusive ownership while discarded temporary selection is claimable");
+            helper.assertTrue(body.mob().getX() > f.at(2).block(f.level).getX() + 1.5,
+                "the ordinary runner actually keeps moving after interaction was suspended");
+            Charters.keep(f.colony, Charter.founded("new keeper", f.second.getUUID()));
+            f.ownership.select(f.second, List.of(body.id()));
+            helper.assertTrue(!f.ownership.owns(f.first, body)
+                    && ResidentCommands.of(f.colony).current(body.id()).isEmpty(),
+                "real charter loss still cancels the former keeper's accepted task and releases its handle");
+            helper.succeed();
+        });
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 180)
+    public static void inputExpirySuspendsAnAcceptedTaskButReleasesItsTemporarySelection(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        f.renew = false;
+        Body body = f.resident(2), temporary = f.resident(4);
+        f.ownership.select(f.first, List.of(body.id(), temporary.id()));
+        helper.assertTrue(SelectionOrders.submit(f.first, f.colony.id(), List.of(body.id()), List.of(f.at(8)), -1),
+            "one selected resident receives an actual tracked task");
+        UnitGroup group = UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow();
+        UUID generation = group.commandId().orElseThrow();
+        f.first.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+        helper.runAfterDelay(CombatSelectionOwnership.LEASE_TICKS + 10, () -> {
+            helper.assertTrue(f.ownership.snapshot(f.first).selection().equals(List.of(body.id()))
+                    && f.ownership.owns(f.first, body) && !f.ownership.owns(f.first, temporary)
+                    && group.commandId().filter(generation::equals).isPresent(),
+                "expiry performs the same pruning as suspension without creating a permanent mission reference");
+            helper.assertTrue(f.ownership.heartbeat(f.first), "a continuing keeper can acknowledge its background task without a book");
+            helper.assertTrue(f.ownership.snapshot(f.first).selection().equals(List.of(body.id())),
+                "a heartbeat cannot restore the expired temporary selection or reactivate suspended input");
+            helper.succeed();
+        });
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 180)
+    public static void suspendedShortcutWithoutCommandAlsoSurvivesInputExpiryUntilExplicitRelease(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        f.renew = false;
+        Body body = f.resident(2);
+        f.ownership.select(f.first, List.of(body.id()));
+        f.ownership.bindGroup(f.first, 0);
+        f.ownership.suspend(f.first);
+        f.first.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+        helper.runAfterDelay(CombatSelectionOwnership.LEASE_TICKS + 10, () -> {
+            var state = f.ownership.snapshot(f.first);
+            helper.assertTrue(state.selection().isEmpty() && state.groups().get(0).equals(List.of(body.id()))
+                    && f.ownership.owns(f.first, body) && !f.ownership.canSelect(f.second, body),
+                "the pre-existing shortcut reference survives suspension without a task or heartbeat");
+            f.first.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(FolkwaysItems.COLONY_BOOK.get()));
+            helper.assertTrue(f.ownership.recallGroup(f.first, 0)
+                    && f.ownership.releaseSelected(f.first, List.of(body.id())) && !f.ownership.owns(f.first, body),
+                "a fresh explicit release with the book removes all resumed selection and shortcut references");
+            helper.succeed();
+        });
+    }
+
+    @GameTest(template = "empty_large")
+    public static void shrinkingAResumedSquadStillReleasesOnlyTheRemovedMembers(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body a = f.resident(2), b = f.resident(4), c = f.resident(6);
+        List<UUID> abc = List.of(a.id(), b.id(), c.id());
+        f.ownership.select(f.first, abc);
+        helper.assertTrue(SelectionOrders.submit(f.first, f.colony.id(), abc, List.of(f.at(12)), -1), "ABC accepts a tracked task");
+        UnitGroup group = UnitGroups.of(f.colony).ofResident(a.id()).orElseThrow();
+        UUID generation = group.commandId().orElseThrow();
+        f.ownership.suspend(f.first);
+        f.ownership.select(f.first, List.of(a.id(), b.id()));
+        helper.assertTrue(group.members().equals(Set.of(a.id(), b.id())) && group.commandId().filter(generation::equals).isPresent()
+                && !f.ownership.owns(f.first, c) && ResidentCommands.of(f.colony).current(c.id()).isEmpty(),
+            "ABC to AB still releases C instead of retaining an independent mission reference");
+        helper.assertTrue(f.ownership.owns(f.first, a) && f.ownership.owns(f.first, b), "the retained members keep their same actual task");
+        f.ownership.bindGroup(f.first, 0);
+        f.ownership.bindGroup(f.first, 0);
+        helper.assertTrue(f.ownership.snapshot(f.first).groups().get(0).isEmpty()
+                && ResidentCommands.of(f.colony).current(a.id()).isPresent(), "exact-set shortcut toggle still preserves the selection reference");
+        f.ownership.select(f.first, List.of());
+        helper.assertTrue(ResidentCommands.of(f.colony).current(a.id()).isEmpty()
+                && ResidentCommands.of(f.colony).current(b.id()).isEmpty(), "ordinary explicit deselection keeps the original last-reference release rule");
+        helper.succeed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 600)
@@ -248,9 +358,10 @@ public final class CombatSelectionOwnershipGameTests {
         var oldAttacks = commands.attack(List.of(body), enemy, f.first);
         f.ownership.trackAttack(f.first, oldAttacks);
         var replacement = commands.hold(body, f.at(10));
-        f.ownership.clearContext(f.first);
+        f.ownership.suspend(f.first);
         helper.assertTrue(commands.current(body.id()).orElseThrow() == replacement,
-            "closing an old session's tracked attack cannot close a newer independent command");
+            "suspending an old attack handle cannot retain or close a newer independent command");
+        helper.assertFalse(f.ownership.owns(f.first, body), "a replaced exact attack handle cannot keep selection alive during suspension");
         helper.succeed();
     }
 
@@ -278,10 +389,11 @@ public final class CombatSelectionOwnershipGameTests {
         helper.assertValueEqual(reused.pointCommandId().orElseThrow(), generation, "append preserves the authored RTS generation");
         reused.guard(new Deployment(f.at(12), f.at(12), new Vec3(1, 0, 0), new Deployment.Formation(2)));
         var pageReplacement = commands.current(body.id()).orElseThrow();
-        f.ownership.clearContext(f.first);
+        f.ownership.suspend(f.first);
         helper.assertTrue(commands.current(body.id()).orElseThrow() == pageReplacement
             && groups.ofResident(body.id()).orElseThrow() == reused,
-            "a book-page deployment on the same group replaces the RTS generation and survives old-session release");
+            "a book-page deployment on the same group replaces the RTS generation and survives old-session suspension");
+        helper.assertFalse(f.ownership.owns(f.first, body), "a stale RTS generation cannot keep the replacement page command selected");
         helper.succeed();
     }
 

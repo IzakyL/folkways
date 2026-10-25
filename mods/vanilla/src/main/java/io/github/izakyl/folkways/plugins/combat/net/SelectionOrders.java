@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.front.api.ui.Pages;
+import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.plugins.combat.Threats;
 import io.github.izakyl.folkways.plugins.combat.control.CombatSelectionOwnership;
 import io.github.izakyl.folkways.plugins.combat.group.UnitGroup;
@@ -30,6 +31,14 @@ public final class SelectionOrders {
         if (!player.getServer().isSameThread() || player.isSpectator() || !player.isAlive()) { return Optional.empty(); }
         return Pages.colonyOf(player).filter(colony -> colony.id().equals(expected))
             .filter(colony -> Books.ofHeldBook(player, expected).filter(held -> held.id().equals(expected)).isPresent());
+    }
+
+    /** Continuing an accepted task does not require keeping its command book in hand. */
+    public static Optional<Colony> continuing(ServerPlayer player, UUID expected) {
+        if (!player.getServer().isSameThread() || player.isRemoved() || player.isSpectator() || !player.isAlive()
+                || !Books.keeps(player, expected)) { return Optional.empty(); }
+        // Use the player's chosen colony, not an unrelated panel temporarily open on screen.
+        return CurrentColony.of(player).filter(colony -> colony.id().equals(expected));
     }
 
     public static boolean submit(ServerPlayer player, UUID colonyId, List<UUID> residents,
@@ -89,7 +98,7 @@ public final class SelectionOrders {
     /** A reply can only expose the exact squad that is still selected by this player. */
     static Optional<UnitGroup> route(ServerPlayer player, UUID colonyId, List<UUID> residents) {
         if (residents.isEmpty() || residents.size() > CombatPackets.MAX_MEMBERS) { return Optional.empty(); }
-        return authorized(player, colonyId).flatMap(colony -> {
+        return continuing(player, colonyId).flatMap(colony -> {
             Set<UUID> members = new LinkedHashSet<>(residents);
             if (members.stream().anyMatch(id -> body(player, colony, id)
                     .filter(person -> CombatSelectionOwnership.of(colony).selected(player, person)).isEmpty())) {

@@ -31,7 +31,7 @@ public final class CombatPackets {
     public static final int MAX_MEMBERS = 256;
     public static final int MAX_POINTS = 16;
     // Selection leases, shortcut operations and immediate waypoint acknowledgements must match on both sides.
-    private static final String NETWORK_VERSION = "5";
+    private static final String NETWORK_VERSION = "6";
     private record Snapshot(UUID colony, WorldPos at, Set<UUID> residents) { }
     private static volatile Snapshot snapshot;
     private static long requested;
@@ -112,6 +112,7 @@ public final class CombatPackets {
     public static boolean bind(int slot) { return control(CombatControlPacket.Operation.BIND, slot, List.of()); }
     public static boolean recall(int slot) { return control(CombatControlPacket.Operation.RECALL, slot, List.of()); }
     public static boolean heartbeat() { return control(CombatControlPacket.Operation.HEARTBEAT, 0, List.of()); }
+    public static boolean suspendControl() { return control(CombatControlPacket.Operation.SUSPEND, 0, List.of()); }
     public static void releaseControl() { control(CombatControlPacket.Operation.CLEAR, 0, List.of()); }
     private static boolean control(CombatControlPacket.Operation operation, int slot, List<UUID> residents) {
         Snapshot current = snapshot;
@@ -247,7 +248,11 @@ public final class CombatPackets {
     }
 
     private static void control(ServerPlayer player, CombatControlPacket packet) {
-        var colony = SelectionOrders.authorized(player, packet.colonyId());
+        var continuing = SelectionOrders.continuing(player, packet.colonyId());
+        var colony = switch (packet.operation()) {
+            case HEARTBEAT, SUSPEND, CLEAR -> continuing;
+            default -> SelectionOrders.authorized(player, packet.colonyId());
+        };
         boolean accepted = false;
         CombatSelectionOwnership.Snapshot state = new CombatSelectionOwnership.Snapshot(0, List.of(),
             Collections.nCopies(9, List.of()));
@@ -258,12 +263,14 @@ public final class CombatPackets {
                 case BIND -> ownership.bindGroup(player, packet.slot() - 1);
                 case RECALL -> ownership.recallGroup(player, packet.slot() - 1);
                 case HEARTBEAT -> ownership.heartbeat(player);
+                case SUSPEND -> ownership.suspend(player);
                 case CLEAR -> { ownership.clearContext(player); yield true; }
                 case RELEASE -> ownership.releaseSelected(player, packet.residents());
             };
             state = ownership.snapshot(player);
-        } else if (colony.isPresent()) {
-            state = CombatSelectionOwnership.of(colony.get()).snapshot(player);
+        } else if (continuing.isPresent()) {
+            // Reject new input without erasing the keeper's already accepted background task.
+            state = CombatSelectionOwnership.of(continuing.get()).snapshot(player);
         }
         Optional<UnitGroup> group = SelectionOrders.route(player, packet.colonyId(), state.selection());
         PacketDistributor.sendToPlayer(player, new CombatControlReply(packet.request(), packet.colonyId(),

@@ -408,8 +408,9 @@ public final class ResidentCommands {
         if (server.overworld().getGameTime() - order.movingSince >= 600) { return AttackEnd.TIMED_OUT; }
         ServerPlayer commander = server.getPlayerList().getPlayer(order.commander);
         if (commander == null || commander.isSpectator() || !commander.isAlive()
-                || SelectionOrders.authorized(commander, colony.id()).isEmpty()
-                || commander.level() != order.body.mob().level()) { return AttackEnd.AUTHORITY_LOST; }
+                || SelectionOrders.continuing(commander, colony.id()).isEmpty()
+                || commander.level() != order.body.mob().level()
+                || !WorldSpaces.at(commander).sameRealm(order.destination)) { return AttackEnd.AUTHORITY_LOST; }
         ServerLevel level = (ServerLevel) order.body.mob().level();
         if (!(level.getEntity(order.target) instanceof Mob target)) { return AttackEnd.TARGET_LOST; }
         if (!target.isAlive()) { return AttackEnd.TARGET_DEFEATED; }

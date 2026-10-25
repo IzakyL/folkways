@@ -77,4 +77,29 @@ public final class CombatIntentGameTests {
         } finally { buffer.release(); }
         helper.succeed();
     }
+
+    @GameTest(template = "empty")
+    public static void suspendIntentAndItsAuthoritativeRouteSnapshotRoundTripTogether(GameTestHelper helper) {
+        UUID colony = UUID.randomUUID(), resident = UUID.randomUUID(), generation = UUID.randomUUID();
+        CombatControlPacket sent = new CombatControlPacket(7, colony, CombatControlPacket.Operation.SUSPEND, 0, List.of());
+        WorldPos point = WorldPos.of(helper.getLevel(), BlockPos.ZERO);
+        var state = new CombatOrderState(UUID.randomUUID(), generation, "direct", "holding", "none", 1, 0, 0, false, true, 0);
+        CombatControlReply reply = new CombatControlReply(7, colony, point, 3, List.of(resident),
+            java.util.Collections.nCopies(9, List.of()), List.of(point), -1, true, true,
+            CombatControlPacket.Operation.SUSPEND, state);
+        var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
+        try {
+            CombatControlPacket.STREAM_CODEC.encode(buffer, sent);
+            CombatControlReply.STREAM_CODEC.encode(buffer, reply);
+            helper.assertValueEqual(CombatControlPacket.STREAM_CODEC.decode(buffer), sent, "suspension sends no client-authored member union");
+            helper.assertValueEqual(CombatControlReply.STREAM_CODEC.decode(buffer), reply,
+                "the acknowledgement retains the server selection, route, generation and terminal dwell observation");
+            helper.assertValueEqual(buffer.readableBytes(), 0, "both protocol-six messages consume their complete bounded payloads");
+        } finally { buffer.release(); }
+        try {
+            new CombatControlPacket(8, colony, CombatControlPacket.Operation.SUSPEND, 0, List.of(resident));
+            helper.fail("suspension must not acquire identifiers supplied by the client");
+        } catch (IllegalArgumentException expected) { }
+        helper.succeed();
+    }
 }
