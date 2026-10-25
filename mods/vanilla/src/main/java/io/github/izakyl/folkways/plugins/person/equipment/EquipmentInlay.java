@@ -73,6 +73,9 @@ public final class EquipmentInlay implements Inlay {
     private ItemStack dragPreview = ItemStack.EMPTY;
     private double dragDistance;
     private boolean dragging;
+    private com.lowdragmc.lowdraglib2.gui.ui.ModularUI pressedUi;
+    private Object pressedScreen;
+    private boolean windowWasActive;
     private Button manualTab;
     private Button plansTab;
     private Button templatePrevious;
@@ -103,6 +106,9 @@ public final class EquipmentInlay implements Inlay {
         page.addEventListener(UIEvents.MOUSE_MOVE, this::moveDrag, true);
         page.addEventListener(UIEvents.MOUSE_UP, this::endPress, true);
         page.addEventListener(UIEvents.DRAG_END, event -> clearPress(), true);
+        page.addEventListener(UIEvents.TICK, event -> tickPress());
+        page.addEventListener(UIEvents.REMOVED, event -> cancelPress());
+        page.addEventListener(UIEvents.MUI_CHANGED, event -> cancelPress());
         heading = button("open", "open", () -> { expanded = !expanded; refresh(); });
         selection = Rows.text(Component.empty());
         current = Rows.note(Component.empty());
@@ -244,7 +250,7 @@ public final class EquipmentInlay implements Inlay {
                 || entry.getBoolean("remote") || source.equals("player") && !snapshot.getBoolean("near")) {
             return;
         }
-        clearPress();
+        cancelPress();
         pressedCell = new DragPayload(snapshot.getUUID("resident"), snapshot.getUUID("ticket"),
             source, entry.getInt("index"));
         pressedElement = sourceElement;
@@ -253,12 +259,16 @@ public final class EquipmentInlay implements Inlay {
         pressedX = event.x;
         pressedY = event.y;
         dragging = false;
+        pressedUi = page.getModularUI();
+        pressedScreen = Client.screen();
+        windowWasActive = Client.windowActive();
     }
 
     private void moveDrag(UIEvent event) {
         if (pressedCell == null || dragging) { return; }
-        if (!Client.leftDown() || !current(pressedCell) || pending || !snapshot.getBoolean("editable")) {
-            clearPress();
+        if (!gestureCurrent() || pressedUi.getLastMouseDownButton() != 0 || !current(pressedCell)
+                || pending || !snapshot.getBoolean("editable")) {
+            cancelPress();
             return;
         }
         dragDistance = Math.hypot(event.x - pressedX, event.y - pressedY);
@@ -273,7 +283,7 @@ public final class EquipmentInlay implements Inlay {
         if (!dragging) {
             if (event.button == 0 && event.target != null
                     && (event.target == pressedElement || pressedElement.isAncestorOf(event.target))
-                    && current(pressedCell)) {
+                    && gestureCurrent() && current(pressedCell)) {
                 equip(pressedCell.source(), pressedCell.index(), selected);
             }
             clearPress();
@@ -285,8 +295,11 @@ public final class EquipmentInlay implements Inlay {
         if (event.dragHandler == null) { return; }
         Object value = event.dragHandler.getDraggingObject();
         if (value instanceof DragPayload payload && dragging && payload.equals(pressedCell)
-                && current(payload) && !pending
+                && gestureCurrent() && current(payload) && !pending
                 && snapshot.getBoolean("editable") && !slot(targetSlot).getBoolean("busy")) {
+            // ModularUI has already cleared its pressed button before DRAG_PERFORM. Let its normal
+            // release finish the library drag, and detach our preview before send() refreshes widgets.
+            clearPress();
             equip(payload.source(), payload.index(), targetSlot);
         }
         event.stopPropagation();
@@ -304,12 +317,39 @@ public final class EquipmentInlay implements Inlay {
         dragPreview = ItemStack.EMPTY;
         dragDistance = 0;
         dragging = false;
+        pressedUi = null;
+        pressedScreen = null;
+        windowWasActive = false;
+    }
+
+    private boolean gestureCurrent() {
+        return pressedUi != null && page.getModularUI() == pressedUi && Client.screen() == pressedScreen
+            && !(windowWasActive && !Client.windowActive());
+    }
+
+    private void tickPress() {
+        if (pressedCell == null) { return; }
+        if (!gestureCurrent() || pressedUi.getLastMouseDownButton() != 0) {
+            cancelPress();
+        } else {
+            windowWasActive = Client.windowActive();
+        }
+    }
+
+    private void cancelPress() {
+        var ui = pressedUi;
+        var source = pressedElement;
+        clearPress();
+        if (ui != null && source != null && ui.getDragHandler().isDragging()
+                && ui.getDragHandler().dragSource == source) {
+            ui.getDragHandler().stopDrag();
+        }
     }
 
     private void refresh() {
         boolean present = snapshot.contains("resident");
         if (pressedCell != null && (!present || !current(pressedCell) || pending || !expanded || showingPlans)) {
-            clearPress();
+            cancelPress();
         }
         page.setDisplay(present);
         content.setDisplay(expanded && present);
@@ -583,10 +623,8 @@ public final class EquipmentInlay implements Inlay {
 
     // RegisteringUi also runs on dedicated servers. Only received client snapshots may touch ClientLevel.
     private static final class Client {
-        private static boolean leftDown() {
-            return org.lwjgl.glfw.GLFW.glfwGetMouseButton(Minecraft.getInstance().getWindow().getWindow(),
-                org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
-        }
+        private static Object screen() { return Minecraft.getInstance().screen; }
+        private static boolean windowActive() { return Minecraft.getInstance().isWindowActive(); }
         private static Component itemName(String id) {
             var key = net.minecraft.resources.ResourceLocation.tryParse(id);
             return key == null ? Component.literal(id) : new ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.get(key)).getHoverName();
