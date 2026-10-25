@@ -717,6 +717,7 @@
   "folkways.settings.pasture.target": "Head count",
   "folkways.settings.reset_layout": "Reset layout",
   "folkways.settings.tool": "Tools",
+  "folkways.settings.tools.allowed": "Allowed tools",
   "folkways.settler.need.bed": "Free bed",
   "folkways.settler.need.food": "Stored food",
   "folkways.settlers.admit": "Let one in",

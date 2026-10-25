@@ -717,6 +717,7 @@
   "folkways.settings.pasture.target": "目标头数",
   "folkways.settings.reset_layout": "重置布局",
   "folkways.settings.tool": "工具",
+  "folkways.settings.tools.allowed": "允许的工具",
   "folkways.settler.need.bed": "空闲床位",
   "folkways.settler.need.food": "存粮",
   "folkways.settlers.admit": "接纳一人",

@@ -11,9 +11,11 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import io.github.izakyl.folkways.FolkwaysClientConfig;
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
@@ -31,6 +33,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -117,8 +120,16 @@ public final class SettingsPage implements Draw {
         Schema.Setting.Items items = CoreSettings.tool(vocation);
         UIElement editor = opener(player, vocation.id(), items);
         Tokens.name(editor, "folkways.settings.open.tool." + Tokens.of(vocation.id()) + context);
-        return Rows.row().addChildren(Rows.icon(iconOf(items.icon())),
-            Rows.name(Component.translatable("folkways.vocation." + Tokens.of(vocation.id()))), editor);
+        UIElement icon = Rows.icon(emblem(vocation).orElseGet(() -> iconOf(items.icon())));
+        icon.style(style -> style.tooltips(Component.translatable("folkways.vocation." + Tokens.of(vocation.id()))));
+        return Rows.row().addChildren(icon,
+            Rows.name(Component.translatable("folkways.settings.tools.allowed")), editor);
+    }
+
+    // The trade's first default tool stands for it; a trade with none keeps the generic pickaxe.
+    private static Optional<ItemStack> emblem(Vocation vocation) {
+        return Stream.concat(vocation.kit().stream(), Tools.sharedGoods(vocation.id()).stream())
+            .flatMap(spec -> Goods.members(spec).stream()).findFirst().map(ItemStack::new);
     }
 
     static UIElement control(Player player, ResourceLocation scope, Schema.Setting setting) {
