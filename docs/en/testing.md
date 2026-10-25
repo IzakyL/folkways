@@ -85,6 +85,25 @@ in `tests/sable/`. See
 The repository's `.mcp.json` exposes the same harness to MCP-capable assistants;
 the LDLib2 UI adapter lives in `tests/ldlib2/`.
 
+### Optional RTS input
+
+The default profile leaves `folkways_war` unloaded. The two RTS specs explicitly
+use `blockwright.toml#combat`, which installs the optional handler on both sides:
+
+```sh
+npm run test:e2e -- tests/e2e/combat-overhead-suspend.spec.ts tests/e2e/combat-rts-input.spec.ts --workers=1
+```
+
+The suspension spec checks real server acknowledgements, unbound task continuation
+and reopening across a client tracking gap. The input spec uses actual pointer and
+keyboard events for selection, shortcuts, route editing and command buttons; Java
+tasks only arrange the fixture or observe state. Its screenshots need visual review.
+Neither spec establishes large-squad performance or arbitrary terrain reliability.
+
+Keep `combat-camera.spec.ts`, `combat-page.spec.ts` and `weapon-sessions.spec.ts`
+on the default profile when checking Vanilla without War. In that configuration,
+the combat tool's world right-click opens the book page instead of issuing RTS input.
+
 ### JEC search compatibility
 
 ```sh

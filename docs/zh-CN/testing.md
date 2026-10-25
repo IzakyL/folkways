@@ -77,6 +77,22 @@ npm run test:e2e -- tests/e2e/founding-smoke.spec.ts --workers=1
 
 仓库的 `.mcp.json` 向支持 MCP 的助手暴露相同测试框架，LDLib2 界面适配器位于 `tests/ldlib2/`。
 
+### 可选 RTS 输入
+
+默认配置不加载 `folkways_war`。两个 RTS 场景显式使用 `blockwright.toml#combat`，
+在客户端和服务端安装可选输入模块：
+
+```sh
+npm run test:e2e -- tests/e2e/combat-overhead-suspend.spec.ts tests/e2e/combat-rts-input.spec.ts --workers=1
+```
+
+挂起场景检查真实服务端回复、未绑数字组的任务续行，以及客户端追踪缺失后重开界面。
+输入场景以实际鼠标和键盘事件验证选择、快捷组、路线编辑与命令按钮；Java 任务仅布置初始场景或读取状态。
+路线截图需要另外看图验收。两个场景均不能证明大规模性能或任意地形可靠性。
+
+验证未安装 War 的 Vanilla 时，`combat-camera.spec.ts`、`combat-page.spec.ts` 和
+`weapon-sessions.spec.ts` 保持默认配置；此时战斗工具的世界右键打开书页，不下达 RTS 输入。
+
 ### JEC 搜索兼容
 
 ```sh
