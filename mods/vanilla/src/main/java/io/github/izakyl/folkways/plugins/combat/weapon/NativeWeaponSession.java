@@ -242,7 +242,19 @@ final class NativeWeaponSession implements WeaponSession {
         double x = foe.getX() - body.getX();
         double z = foe.getZ() - body.getZ();
         double horizontal = Math.sqrt(x * x + z * z);
-        double y = foe.getY(1.0 / 3) - body.getEyeY() + horizontal * 0.2;
+        // BowItem uses rotation and a full-draw speed of three, unlike the slower skeleton shot.
+        // Solve the native arrow's discrete .99 drag/.05 gravity arc instead of overshooting with .2*h.
+        double speed = Math.max(.1, BowItem.getPowerForTime(elapsed) * 3);
+        double height = foe.getY(.5) - (body.getEyeY() - .1);
+        double time = horizontal / speed;
+        double y = height;
+        for (int iteration = 0; iteration < 4 && horizontal > .01; iteration++) {
+            double dragSum = (1 - Math.pow(.99, time)) / .01;
+            y = height + 5 * (time - dragSum);
+            double forward = speed * Math.cos(Math.atan2(y, horizontal));
+            double fraction = Math.min(.999, horizontal * .01 / Math.max(.01, forward));
+            time = Math.min(40, Math.log1p(-fraction) / Math.log(.99));
+        }
         body.setYRot((float) (Mth.atan2(z, x) * Mth.RAD_TO_DEG) - 90);
         body.setXRot((float) -(Mth.atan2(y, horizontal) * Mth.RAD_TO_DEG));
         body.setYHeadRot(body.getYRot());

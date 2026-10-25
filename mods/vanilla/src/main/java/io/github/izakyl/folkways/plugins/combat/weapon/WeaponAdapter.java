@@ -1,6 +1,10 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.terms.Goods;
+import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.Optional;
 import net.minecraft.world.item.ItemStack;
 
@@ -17,6 +21,18 @@ public interface WeaponAdapter {
 
     /** An optional native animation bridge may also execute this body's permitted unarmed attacks. */
     default boolean acceptsBarehanded(Worker worker) { return false; }
+
+    /** Optional ammunition demand, independent of readiness: an empty weapon still needs real stock. */
+    default Optional<Ammunition> ammunition(ItemStack actualWeapon, int requestedReserve) { return Optional.empty(); }
+
+    /** Stock is a coarse query; compatible checks the actual components. Loaded counts paid physical units. */
+    record Ammunition(ItemSpec stock, Predicate<ItemStack> compatible, int target, int loaded) {
+        public Ammunition {
+            Objects.requireNonNull(stock); Objects.requireNonNull(compatible);
+            if (target < 1 || target > 4096 || loaded < 0) throw new IllegalArgumentException("invalid ammunition accounting");
+        }
+        public boolean accepts(ItemStack actual) { return Goods.matches(actual, stock) && compatible.test(actual); }
+    }
 
     Optional<WeaponSession> open(Worker worker);
 

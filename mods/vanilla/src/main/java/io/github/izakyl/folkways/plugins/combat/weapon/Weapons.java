@@ -131,7 +131,54 @@ public final class Weapons {
         return Optional.empty();
     }
 
+    /** The weapon is the actual physical stack; consumers must not mutate it while inspecting its demand. */
+    public record AmmunitionSupply(ItemStack weapon, WeaponAdapter.Ammunition demand) { }
+
+    public static Optional<WeaponAdapter.Ammunition> ammunition(ItemStack actualWeapon, int reserve) {
+        return registered.stream().map(Registered::adapter).filter(adapter -> adapter.accepts(actualWeapon)).findFirst()
+            .flatMap(adapter -> adapter.ammunition(actualWeapon, reserve));
+    }
+
+    /** Finds the actual selected weapon even when its adapter's usable() currently rejects an empty chamber. */
+    public static Optional<AmmunitionSupply> ammunition(ResidentEntity resident) {
+        ItemStack actual = resident.hasWeaponSession() ? resident.getMainHandItem() : ResidentEquipment.assigned(resident);
+        if (!actual.isEmpty()) {
+            ItemStack selected = actual;
+            return ammunition(actual, ResidentEquipment.ammoTarget(resident)).map(demand -> new AmmunitionSupply(selected, demand));
+        }
+        if (ResidentEquipment.mainLocked(resident)) return Optional.empty();
+        Optional<PatrolSupplies.Loadout> preference = resident.level() instanceof ServerLevel level ? resident.colonyId()
+            .flatMap(id -> Colonies.of(level.getServer(), id)).flatMap(PatrolContent::suppliesOf)
+            .flatMap(supplies -> supplies.preference(resident.id())) : Optional.empty();
+        if (preference.isPresent()) {
+            for (int cell = 0; cell < resident.pack().getContainerSize(); cell++) {
+                ItemStack stack = resident.pack().getItem(cell);
+                if (ResidentEquipment.weaponCandidate(resident, stack) && PatrolSupplies.prefers(preference.get(), stack)) {
+                    return ammunition(stack, ResidentEquipment.ammoTarget(resident)).map(demand -> new AmmunitionSupply(stack, demand));
+                }
+            }
+        }
+        for (int cell = 0; cell < resident.pack().getContainerSize(); cell++) {
+            ItemStack stack = resident.pack().getItem(cell);
+            if (ResidentEquipment.weaponCandidate(resident, stack)
+                    && registered.stream().anyMatch(entry -> entry.adapter().accepts(stack))) {
+                return ammunition(stack, ResidentEquipment.ammoTarget(resident)).map(demand -> new AmmunitionSupply(stack, demand));
+            }
+        }
+        return Optional.empty();
+    }
+
     private record NativeAdapter(NativeWeaponSession.Kind kind, double range) implements WeaponAdapter {
+        @Override
+        public Optional<Ammunition> ammunition(ItemStack actualWeapon, int reserve) {
+            if (!ranged() || !accepts(actualWeapon)) return Optional.empty();
+            ProjectileWeaponItem weapon = (ProjectileWeaponItem) actualWeapon.getItem();
+            var compatible = weapon.getAllSupportedProjectiles(actualWeapon);
+            var loaded = actualWeapon.get(net.minecraft.core.component.DataComponents.CHARGED_PROJECTILES);
+            int paid = loaded != null && loaded.getItems().stream().anyMatch(compatible) ? 1 : 0;
+            return Optional.of(new Ammunition(io.github.izakyl.folkways.core.api.terms.ItemSpec.of(net.minecraft.tags.ItemTags.ARROWS),
+                compatible, reserve, paid));
+        }
         @Override
         public boolean supportsAssignment() { return true; }
 
