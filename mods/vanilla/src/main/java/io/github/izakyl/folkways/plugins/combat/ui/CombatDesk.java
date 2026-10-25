@@ -44,7 +44,7 @@ public final class CombatDesk {
         final Set<UUID> picked = new LinkedHashSet<>();
         final List<Point> points = new ArrayList<>();
         UUID group;
-        Component message = Component.translatable("folkways.combat.help");
+        Component message = Component.empty();
     }
     private final Colony colony;
     private final Map<UUID, Draft> drafts = new HashMap<>();

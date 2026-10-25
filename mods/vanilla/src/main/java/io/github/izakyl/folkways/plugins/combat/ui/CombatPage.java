@@ -110,7 +110,7 @@ public final class CombatPage implements Draw {
         for (String weapon : List.of("none", "melee", "bow", "crossbow")) {
             weapons.addChildren(defaultButton(player, "weapon_" + weapon));
         }
-        UIElement ammunition = Rows.strip().addChildren(Rows.text(Component.translatable("folkways.equipment.defaults.ammo")));
+        UIElement ammunition = Rows.strip().addChildren(Rows.value(Component.translatable("folkways.equipment.defaults.ammo")));
         for (int amount : List.of(8, 16, 32)) {
             ammunition.addChildren(defaultButton(player, "ammo_" + amount));
         }
@@ -208,7 +208,9 @@ public final class CombatPage implements Draw {
         fillDefaults(tag.getCompound("defaults"));
         summary.setText(Pages.readText(player.registryAccess(), tag.get("summary")));
         points.setText(Pages.readText(player.registryAccess(), tag.get("points")));
-        message.setText(Pages.readText(player.registryAccess(), tag.get("message")));
+        Component feedback = Pages.readText(player.registryAccess(), tag.get("message"));
+        message.setText(feedback);
+        message.setDisplay(!feedback.getString().isBlank());
         preference.setText(Pages.readText(player.registryAccess(), tag.get("loadout")));
         selection.setText(Component.translatable("folkways.combat.selection", tag.getInt("selected")));
         locations.setText(Component.literal(tag.getString("locations")));
