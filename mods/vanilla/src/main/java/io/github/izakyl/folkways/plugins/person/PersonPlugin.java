@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.front.api.ui.RegisteringUi;
 import io.github.izakyl.folkways.library.Shelves;
 import io.github.izakyl.folkways.plugins.person.fear.FearContent;
 import io.github.izakyl.folkways.plugins.person.equipment.EquipmentInlay;
+import io.github.izakyl.folkways.plugins.person.equipment.EquipmentPlans;
 import io.github.izakyl.folkways.plugins.person.equipment.ResidentEquipment;
 import io.github.izakyl.folkways.plugins.person.living.Housing;
 import io.github.izakyl.folkways.plugins.person.living.LivingContent;
@@ -46,6 +47,7 @@ public final class PersonPlugin {
             PersonBody.declare(event);
             LivingContent.declare(event);
             FearContent.declare(event);
+            EquipmentPlans.declare(event);
         });
         modBus.addListener(Relating.class, PersonBody::relate);
         modBus.addListener(Registering.class, event -> {

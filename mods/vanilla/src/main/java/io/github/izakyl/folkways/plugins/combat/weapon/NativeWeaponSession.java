@@ -29,7 +29,9 @@ final class NativeWeaponSession implements WeaponSession {
     private final boolean barehanded;
     private State state = State.READY;
     private LivingEntity target;
+    private LivingEntity defendedTarget;
     private int elapsed;
+    private int meleeDuration = 10;
     private long lastTick = Long.MIN_VALUE;
     private LivingEntity explicitTarget;
     private java.util.function.BooleanSupplier explicitPermission;
@@ -68,8 +70,13 @@ final class NativeWeaponSession implements WeaponSession {
         if (state != State.READY || !valid() || !permitted(foe)) {
             return false;
         }
+        if (kind != Kind.MELEE && resident != null) ResidentShields.lower(resident);
+        if (kind != Kind.MELEE && body.isUsingItem()) return false;
         target = foe;
+        defendedTarget = null;
         elapsed = 0;
+        // Snapshot the cycle: gaining, breaking or disabling a shield cannot move a pending hit frame.
+        meleeDuration = 10;
         if (kind == Kind.CROSSBOW && !CrossbowItem.isCharged(weapon())) {
             if (!beginReload()) {
                 target = null;
@@ -83,6 +90,9 @@ final class NativeWeaponSession implements WeaponSession {
             state = State.FIRING;
             if (kind == Kind.BOW) {
                 body.startUsingItem(InteractionHand.MAIN_HAND);
+                if (!mainHandUse()) { finish(); return false; }
+            } else if (kind == Kind.MELEE && resident != null) {
+                if (ResidentShields.guard(resident, target)) meleeDuration = 20;
             }
         }
         return true;
@@ -102,9 +112,12 @@ final class NativeWeaponSession implements WeaponSession {
         if (body.getProjectile(weapon()).isEmpty()) {
             return false;
         }
+        if (resident != null) ResidentShields.lower(resident);
+        if (body.isUsingItem()) return false;
         elapsed = 0;
         state = State.RELOADING;
         body.startUsingItem(InteractionHand.MAIN_HAND);
+        if (!mainHandUse()) { finish(); return false; }
         return true;
     }
 
@@ -126,12 +139,25 @@ final class NativeWeaponSession implements WeaponSession {
             return;
         }
         if (state != State.FIRING && state != State.RELOADING) {
+            if (state == State.READY && resident != null && defendedTarget != null) {
+                if (permitted(defendedTarget)) ResidentShields.guard(resident, defendedTarget);
+                else { ResidentShields.lower(resident); defendedTarget = null; }
+            }
+            return;
+        }
+        if ((state == State.RELOADING || kind == Kind.BOW) && !mainHandUse()) {
+            stop();
             return;
         }
         if (target != null) {
             body.getLookControl().setLookAt(target);
         }
         elapsed++;
+        if (kind == Kind.MELEE && resident != null) {
+            // Five final ticks leave the shield down for the physical swing and actual damage frame.
+            if (meleeDuration == 20 && elapsed < meleeDuration - 5) ResidentShields.guard(resident, target);
+            else ResidentShields.lower(resident);
+        }
         if (state == State.RELOADING) {
             int charge = CrossbowItem.getChargeDuration(weapon(), body);
             if (elapsed < charge) {
@@ -150,7 +176,7 @@ final class NativeWeaponSession implements WeaponSession {
             return;
         }
         int duration = switch (kind) {
-            case MELEE -> 10;
+            case MELEE -> meleeDuration;
             case BOW -> BowItem.MAX_DRAW_DURATION;
             case CROSSBOW -> 1;
         };
@@ -195,11 +221,21 @@ final class NativeWeaponSession implements WeaponSession {
     }
 
     private void finish() {
+        LivingEntity previous = target;
         target = null;
         elapsed = 0;
         body.stopUsingItem();
         // Native durability breakage can close the hand lease during shoot(). Keep terminal states terminal.
-        if (state != State.CLOSED && state != State.STOPPING) { state = State.READY; }
+        if (state != State.CLOSED && state != State.STOPPING) {
+            state = State.READY;
+            if (resident != null && previous != null && permitted(previous)
+                    && ResidentShields.guard(resident, previous)) defendedTarget = previous;
+        }
+    }
+
+    private boolean mainHandUse() {
+        return body.isUsingItem() && body.getUsedItemHand() == InteractionHand.MAIN_HAND
+            && body.getUseItem() == weapon();
     }
 
     private void aim(LivingEntity foe) {
@@ -241,6 +277,7 @@ final class NativeWeaponSession implements WeaponSession {
         explicitTarget = null;
         explicitPermission = null;
         target = null;
+        defendedTarget = null;
         elapsed = 0;
         // stopUsingItem clears use state; releaseUsingItem would discharge a fully drawn bow.
         body.stopUsingItem();

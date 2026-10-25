@@ -100,6 +100,9 @@ public final class ResidentEquipment {
         Feedback feedback = RESULTS.get(actor);
         data.putString("result", editable(actor, resident) ? feedback == null ? "" : feedback.key() : key("forbidden"));
         if (feedback != null && editable(actor, resident)) data.putIntArray("resultArgs", feedback.arguments());
+        // Display-only defense timers do not invalidate inventory tickets on every cooldown tick.
+        data.putBoolean("shieldGuard", resident.isBlocking());
+        data.putInt("shieldCooldown", resident.shieldCooldownTicks());
         return data;
     }
 
@@ -116,6 +119,10 @@ public final class ResidentEquipment {
             .findFirst().orElse(null);
         if (action.getString("kind").equals("fill")) {
             RESULTS.put(actor, fill(actor, resident));
+            return;
+        }
+        if (EquipmentPlans.handles(action.getString("kind"))) {
+            report(actor, "plan_" + EquipmentPlans.of(colony(actor, resident).orElseThrow()).act(actor, resident, action));
             return;
         }
         String result = switch (action.getString("kind")) {
@@ -161,6 +168,7 @@ public final class ResidentEquipment {
 
     private static CompoundTag snapshot(ServerPlayer actor, ResidentEntity resident) {
         CompoundTag data = new CompoundTag();
+        colony(actor, resident).ifPresent(colony -> data.put("plans", EquipmentPlans.of(colony).snapshot(actor, resident)));
         data.putUUID("resident", resident.id());
         data.putBoolean("near", nearby(actor, resident));
         data.putBoolean("busy", busy(resident));
@@ -275,7 +283,7 @@ public final class ResidentEquipment {
         return "ok";
     }
 
-    private static boolean accepts(ResidentEntity resident, EquipmentSlot slot, ItemStack stack) {
+    static boolean accepts(ResidentEntity resident, EquipmentSlot slot, ItemStack stack) {
         if (slot == EquipmentSlot.MAINHAND) return Weapons.accepts(stack);
         if (slot == EquipmentSlot.OFFHAND) return true;
         return resident.getEquipmentSlotForItem(stack) == slot;
@@ -343,7 +351,7 @@ public final class ResidentEquipment {
         return new Feedback(key(ambiguous > 0 ? "ambiguous" : changed > 0 ? "ok" : "no_change"), new int[0]);
     }
 
-    private static String target(ResidentEntity resident, int value) {
+    static String target(ResidentEntity resident, int value) {
         if (value != 8 && value != 16 && value != 32) return "invalid";
         CompoundTag settings = resident.getPersistentData().getCompound(SETTINGS);
         settings.putInt("ammoTarget", value); resident.getPersistentData().put(SETTINGS, settings);
@@ -380,7 +388,7 @@ public final class ResidentEquipment {
         return copy;
     }
 
-    private static boolean roomForReturn(ResidentEntity resident, Container pack) {
+    static boolean roomForReturn(ResidentEntity resident, Container pack) {
         return !resident.hasWeaponSession() || Containers.insert(copy(pack, pack.getContainerSize()),
             resident.getMainHandItem().copy()).isEmpty();
     }
@@ -388,6 +396,33 @@ public final class ResidentEquipment {
     private static void write(Container into, Container from) {
         for (int cell = 0; cell < from.getContainerSize(); cell++) into.setItem(cell, from.getItem(cell));
         into.setChanged();
+    }
+
+    /** Installs one real staged item. The previous item remains physical protected spare stock in the pack. */
+    static String automatic(ResidentEntity resident, EquipmentSlot slot, ItemStack incoming) {
+        if (Equipment.locked(resident, slot)) return "locked";
+        if (slot == EquipmentSlot.MAINHAND && busy(resident)) return "busy";
+        if (!accepts(resident, slot, incoming)) return "invalid";
+        ItemStack original = slot == EquipmentSlot.MAINHAND ? assigned(resident) : resident.getItemBySlot(slot);
+        if (TaskTools.holds(resident.id(), original) || PersonalItems.marked(original)
+                && !PersonalItems.belongsTo(resident, original)) return "busy";
+        SimpleContainer pack = copy(resident.pack(), resident.pack().getContainerSize());
+        int mainCell = assignedCell(resident);
+        if (slot == EquipmentSlot.MAINHAND && mainCell >= 0) pack.setItem(mainCell, ItemStack.EMPTY);
+        if (!original.isEmpty()) {
+            ItemStack spare = original.copy(); PersonalItems.mark(resident, spare, "spare");
+            if (!Containers.insert(pack, spare).isEmpty()) return "no_room";
+        }
+        ItemStack actual = incoming.copyWithCount(1); PersonalItems.mark(resident, actual, slot.getName());
+        if (slot == EquipmentSlot.MAINHAND && !Containers.insert(pack, actual).isEmpty()) return "no_room";
+        if (!roomForReturn(resident, pack)) return "no_room";
+        SimpleContainer before = copy(resident.pack(), resident.pack().getContainerSize());
+        write(resident.pack(), pack);
+        if (slot != EquipmentSlot.MAINHAND && !wear(resident, slot, original, actual)) {
+            write(resident.pack(), before); return "invalid";
+        }
+        Equipment.manual(resident, slot);
+        return "ok";
     }
 
     private static String key(String result) { return "folkways.equipment.result." + result; }

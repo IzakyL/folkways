@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.plugins.person.equipment.EquipmentPlans;
 import io.github.izakyl.folkways.plugins.person.fear.FearContent;
 import io.github.izakyl.folkways.plugins.combat.Threats;
 import io.github.izakyl.folkways.plugins.combat.net.SelectionOrders;
@@ -257,6 +258,8 @@ public final class ResidentCommands {
         // A replacement has its own urge identity: it safely interrupts even a trip already in progress.
         ResourceLocation intent = ResourceLocation.fromNamespaceAndPath("folkways", "command/"
             + (order.mode == Mode.ATTACK ? order.step : order.id));
+        // Keep the player's labour reservation while the same runner performs explicit finite resupply.
+        if (EquipmentPlans.lendsRunner(colony, who.resident().id())) { return List.of(Urge.reserve(intent)); }
         double weight = order.mode == Mode.GUARD ? Urge.DIRE - .5
             : Urge.DIRE + (order.mode == Mode.RETREAT ? 2 : 1);
         if (order.yieldingToDanger()) { weight = Math.min(weight, Urge.DIRE - .5); }
@@ -326,6 +329,8 @@ public final class ResidentCommands {
     }
 
     void ended(Order order, Ending how) {
+        if (active.get(order.resident()) == order && how instanceof Ending.Dropped
+                && EquipmentPlans.lendsRunner(colony, order.resident())) { return; }
         if (how instanceof Ending.Failed failed && active.remove(order.resident(), order)) {
             order.failure = failed.why();
             if (order.mode == Mode.ATTACK) {
@@ -367,6 +372,9 @@ public final class ResidentCommands {
                     order.approached = at;
                     order.retargetAt = now + 10;
                 }
+            } else if (EquipmentPlans.lendsRunner(colony, order.resident())) {
+                // Resupply borrows a stable order; its travel is not failed command travel time.
+                order.movingSince++;
             } else if ((order.mode == Mode.GUARD || order.defensiveOnly())
                     && (order.engaged() || order.yielded || order.yieldingToDanger())
                     && order.status == Status.MOVING) {

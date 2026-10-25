@@ -20,6 +20,7 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.person.equipment.ResidentEquipment;
+import io.github.izakyl.folkways.plugins.person.equipment.EquipmentPlans;
 import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -176,6 +177,7 @@ public final class PatrolSupplies {
 
     public List<Urge> urges(Worker who, Optional<ResidentCommands.Order> order, long duty, long until) {
         if (!(who.body() instanceof ResidentEntity body) || !(body.level() instanceof ServerLevel level)) { return List.of(); }
+        if (EquipmentPlans.manages(colony, body.id())) { pending.remove(body.id()); return List.of(); }
         boolean authorized = order.map(current -> current.mode() == ResidentCommands.Mode.GUARD).orElse(level.getGameTime() <= until);
         if (!authorized) {
             duties.remove(body.id());
@@ -258,7 +260,8 @@ public final class PatrolSupplies {
     }
 
     boolean active(PatrolSupplyNode request) {
-        return pending.get(request.authority().body().id()) == request && valid(request.authority())
+        return !EquipmentPlans.manages(colony, request.authority().body().id())
+            && pending.get(request.authority().body().id()) == request && valid(request.authority())
             && request.demand().equals(wanted(request.authority().body()));
     }
 

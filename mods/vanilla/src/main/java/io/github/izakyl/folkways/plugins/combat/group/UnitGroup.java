@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.plugins.person.equipment.EquipmentPlans;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -452,6 +453,18 @@ public final class UnitGroup {
             }
         }
         bodies = loaded();
+        if (equipmentLent(bodies)) {
+            // A finite, valid refill borrows the same runner and keeps its original order.
+            // Do not turn the deliberate trip away from a stable slot into a blocked route member.
+            assembledSince = Long.MIN_VALUE;
+            if (points != null) {
+                pointsCombatPaused = true;
+                resetPointTracking();
+                long now = owner.server.overworld().getGameTime();
+                if (pointRetryAt > now) { pointRetryAt++; }
+            }
+            return;
+        }
         if (attacking) { tickAttack(bodies); return; }
         if (regrouping) { tickRegroup(bodies); return; }
         Set<UUID> present = new LinkedHashSet<>();
@@ -509,6 +522,15 @@ public final class UnitGroup {
                 }
             }
         }
+    }
+
+    private boolean equipmentLent(List<Body> bodies) {
+        return bodies.stream().anyMatch(body -> {
+            ResidentCommands.Order order = orders.get(body.id());
+            return order != null && order.boundTo(body)
+                && owner.commands.current(body.id()).orElse(null) == order
+                && EquipmentPlans.lendsRunner(owner.colony, body.id());
+        });
     }
 
     private void tickPoints(List<Body> bodies, Set<UUID> present) {

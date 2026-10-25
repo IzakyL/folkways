@@ -6,6 +6,7 @@ import com.lowdragmc.lowdraglib2.gui.texture.ItemStackTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import dev.vfyjxf.taffy.style.FlexWrap;
 import io.github.izakyl.folkways.front.api.ui.Inlay;
 import io.github.izakyl.folkways.front.api.ui.Nook;
@@ -54,6 +55,30 @@ public final class EquipmentInlay implements Inlay {
     private Label ammo;
     private Label status;
     private Label feedback;
+    private UIElement manual;
+    private UIElement plansPage;
+    private boolean showingPlans;
+    private String template = "melee_guard";
+    private String scope = "self";
+    private Button manualTab;
+    private Button plansTab;
+    private Button templatePrevious;
+    private Button templateNext;
+    private Label templateName;
+    private Label templateContents;
+    private Label planGoal;
+    private Label planStatus;
+    private Label planResults;
+    private Label shield;
+    private TextField templateInput;
+    private Button templateSave;
+    private Button planPreview;
+    private Button planApply;
+    private Button planRefill;
+    private Button planCancel;
+    private final List<Button> scopes = new ArrayList<>();
+    private final List<Label> previewRows = new ArrayList<>();
+    private UIElement previewList;
 
     @Override
     public UIElement build(Nook nook) {
@@ -102,10 +127,19 @@ public final class EquipmentInlay implements Inlay {
         playerGrid = grid();
         Tokens.name(packGrid, "folkways.equipment.resident_pack");
         Tokens.name(playerGrid, "folkways.equipment.player_pack");
-        content = Rows.page().addChildren(Rows.note(word("hint")), equipment, selection,
+        manual = Rows.page().addChildren(Rows.note(word("hint")), equipment, selection,
             Rows.strip().addChildren(lock, unequip), fill, current, ammo,
-            choices, ammoFill, status, feedback, Rows.heading(word("resident_pack")), packGrid,
+            choices, ammoFill, Rows.heading(word("resident_pack")), packGrid,
             Rows.heading(word("player_pack")), Rows.note(word("player_near")), playerGrid);
+        manualTab = button("tab.manual", "plan.manual", () -> { showingPlans = false; refresh(); });
+        plansTab = button("tab.plans", "plan.open", () -> { showingPlans = true; refresh(); });
+        manualTab.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
+        plansTab.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
+        plansPage = buildPlans();
+        shield = Rows.note(Component.empty());
+        Tokens.name(shield, "folkways.equipment.shield");
+        content = Rows.page().addChildren(Rows.strip().addChildren(manualTab, plansTab), status, feedback,
+            shield, manual, plansPage);
         page.addChildren(heading, content);
 
         var requests = DataBindingBuilder.tagC2S(tag -> {
@@ -197,8 +231,164 @@ public final class EquipmentInlay implements Inlay {
         feedback.setText(result.isEmpty() ? Component.empty() : Component.translatable(result,
             java.util.Arrays.stream(snapshot.getIntArray("resultArgs")).boxed().toArray()));
         feedback.setDisplay(!result.isEmpty());
+        manual.setDisplay(!showingPlans);
+        plansPage.setDisplay(showingPlans);
+        manualTab.setText(word("plan.manual").copy().withColor(!showingPlans ? 0x226544 : Rows.INK));
+        plansTab.setText(word("plan.open").copy().withColor(showingPlans ? 0x226544 : Rows.INK));
+        int cooldown = snapshot.getInt("shieldCooldown");
+        shield.setText(word(cooldown > 0 ? "shield.cooldown" : snapshot.getBoolean("shieldGuard") ? "shield.guarding" : "shield.ready",
+            (cooldown + 19) / 20));
+        shield.setDisplay(stack(slot("offhand").getCompound("stack")).canPerformAction(
+            net.neoforged.neoforge.common.ItemAbilities.SHIELD_BLOCK));
+        refreshPlans();
         refreshCells(packGrid, pack, snapshot.getList("pack", Tag.TAG_COMPOUND), "resident");
         refreshCells(playerGrid, player, snapshot.getList("player", Tag.TAG_COMPOUND), "player");
+    }
+
+    private UIElement buildPlans() {
+        templatePrevious = button("plan.previous", "previous", () -> cycleTemplate(-1));
+        templateNext = button("plan.next", "next", () -> cycleTemplate(1));
+        templatePrevious.layout(layout -> layout.width(28));
+        templateNext.layout(layout -> layout.width(28));
+        templatePrevious.setText(Component.literal("‹"));
+        templateNext.setText(Component.literal("›"));
+        templatePrevious.style(style -> style.tooltips(word("plan.previous")));
+        templateNext.style(style -> style.tooltips(word("plan.next")));
+        templateName = Rows.name(Component.empty());
+        templateContents = Rows.note(Component.empty());
+        planGoal = Rows.text(Component.empty());
+        planStatus = Rows.note(Component.empty());
+        Tokens.name(templateName, "folkways.equipment.plan.template");
+        Tokens.name(planStatus, "folkways.equipment.plan.status");
+        UIElement recipients = grid();
+        for (String name : List.of("self", "selection", "group")) {
+            Button choice = button("plan.scope." + name, "plan.scope." + name, () -> { scope = name; refresh(); });
+            choice.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
+            scopes.add(choice);
+            recipients.addChildren(choice);
+        }
+        planPreview = button("plan.preview", "plan.preview", () -> send(planAction("template_preview")));
+        planApply = button("plan.apply", "plan.apply", () -> send(planAction("template_apply")));
+        planRefill = button("plan.refill", "plan.refill", () -> send(planAction("refill")));
+        planRefill.style(style -> style.tooltips(word("plan.refill_conditions")));
+        planCancel = button("plan.cancel", "plan.cancel", () -> send(planAction("refill_cancel")));
+        templateInput = new TextField();
+        templateInput.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0));
+        templateInput.setTextRegexValidator(".{0,48}");
+        templateInput.textFieldStyle(style -> style.placeholder(word("plan.name")));
+        templateInput.setTextResponder(ignored -> refresh());
+        Tokens.name(templateInput, "folkways.equipment.plan.name");
+        templateSave = button("plan.save", "plan.save", () -> {
+            CompoundTag action = action("template_save");
+            action.putString("name", templateInput.getValue());
+            send(action);
+        });
+        previewList = Rows.page();
+        planResults = Rows.note(word("plan.results"));
+        Tokens.name(previewList, "folkways.equipment.plan.results");
+        var results = Rows.box();
+        results.layout(layout -> layout.height(110).flexShrink(0));
+        results.addScrollViewChild(previewList);
+        return Rows.page().addChildren(Rows.note(word("plan.hint")),
+            Rows.strip().addChildren(templatePrevious, templateName, templateNext), templateContents,
+            Rows.strip().addChildren(templateInput, templateSave), recipients,
+            Rows.strip().addChildren(planPreview, planApply), planGoal, planStatus,
+            Rows.strip().addChildren(planRefill, planCancel), Rows.note(word("plan.refill_hint")), planResults, results);
+    }
+
+    private CompoundTag planAction(String kind) {
+        CompoundTag action = action(kind);
+        action.putString("template", template);
+        action.putString("scope", scope);
+        return action;
+    }
+
+    private void cycleTemplate(int step) {
+        ListTag choices = snapshot.getCompound("plans").getList("templates", Tag.TAG_COMPOUND);
+        if (choices.isEmpty()) { return; }
+        int current = 0;
+        for (int index = 0; index < choices.size(); index++) {
+            if (choices.getCompound(index).getString("id").equals(template)) { current = index; break; }
+        }
+        template = choices.getCompound(Math.floorMod(current + step, choices.size())).getString("id");
+        refresh();
+    }
+
+    private static Component templateName(CompoundTag entry) {
+        if (entry.isEmpty()) { return word("plan.status.none"); }
+        return entry.getBoolean("builtin") ? word("plan.template." + entry.getString("id")) : Component.literal(entry.getString("name"));
+    }
+
+    private void refreshPlans() {
+        CompoundTag plans = snapshot.getCompound("plans");
+        ListTag choices = plans.getList("templates", Tag.TAG_COMPOUND);
+        CompoundTag chosen = new CompoundTag();
+        for (int index = 0; index < choices.size(); index++) {
+            if (choices.getCompound(index).getString("id").equals(template)) { chosen = choices.getCompound(index); break; }
+        }
+        if (chosen.isEmpty() && !choices.isEmpty()) { chosen = choices.getCompound(0); template = chosen.getString("id"); }
+        templateName.setText(templateName(chosen));
+        templatePrevious.setActive(choices.size() > 1);
+        templateNext.setActive(choices.size() > 1);
+        var contents = Component.empty();
+        CompoundTag targets = chosen.getCompound("targets");
+        for (String slot : SLOTS) {
+            if (!targets.contains(slot)) { continue; }
+            if (!contents.getString().isEmpty()) { contents.append(" · "); }
+            contents.append(word("plan.target", word("slot." + slot), Client.itemName(targets.getString(slot))));
+        }
+        if (!chosen.isEmpty()) { contents.append(" · ").append(word("ammo_target", chosen.getInt("ammoTarget"))); }
+        templateContents.setText(contents);
+        boolean editable = snapshot.getBoolean("editable") && !pending;
+        CompoundTag available = plans.getCompound("scopes");
+        for (int index = 0; index < scopes.size(); index++) {
+            String name = List.of("self", "selection", "group").get(index);
+            CompoundTag members = available.getCompound(name);
+            scopes.get(index).setText(Component.literal(scope.equals(name) ? "● " : "")
+                .append(word("plan.scope." + name, members.getInt("count"))));
+            scopes.get(index).setActive(!pending);
+            var names = Component.empty();
+            ListTag people = members.getList("members", Tag.TAG_COMPOUND);
+            for (int at = 0; at < people.size(); at++) {
+                if (at > 0) { names.append(", "); }
+                names.append(people.getCompound(at).getString("name"));
+            }
+            scopes.get(index).style(style -> style.tooltips(word("plan.members", names), word("plan.limit")));
+        }
+        CompoundTag selectedScope = available.getCompound(scope);
+        boolean batch = editable && selectedScope.getInt("count") > 0 && !selectedScope.getBoolean("limited");
+        planPreview.setActive(batch && !chosen.isEmpty());
+        planApply.setActive(batch && !chosen.isEmpty());
+        planRefill.setActive(batch);
+        planCancel.setActive(batch);
+        templateSave.setActive(editable && !templateInput.getValue().isBlank() && choices.size() < 18);
+        CompoundTag goal = plans.getCompound("goal");
+        planGoal.setText(word("plan.goal", templateName(goal.contains("id") ? goal : new CompoundTag())));
+        planStatus.setText(Component.translatable(goal.getString("status")));
+        ListTag preview = plans.getList("preview", Tag.TAG_COMPOUND);
+        String lastScope = plans.getString("previewScope");
+        boolean frozenPreview = List.of("template_preview", "plan_select").contains(plans.getString("previewKind"));
+        planResults.setText(lastScope.isEmpty() ? word("plan.results")
+            : word(frozenPreview ? "plan.preview_results_scope" : "plan.results_scope",
+                word("plan.scope." + lastScope, preview.size())));
+        if (previewRows.size() != preview.size()) {
+            previewList.clearAllChildren(); previewRows.clear();
+            for (int index = 0; index < preview.size(); index++) {
+                Label row = Rows.text(Component.empty()); previewRows.add(row); previewList.addChildren(row);
+            }
+        }
+        for (int index = 0; index < preview.size(); index++) {
+            CompoundTag row = preview.getCompound(index);
+            var line = Component.literal(row.getString("name") + ": ")
+                .append(Component.translatable(row.getString("status")));
+            ListTag missing = row.getList("missing", Tag.TAG_COMPOUND);
+            for (int at = 0; at < missing.size(); at++) {
+                CompoundTag demand = missing.getCompound(at);
+                line.append(" · ").append(Client.itemName(demand.getString("item")))
+                    .append(" ×" + demand.getInt("count"));
+            }
+            previewRows.get(index).setText(line);
+        }
     }
 
     private CompoundTag slot(String name) {
@@ -251,6 +441,10 @@ public final class EquipmentInlay implements Inlay {
 
     // RegisteringUi also runs on dedicated servers. Only received client snapshots may touch ClientLevel.
     private static final class Client {
+        private static Component itemName(String id) {
+            var key = net.minecraft.resources.ResourceLocation.tryParse(id);
+            return key == null ? Component.literal(id) : new ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.get(key)).getHoverName();
+        }
         private static ItemStack stack(CompoundTag tag) {
             var level = Minecraft.getInstance().level;
             return tag.isEmpty() || level == null ? ItemStack.EMPTY

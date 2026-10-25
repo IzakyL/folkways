@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
+import io.github.izakyl.folkways.plugins.combat.weapon.ResidentShields;
 import io.github.izakyl.folkways.plugins.person.living.LivingContent;
 import io.github.izakyl.folkways.plugins.person.equipment.ResidentEquipment;
 import io.github.izakyl.folkways.plugins.person.look.LookPool;
@@ -32,10 +33,12 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -46,6 +49,7 @@ import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ProjectileWeaponItem;
 import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.common.ItemAbilities;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,6 +60,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
     private static final String TAG_LOOK = "Look";
     private static final String TAG_GIVEN = "GivenName";
     private static final String TAG_SURNAME = "Surname";
+    private static final String TAG_SHIELD_COOLDOWN = "ShieldCooldown";
 
     private static final EntityDataAccessor<String> DATA_LOOK =
         SynchedEntityData.defineId(ResidentEntity.class, EntityDataSerializers.STRING);
@@ -70,6 +75,8 @@ public class ResidentEntity extends PathfinderMob implements Body {
         SynchedEntityData.defineId(ResidentEntity.class, EntityDataSerializers.STRING);
 
     private static final EntityDataAccessor<Integer> DATA_LEISURE_PHASE =
+        SynchedEntityData.defineId(ResidentEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_SHIELD_COOLDOWN =
         SynchedEntityData.defineId(ResidentEntity.class, EntityDataSerializers.INT);
 
     public void leisureMotion(String motion) { leisureMotion(motion, 0); }
@@ -105,6 +112,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
         builder.define(DATA_CAST_LINE, Optional.empty());
         builder.define(DATA_LEISURE, "");
         builder.define(DATA_LEISURE_PHASE, 0);
+        builder.define(DATA_SHIELD_COOLDOWN, 0);
     }
 
     public static AttributeSupplier.Builder createAttributes() {
@@ -138,6 +146,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
     public void tick() {
         super.tick();
         if (!level().isClientSide() && level() instanceof ServerLevel serverLevel) {
+            if (shieldCooldownTicks() > 0) entityData.set(DATA_SHIELD_COOLDOWN, shieldCooldownTicks() - 1);
             sweepStrayHandStack();
             if (tickCount % 20 == 0) {
                 pinLook(serverLevel);
@@ -236,6 +245,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
 
     @Override
     public void setItemSlot(EquipmentSlot slot, ItemStack stack) {
+        if (slot == EquipmentSlot.OFFHAND && stack != getOffhandItem()) ResidentShields.lower(this);
         if (slot == EquipmentSlot.MAINHAND && weaponSession != null && stack != getMainHandItem()) {
             // Commands and other mods may replace the hand. Return the previous actual item before
             // installing the replacement; the stopped session must never adopt or fire the new item.
@@ -269,6 +279,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
     }
 
     private void closeWeaponSession() {
+        ResidentShields.lower(this);
         if (weaponSession != null) {
             weaponSession.close();
         }
@@ -413,6 +424,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
             setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
         }
         super.addAdditionalSaveData(tag);
+        tag.putInt(TAG_SHIELD_COOLDOWN, shieldCooldownTicks());
         if (handIsPresentation) {
             setItemInHand(InteractionHand.MAIN_HAND, shown);
         }
@@ -429,6 +441,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+        entityData.set(DATA_SHIELD_COOLDOWN, Mth.clamp(tag.getInt(TAG_SHIELD_COOLDOWN), 0, 100));
         entityData.set(DATA_LOOK, tag.getString(TAG_LOOK));
         setNames(tag.getString(TAG_GIVEN), tag.getString(TAG_SURNAME));
         refreshEffects();
@@ -446,6 +459,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
 
     @Override
     public void die(DamageSource cause) {
+        closeWeaponSession();
         super.die(cause);
         if (level() instanceof ServerLevel serverLevel) {
             // The obituary reaches only who carries the colony's book; the log keeps how and where for the rest.
@@ -453,6 +467,43 @@ public class ResidentEntity extends PathfinderMob implements Body {
                 blockPosition().getX(), blockPosition().getY(), blockPosition().getZ(),
                 serverLevel.getBlockState(blockPosition()).getBlock().builtInRegistryHolder().key().location());
             ResidentObituary.announce(serverLevel, this);
+        }
+    }
+
+    /** Remaining vanilla-length axe disable window, synchronized for the resident status UI. */
+    public int shieldCooldownTicks() {
+        return entityData.get(DATA_SHIELD_COOLDOWN);
+    }
+
+    @Override
+    public boolean isBlocking() {
+        return shieldCooldownTicks() == 0 && super.isBlocking();
+    }
+
+    // LivingEntity's implementation is empty for mobs. Match Player's real shield wear threshold and
+    // durability calculation; directional blocking, projectile piercing and bypass tags remain vanilla.
+    @Override
+    protected void hurtCurrentlyUsedShield(float amount) {
+        ItemStack actual = getUseItem();
+        if (amount < 3.0F || !actual.canPerformAction(ItemAbilities.SHIELD_BLOCK)) return;
+        InteractionHand hand = getUsedItemHand();
+        EquipmentSlot slot = getSlotForHand(hand);
+        actual.hurtAndBreak(1 + Mth.floor(amount), this, slot);
+        if (actual.isEmpty()) {
+            stopUsingItem();
+            setItemSlot(slot, ItemStack.EMPTY);
+            playSound(SoundEvents.SHIELD_BREAK, 0.8F, 0.8F + random.nextFloat() * 0.4F);
+        }
+    }
+
+    @Override
+    protected void blockUsingShield(LivingEntity attacker) {
+        super.blockUsingShield(attacker);
+        // This is the same native attacker/item ability used by Player.blockUsingShield.
+        if (attacker.canDisableShield()) {
+            entityData.set(DATA_SHIELD_COOLDOWN, 100);
+            ResidentShields.lower(this);
+            level().broadcastEntityEvent(this, (byte) 30);
         }
     }
 
