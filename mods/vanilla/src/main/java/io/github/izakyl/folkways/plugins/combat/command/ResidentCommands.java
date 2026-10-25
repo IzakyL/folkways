@@ -13,6 +13,9 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.person.equipment.EquipmentPlans;
+import io.github.izakyl.folkways.plugins.person.living.LivingContent;
+import io.github.izakyl.folkways.plugins.combat.CombatReadiness;
+import io.github.izakyl.folkways.plugins.combat.motion.CombatEvasion;
 import io.github.izakyl.folkways.plugins.person.fear.FearContent;
 import io.github.izakyl.folkways.plugins.combat.Threats;
 import io.github.izakyl.folkways.plugins.combat.net.SelectionOrders;
@@ -86,6 +89,8 @@ public final class ResidentCommands {
         public boolean defensiveOnly() { return dangerRetreat && mode == Mode.HOLD; }
         public boolean yieldingToDanger() {
             if (active.get(resident()) != this) { return false; }
+            if (mode != Mode.MOVE && mode != Mode.RETREAT
+                    && (CombatReadiness.explosiveNear(body.mob()).isPresent() || CombatEvasion.active(body.mob(), this))) return true;
             return (dangerRetreat || mode == Mode.GUARD && deliberateGuard) && woundedDanger(this)
                 || defensiveOnly() && (engaged() || retaliating(this)
                     || body.mob() instanceof ResidentEntity resident && resident.hasWeaponSession());
@@ -259,7 +264,7 @@ public final class ResidentCommands {
         ResourceLocation intent = ResourceLocation.fromNamespaceAndPath("folkways", "command/"
             + (order.mode == Mode.ATTACK ? order.step : order.id));
         // Keep the player's labour reservation while the same runner performs explicit finite resupply.
-        if (EquipmentPlans.lendsRunner(colony, who.resident().id())) { return List.of(Urge.reserve(intent)); }
+        if (lendsRunner(who.resident().id())) { return List.of(Urge.reserve(intent)); }
         double weight = order.mode == Mode.GUARD ? Urge.DIRE - .5
             : Urge.DIRE + (order.mode == Mode.RETREAT ? 2 : 1);
         if (order.yieldingToDanger()) { weight = Math.min(weight, Urge.DIRE - .5); }
@@ -279,6 +284,10 @@ public final class ResidentCommands {
         }
         if (woundedDanger(order)) { return Urge.Priority.ORDINARY; }
         return Urge.Priority.CONTROL;
+    }
+
+    private boolean lendsRunner(UUID resident) {
+        return LivingContent.lendsRunner(colony, resident) || EquipmentPlans.lendsRunner(colony, resident);
     }
 
     private boolean woundedDanger(Order order) {
@@ -330,7 +339,7 @@ public final class ResidentCommands {
 
     void ended(Order order, Ending how) {
         if (active.get(order.resident()) == order && how instanceof Ending.Dropped
-                && EquipmentPlans.lendsRunner(colony, order.resident())) { return; }
+                && lendsRunner(order.resident())) { return; }
         if (how instanceof Ending.Failed failed && active.remove(order.resident(), order)) {
             order.failure = failed.why();
             if (order.mode == Mode.ATTACK) {
@@ -372,7 +381,7 @@ public final class ResidentCommands {
                     order.approached = at;
                     order.retargetAt = now + 10;
                 }
-            } else if (EquipmentPlans.lendsRunner(colony, order.resident())) {
+            } else if (lendsRunner(order.resident())) {
                 // Resupply borrows a stable order; its travel is not failed command travel time.
                 order.movingSince++;
             } else if ((order.mode == Mode.GUARD || order.defensiveOnly())

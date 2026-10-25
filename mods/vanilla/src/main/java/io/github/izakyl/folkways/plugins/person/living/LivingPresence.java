@@ -37,6 +37,7 @@ import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.plugins.combat.control.CombatSelectionOwnership;
+import io.github.izakyl.folkways.plugins.combat.CombatReadiness;
 import io.github.izakyl.folkways.plugins.patrol.Wards;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import java.nio.charset.StandardCharsets;
@@ -61,6 +62,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -98,6 +100,8 @@ final class LivingPresence implements Facing {
         new Watermark(Rest.SPENT - Rest.SLEEPY, 0, Rest.SPENT);
 
     private final Map<UUID, Hunger> bellies = new LinkedHashMap<>();
+    private final Map<UUID, RecoveryMealNode> recoveryMeals = new LinkedHashMap<>();
+    private final Map<UUID, String> recoveryStates = new LinkedHashMap<>();
 
     private final Map<UUID, Rest> wear = new LinkedHashMap<>();
     private final Map<UUID, AwakeTime> awakeTime = new LinkedHashMap<>();
@@ -147,6 +151,8 @@ final class LivingPresence implements Facing {
         unwritten |= bellies.keySet().retainAll(belonging);
         unwritten |= wear.keySet().retainAll(belonging);
         awakeTime.keySet().retainAll(belonging);
+        recoveryMeals.keySet().retainAll(belonging);
+        recoveryStates.keySet().retainAll(belonging);
         unwritten |= moods.keySet().retainAll(belonging);
         leisure.retain(belonging);
         hunger.retain(belonging);
@@ -235,6 +241,8 @@ final class LivingPresence implements Facing {
     }
 
     public List<Urge> urges(Worker who, ColonyView colony) {
+        Optional<Urge> recovery = recovery(who, colony);
+        if (recovery.isPresent()) return List.of(recovery.get());
         List<Urge> felt = new ArrayList<>();
         eating(who, colony).ifPresent(felt::add);
         sleeping(who, colony).ifPresent(felt::add);
@@ -260,6 +268,65 @@ final class LivingPresence implements Facing {
         return Optional.of(new Urge(EAT, weight, urgent || !who.effects().has(Stats.PATIENT),
             () -> new EatAction(where, this, who.resident().id(), at)));
     }
+
+    String recoveryStatus(UUID id) { return "folkways.equipment.recovery." + recoveryStates.getOrDefault(id, "waiting"); }
+    boolean lendsRunner(UUID id) {
+        RecoveryMealNode meal = recoveryMeals.get(id);
+        return meal != null && meal.order != null && valid(meal);
+    }
+    private Optional<Urge> recovery(Worker who, ColonyView view) {
+        UUID id = who.resident().id();
+        RecoveryMealNode meal = recoveryMeals.get(id);
+        if (meal != null && valid(meal)) return Optional.of(recoveryUrge(meal));
+        recoveryMeals.remove(id);
+        Mob body = who.body();
+        Hunger belly = bellies.get(id);
+        if (belly == null || !LivingContent.looksAfter(who.resident()) || body.getHealth() >= body.getMaxHealth()) {
+            recoveryStates.put(id, "ready"); return Optional.empty();
+        }
+        if (!view.level().getGameRules().getBoolean(GameRules.RULE_NATURAL_REGENERATION)) {
+            recoveryStates.put(id, "disabled"); return Optional.empty();
+        }
+        if (!CombatReadiness.quiet(body)) { recoveryStates.put(id, "cooldown"); return Optional.empty(); }
+        var order = ResidentCommands.of(this.colony).current(id).orElse(null);
+        if (!stable(who, order, false)) { recoveryStates.put(id, "waiting"); return Optional.empty(); }
+        if (belly.foodLevel() >= Hunger.MAX_FOOD_LEVEL) { recoveryStates.put(id, "recovering"); return Optional.empty(); }
+        meal = new RecoveryMealNode(this, who, order); recoveryMeals.put(id, meal);
+        if (!carriesAMeal(who)) {
+            recoveryMeals.remove(id); recoveryStates.put(id, "missing_food"); return Optional.empty();
+        }
+        recoveryStates.put(id, "eating"); return Optional.of(recoveryUrge(meal));
+    }
+    private Urge recoveryUrge(RecoveryMealNode meal) {
+        return new Urge(ResourceLocation.fromNamespaceAndPath("folkways", "recovery_meal/" + meal.id()),
+            Urge.DIRE - .2, true, () -> meal);
+    }
+    boolean valid(RecoveryMealNode meal) {
+        Mob body = meal.worker.body();
+        return recoveryMeals.get(meal.worker.resident().id()) == meal && body.isAlive() && !body.isRemoved()
+            && Bodies.of(body).flatMap(person -> person.colonyId()).filter(colony.id()::equals).isPresent()
+            && colony.holdingOf(meal.worker.resident().id()).isPresent()
+            && meal.spec().site().where().sameRealm(WorldSpaces.at(body))
+            && body.level().getGameTime() < meal.deadline && body.getHealth() < body.getMaxHealth()
+            && body.level().getGameRules().getBoolean(GameRules.RULE_NATURAL_REGENERATION)
+            && CombatReadiness.quiet(body) && stable(meal.worker, meal.order, true)
+            && ResidentCommands.of(colony).current(meal.worker.resident().id()).orElse(null) == meal.order;
+    }
+    private boolean stable(Worker who, ResidentCommands.Order order, boolean underway) {
+        if (who.body().isPassenger()) return false;
+        if (!underway && io.github.izakyl.folkways.plugins.combat.group.UnitGroups.of(colony).ofResident(who.resident().id())
+                .filter(group -> !group.maintenanceAllowed(true)).isPresent()) return false;
+        if (order != null) return Bodies.of(who.body()).filter(order::boundTo).isPresent()
+            && (order.mode() == ResidentCommands.Mode.HOLD || order.mode() == ResidentCommands.Mode.GUARD)
+            && order.status() == ResidentCommands.Status.HOLDING && !order.engaged() && !order.yieldingToDanger();
+        return !directed(who.resident().id()) && Bodies.of(who.body()).map(body -> body.doing().isEmpty()
+            || underway && body.doing().filter(doing -> doing.what().equals(LivingContent.EATING)).isPresent()).orElse(false);
+    }
+    private boolean recoveryFood(UUID id) {
+        Hunger belly = bellies.get(id);
+        return recoveryMeals.containsKey(id) && belly != null && belly.foodLevel() < Hunger.MAX_FOOD_LEVEL;
+    }
+    void recoveryEnded(RecoveryMealNode meal) { recoveryMeals.remove(meal.worker.resident().id(), meal); }
 
     private Optional<Urge> sleeping(Worker who, ColonyView colony) {
         // Withdrawing this urge also lets the same runner finish an existing sleeping gesture safely.
@@ -317,14 +384,14 @@ final class LivingPresence implements Facing {
         Hunger belly = bellies.get(resident);
         return belly != null && !PersonalItems.marked(stack)
             && FoodSafety.usable(Fronts.of(colony).settings(LivingContent.ID), stack, food)
-            && belly.canEatMeal(food)
+            && (belly.canEatMeal(food) || recoveryFood(resident))
             && FoodSafety.matches(Fronts.of(colony).settings(LivingContent.ID), stack);
     }
 
     // A served table meal is chosen by the dining area's own list, so only the belly decides.
     boolean wouldEat(UUID resident, FoodProperties food) {
         Hunger belly = bellies.get(resident);
-        return belly != null && belly.canEatMeal(food);
+        return belly != null && (belly.canEatMeal(food) || recoveryFood(resident));
     }
 
     void ate(UUID resident, FoodProperties food, ItemStack eaten, long now) {
@@ -454,6 +521,8 @@ final class LivingPresence implements Facing {
     }
 
     public void closed(Closing why) {
+        recoveryMeals.clear();
+        recoveryStates.clear();
         awakeTime.clear();
         dining.clear();
         if (why == Closing.RAZED) {

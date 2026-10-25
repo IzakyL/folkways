@@ -79,6 +79,7 @@ public final class StrikeNode implements Node {
             if (session == null || !session.fire(target)) {
                 return false;
             }
+            io.github.izakyl.folkways.plugins.combat.CombatReadiness.fighting(who.body());
         }
         session.tick();
         killed = !target.isAlive();

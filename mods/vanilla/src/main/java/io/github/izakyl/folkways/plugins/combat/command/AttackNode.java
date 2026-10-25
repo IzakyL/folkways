@@ -66,6 +66,7 @@ final class AttackNode implements Node {
         }
         if (session.state() == WeaponSession.State.READY && !session.fire(target)) { return false; }
         session.tick();
+        io.github.izakyl.folkways.plugins.combat.CombatReadiness.fighting(who.body());
         return target.isAlive() && session.state() != WeaponSession.State.CLOSED
             && session.state() != WeaponSession.State.STOPPING;
     }

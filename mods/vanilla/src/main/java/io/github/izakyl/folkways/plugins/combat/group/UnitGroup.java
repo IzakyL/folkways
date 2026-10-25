@@ -97,6 +97,14 @@ public final class UnitGroup {
     /** Generation changes for each external command, including page deployments, but never for an internal leg. */
     public Optional<UUID> commandId() { return Optional.ofNullable(commandId); }
     public CommandKind commandKind() { return commandKind; }
+    /** Automatic trips wait for final stations; a carried meal may pause a real authored patrol stop. */
+    public boolean maintenanceAllowed(boolean allowPatrolStop) {
+        if (phase != Phase.HOLDING || attacking || regrouping || mode == ResidentCommands.Mode.RETREAT) return false;
+        List<Body> bodies = loaded();
+        if (bodies.size() != members.size() || !assembled(bodies)) return false;
+        if (points != null) return points.complete() || allowPatrolStop && points.atStop();
+        return patrol.isEmpty() || allowPatrolStop;
+    }
     public EndReason endReason() { return endReason; }
     public Set<UUID> failedMembers() { return Set.copyOf(failedMembers); }
     /** Position/status observation only; this never asks a navigator to find a path. */
@@ -529,7 +537,8 @@ public final class UnitGroup {
             ResidentCommands.Order order = orders.get(body.id());
             return order != null && order.boundTo(body)
                 && owner.commands.current(body.id()).orElse(null) == order
-                && EquipmentPlans.lendsRunner(owner.colony, body.id());
+                && (EquipmentPlans.lendsRunner(owner.colony, body.id())
+                    || io.github.izakyl.folkways.plugins.person.living.LivingContent.lendsRunner(owner.colony, body.id()));
         });
     }
 

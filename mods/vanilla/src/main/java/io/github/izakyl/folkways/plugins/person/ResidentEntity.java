@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
 import io.github.izakyl.folkways.plugins.combat.weapon.ResidentShields;
+import io.github.izakyl.folkways.plugins.combat.motion.CombatMotions;
 import io.github.izakyl.folkways.plugins.person.living.LivingContent;
 import io.github.izakyl.folkways.plugins.person.equipment.ResidentEquipment;
 import io.github.izakyl.folkways.plugins.person.look.LookPool;
@@ -146,6 +147,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
     public void tick() {
         super.tick();
         if (!level().isClientSide() && level() instanceof ServerLevel serverLevel) {
+            CombatMotions.tick(this);
             if (shieldCooldownTicks() > 0) entityData.set(DATA_SHIELD_COOLDOWN, shieldCooldownTicks() - 1);
             sweepStrayHandStack();
             if (tickCount % 20 == 0) {
@@ -279,6 +281,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
     }
 
     private void closeWeaponSession() {
+        CombatMotions.stop(this);
         ResidentShields.lower(this);
         if (weaponSession != null) {
             weaponSession.close();
@@ -440,6 +443,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
 
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
+        CombatMotions.stop(this);
         super.readAdditionalSaveData(tag);
         entityData.set(DATA_SHIELD_COOLDOWN, Mth.clamp(tag.getInt(TAG_SHIELD_COOLDOWN), 0, 100));
         entityData.set(DATA_LOOK, tag.getString(TAG_LOOK));

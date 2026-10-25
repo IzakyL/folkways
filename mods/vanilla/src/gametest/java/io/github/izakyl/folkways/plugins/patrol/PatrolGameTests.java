@@ -93,7 +93,7 @@ public final class PatrolGameTests {
     public static void vigilanceFindsDistantThreatsAndSharesThemWithNearbyPatrollers(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         for (int x = 0; x < 22; x++) {
-            for (int z = 0; z < 4; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE); }
+            for (int z = 0; z < 22; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE); }
         }
         Colony colony = Colonies.mint(level.getServer());
         Body scout = PersonBody.RESIDENT.get().create(level);
@@ -101,24 +101,36 @@ public final class PatrolGameTests {
         Zombie zombie = EntityType.ZOMBIE.create(level);
         place(helper, scout.mob(), new BlockPos(1, 1, 1));
         place(helper, peer.mob(), new BlockPos(1, 1, 2));
-        place(helper, zombie, new BlockPos(17, 1, 1));
+        place(helper, zombie, new BlockPos(21, 1, 21));
         scout.mob().setNoAi(true); peer.mob().setNoAi(true); zombie.setNoAi(true);
         try {
             grant(scout, "patrolling_alert");
             helper.assertValueEqual((int) scout.effects().value(PatrolContent.ALERT_RANGE), 6,
                 "the scout has all three vigilance ranks");
             helper.assertTrue(scout.mob().hasLineOfSight(zombie),
-                "the sixteen-block sight line lies entirely inside the reserved test arena");
+                "the twenty-eight-block diagonal sight line stays inside the reserved test arena");
+            helper.assertTrue(peer.mob().hasLineOfSight(zombie)
+                    && peer.mob().distanceTo(zombie) > 24 && scout.mob().distanceTo(zombie) < 30,
+                "clear sight isolates ordinary twenty-four versus vigilance thirty-block discovery");
             PatrolPresence patrol = new PatrolPresence(colony);
             patrol.watched(scout.id(), level.getGameTime());
             patrol.watched(peer.id(), level.getGameTime());
             ItemStack sword = new ItemStack(Items.IRON_SWORD);
             helper.assertTrue(patrol.urges(worker(peer, sword), colony.view(level)).isEmpty(),
-                "ordinary patroller cannot independently discover a threat sixteen blocks away");
+                "ordinary patroller cannot independently discover a threat beyond twenty-four blocks");
             helper.assertFalse(patrol.urges(worker(scout, sword), colony.view(level)).isEmpty(),
                 "vigilance expands actual discovery range");
+            // Shared alerts retain their own twenty-four-block cap and may bypass lost sight.
+            // Move this static policy fixture inside that cap, behind a screen outside the scout's sight line.
+            BlockPos shared = helper.absolutePos(new BlockPos(8, 1, 1));
+            peer.mob().moveTo(shared.getX() + .5, shared.getY(), shared.getZ() + .5);
+            for (int y = 1; y <= 3; y++) for (int z = 1; z <= 4; z++) {
+                helper.setBlock(new BlockPos(9, y, z), Blocks.STONE);
+            }
+            helper.assertTrue(peer.mob().distanceTo(zombie) <= 24 && !peer.mob().hasLineOfSight(zombie),
+                "the colleague is within alert range but cannot independently see the discovered target");
             helper.assertFalse(patrol.urges(worker(peer, sword), colony.view(level)).isEmpty(),
-                "nearby colleague receives the discovered target");
+                "the nearby colleague receives the actual shared target despite its blocked sight line");
         } finally {
             scout.mob().discard(); peer.mob().discard(); zombie.discard(); colony.raze();
         }

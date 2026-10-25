@@ -79,6 +79,14 @@ public final class LivingContent {
     static final Meter ALERTNESS =
         new Meter(ResourceLocation.fromNamespaceAndPath("folkways", "hud/rest"), 0xFFE8D98C);
 
+    public static boolean lendsRunner(Colony colony, java.util.UUID resident) {
+        return colony.service(ID, LivingPresence.class).map(living -> living.lendsRunner(resident)).orElse(false);
+    }
+    public static String recoveryStatus(Colony colony, java.util.UUID resident) {
+        return colony.service(ID, LivingPresence.class).map(living -> living.recoveryStatus(resident))
+            .orElse("folkways.equipment.recovery.waiting");
+    }
+
     public static void declare(Declaring declaring) {
         DiningTables.installKeepout();
         declaring.colony(ID, scope -> {

@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.Threats;
+import io.github.izakyl.folkways.plugins.combat.CombatReadiness;
 import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.plugins.combat.group.UnitGroup;
 import io.github.izakyl.folkways.plugins.combat.group.UnitGroups;
@@ -57,7 +58,8 @@ final class PatrolPresence implements Facing {
 
     private static final int PERIOD = 100;
 
-    private static final double ENGAGE_RANGE = 12.0;
+    private static final double ENGAGE_RANGE = 24.0;
+    private static final double LEASH_RANGE = 12.0;
 
     // Above fear, so a patroller struck by what it is fighting fights on rather than running.
     private static final double STAND_GROUND = Urge.DIRE + 0.5;
@@ -260,6 +262,8 @@ final class PatrolPresence implements Facing {
         if (foe.isEmpty() || !Weapons.armed(who)) {
             return supply;
         }
+        if (foe.get() instanceof net.minecraft.world.entity.monster.Creeper
+                && (!Weapons.ranged(who) || CombatReadiness.explosiveNear(body).isPresent())) return supply;
         Optional<Stances> reach = battleStances(level, who, foe.get(), guard);
         if (reach.isEmpty()) {
             return supply;
@@ -290,7 +294,7 @@ final class PatrolPresence implements Facing {
         return Optional.ofNullable(body.getLastHurtByMob())
             .filter(Mob.class::isInstance).map(Mob.class::cast)
             .filter(mob -> body.tickCount - body.getLastHurtByMobTimestamp() <= 100
-                && Threats.hostile(mob, body) && body.distanceToSqr(mob) <= ENGAGE_RANGE * ENGAGE_RANGE
+                && Threats.hostile(mob, body) && body.distanceToSqr(mob) <= LEASH_RANGE * LEASH_RANGE
                 && body.hasLineOfSight(mob));
     }
 
@@ -298,7 +302,8 @@ final class PatrolPresence implements Facing {
         alerts.values().removeIf(until -> until < level.getGameTime());
         List<Mob> near = level.getEntitiesOfClass(Mob.class, body.getBoundingBox().inflate(Math.max(range, 24)),
             mob -> Threats.hostile(mob, body)
-                && insideLeash(level, guard, WorldSpaces.at(mob))
+                && (guard.isEmpty() || WorldSpaces.world(level, guard.get().destination())
+                    .filter(origin -> origin.distanceToSqr(mob.position()) <= range * range).isPresent())
                 && (body.distanceToSqr(mob) <= range * range
                     || alerts.containsKey(mob.getUUID()) && body.distanceToSqr(mob) <= 24 * 24));
         near.sort(Comparator.comparingDouble(body::distanceToSqr));
@@ -314,7 +319,7 @@ final class PatrolPresence implements Facing {
             WorldPos at) {
         return guard.isEmpty() || guard.get().destination().sameRealm(at)
             && WorldSpaces.world(level, guard.get().destination()).flatMap(origin -> WorldSpaces.world(level, at)
-                .map(point -> origin.distanceToSqr(point) <= ENGAGE_RANGE * ENGAGE_RANGE)).orElse(false);
+                .map(point -> origin.distanceToSqr(point) <= LEASH_RANGE * LEASH_RANGE)).orElse(false);
     }
 
     private static Optional<Stances> battleStances(ServerLevel level, Worker who, Mob foe,
@@ -330,7 +335,7 @@ final class PatrolPresence implements Facing {
             } else {
                 BlockPos target = cellOf(level, foe);
                 var towardBody = body.position().subtract(foe.position()).multiply(1, 0, 1).normalize();
-                for (int distance = 2; distance < range; distance++) {
+                for (int distance = foe instanceof net.minecraft.world.entity.monster.Creeper ? 8 : 2; distance < range; distance++) {
                     for (double turn : new double[] {-.5, 0, .5}) {
                         var feet = net.minecraft.world.phys.Vec3.atBottomCenterOf(target)
                             .add(towardBody.yRot((float) turn).scale(distance));

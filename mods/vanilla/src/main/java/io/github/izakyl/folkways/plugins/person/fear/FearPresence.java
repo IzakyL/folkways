@@ -6,6 +6,8 @@ import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.plugins.combat.Threats;
+import io.github.izakyl.folkways.plugins.combat.motion.CombatEvasion;
+import io.github.izakyl.folkways.core.api.colony.Colonies;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,6 +31,10 @@ final class FearPresence {
     private final Map<Mob, Escape> escapes = new WeakHashMap<>();
 
     public List<Urge> urges(Worker who, ColonyView colony) {
+        var home = who.body().level().getServer();
+        var tactical = Bodies.of(who.body()).flatMap(body -> body.colonyId()).flatMap(id -> Colonies.of(home, id))
+            .map(place -> CombatEvasion.urges(who, place, colony)).orElse(List.of());
+        if (!tactical.isEmpty()) return tactical;
         Optional<BlockPos> away = away(who);
         if (away.isEmpty()) {
             return List.of();
