@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -22,13 +23,19 @@ final class CullNode extends AnimalNode {
 
     // What a beast falls to is known only once it falls: meat and a hide, say, a cell each.
     private static final List<Amount> CARCASS = Leaves.room(2);
+    private final Function<ServerLevel, Optional<Pen>> current;
 
-    CullNode(Chore chore) {
+    CullNode(Chore chore, Function<ServerLevel, Optional<Pen>> current) {
         super(PenNode.declare(chore, Herd.Job.CULL).leaves(CARCASS).doing(PastureContent.CULLING).done(), chore);
+        this.current = current;
     }
 
     @Override
     Outcome work(ServerLevel level, Worker who, Animal beast) {
+        Pen pen = current.apply(level).orElse(null);
+        if (pen == null || !pen.keeps(beast) || beast.isBaby() || pen.surplus(pen.stock(level)) == 0) {
+            return refuse(PastureRefusal.HERD_CHANGED);
+        }
         AABB where = beast.getBoundingBox().inflate(SPILL);
         Set<Integer> alreadyLying = new HashSet<>();
         for (ItemEntity older : level.getEntitiesOfClass(ItemEntity.class, where)) {

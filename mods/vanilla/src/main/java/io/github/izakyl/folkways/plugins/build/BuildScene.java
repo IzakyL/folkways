@@ -99,7 +99,7 @@ public final class BuildScene {
         scene.idle(10);
         scene.world().destroyBlock(flower);
         scene.overlay().showText(80)
-            .text("Residents with the building trade take the order. First they clear what stands where the drawing wants empty space, working down from the top.")
+            .text("Residents with the building trade take the order. First they clear what stands where the drawing wants empty space, working down from the top. Containers are emptied into the colony's stores before their blocks go.")
             .pointAt(util.vector().topOf(grass.below()))
             .placeNearTarget()
             .attachKeyFrame();

@@ -39,6 +39,7 @@ abstract class BuildNode implements Node {
     private final Ends ends;
     private final NodeSpec spec;
     private Predicate<BlockPos> met = cell -> false;
+    private Emptying emptying;
     private boolean onlyReplaceable;
 
     BuildNode(BuildJob job, Ends ends) {
@@ -80,6 +81,22 @@ abstract class BuildNode implements Node {
         return this;
     }
 
+    final BuildNode emptying(Emptying emptying) {
+        this.emptying = emptying;
+        return this;
+    }
+
+    final Optional<BuildRefusal> obstruction(ServerLevel level) {
+        if (finished(level) || job.kind() != BuildJob.Kind.STRIP && job.kind() != BuildJob.Kind.LAY
+            && job.kind() != BuildJob.Kind.DRAIN) {
+            return Optional.empty();
+        }
+        Map<BlockPos, BlockState> cells = remaining(level, job.before(), true);
+        // A late replacement may have put a container in a cell that was empty when the plan was laid.
+        remaining(level, job.after(), true).forEach(cells::putIfAbsent);
+        return emptying == null ? Emptying.check(level, cells) : emptying.before(level, cells);
+    }
+
     @Override
     public final NodeSpec spec() {
         return spec;
@@ -105,7 +122,15 @@ abstract class BuildNode implements Node {
         })) {
             return refuse(BuildRefusal.NO_WAY_TO_BUILD);
         }
-        return work(level, who);
+        Optional<BuildRefusal> blocked = obstruction(level);
+        if (blocked.isPresent()) {
+            return refuse(blocked.get());
+        }
+        Outcome outcome = work(level, who);
+        if (emptying != null) {
+            emptying.removed(level);
+        }
+        return outcome;
     }
 
     // The plan a build goes up by is laid once and kept: a piece that cannot go in yet waits and is tried again,

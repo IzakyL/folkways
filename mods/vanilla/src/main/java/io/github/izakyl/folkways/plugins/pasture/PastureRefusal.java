@@ -22,6 +22,8 @@ enum PastureRefusal implements RefusalKind.Named {
 
     NOT_FEEDABLE,
 
+    HERD_CHANGED,
+
     STILL_STANDING;
 
     @Override

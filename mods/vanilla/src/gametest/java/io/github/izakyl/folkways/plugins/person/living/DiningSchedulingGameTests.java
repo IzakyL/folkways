@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.WorkExertion;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
@@ -26,6 +27,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.Container;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -113,14 +115,79 @@ public final class DiningSchedulingGameTests {
                 helper.assertTrue(rig.living.mood(rig.person.getUUID()).drank >= rig.hungryAt, "drinking records its own mood experience");
                 helper.assertTrue(java.util.stream.IntStream.range(0, rig.person.pack().getContainerSize())
                     .noneMatch(slot -> rig.person.pack().getItem(slot).is(Items.POTION)), "the drunk bottle leaves the diner's pack");
+                var rules = rig.colony.storeRules(WorldPos.of(rig.level, cabinet));
+                helper.assertTrue(StoreRule.takes(rules) && !StoreRule.stores(rules),
+                    "the service cabinet remains a source without accepting ordinary returned-bottle unloading");
                 rig.source.setItem(1, new ItemStack(Items.POTION)); rig.source.setChanged();
             })
             .thenWaitUntil(() -> helper.assertTrue(bottles.getItem(0).is(Items.POTION), "the emptied cabinet slot is restocked from ordinary stock"))
+            .thenWaitUntil(() -> helper.assertValueEqual(count(rig.source, Items.GLASS_BOTTLE), 1,
+                "the real drink byproduct is returned once to ordinary stock without blocking the refill"))
             .thenExecute(() -> {
                 helper.assertTrue(rig.source.getItem(1).isEmpty(), "cabinet replenishment consumes the new stock once");
+                helper.assertValueEqual(count(rig.source, Items.POTION), 0, "the newly stocked potion is delivered, not left in another source slot");
+                helper.assertValueEqual(count(bottles, Items.GLASS_BOTTLE), 0, "the empty bottle never claims a cabinet serving slot");
+                helper.assertValueEqual(count(rig.person.pack(), Items.GLASS_BOTTLE), 0, "the real resident completes the bottle return");
                 DiningGameTests.DISPLAYS.remove(WorldPos.of(rig.level, rig.table));
                 rig.close();
             }).thenSucceed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void drinkCabinetAccessRulesFollowMenuChangesAndRemoval(GameTestHelper helper) {
+        try (var rig = new Rig(helper, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP),
+                Blocks.OAK_STAIRS.defaultBlockState(), new ItemStack(Items.CAKE))) {
+            BlockPos cabinet = rig.chair.west();
+            WorldPos at = WorldPos.of(rig.level, cabinet);
+            rig.level.setBlockAndUpdate(cabinet, Blocks.BARREL.defaultBlockState());
+            Container bottles = (Container) rig.level.getBlockEntity(cabinet);
+            bottles.setItem(0, new ItemStack(Items.POTION));
+            bottles.setItem(1, new ItemStack(Items.GLASS_BOTTLE));
+            bottles.setChanged();
+            var front = ColonyFront.of(rig.colony);
+            var original = front.zonesIn(rig.level).stream().filter(zone -> zone.delegation().equals(LivingContent.DINING)).findFirst().orElseThrow();
+            var settings = original.settings().with(LivingContent.DINING_DRINK.key(),
+                new ColonySettings.Value.Items(List.of(ItemFilter.item(ResourceLocation.withDefaultNamespace("potion")))));
+            front.erase(original.id());
+            var zone = front.addZone(rig.level, LivingContent.DINING, Set.of(rig.table, rig.chair, cabinet), settings).orElseThrow();
+            rig.living.refresh(rig.level.getServer());
+            helper.assertTrue(rig.colony.storesIn(rig.level.dimension()).contains(at), "the cabinet still publishes its physical stock");
+            helper.assertTrue(StoreRule.takes(rig.colony.storeRules(at)) && !StoreRule.stores(rig.colony.storeRules(at)),
+                "service stock remains readable while ordinary unloading is excluded");
+            helper.assertTrue(rig.colony.store(rig.level, at).orElseThrow().getItem(1).is(Items.GLASS_BOTTLE),
+                "existing non-menu contents remain visible for ordinary removal");
+
+            front.erase(zone.id());
+            var next = settings.with(LivingContent.DINING_DRINK.key(), new ColonySettings.Value.Items(List.of(
+                ItemFilter.item(ResourceLocation.withDefaultNamespace("splash_potion")))));
+            var changed = front.addZone(rig.level, LivingContent.DINING, Set.of(rig.table, rig.chair, cabinet), next).orElseThrow();
+            rig.living.refresh(rig.level.getServer());
+            helper.assertTrue(StoreRule.takes(rig.colony.storeRules(at)) && !StoreRule.stores(rig.colony.storeRules(at)),
+                "changing the drink menu keeps the same directional stock access");
+            helper.assertTrue(rig.colony.store(rig.level, at).orElseThrow().getItem(0).is(Items.POTION),
+                "a former-menu drink can still be taken out instead of being destroyed or hidden");
+
+            // Another legitimate owner keeps this physical barrel in ordinary storage after dining retracts it.
+            rig.colony.stores(ResourceLocation.fromNamespaceAndPath("folkways", "dining_rule_control"),
+                rig.level.dimension(), List.of(at));
+            front.erase(changed.id());
+            rig.living.refresh(rig.level.getServer());
+            helper.assertTrue(rig.colony.storesIn(rig.level.dimension()).contains(at), "the independent owner's store remains published");
+            helper.assertTrue(rig.colony.storeRules(at).isEmpty() && StoreRule.stores(rig.colony.storeRules(at)),
+                "removing the dining zone retracts its access restriction instead of leaving a stale rule");
+            helper.assertValueEqual(count(bottles, Items.POTION), 1, "menu changes and removal preserve the actual drink");
+            helper.assertValueEqual(count(bottles, Items.GLASS_BOTTLE), 1, "rules never delete the player's existing empty bottle");
+        }
+        helper.succeed();
+    }
+
+    private static int count(Container stock, Item item) {
+        int total = 0;
+        for (int slot = 0; slot < stock.getContainerSize(); slot++) {
+            ItemStack stack = stock.getItem(slot);
+            if (stack.is(item)) total += stack.getCount();
+        }
+        return total;
     }
 
     /** Shared native fixture. GameTestServer suppresses Labor.work, so this drives the complete
