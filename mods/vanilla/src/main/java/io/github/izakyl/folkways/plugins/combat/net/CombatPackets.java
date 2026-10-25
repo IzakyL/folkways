@@ -31,7 +31,7 @@ public final class CombatPackets {
     public static final int MAX_MEMBERS = 256;
     public static final int MAX_POINTS = 16;
     // Selection leases, shortcut operations and immediate waypoint acknowledgements must match on both sides.
-    private static final String NETWORK_VERSION = "4";
+    private static final String NETWORK_VERSION = "5";
     private record Snapshot(UUID colony, WorldPos at, Set<UUID> residents) { }
     private static volatile Snapshot snapshot;
     private static long requested;

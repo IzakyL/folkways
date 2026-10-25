@@ -56,4 +56,25 @@ public final class CombatIntentGameTests {
         } finally { buffer.release(); }
         helper.succeed();
     }
+
+    @GameTest(template = "empty")
+    public static void routeObservationRetainsCommandGenerationCompletionAndWaitingCount(GameTestHelper helper) {
+        UUID group = UUID.randomUUID(), command = UUID.randomUUID();
+        var moving = new CombatOrderState(group, command, "direct", "waiting_for_member", "route_member_blocked",
+            4, 0, 1, false, false, 1);
+        var finished = new CombatOrderState(group, UUID.randomUUID(), "direct", "holding", "none",
+            4, 0, 1, false, true, 0);
+        var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
+        try {
+            moving.write(buffer);
+            finished.write(buffer);
+            helper.assertValueEqual(CombatOrderState.read(buffer), moving,
+                "an active stop reports the actual waiting count and reason without ending control");
+            var arrived = CombatOrderState.read(buffer);
+            helper.assertTrue(arrived.routeComplete() && !arrived.commandId().equals(command),
+                "a completed observation belongs to its own command, so it cannot hide an older or newer route");
+            helper.assertValueEqual(buffer.readableBytes(), 0, "both bounded observations are consumed completely");
+        } finally { buffer.release(); }
+        helper.succeed();
+    }
 }
