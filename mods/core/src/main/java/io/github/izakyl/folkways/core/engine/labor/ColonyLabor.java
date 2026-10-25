@@ -10,7 +10,6 @@ import io.github.izakyl.folkways.core.api.work.Doings;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.NodeState;
 import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Urge;
@@ -697,12 +696,7 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     }
 
     Hands hands(Body body, Placement placement) {
-        return new Hands(colony(), Optional.empty(), body, survey.stands(), placement, this::spilled, () -> routeOf(body.id()));
-    }
-
-    Hands hands(Body body, Placement placement, NodeSpec spec) {
-        return new Hands(colony(), spec.vocation(), body, survey.stands(), placement, this::spilled,
-            () -> routeOf(body.id()));
+        return new Hands(body, survey.stands(), placement, this::spilled, () -> routeOf(body.id()));
     }
 
     private List<Node> routeOf(UUID resident) {

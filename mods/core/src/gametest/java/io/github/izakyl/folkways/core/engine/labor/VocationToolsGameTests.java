@@ -23,7 +23,9 @@ import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,49 +60,49 @@ public final class VocationToolsGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void multiVocationSelectionAndWearUseTheWorkVocation(GameTestHelper helper) {
+    public static void heldToolAllowedOnlyForBuildingCanDoFarmingWork(GameTestHelper helper) {
         var body = PersonBody.RESIDENT.get().create(helper.getLevel());
         var colony = new ColonyData().works();
         var front = ColonyFront.of(colony);
         Vocation building = Vocations.required(BUILDING);
-        Vocation patrol = Vocations.required(id("patrolling"));
-        helper.assertTrue(body.licences().of(building).isPresent() && body.licences().of(patrol).isPresent(),
+        Vocation farming = Vocations.required(FARMING);
+        helper.assertTrue(body.licences().of(building).isPresent() && body.licences().of(farming).isPresent(),
             "the same resident is licensed for both vocations");
+        for (Vocation vocation : Vocations.all()) {
+            front.setSetting(vocation.id(), "tool", rules());
+        }
         front.setSetting(BUILDING, "tool", rules("stone_axe"));
-        front.setSetting(id("patrolling"), "tool", rules("iron_axe"));
+        front.setSetting(FARMING, "tool", rules("iron_hoe"));
         ItemStack stone = new ItemStack(Items.STONE_AXE);
-        ItemStack iron = new ItemStack(Items.IRON_AXE);
         body.pack().setItem(0, stone);
-        body.pack().setItem(1, iron);
-        NodeSpec spec = work(helper, patrol);
+        NodeSpec spec = work(helper, farming);
         var snapshot = KitRules.snapshot(colony);
-        helper.assertFalse(Tools.canPrepare(body.kind().id(), spec, List.of(stone), snapshot),
-            "a building tool cannot qualify the resident for patrol");
-        helper.assertTrue(Tools.canPrepare(body.kind().id(), spec, List.of(stone, iron), snapshot),
-            "planning can use the patrol tool even when it follows the building tool");
-        var kit = Kit.of(colony, body);
-        helper.assertTrue(kit.holds(stone) && kit.holds(iron), "the carried kit is the union of each licensed kit's allowed tools");
-        Hands hands = new Hands(colony, spec.vocation(), body, null, Placement.NOWHERE, drop -> { }, List::of);
-        helper.assertTrue(hands.held(AXE) == iron, "actual selection skips the other vocation's first matching axe");
+        helper.assertTrue(snapshot.allows(Optional.of(building), Items.STONE_AXE)
+            && !snapshot.allows(Optional.of(farming), Items.STONE_AXE), "only building may acquire the stone axe");
+        helper.assertTrue(Tools.canPrepare(body.kind().id(), spec, List.of(stone), snapshot),
+            "a held building tool qualifies the resident for farming work");
+        helper.assertTrue(Kit.of(colony, body).holds(stone), "building keeps its own allowed axe");
+        Hands hands = new Hands(body, null, Placement.NOWHERE, drop -> { }, List::of);
+        helper.assertTrue(hands.held(AXE).is(Items.STONE_AXE), "selection ignores the vocation lists");
         Node node = new Node() {
             public NodeSpec spec() { return spec; }
             public Outcome commit(ServerLevel level, Worker who) {
-                helper.assertTrue(who.held(AXE) == iron, "commit receives the same physical tool");
+                helper.assertTrue(who.held(AXE).is(Items.STONE_AXE), "farming work uses the building axe");
                 return Outcome.done();
             }
         };
-        helper.assertTrue(Commit.run(helper.getLevel(), node, hands) instanceof Outcome.Done, "allowed work commits");
+        helper.assertTrue(Commit.run(helper.getLevel(), node, hands) instanceof Outcome.Done, "cross-vocation work commits");
         Wear.from(helper.getLevel(), body, spec, hands, item -> { });
-        helper.assertValueEqual(stone.getDamageValue(), 0, "the building axe is not worn");
-        helper.assertValueEqual(iron.getDamageValue(), 1, "wear follows the actual patrol selection");
-        front.setSetting(id("patrolling"), "tool", rules());
-        helper.assertFalse(Kit.of(colony, body).holds(iron), "the disabled vocation's axe becomes cargo");
-        helper.assertTrue(Kit.of(colony, body).holds(stone), "the other vocation keeps its own allowed axe");
-        Hands forbidden = new Hands(colony, spec.vocation(), body, null, Placement.NOWHERE, drop -> { }, List::of);
-        helper.assertTrue(Commit.run(helper.getLevel(), node, forbidden) instanceof Outcome.Failed,
-            "execution rechecks a list changed after planning");
-        helper.assertTrue(snapshot.allows(Optional.of(patrol), Items.IRON_AXE), "an earlier planning snapshot remains immutable");
-        helper.assertFalse(KitRules.snapshot(colony).allows(Optional.of(patrol), Items.IRON_AXE), "a new snapshot sees the edit");
+        helper.assertValueEqual(stone.getDamageValue(), 1, "wear reaches the pack stack");
+        front.setSetting(BUILDING, "tool", rules());
+        helper.assertFalse(Kit.of(colony, body).holds(stone), "a tool removed from every kit becomes cargo");
+        helper.assertTrue(Commit.run(helper.getLevel(), node, hands) instanceof Outcome.Done,
+            "a list edit cannot reject a tool already in the pack");
+        ItemStack iron = new ItemStack(Items.IRON_AXE);
+        body.pack().setItem(0, iron);
+        helper.assertTrue(hands.held(AXE).is(Items.IRON_AXE), "selection follows the pack after a stack is replaced");
+        helper.assertTrue(snapshot.allows(Optional.of(building), Items.STONE_AXE), "an earlier planning snapshot remains immutable");
+        helper.assertFalse(KitRules.snapshot(colony).allows(Optional.of(building), Items.STONE_AXE), "a new snapshot sees the edit");
         body.mob().discard();
         ColonyFront.forget(colony.id());
         helper.succeed();
@@ -135,6 +137,32 @@ public final class VocationToolsGameTests {
     @GameTest(template = "empty")
     public static void legacyExplicitEmptyMigratesAsForbidden(GameTestHelper helper) {
         migrate(helper, rules());
+    }
+
+    @GameTest(template = "empty")
+    public static void legacyDefaultKeepsVocationDefaultsUnconfigured(GameTestHelper helper) {
+        var colony = new ColonyData().works();
+        var filters = new ArrayList<>(CoreSettings.legacyKit());
+        Collections.reverse(filters);
+        CompoundTag scopes = new CompoundTag();
+        scopes.put(CoreSettings.CORE.toString(), ColonySettings.empty().with("tool",
+            new ColonySettings.Value.Items(filters)).save());
+        CompoundTag saved = new CompoundTag();
+        saved.put("settings", scopes);
+        colony.keep(ColonyFront.OWNER, saved);
+        for (int load = 0; load < 2; load++) {
+            var front = ColonyFront.of(colony);
+            var defaults = KitRules.defaults();
+            for (Vocation vocation : Vocations.all()) {
+                helper.assertTrue(front.settings(vocation.id()).valueOf("tool").isEmpty(),
+                    "the old global default leaves each vocation unconfigured");
+                helper.assertTrue(front.toolRules().tools().get(vocation.id()).equals(defaults.tools().get(vocation.id())),
+                    "each vocation inherits only its own default tools");
+            }
+            helper.assertValueEqual(colony.kept(ColonyFront.OWNER).getInt("toolVersion"), 1, "migration is versioned in the save");
+            ColonyFront.forget(colony.id());
+        }
+        helper.succeed();
     }
 
     private static void migrate(GameTestHelper helper, ColonySettings.Value.Items legacy) {

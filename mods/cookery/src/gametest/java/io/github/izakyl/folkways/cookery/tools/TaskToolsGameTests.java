@@ -136,7 +136,7 @@ public final class TaskToolsGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void sharedBorrowUsesTheWorkVocationAndStillReturnsAfterDisabling(GameTestHelper helper) {
+    public static void sharedBorrowUsesTheWorkVocationAndHeldLoansStillWorkAfterDisabling(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
             var executions = new AtomicInteger();
@@ -152,23 +152,25 @@ public final class TaskToolsGameTests {
             helper.assertFalse(work.ready(rig.level), "no shared knife can be reserved for the forbidden vocation");
             helper.assertTrue(((ToolWork) work).families().isEmpty(), "a disabled vocation requests no shared-tool replenishment");
             helper.assertTrue(rig.tools.pool.leases(rig.colony.colonyId()).isEmpty(), "refusal creates no physical lease");
+            var spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(rig.boardAt),
+                Stances.WHEREVER, Workload.Once.of(1)).vocation(WaresContent.trade()).tools(new ToolUse(KNIFE, 0))
+                .needs(new io.github.izakyl.folkways.core.api.work.Need(KNIVES, 1, true)).done();
+            var rules = io.github.izakyl.folkways.core.api.vocation.KitRules.snapshot(rig.colony.works());
+            helper.assertFalse(Tools.canPrepare(rig.body.kind().id(), spec, List.of(), rules),
+                "planning cannot fetch a missing shared tool forbidden for the step's vocation");
+            helper.assertTrue(Tools.canPrepare(rig.body.kind().id(), spec, List.of(rig.namedKnife()), rules),
+                "an already held shared tool satisfies planning regardless of the step's acquisition list");
             front.setSetting(crafting, "tool", knife);
+            helper.assertTrue(Tools.canPrepare(rig.body.kind().id(), spec, List.of(),
+                io.github.izakyl.folkways.core.api.vocation.KitRules.snapshot(rig.colony.works())),
+                "planning may fetch a missing shared tool allowed for the step's vocation");
             helper.assertTrue(work.planned(rig.level).isEmpty() && work.ready(rig.level), "crafting's own list permits borrowing");
             rig.step(work);
             helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 1L, "one physical knife was borrowed");
             front.setSetting(crafting, "tool", new ColonySettings.Value.Items(List.of()));
-            var within = (Workload.Within) work.spec().workload();
-            var turn = within.next(rig.level, rig.worker);
-            helper.assertTrue(turn instanceof Workload.Within.Turn.Piece piece && piece.node() instanceof ToolAction.Return,
-                "disabling after borrowing returns the tool without doing the forbidden work");
-            Node returning = ((Workload.Within.Turn.Piece) turn).node();
-            rig.stand(returning);
-            helper.assertTrue(Commit.run(rig.level, returning, rig.worker) instanceof Outcome.Done, "return is allowed after disabling");
-            within.ended(rig.level, returning, Ending.DONE);
-            helper.assertTrue(within.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Leave, "return settles the wrapper");
-            helper.assertTrue(work.commit(rig.level, rig.worker) instanceof Outcome.Failed, "the forbidden task ends with a refusal");
-            work.ended(rig.level, Ending.REVOKED);
-            helper.assertValueEqual(executions.get(), 0, "no forbidden native action ran");
+            helper.assertTrue(work.ready(rig.level), "the already borrowed knife remains ready after disabling acquisition");
+            rig.finish(work);
+            helper.assertValueEqual(executions.get(), 1, "the native action uses its held loan after disabling acquisition");
             helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "the original knife is back in shared storage");
             helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 0L, "the pack retains no duplicate");
         }
@@ -193,6 +195,41 @@ public final class TaskToolsGameTests {
             work.ended(rig.level, Ending.REVOKED);
             helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "the disallowed tool never leaves storage");
             helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 0L, "no forbidden borrow enters the pack");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void changingAllowedKnivesWhileTravellingRetriesWithTheNewSubset(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            var iron = ModItems.IRON_KITCHEN_KNIFE.get();
+            var other = Goods.members(KNIVES).stream().filter(item -> item != iron).findFirst().orElseThrow();
+            rig.rack.setItem(0, rig.namedKnife());
+            rig.rack.setItem(1, new ItemStack(other));
+            var front = ColonyFront.of(rig.colony.works());
+            front.setSetting(WaresContent.CRAFTING, "tool", new ColonySettings.Value.Items(List.of(
+                ItemFilter.item(BuiltInRegistries.ITEM.getKey(iron)))));
+            var executions = new AtomicInteger();
+            Node work = rig.simple(executions, false);
+            helper.assertTrue(work.ready(rig.level), "the original subset permits borrowing");
+            var within = (Workload.Within) work.spec().workload();
+            Node borrow = ((Workload.Within.Turn.Piece) within.next(rig.level, rig.worker)).node();
+            front.setSetting(WaresContent.CRAFTING, "tool", new ColonySettings.Value.Items(List.of(
+                ItemFilter.item(BuiltInRegistries.ITEM.getKey(other)))));
+            rig.stand(borrow);
+            helper.assertTrue(Commit.run(rig.level, borrow, rig.worker) instanceof Outcome.Failed,
+                "the old knife is forbidden after travelling");
+            within.ended(rig.level, borrow, Ending.REVOKED);
+            helper.assertTrue(rig.tools.pool.leases(rig.colony.colonyId()).isEmpty(), "the rejected lease is removed");
+            helper.assertFalse(rig.step(work), "the next turn borrows from the new subset without another readiness check");
+            helper.assertTrue(rig.rack.getItem(0).getItem() == iron && rig.rack.getItem(1).isEmpty(),
+                "only the newly allowed knife leaves storage");
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(other.getDefaultInstance())), 1L,
+                "the new knife is physically borrowed");
+            rig.finish(work);
+            helper.assertValueEqual(executions.get(), 1, "the native action completes once with the new knife");
+            helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 2L, "both physical knives end in storage");
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 0L, "no borrowed knife remains in the pack");
         }
         helper.succeed();
     }

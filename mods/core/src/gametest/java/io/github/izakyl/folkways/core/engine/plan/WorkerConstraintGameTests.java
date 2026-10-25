@@ -52,7 +52,7 @@ public final class WorkerConstraintGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(WorkerConstraintGameTests.class); }
     @GameTest(template = "empty")
-    public static void multiVocationFitnessChecksEveryStepsOwnToolList(GameTestHelper helper) {
+    public static void multiVocationFitnessUsesHeldToolsAcrossVocations(GameTestHelper helper) {
         var fixture = new PlanningFixture(helper);
         var base = fixture.crew.hands().getFirst();
         var building = Vocations.required(ResourceLocation.fromNamespaceAndPath("folkways", "building"));
@@ -67,11 +67,11 @@ public final class WorkerConstraintGameTests {
             Stances.WHEREVER, Workload.Once.of(1)).vocation(patrol)
             .tools(new ToolUse(new ToolNeed.Ability(ItemAbilities.AXE_DIG), 1)).done();
         var work = new Fitness.Work(List.of(step), Set.of(), 0);
-        helper.assertTrue(Fitness.of(hand, work).equals(Optional.of(Fitness.Unfit.NO_TOOL)),
-            "another licensed vocation's matching axe cannot qualify a patrol step");
+        helper.assertTrue(Fitness.of(hand, work).isEmpty(),
+            "another licensed vocation's held axe qualifies the step regardless of its acquisition list");
         var equipped = new Crew.Hand(hand.who(), hand.at(), 6, 6, 1, licences,
             List.of(new ItemStack(Items.STONE_AXE), new ItemStack(Items.IRON_AXE)), Optional.empty(), List.of(), rules);
-        helper.assertTrue(Fitness.of(equipped, work).isEmpty(), "the patrol's own allowed axe qualifies the same resident");
+        helper.assertTrue(Fitness.of(equipped, work).isEmpty(), "either held axe qualifies the same resident");
         resident.mob().discard();
         helper.succeed();
     }

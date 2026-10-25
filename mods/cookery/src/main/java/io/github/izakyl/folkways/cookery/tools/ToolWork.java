@@ -3,7 +3,6 @@ package io.github.izakyl.folkways.cookery.tools;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.core.api.work.Staged;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -157,11 +156,14 @@ final class ToolWork implements Node, Workload.Within {
             complete = true;
             return LEAVE;
         }
-        if (!workDone && allowed().isEmpty()) {
+        if (!started && !workDone && !loans.keySet().containsAll(families) && allowed().isEmpty()) {
             failure = CookeryRefusal.NOTHING_TO_WORK_WITH;
             workDone = true;
         }
         if (!started && !workDone) {
+            if (loans.isEmpty()) {
+                families = allowed();
+            }
             for (ItemSpec family : families) {
                 if (loans.containsKey(family)) {
                     continue;
@@ -188,7 +190,7 @@ final class ToolWork implements Node, Workload.Within {
         }
         if (!workDone) {
             if (original.spec().workload() instanceof Within within) {
-                Turn turn = within.next(level, new LoanWorker(who, service, loans, original.spec().vocation()));
+                Turn turn = within.next(level, new LoanWorker(who, service, loans));
                 if (turn instanceof Turn.Piece piece) {
                     if (!equipped(piece.node(), who)) {
                         failure = CookeryRefusal.NOTHING_TO_WORK_WITH;
@@ -297,10 +299,9 @@ final class ToolWork implements Node, Workload.Within {
     public Unmet unmet(UUID before, Ending how) { return original.unmet(before, how); }
 
     private boolean equipped(Node action, Worker who) {
-        Worker actual = new LoanWorker(who, service, loans, action.spec().vocation());
+        Worker actual = new LoanWorker(who, service, loans);
         return action.spec().tools().stream().allMatch(use -> use.need() instanceof io.github.izakyl.folkways.core.api.work.ToolNeed.None
-            || !actual.held(use.need()).isEmpty() && KitRules.allows(
-                service.colony, action.spec().vocation(), actual.held(use.need()).getItem()));
+            || !actual.held(use.need()).isEmpty());
     }
 
     private Node action(Node node) {
@@ -317,7 +318,7 @@ final class ToolWork implements Node, Workload.Within {
         Action(Node delegate) {
             this.delegate = delegate;
             Workload workload = delegate.spec().workload() instanceof Workload.Continuous continuous
-                ? (Workload.Continuous) (level, who) -> continuous.holds(level, new LoanWorker(who, service, loans, delegate.spec().vocation()))
+                ? (Workload.Continuous) (level, who) -> continuous.holds(level, new LoanWorker(who, service, loans))
                 : delegate.spec().workload();
             action = copy(delegate.spec(), UUID.randomUUID(), workload,
                 delegate.spec().tools(), delegate.spec().leaves(), delegate.spec().effort());
@@ -332,7 +333,7 @@ final class ToolWork implements Node, Workload.Within {
         public boolean settled(ServerLevel level) { return delegate.settled(level); }
         public Optional<RefusalKind> refusal(ServerLevel level) { return delegate.refusal(level); }
         public void released(ServerLevel level, Worker who, Ending how) {
-            delegate.released(level, new LoanWorker(who, service, loans, delegate.spec().vocation()), how);
+            delegate.released(level, new LoanWorker(who, service, loans), how);
         }
         public void ended(ServerLevel level, Ending how) {
             if (delegate != original) {
@@ -353,7 +354,7 @@ final class ToolWork implements Node, Workload.Within {
                 }
             }
             try {
-                return delegate.commit(level, new LoanWorker(who, service, loans, delegate.spec().vocation()));
+                return delegate.commit(level, new LoanWorker(who, service, loans));
             } finally {
                 held.forEach((lease, tool) -> {
                     if (tool.isEmpty()) {
@@ -371,10 +372,10 @@ final class ToolWork implements Node, Workload.Within {
         StagedAction(Node delegate) { super(delegate); }
 
         public Drawn draw(ServerLevel level, Worker who) {
-            return ((Staged) delegate).draw(level, new LoanWorker(who, service, loans, delegate.spec().vocation()));
+            return ((Staged) delegate).draw(level, new LoanWorker(who, service, loans));
         }
         public void restore(ServerLevel level, Worker who, List<ItemStack> goods) {
-            ((Staged) delegate).restore(level, new LoanWorker(who, service, loans, delegate.spec().vocation()), goods);
+            ((Staged) delegate).restore(level, new LoanWorker(who, service, loans), goods);
         }
     }
 

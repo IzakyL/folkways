@@ -234,8 +234,6 @@ public final class CreateJointGameTests {
         Mob body = EntityType.PIG.create(helper.getLevel());
         body.moveTo(feet.getX() + 0.5D, feet.getY(), feet.getZ() + 0.5D);
         SimpleContainer pack = new SimpleContainer(27);
-        ItemStack pickaxe = new ItemStack(net.minecraft.world.item.Items.IRON_PICKAXE);
-        pack.addItem(pickaxe);
         for (ItemStack stack : of(track(), tracks)) {
             pack.addItem(stack);
         }
@@ -257,7 +255,7 @@ public final class CreateJointGameTests {
             }
 
             public ItemStack held(ToolNeed need) {
-                return io.github.izakyl.folkways.core.api.work.Tools.answers(pickaxe, need) ? pickaxe : ItemStack.EMPTY;
+                return ItemStack.EMPTY;
             }
 
             public void spill(ItemStack stack) {

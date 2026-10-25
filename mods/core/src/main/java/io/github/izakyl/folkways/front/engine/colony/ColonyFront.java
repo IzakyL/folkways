@@ -287,7 +287,8 @@ public final class ColonyFront implements FrontView {
         if (front.toolVersion < 1) {
             var legacy = loaded.getOrDefault(CoreSettings.CORE,
                 ColonySettings.empty()).valueOf("tool");
-            if (legacy.orElse(null) instanceof ColonySettings.Value.Items tools) {
+            if (legacy.orElse(null) instanceof ColonySettings.Value.Items tools
+                    && !Set.copyOf(tools.value()).equals(CoreSettings.legacyKit())) {
                 for (var vocation : Vocations.all()) {
                     ColonySettings held = loaded.getOrDefault(vocation.id(), ColonySettings.empty());
                     if (held.valueOf("tool").isEmpty()) {

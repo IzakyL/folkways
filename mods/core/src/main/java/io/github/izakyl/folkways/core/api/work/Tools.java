@@ -4,16 +4,12 @@ import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.Objects;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Predicate;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.Container;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.common.ItemAbility;
 
@@ -58,7 +54,7 @@ public final class Tools {
             return true;
         }
         for (ToolUse use : spec.tools()) {
-            if (from(held, use.need(), item -> rules.allows(spec.vocation(), item)).isPresent()) {
+            if (from(held, use.need()).isPresent()) {
                 continue;
             }
             var goods = shared(use.need()).orElse(null);
@@ -100,25 +96,12 @@ public final class Tools {
         return true;
     }
 
-    public static Optional<ItemStack> from(Container held, ToolNeed need, Predicate<Item> allowed) {
-        List<ItemStack> stacks = new ArrayList<>();
-        for (int slot = 0; slot < held.getContainerSize(); slot++) {
-            stacks.add(held.getItem(slot));
-        }
-        return from(stacks, need, allowed);
-    }
-
     public static Optional<ItemStack> from(List<ItemStack> held, ToolNeed need) {
-        return from(held, need, item -> true);
-    }
-
-    public static Optional<ItemStack> from(List<ItemStack> held, ToolNeed need,
-            Predicate<Item> allowed) {
         if (need instanceof ToolNeed.None) {
             return Optional.of(ItemStack.EMPTY);
         }
         for (ItemStack stack : held) {
-            if (!stack.isEmpty() && allowed.test(stack.getItem()) && answers(stack, need)) {
+            if (answers(stack, need)) {
                 return Optional.of(stack);
             }
         }
