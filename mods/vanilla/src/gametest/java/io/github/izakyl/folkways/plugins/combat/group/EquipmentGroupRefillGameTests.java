@@ -206,8 +206,9 @@ public final class EquipmentGroupRefillGameTests {
                 BlockPos cell = at(3, 1, 3 + n * 2).block(level);
                 person.moveTo(cell.getX() + .5, cell.getY(), cell.getZ() + .5);
                 person.getRandom().setSeed(42L + n);
+                level.addFreshEntity(person);
                 colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow(); person.joinColony(colony.id());
-                level.addFreshEntity(person); people.add(person);
+                people.add(person);
             }
             borrower = (ResidentEntity) people.getFirst().mob();
             player.moveTo(borrower.getX(), borrower.getY(), borrower.getZ() - 1);

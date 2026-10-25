@@ -68,31 +68,22 @@ public final class PointRouteGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 1200)
-    public static void intermediateAdvanceDoesNotRequireEveryResidentToHoldExactly(GameTestHelper helper) {
+    public static void eachResidentKeepsItsOriginalRunnerToTheActualMandatoryStop(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people();
-        scene.groups.commandSelectionPoints(people, List.of(scene.at(19, 1, 10)), -1);
+        WorldPos goal = scene.at(19, 1, 10);
+        scene.groups.commandSelectionPoints(people, List.of(goal), -1);
         UnitGroup group = scene.group();
-        AtomicReference<WorldPos> previousCaptain = new AtomicReference<>(group.captain().orElseThrow());
-        AtomicBoolean previousMoving = new AtomicBoolean(true);
-        AtomicBoolean continuousAdvance = new AtomicBoolean();
-        helper.onEachTick(() -> {
-            WorldPos current = group.captain().orElseThrow();
-            if (!current.equals(previousCaptain.get()) && previousMoving.get()) { continuousAdvance.set(true); }
-            previousCaptain.set(current);
-            previousMoving.set(people.stream().anyMatch(body -> scene.commands.current(body.id())
-                .filter(order -> order.status() == ResidentCommands.Status.MOVING
-                    && !Reach.standingAt(body.mob().position(), order.destination().block(scene.level))).isPresent()));
-            helper.assertTrue(group.phase() != UnitGroup.Phase.FAILED_WAITING,
-                "open grass must not fail while members are still making progress");
-        });
-        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(group.routeComplete(), "the squad finishes its route"))
+        var original = people.stream().collect(java.util.stream.Collectors.toMap(Body::id,
+            body -> scene.commands.current(body.id()).orElseThrow()));
+        helper.assertTrue(group.captain().filter(goal::equals).isPresent(), "the logical cursor names the mandatory stop immediately");
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(group.routeComplete(), "the squad physically finishes its mandatory stop"))
             .thenExecute(() -> {
-                helper.assertTrue(continuousAdvance.get(), "at least one intermediate leg advances before exact all-member HOLDING");
+                original.forEach((member, order) -> helper.assertTrue(scene.commands.current(member).orElse(null) == order,
+                    "internal six-block anchors no longer restart healthy navigation"));
                 scene.assertAtSlots();
             }).thenSucceed();
     }
-
     @GameTest(template = "empty_large", timeoutTicks = 1800)
     public static void finalDwellCompletesThenAppendKeepsHistoryWithoutRepeatingCompletedStop(GameTestHelper helper) {
         Scene scene = new Scene(helper);
@@ -159,8 +150,9 @@ public final class PointRouteGameTests {
         }
         scene.groups.commandSelectionPoints(people, List.of(scene.at(19, 1, 10)), -1);
         UnitGroup group = scene.group();
-        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.FAILED_WAITING,
-            "a blocked mandatory point must finish bounded recovery in controlled failure"))
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(group.phase() == UnitGroup.Phase.WAITING_FOR_MEMBER
+                && !group.failedMembers().isEmpty(),
+            "a blocked mandatory point finishes its bounded active recovery in visible retained waiting"))
             .thenExecute(() -> {
                 helper.assertTrue(group.endReason() == UnitGroup.EndReason.ROUTE_NO_PATH
                         || group.endReason() == UnitGroup.EndReason.ROUTE_MEMBER_BLOCKED
@@ -265,10 +257,10 @@ public final class PointRouteGameTests {
                 BlockPos cell = at(2, 1, z).block(level);
                 body.mob().moveTo(cell.getX() + .5, cell.getY(), cell.getZ() + .5);
                 body.mob().setOnGround(true);
+                level.addFreshEntity(body.mob());
                 colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
                 bodies.add(body);
-                level.addFreshEntity(body.mob());
             }
             return List.copyOf(bodies);
         }

@@ -384,6 +384,13 @@ public final class ResidentCommands {
             } else if (lendsRunner(order.resident())) {
                 // Resupply borrows a stable order; its travel is not failed command travel time.
                 order.movingSince++;
+            } else if (order.status == Status.MOVING
+                    && order.body.mob().getMoveControl()
+                        instanceof io.github.izakyl.folkways.plugins.person.walk.ResidentMoveControl movement
+                    && movement.yielding()) {
+                // Resident traffic deliberately slows a follower or yields to oncoming walkers.
+                // That shared navigation pause must not exhaust this command's travel budget.
+                order.movingSince++;
             } else if ((order.mode == Mode.GUARD || order.defensiveOnly())
                     && (order.engaged() || order.yielded || order.yieldingToDanger())
                     && order.status == Status.MOVING) {

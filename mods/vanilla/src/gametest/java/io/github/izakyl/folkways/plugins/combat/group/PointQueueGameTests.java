@@ -51,8 +51,9 @@ public final class PointQueueGameTests {
             helper.assertTrue(slot.cell().distSqr(captain.cell()) <= 3 * 3,
                 "every member moves around the current logical captain"))));
         var sequence = helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(!group.captain().orElseThrow().equals(initialCaptain)
-                    && group.patrolStop() == 0 && group.phase() == UnitGroup.Phase.LINE,
+            .thenWaitUntil(() -> helper.assertTrue(group.patrolStop() == 0 && group.phase() == UnitGroup.Phase.LINE
+                    && scene.people.stream().anyMatch(body -> body.mob().getX() > scene.at(4, 8).cell().getX())
+                    && !group.atAuthoredStop(),
                 "the initial click starts travelling before any second click is sent"))
             .thenExecute(() -> {
                 WorldPos movingCaptain = group.captain().orElseThrow();
@@ -260,10 +261,10 @@ public final class PointQueueGameTests {
                 Body body = PersonBody.RESIDENT.get().create(level);
                 BlockPos cell = at(2, 7 + n * 2).block(level);
                 body.mob().moveTo(cell.getX() + .5, cell.getY(), cell.getZ() + .5);
+                level.addFreshEntity(body.mob());
                 colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
                 people.add(body);
-                level.addFreshEntity(body.mob());
             }
             helper.onEachTick(simulation::tick);
             helper.testInfo.addListener(this);

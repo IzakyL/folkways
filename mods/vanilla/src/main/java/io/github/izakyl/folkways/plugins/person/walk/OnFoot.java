@@ -33,6 +33,7 @@ public final class OnFoot implements Conveyance {
     private static final int REPATH_TICKS = 5;
 
     private static final int NO_PROGRESS_TICKS = 200;
+    private static final int MAX_WALKING_TICKS = 2400;
 
     private static final double PROGRESS_STEP = 0.5D;
 
@@ -43,6 +44,7 @@ public final class OnFoot implements Conveyance {
     private int walkingTicks;
     private double closest = Double.MAX_VALUE;
     private int sinceProgress;
+    private Vec3 progressAt;
     private Float walked;
     private double distanceWalked;
     private int activeWalkingTicks;
@@ -74,7 +76,9 @@ public final class OnFoot implements Conveyance {
         if (!closingIn(body, to)) {
             return new Going.Failed(lost);
         }
-        if (++walkingTicks % 10 == 0 && to.stream().anyMatch(cell -> cell.realm() instanceof Realm.Dimension)
+        boolean yielding = body.getMoveControl() instanceof ResidentMoveControl control && control.yielding();
+        if (!yielding && ++walkingTicks >= MAX_WALKING_TICKS) { return new Going.Failed(lost); }
+        if (!yielding && walkingTicks % 10 == 0 && to.stream().anyMatch(cell -> cell.realm() instanceof Realm.Dimension)
                 && !Structures.obstacles(level,
                     body.getBoundingBox().inflate(4.0D)).isEmpty()) {
             repath(body, cells);
@@ -104,6 +108,7 @@ public final class OnFoot implements Conveyance {
         activeWalkingTicks = 0;
         closest = Double.MAX_VALUE;
         sinceProgress = 0;
+        progressAt = body.position();
         repath(body, here(level, to));
     }
 
@@ -162,11 +167,14 @@ public final class OnFoot implements Conveyance {
         double near = apart(body, to);
         if (body.getMoveControl() instanceof ResidentMoveControl control && control.yielding()) {
             closest = near;
+            progressAt = body.position();
             sinceProgress = 0;
             return true;
         }
-        if (near < closest - PROGRESS_STEP) {
+        if (near < closest - PROGRESS_STEP || progressAt != null
+                && progressAt.distanceToSqr(body.position()) >= PROGRESS_STEP * PROGRESS_STEP) {
             closest = near;
+            progressAt = body.position();
             sinceProgress = 0;
             return true;
         }

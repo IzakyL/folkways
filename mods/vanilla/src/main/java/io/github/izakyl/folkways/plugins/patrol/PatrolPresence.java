@@ -105,6 +105,7 @@ final class PatrolPresence implements Facing {
     private final Map<UUID, Lap> laps = new ConcurrentHashMap<>();
 
     private final Map<UUID, Long> alerts = new ConcurrentHashMap<>();
+    private record MovingBattle(UUID order, UUID route, int stop, WorldPos anchor) { }
 
     private volatile Map<UUID, List<Stop>> routes = Map.of();
 
@@ -232,13 +233,19 @@ final class PatrolPresence implements Facing {
             failedWaiting ? Long.MIN_VALUE : dutyUntil.getOrDefault(who.resident().id(), Long.MIN_VALUE));
         Optional<ResidentCommands.Order> guard = order
             .filter(current -> current.mode() == ResidentCommands.Mode.GUARD || current.defensiveOnly());
+        Optional<UnitGroup> marching = UnitGroups.of(colony).ofResident(who.resident().id())
+            .filter(group -> group.attackMove() && group.transiting());
+        Optional<WorldPos> battleAnchor = guard.map(ResidentCommands.Order::destination);
+        if (marching.isPresent() && guard.isPresent()) {
+            battleAnchor = Optional.of(marching.get().encounterAnchor(who.resident().id()).orElseGet(() -> WorldSpaces.at(body)));
+        }
         Optional<ResidentSupport.Ticket> assisting = support.ticket(who);
         if (assisting.isPresent()) {
             var ticket = assisting.get();
             Mob threat = ticket.foe.get();
             if (threat != null && (!(threat instanceof net.minecraft.world.entity.monster.Creeper)
                     || Weapons.ranged(who) && CombatReadiness.explosiveNear(body).isEmpty())) {
-                var stances = battleStances(level, who, threat, guard);
+                var stances = battleStances(level, who, threat, guard.map(ResidentCommands.Order::destination));
                 if (stances.isPresent()) {
                     var helping = support.urge(who, ticket, stances.get());
                     if (!helping.isEmpty()) return helping;
@@ -248,16 +255,16 @@ final class PatrolPresence implements Facing {
         // Failed waiting has no navigation handle, but must not resume an old patrol duty or supply trip.
         // Stopped and reforming squads may retaliate inside their fixed slot leash, never scan for a new foe.
         Optional<Mob> foe = failedWaiting || guard.filter(ResidentCommands.Order::defensiveOnly).isPresent()
-            ? attacker(body).filter(target -> insideLeash(level, guard, WorldSpaces.at(target)))
+            ? attacker(body).filter(target -> insideLeash(level, guard.map(ResidentCommands.Order::destination), WorldSpaces.at(target)))
             : guard.isPresent() || onDuty(who.resident().id(), level.getGameTime())
-            ? nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE), guard)
+            ? nearestFoe(level, body, ENGAGE_RANGE + who.effects().value(PatrolContent.ALERT_RANGE), battleAnchor)
             : attacker(body);
         if (foe.isEmpty() || !Weapons.armed(who)) {
             return supply;
         }
         if (foe.get() instanceof net.minecraft.world.entity.monster.Creeper
                 && (!Weapons.ranged(who) || CombatReadiness.explosiveNear(body).isPresent())) return supply;
-        Optional<Stances> reach = battleStances(level, who, foe.get(), guard);
+        Optional<Stances> reach = battleStances(level, who, foe.get(), battleAnchor);
         if (reach.isEmpty()) {
             return supply;
         }
@@ -267,14 +274,28 @@ final class PatrolPresence implements Facing {
         // renews the group pause; fear remains free to take over independently.
         if (standsGround) { guard.ifPresent(ResidentCommands.Order::engaging); }
         Mob target = foe.get();
+        java.util.function.BooleanSupplier authorized = null;
+        if (standsGround && marching.isPresent() && guard.isPresent()) {
+            UnitGroup group = marching.get();
+            ResidentCommands.Order original = guard.get();
+            MovingBattle lease = new MovingBattle(original.id(), group.pointCommandId().orElseThrow(),
+                group.patrolStop(), battleAnchor.orElseThrow());
+            io.github.izakyl.folkways.core.api.resident.body.Bodies.of(body).ifPresent(group::encounter);
+            authorized = () -> ResidentCommands.of(colony).current(who.resident().id()).orElse(null) == original
+                && group.pointCommandId().filter(lease.route()::equals).isPresent() && group.patrolStop() == lease.stop()
+                && Threats.hostile(target, body) && lease.anchor().sameRealm(WorldSpaces.at(body))
+                && WorldSpaces.world(level, lease.anchor()).filter(at -> body.position().distanceToSqr(at) <= 12.9 * 12.9
+                    && target.position().distanceToSqr(at) <= ENGAGE_RANGE * ENGAGE_RANGE).isPresent();
+        }
         if (who.effects().value(PatrolContent.ALERT_RANGE) > 0) {
             alerts.put(target.getUUID(), level.getGameTime() + 100);
         }
         Stances stances = reach.get();
         ResourceLocation intent = ResourceLocation.fromNamespaceAndPath(ENGAGE.getNamespace(),
             ENGAGE.getPath() + "/" + target.getUUID());
+        java.util.function.BooleanSupplier permit = authorized;
         return List.of(new Urge(intent, weight, true, () -> body instanceof ResidentEntity
-            ? new StrikeNode(level, target, stances) : new ToolStrikeNode(level, target, stances)));
+            ? new StrikeNode(level, target, stances, permit) : new ToolStrikeNode(level, target, stances, permit)));
     }
 
     private boolean onDuty(UUID resident, long now) {
@@ -291,11 +312,11 @@ final class PatrolPresence implements Facing {
                 && body.hasLineOfSight(mob));
     }
 
-    private Optional<Mob> nearestFoe(ServerLevel level, Mob body, double range, Optional<ResidentCommands.Order> guard) {
+    private Optional<Mob> nearestFoe(ServerLevel level, Mob body, double range, Optional<WorldPos> guard) {
         alerts.values().removeIf(until -> until < level.getGameTime());
         List<Mob> near = level.getEntitiesOfClass(Mob.class, body.getBoundingBox().inflate(Math.max(range, 24)),
             mob -> Threats.hostile(mob, body)
-                && (guard.isEmpty() || WorldSpaces.world(level, guard.get().destination())
+                && (guard.isEmpty() || WorldSpaces.world(level, guard.get())
                     .filter(origin -> origin.distanceToSqr(mob.position()) <= range * range).isPresent())
                 && (body.distanceToSqr(mob) <= range * range
                     || alerts.containsKey(mob.getUUID()) && body.distanceToSqr(mob) <= 24 * 24));
@@ -308,15 +329,15 @@ final class PatrolPresence implements Facing {
         return Optional.empty();
     }
 
-    private static boolean insideLeash(ServerLevel level, Optional<ResidentCommands.Order> guard,
+    private static boolean insideLeash(ServerLevel level, Optional<WorldPos> guard,
             WorldPos at) {
-        return guard.isEmpty() || guard.get().destination().sameRealm(at)
-            && WorldSpaces.world(level, guard.get().destination()).flatMap(origin -> WorldSpaces.world(level, at)
+        return guard.isEmpty() || guard.get().sameRealm(at)
+            && WorldSpaces.world(level, guard.get()).flatMap(origin -> WorldSpaces.world(level, at)
                 .map(point -> origin.distanceToSqr(point) <= LEASH_RANGE * LEASH_RANGE)).orElse(false);
     }
 
     private static Optional<Stances> battleStances(ServerLevel level, Worker who, Mob foe,
-            Optional<ResidentCommands.Order> guard) {
+            Optional<WorldPos> guard) {
         Mob body = who.body();
         Set<BlockPos> cells = new LinkedHashSet<>();
         if (Weapons.ranged(who)) {

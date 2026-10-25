@@ -369,10 +369,10 @@ public final class SquadExecutionGameTests {
                 Body body = PersonBody.RESIDENT.get().create(level);
                 BlockPos cell = at(2, 7 + n * 2).block(level);
                 body.mob().moveTo(cell.getX() + .5, cell.getY(), cell.getZ() + .5);
+                level.addFreshEntity(body.mob());
                 colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
                 body.pack().insert(new ItemStack(Items.IRON_SWORD));
-                level.addFreshEntity(body.mob());
                 bodies.add(body);
                 people.add(body);
             }

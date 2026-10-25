@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -26,7 +27,6 @@ import net.minecraft.world.phys.AABB;
 final class PointRoute {
     final UUID commandId = UUID.randomUUID();
     final boolean attackMove;
-    private static final int ADVANCE = 6;
     private static final int SLOT_PATH_ATTEMPTS = 12;
     private static final int MAX_POINTS = 16;
     List<WorldPos> points;
@@ -62,18 +62,9 @@ final class PointRoute {
             if (!points.getFirst().sameRealm(point)) { throw new IllegalArgumentException("route crosses realms"); }
             slots(bodies, point);
         }
-        WorldPos first = WorldSpaces.at(bodies.getFirst().mob());
-        double x = bodies.stream().map(body -> WorldSpaces.at(body.mob())).mapToInt(at -> at.cell().getX()).average().orElseThrow();
-        double y = bodies.stream().map(body -> WorldSpaces.at(body.mob())).mapToInt(at -> at.cell().getY()).average().orElseThrow();
-        double z = bodies.stream().map(body -> WorldSpaces.at(body.mob())).mapToInt(at -> at.cell().getZ()).average().orElseThrow();
-        WorldPos center = first.at(BlockPos.containing(x, y, z));
-        captain = first;
-        for (int dy : new int[] {0, -1, 1, -2, 2}) {
-            WorldPos candidate = center.at(center.cell().offset(0, dy, 0));
-            try { slots(bodies, candidate); captain = candidate; break; }
-            catch (IllegalArgumentException unavailable) { /* Gather around a loaded member if the midpoint is unsafe. */ }
-        }
-        slots(bodies, captain);
+        // This is the authored stop cursor, not a physical captain or a transit assembly gate.
+        // Every member's existing runner can navigate independently through the same bottleneck.
+        captain = points.getFirst();
     }
 
     WorldPos captain() { return captain; }
@@ -109,51 +100,17 @@ final class PointRoute {
         complete = false;
     }
 
-    /** Compute without changing the captain; commit only after a complete command batch is accepted. */
-    Optional<WorldPos> advance(List<Body> bodies) {
-        WorldPos goal = points.get(stop);
-        Body leader = bodies.getFirst();
-        var level = leader.mob().level();
-        if (Reach.standingAt(WorldSpaces.relative(level, goal.realm(), leader.mob().position()).orElseThrow(), goal.cell())) {
-            return Optional.of(goal);
-        }
-        var path = leader.mob().getNavigation().createPath(Set.of(goal.block(level)), 0);
-        // A temporary airborne body cannot update its ground navigator. A distant target may
-        // also have a useful partial path inside FOLLOW_RANGE; neither means permanent failure.
-        if (path == null) { return Optional.empty(); }
-        List<WorldPos> candidates = new ArrayList<>();
-        Vec3 previous = WorldSpaces.relative(level, goal.realm(), leader.mob().position()).orElseThrow();
-        double alreadyCovered = previous.distanceTo(Vec3.atBottomCenterOf(captain.cell()));
-        double length = 0;
-        // createPath can reuse a running path. Start at its live cursor, using the same real
-        // resident as the path finder, and bound cumulative path length rather than an anchor sphere.
-        for (int n = path.getNextNodeIndex(); n < path.getNodeCount(); n++) {
-            var node = path.getNode(n);
-            WorldPos point = WorldPos.of(level, new BlockPos(node.x, node.y, node.z));
-            if (!goal.sameRealm(point)) { break; }
-            Vec3 feet = Vec3.atBottomCenterOf(point.cell());
-            length += feet.distanceTo(previous);
-            if (length > ADVANCE + .01) { break; }
-            previous = feet;
-            if (!point.equals(captain) && (point.equals(goal) || length > alreadyCovered + .5)) { candidates.add(point); }
-        }
-        for (WorldPos candidate : candidates.reversed()) {
-            try { slots(bodies, candidate); return Optional.of(candidate); }
-            catch (IllegalArgumentException unavailable) { /* A doorway node need not itself become an assembly stop. */ }
-        }
-        return Optional.empty();
-    }
-
-    void advanced(WorldPos next) { captain = next; }
     int travellingTicks() { return travellingTicks; }
     /** Called only while a present squad owns the runner and is travelling or recovering. */
     void travelling() { travellingTicks++; }
     void nextStop() {
         if (!hasNext()) { throw new IllegalStateException("point queue is waiting for another point"); }
         stop = stop + 1 < points.size() ? stop + 1 : cycleStart;
+        captain = points.get(stop);
         travellingTicks = 0;
         complete = false;
     }
+    void restoreStop(int previous) { stop = previous; captain = points.get(previous); }
 
     /** A bounded local search for a safe end-of-command assembly anchor. */
     static PointRoute regroup(UnitGroups owner, List<Body> bodies) {
@@ -293,6 +250,30 @@ final class PointRoute {
     static final class Unavailable extends IllegalArgumentException {
         final UUID member;
         Unavailable(UUID member) { super("no reachable non-overlapping nearby squad slot for " + member); this.member = member; }
+    }
+
+    /** Local encounter homes follow the actual queue footprint, not one N-slot transit rectangle. */
+    static Map<UUID, WorldPos> stations(List<Body> bodies, Map<UUID, WorldPos> retained) {
+        Map<UUID, WorldPos> result = new LinkedHashMap<>();
+        List<AABB> occupied = new ArrayList<>();
+        for (Body body : bodies) {
+            WorldPos origin = retained.getOrDefault(body.id(), WorldSpaces.at(body.mob()));
+            WorldPos chosen = null;
+            search: for (int radius = 0; radius <= 4; radius++) {
+                for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) continue;
+                    for (int dy : new int[] {0, -1, 1, -2, 2}) {
+                        WorldPos candidate = origin.at(origin.cell().offset(dx, dy, dz));
+                        if (safe(body, candidate) && occupied.stream().noneMatch(at(body, candidate)::intersects)) {
+                            chosen = candidate; break search;
+                        }
+                    }
+                }
+            }
+            if (chosen == null) throw new Unavailable(body.id());
+            result.put(body.id(), chosen); occupied.add(at(body, chosen));
+        }
+        return Map.copyOf(result);
     }
 
     private static boolean safe(Body body, WorldPos point) {

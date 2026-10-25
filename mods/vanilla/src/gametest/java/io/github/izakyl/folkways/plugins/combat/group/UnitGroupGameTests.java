@@ -750,11 +750,11 @@ public final class UnitGroupGameTests {
                 Body body = PersonBody.RESIDENT.get().create(level);
                 BlockPos cell = at(2, 1, 7 + n * 2).block(level);
                 body.mob().moveTo(cell.getX() + .5, cell.getY(), cell.getZ() + .5);
+                level.addFreshEntity(body.mob());
                 colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
                 bodies.add(body);
                 people.add(body);
-                level.addFreshEntity(body.mob());
             }
             return List.copyOf(people);
         }
