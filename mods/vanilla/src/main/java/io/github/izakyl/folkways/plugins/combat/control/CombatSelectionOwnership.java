@@ -377,9 +377,14 @@ public final class CombatSelectionOwnership {
     }
 
     boolean reserved(Body body) {
+        return reserved(body.id());
+    }
+
+    /** A live selection or shortcut keeps this loaded resident available for its controlling player. */
+    public boolean reserved(UUID resident) {
         requireThread();
         prune();
-        return owners.containsKey(body.id());
+        return owners.containsKey(resident);
     }
 
     void tick(MinecraftServer ignored) { prune(); }

@@ -12,9 +12,9 @@ final class Rest {
     static final int SPENT = 1200;
     static final int SLEEPY = 800;
 
-    // A resident walking most of the day, as a working one does, grows sleepy about once a day and sleeps it off
-    // in a sixth of one.
-    private static final double PER_LABOR_TICK = 1.0D / 5.0D;
+    // One loaded day awake reaches the sleep threshold; walking can bring it forward.
+    // Time has one live clock, independent of delayed work-node settlement and player control.
+    private static final double PER_AWAKE_TICK = 1.0D / 30.0D;
 
     private static final double PER_BLOCK_WALKED = 0.3D;
 
@@ -26,11 +26,9 @@ final class Rest {
         return SPENT - tiredness();
     }
 
-    void spend(double laborTicks, double blocksWalked) {
-        tired = Math.min(SPENT, tired
-            + laborTicks * PER_LABOR_TICK
-            + blocksWalked * PER_BLOCK_WALKED);
-    }
+    void awake(double ticks) { tired = Math.min(SPENT, tired + ticks * PER_AWAKE_TICK); }
+
+    void walked(double blocks) { tired = Math.min(SPENT, tired + blocks * PER_BLOCK_WALKED); }
 
     void sleep(int ticks) {
         tired = Math.max(RESTED, tired - ticks * PER_TICK_ASLEEP);

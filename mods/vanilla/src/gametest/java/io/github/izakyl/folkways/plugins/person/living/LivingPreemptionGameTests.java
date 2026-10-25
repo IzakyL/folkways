@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
+import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
@@ -19,8 +20,15 @@ import io.github.izakyl.folkways.core.api.work.WorkExertion;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
+import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.plugins.combat.control.CombatSelectionOwnership;
+import io.github.izakyl.folkways.front.engine.charter.Charter;
+import io.github.izakyl.folkways.front.engine.charter.Charters;
+import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
+import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -28,13 +36,16 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.neoforged.neoforge.common.util.FakePlayerFactory;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -60,8 +71,8 @@ public final class LivingPreemptionGameTests {
             helper.assertTrue(Math.abs(saved.getList("hunger", 10).getCompound(0).getFloat("Exhaustion")
                 - 0.19F) < 0.00001F, "food consumes standard work plus distance, independent of labor ticks");
             var rest = saved.getList("rest", 10).getCompound(0);
-            helper.assertTrue(Math.abs(rest.getFloat("Tired") - (1.0F / 5 + 0.9F)) < 0.00001F,
-                "fatigue consumes elapsed labor ticks plus distance, preserving fractional effort");
+            helper.assertTrue(Math.abs(rest.getFloat("Tired") - 0.9F) < 0.00001F,
+                "settled effort adds distance fatigue once; elapsed time belongs exclusively to the live awake clock");
             Rest loaded = new Rest();
             loaded.load(io.github.izakyl.folkways.base.persist.Reader.of(rest));
             helper.assertTrue(Math.abs(loaded.save().getFloat("Tired") - rest.getFloat("Tired")) < 0.00001F,
@@ -107,6 +118,77 @@ public final class LivingPreemptionGameTests {
             body.mob().discard();
             colony.raze();
         }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void selectionShortcutsAndCommandsDeferSleepButDoNotEraseRestDebt(GameTestHelper helper) {
+        var level = helper.getLevel();
+        Colony colony = Colonies.mint(level.getServer());
+        Body body = PersonBody.RESIDENT.get().create(level);
+        var player = FakePlayerFactory.get(level, new GameProfile(UUID.randomUUID(), "rest_commander"));
+        try {
+            BlockPos feet = helper.absolutePos(new BlockPos(2, 1, 2));
+            helper.setBlock(new BlockPos(2, 0, 2), Blocks.STONE);
+            body.mob().moveTo(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
+            colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+            body.joinColony(colony.id());
+            level.addFreshEntity(body.mob());
+            player.moveTo(body.mob().position());
+            Charters.keep(colony, Charter.founded("rest control test", player.getUUID()));
+            player.setData(FolkwaysPlayerAttachments.CURRENT_COLONY, Optional.of(colony.id()));
+            player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(FolkwaysItems.COLONY_BOOK.get()));
+            WorldPos bed = WorldPos.of(level, feet);
+            colony.keep(LivingContent.ID, Writer.of()
+                .children("hunger", List.of(body.id()), id -> Writer.of().uuid("resident", id).integer("FoodLevel", 20).tag())
+                .children("rest", List.of(body.id()), id -> Writer.of().uuid("resident", id).integer("Tired", Rest.SPENT).tag())
+                .children("claims", List.of(body.id()), id -> Writer.of().uuid("resident", id).blob("bed", bed.save()).tag()).tag());
+            LivingPresence living = new LivingPresence(colony);
+            Worker worker = worker(body, 0);
+            var ownership = CombatSelectionOwnership.of(colony);
+            helper.assertTrue(living.urges(worker, colony.view(level)).stream().anyMatch(urge -> urge.id().equals(LivingPresence.SLEEP)),
+                "a fully exhausted uncontrolled resident still requests its own bed");
+            helper.assertTrue(ownership.select(player, List.of(body.id())), "the actual commander acquires selection ownership");
+            helper.assertFalse(living.urges(worker, colony.view(level)).stream().anyMatch(urge -> urge.id().equals(LivingPresence.SLEEP)),
+                "selection alone postpones sleep even without a movement order");
+            ownership.bindGroup(player, 0);
+            ownership.select(player, List.of());
+            helper.assertFalse(living.urges(worker, colony.view(level)).stream().anyMatch(urge -> urge.id().equals(LivingPresence.SLEEP)),
+                "a retained shortcut continues postponing sleep after the visible selection clears");
+            ownership.recallGroup(player, 0);
+            ownership.releaseSelected(player, List.of(body.id()));
+            helper.assertTrue(living.urges(worker, colony.view(level)).stream().anyMatch(urge -> urge.id().equals(LivingPresence.SLEEP)),
+                "releasing the last references restores the unchanged sleep need");
+            var hold = ResidentCommands.of(colony).hold(body, bed);
+            helper.assertFalse(living.urges(worker, colony.view(level)).stream().anyMatch(urge -> urge.id().equals(LivingPresence.SLEEP)),
+                "a valid standalone manual order also postpones sleep");
+            hold.close();
+            Mood mood = new Mood();
+            mood.step(level.getGameTime(), 20, living.alertnessOf(body.id()).orElseThrow(), 0, false, false);
+            helper.assertValueEqual(mood.reasons.get("rest"), -10,
+                "postponing sleep preserves exhaustion and its existing mood penalty instead of granting free rest");
+        } finally {
+            body.mob().discard();
+            player.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+            colony.raze();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void onlyConsecutiveLoadedAwakeTicksAddTimeFatigue(GameTestHelper helper) {
+        AwakeTime clock = new AwakeTime();
+        Rest rest = new Rest();
+        helper.assertValueEqual(clock.observe(100, true), 0, "the first loaded observation has no elapsed interval");
+        for (long tick = 101; tick <= 130; tick++) { rest.awake(clock.observe(tick, true)); }
+        helper.assertValueEqual(rest.tiredness(), 1, "thirty actual awake ticks charge one time-fatigue point");
+        helper.assertValueEqual(clock.observe(130, true), 0, "duplicate observation in the same tick never double charges");
+        helper.assertValueEqual(clock.observe(131, false), 0, "sleeping does not count as awake time");
+        helper.assertValueEqual(clock.observe(5000, true), 0, "an unloaded or offline gap is not retroactive awake time");
+        helper.assertValueEqual(new AwakeTime().observe(5001, true), 0, "a reloaded clock starts without catch-up debt");
+        Rest day = new Rest();
+        day.awake(24000);
+        helper.assertValueEqual(day.tiredness(), Rest.SLEEPY, "one loaded awake day reaches the existing sleepy threshold");
         helper.succeed();
     }
 

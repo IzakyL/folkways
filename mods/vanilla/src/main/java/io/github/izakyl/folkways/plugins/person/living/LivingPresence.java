@@ -34,6 +34,8 @@ import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.plugins.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.plugins.combat.control.CombatSelectionOwnership;
 import io.github.izakyl.folkways.plugins.patrol.Wards;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import java.nio.charset.StandardCharsets;
@@ -97,6 +99,7 @@ final class LivingPresence implements Facing {
     private final Map<UUID, Hunger> bellies = new LinkedHashMap<>();
 
     private final Map<UUID, Rest> wear = new LinkedHashMap<>();
+    private final Map<UUID, AwakeTime> awakeTime = new LinkedHashMap<>();
 
     private final Map<UUID, Mood> moods = new LinkedHashMap<>();
     private final HousingRooms rooms = new HousingRooms();
@@ -142,6 +145,7 @@ final class LivingPresence implements Facing {
         }
         unwritten |= bellies.keySet().retainAll(belonging);
         unwritten |= wear.keySet().retainAll(belonging);
+        awakeTime.keySet().retainAll(belonging);
         unwritten |= moods.keySet().retainAll(belonging);
         leisure.retain(belonging);
         hunger.retain(belonging);
@@ -162,8 +166,16 @@ final class LivingPresence implements Facing {
                     continue;
                 }
                 Entity found = level.getEntity(resident.id());
-                if (!(found instanceof LivingEntity living)) {
+                if (!(found instanceof LivingEntity living) || !living.isAlive() || living.isRemoved()) {
+                    awakeTime.remove(resident.id());
                     continue;
+                }
+                int awake = awakeTime.computeIfAbsent(resident.id(), id -> new AwakeTime())
+                    .observe(level.getGameTime(), !living.isSleeping());
+                if (awake > 0) {
+                    wear.computeIfAbsent(resident.id(), id -> new Rest())
+                        .awake(awake * view.effectsOf(resident).value(Stats.FATIGUE));
+                    unwritten = true;
                 }
                 Hunger his = bellies.computeIfAbsent(resident.id(), id -> new Hunger());
                 his.setExhaustionRateMul((float) view.effectsOf(resident).value(Stats.APPETITE));
@@ -205,7 +217,8 @@ final class LivingPresence implements Facing {
             .filter(doing -> doing.equals("fetching") || doing.equals("stowing") || doing.equals("picking_up")).isPresent();
         double travelFatigue = hauling ? body.effects().value(Stats.FATIGUE,
             Vocations.HAULING) : fatigue;
-        wear.computeIfAbsent(body.id(), id -> new Rest()).spend(effort.activeTicks() * fatigue, effort.distance() * travelFatigue);
+        // Elapsed awake time is charged by tick(), never again by a delayed execution total.
+        wear.computeIfAbsent(body.id(), id -> new Rest()).walked(effort.distance() * travelFatigue);
         unwritten = true;
     }
 
@@ -248,6 +261,9 @@ final class LivingPresence implements Facing {
     }
 
     private Optional<Urge> sleeping(Worker who, ColonyView colony) {
+        // Withdrawing this urge also lets the same runner finish an existing sleeping gesture safely.
+        // A passive selection, a retained shortcut and failed waiting all remain player control.
+        if (directed(who.resident().id())) { return Optional.empty(); }
         Optional<Integer> alertness = alertnessOf(who.resident().id());
         if (alertness.isEmpty() || !tiredness.holds(who.resident().id(), alertness.get())) {
             return Optional.empty();
@@ -262,6 +278,11 @@ final class LivingPresence implements Facing {
         double weight = urgent ? Urge.NOW : Urge.SPARE;
         return Optional.of(new Urge(SLEEP, weight, urgent || !who.effects().has(Stats.PATIENT),
             () -> new SleepAction(this, level, where, ticksToSleepOff(who.resident().id()))));
+    }
+
+    private boolean directed(UUID resident) {
+        return CombatSelectionOwnership.of(colony).reserved(resident)
+            || ResidentCommands.of(colony).current(resident).isPresent();
     }
 
     private boolean carriesAMeal(Worker who) {
@@ -430,6 +451,7 @@ final class LivingPresence implements Facing {
     }
 
     public void closed(Closing why) {
+        awakeTime.clear();
         dining.clear();
         if (why == Closing.RAZED) {
             beds.clear();
