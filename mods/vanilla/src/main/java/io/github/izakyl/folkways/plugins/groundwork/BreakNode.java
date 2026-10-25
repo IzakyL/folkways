@@ -10,10 +10,8 @@ import io.github.izakyl.folkways.core.api.work.WorkNoise;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Xp;
-import io.github.izakyl.folkways.plugins.build.BuildContent;
-import io.github.izakyl.folkways.plugins.build.BuildingPerks;
-import java.util.ArrayList;
 import io.github.izakyl.folkways.plugins.farming.FarmingContent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BiPredicate;
@@ -24,26 +22,23 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
-// One block taken out: by a builder clearing a box, with the tool the block wants, or by a farmer pulling a weed.
+// A farmer pulls a weed or clears a fallen log with its decorations.
 final class BreakNode extends GroundNode {
 
     enum Way {
-        CLEAR,
         FALLEN,
         WEED;
 
         Vocation by() {
-            return this == CLEAR ? BuildContent.trade() : FarmingContent.trade();
+            return FarmingContent.trade();
         }
 
         ResourceLocation doing() {
-            return this == CLEAR ? GroundworkContent.CLEARING
-                : this == FALLEN ? GroundworkContent.FELLING : GroundworkContent.WEEDING;
+            return this == FALLEN ? GroundworkContent.FELLING : GroundworkContent.WEEDING;
         }
 
         Workload.Haste haste(Chores.Chore chore) {
-            return this == CLEAR ? worker -> BuildContent.haste(worker) / BuildingPerks.momentum(worker,
-                worker.body().level().getBlockState(chore.job().cell())) : FarmingContent::haste;
+            return FarmingContent::haste;
         }
     }
 
@@ -99,9 +94,6 @@ final class BreakNode extends GroundNode {
             }
         }
         ItemStack tool = way == Way.WEED ? ItemStack.EMPTY : who.held(new ToolNeed.SuitableFor(state));
-        if (way == Way.CLEAR) {
-            tool = BuildingPerks.fortunate(level, who, tool);
-        }
         List<ItemStack> drops = new ArrayList<>();
         List<WorkNoise> noises = new ArrayList<>();
         // Collect decorations before removing their support, so neighbor updates cannot discard their loot.
@@ -114,10 +106,6 @@ final class BreakNode extends GroundNode {
         }
         drops.addAll(take(level, who.body(), cell, state, tool));
         noises.add(WorkNoise.broke(cell, state));
-        if (way == Way.CLEAR && level.getBlockState(cell).isAir()) {
-            drops.addAll(BuildingPerks.discoveries(level, who, cell, state));
-            BuildingPerks.mined(who, state);
-        }
         return new Outcome.Done(noises, drops,
             Optional.of(new Xp(way.by(), 1)));
     }

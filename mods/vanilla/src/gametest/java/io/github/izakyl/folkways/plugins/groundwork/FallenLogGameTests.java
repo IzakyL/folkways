@@ -80,6 +80,7 @@ public final class FallenLogGameTests {
         for (int x = 0; x < length; x++) {
             BlockPos cell = log.east(x);
             marked.add(cell);
+            if (clearing) marked.add(cell.above());
             place(level, cell, horizontal(block));
             place(level, cell.above(), Blocks.MOSS_CARPET.defaultBlockState());
         }
@@ -133,7 +134,7 @@ public final class FallenLogGameTests {
         });
         helper.runAtTickTime(790, close);
         helper.startSequence().thenWaitUntil(() -> {
-            for (BlockPos cell : marked) {
+            for (BlockPos cell : marked.stream().filter(at -> at.getY() == log.getY()).toList()) {
                 helper.assertTrue(level.getBlockState(cell).isAir(), "the marked log was cleared");
                 helper.assertTrue(level.getBlockState(cell.above()).isAir(), "its moss was cleared");
             }

@@ -76,7 +76,7 @@ public final class FishingContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(SPEC);
+        declaring.vocation(SPEC.ordered(500));
         declaring.colony(ID, scope -> {
             FishingPresence state = new FishingPresence(scope.colony());
             scope.share(state);

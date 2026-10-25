@@ -53,7 +53,7 @@ final class TillNode extends FarmNode {
         List<ItemStack> taken = new ArrayList<>();
         BlockPos above = ground.above();
         BlockState weeds = level.getBlockState(above);
-        if (clearing.clears(weeds)) {
+        if (clearing.clearsForTilling(weeds)) {
             taken.addAll(Yield.take(level, who.body(), above, weeds));
             heard.add(WorkNoise.broke(above, weeds));
         }

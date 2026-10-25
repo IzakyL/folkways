@@ -38,6 +38,11 @@ final class Tillage {
         boolean clears(BlockState state) {
             return grass && state.is(WEEDS) || flowers && state.is(FLOWERS);
         }
+
+        // Snow is cleared for tilling regardless of which plants a plot keeps.
+        boolean clearsForTilling(BlockState state) {
+            return state.is(Blocks.SNOW) || clears(state);
+        }
     }
 
     private Tillage() {
@@ -48,8 +53,8 @@ final class Tillage {
             return true;
         }
         // The work clears what is in the way and asks the hoe again before turning the soil.
-        return clearing.clears(level.getBlockState(ground.above())) && hoe.canPerformAction(ItemAbilities.HOE_TILL)
-            && state.is(TILLABLE_UNDER_WEEDS);
+        return clearing.clearsForTilling(level.getBlockState(ground.above()))
+            && hoe.canPerformAction(ItemAbilities.HOE_TILL) && state.is(TILLABLE_UNDER_WEEDS);
     }
 
     static Optional<BlockState> tilled(Level level, BlockPos ground, BlockState state, ItemStack hoe) {

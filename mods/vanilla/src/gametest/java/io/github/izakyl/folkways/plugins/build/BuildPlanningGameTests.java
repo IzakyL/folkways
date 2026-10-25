@@ -940,6 +940,7 @@ public final class BuildPlanningGameTests {
                     asked.withdrawn.add((UUID) args[1]);
                     yield null;
                 }
+                case "holdingAt" -> Optional.empty();
                 case "views" -> List.of(view);
                 case "view" -> view;
                 default -> null;

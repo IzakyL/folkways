@@ -82,7 +82,7 @@ public final class PatrolContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(SPEC);
+        declaring.vocation(SPEC.ordered(600));
         declaring.colony(ID, scope -> {
             PatrolPresence state = new PatrolPresence(scope.colony());
             scope.share(state);

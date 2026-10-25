@@ -13,7 +13,7 @@ import net.minecraft.world.entity.Entity;
 // the tools it asks of others, and it goes looking for none of their kit.
 public record ResidentKind(ResourceLocation id, Growth growth, Locomotion locomotion,
                            Embodiment embodiment, Map<Stake, Participation> participations,
-                           Set<ResourceLocation> barehanded) {
+                           Set<ResourceLocation> barehanded, boolean workDefaults) {
 
     public ResidentKind {
         participations = Map.copyOf(participations);
@@ -47,20 +47,29 @@ public record ResidentKind(ResourceLocation id, Growth growth, Locomotion locomo
         this(id, growth, locomotion, Embodiment.ITSELF, Map.of(), Set.of());
     }
 
+    public ResidentKind(ResourceLocation id, Growth growth, Locomotion locomotion,
+            Embodiment embodiment, Map<Stake, Participation> participations, Set<ResourceLocation> barehanded) {
+        this(id, growth, locomotion, embodiment, participations, barehanded, false);
+    }
+
+    public ResidentKind withWorkDefaults() {
+        return new ResidentKind(id, growth, locomotion, embodiment, participations, barehanded, true);
+    }
+
     public static ResidentKind growing(ResourceLocation id, Locomotion locomotion) {
         return new ResidentKind(id, Growth.CLIMBS, locomotion);
     }
 
     public ResidentKind embodiedBy(Embodiment embodiment) {
-        return new ResidentKind(id, growth, locomotion, embodiment, participations, barehanded);
+        return new ResidentKind(id, growth, locomotion, embodiment, participations, barehanded, workDefaults);
     }
 
     public ResidentKind taking(Map<Stake, Participation> participations) {
-        return new ResidentKind(id, growth, locomotion, embodiment, participations, barehanded);
+        return new ResidentKind(id, growth, locomotion, embodiment, participations, barehanded, workDefaults);
     }
 
     public ResidentKind barehanded(Set<ResourceLocation> trades) {
-        return new ResidentKind(id, growth, locomotion, embodiment, participations, trades);
+        return new ResidentKind(id, growth, locomotion, embodiment, participations, trades, workDefaults);
     }
 
     public boolean worksBarehanded(ResourceLocation trade) {

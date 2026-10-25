@@ -1,6 +1,10 @@
 package io.github.izakyl.folkways.plugins.groundwork;
 
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.plugins.build.BuildContent;
+import io.github.izakyl.folkways.plugins.build.BlueprintBuildOrder;
+import io.github.izakyl.folkways.plugins.build.FiledOrderRig;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
@@ -146,8 +150,11 @@ public final class ForageGameTests {
         try (Fixture f = new Fixture(helper)) {
             f.place(berry(3));
             f.zone(GroundworkContent.CLEAR, GroundworkContent.FORAGE);
-            helper.assertTrue(f.only() instanceof BreakNode, "clear owns this block when both switches are on");
-            f.only().commit(f.level, f.fixture.worker);
+            helper.assertTrue(f.nodes().isEmpty(), "clear files an order instead of foraging");
+            var book = f.colony.kept(BuildContent.ID).getCompound("book");
+            var order = BlueprintBuildOrder.load(Reader.of(book.getList("buildOrders", 10).getCompound(0)),
+                f.level.registryAccess()).orElseThrow();
+            FiledOrderRig.work(helper, f.colony, order.id(), f.fixture.worker);
             helper.assertTrue(f.level.getBlockState(f.cell).isAir(), "clear removes the bush");
         }
         helper.succeed();
@@ -196,8 +203,8 @@ public final class ForageGameTests {
     @GameTest(template = "empty")
     public static void oldSavedConfigurationsKeepTheirDiscoveryBoundary(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
-            f.place(Blocks.DIRT.defaultBlockState());
-            f.zone(GroundworkContent.CLEAR);
+            f.place(Blocks.SHORT_GRASS.defaultBlockState());
+            f.zone(GroundworkContent.WEED);
             Node node = f.only();
             node.planned(f.level);
             node.commit(f.level, f.fixture.worker);
@@ -207,11 +214,11 @@ public final class ForageGameTests {
             var site = saved.getList("sites", 10).getCompound(0);
             site.putString("configuration", site.getString("configuration").replace(",forage=false", ""));
             f.colony.keep(GroundworkContent.ID, saved);
-            f.place(Blocks.STONE.defaultBlockState());
+            f.place(Blocks.SHORT_GRASS.defaultBlockState());
             GroundPresence loaded = new GroundPresence(f.colony);
             loaded.refresh(f.level.getServer());
             helper.assertTrue(loaded.goals(f.colony.view(f.level)).isEmpty(), "migration does not rediscover completed work");
-            helper.assertTrue(f.level.getBlockState(f.cell).is(Blocks.STONE), "new terrain stays outside the old targets");
+            helper.assertTrue(f.level.getBlockState(f.cell).is(Blocks.SHORT_GRASS), "new weeds stay outside the old targets");
         }
         helper.succeed();
     }

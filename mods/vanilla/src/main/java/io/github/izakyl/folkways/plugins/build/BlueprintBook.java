@@ -22,6 +22,7 @@ public final class BlueprintBook {
 
     private static final String TAG_BLUEPRINTS = "blueprints";
     private static final String TAG_BUILD_ORDERS = "buildOrders";
+    private static final String TAG_SINGLE_USE = "singleUse";
 
     static int maxCaptureBlocks() {
         return FolkwaysVanillaConfig.maxBuildCells();
@@ -32,6 +33,9 @@ public final class BlueprintBook {
     static final int MAX_BUILD_ORDERS = 64;
 
     private final Map<UUID, Blueprint> blueprints = new LinkedHashMap<>();
+    // Drawings made for one order stay only until that order ends.
+    private final Set<UUID> singleUse = new HashSet<>();
+
     private final Map<UUID, BlueprintBuildOrder> orders = new LinkedHashMap<>();
     private Runnable dirty = () -> {
     };
@@ -44,14 +48,30 @@ public final class BlueprintBook {
         file(blueprint.confirm(level));
     }
 
+    // A synthetic drawing is agreed by its caller, without a schematic printer pass.
+    void addConfirmed(Blueprint blueprint) {
+        if (!blueprint.confirmed()) {
+            throw new IllegalArgumentException("a synthetic drawing must already be confirmed");
+        }
+        file(blueprint);
+    }
+
     private void file(Blueprint blueprint) {
         blueprints.put(blueprint.id(), blueprint);
         forgetOldestUnused();
         dirty.run();
     }
 
+    boolean full() {
+        return orders.size() >= MAX_BUILD_ORDERS;
+    }
+
+    void singleUse(UUID blueprint) {
+        singleUse.add(blueprint);
+    }
+
     private void forgetOldestUnused() {
-        if (blueprints.size() <= MAX_FILED_BLUEPRINTS) {
+        if (blueprints.size() - singleUse.size() <= MAX_FILED_BLUEPRINTS) {
             return;
         }
         Set<UUID> building = new HashSet<>();
@@ -59,11 +79,11 @@ public final class BlueprintBook {
             building.add(order.blueprintId());
         }
         List<Blueprint> droppable = blueprints.values().stream()
-            .filter(blueprint -> !building.contains(blueprint.id()))
+            .filter(blueprint -> !singleUse.contains(blueprint.id()) && !building.contains(blueprint.id()))
             .sorted(Comparator.comparingLong(Blueprint::createdGameTime))
             .toList();
         for (Blueprint oldest : droppable) {
-            if (blueprints.size() <= MAX_FILED_BLUEPRINTS) {
+            if (blueprints.size() - singleUse.size() <= MAX_FILED_BLUEPRINTS) {
                 return;
             }
             blueprints.remove(oldest.id());
@@ -73,7 +93,7 @@ public final class BlueprintBook {
     Optional<BlueprintBuildOrder> place(ServerLevel level, UUID blueprintId, String name, BlockPos anchor,
             Optional<UUID> playerId, String playerName, long createdGameTime) {
         Blueprint chosen = blueprints.get(blueprintId);
-        if (chosen == null || orders.size() >= MAX_BUILD_ORDERS) {
+        if (chosen == null || full()) {
             return Optional.empty();
         }
         return Optional.of(record(BlueprintBuildOrder.create(chosen.id(), name,
@@ -112,7 +132,11 @@ public final class BlueprintBook {
     }
 
     boolean removeBuildOrder(UUID orderId) {
-        boolean removed = orders.remove(orderId) != null;
+        BlueprintBuildOrder order = orders.remove(orderId);
+        boolean removed = order != null;
+        if (removed && singleUse.remove(order.blueprintId())) {
+            blueprints.remove(order.blueprintId());
+        }
         if (removed) {
             dirty.run();
         }
@@ -121,16 +145,21 @@ public final class BlueprintBook {
 
     CompoundTag save(HolderLookup.Provider provider) {
         return Writer.of()
-            .children(TAG_BLUEPRINTS, blueprints.values(), blueprint -> blueprint.save(provider))
+            .children(TAG_BLUEPRINTS, blueprints.values(), blueprint -> Writer.of(blueprint.save(provider))
+                .flag(TAG_SINGLE_USE, singleUse.contains(blueprint.id())).tag())
             .children(TAG_BUILD_ORDERS, orders.values(), order -> order.save(provider))
             .tag();
     }
 
     static BlueprintBook load(Reader reader, HolderLookup.Provider provider) {
         BlueprintBook book = new BlueprintBook();
-        for (Blueprint blueprint
-            : Entries.of(reader, TAG_BLUEPRINTS, entry -> Blueprint.load(entry, provider))) {
-            book.blueprints.put(blueprint.id(), blueprint);
+        for (Reader entry : reader.children(TAG_BLUEPRINTS)) {
+            Blueprint.load(entry, provider).ifPresent(blueprint -> {
+                book.blueprints.put(blueprint.id(), blueprint);
+                if (entry.flag(TAG_SINGLE_USE).orElse(false)) {
+                    book.singleUse.add(blueprint.id());
+                }
+            });
         }
         for (BlueprintBuildOrder order
             : Entries.of(reader, TAG_BUILD_ORDERS, entry -> BlueprintBuildOrder.load(entry, provider))) {
@@ -145,5 +174,6 @@ public final class BlueprintBook {
         BlueprintBook read = load(reader, provider);
         blueprints.putAll(read.blueprints);
         orders.putAll(read.orders);
+        singleUse.addAll(read.singleUse);
     }
 }

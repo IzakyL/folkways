@@ -101,6 +101,11 @@ final class BuildPresence implements Facing {
         this.tallying = Cadence.claim(colony, TALLY_TICKS);
         this.asks = new BuildSite.Asks() {
             @Override
+            public Optional<Colony> colony() {
+                return Optional.of(colony);
+            }
+
+            @Override
             public void submit(ResourceKey<Level> dimension, Grown work, BiConsumer<UUID, Ending> ended) {
                 colony.submit(BuildContent.ID, dimension, work, ended);
             }
@@ -232,6 +237,21 @@ final class BuildPresence implements Facing {
         Optional<BlueprintBuildOrder> filed = place(level, blueprint, anchor, siteName(typed), playerId, playerName);
         filed.ifPresent(order -> {
             spend(typed);
+            keep();
+        });
+        return filed;
+    }
+
+    Optional<BlueprintBuildOrder> fileOnce(ServerLevel level, Blueprint blueprint, BlockPos anchor) {
+        if (!blueprint.confirmed() || book.full()) {
+            return Optional.empty();
+        }
+        book.singleUse(blueprint.id());
+        book.addConfirmed(blueprint);
+        Optional<BlueprintBuildOrder> filed = book.place(level, blueprint.id(), siteName(""), anchor,
+            Optional.empty(), "", level.getGameTime());
+        filed.ifPresent(order -> {
+            spend("");
             keep();
         });
         return filed;
@@ -680,7 +700,7 @@ final class BuildPresence implements Facing {
         if (refused == 0) {
             return Component.translatable("folkways.page.build.progress", seen.placed(), seen.total());
         }
-        return Component.translatable("folkways.page.build.refused", seen.placed(), seen.total(),
-            refused);
+        return Component.translatable("folkways.page.build.refused", seen.placed(), seen.total(), refused)
+            .append(": ").append(Component.translatable(site.refusals().values().iterator().next().translationKey()));
     }
 }

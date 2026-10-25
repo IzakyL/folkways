@@ -83,7 +83,7 @@ public final class WaresContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(VOCATION);
+        declaring.vocation(VOCATION.ordered(100));
         declaring.refinement(Smelt.SMELTING);
         declaring.colony(ID, scope -> {
             CraftRecipes recipes = new CraftRecipes(scope.server());

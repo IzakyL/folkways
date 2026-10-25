@@ -72,7 +72,7 @@ public final class FolkwaysMod {
         fitTheShell(modBus);
         FolkwaysAttachments.register(modBus);
         Front.install(modBus);
-        modBus.addListener(Declaring.class, event -> event.vocation(Haul.SPEC));
+        modBus.addListener(Declaring.class, event -> event.vocation(Haul.SPEC.ordered(0)));
         modBus.addListener(FMLCommonSetupEvent.class, FolkwaysMod::openDeclarations);
         modBus.addListener(FolkwaysMod::reportDegradedMixins);
         modBus.addListener(LooseFolder::addPackFinder);

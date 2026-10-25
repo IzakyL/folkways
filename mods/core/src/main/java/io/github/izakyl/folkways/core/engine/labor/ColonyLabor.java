@@ -77,7 +77,8 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     private final Map<UUID, Personal> personalRequests = new LinkedHashMap<>();
     private final Set<UUID> reportedFailures = new LinkedHashSet<>();
     private final Inbox inbox = new Inbox();
-    private final Pipeline pipeline = new Pipeline(inbox, new Planner(new Claims(), new Cooldowns()), new Scheduler());
+    private final Pipeline pipeline = new Pipeline(inbox, new Planner(new Claims(), new Cooldowns()), new Scheduler(),
+        this::planningProblem);
     private final Runners runners = new Runners(this::arrived);
     private final Urges urges = new Urges();
     private final Salvage salvage = new Salvage();
@@ -91,7 +92,6 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     // What each stage last asked of the survey: the weave's whole ask, and whether the schedule wants hands read.
     private Asks weaveAsks = Asks.NONE;
     private boolean scheduleHands;
-    private Set<UUID> overloaded = Set.of();
     private List<Shortfall> shortfalls = List.of();
     private List<Refused> refused = List.of();
     private boolean waysAnswered;
@@ -110,11 +110,19 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     private Schedule schedule = Schedule.EMPTY;
     private Diagnosis diagnosis = Diagnosis.NOTHING;
     private long submittedNodes;
+    private long lastScheduleNanos;
+    private long limitedSchedules;
 
     public ColonyLabor(ColonyData colony, ResourceKey<Level> dimension) {
         this.colony = colony;
         this.dimension = dimension;
         colony.works().listen(dimension, this);
+    }
+
+    private void planningProblem(String stage, String error) {
+        LaborIncident.publish(colony.colonyId(), dimension, "planning/" + stage,
+            () -> net.minecraft.network.chat.Component.translatable("folkways.debug.incident.planning",
+                dimension.location().toString() + "/" + stage, error));
     }
 
     @Override
@@ -336,6 +344,11 @@ public final class ColonyLabor implements ColonyWorks.Listening {
             personal.forget(doing.id());
             return;
         }
+        runner.interruptedWork().ifPresent(interrupted -> LaborIncident.work(colony.colonyId(), level, body,
+            interrupted, "urge-preempts/" + keenest.get().id(),
+            () -> net.minecraft.network.chat.Component.translatable("folkways.debug.incident.preempted",
+                keenest.get().id().toString(), LaborIncident.job(doing), LaborIncident.target(level, doing),
+                LaborIncident.surroundings(body))));
         runner.letGo(this, level, body, "urge-preempts");
         personalRequests.put(doing.id(), new Personal(body.id(), keenest.get().id()));
         runner.offer(this, level, body, keenest.get(), doing);
@@ -460,6 +473,13 @@ public final class ColonyLabor implements ColonyWorks.Listening {
     // What the schedule laid, applied: every route is followed afresh from now on, so work a runner let go of
     // is taken up again whether or not its route changed.
     private void laid(Scheduler.Scheduled laid) {
+        lastScheduleNanos = laid.timing().scheduleNanos();
+        if (laid.timing().limited()) {
+            limitedSchedules++;
+            LaborIncident.publish(colony.colonyId(), dimension, "fallback",
+                () -> net.minecraft.network.chat.Component.translatable("folkways.debug.incident.fallback",
+                    dimension.location().toString(), laid.timing().scheduleNanos() / 1_000_000, limitedSchedules));
+        }
         laid.changed().forEach((resident, tour) -> {
             if (tour.nodes().isEmpty()) {
                 tours.remove(resident);
@@ -476,14 +496,9 @@ public final class ColonyLabor implements ColonyWorks.Listening {
                 weaveAsks.wakeAt()));
         }
         scheduleWakeAt = laid.wakeAt();
-        // Work bound to a full pack waits for it to be emptied, and only putting the cargo away empties it: asked
-        // again each time the resident newly keeps work waiting so.
-        for (UUID resident : laid.overloaded()) {
-            if (!overloaded.contains(resident)) {
-                idle(resident);
-            }
+        for (UUID resident : laid.stow()) {
+            inbox.raise(new Message.PackBusy(resident));
         }
-        overloaded = laid.overloaded();
     }
 
     private static UUID about(Message message) {
@@ -853,7 +868,25 @@ public final class ColonyLabor implements ColonyWorks.Listening {
 
     String heartbeat() {
         return readout.line(graph.vertices(), phases, schedule, diagnosis, runners,
-            pipeline.busyFor(Util.getNanos()));
+            pipeline.busyFor(Util.getNanos())) + " limited=" + limitedSchedules;
+    }
+
+    LaborSnapshot snapshot(ServerLevel level) {
+        Map<String, Integer> shortages = new java.util.TreeMap<>();
+        for (Shortfall shortfall : diagnosis.shortfalls()) {
+            shortages.merge(Readout.name(shortfall.why()), 1, Integer::sum);
+        }
+        List<String> examples = new ArrayList<>();
+        for (Unassigned unassigned : diagnosis.unassigned()) {
+            Vertex vertex = graph.vertex(unassigned.node());
+            if (vertex != null) {
+                examples.add(unassigned.why() + "/" + vertex.node().spec().owner() + "/"
+                    + vertex.node().getClass().getSimpleName() + "@" + vertex.node().spec().site().where());
+                if (examples.size() == 3) break;
+            }
+        }
+        return new LaborSnapshot(census(level), pipeline.busyFor(Util.getNanos()) / 1_000_000,
+            lastScheduleNanos / 1_000_000, limitedSchedules, shortages, examples);
     }
 
     long solvingFor(long now) {

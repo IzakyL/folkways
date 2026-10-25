@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.Stash;
+import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.*;
 import io.github.izakyl.folkways.front.api.Fronts;
@@ -57,8 +58,17 @@ final class DiningSupplies {
             }
         }
         cabinets = List.copyOf(found);
-        for (var dimension : offered) if (!byDimension.containsKey(dimension)) { colony.stores(OWNER, dimension, List.of()); }
-        byDimension.forEach((dimension, stores) -> colony.stores(OWNER, dimension, stores));
+        for (var dimension : offered) if (!byDimension.containsKey(dimension)) {
+            colony.stores(OWNER, dimension, List.of());
+            colony.rule(OWNER, dimension, List.of());
+        }
+        byDimension.forEach((dimension, stores) -> {
+            colony.stores(OWNER, dimension, stores);
+            // Ordinary work may take drinks, but StockCabinet alone replenishes these slots.
+            // Returned empty bottles must not claim the last slot before its refill arrives.
+            colony.rule(OWNER, dimension, stores.stream()
+                .<StoreRule>map(at -> new StoreRule.Access(at, true, false)).toList());
+        });
         offered.clear(); offered.addAll(byDimension.keySet());
         refills.keySet().removeIf(slot -> cabinets.stream().noneMatch(cabinet -> slot.at.equals(WorldPos.of(cabinet.level, cabinet.at))
             && slot.zone.equals(cabinet.zone) && slot.menu.equals(cabinet.menu)));
@@ -97,7 +107,10 @@ final class DiningSupplies {
 
     void clear() {
         cabinets = List.of(); refills.clear();
-        for (var dimension : offered) { colony.stores(OWNER, dimension, List.of()); }
+        for (var dimension : offered) {
+            colony.stores(OWNER, dimension, List.of());
+            colony.rule(OWNER, dimension, List.of());
+        }
         offered.clear();
     }
 
