@@ -8,6 +8,9 @@ public interface WeaponSession extends AutoCloseable {
 
     State state();
 
+    /** Native animation collision may finish a target between the runner's ordinary ticks. */
+    default boolean defeatedTarget() { return false; }
+
     /** Queue one attack. Ticks and discharge recheck hostility or the explicit lease, plus sight and range. */
     boolean fire(LivingEntity target);
 

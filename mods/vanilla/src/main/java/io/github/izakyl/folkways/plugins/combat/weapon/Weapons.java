@@ -78,10 +78,13 @@ public final class Weapons {
             if (!assigned.isEmpty()) return adapter.get().openAssigned(worker, assigned);
             return adapter.get().open(worker);
         }
-        return barehanded(worker) ? Optional.of(NativeWeaponSession.barehanded(worker)) : Optional.empty();
+        if (!barehanded(worker)) { return Optional.empty(); }
+        Optional<WeaponAdapter> unarmed = registered.stream().map(Registered::adapter)
+            .filter(candidate -> candidate.acceptsBarehanded(worker)).findFirst();
+        return unarmed.isPresent() ? unarmed.get().open(worker) : Optional.of(NativeWeaponSession.barehanded(worker));
     }
 
-    private static boolean barehanded(Worker worker) {
+    public static boolean barehanded(Worker worker) {
         return ResidentKinds.barehanded(worker.resident().kind(), Optional.of(Vocations.required(PATROLLING)));
     }
 

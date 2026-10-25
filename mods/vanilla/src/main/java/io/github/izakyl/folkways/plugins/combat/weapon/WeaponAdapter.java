@@ -15,6 +15,9 @@ public interface WeaponAdapter {
     /** Inventory-dependent readiness, such as an actual compatible projectile or a loaded chamber. */
     default boolean usable(Worker worker, ItemStack stack) { return accepts(stack); }
 
+    /** An optional native animation bridge may also execute this body's permitted unarmed attacks. */
+    default boolean acceptsBarehanded(Worker worker) { return false; }
+
     Optional<WeaponSession> open(Worker worker);
 
     /** Legacy adapters may rescan the pack. They must opt in before accepting an exact assignment. */
