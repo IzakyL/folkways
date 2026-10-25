@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.combat.group;
 
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import java.util.ArrayDeque;
@@ -10,6 +11,8 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -17,12 +20,14 @@ import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.PathfindingContext;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
 
 /** Transient logical captain. Only the existing command runner moves residents. */
 final class PointRoute {
     final UUID commandId = UUID.randomUUID();
     final boolean attackMove;
-    private static final int ADVANCE = 3;
+    private static final int ADVANCE = 6;
+    private static final int SLOT_PATH_ATTEMPTS = 12;
     private static final int MAX_POINTS = 16;
     List<WorldPos> points;
     int cycleStart;
@@ -30,7 +35,8 @@ final class PointRoute {
     private final UnitGroups owner;
     private WorldPos captain;
     private int stop;
-    private long travellingSince;
+    private int travellingTicks;
+    private boolean complete;
 
     PointRoute(UnitGroups owner, List<Body> bodies, List<WorldPos> points, int cycleStart) {
         this(owner, bodies, points, cycleStart, false);
@@ -46,7 +52,6 @@ final class PointRoute {
         this.points = List.copyOf(points);
         this.cycleStart = cycleStart;
         this.appendable = appendable;
-        travellingSince = owner.server.overworld().getGameTime();
         if (bodies.isEmpty() || points.isEmpty() || points.size() > MAX_POINTS
                 || (cycleStart == -1 ? points.size() != 1 : cycleStart < 0 || cycleStart >= points.size() - 1)
                 || new HashSet<>(points).size() != points.size()) {
@@ -76,6 +81,8 @@ final class PointRoute {
     boolean atStop() { return captain.equals(points.get(stop)); }
     boolean loops() { return cycleStart >= 0; }
     boolean hasNext() { return stop + 1 < points.size() || loops(); }
+    boolean complete() { return complete && !loops(); }
+    void completed() { complete = !loops(); }
     List<WorldPos> slots(List<Body> bodies) { return slots(bodies, captain); }
 
     /** Validate first; appending must never reassemble or rewind an already travelling squad. */
@@ -99,41 +106,53 @@ final class PointRoute {
             points = List.copyOf(next);
         }
         appendable = true;
+        complete = false;
     }
 
     /** Compute without changing the captain; commit only after a complete command batch is accepted. */
-    WorldPos advance(List<Body> bodies) {
-        if (travellingTicks() >= 1200) {
-            throw new IllegalArgumentException("captain route leg timed out");
-        }
+    Optional<WorldPos> advance(List<Body> bodies) {
         WorldPos goal = points.get(stop);
-        Body leader = bodies.getFirst(); // Its assigned slot is the captain itself, never a distant real leader.
+        Body leader = bodies.getFirst();
         var level = leader.mob().level();
-        var path = leader.mob().getNavigation().createPath(goal.block(level), 0);
-        if (path == null || !path.canReach()) { throw new IllegalArgumentException("captain has no route to waypoint"); }
+        if (Reach.standingAt(WorldSpaces.relative(level, goal.realm(), leader.mob().position()).orElseThrow(), goal.cell())) {
+            return Optional.of(goal);
+        }
+        var path = leader.mob().getNavigation().createPath(Set.of(goal.block(level)), 0);
+        // A temporary airborne body cannot update its ground navigator. A distant target may
+        // also have a useful partial path inside FOLLOW_RANGE; neither means permanent failure.
+        if (path == null) { return Optional.empty(); }
         List<WorldPos> candidates = new ArrayList<>();
-        // Read a short prefix of the existing navigator's path; never start another navigator or steer it here.
-        for (int n = 0; n < path.getNodeCount(); n++) {
+        Vec3 previous = WorldSpaces.relative(level, goal.realm(), leader.mob().position()).orElseThrow();
+        double alreadyCovered = previous.distanceTo(Vec3.atBottomCenterOf(captain.cell()));
+        double length = 0;
+        // createPath can reuse a running path. Start at its live cursor, using the same real
+        // resident as the path finder, and bound cumulative path length rather than an anchor sphere.
+        for (int n = path.getNextNodeIndex(); n < path.getNodeCount(); n++) {
             var node = path.getNode(n);
             WorldPos point = WorldPos.of(level, new BlockPos(node.x, node.y, node.z));
-            if (!captain.sameRealm(point) || captain.cell().distSqr(point.cell()) > ADVANCE * ADVANCE) { break; }
-            if (!point.equals(captain)) { candidates.add(point); }
+            if (!goal.sameRealm(point)) { break; }
+            Vec3 feet = Vec3.atBottomCenterOf(point.cell());
+            length += feet.distanceTo(previous);
+            if (length > ADVANCE + .01) { break; }
+            previous = feet;
+            if (!point.equals(captain) && (point.equals(goal) || length > alreadyCovered + .5)) { candidates.add(point); }
         }
         for (WorldPos candidate : candidates.reversed()) {
-            try { slots(bodies, candidate); return candidate; }
+            try { slots(bodies, candidate); return Optional.of(candidate); }
             catch (IllegalArgumentException unavailable) { /* A doorway node need not itself become an assembly stop. */ }
         }
-        throw new IllegalArgumentException("captain cannot make a bounded advance");
+        return Optional.empty();
     }
 
     void advanced(WorldPos next) { captain = next; }
-    long travellingTicks() { return owner.server.overworld().getGameTime() - travellingSince; }
-    /** An unavailable squad or an active combat lease owns none of this route's travel budget. */
-    void waiting() { travellingSince++; }
+    int travellingTicks() { return travellingTicks; }
+    /** Called only while a present squad owns the runner and is travelling or recovering. */
+    void travelling() { travellingTicks++; }
     void nextStop() {
         if (!hasNext()) { throw new IllegalStateException("point queue is waiting for another point"); }
         stop = stop + 1 < points.size() ? stop + 1 : cycleStart;
-        travellingSince = owner.server.overworld().getGameTime();
+        travellingTicks = 0;
+        complete = false;
     }
 
     /** A bounded local search for a safe end-of-command assembly anchor. */
@@ -167,6 +186,12 @@ final class PointRoute {
 
     /** Compact, connected dry standing cells, with local rise/drop instead of an exact flat rectangle. */
     List<WorldPos> slots(List<Body> bodies, WorldPos anchor) {
+        return slots(bodies, anchor, Map.of(), Set.of(), Set.of());
+    }
+
+    /** Path probes run only when installing a batch or recovering a blocked member. */
+    List<WorldPos> slots(List<Body> bodies, WorldPos anchor, Map<UUID, WorldPos> previous,
+            Set<UUID> checkPaths, Set<UUID> alternatives) {
         if (bodies.isEmpty()) { return List.of(); }
         Body first = bodies.getFirst();
         owner.commands.validate(first, anchor);
@@ -199,21 +224,75 @@ final class PointRoute {
         preferred.sort(Comparator.comparingDouble(offset -> offset.distSqr(BlockPos.ZERO)));
         List<WorldPos> available = new ArrayList<>(connected);
         List<WorldPos> result = new ArrayList<>();
+        List<AABB> occupied = new ArrayList<>();
         for (int n = 0; n < bodies.size(); n++) {
             Body body = bodies.get(n);
             WorldPos desired = anchor.at(anchor.cell().offset(preferred.get(n)));
-            available.sort(Comparator.comparingDouble(at -> at.cell().distSqr(desired.cell())));
+            WorldPos old = previous.get(body.id());
+            if (!alternatives.isEmpty() && !alternatives.contains(body.id())) {
+                // Recovery replaces only blocked handles. Every healthy handle keeps its exact
+                // existing target, even if changed terrain now makes that target unsafe.
+                if (old == null) { throw new Unavailable(body.id()); }
+                AABB box = at(body, old);
+                if (occupied.stream().anyMatch(box::intersects)) { throw new Unavailable(body.id()); }
+                result.add(old);
+                occupied.add(box);
+                available.remove(old);
+                continue;
+            }
+            if (old != null && captain != null && old.sameRealm(captain)) {
+                // Translate an existing member's offset instead of changing sides at each bend.
+                desired = anchor.at(anchor.cell().offset(old.cell().subtract(captain.cell())));
+            }
+            if (n == 0) { desired = anchor; }
+            final WorldPos wanted = desired;
+            available.sort(Comparator.<WorldPos>comparingInt(at ->
+                    alternatives.contains(body.id()) && nontouching(at, old) ? 0 : 1)
+                .thenComparingDouble(at -> at.cell().distSqr(wanted.cell()))
+                .thenComparingDouble(at -> at.cell().distSqr(WorldSpaces.at(body.mob()).cell())));
             WorldPos chosen = null;
+            int attempts = 0;
             for (WorldPos candidate : available) {
+                // The reference member must physically visit the authored click itself.
+                if (n == 0 && !candidate.equals(anchor)) { continue; }
+                // A recovering member may change its own slot, but must not displace a healthy
+                // member whose existing runner is still travelling to a later entry in this batch.
+                AABB box = at(body, candidate);
+                if (alternatives.contains(body.id()) && bodies.stream().anyMatch(other ->
+                        !other.id().equals(body.id()) && !alternatives.contains(other.id())
+                            && previous.containsKey(other.id()) && box.intersects(at(other, previous.get(other.id()))))) { continue; }
                 try { owner.commands.validate(body, candidate); }
                 catch (IllegalArgumentException unavailable) { continue; }
-                if (safe(body, candidate)) { chosen = candidate; break; }
+                if (!safe(body, candidate) || occupied.stream().anyMatch(box::intersects)) { continue; }
+                if (checkPaths.contains(body.id()) && !Reach.standingAt(
+                        WorldSpaces.relative(body.mob().level(), candidate.realm(), body.mob().position()).orElseThrow(), candidate.cell())) {
+                    if (++attempts > SLOT_PATH_ATTEMPTS) { break; }
+                    var path = body.mob().getNavigation().createPath(Set.of(candidate.block(body.mob().level())), 0);
+                    if (path == null || !path.canReach()) { continue; }
+                }
+                chosen = candidate;
+                break;
             }
-            if (chosen == null) { throw new IllegalArgumentException("not enough nearby safe squad slots"); }
+            if (chosen == null) { throw new Unavailable(body.id()); }
             result.add(chosen);
+            occupied.add(at(body, chosen));
             available.remove(chosen);
         }
         return List.copyOf(result);
+    }
+
+    private static boolean nontouching(WorldPos candidate, WorldPos old) {
+        return old == null || !candidate.equals(old);
+    }
+
+    private static AABB at(Body body, WorldPos point) {
+        Vec3 world = WorldSpaces.world(body.mob().level(), point).orElseThrow();
+        return body.mob().getBoundingBox().move(world.subtract(body.mob().position())).inflate(.05);
+    }
+
+    static final class Unavailable extends IllegalArgumentException {
+        final UUID member;
+        Unavailable(UUID member) { super("no reachable non-overlapping nearby squad slot for " + member); this.member = member; }
     }
 
     private static boolean safe(Body body, WorldPos point) {

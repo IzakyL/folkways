@@ -383,6 +383,10 @@ public final class ResidentCommandGameTests {
         enemy.setTarget(null);
         helper.assertValueEqual(f.commands.priority(guard), Urge.Priority.CONTROL,
             "once the danger is gone the deliberate stop regains its control tier");
+        enemy.setTarget(body.mob());
+        guard.close();
+        helper.assertFalse(guard.yieldingToDanger(),
+            "a released handle cannot keep a replacement squad paused by its old danger state");
         helper.succeed();
     }
 

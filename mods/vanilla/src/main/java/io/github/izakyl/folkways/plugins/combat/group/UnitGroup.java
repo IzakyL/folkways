@@ -22,12 +22,21 @@ import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 import net.minecraft.world.phys.Vec3;
 
 public final class UnitGroup {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("folkways-combat");
     public enum Phase { IDLE, COLUMN, LINE, HOLDING, ENGAGING, WAITING, FAILED, REFORMING, WAITING_FOR_MEMBER, FAILED_WAITING }
     public enum CommandKind { NONE, DEPLOYMENT, DIRECT, ATTACK_MOVE, ATTACK, STOP }
     public enum EndReason { NONE, TARGET_DEFEATED, TARGET_LOST, OUT_OF_RANGE, TIMED_OUT, AUTHORITY_LOST,
-        REPLACED, CANCELLED, FAILED, PARTIAL_FAILURE, NO_SURVIVORS, NO_SAFE_ANCHOR, REGROUP_TIMED_OUT, STOPPED }
+        REPLACED, CANCELLED, FAILED, PARTIAL_FAILURE, NO_SURVIVORS, NO_SAFE_ANCHOR, REGROUP_TIMED_OUT, STOPPED,
+        ROUTE_NO_PATH, ROUTE_MEMBER_BLOCKED, ROUTE_TIMED_OUT }
 
     private static final int PATROL_PAUSE = 20;
+    private static final int POINT_TRAVEL_BUDGET = 2400;
+    private static final int POINT_PATH_RETRIES = 3;
+    private static final int POINT_RETRY_DELAY = 10;
+    private static final int POINT_STALL_TICKS = 100;
+    private static final int POINT_MEMBER_RECOVERIES = 2;
+    private static final double POINT_COHESION = 3;
+    private static final double POINT_REFERENCE_REACH = 2;
 
     private final UnitGroups owner;
     private final UUID id;
@@ -52,6 +61,12 @@ public final class UnitGroup {
     private long attackStarted;
     private boolean pointsCombatPaused;
     private final Set<UUID> failedMembers = new LinkedHashSet<>();
+    private final Map<UUID, Double> pointClosest = new LinkedHashMap<>();
+    private final Map<UUID, Integer> pointStalled = new LinkedHashMap<>();
+    private final Map<UUID, Integer> pointRecoveries = new LinkedHashMap<>();
+    private final Set<UUID> pointWaitingMembers = new LinkedHashSet<>();
+    private int pointPathRetries;
+    private long pointRetryAt;
     boolean changed;
 
     UnitGroup(UnitGroups owner, UUID id) { this.owner = owner; this.id = id; }
@@ -74,6 +89,8 @@ public final class UnitGroup {
     public int patrolStop() { return points == null ? patrolAt : points.stop(); }
     /** Mandatory click points, including any one-time prefix before the cycle. */
     public List<WorldPos> pointRoute() { return points == null ? List.of() : points.points; }
+    /** Open routes keep their authored history for append/cycle matching after completing the final dwell. */
+    public boolean routeComplete() { return points != null && points.complete(); }
     /** One authored point command, stable across appended points and internally replaced leg handles. */
     public Optional<UUID> pointCommandId() { return Optional.ofNullable(points).map(route -> route.commandId); }
     /** Generation changes for each external command, including page deployments, but never for an internal leg. */
@@ -81,6 +98,29 @@ public final class UnitGroup {
     public CommandKind commandKind() { return commandKind; }
     public EndReason endReason() { return endReason; }
     public Set<UUID> failedMembers() { return Set.copyOf(failedMembers); }
+    /** Position/status observation only; this never asks a navigator to find a path. */
+    public int waitingMembers() {
+        List<Body> bodies = loaded();
+        int waiting = members.size() - bodies.size();
+        if (phase == Phase.FAILED_WAITING) {
+            return Math.min(members.size(), waiting + (int) bodies.stream().filter(body -> failedMembers.contains(body.id())).count());
+        }
+        boolean transit = points != null && !points.atStop() && !pointsCombatPaused;
+        for (int n = 0; n < bodies.size(); n++) {
+            Body body = bodies.get(n);
+            ResidentCommands.Order order = orders.get(body.id());
+            boolean ready = !pointWaitingMembers.contains(body.id())
+                && order != null && order.boundTo(body) && !order.engaged() && !order.yieldingToDanger()
+                && order.status() != ResidentCommands.Status.FAILED && order.status() != ResidentCommands.Status.RELEASED;
+            if (ready) {
+                ready = transit ? atPointSlot(body, n == 0 ? POINT_REFERENCE_REACH : POINT_COHESION)
+                    : order.status() == ResidentCommands.Status.HOLDING
+                        && Reach.standingIn(body.mob(), Stances.at(order.destination()));
+            }
+            if (!ready) { waiting++; }
+        }
+        return Math.min(members.size(), waiting);
+    }
     public boolean attackMove() { return points != null && points.attackMove; }
     public int cycleStart() { return points == null ? -1 : points.cycleStart; }
     /** An accepted live queue can wait indefinitely at its last point for another click. */
@@ -200,6 +240,7 @@ public final class UnitGroup {
         regrouping = false;
         regroupTicks = 0;
         pointsCombatPaused = false;
+        resetPointProgress();
     }
 
     void startAttack(List<ResidentCommands.Order> attacks) {
@@ -228,6 +269,7 @@ public final class UnitGroup {
         patrolAt = -1;
         deployment = null;
         assembledSince = Long.MIN_VALUE;
+        resetPointProgress();
     }
 
     private void tickAttack(List<Body> bodies) {
@@ -323,6 +365,9 @@ public final class UnitGroup {
     }
 
     private void failedWaiting(EndReason reason) {
+        LOGGER.warn("squad={} command={} waits={} stop={} captain={} travelTicks={} members={} missing={} blocked={}",
+            id, commandId, reason, patrolStop(), points == null ? null : points.captain(),
+            points == null ? regroupTicks : points.travellingTicks(), members.size(), members.size() - loaded().size(), failedMembers);
         orders.values().forEach(ResidentCommands.Order::close);
         orders.clear();
         attacking = false;
@@ -347,6 +392,7 @@ public final class UnitGroup {
         commandKind = CommandKind.NONE;
         attacking = false;
         regrouping = false;
+        resetPointProgress();
     }
 
     void startPoints(PointRoute route) {
@@ -466,74 +512,180 @@ public final class UnitGroup {
     }
 
     private void tickPoints(List<Body> bodies, Set<UUID> present) {
-        if (bodies.isEmpty()) { points.waiting(); }
+        if (bodies.isEmpty()) {
+            orders.values().forEach(ResidentCommands.Order::close);
+            orders.clear();
+            assembledSince = Long.MIN_VALUE;
+            phase = Phase.WAITING;
+            if (members.isEmpty()) { failedWaiting(EndReason.NO_SURVIVORS); }
+            return;
+        }
+        if (points.atStop() && mode == ResidentCommands.Mode.HOLD) {
+            orders.values().stream().filter(order -> owner.commands.current(order.resident()).orElse(null) == order)
+                .forEach(ResidentCommands.Order::allowDangerRetreat);
+        }
         if (orders.values().stream().anyMatch(ResidentCommands.Order::yieldingToDanger)) {
-            points.waiting();
+            pointsCombatPaused = true;
+            assembledSince = Long.MIN_VALUE;
+            return;
+        }
+        if (mode == ResidentCommands.Mode.GUARD && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)) {
             pointsCombatPaused = true;
             assembledSince = Long.MIN_VALUE;
             return;
         }
         if (changed || !present.equals(orders.keySet())) {
+            if (owner.server.overworld().getGameTime() < pointRetryAt) { return; }
             changed = false;
-            if (bodies.isEmpty()) {
-                orders.values().forEach(ResidentCommands.Order::close);
-                orders.clear();
-                phase = Phase.WAITING;
-                assembledSince = Long.MIN_VALUE;
-            } else {
-                try { issue(bodies, points.slots(bodies), Phase.LINE, mode); }
-                catch (IllegalArgumentException unavailable) { fail(); }
+            try {
+                issue(bodies, points.slots(bodies, points.captain(), destinations(), Set.of(), Set.of()), Phase.LINE, mode);
+                resetPointTracking();
+            } catch (IllegalArgumentException unavailable) { pointPathFailure(present, EndReason.ROUTE_NO_PATH); }
+            return;
+        }
+        // A retained unloaded member still owes this mandatory stop. Present members may
+        // approach it, but cannot complete its dwell or advance the authored queue alone.
+        boolean assembled = bodies.size() == members.size() && assembled(bodies);
+        if (!points.complete() && (!points.atStop() || !assembled) && !(pointsCombatPaused && assembled)) {
+            points.travelling();
+            if (points.travellingTicks() >= POINT_TRAVEL_BUDGET) {
+                members.stream().filter(member -> !present.contains(member)).forEach(failedMembers::add);
+                bodies.stream().filter(body -> {
+                    ResidentCommands.Order order = orders.get(body.id());
+                    return order == null || !order.boundTo(body) || order.status() != ResidentCommands.Status.HOLDING
+                        || !Reach.standingIn(body.mob(), Stances.at(order.destination()));
+                }).forEach(body -> failedMembers.add(body.id()));
+                if (failedMembers.isEmpty()) { failedMembers.addAll(present); }
+                failedWaiting(EndReason.ROUTE_TIMED_OUT);
+                return;
             }
-            return;
         }
-        if (bodies.isEmpty()) { return; }
-        if (orders.values().stream().anyMatch(order -> order.status() == ResidentCommands.Status.FAILED)) {
-            fail();
-            return;
-        }
-        if (mode == ResidentCommands.Mode.GUARD && orders.values().stream().anyMatch(ResidentCommands.Order::engaged)) {
-            points.waiting();
-            pointsCombatPaused = true;
-            assembledSince = Long.MIN_VALUE;
-            return;
-        }
-        if (!assembled(bodies)) {
-            phase = Phase.LINE;
-            assembledSince = Long.MIN_VALUE;
-            return;
-        }
+        long now = owner.server.overworld().getGameTime();
+        if (now < pointRetryAt) { return; }
+        Set<UUID> blocked = pointBlocked(bodies);
+        if (!blocked.isEmpty()) { recoverPointMembers(bodies, blocked); return; }
         if (pointsCombatPaused) {
-            phase = points.atStop() ? Phase.HOLDING : Phase.REFORMING;
-            long now = owner.server.overworld().getGameTime();
+            phase = bodies.size() == members.size() ? Phase.REFORMING : Phase.WAITING_FOR_MEMBER;
+            if (!assembled) { assembledSince = Long.MIN_VALUE; return; }
             if (assembledSince == Long.MIN_VALUE) { assembledSince = now; }
             if (now - assembledSince < PATROL_PAUSE) { return; }
             pointsCombatPaused = false;
+            if (!points.atStop()) { assembledSince = Long.MIN_VALUE; }
         }
         try {
             if (points.atStop()) {
-                phase = Phase.HOLDING;
-                if (!points.loops() && !points.appendable) { return; }
-                if (mode != ResidentCommands.Mode.GUARD) {
-                    // Travel is deliberate player control. A fully assembled patrol can fight
-                    // during its stop, then every survivor must reform before the dwell starts.
-                    issue(bodies, points.slots(bodies), Phase.LINE, ResidentCommands.Mode.GUARD);
-                    mode = ResidentCommands.Mode.GUARD;
+                if (!assembled) {
+                    phase = bodies.size() == members.size() ? Phase.LINE : Phase.WAITING_FOR_MEMBER;
+                    assembledSince = Long.MIN_VALUE;
                     return;
                 }
-                long now = owner.server.overworld().getGameTime();
+                phase = Phase.HOLDING;
                 if (assembledSince == Long.MIN_VALUE) { assembledSince = now; }
                 if (now - assembledSince < PATROL_PAUSE) { return; }
-                if (!points.hasNext()) { return; }
+                if (!points.hasNext()) { points.completed(); return; }
                 points.nextStop();
+                resetPointProgress();
+            } else {
+                assembledSince = Long.MIN_VALUE;
+                phase = Phase.LINE;
+                if (!pointCohesive(bodies)) { return; }
             }
-            // Every advance waits for all available members. No member receives the distant final
-            // waypoint while its squad is still at a previous captain position.
-            WorldPos next = points.advance(bodies);
-            List<WorldPos> slots = points.slots(bodies, next);
+            Optional<WorldPos> advance = points.advance(bodies);
+            if (advance.isEmpty()) { pointPathFailure(Set.of(bodies.getFirst().id()), EndReason.ROUTE_NO_PATH); return; }
+            WorldPos next = advance.get();
+            List<WorldPos> slots = points.slots(bodies, next, destinations(), present, Set.of());
             mode = points.attackMove ? ResidentCommands.Mode.GUARD : ResidentCommands.Mode.HOLD;
             issue(bodies, slots, Phase.LINE, mode);
             points.advanced(next);
-        } catch (IllegalArgumentException unavailable) { fail(); }
+            resetPointProgress();
+        } catch (PointRoute.Unavailable unavailable) {
+            pointPathFailure(Set.of(unavailable.member), EndReason.ROUTE_NO_PATH);
+        } catch (IllegalArgumentException unavailable) { pointPathFailure(present, EndReason.ROUTE_NO_PATH); }
+    }
+
+    private boolean pointCohesive(List<Body> bodies) {
+        var reference = bodies.getFirst().mob();
+        return WorldSpaces.world(reference.level(), points.captain())
+                .filter(at -> reference.position().distanceToSqr(at) <= POINT_REFERENCE_REACH * POINT_REFERENCE_REACH).isPresent()
+            && bodies.stream().allMatch(body -> atPointSlot(body, POINT_COHESION));
+    }
+
+    private boolean atPointSlot(Body body, double reach) {
+        ResidentCommands.Order order = orders.get(body.id());
+        return order != null && order.boundTo(body) && WorldSpaces.world(body.mob().level(), order.destination())
+            .filter(at -> body.mob().position().distanceToSqr(at) <= reach * reach).isPresent();
+    }
+
+    private Set<UUID> pointBlocked(List<Body> bodies) {
+        Set<UUID> blocked = new LinkedHashSet<>();
+        for (Body body : bodies) {
+            ResidentCommands.Order order = orders.get(body.id());
+            if (order.status() == ResidentCommands.Status.FAILED) { blocked.add(body.id()); continue; }
+            if (Reach.standingIn(body.mob(), Stances.at(order.destination()))) {
+                pointStalled.remove(body.id());
+                pointClosest.remove(body.id());
+                continue;
+            }
+            double distance = WorldSpaces.world(body.mob().level(), order.destination())
+                .map(at -> at.distanceTo(body.mob().position())).orElse(Double.MAX_VALUE);
+            if (distance < pointClosest.getOrDefault(body.id(), Double.MAX_VALUE) - .5) {
+                pointClosest.put(body.id(), distance);
+                pointStalled.put(body.id(), 0);
+            } else if (pointStalled.merge(body.id(), 1, Integer::sum) >= POINT_STALL_TICKS) { blocked.add(body.id()); }
+        }
+        return blocked;
+    }
+
+    private void recoverPointMembers(List<Body> bodies, Set<UUID> blocked) {
+        if (blocked.stream().anyMatch(id -> pointRecoveries.getOrDefault(id, 0) >= POINT_MEMBER_RECOVERIES)) {
+            failedMembers.addAll(blocked);
+            failedWaiting(EndReason.ROUTE_MEMBER_BLOCKED);
+            return;
+        }
+        try {
+            List<WorldPos> slots = points.slots(bodies, points.captain(), destinations(), blocked, blocked);
+            List<ResidentCommands.Target> targets = new ArrayList<>();
+            for (int n = 0; n < bodies.size(); n++) {
+                Body body = bodies.get(n);
+                if (blocked.contains(body.id())) { targets.add(target(body, slots.get(n), mode)); }
+            }
+            List<ResidentCommands.Order> replacements = owner.commands.replace(targets);
+            for (ResidentCommands.Order replacement : replacements) {
+                if (mode == ResidentCommands.Mode.GUARD) { replacement.deliberateGuard(); }
+                ResidentCommands.Order old = orders.put(replacement.resident(), replacement);
+                if (old != null) { old.close(); }
+                pointRecoveries.merge(replacement.resident(), 1, Integer::sum);
+                pointClosest.remove(replacement.resident());
+                pointStalled.remove(replacement.resident());
+            }
+            pointPathRetries = 0;
+            pointWaitingMembers.removeAll(blocked);
+            pointRetryAt = owner.server.overworld().getGameTime() + POINT_RETRY_DELAY;
+            assembledSince = Long.MIN_VALUE;
+            phase = Phase.LINE;
+        } catch (IllegalArgumentException unavailable) { pointPathFailure(blocked, EndReason.ROUTE_MEMBER_BLOCKED); }
+    }
+
+    private void pointPathFailure(Set<UUID> blocked, EndReason reason) {
+        assembledSince = Long.MIN_VALUE;
+        pointWaitingMembers.addAll(blocked);
+        if (++pointPathRetries >= POINT_PATH_RETRIES) {
+            failedMembers.addAll(pointWaitingMembers);
+            failedWaiting(reason);
+            return;
+        }
+        phase = Phase.WAITING_FOR_MEMBER;
+        pointRetryAt = owner.server.overworld().getGameTime() + (long) POINT_RETRY_DELAY * pointPathRetries;
+    }
+
+    private void resetPointTracking() { pointClosest.clear(); pointStalled.clear(); }
+
+    private void resetPointProgress() {
+        resetPointTracking();
+        pointRecoveries.clear();
+        pointWaitingMembers.clear();
+        pointPathRetries = 0;
+        pointRetryAt = 0;
     }
 
     private boolean assembled(List<Body> bodies) {

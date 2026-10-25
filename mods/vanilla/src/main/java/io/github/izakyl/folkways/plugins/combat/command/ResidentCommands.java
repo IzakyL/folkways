@@ -84,6 +84,7 @@ public final class ResidentCommands {
         }
         public boolean defensiveOnly() { return dangerRetreat && mode == Mode.HOLD; }
         public boolean yieldingToDanger() {
+            if (active.get(resident()) != this) { return false; }
             return (dangerRetreat || mode == Mode.GUARD && deliberateGuard) && woundedDanger(this)
                 || defensiveOnly() && (engaged() || retaliating(this)
                     || body.mob() instanceof ResidentEntity resident && resident.hasWeaponSession());
