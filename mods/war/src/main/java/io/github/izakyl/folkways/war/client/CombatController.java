@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.war.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import io.github.izakyl.folkways.core.api.colony.Books;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Realm;
@@ -10,6 +9,7 @@ import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.front.api.ui.Cue;
 import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.client.Overhead;
+import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.plugins.combat.net.CombatControlPacket;
 import io.github.izakyl.folkways.plugins.combat.net.CombatPackets;
 import io.github.izakyl.folkways.plugins.combat.net.CombatWaypointReply;
@@ -107,7 +107,7 @@ final class CombatController implements OverheadTools.Handler {
         if (minecraft.level == null || minecraft.player == null || minecraft.getConnection() == null) {
             reset(); return;
         }
-        Context now = Books.heldColony(minecraft.player)
+        Context now = CurrentColony.id(minecraft.player)
             .map(colony -> new Context(minecraft.player.getUUID(), colony, WorldSpaces.at(minecraft.player).realm())).orElse(null);
         if (!java.util.Objects.equals(context, now)) {
             reset(); context = now;
@@ -115,7 +115,10 @@ final class CombatController implements OverheadTools.Handler {
         if (context == null) { return; }
         synchronizeControl();
         boolean retained = !selected.isEmpty() || shortcuts.values().stream().anyMatch(group -> !group.isEmpty());
-        if (!active() && !retained && !CombatPackets.controlPending()) { return; }
+        if (!active()) {
+            if (retained && heartbeatIn-- <= 0) { CombatPackets.heartbeat(); heartbeatIn = 40; }
+            return;
+        }
         if (requestIn-- <= 0) { CombatPackets.requestRoster(); requestIn = 20; }
         if (retained && heartbeatIn-- <= 0) { CombatPackets.heartbeat(); heartbeatIn = 40; }
         residents.clear();
@@ -124,12 +127,6 @@ final class CombatController implements OverheadTools.Handler {
         for (Entity entity : minecraft.level.entitiesForRendering()) {
             if (entity instanceof ResidentEntity resident && resident.isAlive() && !resident.isRemoved()
                 && roster.contains(resident.getUUID())) { residents.put(resident.getUUID(), resident); }
-        }
-        boolean changed = selected.removeIf(id -> !residents.containsKey(id));
-        if (changed) {
-            clearRoute();
-            CombatPackets.select(List.copyOf(selected));
-            tell("folkways.war.selection_changed", selected.size());
         }
         synchronizeRoute();
     }
@@ -146,10 +143,14 @@ final class CombatController implements OverheadTools.Handler {
                 if (selected.isEmpty()) { disarmAttackMove(); }
                 shortcuts.clear();
                 for (int slot = 1; slot <= 9; slot++) { shortcuts.put(slot, state.groups().get(slot - 1)); }
+                boolean stableHeartbeat = state.accepted()
+                    && state.operation() == CombatControlPacket.Operation.HEARTBEAT
+                    && pendingReplacement == null && !CombatPackets.routePending();
                 boolean routeSnapshot = selectionChanged || state.accepted() && (
                     state.operation() == CombatControlPacket.Operation.SELECT
                     || state.operation() == CombatControlPacket.Operation.RECALL
-                    || state.operation() == CombatControlPacket.Operation.RELEASE);
+                    || state.operation() == CombatControlPacket.Operation.RELEASE
+                    || state.operation() == CombatControlPacket.Operation.SUSPEND) || stableHeartbeat;
                 if (routeSnapshot) {
                     route.clear(); route.addAll(state.points());
                     cycleStart = state.cycleStart(); routeOpen = state.open();
@@ -706,11 +707,13 @@ final class CombatController implements OverheadTools.Handler {
     public void cancel() {
         dragging = false;
         disarmAttackMove();
-        if (!selected.isEmpty()) {
-            if (Minecraft.getInstance().getConnection() != null) { replaceSelection(Set.of()); }
-            else { selected.clear(); }
-        }
         clearRoute();
+        moveMarker = null;
+        markerUntil = 0;
+        notice = Component.empty();
+        noticeUntil = 0;
+        requestIn = 0;
+        if (Minecraft.getInstance().getConnection() != null) { CombatPackets.suspendControl(); }
     }
 
     @Override

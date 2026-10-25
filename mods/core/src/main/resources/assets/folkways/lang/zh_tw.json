@@ -1344,6 +1344,7 @@
   "folkways.war.status_with_route": "%1$s · 路點 %2$s",
   "folkways.war.status_waiting": "%1$s · 待歸隊：%2$s 人",
   "folkways.war.rest_note": "疲倦時受控居民仍會待命；解除控制後可休息，休息不足會降低心情。",
+  "folkways.war.suspend_note": "關閉V介面或切換工具會暫停RTS輸入；已接受的小隊命令會繼續執行，重新開啟即可恢復。未編隊的臨時選擇會解除。",
   "folkways.war.help": "左鍵點擊或拖動選擇。右鍵地面下令，Ctrl+右鍵追加。按住Ctrl回看已提交路線歷史（不是草稿）；路線開放時點擊可見標記以追加或閉環。中鍵拖動平移，Alt+中鍵拖動旋轉，滾輪縮放；行走/跳躍/潛行鍵控制鏡頭移動。",
   "folkways.war.command.none": "無命令",
   "folkways.war.command.deployment": "駐守",

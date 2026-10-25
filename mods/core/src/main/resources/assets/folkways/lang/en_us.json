@@ -1344,6 +1344,7 @@
   "folkways.war.status_with_route": "%1$s · %2$s route points",
   "folkways.war.status_waiting": "%1$s · regroup: %2$s waiting",
   "folkways.war.rest_note": "Controlled residents wait when tired. Releasing them lets them rest; too little rest lowers mood.",
+  "folkways.war.suspend_note": "Closing V or switching tools suspends RTS input. Accepted group orders keep running; reopen to resume. Temporary selections without a group are released.",
   "folkways.war.help": "Select by left-clicking or dragging. Right-click ground to order; Ctrl+right-click to append. Hold Ctrl to review committed route history (not a draft); when open, click a visible marker to append or close. Middle-drag pans, Alt+middle-drag orbits, the wheel zooms, and Walk/Jump/Sneak move the camera.",
   "folkways.war.command.none": "No order",
   "folkways.war.command.deployment": "Guard post",

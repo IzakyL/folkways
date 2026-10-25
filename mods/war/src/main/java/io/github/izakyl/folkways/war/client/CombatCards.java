@@ -82,6 +82,7 @@ final class CombatCards {
             tooltip.add(fullStatus);
             if (!notice.getString().isEmpty()) { tooltip.add(status); }
             tooltip.add(Component.translatable("folkways.war.rest_note"));
+            tooltip.add(Component.translatable("folkways.war.suspend_note"));
             tooltip.add(Component.translatable("folkways.war.help"));
             graphics.renderTooltip(minecraft.font, tooltip, Optional.empty(), ItemStack.EMPTY, mouseX, mouseY);
         }
