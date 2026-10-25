@@ -23,10 +23,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -251,8 +251,14 @@ public final class SeedPlanningGameTests {
             helper.assertValueEqual(budget.planning().tally(Items.WHEAT_SEEDS).compostable(), 0L,
                 "a newly configured reserve applies to the next real inventory batch");
             helper.assertTrue(!budget.permits(UUID.randomUUID(), new ItemStack(Items.WHEAT_SEEDS)), "fresh execution cannot use the stale pre-change report");
-            var unloaded = colony.hold(PersonContent.ID,
-                new Held.Entity(UUID.randomUUID(), BuiltInRegistries.ENTITY_TYPE.getKey(PersonBody.RESIDENT.get()))).orElseThrow();
+            // A held resident goes unloaded the way it does in play: its chunk unloads it after it joined.
+            ResidentEntity away = PersonBody.RESIDENT.get().create(level);away.setNoAi(true);
+            away.moveTo(helper.absolutePos(new BlockPos(7, 1, 4)).getCenter());
+            helper.assertTrue(level.addFreshEntity(away), "the resident that will be unloaded is admitted to the actual level");
+            var unloaded = colony.hold(PersonContent.ID, Held.Entity.of(away)).orElseThrow();
+            away.joinColony(colony.id());colony.entered(away);
+            away.remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
+            helper.assertTrue(colony.holdingOf(away.getUUID()).isPresent(), "unloading keeps the resident held");
             var unknown = budget.planning();
             helper.assertTrue(!unknown.complete() && unknown.tally(Items.WHEAT_SEEDS).compostable() == 0
                 && unknown.reserves().isEmpty(), "an unloaded held resident remains a conservative unknown for the colony");
