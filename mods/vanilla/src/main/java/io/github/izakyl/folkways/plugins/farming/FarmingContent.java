@@ -104,7 +104,7 @@ public final class FarmingContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(SPEC);
+        declaring.vocation(SPEC.ordered(300));
         declaring.colony(ID, scope -> {
             FarmPresence state = new FarmPresence(scope.colony());
             scope.share(state);

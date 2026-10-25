@@ -4,6 +4,9 @@ import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.resident.body.WorkPriorities;
+import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.engine.colony.WorkDefaults;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.plugins.person.look.LookPool;
@@ -104,6 +107,10 @@ final class PersonPresence implements Facing {
             Component.translatable(PersonContent.LOOKS.nameKey()),
             looks(view),
             List.of(new Board.Act.Open(PersonContent.LOOKS.id()))));
+        rows.add(new Board.Row(new ItemStack(BuiltInRegistries.ITEM.get(PersonContent.WORK_DEFAULTS.icon())),
+            Component.translatable(PersonContent.WORK_DEFAULTS.nameKey()),
+            workDefaults(),
+            List.of(new Board.Act.Open(PersonContent.WORK_DEFAULTS.id()))));
         return Optional.of(new Board(List.of(), rows,
             Optional.of(Component.translatable("folkways.page.person.empty"))));
     }
@@ -111,6 +118,13 @@ final class PersonPresence implements Facing {
     private Component names(ColonyView view) {
         NamePool pool = ColonyNames.of(colony, view.level().registryAccess());
         return Component.translatable("folkways.pool.names.short", pool.names().size(), pool.surnames().size());
+    }
+
+    private Component workDefaults() {
+        WorkPriorities priorities = WorkDefaults.of(colony, PersonBody.ID);
+        long changed = Vocations.ids().stream().filter(trade -> !priorities.of(trade).equals(WorkPriorities.DEFAULT)).count();
+        return changed == 0 ? Component.translatable("folkways.work_defaults.usual")
+            : Component.translatable("folkways.work_defaults.changed", changed);
     }
 
     private Component looks(ColonyView view) {

@@ -1,4 +1,4 @@
-package io.github.izakyl.folkways.front.ui.screen;
+package io.github.izakyl.folkways.plugins.person;
 
 import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
@@ -10,7 +10,7 @@ import io.github.izakyl.folkways.core.engine.colony.WorkDefaults;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
@@ -23,7 +23,7 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class WorkDefaultsAuthorityGameTests {
@@ -46,19 +46,14 @@ public final class WorkDefaultsAuthorityGameTests {
         var hauling = Vocations.HAULING;
         var building = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways", "building");
         try {
-            ResidentsPage.editDefault(stranger, PersonBody.ID, hauling, true, 0);
+            WorkDefaultsPage.editDefault(stranger, hauling, true, 0);
             helper.assertValueEqual(WorkDefaults.of(colony, PersonBody.ID).of(hauling), WorkPriorities.DEFAULT,
                 "naming someone else's colony grants no authority");
-            ResidentsPage.editDefault(keeper, PersonBody.ID, hauling, true, 0);
-            ResidentsPage.editDefault(keeper, PersonBody.ID, building, false, -1);
+            WorkDefaultsPage.editDefault(keeper, hauling, true, 0);
+            WorkDefaultsPage.editDefault(keeper, building, false, -1);
             var priorities = WorkDefaults.of(colony, PersonBody.ID);
             helper.assertFalse(priorities.of(hauling).allowed(), "a keeper can toggle work before anyone joins");
             helper.assertTrue(priorities.of(building).priority() == Keenness.SECOND, "ranking another entry keeps the first edit");
-            ResidentsPage.resetDefaults(stranger);
-            helper.assertValueEqual(WorkDefaults.of(colony, PersonBody.ID), priorities, "a stranger cannot reset the template");
-            ResidentsPage.resetDefaults(keeper);
-            helper.assertValueEqual(WorkDefaults.of(colony, PersonBody.ID).of(hauling), WorkPriorities.DEFAULT,
-                "a keeper can reset it");
             helper.assertTrue(colony.residents().isEmpty(), "defaults do not create roster entries");
         } finally {
             colony.raze();

@@ -96,9 +96,6 @@ public final class ResidentWorkDefaultsGameTests {
                     .map(who -> resident(level, who.id())).findFirst().orElseThrow();
                 people.add(second);
                 assertRule(helper, second, trade, false, Keenness.FOURTH);
-                WorkDefaults.reset(colony, PersonBody.ID);
-                assertRule(helper, first, trade, true, Keenness.SECOND);
-                assertRule(helper, second, trade, false, Keenness.FOURTH);
                 helper.succeed();
             } finally {
                 people.forEach(Entity::discard);

@@ -65,7 +65,7 @@ public final class DispatchContent {
         PackageNetworks.install(network);
         NeoForge.EVENT_BUS.addListener(network::tick);
         NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> network.forgetServer());
-        declaring.vocation(SPEC);
+        declaring.vocation(SPEC.ordered(800));
         declaring.colony(ID, scope -> {
             DispatchPresence state = new DispatchPresence(scope.colony());
             scope.share(state);

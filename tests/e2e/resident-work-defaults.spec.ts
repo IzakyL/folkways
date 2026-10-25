@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { defineTask, javaTask, media, screen, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
-import { ancestorsOf, clickElement, panelElements, typeIntoElement, waitForElement } from "../ldlib2";
+import { clickElement, panelElements, waitForElement } from "../ldlib2";
 import { foundColonyFast, foundingBox, openColonyPanelViaBook, optInViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { ADMIT_SETTLERS, runColonyTask } from "../shared/colony/colony-tasks";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -11,9 +11,9 @@ import { commandPos, frames } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { GROUND } from "../shared/harness/stage";
 import { clickTab } from "../shared/ui/colony-pages";
-import { wheelCell } from "../shared/ui/site-panel";
+import { boardActs, wheelCell } from "../shared/ui/site-panel";
 
-const CELL = "folkways.resident.defaults.folkways.resident.folkways.hauling";
+const CELL = "folkways.work_defaults.folkways.hauling";
 const READ = defineTask<{ player: string }, { allowed: boolean; priority: number; residents: Array<{ id: string; allowed: boolean; priority: number }> }>({
   name: "folkways.defaults.read", side: "server",
   source: javaTask({ imports: [
@@ -43,7 +43,7 @@ return mc.getWindow().getGuiScaledWidth();
 ` }),
 });
 
-test("future human work defaults remain editable with an empty or filtered roster", async ({}, testInfo) => {
+test("future human work defaults on the person page affect only new arrivals", async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   ensureOut("e2e");
   const run = newRunId();
@@ -68,8 +68,7 @@ test("future human work defaults remain editable with an empty or filtered roste
       expect((await optInViaBook(server, client, player, foot, "bed")).member).toBe(true);
     }
     await openColonyPanelViaBook(server, client, player, founded.standBlock);
-    await clickTab(client, "folkways.tab.residents");
-    await waitForElement(client, { id: CELL });
+    await openDefaults(client);
     expect((await server.run(READ, { player })).residents).toHaveLength(0);
     await expect.poll(() => text(client, CELL)).toBe("3");
     await clickElement(client, { id: CELL });
@@ -80,30 +79,25 @@ test("future human work defaults remain editable with an empty or filtered roste
     await expect.poll(async () => (await server.run(READ, { player })).residents).toEqual([
       { id: expect.any(String), allowed: false, priority: 2 },
     ]);
-    await typeIntoElement(client, { id: "folkways.resident.search" }, "name=__nobody__");
-    await clickElement(client, { id: "folkways.resident.defaults.reset" });
-    await expect.poll(() => server.run(READ, { player })).toMatchObject({ allowed: true, priority: 3,
+    await clickElement(client, { id: CELL });
+    await wheelCell(server, client, CELL, 1);
+    await wheelCell(server, client, CELL, 1);
+    await expect.poll(() => server.run(READ, { player })).toMatchObject({ allowed: true, priority: 4,
       residents: [{ id: expect.any(String), allowed: false, priority: 2 }] });
-    await expect.poll(() => text(client, CELL)).toBe("3");
-    await clickElement(client, { id: "folkways.resident.defaults.fold" });
-    await frames(client, 3);
-    const folded = await panelElements(client);
-    const cell = folded.find(one => one.id === CELL)!;
-    expect(ancestorsOf(folded, cell).some(one => one.displayed === false)).toBe(true);
-    await clickElement(client, { id: "folkways.resident.defaults.fold" });
-    await client.run(NARROW, undefined);
-    await frames(client, 5);
-    await clickTab(client, "folkways.tab.residents");
-    await waitForElement(client, { id: CELL });
-    await media.screenshot(client, { path: testInfo.outputPath("defaults-narrow.png") });
+    await expect.poll(() => text(client, CELL)).toBe("4");
     await screen.dismiss(client);
     await runColonyTask(server, ADMIT_SETTLERS, { player, colony_id: String(founded.evidence.colonyId), count: 1 });
     await tick.sprint(server, 5);
     const rows = (await server.run(READ, { player })).residents;
     expect(rows).toHaveLength(2);
     expect(rows.map(({ allowed, priority }) => ({ allowed, priority }))).toEqual(expect.arrayContaining([
-      { allowed: false, priority: 2 }, { allowed: true, priority: 3 },
+      { allowed: false, priority: 2 }, { allowed: true, priority: 4 },
     ]));
+    await client.run(NARROW, undefined);
+    await openColonyPanelViaBook(server, client, player, founded.standBlock);
+    await openDefaults(client);
+    await frames(client, 5);
+    await media.screenshot(client, { path: testInfo.outputPath("defaults-narrow.png") });
   } catch (error) {
     pair?.failing(error);
     throw error;
@@ -114,4 +108,12 @@ test("future human work defaults remain editable with an empty or filtered roste
 
 async function text(client: MinecraftClient, id: string): Promise<string | undefined> {
   return (await panelElements(client)).find(one => one.id === id)?.text;
+}
+
+async function openDefaults(client: MinecraftClient) {
+  await clickTab(client, "folkways.page.person");
+  const opens = await boardActs(client, "open", "folkways.person");
+  expect(opens, "the person board opens names, looks, then work defaults").toHaveLength(3);
+  await clickElement(client, { id: opens[2].id });
+  await waitForElement(client, { id: CELL });
 }

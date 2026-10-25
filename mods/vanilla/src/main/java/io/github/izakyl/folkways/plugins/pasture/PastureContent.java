@@ -111,7 +111,7 @@ public final class PastureContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(VOCATION);
+        declaring.vocation(VOCATION.ordered(400));
         declaring.colony(ID, scope -> {
             PasturePresence state = new PasturePresence(scope.colony());
             scope.share(state);

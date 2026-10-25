@@ -81,7 +81,7 @@ public final class WorkDefaultsGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void colonySaveKeepsDefaultsAndMissingPluginsThroughEditsAndReset(GameTestHelper helper) {
+    public static void colonySaveKeepsDefaultsAndMissingPluginsThroughEdits(GameTestHelper helper) {
         var trades = java.util.List.of(FIRST, SECOND);
         var kind = kind("saved_defaults");
         var data = new ColonyData();
@@ -103,10 +103,7 @@ public final class WorkDefaultsGameTests {
         helper.assertFalse(WorkDefaults.of(restored, kind.id()).of(trades.get(0)).allowed(), "the first edit stays");
         helper.assertTrue(WorkDefaults.of(restored, kind.id()).of(trades.get(1)).priority() == Keenness.FOURTH,
             "the second edit stays too");
-        WorkDefaults.reset(restored, kind.id());
-        helper.assertValueEqual(WorkDefaults.of(restored, kind.id()).of(trades.get(0)), WorkPriorities.DEFAULT,
-            "reset clears available trades");
-        helper.assertFalse(WorkDefaults.of(restored, kind.id()).of(id("absent/trade")).allowed(), "reset keeps absent trades");
+        helper.assertFalse(WorkDefaults.of(restored, kind.id()).of(id("absent/trade")).allowed(), "edits keep absent trades");
         helper.assertValueEqual(restored.kept(WorkDefaults.ID).getCompound("kinds").getCompound("absent:kind"), settings,
             "editing one kind keeps unknown kinds");
         helper.succeed();

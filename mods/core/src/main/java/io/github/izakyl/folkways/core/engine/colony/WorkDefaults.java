@@ -44,19 +44,6 @@ public final class WorkDefaults {
         return true;
     }
 
-    public static void reset(Colony colony, ResourceLocation kind) {
-        if (ResidentKinds.of(kind).filter(known -> known.workDefaults()).isEmpty()) {
-            return;
-        }
-        CompoundTag tag = colony.kept(ID);
-        WorkPriorities priorities = of(tag, kind);
-        // Keep missing plugins' entries until their trades are available to edit again.
-        for (ResourceLocation trade : Vocations.ids()) {
-            priorities = priorities.with(trade, WorkPriorities.DEFAULT);
-        }
-        write(colony, tag, kind, priorities);
-    }
-
     private static void write(Colony colony, CompoundTag tag, ResourceLocation kind, WorkPriorities priorities) {
         CompoundTag kinds = tag.getCompound("kinds");
         CompoundTag settings = kinds.getCompound(kind.toString());

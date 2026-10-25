@@ -65,7 +65,7 @@ public final class BuildContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(SPEC);
+        declaring.vocation(SPEC.ordered(200));
         declaring.colony(ID, scope -> {
             BuildPresence state = new BuildPresence(scope.colony(), scope.server());
             scope.share(state);
