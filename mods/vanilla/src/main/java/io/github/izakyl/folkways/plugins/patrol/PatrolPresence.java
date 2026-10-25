@@ -88,6 +88,7 @@ final class PatrolPresence implements Facing {
 
     private final Colony colony;
     private final PatrolSupplies supplies;
+    private final ResidentSupport support;
 
     private final Asking asking;
 
@@ -110,12 +111,16 @@ final class PatrolPresence implements Facing {
     PatrolPresence(Colony colony) {
         this.colony = colony;
         this.supplies = new PatrolSupplies(colony);
+        this.support = new ResidentSupport(colony);
         this.asking = new Asking(colony, PatrolContent.ID, this::ended);
         this.cron = Cadence.claim(colony, PERIOD);
     }
 
     public void tick(MinecraftServer server) {
         supplies.tick(server);
+        support.prune(server.overworld().getGameTime());
+        // Withdraw through Core's normal lifecycle, which releases runners and actual tool/input loans.
+        asking.offer(Map.of());
         if (!swept || cron.due(server)) {
             swept = true;
             refresh(server);
@@ -127,45 +132,20 @@ final class PatrolPresence implements Facing {
     }
 
     PatrolSupplies supplies() { return supplies; }
+    ResidentSupport support() { return support; }
+    boolean legacyDisabled() { return true; }
 
     void refresh(MinecraftServer server) {
-        Map<UUID, List<Stop>> found = new LinkedHashMap<>();
-        for (ColonyView view : colony.views(server)) {
-            found.putAll(Beats.charted(Fronts.of(colony), view.level()));
-        }
-        routes = Map.copyOf(found);
-        laps.keySet().retainAll(found.keySet());
+        routes = Map.of();
+        laps.clear();
         long now = server.overworld().getGameTime();
         lastWatch.keySet().removeIf(id -> dutyUntil.getOrDefault(id, Long.MIN_VALUE) < now);
         dutyUntil.values().removeIf(until -> until < now);
     }
 
-    // A lap under way is offered as it was set out; a new one sets out once any stop on the route
-    // has half its ward run, so the route is walked again before a ward on it lapses.
+    // Old saved drawn routes remain data only. Player V point routes belong to UnitGroups instead.
     public List<Grown> goals(ColonyView view) {
-        ServerLevel level = view.level();
-        long now = level.getGameTime();
-        long due = FolkwaysVanillaConfig.patrolWardTicks() / 2;
-        List<Grown> rounds = new ArrayList<>();
-        routes.forEach((route, stops) -> {
-            if (!stops.getFirst().at().in(level)) {
-                return;
-            }
-            Lap lap = laps.get(route);
-            if (lap != null && lap.walking()) {
-                rounds.add(lap.round().remaining(lap.open()));
-                return;
-            }
-            boolean wanted = stops.stream()
-                .anyMatch(stop -> Wards.until(level, stop.at().block(level)) <= now + due);
-            if (wanted) {
-                int number = lap == null ? 0 : lap.number() + 1;
-                Lap next = new Lap(number, round(route, number, stops));
-                laps.put(route, next);
-                rounds.add(next.round());
-            }
-        });
-        return rounds;
+        return List.of();
     }
 
     // Each route by how many of its stops hold a ward now; one with nowhere to stand along it has no stops at all.
@@ -252,6 +232,19 @@ final class PatrolPresence implements Facing {
             failedWaiting ? Long.MIN_VALUE : dutyUntil.getOrDefault(who.resident().id(), Long.MIN_VALUE));
         Optional<ResidentCommands.Order> guard = order
             .filter(current -> current.mode() == ResidentCommands.Mode.GUARD || current.defensiveOnly());
+        Optional<ResidentSupport.Ticket> assisting = support.ticket(who);
+        if (assisting.isPresent()) {
+            var ticket = assisting.get();
+            Mob threat = ticket.foe.get();
+            if (threat != null && (!(threat instanceof net.minecraft.world.entity.monster.Creeper)
+                    || Weapons.ranged(who) && CombatReadiness.explosiveNear(body).isEmpty())) {
+                var stances = battleStances(level, who, threat, guard);
+                if (stances.isPresent()) {
+                    var helping = support.urge(who, ticket, stances.get());
+                    if (!helping.isEmpty()) return helping;
+                }
+            }
+        }
         // Failed waiting has no navigation handle, but must not resume an old patrol duty or supply trip.
         // Stopped and reforming squads may retaliate inside their fixed slot leash, never scan for a new foe.
         Optional<Mob> foe = failedWaiting || guard.filter(ResidentCommands.Order::defensiveOnly).isPresent()
@@ -374,6 +367,7 @@ final class PatrolPresence implements Facing {
     }
 
     public void closed(Closing why) {
+        support.clear();
         supplies.close();
         routes = Map.of();
         laps.clear();

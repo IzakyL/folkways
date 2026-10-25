@@ -32,8 +32,14 @@ public final class StrikeNode implements Node {
     private boolean killed;
     private boolean rewardSettled;
     private int activeTicks;
+    private final java.util.function.BooleanSupplier authorized;
 
     public StrikeNode(ServerLevel level, Mob foe, Stances stances) {
+        this(level, foe, stances, null);
+    }
+
+    StrikeNode(ServerLevel level, Mob foe, Stances stances, java.util.function.BooleanSupplier authorized) {
+        this.authorized = authorized;
         this.foe = foe.getUUID();
         // The foe, and the cell it is struck at, as the site holds them: aboard the ship it stands on, if it does.
         WorkSite site = WorkSite.on(foe);
@@ -52,7 +58,7 @@ public final class StrikeNode implements Node {
 
     @Override
     public boolean ready(ServerLevel level) {
-        return attempted || standing(level) != null;
+        return (authorized == null || authorized.getAsBoolean()) && (attempted || standing(level) != null);
     }
 
     @Override
@@ -65,18 +71,19 @@ public final class StrikeNode implements Node {
     }
 
     private boolean advance(ServerLevel level, Worker who) {
+        if (authorized != null && !authorized.getAsBoolean()) return false;
         if (session != null && session.defeatedTarget()) {
             killed = true;
             return false;
         }
         LivingEntity target = standing(level);
-        if (!(target instanceof Mob mob) || !Threats.hostile(mob, who.body())) {
+        if (!(target instanceof Mob mob) || authorized == null && !Threats.hostile(mob, who.body())) {
             return false;
         }
         if (!attempted) {
             attempted = true;
             session = Weapons.open(who).orElse(null);
-            if (session == null || !session.fire(target)) {
+            if (session == null || authorized != null && !session.explicitTarget(target, authorized) || !session.fire(target)) {
                 return false;
             }
             io.github.izakyl.folkways.plugins.combat.CombatReadiness.fighting(who.body());

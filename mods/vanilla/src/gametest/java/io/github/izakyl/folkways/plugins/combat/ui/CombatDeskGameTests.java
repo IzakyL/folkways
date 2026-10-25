@@ -38,7 +38,7 @@ public final class CombatDeskGameTests {
     @SubscribeEvent public static void register(RegisterGameTestsEvent event) { event.register(CombatDeskGameTests.class); }
 
     @GameTest(template = "empty_large")
-    public static void pageActionsCreateOneGuardOrTwoPointPatrolAndRejectAStaleGroup(GameTestHelper helper) {
+    public static void bookReplacesItsSingleGuardPostWithoutCreatingAPatrolAndRejectsAStaleGroup(GameTestHelper helper) {
         Fixture f = new Fixture(helper, 2);
         try {
             for (Body body : f.people) { helper.assertTrue(f.desk.act(f.player, "resident", body.id().toString()), "keeper selects a loaded resident"); }
@@ -53,11 +53,36 @@ public final class CombatDeskGameTests {
             helper.assertTrue(f.people.stream().allMatch(body -> ResidentCommands.of(f.colony).current(body.id()).isEmpty()), "release leaves no command");
             BlockPos second = helper.absolutePos(new BlockPos(16, 1, 10));
             f.player.moveTo(second.getX() + .5, second.getY(), second.getZ() + .5);
-            helper.assertTrue(f.desk.act(f.player, "add_point", "") && f.desk.act(f.player, "execute", ""), "a second center point starts a looping patrol");
-            helper.assertValueEqual(group.patrolRoute().size(), 2, "the two configured points are stops, not formation endpoints");
+            helper.assertTrue(f.desk.act(f.player, "add_point", "") && f.desk.act(f.player, "execute", ""), "a second point replaces the book's single guard post");
+            helper.assertValueEqual(f.desk.reading(f.player).getInt("pointCount"), 1, "the book retains only its newest guard post");
+            helper.assertTrue(group.patrolRoute().isEmpty(), "the removed book patrol cannot be recreated by a stale page action");
+            helper.assertTrue(f.people.stream().allMatch(body -> ResidentCommands.of(f.colony).current(body.id())
+                .filter(order -> order.mode() == ResidentCommands.Mode.GUARD && order.destination().cell().getX() >= second.getX() - 2).isPresent()),
+                "the real squad receives guard orders at the replacement post");
             UnitGroups.of(f.colony).dissolve(group);
             helper.assertFalse(f.desk.act(f.player, "group", id.toString()), "a dissolved group ID cannot be selected");
             helper.assertFalse(f.desk.act(f.player, "execute", ""), "the old selected ID cannot reacquire control");
+        } finally { f.close(); }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large")
+    public static void combatDefaultsConfigureTheColonyWithoutSelectingOrReassigningASquad(GameTestHelper helper) {
+        Fixture f = new Fixture(helper, 2);
+        try {
+            helper.assertTrue(f.desk.act(f.player, "defaults_iron", ""), "the keeper checks all four iron armour parts");
+            helper.assertTrue(f.desk.act(f.player, "defaults_weapon_bow", ""), "the keeper chooses a real bow goal");
+            helper.assertTrue(f.desk.act(f.player, "defaults_ammo_32", ""), "the keeper chooses the actual arrow reserve");
+            helper.assertTrue(f.desk.act(f.player, "defaults_enabled", ""), "the keeper enables the colony default");
+            var defaults = f.desk.reading(f.player).getCompound("defaults");
+            helper.assertTrue(defaults.getBoolean("enabled") && List.of("head", "chest", "legs", "feet").stream()
+                .allMatch(defaults::getBoolean), "all four armour slots are included in the enabled goal");
+            helper.assertValueEqual(defaults.getString("weapon"), "bow", "the configured weapon is retained");
+            helper.assertValueEqual(defaults.getInt("ammo"), 32, "the configured reserve is retained");
+            helper.assertTrue(f.people.stream().allMatch(body -> ResidentCommands.of(f.colony).current(body.id()).isEmpty()
+                && UnitGroups.of(f.colony).ofResident(body.id()).isEmpty()), "configuration does not issue a movement order or secretly regroup anyone");
+            helper.assertFalse(f.desk.act(f.player, "defaults_weapon_unknown", ""), "a forged weapon action cannot change defaults");
+            helper.assertValueEqual(f.desk.reading(f.player).getCompound("defaults").getString("weapon"), "bow", "rejection leaves the valid configuration intact");
         } finally { f.close(); }
         helper.succeed();
     }

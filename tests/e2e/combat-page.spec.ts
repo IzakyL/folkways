@@ -43,7 +43,7 @@ const COMBAT_PAGE = "folkways.combat";
 const COMBAT_TAB = "folkways.page.combat";
 const CONTROL = "folkways.combat.";
 
-test("the combat page creates a real GUARD, releases it, and executes its two-point patrol", async ({}, testInfo) => {
+test("the combat page creates, replaces and releases a real single guard post", async ({}, testInfo) => {
   test.setTimeout(420_000);
   let pair: E2EPair | undefined;
   let scene: Scene | undefined;
@@ -148,8 +148,7 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     evidence.push({ step: "UI released actual GUARD handles", reading });
     expect(reading.residents.every(resident => resident.orderMode === "NONE")).toBe(true);
 
-    // Keep the first point in the player's saved draft. Move the player through the server to a safe floor cell;
-    // the second point itself is still added only by clicking the UI control.
+    // A book action replaces its post; mandatory patrol authoring belongs to the V tool.
     const secondPoint: Vec = { x: origin.x + 7, y: origin.y, z: origin.z + 10 };
     await mustCommand(server, `tp ${player.name} ${secondPoint.x + 0.5} ${secondPoint.y} ${secondPoint.z + 0.5} 180 0`);
     await tick.sprint(server, 2);
@@ -158,30 +157,23 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     await clickElement(client, { id: `${CONTROL}add_point` }, { scrollIntoView: true });
     const twoPointUi = await panelElements(client);
     const pointText = twoPointUi.find(element => element.id === `${CONTROL}points`)?.text ?? "";
-    const summaryText = twoPointUi.filter(element => element.id?.startsWith(CONTROL))
-      .map(element => element.text ?? "").join(" ");
-    evidence.push({ step: "two-point patrol preview", ui: twoPointUi.filter(element => element.id?.startsWith(CONTROL)) });
-    expect(pointText, "the page must visibly show two stored route points").toMatch(/2|二/);
-    expect(pointText).toContain("循环巡逻");
-    expect(summaryText, "the page must identify the two-point mode as patrol in the active locale")
-      .toMatch(/patrol|巡逻|巡邏|巡迴|巡回/i);
-    await capture(client, testInfo.outputPath("combat-page-two-point-patrol.png"), testInfo, "combat-page-two-point-patrol.png");
+    evidence.push({ step: "replacement guard post preview", ui: twoPointUi.filter(element => element.id?.startsWith(CONTROL)) });
+    expect(pointText, "the book retains one replacement post").toMatch(/1|一/);
+    expect(pointText).toContain("站岗");
+    await capture(client, testInfo.outputPath("combat-page-replacement-post.png"), testInfo, "combat-page-replacement-post.png");
 
     await clickElement(client, { id: `${CONTROL}execute` });
-    reading = await waitFor(server, scene, "UI execution creates a real two-stop patrol", state =>
-      state.routeStops === 2 && state.groupPhase !== "IDLE" && state.groupPhase !== "FAILED"
+    reading = await waitFor(server, scene, "UI execution replaces the actual guard post", state =>
+      state.routeStops === 0 && state.groupPhase !== "IDLE" && state.groupPhase !== "FAILED"
         && state.residents.length === 2 && state.residents.every(resident => resident.orderMode === "GUARD"
           && resident.orderStatus !== "FAILED"), 160, 4);
-    expect(reading.patrolStop).toBeGreaterThanOrEqual(0);
-    expect(reading.patrolStop).toBeLessThan(2);
-    const patrolProgress = await waitFor(server, scene, "the real controller advances to its second point", state =>
-      state.routeStops === 2 && state.patrolStop === 1 && state.groupPhase !== "FAILED", 600, 4);
-    evidence.push({ step: "server confirms real patrol controller advanced stops", reading: patrolProgress });
-    await capture(client, testInfo.outputPath("combat-page-patrol-executing.png"), testInfo, "combat-page-patrol-executing.png");
+    expect(reading.residents.every(resident => resident.destination !== undefined
+      && distance(resident.destination, secondFooting) <= 3.5)).toBe(true);
+    evidence.push({ step: "server confirms the replacement guard destinations", reading });
     await clickElement(client, { id: `${CONTROL}release` });
-    reading = await waitFor(server, scene, "UI release stops the patrol controller", state =>
+    reading = await waitFor(server, scene, "UI release stops the guard controller", state =>
       state.groupPhase === "IDLE" && state.residents.every(resident => resident.order === "NONE"), 80, 4);
-    evidence.push({ step: "UI released actual patrol orders", reading });
+    evidence.push({ step: "UI released replacement guard orders", reading });
 
     const selectedGroup = reading.group;
     await clickElement(client, { id: `${CONTROL}retreat` });
@@ -233,7 +225,7 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     expect(descendantsText(englishUi, COMBAT_TAB), "the visible English navigation label must be localized")
       .toContain("Combat");
     expect(englishUi.find(element => element.id === `${CONTROL}summary`)?.text).toContain("Squad");
-    expect(englishUi.find(element => element.id === `${CONTROL}points`)?.text).toContain("Looping patrol");
+    expect(englishUi.find(element => element.id === `${CONTROL}points`)?.text).toContain("Guard post");
     expect(englishUi.find(element => element.id === `${CONTROL}preference`)?.text)
       .toContain("Weapon preference");
     expect(englishUi.find(element => element.id === `${CONTROL}preference`)?.text)
@@ -241,7 +233,7 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     const englishReading = await sample(server, scene, "English page reopened with persisted bow preference");
     expect(englishReading.loadouts).toEqual(["BOW", "BOW"]);
     for (const [token, label] of [
-      [`${CONTROL}execute`, "Start guard / patrol"],
+      [`${CONTROL}execute`, "Start guard"],
       [`${CONTROL}retreat`, "Retreat here"],
       [`${CONTROL}release`, "Release"],
     ]) {

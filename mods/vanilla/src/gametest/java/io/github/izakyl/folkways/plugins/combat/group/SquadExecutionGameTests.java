@@ -154,7 +154,11 @@ public final class SquadExecutionGameTests {
             }
         } catch (ReflectiveOperationException unavailable) { throw new IllegalStateException(unavailable); }
         helper.assertTrue(attacks.stream().allMatch(order -> order.status() == ResidentCommands.Status.FAILED
-            && order.attackEnd() == ResidentCommands.AttackEnd.OUT_OF_RANGE), "the fixture exercises failed runner status with a specific normal termination reason");
+            && order.attackEnd() == ResidentCommands.AttackEnd.OUT_OF_RANGE), "the fixture exercises failed runner status with a specific normal termination reason: "
+                + attacks.stream().map(order -> order.status() + "/" + order.attackEnd()).toList()
+                + ", commander=" + (f.level.getServer().getPlayerList().getPlayer(f.player.getUUID()) == f.player)
+                + ", targetAlive=" + enemy.isAlive() + ", targetLoaded=" + f.level.hasChunkAt(enemy.blockPosition())
+                + ", target=" + enemy.position() + ", origins=" + attacks.stream().map(ResidentCommands.Order::destination).toList());
         f.groups.tick(f.level.getServer());
         helper.assertTrue(group.endReason() == UnitGroup.EndReason.OUT_OF_RANGE && group.failedMembers().isEmpty(),
             "squad aggregation preserves the leash result instead of reporting a false complete or partial execution failure");

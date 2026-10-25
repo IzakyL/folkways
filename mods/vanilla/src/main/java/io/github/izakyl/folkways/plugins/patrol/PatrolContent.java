@@ -14,15 +14,11 @@ import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.effect.Modifier;
 import io.github.izakyl.folkways.effect.Stat;
 import io.github.izakyl.folkways.effect.perk.Perk;
-import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.Shape;
-import io.github.izakyl.folkways.front.api.panel.PageKind;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
@@ -44,9 +40,6 @@ public final class PatrolContent {
 
     public static final ResourceLocation FIGHTING =
         ResourceLocation.fromNamespaceAndPath("folkways", "fighting");
-
-    private static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.patrol",
-        ResourceLocation.withDefaultNamespace("iron_sword"));
 
     // Any melee weapon will do; other mods list theirs under the common tag.
     static final ToolNeed WEAPON = new ToolNeed.Tagged(Tags.Items.MELEE_WEAPON_TOOLS);
@@ -110,9 +103,8 @@ public final class PatrolContent {
 
     public static void enroll(Registering registering) {
         registering.facing(ID, colony -> colony.service(ID, PatrolPresence.class).map(Facing.class::cast));
-        registering.enrollment(ID,
-            new Enrollment(List.of(new Delegation(BEAT, new Shape.Path(FolkwaysVanillaConfig.maxPatrolPoints()),
-                ResourceLocation.withDefaultNamespace("iron_sword"))), Schema.none(), List.of(PAGE)));
+        // Keep the service and stored path data readable, without exposing legacy automatic patrol work.
+        registering.enrollment(ID, new Enrollment(List.of(), Schema.none(), List.of()));
     }
 
     static Vocation trade() {

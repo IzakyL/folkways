@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.plugins.combat.group.UnitGroup;
 import io.github.izakyl.folkways.plugins.combat.group.UnitGroups;
 import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.person.equipment.EquipmentPlans;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -63,6 +64,9 @@ public final class CombatDesk {
         if (!authorized(player)) { return false; }
         Draft draft = draft(player);
         try {
+            if (action.startsWith("defaults_")) {
+                return defaults(player, draft, action);
+            }
             switch (action) {
                 case "resident" -> {
                     UUID id = UUID.fromString(value);
@@ -83,7 +87,6 @@ public final class CombatDesk {
                     draft.group = id;
                 }
                 case "add_point", "add_aim" -> {
-                    require(draft.points.size() < 16, "points");
                     WorldPos at = WorldSpaces.at(player);
                     if (action.equals("add_aim")) {
                         HitResult hit = player.pick(128, 0, false);
@@ -92,8 +95,9 @@ public final class CombatDesk {
                         at = WorldPos.of(player.serverLevel(), ((BlockHitResult) hit).getBlockPos().above());
                     }
                     validPoint(player, at);
-                    require(draft.points.isEmpty() || draft.points.getFirst().at().sameRealm(at), "destination");
                     var direction = player.getDirection();
+                    // Book controls configure one post. Mandatory patrol routes belong to the V input tool.
+                    draft.points.clear();
                     draft.points.add(new Point(at, new Vec3(direction.getStepX(), 0, direction.getStepZ())));
                 }
                 case "clear_points" -> draft.points.clear();
@@ -103,8 +107,8 @@ public final class CombatDesk {
                     require(!draft.points.isEmpty(), "points");
                     List<Deployment> route = draft.points.stream().map(point -> formation(point, people.size())).toList();
                     for (Deployment stop : route) { validate(people, stop); }
-                    if (route.size() == 1) { group.guard(route.getFirst()); }
-                    else { group.patrol(route); }
+                    require(route.size() == 1, "points");
+                    group.guard(route.getFirst());
                 }
                 case "retreat" -> {
                     UnitGroup group = ownedGroup(player, draft.group);
@@ -137,6 +141,27 @@ public final class CombatDesk {
                 ? key : "folkways.combat.error.rejected");
             return false;
         }
+    }
+
+    private boolean defaults(ServerPlayer player, Draft draft, String action) {
+        EquipmentPlans plans = EquipmentPlans.of(colony);
+        // Read the latest server revision for each click, never a client-authored whole-colony snapshot.
+        CompoundTag next = plans.defaultSnapshot().copy();
+        switch (action) {
+            case "defaults_enabled" -> next.putBoolean("enabled", !next.getBoolean("enabled"));
+            case "defaults_iron" -> {
+                boolean full = List.of("head", "chest", "legs", "feet").stream().allMatch(next::getBoolean);
+                for (String slot : List.of("head", "chest", "legs", "feet")) { next.putBoolean(slot, !full); }
+            }
+            case "defaults_weapon_none", "defaults_weapon_melee", "defaults_weapon_bow", "defaults_weapon_crossbow" ->
+                next.putString("weapon", action.substring("defaults_weapon_".length()));
+            case "defaults_ammo_8", "defaults_ammo_16", "defaults_ammo_32" ->
+                next.putInt("ammo", Integer.parseInt(action.substring("defaults_ammo_".length())));
+            default -> { throw new IllegalArgumentException("folkways.combat.error.rejected"); }
+        }
+        String result = plans.updateDefaults(player, next);
+        draft.message = Component.translatable("folkways.equipment.defaults.result." + result);
+        return result.equals("ok");
     }
 
     void close() { drafts.clear(); groupNumbers.clear(); nextGroupNumber = 1; }
@@ -202,6 +227,7 @@ public final class CombatDesk {
         CompoundTag tag = new CompoundTag();
         if (!authorized(player)) { return tag; }
         Draft draft = draft(player);
+        tag.put("defaults", EquipmentPlans.of(colony).defaultSnapshot());
         ListTag people = new ListTag();
         colony.residents().stream().sorted(Comparator.comparing(resident -> resident.id().toString())).forEach(resident -> {
             try {

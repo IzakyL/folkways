@@ -307,22 +307,32 @@ public final class CombatSelectionOwnershipGameTests {
     @GameTest(template = "empty_large", timeoutTicks = 600)
     public static void completedRtsPointHoldReturnsToWorkOnlyAfterSelectionAndShortcutRelease(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
-        Body body = f.resident(2);
+        // Keep ordinary idle's six-block search inside this test's connected floor. An edge start could
+        // choose a neighbouring structure's isolated lower footing before the work plan is published.
+        for (int x = 0; x < 22; x++) for (int z = 12; z < 22; z++) helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+        WorldPos home = WorldPos.of(f.level, helper.absolutePos(new BlockPos(8, 1, 8)));
+        WorldPos post = WorldPos.of(f.level, helper.absolutePos(new BlockPos(14, 1, 8)));
+        Body body = f.resident(8);
+        body.mob().moveTo(Vec3.atBottomCenterOf(home.block(f.level)));
         body.pack().insert(new ItemStack(Items.IRON_AXE));
-        Job job = new Job(f.at(2), body);
+        body.pack().insert(new ItemStack(Items.BREAD, 8));
+        Job job = new Job(home, body);
         f.colony.submit(WORK, f.level.dimension(), Grown.of(job), (id, how) -> { });
         AtomicReference<UnitGroup> group = new AtomicReference<>();
         helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(job.working, "ordinary work actually began before RTS takeover"))
+            .thenWaitUntil(() -> helper.assertTrue(job.working, "ordinary work actually began before RTS takeover: doing="
+                + body.doing() + ", at=" + body.mob().position() + ", tools=" + body.pack().count(Items.IRON_AXE)
+                + ", stalls=" + f.colony.stallsIn(f.level.dimension()).stream().limit(6).map(stall -> stall.why() + ":"
+                    + stall.goods().map(goods -> goods.item() + "/" + goods.tag() + "/choices=" + goods.anyOf().size()).orElse("none")).toList()))
             .thenExecute(() -> {
                 f.ownership.select(f.first, List.of(body.id()));
                 f.ownership.bindGroup(f.first, 0);
-                UnitGroups.of(f.colony).appendSelectionPoint(List.of(body), f.at(8));
+                UnitGroups.of(f.colony).appendSelectionPoint(List.of(body), post);
                 group.set(UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow());
                 f.ownership.trackGroup(f.first, group.get());
             })
             .thenWaitUntil(() -> helper.assertTrue(group.get().phase() == UnitGroup.Phase.HOLDING
-                && group.get().captain().filter(f.at(8)::equals).isPresent(), "the real RTS open queue reaches and holds its endpoint"))
+                && group.get().captain().filter(post::equals).isPresent(), "the real RTS open queue reaches and holds its endpoint"))
             .thenExecute(() -> f.ownership.select(f.first, List.of()))
             .thenIdle(15)
             .thenExecute(() -> {

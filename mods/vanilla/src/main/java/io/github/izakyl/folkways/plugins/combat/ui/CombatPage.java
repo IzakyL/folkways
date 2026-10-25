@@ -10,14 +10,19 @@ import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 
 /** The colony book's combat page: people, an actual squad, point configuration, and explicit orders. */
 public final class CombatPage implements Draw {
@@ -39,6 +44,9 @@ public final class CombatPage implements Draw {
     private final Label locations = Rows.note(Component.empty());
     private final Label preference = named("preference", Rows.text(Component.empty()));
     private final Label selection = named("selection", Rows.value(Component.empty()));
+    private final Map<String, Button> defaultControls = new LinkedHashMap<>();
+    private final Label defaultSummary = named("defaults.summary", Rows.note(Component.empty()));
+    private final Label defaultReasons = named("defaults.reasons", Rows.note(Component.empty()));
 
     @Override
     public UIElement build(Player player) {
@@ -73,10 +81,12 @@ public final class CombatPage implements Draw {
         }
         UIElement content = Rows.page().addChildren(
             Rows.note(Component.translatable("folkways.combat.help")),
+            defaultEquipment(player),
             Rows.heading(Component.translatable("folkways.combat.people")),
             Rows.strip().addChildren(pager(player, true, -1), pager(player, true, 1),
                 selection, action(player, "create_group", "folkways.combat.create_group")), residents,
             Rows.heading(Component.translatable("folkways.combat.groups")),
+            Rows.note(Component.translatable("folkways.combat.groups_help")),
             Rows.strip().addChildren(pager(player, false, -1), pager(player, false, 1)), groups,
             Rows.heading(Component.translatable("folkways.combat.positions")), points, locations,
             Rows.strip().addChildren(action(player, "add_point", "folkways.combat.add_point"),
@@ -93,6 +103,62 @@ public final class CombatPage implements Draw {
         Rows.fills(page);
         page.addSyncValue(DataBindingBuilder.tagS2C(() -> reading(player)).onSyncReceived(value -> fill(player, value)).build().getSyncValue());
         return page;
+    }
+
+    private UIElement defaultEquipment(Player player) {
+        UIElement weapons = Rows.strip();
+        for (String weapon : List.of("none", "melee", "bow", "crossbow")) {
+            weapons.addChildren(defaultButton(player, "weapon_" + weapon));
+        }
+        UIElement ammunition = Rows.strip().addChildren(Rows.text(Component.translatable("folkways.equipment.defaults.ammo")));
+        for (int amount : List.of(8, 16, 32)) {
+            ammunition.addChildren(defaultButton(player, "ammo_" + amount));
+        }
+        return Rows.page().addChildren(
+            Rows.heading(Component.translatable("folkways.equipment.defaults.title")),
+            Rows.note(Component.translatable("folkways.equipment.defaults.help")),
+            Rows.strip().addChildren(defaultButton(player, "enabled"), defaultButton(player, "iron")),
+            weapons, ammunition, defaultSummary, defaultReasons);
+    }
+
+    private Button defaultButton(Player player, String key) {
+        Button button = action(player, "defaults_" + key, "folkways.equipment.defaults." + key);
+        defaultControls.put(key, button);
+        return button;
+    }
+
+    private void fillDefaults(CompoundTag data) {
+        for (Map.Entry<String, Button> entry : defaultControls.entrySet()) {
+            String key = entry.getKey();
+            boolean checked = key.equals("enabled") ? data.getBoolean("enabled")
+                : key.equals("iron") ? List.of("head", "chest", "legs", "feet").stream().allMatch(data::getBoolean)
+                : key.startsWith("weapon_") ? key.substring(7).equals(data.getString("weapon"))
+                : key.startsWith("ammo_") && Integer.toString(data.getInt("ammo")).equals(key.substring(5));
+            entry.getValue().setText(Component.literal(checked ? "[x] " : "[ ] ")
+                .append(Component.translatable("folkways.equipment.defaults." + key)));
+        }
+        String status = data.getString("status");
+        defaultSummary.setText(Component.translatable("folkways.equipment.defaults.summary",
+            data.getInt("eligible"), data.getInt("equipped"), data.getInt("waiting"), data.getInt("busy"),
+            data.getInt("locked"), data.getInt("overridden"), data.getInt("production"))
+            .append(" · ").append(Component.translatable(status.isEmpty() ? "folkways.equipment.defaults.status.disabled" : status)));
+        Map<String, Component> reasons = new LinkedHashMap<>();
+        for (Tag value : data.getList("parts", Tag.TAG_COMPOUND)) {
+            CompoundTag part = (CompoundTag) value;
+            String reason = part.getString("reason");
+            if (reason.isEmpty() || reasons.size() >= 6) { continue; }
+            String item = part.getString("item");
+            Component name = Optional.ofNullable(ResourceLocation.tryParse(item)).flatMap(BuiltInRegistries.ITEM::getOptional)
+                .map(found -> new ItemStack(found).getHoverName()).orElseGet(() -> Component.literal(item));
+            reasons.putIfAbsent(item + ":" + reason, Component.empty().append(name).append(": ")
+                .append(Component.translatable(reason.startsWith("folkways.") ? reason : "folkways.equipment.defaults.reason." + reason)));
+        }
+        var feedback = Component.empty();
+        for (Component reason : reasons.values()) {
+            if (!feedback.getSiblings().isEmpty()) { feedback.append(" · "); }
+            feedback.append(reason);
+        }
+        defaultReasons.setText(feedback);
     }
 
     private Optional<CombatDesk> desk(Player player) {
@@ -139,6 +205,7 @@ public final class CombatPage implements Draw {
     }
     private void fill(Player player, Tag value) {
         CompoundTag tag = value instanceof CompoundTag compound ? compound : new CompoundTag();
+        fillDefaults(tag.getCompound("defaults"));
         summary.setText(Pages.readText(player.registryAccess(), tag.get("summary")));
         points.setText(Pages.readText(player.registryAccess(), tag.get("points")));
         message.setText(Pages.readText(player.registryAccess(), tag.get("message")));

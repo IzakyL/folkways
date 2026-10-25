@@ -32,8 +32,14 @@ final class ToolStrikeNode implements Node {
 
     private final NodeSpec spec;
     private final UUID foe;
+    private final java.util.function.BooleanSupplier authorized;
 
     ToolStrikeNode(ServerLevel level, Mob foe, Stances stances) {
+        this(level, foe, stances, null);
+    }
+
+    ToolStrikeNode(ServerLevel level, Mob foe, Stances stances, java.util.function.BooleanSupplier authorized) {
+        this.authorized = authorized;
         this.foe = foe.getUUID();
         // The foe, and the cell it is struck at, as the site holds them: aboard the ship it stands on, if it does.
         WorkSite site = WorkSite.on(foe);
@@ -53,14 +59,15 @@ final class ToolStrikeNode implements Node {
 
     @Override
     public boolean ready(ServerLevel level) {
-        return standing(level) != null;
+        return (authorized == null || authorized.getAsBoolean()) && standing(level) != null;
     }
 
     @Override
     public Outcome commit(ServerLevel level, Worker who) {
+        if (authorized != null && !authorized.getAsBoolean()) return Outcome.done();
         LivingEntity target = standing(level);
         Mob body = who.body();
-        if (!(target instanceof Mob mob) || !Threats.hostile(mob, body) || !body.hasLineOfSight(target)
+        if (!(target instanceof Mob mob) || authorized == null && !Threats.hostile(mob, body) || !body.hasLineOfSight(target)
                 || body.distanceTo(target) > STRIKE_REACH + target.getBbWidth()) {
             return Outcome.done();
         }
