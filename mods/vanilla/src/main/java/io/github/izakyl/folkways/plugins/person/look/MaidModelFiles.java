@@ -66,7 +66,9 @@ final class MaidModelFiles {
                         layered.add(source.json(file));
                     }
                     JsonObject animations = MaidAssets.merged(layered);
-                    geometry = MaidAssets.geometry(model, MaidAssets.hiddenByLayers(animations, bones));
+                    // A layer's zero scale is a live state, not permission to delete the bone. It may show
+                    // again when the resident blinks, sleeps or loses health, or when its clip advances.
+                    geometry = MaidAssets.geometry(model, Set.of());
                     animationFile = MaidAssets.animations(maid, animations);
                 } else {
                     geometry = MaidAssets.geometry(model, MaidAssets.hiddenByScripts(maid.animations(), bones));

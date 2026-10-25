@@ -42,7 +42,7 @@ final class Kit {
         for (Vocation vocation : Vocations.all()) {
             if (can.of(vocation).isPresent() && !body.kind().worksBarehanded(vocation.id())) {
                 for (ItemSpec tool : vocation.kit()) {
-                    allowed(colony, tool).ifPresent(wanted::add);
+                    allowed(colony, vocation, tool).ifPresent(wanted::add);
                 }
             }
         }
@@ -56,11 +56,11 @@ final class Kit {
     }
 
     // The part of a kit's tool the colony lets its residents take up; nothing, when it allows none of it.
-    private static Optional<ItemSpec> allowed(Colony colony, ItemSpec tool) {
+    private static Optional<ItemSpec> allowed(Colony colony, Vocation vocation, ItemSpec tool) {
         Set<Item> named = new LinkedHashSet<>();
         collect(tool, named);
         List<ItemSpec> kept = named.stream()
-            .filter(item -> KitRules.allows(colony, item)
+            .filter(item -> KitRules.allows(colony, vocation, item)
                 && !io.github.izakyl.folkways.core.api.work.Tools.sharedItem(item.getDefaultInstance()))
             .map(item -> ItemSpec.of(BuiltInRegistries.ITEM.getKey(item)))
             .toList();

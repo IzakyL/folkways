@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.engine.labor;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
+import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Before;
@@ -550,22 +551,32 @@ public final class HaulExecutionGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
-    public static void aToolOffTheColonyListIsCarriedAsCargo(GameTestHelper helper) {
+    public static void aToolOffEveryVocationListIsCarriedAsCargo(GameTestHelper helper) {
         var resident = PersonBody.RESIDENT.get().create(helper.getLevel());
         var body = io.github.izakyl.folkways.core.api.resident.body.Bodies.of(resident).orElseThrow();
         var colony = new io.github.izakyl.folkways.core.engine.colony.ColonyData().works();
         var front = io.github.izakyl.folkways.front.engine.colony.ColonyFront.of(colony);
-        helper.assertTrue(front.setSetting(io.github.izakyl.folkways.front.api.CoreSettings.CORE,
+        for (var vocation : io.github.izakyl.folkways.core.api.vocation.Vocations.all()) {
+            helper.assertTrue(front.setSetting(vocation.id(),
                 io.github.izakyl.folkways.front.api.CoreSettings.TOOL_KEY,
                 new io.github.izakyl.folkways.front.engine.colony.ColonySettings.Value.Items(List.of(
                     io.github.izakyl.folkways.core.api.terms.ItemFilter.item(
                         net.minecraft.resources.ResourceLocation.withDefaultNamespace("stone_axe"))))),
-            "the colony's tool list should take a narrower list");
+                "each vocation's tool list should take a narrower list");
+        }
         var kit = Kit.of(colony, body);
         var iron = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_AXE);
         var stone = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE_AXE);
         helper.assertTrue(!kit.holds(iron), "a tool the colony took off its list is cargo, to be put away");
         helper.assertTrue(kit.holds(stone), "a tool still on the list stays equipped");
+        helper.assertTrue(kit.specs().stream().noneMatch(spec -> Goods.matches(iron, spec)),
+            "stocking cannot request the forbidden iron axe");
+        body.pack().setItem(0, iron);
+        var hands = new Hands(body, null, Placement.NOWHERE, drop -> { }, List::of);
+        helper.assertTrue(hands.held(new io.github.izakyl.folkways.core.api.work.ToolNeed.Ability(
+            net.neoforged.neoforge.common.ItemAbilities.AXE_DIG)).is(net.minecraft.world.item.Items.IRON_AXE), "the carried cargo tool can still be used");
+        io.github.izakyl.folkways.front.engine.colony.ColonyFront.forget(colony.id());
+        body.mob().discard();
         helper.succeed();
     }
 

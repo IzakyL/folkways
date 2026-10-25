@@ -85,6 +85,21 @@ public final class ResidentPathNavigation extends GroundPathNavigation {
         super.followThePath();
     }
 
+    @Override
+    protected void doStuckDetection(Vec3 at) {
+        if (mob.getMoveControl() instanceof ResidentMoveControl control && control.yielding()) {
+            // A deliberate queue wait consumes neither vanilla's displacement window nor its per-node timeout.
+            lastStuckCheck = tick;
+            lastStuckCheckPos = at;
+            timeoutTimer = 0;
+            timeoutLimit = 0;
+            timeoutCachedNode = Vec3i.ZERO;
+            lastTimeoutCheck = level.getGameTime();
+            return;
+        }
+        super.doStuckDetection(at);
+    }
+
     // Up a stepladder the body walks its steps and rises through the column's nodes without waiting at any: past
     // the foot it was already a block over the node vanilla still steered it to, and it paced the top for good.
     // Nodes of the column it has already risen to are passed, up to the first one still above it.

@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.base.Ledger;
 import io.github.izakyl.folkways.effect.perk.Perk;
 import io.github.izakyl.folkways.effect.perk.PerkPool;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -25,7 +26,7 @@ public final class Vocations {
     }
 
     public static Vocation register(VocationSpec spec) {
-        Vocation vocation = TRADES.claim(new Vocation(spec.id(), spec.perks(), spec.kit()));
+        Vocation vocation = TRADES.claim(new Vocation(spec.id(), spec.perks(), spec.kit(), spec.order()));
         for (Perk perk : spec.perks()) {
             PerkPool.register(spec.id(), perk);
         }
@@ -54,12 +55,19 @@ public final class Vocations {
         return List.copyOf(tools);
     }
 
+    /**
+     * Shared column/wire order, independent of mod loading and event listener registration order.
+     * Built-ins declare explicit orders to retain their historical columns; other trades default
+     * to the end, ordered by namespace:path (not ResourceLocation's path-first natural order).
+     */
     public static List<ResourceLocation> ids() {
-        return TRADES.ids();
+        return all().stream().map(Vocation::id).toList();
     }
 
     public static List<Vocation> all() {
-        return TRADES.all();
+        return TRADES.all().stream()
+            .sorted(Comparator.comparingInt(Vocation::order).thenComparing(trade -> trade.id().toString()))
+            .toList();
     }
 
     public static Optional<Vocation> of(ResourceLocation id) {

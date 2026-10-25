@@ -2,6 +2,8 @@
 
 English · [简体中文](../zh-CN/README.md)
 
+For groundwork clearing and fallen-wood rules, see [Groundwork](groundwork.md).
+
 | I want to…                                                                     | Start here                                                     |
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------- |
 | Install Folkways and found a colony                                            | [Project README](../../README.md)                              |

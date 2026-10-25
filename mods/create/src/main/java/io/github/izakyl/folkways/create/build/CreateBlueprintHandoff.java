@@ -44,7 +44,9 @@ public final class CreateBlueprintHandoff {
         }
         SchematicTransformation transformation = handler.getTransformation();
         StructurePlaceSettings settings = transformation.toSettings();
-        BlockPos anchor = transformation.getAnchor();
+        var bounds = handler.getBounds();
+        BlockPos size = BlockPos.containing(bounds.getXsize(), bounds.getYsize(), bounds.getZsize());
+        BlockPos anchor = CreateSchematicPlacement.corner(transformation.getAnchor(), size, settings);
         BlueprintUploads.send(new UploadBlueprintPacket(book.get(), name, siteName, file.get(),
             anchor, excavate, settings.getRotation(), settings.getMirror(), raise), PacketDistributor::sendToServer);
     }

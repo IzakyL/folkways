@@ -139,7 +139,7 @@ public final class PastureScene {
         scene.world().createItemEntity(util.vector().centerOf(9, 1, 2), new Vec3(0.0, 0.15, 0.0),
             new ItemStack(Items.WHITE_WOOL, 2));
         scene.overlay().showText(100)
-            .text("While the shear switch is on, sheep are shorn once their wool is back, and the shears must be on the Tools list under Settings. In a chicken pen, eggs are picked up where they fall.")
+            .text("While the shear switch is on, sheep are shorn once their wool is back, and the shears must be on the tool list on the Pasture page. In a chicken pen, eggs are picked up where they fall.")
             .pointAt(util.vector().topOf(9, 1, 2))
             .placeNearTarget()
             .attachKeyFrame();

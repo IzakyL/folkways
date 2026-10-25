@@ -88,6 +88,9 @@ public final class Haul {
                 return Optional.empty();
             }
             NodeSpec asked = delivery.spec();
+            if (delivery.source().isPresent()) {
+                return Optional.of(TransferNode.collecting(delivery));
+            }
             long wanted = delivery.goods().count();
             long count = Math.min(wanted, sizing.runs(asked.site(),
                 List.of(new Need(delivery.goods().spec(), 1, true)), Vocations.of(Vocations.HAULING),

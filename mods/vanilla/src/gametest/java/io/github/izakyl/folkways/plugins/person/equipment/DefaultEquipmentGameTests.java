@@ -135,9 +135,14 @@ public final class DefaultEquipmentGameTests {
         Scene scene = new Scene(helper, true); scene.listen();
         scene.manufacturingOnly = true; scene.residents.forEach(scene::manufacturingWorker);
         // This test budgets exactly two helmets. Unrelated automatic vocation kits must not spend its iron.
-        helper.assertTrue(io.github.izakyl.folkways.front.engine.colony.ColonyFront.of(scene.colony).setSetting(
-            io.github.izakyl.folkways.front.api.CoreSettings.CORE, io.github.izakyl.folkways.front.api.CoreSettings.TOOL_KEY,
-            new io.github.izakyl.folkways.front.engine.colony.ColonySettings.Value.Items(List.of())), "the manufacturing fixture isolates its exact ten-ingot material budget from unrelated vocation tool orders");
+        var front = io.github.izakyl.folkways.front.engine.colony.ColonyFront.of(scene.colony);
+        for (var vocation : List.of(WaresContent.trade(), io.github.izakyl.folkways.core.api.vocation.Vocations.required(
+                io.github.izakyl.folkways.core.api.vocation.Vocations.HAULING))) {
+            front.setSetting(vocation.id(), io.github.izakyl.folkways.front.api.CoreSettings.TOOL_KEY,
+                new io.github.izakyl.folkways.front.engine.colony.ColonySettings.Value.Items(List.of()));
+            helper.assertTrue(front.settings(vocation.id()).entries(io.github.izakyl.folkways.front.api.CoreSettings.TOOL_KEY).isEmpty(),
+                "the manufacturing fixture isolates its exact ten-ingot budget from unrelated tool orders for " + vocation.id());
+        }
         helper.assertTrue(scene.body.licences().of(WaresContent.trade()).isPresent(), "the worker retains the real crafting vocation and still executes native recipes");        BlockPos table = helper.absolutePos(new BlockPos(8, 1, 4)); scene.level.setBlockAndUpdate(table, Blocks.CRAFTING_TABLE.defaultBlockState());
         var registration = scene.colony.hold(WaresContent.STATION, new Held.Block(WorldPos.of(scene.level, table)));
         helper.assertTrue(registration.isPresent(), "the real Wares crafting-table block entity registers as a block site: " + scene.level.getBlockEntity(table));

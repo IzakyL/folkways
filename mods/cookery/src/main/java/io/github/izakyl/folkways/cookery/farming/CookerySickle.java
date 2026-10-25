@@ -47,7 +47,7 @@ public final class CookerySickle implements HarvestMethod {
     public static synchronized void register() {
         if (registered) return;
         HarvestMethods.register(MODE, new CookerySickle());
-        Tools.shared(SICKLE, ItemSpec.of(TAG));
+        Tools.shared(FarmingContent.VOCATION, SICKLE, ItemSpec.of(TAG));
         registered = true;
     }
 

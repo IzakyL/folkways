@@ -160,6 +160,11 @@ public final class OnFoot implements Conveyance {
 
     private boolean closingIn(Mob body, Set<WorldPos> to) {
         double near = apart(body, to);
+        if (body.getMoveControl() instanceof ResidentMoveControl control && control.yielding()) {
+            closest = near;
+            sinceProgress = 0;
+            return true;
+        }
         if (near < closest - PROGRESS_STEP) {
             closest = near;
             sinceProgress = 0;

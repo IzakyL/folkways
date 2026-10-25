@@ -38,7 +38,7 @@ public final class BuildContent {
     public static final String QUICK_HANDS = "building_quick_hands";
 
     static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.build",
-        ResourceLocation.withDefaultNamespace("bricks"));
+        ResourceLocation.withDefaultNamespace("bricks")).tools(VOCATION);
 
     static final PageKind BLUEPRINTS = PageKind.boarded(
         ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "blueprints"),
@@ -65,7 +65,7 @@ public final class BuildContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(SPEC);
+        declaring.vocation(SPEC.ordered(200));
         declaring.colony(ID, scope -> {
             BuildPresence state = new BuildPresence(scope.colony(), scope.server());
             scope.share(state);

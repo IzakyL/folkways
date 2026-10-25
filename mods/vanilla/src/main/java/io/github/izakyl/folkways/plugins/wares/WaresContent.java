@@ -53,7 +53,7 @@ public final class WaresContent {
             ItemFilter.item(ResourceLocation.withDefaultNamespace("charcoal"))));
 
     private static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.wares",
-        ResourceLocation.withDefaultNamespace("crafting_table"));
+        ResourceLocation.withDefaultNamespace("crafting_table")).tools(CRAFTING);
 
     public static final Stat BATCH = stat("crafting_batch", 1, 8);
     public static final Stat REFUND = stat("crafting_refund", 0, 1);
@@ -83,7 +83,7 @@ public final class WaresContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(VOCATION);
+        declaring.vocation(VOCATION.ordered(100));
         declaring.refinement(Smelt.SMELTING);
         declaring.colony(ID, scope -> {
             CraftRecipes recipes = new CraftRecipes(scope.server());

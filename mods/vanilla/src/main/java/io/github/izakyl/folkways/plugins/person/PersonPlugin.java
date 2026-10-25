@@ -57,6 +57,7 @@ public final class PersonPlugin {
         modBus.addListener(RegisteringUi.class, event -> {
             event.page(PersonContent.LOOKS.id(), LooksPage::new);
             event.page(PersonContent.NAMES.id(), NamesPage::new);
+            event.page(PersonContent.WORK_DEFAULTS.id(), WorkDefaultsPage::new);
             event.inlay(Bay.RESIDENT, LookPool.OWNER, PersonInlay::new);
             event.inlay(Bay.RESIDENT, ResourceLocation.fromNamespaceAndPath("folkways", "equipment"), EquipmentInlay::new);
             event.inlay(Bay.RESIDENT, LivingContent.ID, LivingInlay::new);

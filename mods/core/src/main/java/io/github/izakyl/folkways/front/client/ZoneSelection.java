@@ -1,7 +1,9 @@
 package io.github.izakyl.folkways.front.client;
 
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import io.github.izakyl.folkways.FolkwaysClientConfig;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
@@ -330,14 +332,14 @@ public final class ZoneSelection {
         MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
 
         if (min != null && aimedFace != null) {
-            VertexConsumer fills = buffers.getBuffer(RenderType.debugFilledBox());
+            VertexConsumer fills = buffers.getBuffer(Layers.FACE_FILL);
             for (Direction face : gripped()) {
                 AABB slab = faceSlab(boxOfMarked(), face);
                 LevelRenderer.addChainedFilledBoxVertices(poseStack, fills,
                     slab.minX, slab.minY, slab.minZ, slab.maxX, slab.maxY, slab.maxZ,
                     DRAFT[0], DRAFT[1], DRAFT[2], 0.35F);
             }
-            buffers.endBatch(RenderType.debugFilledBox());
+            buffers.endBatch(Layers.FACE_FILL);
         }
 
         VertexConsumer lines = buffers.getBuffer(RenderType.lines());
@@ -358,6 +360,23 @@ public final class ZoneSelection {
         poseStack.popPose();
         poseStack.popPose();
         buffers.endBatch(RenderType.lines());
+    }
+
+    /** The face fill tests against terrain but leaves depth clear for later previews. */
+    private static final class Layers extends RenderType {
+        static final RenderType FACE_FILL = create("folkways_zone_face_fill", DefaultVertexFormat.POSITION_COLOR,
+            VertexFormat.Mode.TRIANGLE_STRIP, 1536, false, true,
+            CompositeState.builder()
+                .setShaderState(POSITION_COLOR_SHADER)
+                .setLayeringState(VIEW_OFFSET_Z_LAYERING)
+                .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                .setWriteMaskState(COLOR_WRITE)
+                .createCompositeState(false));
+
+        private Layers(String name, VertexFormat format, VertexFormat.Mode mode, int size, boolean crumbling,
+                boolean sorted, Runnable setup, Runnable clear) {
+            super(name, format, mode, size, crumbling, sorted, setup, clear);
+        }
     }
 
     private static AABB faceSlab(AABB box, Direction face) {

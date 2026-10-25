@@ -6,21 +6,15 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalDouble;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-// Turns a maid model as Touhou Little Maid keeps it into the geometry and animation files GeckoLib reads. A
-// resident only stands, walks and works, so the bones that mod shows on some other occasion (armour worn, a task
-// taken up, a weapon drawn, eyes shut) are left out rather than drawn all at once.
+// Turns a maid model as Touhou Little Maid keeps it into the geometry and animation files GeckoLib reads.
+// Scripted maids omit occasional bones; GeckoLib maids retain their bones and live animation layers.
 final class MaidAssets {
     private static final String GEOMETRY = "minecraft:geometry";
     private static final String BONES = "bones";
@@ -47,9 +41,6 @@ final class MaidAssets {
     private static final String HEALTH_SCRIPT = "health/less_show.js";
 
     private static final Set<String> WORDS = Set.of("lerp_mode", "easing");
-
-    private static final Pattern LAYER = Pattern.compile("(pre_)?parallel(\\d+)");
-    private static final Pattern HELPER = Pattern.compile("gui|[mM]olang\\d*");
 
     private MaidAssets() {
     }
@@ -183,87 +174,6 @@ final class MaidAssets {
         return camel.toString();
     }
 
-    // The bones a GeckoLib maid's standing layers scale away to nothing at rest, plus the ones that only carry
-    // values for its animations. Of the layers (pre_parallelN, then parallelN) the last to scale a bone decides.
-    static Set<String> hiddenByLayers(JsonObject animations, List<String> bones) {
-        List<String> layers = animations.keySet().stream()
-            .filter(name -> LAYER.matcher(name).matches())
-            .sorted(Comparator.comparing((String name) -> !name.startsWith("pre_")).thenComparingInt(MaidAssets::layerOf))
-            .toList();
-        Map<String, Boolean> last = new LinkedHashMap<>();
-        for (String layer : layers) {
-            if (!(animations.get(layer) instanceof JsonObject animation)
-                    || !(animation.get(BONES) instanceof JsonObject moved)) {
-                continue;
-            }
-            for (Map.Entry<String, JsonElement> bone : moved.entrySet()) {
-                if (bone.getValue() instanceof JsonObject channels && channels.has("scale")) {
-                    last.put(bone.getKey(), vanishes(channels.get("scale")));
-                }
-            }
-        }
-        Set<String> hidden = new HashSet<>();
-        last.forEach((bone, gone) -> {
-            if (gone) {
-                hidden.add(bone);
-            }
-        });
-        bones.stream().filter(bone -> HELPER.matcher(bone).matches()).forEach(hidden::add);
-        return hidden;
-    }
-
-    private static int layerOf(String name) {
-        Matcher matcher = LAYER.matcher(name);
-        return matcher.matches() ? Integer.parseInt(matcher.group(2)) : 0;
-    }
-
-    // A scale channel is a value, three of them, or keyframes of either; the first keyframe is the resting one.
-    private static boolean vanishes(JsonElement scale) {
-        JsonElement resting = scale;
-        if (scale instanceof JsonObject keyframes) {
-            String first = null;
-            for (String time : keyframes.keySet()) {
-                try {
-                    if (first == null || Double.parseDouble(time) < Double.parseDouble(first)) {
-                        first = time;
-                    }
-                } catch (NumberFormatException exception) {
-                    return false;
-                }
-            }
-            if (first == null) {
-                return false;
-            }
-            resting = keyframes.get(first);
-            if (resting instanceof JsonObject eased) {
-                resting = eased.has("post") ? eased.get("post") : eased.has("pre") ? eased.get("pre") : eased.get("vector");
-            }
-        }
-        if (resting == null) {
-            return false;
-        }
-        List<JsonElement> parts = new ArrayList<>();
-        if (resting instanceof JsonArray axes) {
-            axes.forEach(parts::add);
-        } else {
-            parts.add(resting);
-        }
-        boolean zero = false;
-        for (JsonElement part : parts) {
-            if (!part.isJsonPrimitive()) {
-                return false;
-            }
-            OptionalDouble value = part.getAsJsonPrimitive().isNumber()
-                ? OptionalDouble.of(part.getAsDouble())
-                : Molang.atRest(part.getAsString());
-            if (value.isEmpty()) {
-                return false;
-            }
-            zero |= value.getAsDouble() == 0.0;
-        }
-        return zero;
-    }
-
     // Animation files laid over one another the way Touhou Little Maid does: a later file's animation replaces
     // an earlier one of the same name.
     static JsonObject merged(List<JsonObject> files) {
@@ -296,10 +206,15 @@ final class MaidAssets {
             : authored;
     }
 
-    // The animation file of one GeckoLib maid: the few motions a resident plays, each under the maid's own name.
+    // The animation file of one GeckoLib maid: main motions and live layers, each under the maid's own name.
     static JsonObject animations(MaidLooks.Maid maid, JsonObject merged) {
         JsonObject animations = new JsonObject();
-        for (String name : MaidLooks.PLAYED) {
+        List<String> played = new ArrayList<>(MaidLooks.PLAYED);
+        for (int layer = 0; layer < MaidLooks.PARALLEL_LAYERS; layer++) {
+            played.add("pre_parallel" + layer);
+            played.add("parallel" + layer);
+        }
+        for (String name : played) {
             if (merged.get(name) instanceof JsonObject animation) {
                 animations.add(maid.animation(name), portable(animation, false));
             } else if (List.of("idle", "walk", "swing_hand").contains(name)) {

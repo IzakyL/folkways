@@ -1,9 +1,12 @@
 package io.github.izakyl.folkways.front.client;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexSorting;
 import io.github.izakyl.folkways.front.api.ui.Signs;
 import io.github.izakyl.folkways.front.client.ColonyLookCard.Row;
+import java.nio.DoubleBuffer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -12,6 +15,7 @@ import java.util.Map;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -21,10 +25,16 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.system.MemoryStack;
 
 final class WorldCards {
 
@@ -53,8 +63,9 @@ final class WorldCards {
     }
 
     /**
-     * Draws the queued cards nearest first and drops every card that any drawn card would cover even in part,
-     * so a card is either whole on screen or not there. Each card is flushed on its own.
+     * Draws the queued cards nearest first, skipping those hidden by blocks at their middle and all four corners.
+     * Partly hidden cards draw whole in front of the world. Every card that any drawn card would cover even in
+     * part is dropped, so a card is either whole on screen or not there. Each card is flushed on its own.
      */
     static void flush(Minecraft minecraft, PoseStack poseStack, Vec3 camera) {
         if (QUEUE.isEmpty()) {
@@ -77,6 +88,11 @@ final class WorldCards {
         poseStack.translate(-camera.x, -camera.y, -camera.z);
         for (Queued card : queued) {
             LookCardLayout.Laid laid = LookCardLayout.of(minecraft.font, card.rows());
+            Vec3[] spots = spots(view, card, laid);
+            int hidden = hidden(minecraft.level, view.getPosition(), spots);
+            if (hidden == spots.length) {
+                continue;
+            }
             float[] rect = screenRect(card, laid, camera, toView);
             if (rect != null && shown.stream().anyMatch(other -> overlaps(rect, other))) {
                 continue;
@@ -84,25 +100,46 @@ final class WorldCards {
             if (rect != null) {
                 shown.add(rect);
             }
-            CardBackdrop.Ink ink = ink(minecraft, view, card, laid);
+            CardBackdrop.Ink ink = ink(minecraft, view, card, spots);
             inks.put(key(card), ink);
-            draw(minecraft, poseStack, buffers, card.anchor(), laid, card.scale(), ink);
-            buffers.endBatch();
+            if (hidden == 0) {
+                draw(minecraft, poseStack, buffers, card.anchor(), laid, card.scale(), ink);
+                buffers.endBatch();
+            } else {
+                drawInFront(minecraft, poseStack, buffers, card, laid, ink);
+            }
         }
         poseStack.popPose();
         INKS.clear();
         INKS.putAll(inks);
     }
 
-    /** Reads the world behind the card's middle and corners, and eases the card's ink toward what it needs there. */
-    private static CardBackdrop.Ink ink(Minecraft minecraft, Camera view, Queued card, LookCardLayout.Laid laid) {
+    private static Vec3[] spots(Camera view, Queued card, LookCardLayout.Laid laid) {
         Vec3 up = new Vec3(view.getUpVector()).scale(card.scale());
         Vec3 left = new Vec3(view.getLeftVector()).scale(card.scale());
         Vec3 bottom = card.anchor().add(up.scale(-PAD_Y));
         Vec3 top = card.anchor().add(up.scale(laid.height() + PAD_Y));
         Vec3 side = left.scale(laid.width() / 2.0F + PAD_X);
-        double backdrop = CardBackdrop.luminance(minecraft, view.getPosition(),
-            bottom.add(top).scale(0.5D), top.add(side), top.subtract(side), bottom.add(side), bottom.subtract(side));
+        return new Vec3[] {bottom.add(top).scale(0.5D), top.add(side), top.subtract(side), bottom.add(side),
+            bottom.subtract(side)};
+    }
+
+    private static int hidden(ClientLevel level, Vec3 camera, Vec3[] spots) {
+        int hidden = 0;
+        for (Vec3 spot : spots) {
+            BlockHitResult hit = level.clip(new ClipContext(camera, spot, ClipContext.Block.VISUAL,
+                ClipContext.Fluid.NONE, CollisionContext.empty()));
+            if (hit.getType() == HitResult.Type.BLOCK
+                    && camera.distanceToSqr(hit.getLocation()) < camera.distanceToSqr(spot)) {
+                hidden++;
+            }
+        }
+        return hidden;
+    }
+
+    /** Reads the world behind the card's middle and corners, and eases the card's ink toward what it needs there. */
+    private static CardBackdrop.Ink ink(Minecraft minecraft, Camera view, Queued card, Vec3[] spots) {
+        double backdrop = CardBackdrop.luminance(minecraft, view.getPosition(), spots);
         float opacity = minecraft.options.getBackgroundOpacity(card.look().backgroundOpacity());
         CardBackdrop.Ink wanted = CardBackdrop.ink(backdrop, opacity, card.look().bodyColor());
         CardBackdrop.Ink was = INKS.get(key(card));
@@ -150,6 +187,33 @@ final class WorldCards {
     }
 
     private record Queued(Vec3 anchor, List<Row> rows, float scale, Look look, double distanceSqr) {
+    }
+
+    private static void drawInFront(Minecraft minecraft, PoseStack poseStack, MultiBufferSource.BufferSource buffers,
+            Queued card, LookCardLayout.Laid laid, CardBackdrop.Ink ink) {
+        Matrix4f projection = new Matrix4f(RenderSystem.getProjectionMatrix());
+        VertexSorting sorting = RenderSystem.getVertexSorting();
+        Vector3f centre = poseStack.last().pose().transformPosition(card.anchor().toVector3f());
+        RenderSystem.getModelViewMatrix().transformPosition(centre);
+        float depth = -centre.z();
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            DoubleBuffer range = stack.mallocDouble(2);
+            GL11.glGetDoublev(GL11.GL_DEPTH_RANGE, range);
+            // Keep depth testing within the card, including the faces of 3D items, ahead of the world.
+            GL11.glDepthRange(0.0D, 0.01D);
+            try {
+                if (depth > 0.0F) {
+                    // Centre depth on the card so distant item faces stay distinct in the small depth range.
+                    // Only clip-space z changes; screen positions, sizes and perspective stay the same.
+                    RenderSystem.setProjectionMatrix(new Matrix4f(projection).m22(-1.0F).m32(-depth), sorting);
+                }
+                draw(minecraft, poseStack, buffers, card.anchor(), laid, card.scale(), ink);
+                buffers.endBatch();
+            } finally {
+                RenderSystem.setProjectionMatrix(projection, sorting);
+                GL11.glDepthRange(range.get(0), range.get(1));
+            }
+        }
     }
 
     /** Draws the card facing the camera, its bottom edge centred on the anchor. */

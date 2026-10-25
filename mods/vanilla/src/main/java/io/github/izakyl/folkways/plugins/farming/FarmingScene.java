@@ -72,7 +72,7 @@ public final class FarmingScene {
             Blocks.FARMLAND.defaultBlockState().setValue(BlockStateProperties.MOISTURE, 7), false);
         scene.overlay().showOutline(PonderPalette.GREEN, wheatSoil, wheatSoil, 90);
         scene.overlay().showText(90)
-            .text("Residents hoe the ground inside the box. A hoe is the one tool a plot asks for, and the Tools list under Settings has to allow it: an empty list allows none.")
+            .text("Residents hoe the ground inside the box. A hoe is the one tool a plot asks for, and the tool list on the Farming page has to allow it: an empty list allows none.")
             .pointAt(util.vector().topOf(2, 0, 1))
             .placeNearTarget()
             .attachKeyFrame();

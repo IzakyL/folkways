@@ -24,6 +24,10 @@ public final class PersonContent {
         ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "names"),
         "folkways.tab.names", ResourceLocation.withDefaultNamespace("name_tag"));
 
+    public static final PageKind WORK_DEFAULTS = PageKind.boarded(
+        ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "work_defaults"),
+        "folkways.tab.work_defaults", ResourceLocation.withDefaultNamespace("iron_pickaxe"));
+
     public static void declare(io.github.izakyl.folkways.core.api.Declaring declaring) {
         declaring.colony(ID, scope -> {
             PersonPresence state = new PersonPresence(scope.colony());
@@ -36,7 +40,7 @@ public final class PersonContent {
         registering.facing(ID, colony -> colony.service(ID, PersonPresence.class)
             .map(value -> (io.github.izakyl.folkways.front.api.Facing) value));
         registering.enrollment(ID,
-            new Enrollment(List.of(), Schema.none(), List.of(PAGE, NAMES, LOOKS)));
+            new Enrollment(List.of(), Schema.none(), List.of(PAGE, NAMES, LOOKS, WORK_DEFAULTS)));
         registering.admission(ID, PersonBody.ID, new Immigration());
     }
 }

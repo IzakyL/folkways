@@ -104,23 +104,25 @@ public final class PatrolSupplyGameTests {
     public static void optionalWeaponsRespectAnExplicitToolBanWithoutBecomingEveryResidentsKit(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         ColonyFront front = ColonyFront.of(scene.colony);
-        List<ItemFilter> original = front.settings(CoreSettings.CORE).entries(CoreSettings.TOOL_KEY);
+        List<ItemFilter> original = front.settings(PatrolContent.VOCATION).entries(CoreSettings.TOOL_KEY);
         ItemFilter bow = ItemFilter.item(ResourceLocation.withDefaultNamespace("bow"));
         ItemFilter crossbow = ItemFilter.item(ResourceLocation.withDefaultNamespace("crossbow"));
-        helper.assertTrue(KitRules.allows(scene.colony, Items.BOW) && KitRules.allows(scene.colony, Items.CROSSBOW),
+        helper.assertTrue(KitRules.allows(scene.colony, Vocations.required(PatrolContent.VOCATION), Items.BOW) && KitRules.allows(scene.colony, Vocations.required(PatrolContent.VOCATION), Items.CROSSBOW),
             "fresh colonies allow the declared optional weapons");
-        helper.assertValueEqual(CoreSettings.tool().byDefault().stream().filter(bow::equals).count(), 1L,
+        helper.assertValueEqual(CoreSettings.tool(Vocations.required(PatrolContent.VOCATION)).byDefault().stream().filter(bow::equals).count(), 1L,
             "the default list names the optional bow once");
-        helper.assertTrue(CoreSettings.tool().byDefault().contains(crossbow), "the optional crossbow is permitted by default");
+        helper.assertTrue(CoreSettings.tool(Vocations.required(PatrolContent.VOCATION)).byDefault().contains(crossbow), "the optional crossbow is permitted by default");
         boolean lateDeclarationRefused = false;
-        try { CoreSettings.defaultTool(io.github.izakyl.folkways.core.api.terms.ItemSpec.of(bow.id())); }
+        try { CoreSettings.defaultTool(PatrolContent.VOCATION, io.github.izakyl.folkways.core.api.terms.ItemSpec.of(bow.id())); }
         catch (IllegalStateException expected) { lateDeclarationRefused = true; }
         helper.assertTrue(lateDeclarationRefused, "runtime callers cannot change declared default permissions");
         helper.assertTrue(Vocations.required(PatrolContent.VOCATION).kit().stream()
                 .noneMatch(tool -> Goods.matches(new ItemStack(Items.BOW), tool) || Goods.matches(new ItemStack(Items.CROSSBOW), tool)),
             "optional permissions do not create automatic vocation equipment requests");
+        helper.assertFalse(KitRules.allows(scene.colony, io.github.izakyl.folkways.plugins.wares.WaresContent.trade(), Items.BOW),
+            "optional patrol bows do not silently become crafting permissions");
         List<ItemFilter> forbidden = original.stream().filter(item -> !item.equals(bow)).toList();
-        helper.assertTrue(front.setSetting(CoreSettings.CORE, CoreSettings.TOOL_KEY, new ColonySettings.Value.Items(forbidden)),
+        helper.assertTrue(front.setSetting(PatrolContent.VOCATION, CoreSettings.TOOL_KEY, new ColonySettings.Value.Items(forbidden)),
             "the player explicitly removes the bow permission");
         scene.store.setItem(0, new ItemStack(Items.BOW)); scene.store.setItem(1, new ItemStack(Items.ARROW, 8));
         scene.supplies.loadout(scene.body, PatrolSupplies.Loadout.BOW); scene.guard();
@@ -131,9 +133,9 @@ public final class PatrolSupplyGameTests {
             .thenExecute(() -> {
                 helper.assertValueEqual(scene.countInStore(Items.BOW), 1, "a loadout cannot override the player's tool ban");
                 helper.assertValueEqual(scene.body.pack().count(Items.BOW), 0, "forbidden equipment never reaches the resident");
-                helper.assertValueEqual(front.settings(CoreSettings.CORE).entries(CoreSettings.TOOL_KEY), forbidden,
+                helper.assertValueEqual(front.settings(PatrolContent.VOCATION).entries(CoreSettings.TOOL_KEY), forbidden,
                     "default permissions never migrate over an explicit player setting");
-                helper.assertTrue(front.setSetting(CoreSettings.CORE, CoreSettings.TOOL_KEY, new ColonySettings.Value.Items(original)),
+                helper.assertTrue(front.setSetting(PatrolContent.VOCATION, CoreSettings.TOOL_KEY, new ColonySettings.Value.Items(original)),
                     "the player allows the bow again");
             })
             .thenWaitUntil(() -> helper.assertTrue(scene.body.pack().count(Items.BOW) == 1 && scene.body.pack().count(Items.ARROW) == 8,

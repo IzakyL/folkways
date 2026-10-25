@@ -10,7 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 // Molang as Touhou Little Maid's models write it, read two ways. What an expression comes to for a model at
-// rest, where every variable and query is 0 and `a ?? b` falls back to b, tells whether a bone's scale hides it.
+// rest, with a healthy, awake resident and `a ?? b` falling back for unknown names, reads a bone's scale.
 // And the same expression in the narrower Molang GeckoLib takes, for the animations a resident plays.
 final class Molang {
     // The queries GeckoLib answers for something that is not itself an entity; a resident's model is drawn by one
@@ -72,7 +72,11 @@ final class Molang {
     }
 
     // unset marks a bare variable or query, the one thing `??` passes over.
-    private record Value(double number, boolean unset, String written) {
+    private record Value(double number, boolean unset, String written, int precedence) {
+        Value(double number, boolean unset, String written) {
+            this(number, unset, written, Integer.MAX_VALUE);
+        }
+
         static Value of(double number, String written) {
             return new Value(number, false, written);
         }
@@ -84,6 +88,18 @@ final class Molang {
         boolean truth() {
             return number != 0.0;
         }
+
+        // GeckoLib 4 ranks comparisons and both boolean operators above arithmetic (all at 5).
+        // Keep the tree we parsed using TLM's precedence, including right operands at equal precedence.
+        static Value binary(double number, Value left, String sign, Value right, int precedence) {
+            return new Value(number, false,
+                left.operand(precedence, false) + " " + sign + " " + right.operand(precedence, true), precedence);
+        }
+
+        String operand(int parentPrecedence, boolean right) {
+            return precedence < parentPrecedence || (right && precedence == parentPrecedence)
+                ? "(" + written + ")" : written;
+        }
     }
 
     // GeckoLib refuses a whole animation over an `a ? b`, so the `: 0` it implies is written out.
@@ -94,15 +110,15 @@ final class Molang {
         }
         Value then = ternary();
         Value otherwise = take(":") ? ternary() : Value.of(0.0, "0");
-        return Value.of(condition.truth() ? then.number : otherwise.number,
-            condition.written + " ? " + then.written + " : " + otherwise.written);
+        return new Value(condition.truth() ? then.number : otherwise.number, false,
+            condition.operand(1, false) + " ? " + then.operand(1, false) + " : " + otherwise.operand(1, false), 0);
     }
 
     private Value coalesce() {
         Value left = either();
         while (take("??")) {
             Value right = either();
-            left = left.unset ? new Value(right.number, false, right.written) : left;
+            left = left.unset ? new Value(right.number, false, right.written, right.precedence) : left;
         }
         return left;
     }
@@ -111,7 +127,7 @@ final class Molang {
         Value left = both();
         while (take("||")) {
             Value right = both();
-            left = Value.of(left.truth() || right.truth(), left.written + " || " + right.written);
+            left = Value.binary(left.truth() || right.truth() ? 1 : 0, left, "||", right, 5);
         }
         return left;
     }
@@ -120,7 +136,7 @@ final class Molang {
         Value left = compared();
         while (take("&&")) {
             Value right = compared();
-            left = Value.of(left.truth() && right.truth(), left.written + " && " + right.written);
+            left = Value.binary(left.truth() && right.truth() ? 1 : 0, left, "&&", right, 5);
         }
         return left;
     }
@@ -141,7 +157,7 @@ final class Molang {
                 case "<" -> left.number < right.number;
                 default -> left.number > right.number;
             };
-            left = Value.of(truth, left.written + " " + sign + " " + right.written);
+            left = Value.binary(truth ? 1 : 0, left, sign, right, 5);
         }
     }
 
@@ -153,8 +169,8 @@ final class Molang {
                 return left;
             }
             Value right = product();
-            left = Value.of(sign.equals("+") ? left.number + right.number : left.number - right.number,
-                left.written + " " + sign + " " + right.written);
+            left = Value.binary(sign.equals("+") ? left.number + right.number : left.number - right.number,
+                left, sign, right, 1);
         }
     }
 
@@ -166,8 +182,8 @@ final class Molang {
                 return left;
             }
             Value right = unary();
-            left = Value.of(sign.equals("*") ? left.number * right.number : left.number / right.number,
-                left.written + " " + sign + " " + right.written);
+            left = Value.binary(sign.equals("*") ? left.number * right.number : left.number / right.number,
+                left, sign, right, 2);
         }
     }
 
@@ -214,7 +230,7 @@ final class Molang {
                 throw new IllegalArgumentException("unmatched quote");
             }
             at = closing + 1;
-            return new Value(0.0, true, "0");
+            return new Value(0.0, true, text.substring(from, at));
         }
         while (at < text.length() && (Character.isLetterOrDigit(text.charAt(at))
                 || text.charAt(at) == '_' || text.charAt(at) == '.')) {
@@ -237,6 +253,26 @@ final class Molang {
             double number = math(name.substring(dot + 1), of);
             guessed |= Double.isNaN(number);
             return Value.of(number, written);
+        }
+        if (name.equals("ysm.second_order") && arguments.isPresent() && arguments.get().size() >= 2) {
+            // TLM initializes a new filter at its input. Keep that steady-state value without borrowing
+            // another resident's physics history or pulling a world-space prop toward the world origin.
+            Value input = arguments.get().get(1);
+            return Value.of(input.number, "(" + input.written + ")");
+        }
+        if (name.equals("ysm.bone_rot") && arguments.isPresent() && arguments.get().size() == 1 && take(".")) {
+            String axis = taken("x", "y", "z");
+            String bone = arguments.get().getFirst().written;
+            if (axis != null && bone.length() >= 2 && (bone.startsWith("'") || bone.startsWith("\""))) {
+                return Value.of(0, ResidentMolang.boneRotation(bone.substring(1, bone.length() - 1), axis));
+            }
+            throw new IllegalArgumentException("unsupported bone rotation member");
+        }
+        String reference = name + (arguments.isEmpty() ? "" : "(" + String.join(", ",
+            arguments.get().stream().map(value -> value.written.toLowerCase(Locale.ROOT)).toList()) + ")");
+        Optional<ResidentMolang> resident = ResidentMolang.named(reference);
+        if (resident.isPresent()) {
+            return Value.of(resident.get().resting(), resident.get().variable());
         }
         if (arguments.isEmpty() && KEPT.contains(scope)) {
             return new Value(0.0, true, name);

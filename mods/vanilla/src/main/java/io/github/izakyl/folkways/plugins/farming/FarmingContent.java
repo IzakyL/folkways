@@ -45,7 +45,7 @@ public final class FarmingContent {
         ResourceLocation.fromNamespaceAndPath("folkways", "farm");
 
     private static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.farm",
-        ResourceLocation.withDefaultNamespace("wheat"));
+        ResourceLocation.withDefaultNamespace("wheat")).tools(VOCATION);
 
     public static final String QUICK_HANDS = "farming_quick_hands";
     public static final String REPLANT = "farming_replant";
@@ -104,7 +104,7 @@ public final class FarmingContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(SPEC);
+        declaring.vocation(SPEC.ordered(300));
         declaring.colony(ID, scope -> {
             FarmPresence state = new FarmPresence(scope.colony());
             scope.share(state);

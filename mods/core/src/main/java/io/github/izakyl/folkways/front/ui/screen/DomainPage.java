@@ -20,6 +20,7 @@ import dev.vfyjxf.taffy.style.FlexDirection;
 import dev.vfyjxf.taffy.style.FlexWrap;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
@@ -162,7 +163,10 @@ public final class DomainPage implements Draw {
         drawn.grid = grid;
 
         ScrollerView scroller = Rows.fills(Rows.box());
-        scroller.addScrollViewChild(Rows.page().addChildren(grid, footer));
+        UIElement contents = Rows.page().addChildren(grid, footer);
+        page.toolVocation().flatMap(Vocations::of)
+            .ifPresent(vocation -> contents.addChildren(SettingsPage.tools(player, vocation, "." + Tokens.of(page.id()))));
+        scroller.addScrollViewChild(contents);
 
         UIElement page = Rows.page().addChildren(scroller);
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));

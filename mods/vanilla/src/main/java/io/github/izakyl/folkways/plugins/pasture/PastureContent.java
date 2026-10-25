@@ -93,7 +93,7 @@ public final class PastureContent {
         true);
 
     private static final PageKind PAGE = PageKind.boarded(PASTURE, "folkways.page.pasture",
-        ResourceLocation.withDefaultNamespace("lead"));
+        ResourceLocation.withDefaultNamespace("lead")).tools(HERDING);
 
     private static final VocationSpec VOCATION =
         new VocationSpec(HERDING, List.of(
@@ -111,7 +111,7 @@ public final class PastureContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(VOCATION);
+        declaring.vocation(VOCATION.ordered(400));
         declaring.colony(ID, scope -> {
             PasturePresence state = new PasturePresence(scope.colony());
             scope.share(state);

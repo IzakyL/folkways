@@ -118,7 +118,7 @@ public final class ColonyPanelScene {
         scene.idle(10);
         scene.overlay()
             .showText(100)
-            .text("Under Preferences, Settings holds the colony's Tools list. Residents only take up tools on it, and an empty list allows none. It starts out with every tool some work asks for.")
+            .text("Each trade’s page holds its tool list. The list controls which tools residents may acquire for that trade. Unconfigured lists inherit the trade’s kit defaults; an empty list allows no acquisitions.")
             .pointAt(minerHead)
             .placeNearTarget()
             .attachKeyFrame();

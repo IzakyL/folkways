@@ -24,23 +24,16 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.block.DoublePlantBlock;
-import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-// What each kind of zone asks for, read off the world one sweep at a time. Only the cells it can be done at now are
-// asked for: a box is cleared from the top down and filled from the bottom up, a layer opening the next as it goes.
+// Weeds, trees and loose stacks in a zone, read off the world one sweep at a time.
 final class Survey {
 
     // How far a body stands from the cell it works: as far as its hands reach.
     private static final int REACH = (int) Math.floor(Reach.PLAYER_BLOCK_REACH);
-
-    private static final Comparator<BlockPos> DOWNWARD =
-        Comparator.comparingInt((BlockPos cell) -> -cell.getY())
-            .thenComparingInt(BlockPos::getX)
-            .thenComparingInt(BlockPos::getZ);
 
     private static final Comparator<BlockPos> UPWARD =
         Comparator.comparingInt((BlockPos cell) -> cell.getY())
@@ -63,43 +56,22 @@ final class Survey {
         this.cells = cells;
     }
 
-    List<Job> clear(Predicate<BlockPos> member) {
-        return clear(member, state -> false, Set.of());
-    }
-
-    // Every block in the box goes, but a colony's own blocks, liquids, what no hand breaks and what the zone keeps.
-    // A cell waits for the one over it, and nobody digs out the block they stand on. A cell other work of the zone
-    // has taken is left to it, and what lies under it waits for that work too.
-    List<Job> clear(Predicate<BlockPos> member, Predicate<BlockState> kept, Set<BlockPos> claimed) {
-        Predicate<BlockPos> wanted = toClear(member, kept);
-        List<Job> jobs = new ArrayList<>();
-        for (BlockPos cell : sorted(DOWNWARD)) {
-            if (!wanted.test(cell) || claimed.contains(cell)
-                || !discovering && cells.contains(cell.above()) && wanted.test(cell.above())) {
-                continue;
-            }
-            stances(cell, Set.of(cell.above())).ifPresent(where -> jobs.add(Job.at(cell, site(cell), where)));
-        }
-        return jobs;
-    }
-
-    List<Job> fill() {
-        return fill(Set.of());
-    }
-
-    // Every open cell is laid, the lowest first; nobody lays a block where they stand or where their head is. A cell
-    // other work of the zone has taken, a weed to pull, is laid once that is done. Nothing is laid over a flower: one
-    // the zone pulls is laid over once it is gone, and one it keeps is not buried.
-    List<Job> fill(Set<BlockPos> claimed) {
-        Predicate<BlockPos> wanted = cell -> level.isLoaded(cell) && open(level.getBlockState(cell));
+    // Fallen wood needs no canopy. Only its marked logs go; their small decorations come away first.
+    List<Job> fallen(Predicate<BlockPos> member, Predicate<BlockState> kept, Set<BlockPos> claimed) {
+        Predicate<BlockPos> spared = cell -> member.test(cell) || kept.test(level.getBlockState(cell));
+        FallenLogs fallen = new FallenLogs(level, member);
         List<Job> jobs = new ArrayList<>();
         for (BlockPos cell : sorted(UPWARD)) {
-            if (!wanted.test(cell) || claimed.contains(cell)
-                || !discovering && cells.contains(cell.below()) && wanted.test(cell.below())
-                || flower(level.getBlockState(cell.below()))) {
+            if (claimed.contains(cell) || !level.isLoaded(cell) || !FallenLogs.horizontal(level.getBlockState(cell))
+                || spared.test(cell) || !fallen.at(cell)) {
                 continue;
             }
-            stances(cell, Set.of(cell, cell.below())).ifPresent(where -> jobs.add(Job.at(cell, site(cell), where)));
+            List<BlockPos> decorations = fallen.decorations(cell);
+            if (decorations.stream().anyMatch(spared)) {
+                continue;
+            }
+            stances(cell).ifPresent(where -> jobs.add(new Job("fallen:" + Job.keyOf(cell), site(cell),
+                cell, List.of(cell), decorations, where)));
         }
         return jobs;
     }
@@ -108,8 +80,25 @@ final class Survey {
         List<Job> jobs = new ArrayList<>();
         for (BlockPos cell : sorted(UPWARD)) {
             if (level.isLoaded(cell) && weedAt(level.getBlockState(cell), pulled)) {
-                stances(cell, Set.of()).ifPresent(where -> jobs.add(Job.at(cell, site(cell), where)));
+                stances(cell).ifPresent(where -> jobs.add(Job.at(cell, site(cell), where)));
             }
+        }
+        return jobs;
+    }
+
+    List<Job> forage(Predicate<BlockPos> spared, Set<BlockPos> claimed) {
+        List<Job> jobs = new ArrayList<>();
+        Set<BlockPos> found = new HashSet<>();
+        for (BlockPos cell : sorted(UPWARD)) {
+            if (found.contains(cell) || !level.isLoaded(cell) || !Foraging.root(level.getBlockState(cell))) continue;
+            List<BlockPos> plant = Foraging.cells(level, cell, cells);
+            if (plant.isEmpty() || plant.stream().anyMatch(at -> claimed.contains(at) || spared.test(at)
+                    || level.getBlockState(at).getDestroySpeed(level, at) < 0.0F)) continue;
+            BlockPos root = Foraging.vine(level.getBlockState(cell)) ? plant.getLast() : cell;
+            stances(root).ifPresent(where -> {
+                found.addAll(plant);
+                jobs.add(new Job(Job.keyOf(root), site(root), root, plant, List.of(), where));
+            });
         }
         return jobs;
     }
@@ -129,10 +118,10 @@ final class Survey {
                 continue;
             }
             List<BlockPos> canopy = Felling.canopy(level, tree);
-            if (canopy.isEmpty()) {
+            if (canopy.stream().noneMatch(leaf -> Felling.leaf(level.getBlockState(leaf)))) {
                 continue;
             }
-            Optional<Stances> where = stances(cell, Set.of());
+            Optional<Stances> where = stances(cell);
             if (where.isEmpty()) {
                 continue;
             }
@@ -175,32 +164,9 @@ final class Survey {
         return jobs;
     }
 
-    private Predicate<BlockPos> toClear(Predicate<BlockPos> member, Predicate<BlockState> kept) {
-        return cell -> {
-            if (!level.isLoaded(cell) || member.test(cell)) {
-                return false;
-            }
-            BlockState state = level.getBlockState(cell);
-            return clearable(level, cell, state) && !kept.test(state);
-        };
-    }
-
-    static boolean clearable(ServerLevel level, BlockPos cell, BlockState state) {
-        return !state.isAir() && !(state.getBlock() instanceof LiquidBlock)
-            && state.getDestroySpeed(level, cell) >= 0.0F;
-    }
-
-    static boolean open(BlockState state) {
-        return state.isAir() || state.canBeReplaced();
-    }
-
     // What a zone pulls when it weeds: its grass, its flowers, or both.
     static Predicate<BlockState> weeds(boolean grass, boolean flowers) {
         return state -> FarmingContent.weed(state, grass, flowers);
-    }
-
-    private static boolean flower(BlockState state) {
-        return FarmingContent.weed(state, false, true);
     }
 
     // A weed two tall is pulled by its lower half, which takes the upper with it.
@@ -219,9 +185,8 @@ final class Survey {
         return new WorkSite.AtBlock(WorldPos.of(level, cell));
     }
 
-    // Everywhere a body stands in reach of the cell, from a level below it to one above, but the cells the work
-    // itself would leave nobody standing in.
-    private Optional<Stances> stances(BlockPos target, Set<BlockPos> barred) {
+    // Everywhere a body stands in reach of the cell, from a level below it to one above.
+    private Optional<Stances> stances(BlockPos target) {
         if (discovering) {
             return Optional.of(Stances.WHEREVER);
         }
@@ -230,7 +195,7 @@ final class Survey {
             for (int dy = -2; dy <= 1; dy++) {
                 for (int dz = -REACH; dz <= REACH; dz++) {
                     BlockPos feet = target.offset(dx, dy, dz);
-                    if (!barred.contains(feet) && Reach.withinReach(feet, target) && footed.computeIfAbsent(feet,
+                    if (Reach.withinReach(feet, target) && footed.computeIfAbsent(feet,
                             at -> level.isLoaded(at) && Footing.withFeetAt(level, at))) {
                         found.add(feet);
                     }

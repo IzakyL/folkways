@@ -42,3 +42,16 @@ dependencies {
 
 // The recipe audit is one fixture shared by native kitchen and vanilla crafting tests in their own modules.
 sourceSets.cookeryTest.resources.srcDir(rootProject.file("mods/cookery/src/gametest/resources"))
+
+// Main and test resources share one mod pack; an overlapping test tag must retain the shipped entries.
+tasks.named("processGametestResources") {
+    def forage = file("src/main/resources/data/folkways/tags/block/forage.json")
+    inputs.file(forage)
+    doLast {
+        def parser = new groovy.json.JsonSlurper()
+        def shipped = parser.parse(forage)
+        def extra = parser.parse(file("src/gametest/resources/data/folkways/tags/block/forage.json"))
+        def merged = [replace: false, values: shipped.values + extra.values]
+        file("${destinationDir}/data/folkways/tags/block/forage.json").text = groovy.json.JsonOutput.toJson(merged) + "\n"
+    }
+}

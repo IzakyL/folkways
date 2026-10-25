@@ -300,7 +300,7 @@ public final class PatrolSupplies {
         int left = count;
         while (left > 0) {
             ItemStack stack = Containers.extract(source, item -> !PersonalItems.marked(item) && compatible.test(item) && Goods.matches(item, goods)
-                && (!weapon || KitRules.allows(colony, item.getItem())), left);
+                && (!weapon || KitRules.allows(colony, io.github.izakyl.folkways.core.api.vocation.Vocations.required(PatrolContent.VOCATION), item.getItem())), left);
             if (stack.isEmpty()) { break; }
             taken.add(stack); left -= stack.getCount();
         }

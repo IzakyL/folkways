@@ -82,7 +82,7 @@ public final class FishingScene {
         fisher.hold(scene, new ItemStack(Items.FISHING_ROD));
         scene.idle(10);
         scene.overlay().showText(90)
-            .text("A rod is the one tool a cast asks for, and it has to be on the Tools list under Settings.")
+            .text("A rod is the one tool a cast asks for, and it has to be on the tool list on the Fishing page.")
             .pointAt(util.vector().topOf(4, 0, 3).add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();

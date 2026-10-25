@@ -116,9 +116,16 @@ public final class ColonySettings implements Settings {
     }
 
     public ColonySettings conformedTo(Schema schema) {
-        Map<String, Value> next = new LinkedHashMap<>();
+        return conformedTo(schema, Set.of());
+    }
+
+    public ColonySettings conformedTo(Schema schema, Set<String> inherited) {
+        Map<String, Value> next = new LinkedHashMap<>(byKey);
         for (Schema.Setting declared : schema.settings()) {
             Value held = byKey.get(declared.key());
+            if (held == null && inherited.contains(declared.key())) {
+                continue;
+            }
             next.put(declared.key(), fits(declared, held) ? held : defaultOf(declared));
         }
         return new ColonySettings(next);

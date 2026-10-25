@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
@@ -76,7 +77,7 @@ final class Survey {
         return one.at().realm().equals(other.at().realm()) && one.packCells() == other.packCells()
             && one.packCapacity() == other.packCapacity() && one.pace() == other.pace()
             && one.licences().equals(other.licences()) && sameStacks(one.tools(), other.tools())
-            && sameStacks(one.cargo(), other.cargo());
+            && sameStacks(one.cargo(), other.cargo()) && one.toolRules().equals(other.toolRules());
     }
 
     private final Map<Stash, Reading> stores = new LinkedHashMap<>();
@@ -148,11 +149,13 @@ final class Survey {
     }
 
     boolean answer(ServerLevel level, ColonyData colony, Map<UUID, Body> present, BiConsumer<Body, Boolean> seen) {
+        var toolRules = KitRules.snapshot(colony.works());
         suppliesRead.keySet().retainAll(present.keySet());
         for (Body body : present.values()) {
             boolean supply = KitRules.supplies(colony.works(), body);
             Boolean supplied = suppliesRead.put(body.id(), supply);
-            if (supplied == null || supplied != supply) {
+            Crew.Hand prior = hands.get(body.id());
+            if (supplied == null || supplied != supply || prior != null && !prior.toolRules().equals(toolRules)) {
                 handsOf.add(body.id());
             }
             if (Equipment.reconcile(colony.works(), body)) {
@@ -386,7 +389,7 @@ final class Survey {
             List.copyOf(licences),
             kit.inPack(body),
             Optional.empty(),
-            kit.cargoIn(body)));
+            kit.cargoIn(body), KitRules.snapshot(colony.works())));
         seen.accept(body, suppliesRead.getOrDefault(resident, true));
         return had == null || !sameHand(had, hands.get(resident));
     }

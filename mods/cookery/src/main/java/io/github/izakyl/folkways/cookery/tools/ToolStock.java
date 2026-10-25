@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
+import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.cookery.racks.KitchenRacks;
 import io.github.izakyl.folkways.plugins.orders.Orders;
@@ -63,8 +64,8 @@ final class ToolStock {
         this.borrowed = borrowed;
     }
 
-    Optional<ItemSpec> allowed(ItemSpec family) {
-        List<ItemSpec> choices = Goods.members(family).stream().filter(item -> KitRules.allows(colony, item))
+    Optional<ItemSpec> allowed(Optional<Vocation> vocation, ItemSpec family) {
+        List<ItemSpec> choices = Goods.members(family).stream().filter(item -> KitRules.allows(colony, vocation, item))
             .map(item -> Goods.specOf(item.getDefaultInstance())).toList();
         return choices.isEmpty() ? Optional.empty() : Optional.of(ItemSpec.anyOf(choices));
     }

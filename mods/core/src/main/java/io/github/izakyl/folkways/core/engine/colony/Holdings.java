@@ -80,12 +80,19 @@ public final class Holdings implements ColonyChangeSource {
         if (taken(what)) {
             return Optional.empty();
         }
+        Optional<Body> joining = what instanceof Held.Entity entity ? bodyOf(server, entity.entity()) : Optional.empty();
+        if (what instanceof Held.Entity entity && ResidentKinds.of(entity.type())
+                .filter(kind -> kind.workDefaults()).isPresent() && joining.isEmpty()) {
+            return Optional.empty();
+        }
         Holding holding = new Holding(UUID.randomUUID(), owner, what);
         put(holding);
         switch (what) {
             case Held.Block block -> blockEntity(server, block.cell())
                 .ifPresent(entity -> ColonyMembership.join(entity, colony));
-            case Held.Entity entity -> bodyOf(server, entity.entity()).ifPresent(body -> {
+            case Held.Entity entity -> joining.ifPresent(body -> {
+                WorkDefaults.apply(ColonyData.find(server, colony)
+                    .map(data -> data.keeps().kept(WorkDefaults.ID)).orElseGet(CompoundTag::new), body);
                 body.joinColony(colony);
                 if (!body.mob().isRemoved()) {
                     present.add(body.id());
@@ -327,6 +334,9 @@ public final class Holdings implements ColonyChangeSource {
     }
 
     private static Optional<Body> bodyOf(MinecraftServer server, UUID entity) {
+        if (server == null) {
+            return Optional.empty();
+        }
         for (ServerLevel level : server.getAllLevels()) {
             Entity found = level.getEntity(entity);
             if (found != null) {

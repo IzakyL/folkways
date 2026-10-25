@@ -111,6 +111,7 @@ public final class ItemPicker {
     private final Button rule = new Button();
     private final Button confirm = new Button().setText(Component.translatable("folkways.action.confirm"));
     private String query = "";
+    private boolean confirmUnchanged;
 
     private ItemPicker(Mode mode, List<Item> pool, List<Offer> offers, Set<ItemFilter> held) {
         this.mode = mode;
@@ -134,7 +135,14 @@ public final class ItemPicker {
     // A list of rules, any items, tags and searches.
     public static Dialog many(UIElement host, Component title, List<ItemFilter> current, boolean blocks,
             Consumer<List<ItemFilter>> confirmed) {
+        return many(host, title, current, blocks, false, confirmed);
+    }
+
+    // Inherited settings may be confirmed unchanged to make even an empty default an explicit choice.
+    public static Dialog many(UIElement host, Component title, List<ItemFilter> current, boolean blocks,
+            boolean confirmUnchanged, Consumer<List<ItemFilter>> confirmed) {
         ItemPicker picker = new ItemPicker(Mode.MANY, poolOf(blocks), List.of(), new LinkedHashSet<>(current));
+        picker.confirmUnchanged = confirmUnchanged;
         return picker.show(host, title, confirmed);
     }
 
@@ -226,7 +234,7 @@ public final class ItemPicker {
 
         confirm.setOnClick(event -> {
             dialog.close();
-            if (!picked.equals(held)) {
+            if (confirmUnchanged || !picked.equals(held)) {
                 confirmed.accept(inOrder());
             }
         });
@@ -486,7 +494,7 @@ public final class ItemPicker {
             rule.setActive(typed.isPresent() && !picked.contains(typed.get())
                 && !coveredBy(Set.of(typed.get())).isEmpty());
         }
-        confirm.setActive(!picked.equals(held) && (mode != Mode.ONE || !picked.isEmpty()));
+        confirm.setActive((confirmUnchanged || !picked.equals(held)) && (mode != Mode.ONE || !picked.isEmpty()));
     }
 
     private void wear(Item item, UIElement leaf) {

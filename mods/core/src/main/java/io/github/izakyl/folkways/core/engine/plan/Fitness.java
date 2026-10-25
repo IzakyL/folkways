@@ -43,7 +43,7 @@ final class Fitness {
             }
         }
         for (NodeSpec step : work.steps()) {
-            if (!Tools.canPrepare(hand.who().kind(), step, hand.tools())) {
+            if (!Tools.canPrepare(hand.who().kind(), step, hand.tools(), hand.toolRules())) {
                 return Optional.of(Unfit.NO_TOOL);
             }
         }

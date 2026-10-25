@@ -1,0 +1,45 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "quark:hollow_oak_log",
+      "required": false
+    },
+    {
+      "id": "quark:hollow_spruce_log",
+      "required": false
+    },
+    {
+      "id": "quark:hollow_birch_log",
+      "required": false
+    },
+    {
+      "id": "quark:hollow_jungle_log",
+      "required": false
+    },
+    {
+      "id": "quark:hollow_acacia_log",
+      "required": false
+    },
+    {
+      "id": "quark:hollow_dark_oak_log",
+      "required": false
+    },
+    {
+      "id": "quark:hollow_mangrove_log",
+      "required": false
+    },
+    {
+      "id": "quark:hollow_cherry_log",
+      "required": false
+    },
+    {
+      "id": "quark:hollow_crimson_stem",
+      "required": false
+    },
+    {
+      "id": "quark:hollow_warped_stem",
+      "required": false
+    }
+  ]
+}

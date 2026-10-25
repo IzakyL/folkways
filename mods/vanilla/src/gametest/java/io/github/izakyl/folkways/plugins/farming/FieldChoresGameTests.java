@@ -29,6 +29,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.SnowLayerBlock;
+import net.minecraft.world.level.block.SnowyDirtBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -125,6 +127,50 @@ public final class FieldChoresGameTests {
             helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "planning does not turn the soil");
             helper.assertTrue(level.getBlockState(ground.above()).is(grass.get(i++)),
                 "planning does not remove the grass");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void aSnowyFieldIsPlannedWithoutChangingTheWorld(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 1, 1));
+        for (BlockPos floor : BlockPos.betweenClosed(origin, origin.offset(5, 0, 3))) {
+            place(level, floor, Blocks.DIRT.defaultBlockState());
+            place(level, floor.above(), Blocks.AIR.defaultBlockState());
+            place(level, floor.above(2), Blocks.AIR.defaultBlockState());
+        }
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        List<BlockState> soils = List.of(Blocks.DIRT.defaultBlockState(),
+            Blocks.GRASS_BLOCK.defaultBlockState().setValue(SnowyDirtBlock.SNOWY, true),
+            Blocks.DIRT_PATH.defaultBlockState());
+        for (int layers = 1; layers <= 8; layers++) {
+            BlockPos ground = origin.offset(1 + (layers - 1) % 4, 0, 1 + (layers - 1) / 4);
+            place(level, ground, soils.get((layers - 1) % soils.size()));
+            place(level, ground.above(), Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, layers));
+            cells.add(ground);
+        }
+        Crop crop = Crop.of(level, origin, ResourceLocation.withDefaultNamespace("wheat")).orElseThrow();
+        Field field = new Field(crop, new Tillage.Clearing(false, false), WorldPos.of(level, origin),
+            () -> { }, new PastDay());
+        Field.Tally tally = field.scan(level, zone(level, cells), crop, 1);
+        helper.assertTrue(tally.till() == cells.size() && tally.sow() == 0,
+            "every snow-covered cell needs tilling before sowing: " + tally);
+        field.settle(1);
+        List<Grown> goals = new ArrayList<>();
+        field.chores().forEach(chores -> chores.goals(level, goals));
+        Set<BlockPos> tilled = new LinkedHashSet<>();
+        goals.forEach(goal -> goal.nodes().forEach(node -> {
+            helper.assertTrue(node instanceof TillNode, "snow-covered soil needs tilling work");
+            tilled.add(node.spec().focus().orElseThrow());
+        }));
+        helper.assertTrue(tilled.equals(cells), "every snow-covered cell has a tilling job: " + tilled);
+        int layers = 1;
+        for (BlockPos ground : cells) {
+            helper.assertTrue(level.getBlockState(ground).equals(soils.get((layers - 1) % soils.size())),
+                "planning does not turn the soil");
+            helper.assertTrue(level.getBlockState(ground.above()).equals(Blocks.SNOW.defaultBlockState()
+                .setValue(SnowLayerBlock.LAYERS, layers++)), "planning leaves every snow layer in place");
         }
         helper.succeed();
     }

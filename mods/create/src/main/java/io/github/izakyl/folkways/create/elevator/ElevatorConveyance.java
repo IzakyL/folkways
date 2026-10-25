@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.api.work.Doing;
 import io.github.izakyl.folkways.core.api.work.Doings;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.create.transport.PassengerLanding;
+import io.github.izakyl.folkways.plugins.person.walk.ResidentMoveControl;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -31,6 +32,9 @@ final class ElevatorConveyance implements Conveyance {
 
     @Override
     public Going step(ServerLevel level, Mob body, Set<WorldPos> to) {
+        if (body.getMoveControl() instanceof ResidentMoveControl control) {
+            control.centreForTransport();
+        }
         var lift = ElevatorDispatch.controller(level.getServer(), fare.colony(), fare.lift()).orElse(null);
         if (lift == null || !level.dimension().equals(fare.lift().dimension())) {
             return new Going.Failed(ElevatorRefusal.UNAVAILABLE);

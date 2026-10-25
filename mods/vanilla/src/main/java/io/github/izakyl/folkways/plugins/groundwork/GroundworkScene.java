@@ -48,39 +48,43 @@ public final class GroundworkScene {
         scene.idle(15);
 
         scene.overlay().showText(90)
-            .text("A groundwork zone does whichever work is ticked in its settings, one or several: clear, fill, weed, fell and haul. Cleared and filled together, the box is dug out and laid with the fill block; the fill block already there stays.")
+            .text("Clear or Fill turns the zone into one build order, then erases the zone. With Fill ticked, every marked cell targets the chosen block. Other work ticked is ignored.")
             .pointAt(util.vector().topOf(4, 0, 4))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
 
-        scene.overlay().showOutline(PonderPalette.RED, "clear", boulder, 90);
+        scene.overlay().showOutline(PonderPalette.RED, "clear", boulder, 30);
         scene.overlay().showText(90)
-            .text("Clear takes out every block in the box, from the top down, and only in the box: mark it as deep as you mean to dig. Builders do it, with the tool each block wants, and leave the colony's own blocks alone.")
+            .text("Clear alone orders air at every marked cell. The zone disappears as soon as the order is filed; builders then excavate it as an ordinary build site.")
             .colored(PonderPalette.RED)
             .pointAt(util.vector().topOf(2, 0, 2))
             .placeNearTarget()
             .attachKeyFrame();
-        scene.idle(50);
+        scene.idle(30);
+        scene.overlay().showOutline(PonderPalette.BLUE, "clear_order", boulder, 60);
+        scene.idle(20);
         scene.world().setBlocks(util.select().fromTo(1, 2, 1, 2, 2, 2), Blocks.AIR.defaultBlockState(), true);
         scene.idle(20);
         scene.world().setBlocks(util.select().fromTo(1, 1, 1, 2, 1, 2), Blocks.AIR.defaultBlockState(), true);
         scene.idle(30);
 
-        scene.overlay().showOutline(PonderPalette.GREEN, "fill", pit, 90);
+        scene.overlay().showOutline(PonderPalette.GREEN, "fill", pit, 30);
         scene.overlay().showText(90)
-            .text("Fill lays the block chosen in its settings into every open cell, from the bottom up, brought from the colony's stores.")
+            .text("Fill orders the chosen block at every marked cell, replacing whatever stands there. The zone disappears when filed; builders bring the blocks from the colony's stores.")
             .colored(PonderPalette.GREEN)
             .pointAt(util.vector().topOf(2, 0, 6))
             .placeNearTarget()
             .attachKeyFrame();
-        scene.idle(50);
+        scene.idle(30);
+        scene.overlay().showOutline(PonderPalette.BLUE, "fill_order", pit, 60);
+        scene.idle(20);
         scene.world().setBlocks(pit, Blocks.DIRT.defaultBlockState(), true);
         scene.idle(50);
 
         scene.overlay().showOutline(PonderPalette.GREEN, "weed", weeds, 80);
         scene.overlay().showText(80)
-            .text("Weed pulls the grass and ferns in the box. Flowers are pulled only with Pull flowers ticked, and a fill never buries one. Farmers do it.")
+            .text("With Clear and Fill off, Weed pulls grass and ferns. Flowers are pulled only with Pull flowers ticked. Farmers do it.")
             .pointAt(util.vector().topOf(6, 0, 1))
             .placeNearTarget()
             .attachKeyFrame();
@@ -91,7 +95,7 @@ public final class GroundworkScene {
         Selection tree = util.select().fromTo(4, 1, 4, 8, 6, 8);
         scene.overlay().showOutline(PonderPalette.OUTPUT, "fell", util.select().fromTo(5, 1, 5, 7, 1, 7), 90);
         scene.overlay().showText(90)
-            .text("Fell takes down every tree whose trunk stands in the box, its leaves with it. A log with no leaves of its own, in a wall or a beam, is left standing.")
+            .text("Fell takes down trees whose trunks stand in the box, leaves and all. It also clears horizontal logs resting on the ground away from trees, with their moss and other small plants. Colony building blocks stay.")
             .colored(PonderPalette.OUTPUT)
             .pointAt(util.vector().topOf(trunk.below()))
             .placeNearTarget()
@@ -111,6 +115,20 @@ public final class GroundworkScene {
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
+
+        BlockPos berries = util.grid().at(6, 1, 1);
+        scene.world().setBlock(berries, Blocks.SWEET_BERRY_BUSH.defaultBlockState()
+            .setValue(net.minecraft.world.level.block.SweetBerryBushBlock.AGE, 3), false);
+        scene.overlay().showText(100)
+            .text("Forage has farmers break food plants and store all their drops. Young berry bushes and fruitless cave-vine segments are cleared too. The marked vine column is removed, without leaving plants to regrow. Clear takes priority when both switches are ticked.")
+            .colored(PonderPalette.GREEN)
+            .pointAt(util.vector().centerOf(berries))
+            .placeNearTarget()
+            .attachKeyFrame();
+        scene.idle(50);
+        scene.world().setBlock(berries, Blocks.AIR.defaultBlockState(), true);
+        scene.world().createItemEntity(util.vector().centerOf(berries), Vec3.ZERO, new ItemStack(Items.SWEET_BERRIES, 2));
+        scene.idle(60);
     }
 
     private static void plantTree(SceneBuilder scene, SceneBuildingUtil util, BlockPos trunk) {

@@ -4,9 +4,13 @@ import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.resident.body.PersonalItems;
 import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.StoreRule;
+import io.github.izakyl.folkways.core.api.work.Amount;
+import io.github.izakyl.folkways.core.api.work.Delivery;
+import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Doing;
 import io.github.izakyl.folkways.core.api.work.Doings;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -14,6 +18,7 @@ import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
+import io.github.izakyl.folkways.core.api.work.Recourse;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkGesture;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
@@ -34,6 +39,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.items.IItemHandler;
 
 public final class TransferNode implements Node, Staged {
     public sealed interface Endpoint {
@@ -51,6 +58,8 @@ public final class TransferNode implements Node, Staged {
     private final boolean handed;
     private boolean directed;
     private final LongConsumer landed;
+    private Optional<Delivery.Source> collection = Optional.empty();
+    private boolean collecting;
 
     public TransferNode(UUID id, Endpoint from, Endpoint to, Manifest goods, Stances stances,
                         WorkSite site) {
@@ -85,6 +94,35 @@ public final class TransferNode implements Node, Staged {
             .done();
         return new TransferNode(spec, Endpoint.pack(), Endpoint.store(into), new Manifest(List.of(), List.of()), true,
             landed);
+    }
+
+    // A directed collection uses the ordinary take and put, kept together until the exact stack is delivered.
+    static Grown collecting(Delivery delivery) {
+        Delivery.Source source = delivery.source().orElseThrow();
+        Manifest cargo = new Manifest(List.of(source.stack()), List.of());
+        Amount load = new Amount(Goods.specOf(source.stack()), source.stack().getCount());
+        NodeSpec takeSpec = NodeSpec.of(UUID.randomUUID(), Haul.DOMAIN, new WorkSite.AtBlock(source.at()),
+                source.stances(), Workload.Once.of(FolkwaysConfig.haulReachTicks(), Haul::haste))
+            .leaves(List.of(load)).vocation(Haul.trade()).gesture(WorkGesture.SWING)
+            .doing(Doings.FETCHING, load.spec()).done();
+        TransferNode take = new TransferNode(takeSpec, Endpoint.store(new Stash(source.at())), Endpoint.pack(),
+            cargo, false, count -> { });
+        take.collection = Optional.of(source);
+        take.collecting = true;
+        NodeSpec putSpec = NodeSpec.of(delivery.id(), Haul.DOMAIN, delivery.spec().site(), delivery.spec().stances(),
+                Workload.Once.of(FolkwaysConfig.haulReachTicks(), Haul::haste))
+            .leaves(List.of(new Amount(load.spec(), -load.count()))).vocation(Haul.trade()).gesture(WorkGesture.SWING)
+            .doing(Doings.STOWING, load.spec()).done();
+        TransferNode put = new TransferNode(putSpec, Endpoint.pack(),
+            Endpoint.store(new Stash(delivery.spec().site().where())), cargo, false, delivery.arrived());
+        put.collecting = true;
+        return Grown.then(take, put).byOneWorker();
+    }
+
+    @Override
+    public Recourse failing(ServerLevel level, RefusalKind why) {
+        return collecting && (why == HaulRefusal.NO_ROOM || !fetching() && why == HaulRefusal.NOT_A_CONTAINER)
+            ? Recourse.waitFor(100) : Recourse.FAIL;
     }
 
     private TransferNode(NodeSpec spec, Endpoint from, Endpoint to, Manifest cargo, boolean handed,
@@ -200,6 +238,29 @@ public final class TransferNode implements Node, Staged {
     // The core lifts the planned goods out of the source; all of them or none.
     @Override
     public Drawn draw(ServerLevel level, Worker who) {
+        if (collection.isPresent()) {
+            Delivery.Source source = collection.get();
+            if (!source.at().in(level) || !level.isLoaded(source.at().block(level))
+                || level.getBlockState(source.at().block(level)) != source.state()
+                || level.getBlockEntity(source.at().block(level)) != source.entity()) {
+                return new Short(HaulRefusal.NOTHING_TO_TAKE);
+            }
+            IItemHandler handler = level.getCapability(Capabilities.ItemHandler.BLOCK, source.at().block(level),
+                source.side().orElse(null));
+            if (handler == null || source.slot() >= handler.getSlots()) {
+                return new Short(HaulRefusal.NOT_A_CONTAINER);
+            }
+            ItemStack wanted = source.stack();
+            ItemStack can = handler.extractItem(source.slot(), wanted.getCount(), true);
+            if (!ItemStack.matches(can, wanted)) {
+                return new Short(HaulRefusal.NOTHING_TO_TAKE);
+            }
+            if (!Containers.insert(snapshot(who.pack()), wanted).isEmpty()) {
+                return new Short(HaulRefusal.NO_ROOM);
+            }
+            ItemStack taken = handler.extractItem(source.slot(), wanted.getCount(), false);
+            return taken.isEmpty() ? new Short(HaulRefusal.NOTHING_TO_TAKE) : new Taken(List.of(taken));
+        }
         if (from instanceof Endpoint.Store store
                 && !StoreRule.takes(Stores.rulesAt(store.stash().pos()))) {
             return new Short(HaulRefusal.NOTHING_TO_TAKE);
@@ -243,7 +304,8 @@ public final class TransferNode implements Node, Staged {
 
     @Override
     public void restore(ServerLevel level, Worker who, List<ItemStack> goods) {
-        Container source = inventory(from, level, who).orElse(who.pack());
+        // A collected stack already has room in the pack, including when its source cannot accept returns.
+        Container source = collection.isPresent() ? who.pack() : inventory(from, level, who).orElse(who.pack());
         for (ItemStack stack : goods) {
             ItemStack left = Containers.insert(source, stack);
             if (!left.isEmpty() && source != who.pack()) {

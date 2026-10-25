@@ -4,6 +4,7 @@ import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
 import com.simibubi.create.content.contraptions.elevator.ElevatorContactBlock;
 import com.simibubi.create.content.contraptions.elevator.ElevatorContraption;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
+import io.github.izakyl.folkways.front.client.ShadowPass;
 import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,7 +40,7 @@ public final class ElevatorOutlines {
 
     @SubscribeEvent
     public static void render(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS || ShadowPass.active()) return;
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null || minecraft.player == null
                 || ColonyBookItem.heldBook(minecraft.player).isEmpty()) {

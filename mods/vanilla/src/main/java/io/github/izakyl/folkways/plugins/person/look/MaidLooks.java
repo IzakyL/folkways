@@ -41,10 +41,17 @@ public final class MaidLooks {
     private static final String WORK = "swing_hand";
     // The motions a resident plays, by the names Touhou Little Maid's GeckoLib models give them.
     static final List<String> PLAYED = List.of(IDLE, WALK, WORK, "chair", "use_mainhand:eat", "use_mainhand:drink");
+    public static final int PARALLEL_LAYERS = 8;
 
     private static volatile List<Maid> maids;
 
     private MaidLooks() {
+    }
+
+    public static Optional<String> layerAnimation(ResidentLook.Model model, String layer) {
+        String idle = model.idleAnimation();
+        return idle.startsWith("maid.") && idle.endsWith(".idle")
+            ? Optional.of(idle.substring(0, idle.length() - IDLE.length()) + layer) : Optional.empty();
     }
 
     // geometry and animations are paths under the pack folder; a maid that is not a GeckoLib model names the

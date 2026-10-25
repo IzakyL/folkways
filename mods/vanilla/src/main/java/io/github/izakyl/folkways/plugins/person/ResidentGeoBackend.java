@@ -2,8 +2,10 @@ package io.github.izakyl.folkways.plugins.person;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import io.github.izakyl.folkways.plugins.person.look.MaidLooks;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLook;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLooks;
+import io.github.izakyl.folkways.plugins.person.look.ResidentMolang;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,6 +32,7 @@ import software.bernie.geckolib.cache.GeckoLibCache;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.constant.DataTickets;
+import software.bernie.geckolib.loading.math.MathParser;
 import software.bernie.geckolib.model.GeoModel;
 import software.bernie.geckolib.model.data.EntityModelData;
 import software.bernie.geckolib.renderer.GeoRenderer;
@@ -109,8 +112,27 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
 
         @Override
         public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+            layers(controllers, "pre_parallel");
             controllers.add(new AnimationController<>(this, "move", 4, Crew::chooseLoop));
             controllers.add(new AnimationController<>(this, "work", 0, Crew::chooseWork));
+            layers(controllers, "parallel");
+        }
+
+        private void layers(AnimatableManager.ControllerRegistrar controllers, String prefix) {
+            for (int index = 0; index < MaidLooks.PARALLEL_LAYERS; index++) {
+                String layer = prefix + index;
+                controllers.add(new AnimationController<>(this, layer, 0, state -> {
+                    if (!(state.getData(DataTickets.ENTITY) instanceof ResidentEntity resident)) {
+                        return PlayState.STOP;
+                    }
+                    return modelOf(resident).flatMap(model -> MaidLooks.layerAnimation(model, layer)
+                        .filter(name -> {
+                            var file = GeckoLibCache.getBakedAnimations().get(model.animations());
+                            return file != null && file.getAnimation(name) != null;
+                        }))
+                        .map(name -> state.setAndContinue(loop(name))).orElse(PlayState.STOP);
+                }));
+            }
         }
 
         private static PlayState chooseLoop(AnimationState<Crew> state) {
@@ -171,6 +193,27 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
 
         private static final String HEAD_BONE = "head";
         private ResidentLook.Model currentModel;
+
+        @Override
+        public void applyMolangQueries(AnimationState<Crew> state, double animTime) {
+            if (!(state.getData(DataTickets.ENTITY) instanceof ResidentEntity resident)) {
+                return;
+            }
+            EntityModelData head = state.getData(DataTickets.ENTITY_MODEL_DATA);
+            for (ResidentMolang query : ResidentMolang.values()) {
+                double value = query.value(resident, head == null ? 0 : head.headPitch(),
+                    head == null ? 0 : head.netHeadYaw(), animTime, state.getPartialTick());
+                MathParser.setVariable(query.variable(), () -> value);
+            }
+            // TLM's bone_rot is a live struct: a later helper bone can read rotations applied earlier in
+            // this animation pass. Resolve lazily, and return zero when another model lacks that bone.
+            ResidentMolang.boneRotations().forEach((variable, query) -> MathParser.setVariable(variable,
+                () -> getBone(query.bone()).map(bone -> switch (query.axis()) {
+                    case "x" -> -Math.toDegrees(bone.getRotX());
+                    case "y" -> -Math.toDegrees(bone.getRotY());
+                    default -> Math.toDegrees(bone.getRotZ());
+                }).orElse(0.0)));
+        }
 
         @Override
         public ResourceLocation getModelResource(Crew crew) {

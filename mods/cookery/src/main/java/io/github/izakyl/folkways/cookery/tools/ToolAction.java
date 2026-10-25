@@ -5,6 +5,8 @@ import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
+import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Node;
@@ -97,11 +99,14 @@ abstract class ToolAction implements Node {
 
     static final class Borrow extends ToolAction {
         final ToolStock.Source source;
+        final Optional<Vocation> vocation;
         boolean moved;
 
-        Borrow(TaskTools service, KitchenTools.Lease lease, ToolStock.Source source) {
+        Borrow(TaskTools service, KitchenTools.Lease lease, ToolStock.Source source,
+                Optional<Vocation> vocation) {
             super(service, lease, source.at(), source.stances());
             this.source = source;
+            this.vocation = vocation;
         }
 
         @Override
@@ -120,6 +125,9 @@ abstract class ToolAction implements Node {
             if (!ItemStack.isSameItemSameComponents(actual, source.expected()) || actual.isEmpty()
                     || io.github.izakyl.folkways.core.api.resident.body.PersonalItems.marked(actual)) {
                 return Outcome.failed(CookeryRefusal.STATION_CHANGED);
+            }
+            if (!KitRules.allows(service.colony, vocation, actual.getItem())) {
+                return Outcome.failed(CookeryRefusal.NOTHING_TO_WORK_WITH);
             }
             if (!move(inventory, source.slot(), who.pack())) {
                 return Outcome.failed(CookeryRefusal.STATION_BUSY);

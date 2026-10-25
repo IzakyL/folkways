@@ -38,7 +38,7 @@ public final class FishingContent {
         ResourceLocation.fromNamespaceAndPath("folkways", "fish");
 
     private static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.fish",
-        ResourceLocation.withDefaultNamespace("fishing_rod"));
+        ResourceLocation.withDefaultNamespace("fishing_rod")).tools(VOCATION);
 
     public static final String QUICK_HANDS = "fishing_quick_hands";
 
@@ -76,7 +76,7 @@ public final class FishingContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(SPEC);
+        declaring.vocation(SPEC.ordered(500));
         declaring.colony(ID, scope -> {
             FishingPresence state = new FishingPresence(scope.colony());
             scope.share(state);

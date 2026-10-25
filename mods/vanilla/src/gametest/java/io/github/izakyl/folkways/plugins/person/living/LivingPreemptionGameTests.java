@@ -60,9 +60,9 @@ public final class LivingPreemptionGameTests {
     public static void abstractEffortSeparatesFoodFromTimeAndPersistsFractions(GameTestHelper helper) {
         Colony colony = Colonies.mint(helper.getLevel().getServer());
         Body body = PersonBody.RESIDENT.get().create(helper.getLevel());
+        body.mob().moveTo(helper.absolutePos(new BlockPos(1, 2, 1)).getCenter());
+        helper.getLevel().addFreshEntity(body.mob());
         colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
-        body.joinColony(colony.id());
-        colony.entered(body);
         try {
             WorkExertion.performed(body.mob(), 2, 1, 3);
             colony.service(LivingContent.ID, LivingPresence.class).orElseThrow()

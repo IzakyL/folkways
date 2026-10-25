@@ -58,7 +58,7 @@ public final class RailContent {
         TransitNetworks.install(network);
         NeoForge.EVENT_BUS.addListener(network::tick);
         NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> network.forgetServer());
-        declaring.vocation(SPEC);
+        declaring.vocation(SPEC.ordered(700));
         declaring.colony(ID, scope -> {
             RailPresence state = new RailPresence(scope.colony());
             scope.share(state);

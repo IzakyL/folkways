@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.core.api.work.Delivery;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.List;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
@@ -30,6 +31,34 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(FolkwaysMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class LivingEatingGameTests {
+
+    @GameTest(template = "empty")
+    public static void maidFoodQueryReceivesPersistedHungerAndMealUpdatesThroughEntityData(GameTestHelper helper) {
+        try (EatingFixture meal = new EatingFixture(helper, 6, new ItemStack(Items.BREAD, 3))) {
+            meal.settle();
+            var body = (io.github.izakyl.folkways.plugins.person.ResidentEntity) meal.body.mob();
+            var observer = PersonBody.RESIDENT.get().create(helper.getLevel());
+            helper.assertValueEqual(observer.foodLevel(), 20.0F, "before sync, a new resident is normally fed");
+            meal.living.tick(helper.getLevel().getServer());
+            var update = body.getEntityData().packDirty();
+            helper.assertTrue(update != null, "the loaded hunger creates an entity tracking update");
+            observer.getEntityData().assignValues(update);
+            helper.assertValueEqual(observer.foodLevel(), 6.0F, "persisted Hunger reaches observers without book UI data");
+            helper.assertValueEqual(io.github.izakyl.folkways.plugins.person.look.ResidentMolang.FOOD_LEVEL
+                .value(observer, 0, 0, 0), 6.0, "the inclusive <= 6 expression threshold can activate");
+            meal.eat();
+            meal.living.tick(helper.getLevel().getServer());
+            observer.getEntityData().assignValues(body.getEntityData().packDirty());
+            helper.assertValueEqual(observer.foodLevel(), 11.0F, "eating bread updates the same synced hunger");
+            helper.assertTrue(io.github.izakyl.folkways.plugins.person.look.ResidentMolang.FOOD_LEVEL
+                .value(observer, 0, 0, 0) > 6, "the normal face returns after a meal");
+            body.foodLevel(-5);
+            helper.assertValueEqual(body.foodLevel(), 0.0F, "presentation hunger is clamped at zero");
+            body.foodLevel(30);
+            helper.assertValueEqual(body.foodLevel(), 20.0F, "presentation hunger is clamped at twenty");
+        }
+        helper.succeed();
+    }
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(LivingEatingGameTests.class);

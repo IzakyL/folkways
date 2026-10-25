@@ -6,10 +6,15 @@ import io.github.izakyl.folkways.core.api.colony.Holding;
 import io.github.izakyl.folkways.core.api.colony.Release;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
+import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.FrontView;
 import io.github.izakyl.folkways.front.api.Fronts;
+import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.engine.Enrollments;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,6 +30,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 // What the book draws on a colony: the areas and lines it holds for the plugins that drew them, and the settings
@@ -39,6 +45,10 @@ public final class ColonyFront implements FrontView {
 
     private static final Map<UUID, ColonyFront> HELD = new ConcurrentHashMap<>();
 
+    private static final String TAG_TOOL_VERSION = "toolVersion";
+
+    private int toolVersion = 1;
+    private volatile KitRules.Snapshot toolRules;
     private final Colony colony;
     private final Map<UUID, ColonySettings> drawn = new LinkedHashMap<>();
     private final Map<ResourceLocation, ColonySettings> settings = new LinkedHashMap<>();
@@ -185,17 +195,36 @@ public final class ColonyFront implements FrontView {
         if (held == null) {
             return false;
         }
-        ColonySettings.Value standing = held.valueOf(key).orElse(null);
+        ColonySettings.Value standing = held.conformedTo(ColonySchemas.of(scope)).valueOf(key).orElse(null);
         if (standing == null || standing.getClass() != value.getClass()) {
             return false;
         }
-        ColonySettings next = held.with(key, value).conformedTo(ColonySchemas.of(scope));
+        ColonySettings next = ColonySchemas.conform(scope, held.with(key, value));
         if (next.equals(held)) {
             return false;
         }
         settings.put(scope, next);
+        toolRules = null;
         write();
         return true;
+    }
+
+    public static void toolsReloaded() {
+        HELD.values().forEach(front -> front.toolRules = null);
+    }
+
+    public KitRules.Snapshot toolRules() {
+        if (toolRules == null) {
+            Map<ResourceLocation, Set<Item>> allowed = new LinkedHashMap<>();
+            for (var vocation : Vocations.all()) {
+                ColonySettings effective = settings(vocation.id()).conformedTo(
+                    new Schema(List.of(CoreSettings.tool(vocation))));
+                allowed.put(vocation.id(), effective.items("tool")
+                    .map(Goods::members).orElse(Set.of()));
+            }
+            toolRules = new KitRules.Snapshot(allowed);
+        }
+        return toolRules;
     }
 
     private void write() {
@@ -204,7 +233,7 @@ public final class ColonyFront implements FrontView {
     }
 
     private CompoundTag save() {
-        Writer writer = Writer.of();
+        Writer writer = Writer.of().integer(TAG_TOOL_VERSION, toolVersion);
         Writer byHolding = writer.child(TAG_DRAWN);
         drawn.forEach((id, held) -> byHolding.blob(id.toString(), held.save()));
         Writer scopes = writer.child(TAG_SETTINGS);
@@ -233,11 +262,33 @@ public final class ColonyFront implements FrontView {
                         ? loaded.conformedTo(ColonySchemas.ofDelegation(delegation)) : loaded));
             }
         });
-        reader.child(TAG_SETTINGS).ifPresent(scopes -> front.settings.replaceAll(
-            (scope, byDefault) -> scopes.child(scope.toString())
-                .map(ColonySettings::load)
-                .map(loaded -> loaded.conformedTo(ColonySchemas.of(scope)))
-                .orElse(byDefault)));
+        Map<ResourceLocation, ColonySettings> loaded = new LinkedHashMap<>();
+        reader.child(TAG_SETTINGS).ifPresent(scopes -> {
+            for (String key : scopes.keys()) {
+                ResourceLocation scope = ResourceLocation.tryParse(key);
+                if (scope != null) {
+                    scopes.child(key).map(ColonySettings::load).ifPresent(value -> loaded.put(scope, value));
+                }
+            }
+        });
+        front.toolVersion = reader.integer(TAG_TOOL_VERSION).orElse(0);
+        if (front.toolVersion < 1) {
+            var legacy = loaded.getOrDefault(CoreSettings.CORE,
+                ColonySettings.empty()).valueOf("tool");
+            if (legacy.orElse(null) instanceof ColonySettings.Value.Items tools
+                    && !Set.copyOf(tools.value()).equals(CoreSettings.legacyKit())) {
+                for (var vocation : Vocations.all()) {
+                    ColonySettings held = loaded.getOrDefault(vocation.id(), ColonySettings.empty());
+                    if (held.valueOf("tool").isEmpty()) {
+                        loaded.put(vocation.id(), held.with("tool", tools));
+                    }
+                }
+            }
+            front.toolVersion = 1;
+        }
+        loaded.forEach((scope, held) -> front.settings.put(scope, ColonySchemas.conform(scope, held)));
+        // Keep the migration marker and unknown plugin scopes before another save can reload them.
+        front.write();
         return front;
     }
 }

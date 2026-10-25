@@ -82,9 +82,9 @@ public final class PatrolContent {
     }
 
     public static void declare(Declaring declaring) {
-        declaring.vocation(SPEC);
-        CoreSettings.defaultTool(ItemSpec.of(ResourceLocation.withDefaultNamespace("bow")));
-        CoreSettings.defaultTool(ItemSpec.of(ResourceLocation.withDefaultNamespace("crossbow")));
+        declaring.vocation(SPEC.ordered(600));
+        CoreSettings.defaultTool(VOCATION, ItemSpec.of(ResourceLocation.withDefaultNamespace("bow")));
+        CoreSettings.defaultTool(VOCATION, ItemSpec.of(ResourceLocation.withDefaultNamespace("crossbow")));
         KitRules.supplyPolicy(ID, (colony, body) -> !(body.mob() instanceof ResidentEntity person) || !person.hasWeaponSession());
         PackKeeps.add((colony, body) -> suppliesOf(colony)
             .map(supplies -> supplies.keeps(body)).orElse(List.of()));

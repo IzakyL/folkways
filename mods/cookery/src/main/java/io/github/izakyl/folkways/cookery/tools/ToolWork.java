@@ -68,8 +68,21 @@ final class ToolWork implements Node, Workload.Within {
     }
 
     ServerLevel level() { return level; }
-    List<ItemSpec> families() { return families; }
+    // Replenishment follows the current list while a task waits to borrow.
+    List<ItemSpec> families() { return allowed(); }
     boolean needsTools() { return !workDone; }
+
+    private List<ItemSpec> allowed() {
+        List<ItemSpec> allowed = new ArrayList<>();
+        for (ItemSpec family : declared) {
+            Optional<ItemSpec> choice = service.stock.allowed(spec.vocation(), family);
+            if (choice.isEmpty()) {
+                return List.of();
+            }
+            allowed.add(choice.get());
+        }
+        return List.copyOf(allowed);
+    }
 
     @Override
     public Optional<UUID> worker() { return borrower == null ? original.worker() : Optional.of(borrower); }
@@ -81,15 +94,11 @@ final class ToolWork implements Node, Workload.Within {
             return refused;
         }
         this.level = level;
-        List<ItemSpec> allowed = new ArrayList<>();
-        for (ItemSpec family : declared) {
-            Optional<ItemSpec> choice = service.stock.allowed(family);
-            if (choice.isEmpty()) {
-                return Optional.of(CookeryRefusal.NOTHING_TO_WORK_WITH);
-            }
-            allowed.add(choice.get());
+        List<ItemSpec> allowed = allowed();
+        if (allowed.isEmpty()) {
+            return Optional.of(CookeryRefusal.NOTHING_TO_WORK_WITH);
         }
-        families = List.copyOf(allowed);
+        families = allowed;
         service.started(this);
         return Optional.empty();
     }
@@ -100,6 +109,13 @@ final class ToolWork implements Node, Workload.Within {
         if (workDone) return true;
         if (!original.ready(level)) {
             return false;
+        }
+        if (!started && loans.isEmpty()) {
+            List<ItemSpec> allowed = allowed();
+            if (allowed.isEmpty()) {
+                return false;
+            }
+            families = allowed;
         }
         for (ItemSpec family : families) {
             var state = service.pool.request(service.colony.id(), id(), family, service.stock.read(level, family).inventory()).status();
@@ -140,7 +156,14 @@ final class ToolWork implements Node, Workload.Within {
             complete = true;
             return LEAVE;
         }
-        if (!started) {
+        if (!started && !workDone && !loans.keySet().containsAll(families) && allowed().isEmpty()) {
+            failure = CookeryRefusal.NOTHING_TO_WORK_WITH;
+            workDone = true;
+        }
+        if (!started && !workDone) {
+            if (loans.isEmpty()) {
+                families = allowed();
+            }
             for (ItemSpec family : families) {
                 if (loans.containsKey(family)) {
                     continue;
@@ -160,7 +183,7 @@ final class ToolWork implements Node, Workload.Within {
                 }
                 borrower = who.resident().id();
                 loans.put(family, lease);
-                return new Turn.Piece(new ToolAction.Borrow(service, lease, source));
+                return new Turn.Piece(new ToolAction.Borrow(service, lease, source, spec.vocation()));
             }
             started = true;
             service.protect(id(), who.resident().id(), families);

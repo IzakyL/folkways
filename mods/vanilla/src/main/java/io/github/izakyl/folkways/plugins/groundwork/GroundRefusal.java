@@ -5,5 +5,7 @@ import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 public enum GroundRefusal implements RefusalKind.Named {
 
     NOTHING_TO_WORK,
-    NOTHING_TO_LAY;
+    INVALID_FILL,
+    ORDER_TOO_LARGE,
+    ORDER_UNAVAILABLE;
 }
