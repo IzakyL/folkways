@@ -2,7 +2,7 @@
 
 [架构说明](architecture.md) · [English](../en/combat-architecture.md)
 
-本增量从战斗初稿 `e40ebc7` 续作，当前已合入 master `7cf7259`。已提供可配置敌意、居民自卫与逃跑、服务端单人命令、实际 UnitGroup、编队巡逻，以及真实近战、弓和弩会话。可选 War 模块现提供框选与快捷编队输入；袭击、战略 AI 和枪械兼容仍未实现。
+本增量从战斗初稿 `e40ebc7` 续作，已整合 master `e70e8f18` 的职业工具配置、居民让行和模型状态更新。已提供可配置敌意、居民自卫与逃跑、服务端单人命令、实际 UnitGroup、编队巡逻，以及真实近战、弓和弩会话。可选 War 模块提供框选与快捷编队输入；袭击、战略 AI 和枪械兼容仍未实现。
 
 ## 模块边界
 
@@ -14,6 +14,8 @@
 | 独立枪械扩展，未来 | 通过 Vanilla 契约调用 TaCZ、Point Blank 各自的原生逻辑                     |
 
 Core、Vanilla 不依赖 War 或枪械模组。Create、Cookery、Modular Golems 保持独立扩展。
+
+对应源码边界如下：`mods/core` 的 `core.api`、`core.engine` 管通用控制权、调度与物品保护；`mods/vanilla` 的 `plugins.combat` 管命令、UnitGroup、武器和支援，`plugins.person.equipment` 管居民配装。`mods/war` 的 `war` 包只将 V 界面选择与鼠标输入提交给 Vanilla 的服务端接口，不直接导航或转移装备。具体 Epic Fight 桥接从本版拆出，在独立后续模块评审；通用 `WeaponAdapter`、`WeaponSession`、`CombatMotions` 及 Core `BodyActions` 留在上述基础模块。
 
 ## P0/P1：日常敌对与防御
 
@@ -260,7 +262,7 @@ Core 的 `PersonalItems` 在真实 ItemStack 的自定义数据中记录居民�
 
 `Equipment.locked/lock/manual` 提供通用持久锁与自动穿戴记账交接。Vanilla 的 `ResidentEquipment.read/act` 负责具体配装及交换，`assigned` 指向真实主手指定物：空闲时仍在 Pack，战斗时由独占 WeaponSession 移至主手，当前工作展示仅供查看。手动换装默认锁定；损坏后保持空锁槽，不自动挑另一件。解锁主手允许旧的自动武器选择与补给推导，包括本人的备用弓弩，但备用物仍受个人所有权保护。没有单独的免费修理或损坏替换。
 
-`WeaponAdapter.supportsAssignment/openAssigned` 是默认拒绝的精确指定扩展，原有 `open(worker)` 保留二进制入口。原版及独立 Epic Fight 适配器支持精确指定；旧插件未经适配不能重新扫描并替换指定物。Epic Fight 只借出被指定的真实栈，不以另一把同类武器替代。
+`WeaponAdapter.supportsAssignment/openAssigned` 是默认拒绝的精确指定扩展，原有 `open(worker)` 保留二进制入口。原版适配器支持精确指定；旧插件未经适配不能重新扫描并替换指定物。可选武器模块也只能借出被指定的真实栈，不能以另一把同类武器替代。
 
 - 装备动作携带居民 UUID 和一次性服务端快照票据。服务端重新检查聚落权限、加载与存活、控制归属、菜单和完整物品状态；重复、陈旧或跨居民请求拒绝。
 - 玩家物品交付及未标记包内物品的首次认领要求同空间、六格内。远程仅能使用该居民已有的可用个人物品。任务借用及活动任务中的未标记货物只读；借衣占用的原生槽也不能取走或锁定。
@@ -281,11 +283,11 @@ Core 的 `PersonalItems` 在真实 ItemStack 的自定义数据中记录居民�
 - 小队在有效补给借用期间暂停路线推进、驻留、掉队恢复与计时；已完成的单点也不把领取成员误判成卡住。归位后重新完整停留二十 tick 才继续，改令先撤销借用，不吞掉新命令。
 - 保存模板、目标与未完成补给意图，不保存活跃节点、库存预留或武器会话。重新加载后重建请求并检查实体与权限。批量结果绑定本次被接受的目标身份与代次，实时反映个人状态和剩余缺口；未接受者保持本次失败，后续改令明确显示替换。预览标为上次库存快照，普通同步不反复扫描仓库。
 
-### 盾牌与 Epic Fight
+### 盾牌与可选动作扩展
 
 `ResidentShields.guard/lower` 只使用真实副手及原版格挡路径，保留正面方向、五 tick 起盾延迟、穿透与伤害绕过规则。真实伤害消耗盾耐久，破盾只消耗一次；斧破盾禁用一百 tick，冷却可保存并同步。近战没有可用盾时沿用十 tick 攻击；起盾成功的攻击固定为二十 tick，前十四 tick 防守、最后五 tick 收盾、第二十 tick 命中，途中损坏或禁盾不提前命中。弓弩使用主手期间收盾，不同时拉弓和格挡。
 
-独立 `mods/epicfite`（模组 ID `folkways_epicfight`）接入 Epic Fight 21.17.3.1 至 21.18 之前版本。精确配装走实际选中栈；攻击伤害由真实动画碰撞产生，每次碰撞重查指定目标的即时授权、身份、距离和视线。持盾攻击有可撤销的六 tick 举盾准备期，期间 FIRING 保活但不授权碰撞，收盾后才启动动画；无盾保持原动画时序。停止、失权、保存、卸载或死亡撤销待执行攻击并幂等返还武器。玩家与其他居民不因显式攻击授权而成为可伤害目标。
+第一版只交付原版武器与盾牌。Epic Fight 的具体动画、碰撞和模型桥接在独立后续 PR 评审，不包含在本版构建。Core、Vanilla 均不依赖该模组；公共武器及动作接口保留，供后续桥接以独立模块接入。
 
 Core `BodyActions` 允许独立动画扩展暂停普通身体动作，但先处理撤销和清理，避免眩晕冻结借还。`WeaponSession.defeatedTarget` 与公开的巡逻 `StrikeNode` 结算动画帧间的真实击杀，最多奖励一次；`acceptsBarehanded` 保留可用的原生空手动画入口。
 
@@ -295,7 +297,7 @@ Core `BodyActions` 允许独立动画扩展暂停普通身体动作，但先处�
 
 健康居民也会识别近距苦力怕：普通六格、点燃或膨胀八格、闪电苦力怕十格。`CombatEvasion` 最多试十二条候选路径，`EvasionNode` 由当前 BodyRunner 执行一次最多一百 tick 的退位，不替换原命令。紧急避爆可在原站位十六格局部域内退让，普通风筝仍十二格；失败不转入新的无界随机逃离，原有受击、火焰恐惧保留。移动、撤退和新命令撤销旧避让。第一版风筝是“退位—停步射击—逼近再退”，不是移动射击；武器射程不足或无路时不保证击杀。
 
-`CombatMotions` 是 Vanilla 的可选原生动作接口，独占会话由当前节点打开和关闭。Epic Fight 模块依据固定版源码使用四向原生 STEP 的位移及回避窗口，冷却四十 tick，动作最多二十 tick、三格；不自造无敌。逐帧检查地面、墙体、悬崖、加载范围、空间、即时授权和局部域，无安全动作就沿已有导航退位。冲刺在该节点的现有路径上使用真实 sprint 属性，原生冲刺窗口二十 tick；不增加另一个 AI Goal。取消、失权、受击硬直、存档和卸载先回收动作及临时尺寸，再允许后续控制。此为有界居民决策，不是调用仅适用于玩家的 DodgeSkill。
+`CombatMotions` 是 Vanilla 的可选原生动作接口，独占会话由当前节点打开和关闭。扩展必须逐帧检查地面、墙体、悬崖、加载范围、空间、即时授权和局部域；无安全动作就沿已有导航退位。取消、失权、存档和卸载须先回收动作及临时状态，再允许后续控制，不得增加第二个导航者或后台攻击 Goal。本版不注册第三方动作适配器，也不宣称史诗战斗闪避或动画已交付。
 
 ### 通用弹药与脱战恢复
 
@@ -325,7 +327,7 @@ Core `BodyActions` 允许独立动画扩展暂停普通身体动作，但先处�
 
 未锁主手先选可用远程，再选近战，同类按估算持续单体 DPS 排序，斧头参与。评分使用实际属性及已实现的攻击／装填周期，包含原生锋利、力量和快速装填，不虚算未知目标的亡灵杀手、节肢杀手或群伤收益。手动锁定仍权威，包括锁空或暂不可用。装载弹药必须真实；会话精确借用选中物，不复制替代。空查询不缓存，避免当刻补入武器仍被误报无武器。
 
-原生无盾近战周期为 `max(10, ceil(20 / 攻速))` tick；有盾至少 20 tick，保留末 5 tick 收盾窗口。Epic Fight 评分是估值，不保证任意连段的实际最优 DPS。玩家命令行进使用原执行器的 1.3 步速，包括攻击接近和编队移动；后续普通劳动建立自己的正常步速行程。独立 RTS 审计在修正借物完成、来源与弹药储备后接受这些契约，静态批准与运行、客户端验收分开记录。
+原生无盾近战周期为 `max(10, ceil(20 / 攻速))` tick；有盾至少 20 tick，保留末 5 tick 收盾窗口。武器评分依据已实现的时序与伤害，扩展须自行提供估值。玩家命令行进使用原执行器的 1.3 步速，包括攻击接近和编队移动；后续普通劳动建立自己的正常步速行程。独立 RTS 审计在修正借物完成、来源与弹药储备后接受这些契约，静态批准与运行、客户端验收分开记录。
 
 ### 编队行进复审：后续设计
 
@@ -340,7 +342,6 @@ Core `BodyActions` 允许独立动画扩展暂停普通身体动作，但先处�
 ./gradlew -PgameTestMod=vanilla runGameTestServer
 ./gradlew -PcookeryTests=true -PgameTestMod=vanilla runGameTestServer
 ./gradlew -PgameTestMod=core runGameTestServer
-./gradlew -PepicfightTests=true -PgameTestMod=epicfite runGameTestServer
 npm run test:unit
 npm run typecheck
 npm run test:e2e -- tests/e2e/native-hostility.spec.ts tests/e2e/resident-commands.spec.ts tests/e2e/combat-hostility-policy.spec.ts tests/e2e/formation-patrol.spec.ts tests/e2e/weapon-sessions.spec.ts --workers=1

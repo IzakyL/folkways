@@ -2,18 +2,20 @@
 
 [Architecture](architecture.md) · [简体中文](../zh-CN/combat-architecture.md)
 
-This increment continues draft e40ebc7 and now incorporates master 7cf7259. It provides configurable hostility, defence and escape, server-side orders, actual groups, formation patrols and real melee, bow and crossbow sessions. Optional War now provides selection and shortcut inputs; raids, strategic AI and gun integrations remain unimplemented.
+This increment continues draft e40ebc7 and incorporates master e70e8f18's per-vocation tool configuration, resident traffic and model-state updates. It provides configurable hostility, defence and escape, server-side orders, actual groups, formation patrols and real melee, bow and crossbow sessions. Optional War provides selection and shortcut inputs; raids, strategic AI and gun integrations remain unimplemented.
 
 ## Module ownership
 
-| Module                            | Responsibility                                                                                           |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Core                              | Residents, labour, item ownership, lifecycle, general travel and exclusive execution                     |
-| Vanilla                           | Everyday hostility, defence, patrol, orders, actual groups, placement, movement and weapon contracts     |
-| War                               | RTS selection, shortcut sets, pointer orders and route drafts; raids and strategic AI remain future work |
-| Separate gun integrations, future | Native TaCZ or Point Blank execution through Vanilla contracts                                           |
+| Module                            | Responsibility                                                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Core                              | Residents, labour, item ownership, lifecycle, general travel and exclusive execution                               |
+| Vanilla                           | Everyday hostility, defence, patrol, orders, actual groups, placement, movement and weapon contracts               |
+| War                               | RTS selection, shortcut sets, pointer orders and immediate route queues; raids and strategic AI remain future work |
+| Separate gun integrations, future | Native TaCZ or Point Blank execution through Vanilla contracts                                                     |
 
 Core and Vanilla require neither War nor gun mods. Create, Cookery and Modular Golems retain independent extensions.
+
+In source, `mods/core` owns generic control, scheduling and item protection through `core.api` and `core.engine`. Vanilla's `plugins.combat` owns commands, UnitGroups, weapons and support; `plugins.person.equipment` owns resident outfits. The `war` package in `mods/war` submits V-view selection and pointer intent to Vanilla's server interfaces without directly navigating residents or moving equipment. Concrete Epic Fight integration is split into a separate follow-up module; generic `WeaponAdapter`, `WeaponSession`, `CombatMotions` and Core `BodyActions` remain in the foundation.
 
 ## P0/P1: hostility and defence
 
@@ -250,7 +252,7 @@ Core `PersonalItems` records the resident and purpose on the actual ItemStack's 
 
 `Equipment.locked/lock/manual` supplies persistent generic locks and automatic clothing bookkeeping handoff. Vanilla `ResidentEquipment.read/act` owns equipment rules and exchanges. `assigned` references the physical designated weapon: it stays in Pack while idle and moves into the exclusive WeaponSession hand during combat; the working hand presentation is read-only. Manual equipment defaults to locked. Breakage leaves an empty locked slot rather than selecting another item. Unlocking permits existing automatic weapon selection and inferred supplies, including a personal spare bow, while retaining ownership protection. No free repair or breakage replacement is introduced.
 
-`WeaponAdapter.supportsAssignment/openAssigned` adds an opt-in exact assignment contract, defaulting to refusal while retaining the binary entry point `open(worker)`. Native and independent Epic Fight adapters support exact selection. An unadapted plugin cannot rescan and substitute another assigned item. Epic Fight borrows the designated physical stack rather than another weapon of its type.
+`WeaponAdapter.supportsAssignment/openAssigned` adds an opt-in exact assignment contract, defaulting to refusal while retaining the binary entry point `open(worker)`. Native adapters support exact selection. An unadapted plugin cannot rescan and substitute another assigned item. Optional weapon modules must also borrow the designated physical stack rather than another weapon of its type.
 
 - Requests carry a resident UUID and a single-use server snapshot ticket. The server rechecks colony authority, life and loading, control ownership, menu and complete inventory state. Replays, stale requests and different residents are rejected.
 - Player transfers and first claiming unmarked carried items require the same space within six blocks. Remote changes use only that resident's available personal items. Borrowed goods and unmarked cargo during an active task are read-only, including clothing already occupying native slots.
@@ -271,11 +273,11 @@ The equipment area has separate manual and loadout tabs, without enlarging the V
 - Squads pause route advancement, dwell, blocked-member recovery and timing during a valid refill loan, including completed single-point routes. A fresh twenty-tick assembled dwell follows return. Replacement commands invalidate the loan before this pause is considered.
 - Save templates, goals and unfinished request intentions, without live nodes, reservations or weapon sessions. Loading reconstructs and validates requests. Batch results bind to the goal identity and revision accepted by that operation and show current status and gaps. Rejected members retain that operation's failure; later changes explicitly show replacement. Previews are identified stock snapshots, and normal sync does not repeatedly scan warehouses.
 
-### Shields and Epic Fight
+### Shields and optional action extensions
 
 `ResidentShields.guard/lower` uses the real offhand and native blocking path, preserving direction, the five-tick raise delay, piercing and bypass rules. Real blocking consumes durability; breakage consumes the shield once. Axe disable lasts 100 ticks and is saved and synchronized. Melee without an available shield retains its ten-tick attack. A successful raise fixes that attack at twenty ticks: defense through tick fourteen, shield down for the final five ticks, damage at tick twenty. Breakage or disable cannot advance that pending hit. Bows and crossbows retain exclusive main-hand use with the shield lowered.
 
-Independent `mods/epicfite` (mod ID `folkways_epicfight`) targets Epic Fight 21.17.3.1 up to but excluding 21.18. Exact equipment uses the selected real stack. Native animation collisions cause damage and recheck live explicit-target authority, identity, range and sight. A shield gives a cancellable six-tick preparation window: FIRING keeps the work node alive while collision remains unauthorized. The shield lowers before animation starts; unshielded timing is unchanged. Stop, authority loss, saving, unloading and death revoke queued attacks and return the weapon idempotently. Explicit targeting does not permit damage to players or other residents.
+This first delivery includes native weapons and shields. Concrete Epic Fight animation, collision and model integration belongs to a separate follow-up PR and is excluded from this build. Neither Core nor Vanilla depends on that mod; public weapon and action interfaces remain available for an independent bridge.
 
 Core `BodyActions` lets independent animation extensions pause ordinary body actions after revocation and cleanup, so stun cannot freeze a loan's return. `WeaponSession.defeatedTarget` and public patrol `StrikeNode` settle real animation-frame kills once. `acceptsBarehanded` retains the native unarmed animation entry point.
 
@@ -285,7 +287,7 @@ Patrol discovery starts at twenty-four blocks plus effects. Autonomous combat po
 
 Healthy residents recognize nearby creepers: six blocks ordinarily, eight when ignited or swelling, and ten when charged. `CombatEvasion` tries at most twelve candidate paths; the current BodyRunner owns one `EvasionNode` for at most 100 ticks without replacing the command. Emergency explosive avoidance may retreat within a sixteen-block local station domain; ordinary kiting retains twelve. A failed proposal does not enter a new unbounded random escape, while original damage/fire fear remains. Movement, retreat and replacement commands revoke old actions. Kiting is retreat, stop, shoot, and retreat again when approached, without moving fire or a guaranteed kill when range or terrain is insufficient.
 
-Vanilla `CombatMotions` is an optional native-action interface whose exclusive session belongs to the current node. The Epic Fight bridge uses native directional STEP movement and its native evasion window, with a forty-tick cooldown and at most twenty ticks/three blocks per action. It invents no invulnerability. Each frame checks solid footing, walls, ledges, loading, realm, live authority and the local domain. If unavailable, the same node uses its existing navigator. Sprint applies actual native speed to that path for a twenty-tick window, without another AI goal. Cancellation, authority loss, hard stun, saving and unloading reclaim the action and temporary dimensions. These are bounded resident decisions rather than the player-only DodgeSkill.
+Vanilla `CombatMotions` is an optional native-action interface whose exclusive session belongs to the current node. Extensions must check solid footing, walls, ledges, loading, realm, live authority and the local domain each frame. If unavailable, the same node uses its existing navigator. Cancellation, authority loss, saving and unloading must reclaim actions and temporary state before another controller proceeds, without another navigator or background attack goal. This build registers no third-party action adapter and makes no claim of delivered Epic Fight dodges or animation integration.
 
 ### Generic ammunition and post-combat recovery
 
@@ -315,7 +317,7 @@ Collection uses real stock. Shortages submit ordinary finite Delivery work throu
 
 An unlocked combat hand chooses usable ranged weapons before melee, then higher estimated sustained single-target DPS; axes participate. Scores use actual attributes and implemented attack/charge cadence, including native Sharpness, Power and Quick Charge without guessing target-specific Smite/Bane or area damage. A manual lock remains authoritative, even empty or temporarily unusable. Loaded ammunition must be real. Sessions borrow the exact selected item; empty planning results are not cached, so newly supplied weapons are immediately visible.
 
-Native unshielded melee cadence is `max(10, ceil(20 / attackSpeed))` ticks. Shields retain a cycle of at least 20 ticks and their final five-tick exposure. Epic Fight scores are estimates, not guarantees about arbitrary combos. Player command travel uses a 1.3 pace through its existing runner, including attack approach and squad travel; subsequent ordinary work creates a normal-speed trip. The independent RTS audit accepted these contracts after correcting borrowed-item fulfilment, provenance and ammunition reserves. Static approval is separate from runtime and client acceptance.
+Native unshielded melee cadence is `max(10, ceil(20 / attackSpeed))` ticks. Shields retain a cycle of at least 20 ticks and their final five-tick exposure. Weapon scores describe implemented cadence and damage; extensions must provide their own estimates. Player command travel uses a 1.3 pace through its existing runner, including attack approach and squad travel; subsequent ordinary work creates a normal-speed trip. The independent RTS audit accepted these contracts after correcting borrowed-item fulfilment, provenance and ammunition reserves. Static approval is separate from runtime and client acceptance.
 
 ### Formation transit audit: follow-up design
 
@@ -330,7 +332,6 @@ The reviewed follow-up keeps stable individual navigation and shared route inten
 ./gradlew -PgameTestMod=vanilla runGameTestServer
 ./gradlew -PcookeryTests=true -PgameTestMod=vanilla runGameTestServer
 ./gradlew -PgameTestMod=core runGameTestServer
-./gradlew -PepicfightTests=true -PgameTestMod=epicfite runGameTestServer
 npm run test:unit
 npm run typecheck
 npm run test:e2e -- tests/e2e/native-hostility.spec.ts tests/e2e/resident-commands.spec.ts tests/e2e/combat-hostility-policy.spec.ts tests/e2e/formation-patrol.spec.ts tests/e2e/weapon-sessions.spec.ts --workers=1

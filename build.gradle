@@ -11,23 +11,21 @@ def modProjects = [
     folkways_modulargolems: ":modulargolems",
     folkways_cookery: ":cookery",
     folkways_war: ":war",
-    folkways_epicfight: ":epicfite",
 ]
 modProjects.values().each { evaluationDependsOn(it) }
 
 // Optional integrations enter the test server only when their fixtures are requested.
 def modularGolemsTests = providers.gradleProperty("modularGolemsTests").map { it.toBoolean() }.getOrElse(false)
 def cookeryTests = providers.gradleProperty("cookeryTests").map { it.toBoolean() }.getOrElse(false)
-def epicfightTests = providers.gradleProperty("epicfightTests").map { it.toBoolean() }.getOrElse(false)
 def tavernTests = providers.gradleProperty("tavernTests").map { it.toBoolean() }.getOrElse(false)
 if (tavernTests && !cookeryTests) {
     throw new GradleException("Tavern GameTests require -PcookeryTests=true")
 }
 def testedMods = modProjects.findAll { id, path -> (path != ":modulargolems" || modularGolemsTests)
-    && (path != ":cookery" || cookeryTests) && (path != ":epicfite" || epicfightTests) }
+    && (path != ":cookery" || cookeryTests) }
 def gameTestMod = providers.gradleProperty("gameTestMod").getOrElse("")
-if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "modulargolems", "war", "epicfite"])) {
-    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create, cookery, modulargolems, war or epicfite")
+if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "modulargolems", "war"])) {
+    throw new GradleException("Unknown GameTest mod '${gameTestMod}'; choose core, vanilla, create, cookery, modulargolems or war")
 }
 if (gameTestMod == "modulargolems" && !modularGolemsTests) {
     throw new GradleException("Modular Golems GameTests require -PmodularGolemsTests=true")
@@ -35,12 +33,9 @@ if (gameTestMod == "modulargolems" && !modularGolemsTests) {
 if (gameTestMod == "cookery" && !cookeryTests) {
     throw new GradleException("Cookery GameTests require -PcookeryTests=true")
 }
-if (gameTestMod == "epicfite" && !epicfightTests) {
-    throw new GradleException("Epic Fight GameTests require -PepicfightTests=true")
-}
 def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gameTestMod}" }
 // Every installed-mod combination owns its world, including Tavern's extra registries.
-def gameTestSuites = [cookery: cookeryTests, modulargolems: modularGolemsTests, tavern: tavernTests, epicfight: epicfightTests]
+def gameTestSuites = [cookery: cookeryTests, modulargolems: modularGolemsTests, tavern: tavernTests]
     .findAll { suite, enabled -> enabled }.keySet().join("-") ?: "base"
 def gameTestDirectory = "run/gametest/${gameTestMod ?: 'all'}/${gameTestSuites}"
 
@@ -117,7 +112,6 @@ dependencies {
     if (!gameTestMod || gameTestMod == "vanilla") { runtimeOnly core.lib("geckolib") }
     if (cookeryTests) { runtimeOnly core.lib("kaleidoscope_cookery") }
     if (tavernTests) { runtimeOnly core.lib("kaleidoscope_tavern") }
-    if (epicfightTests) { runtimeOnly core.lib("epicfight") }
     if (modularGolemsTests) {
         runtimeOnly core.lib("modulargolems"), core.lib("l2library"), core.lib("l2core"), core.lib("l2serial")
     }
@@ -140,7 +134,8 @@ tasks.named("jar") {
 }
 
 // Every mod's jar into build/libs, where the e2e instances find them.
-def collectJars = tasks.register("collectJars", Copy) {
+// Removed optional modules must not survive as stale jars in a subsequent build's bundle.
+def collectJars = tasks.register("collectJars", Sync) {
     modProjects.values().each { path -> from(project(path).tasks.named("jar")) }
     into layout.buildDirectory.dir("libs")
 }
