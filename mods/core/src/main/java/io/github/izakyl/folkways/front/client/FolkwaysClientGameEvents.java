@@ -201,6 +201,9 @@ public final class FolkwaysClientGameEvents {
     // The cards go down first: the translucent fills drawn after them write depth, and would hide a card behind them.
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
+        if (ShadowPass.active()) {
+            return;
+        }
         ColonyHighlightState.queueCards(event);
         LookLineCards.render(event);
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
