@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.epicfight;
 import io.github.izakyl.folkways.core.api.resident.body.BodyActions;
 import io.github.izakyl.folkways.epicfight.client.EpicFightClient;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
+import io.github.izakyl.folkways.plugins.combat.motion.CombatMotions;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import net.minecraft.core.Holder;
@@ -40,6 +41,7 @@ public final class FolkwaysEpicFight {
         event.enqueueWork(() -> {
             Armatures.registerEntityTypeArmature(PersonBody.RESIDENT.get(), Armatures.BIPED);
             Weapons.register(ResourceLocation.fromNamespaceAndPath(ID, "melee"), EpicFightWeaponAdapter.INSTANCE);
+            CombatMotions.register(ResourceLocation.fromNamespaceAndPath(ID, "movement"), EpicFightMotionAdapter.INSTANCE);
             BodyActions.register(ResourceLocation.fromNamespaceAndPath(ID, "epicfight_labor"), body -> {
                 if (body instanceof ResidentEntity resident) {
                     ResidentEpicFightPatch patch = ResidentEpicFightPatch.of(resident);

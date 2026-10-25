@@ -98,7 +98,7 @@ public final class EpicFightWeaponAdapter implements WeaponAdapter {
             return null;
         }
         ResidentEpicFightPatch patch = ResidentEpicFightPatch.of(resident);
-        return patch == null || patch.uninitialized() || patch.blocksLabor() ? null : patch;
+        return patch == null || patch.uninitialized() || patch.hasMotion() || patch.blocksLabor() ? null : patch;
     }
 
     private static Optional<WeaponSession> borrow(Worker worker, ResidentEntity resident,

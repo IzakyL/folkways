@@ -11,6 +11,8 @@ import yesman.epicfight.api.animation.Animator;
 import yesman.epicfight.api.animation.AnimationManager.AnimationAccessor;
 import yesman.epicfight.api.animation.LivingMotions;
 import yesman.epicfight.api.animation.types.AttackAnimation;
+import yesman.epicfight.api.animation.types.ActionAnimation;
+import yesman.epicfight.api.animation.types.DodgeAnimation;
 import yesman.epicfight.api.animation.types.StaticAnimation;
 import yesman.epicfight.api.utils.AttackResult;
 import yesman.epicfight.gameasset.Animations;
@@ -27,6 +29,8 @@ public final class ResidentEpicFightPatch extends HumanoidMobPatch<ResidentEntit
     private static final float RUNNING_STRIDE = 0.85F;
     private static volatile Predicate<ResidentEntity> rendererEligibility = resident -> true;
     private EpicFightWeaponSession strike;
+    private EpicFightMotionSession motion;
+    private long nextDodge;
 
     public ResidentEpicFightPatch(ResidentEntity original) {
         super(original, Factions.VILLAGER);
@@ -114,9 +118,30 @@ public final class ResidentEpicFightPatch extends HumanoidMobPatch<ResidentEntit
 
     @Override
     public void preTick() {
+        if (!isLogicalClient() && motion != null) { motion.beforeAnimationTick(); }
         if (!isLogicalClient() && strike != null) { strike.beforeAnimationTick(); }
         super.preTick();
     }
+
+    @Override
+    public boolean shouldMoveOnCurrentSide(ActionAnimation action) {
+        // A delayed link frame must not continue moving a resident after its work lease was revoked.
+        if (action instanceof DodgeAnimation) {
+            return !isLogicalClient() && motion != null && motion.allowsRootMotion(action);
+        }
+        return super.shouldMoveOnCurrentSide(action);
+    }
+
+    boolean hasMotion() { return motion != null; }
+    boolean hasStrike() { return strike != null; }
+    long nextDodgeAt() { return nextDodge; }
+    void nextDodgeAt(long value) { nextDodge = value; }
+    boolean ownsMotion(EpicFightMotionSession session) { return motion == session; }
+    void claimMotion(EpicFightMotionSession session) {
+        if (motion != null || strike != null) throw new IllegalStateException("resident already owns an EF action");
+        motion = session;
+    }
+    void releaseMotion(EpicFightMotionSession session) { if (motion == session) motion = null; }
 
     @Override
     public LivingEntity getTarget() {
@@ -129,7 +154,7 @@ public final class ResidentEpicFightPatch extends HumanoidMobPatch<ResidentEntit
         if (animator == null) { return false; }
         if (isStunned()) { return true; }
         return (getEntityState().inaction() || getEntityState().movementLocked())
-            && (strike == null || !strike.playing());
+            && (strike == null || !strike.playing()) && (motion == null || !motion.playing());
     }
 
     public boolean actionOwnsPose() {
@@ -143,7 +168,7 @@ public final class ResidentEpicFightPatch extends HumanoidMobPatch<ResidentEntit
     }
 
     boolean beginStrike(EpicFightWeaponSession session) {
-        if (strike != null || blocksLabor()) { return false; }
+        if (strike != null || motion != null || blocksLabor()) { return false; }
         strike = session;
         CombatBehaviors<HumanoidMobPatch<?>> behaviors = getHoldingItemWeaponMotionBuilder().build(this);
         CombatBehaviors.Behavior<HumanoidMobPatch<?>> selected = behaviors.selectRandomBehaviorSeries();
@@ -171,6 +196,7 @@ public final class ResidentEpicFightPatch extends HumanoidMobPatch<ResidentEntit
 
     @Override
     public boolean applyStun(StunType type, float duration) {
+        if (type != StunType.NONE && motion != null) { motion.close(); }
         if (type != StunType.NONE && strike != null) { strike.stop(); }
         return super.applyStun(type, duration);
     }
