@@ -133,7 +133,7 @@ public final class SquadExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(template = "formation_long")
     public static void runnerRefusalAfterTargetEscapesPreservesTheSpecificAttackEnd(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         List<Body> people = f.people(2);
@@ -146,6 +146,10 @@ public final class SquadExecutionGameTests {
         BlockPos escaped = enemy.blockPosition().offset(65, 0, 0);
         f.level.getChunkAt(escaped);
         enemy.moveTo(escaped.getX() + .5, escaped.getY(), escaped.getZ() + .5);
+        // A FULL chunk alone need not keep its entities accessible. The longer test structure
+        // holds the escaped target in the active test area, independently of neighbouring tests.
+        helper.assertTrue(f.level.getEntity(enemy.getUUID()) == enemy,
+            "the escaped target remains loaded in the entity manager before the runner reports its failure");
         try {
             var ended = ResidentCommands.class.getDeclaredMethod("ended", ResidentCommands.Order.class, Ending.class);
             ended.setAccessible(true);
