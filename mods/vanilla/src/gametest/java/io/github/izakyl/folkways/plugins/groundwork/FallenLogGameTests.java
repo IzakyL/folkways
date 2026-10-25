@@ -91,12 +91,13 @@ public final class FallenLogGameTests {
         ColonyFront.of(colony).addZone(level, GroundworkContent.ZONE, marked, ColonySettings.empty()
             .with(GroundworkContent.CLEAR, new ColonySettings.Value.Flag(clearing))
             .with(GroundworkContent.FELL, new ColonySettings.Value.Flag(!clearing))).orElseThrow();
+        colony.hold(GroundworkContent.ID, new Held.Block(WorldPos.of(level, chest))).orElseThrow();
         colony.stores(GroundworkContent.ID, level.dimension(), List.of(WorldPos.of(level, chest)));
         var person = PersonBody.RESIDENT.get().create(level);
         person.moveTo(log.getX() + 2.5, log.getY(), log.getZ() + 1.5);
+        level.addFreshEntity(person);
         colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
         person.joinColony(colony.id());
-        level.addFreshEntity(person);
         colony.entered(person);
         var data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
         var labor = new ColonyLabor(data, level.dimension());
@@ -138,8 +139,10 @@ public final class FallenLogGameTests {
                 helper.assertTrue(level.getBlockState(cell).isAir(), "the marked log was cleared");
                 helper.assertTrue(level.getBlockState(cell.above()).isAir(), "its moss was cleared");
             }
-            helper.assertTrue(stock.countItem(block.asItem()) == length, "the logs reached colony storage");
-            helper.assertTrue(stock.countItem(Items.MOSS_CARPET) == length, "moss loot survived the support update");
+            helper.assertTrue(stock.countItem(block.asItem()) + (clearing ? person.pack().countItem(block.asItem()) : 0) == length,
+                "the logs are collected");
+            helper.assertTrue(stock.countItem(Items.MOSS_CARPET) + (clearing ? person.pack().countItem(Items.MOSS_CARPET) : 0) == length,
+                "moss loot survived the support update");
         }).thenExecute(close).thenSucceed();
     }
 
@@ -189,6 +192,7 @@ public final class FallenLogGameTests {
         var fixture = new PlanningFixture(helper);
         try {
             ColonyFront.of(colony).addZone(level, GroundworkContent.ZONE, Set.of(log), ColonySettings.empty()
+                .with(GroundworkContent.CLEAR, new ColonySettings.Value.Flag(false))
                 .with(GroundworkContent.FELL, new ColonySettings.Value.Flag(true))).orElseThrow();
             GroundPresence presence = new GroundPresence(colony);
             presence.refresh(level.getServer());
@@ -201,6 +205,40 @@ public final class FallenLogGameTests {
             helper.assertTrue(node.commit(level, fixture.worker) instanceof Outcome.Failed,
                 "newly registered decoration prevents removing its support");
             helper.assertTrue(level.getBlockState(log).is(Blocks.OAK_LOG), "the log stayed through both refusals");
+        } finally {
+            fixture.worker.body().discard();
+            colony.raze();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void decorationsPlacedAfterPlanningAreProtectedOrCollected(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos log = ground(helper);
+        place(level, log, horizontal(Blocks.OAK_LOG));
+        Colony colony = Colonies.mint(level.getServer());
+        var fixture = new PlanningFixture(helper);
+        try {
+            ColonyFront.of(colony).addZone(level, GroundworkContent.ZONE, Set.of(log), ColonySettings.empty()
+                .with(GroundworkContent.CLEAR, new ColonySettings.Value.Flag(false))
+                .with(GroundworkContent.FELL, new ColonySettings.Value.Flag(true))).orElseThrow();
+            GroundPresence presence = new GroundPresence(colony);
+            presence.refresh(level.getServer());
+            Node node = presence.goals(colony.view(level)).getFirst().nodes().getFirst();
+            node.planned(level);
+            place(level, log.above(), Blocks.MOSS_CARPET.defaultBlockState());
+            var held = colony.hold(POINTS, new Held.Point(WorldPos.of(level, log.above()))).orElseThrow();
+            helper.assertTrue(node.commit(level, fixture.worker) instanceof Outcome.Failed,
+                "a protected decoration absent from the plan prevents cutting its support");
+            helper.assertTrue(level.getBlockState(log).is(Blocks.OAK_LOG)
+                && level.getBlockState(log.above()).is(Blocks.MOSS_CARPET), "the log and new decoration stay");
+            colony.release(held.id(), io.github.izakyl.folkways.core.api.colony.Release.LET_GO);
+            Outcome.Done done = (Outcome.Done) node.commit(level, fixture.worker);
+            helper.assertTrue(level.getBlockState(log).isAir() && level.getBlockState(log.above()).isAir(),
+                "unprotected current decorations are removed before the log");
+            helper.assertTrue(done.made().stream().filter(stack -> stack.is(Items.MOSS_CARPET))
+                .mapToInt(net.minecraft.world.item.ItemStack::getCount).sum() == 1, "new moss loot survives the support update");
         } finally {
             fixture.worker.body().discard();
             colony.raze();
@@ -225,6 +263,7 @@ public final class FallenLogGameTests {
         Colony colony = Colonies.mint(level.getServer());
         try {
             ColonyFront.of(colony).addZone(level, GroundworkContent.ZONE, Set.of(log, log.south()), ColonySettings.empty()
+                .with(GroundworkContent.CLEAR, new ColonySettings.Value.Flag(false))
                 .with(GroundworkContent.FELL, new ColonySettings.Value.Flag(true))
                 .with(GroundworkContent.WEED, new ColonySettings.Value.Flag(true))).orElseThrow();
             GroundPresence presence = new GroundPresence(colony);

@@ -88,7 +88,9 @@ final class BreakNode extends GroundNode {
         if (state.getDestroySpeed(level, cell) < 0.0F || spared.test(cell, state)) {
             return refuse(GroundRefusal.NOTHING_TO_WORK);
         }
-        for (BlockPos decoration : job.canopy()) {
+        List<BlockPos> decorations = way == Way.FALLEN
+            ? new FallenLogs(level, at -> false).decorations(cell) : job.canopy();
+        for (BlockPos decoration : decorations) {
             if (!level.isLoaded(decoration) || spared.test(decoration, level.getBlockState(decoration))) {
                 return refuse(GroundRefusal.NOTHING_TO_WORK);
             }
@@ -97,7 +99,7 @@ final class BreakNode extends GroundNode {
         List<ItemStack> drops = new ArrayList<>();
         List<WorkNoise> noises = new ArrayList<>();
         // Collect decorations before removing their support, so neighbor updates cannot discard their loot.
-        for (BlockPos decoration : job.canopy()) {
+        for (BlockPos decoration : decorations) {
             BlockState plant = level.getBlockState(decoration);
             if (FallenLogs.decoration(plant)) {
                 drops.addAll(take(level, who.body(), decoration, plant, tool));
