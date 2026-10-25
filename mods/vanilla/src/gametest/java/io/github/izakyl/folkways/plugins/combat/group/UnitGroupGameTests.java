@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
@@ -100,8 +101,37 @@ public final class UnitGroupGameTests {
                 "a point command crosses ordinary uneven terrain and assembles"))
             .thenExecute(() -> {
                 helper.assertTrue(group.captain().orElseThrow().equals(click), "the click remains the squad anchor");
-                helper.assertTrue(group.destinations().containsValue(scene.at(16, 2, 8)),
-                    "a nearby slot follows the raised safe standing surface instead of rejecting the click");
+                helper.assertTrue(group.destinations().values().stream().allMatch(slot ->
+                        Footing.withFeetAt(scene.level, slot.block(scene.level))),
+                    "every chosen slot has real standing room around the raised obstacle");
+                scene.assertLine(helper, group, people);
+                group.release();
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 1200)
+    public static void clickAnchorWithOnlyOneLowCellRequiresRaisedSlotsAndPhysicalAssembly(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(4);
+        // The entire bounded slot-search area is a one-block plateau except for the authored
+        // anchor. Four residents cannot form here using only level-one standing cells.
+        for (int x = 13; x <= 19; x++) {
+            for (int z = 7; z <= 13; z++) {
+                if (x != 16 || z != 10) { helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE); }
+            }
+        }
+        WorldPos click = scene.at(16, 1, 10);
+        scene.groups.commandSelectionPoints(people, List.of(click), -1);
+        UnitGroup group = scene.groups.ofResident(people.getFirst().id()).orElseThrow();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(group.routeComplete(),
+                "the squad reaches its uneven mandatory point and completes its physical dwell; phase=" + group.phase()))
+            .thenExecute(() -> {
+                helper.assertTrue(group.captain().orElseThrow().equals(click), "the low authored anchor remains the mandatory click");
+                helper.assertValueEqual(group.destinations().values().stream()
+                    .filter(slot -> slot.cell().getY() == click.cell().getY() + 1).count(), 3L,
+                    "the three other members must use the surrounding raised standing surface");
+                helper.assertTrue(group.destinations().values().stream().allMatch(slot ->
+                        Footing.withFeetAt(scene.level, slot.block(scene.level))), "all four final slots have real standing room");
                 scene.assertLine(helper, group, people);
                 group.release();
             }).thenSucceed();

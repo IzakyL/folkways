@@ -146,7 +146,16 @@ public final class PointRouteGameTests {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people();
         for (int y = 1; y <= 3; y++) {
-            for (int z = 0; z < 22; z++) { helper.setBlock(new BlockPos(10, y, z), Blocks.STONE); }
+            // The surrounding flat GameTest world makes a single wall bypassable. Enclose
+            // the target on all four sides while keeping several safe interior assembly cells.
+            for (int z = 5; z <= 15; z++) {
+                helper.setBlock(new BlockPos(14, y, z), Blocks.STONE);
+                helper.setBlock(new BlockPos(21, y, z), Blocks.STONE);
+            }
+            for (int x = 14; x <= 21; x++) {
+                helper.setBlock(new BlockPos(x, y, 5), Blocks.STONE);
+                helper.setBlock(new BlockPos(x, y, 15), Blocks.STONE);
+            }
         }
         scene.groups.commandSelectionPoints(people, List.of(scene.at(19, 1, 10)), -1);
         UnitGroup group = scene.group();

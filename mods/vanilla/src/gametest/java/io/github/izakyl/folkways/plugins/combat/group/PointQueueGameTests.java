@@ -118,16 +118,30 @@ public final class PointQueueGameTests {
     public static void longCombatPausesTravelBudgetThenReassemblesAndResumesTheSameRoute(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<WorldPos> stops = List.of(scene.at(8, 10), scene.at(16, 10));
-        PointRoute route = new PointRoute(scene.groups, scene.people, stops, 0);
+        PointRoute route = new PointRoute(scene.groups, scene.people, stops, 0, false, true);
         UnitGroup group = scene.groups.create(scene.people);
         group.startPoints(route);
         AtomicBoolean fighting = new AtomicBoolean();
         AtomicLong budgetAtContact = new AtomicLong();
+        AtomicBoolean returning = new AtomicBoolean();
+        AtomicLong reassembledAt = new AtomicLong(Long.MIN_VALUE);
         AtomicReference<List<ResidentCommands.Order>> combatHandles = new AtomicReference<>();
         // Renew the same short combat leases used by real guards. This isolates route accounting
         // from enemy health, weapons and damage while the real command runner retains every slot.
         helper.onEachTick(() -> {
             if (fighting.get()) { scene.handles().forEach(ResidentCommands.Order::engaging); }
+            if (!returning.get()) { return; }
+            if (group.patrolStop() == 0) {
+                boolean ready = scene.people.stream().allMatch(body -> scene.commands.current(body.id())
+                    .filter(order -> order.status() == ResidentCommands.Status.HOLDING && !order.engaged()
+                        && !order.yieldingToDanger() && Reach.standingAt(body.mob().position(), order.destination().block(scene.level))).isPresent());
+                if (ready) { reassembledAt.compareAndSet(Long.MIN_VALUE, scene.level.getGameTime()); }
+                else { reassembledAt.set(Long.MIN_VALUE); }
+            } else {
+                helper.assertTrue(reassembledAt.get() != Long.MIN_VALUE
+                        && scene.level.getGameTime() - reassembledAt.get() >= 20,
+                    "leaving the mandatory stop requires twenty physical, combat-free assembly ticks after return");
+            }
         });
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(group.patrolStop() == 0 && group.phase() == UnitGroup.Phase.HOLDING,
@@ -145,16 +159,14 @@ public final class PointQueueGameTests {
                 helper.assertTrue(route.travellingTicks() <= budgetAtContact.get() + 1,
                     "active combat leases consume no route travel budget, even before nextStop resets it");
                 fighting.set(false);
+                returning.set(true);
                 Body displaced = scene.people.getLast();
                 BlockPos slot = group.destinations().get(displaced.id()).block(scene.level);
                 displaced.mob().moveTo(slot.getX() + 1.5, slot.getY(), slot.getZ() + .5);
             })
-            .thenWaitUntil(() -> helper.assertTrue(group.patrolStop() == 0 && group.phase() == UnitGroup.Phase.HOLDING,
-                "the combat lease expires and every survivor reforms before the dwell restarts"))
+            .thenWaitUntil(() -> helper.assertTrue(group.patrolStop() == 0 && reassembledAt.get() != Long.MIN_VALUE,
+                "the combat lease expires and every survivor physically reforms before the dwell completes"))
             .thenExecute(() -> scene.assertAssembled(group))
-            .thenIdle(19)
-            .thenExecute(() -> helper.assertValueEqual(group.patrolStop(), 0,
-                "combat does not skip the twenty-tick complete assembly pause"))
             .thenWaitUntil(() -> helper.assertTrue(group.patrolStop() == 1 && group.phase() == UnitGroup.Phase.HOLDING,
                 "the original route continues after a long battle without a stale travel timeout"))
             .thenExecute(() -> {
