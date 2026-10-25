@@ -129,8 +129,8 @@ for (const installed of [false, true]) test(`display search with JEC ${installed
     await world.command(server, `setblock ${commandPos(barrel)} minecraft:barrel{Items:[{Slot:0b,id:"minecraft:iron_ingot",count:13}]}`);
     expect((await optInViaBook(server, client, player, barrel, "chest")).member).toBe(true);
     await openColonyPanelViaBook(server, client, player, founded.standBlock);
-    await clickTab(client, "folkways.tab.settings");
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways.building" }, { scrollIntoView: true });
+    await clickTab(client, "folkways.page.build");
+    await clickElement(client, { id: "folkways.settings.open.tool.folkways.building.folkways.build" }, { scrollIntoView: true });
     await waitForElement(client, { id: "folkways.selector.search" });
     for (const query of ["tieding", "td", "tie锭", "@minecraft TIEDING"]) {
       await search(client, "folkways.selector.search", query);

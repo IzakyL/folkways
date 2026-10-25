@@ -10,7 +10,6 @@ import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
-import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.FrontView;
@@ -205,17 +204,6 @@ public final class ColonyFront implements FrontView {
             return false;
         }
         settings.put(scope, next);
-        toolRules = null;
-        write();
-        return true;
-    }
-
-    public boolean resetTool(Vocation vocation) {
-        ColonySettings held = settings(vocation.id());
-        if (held.valueOf(CoreSettings.TOOL_KEY).isEmpty()) {
-            return false;
-        }
-        settings.put(vocation.id(), held.without(CoreSettings.TOOL_KEY));
         toolRules = null;
         write();
         return true;

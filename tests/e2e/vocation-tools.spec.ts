@@ -33,7 +33,7 @@ return result;
 ` }),
 });
 
-test("vocation tool editors isolate lists, persist empty, and reset defaults", async ({}, testInfo) => {
+test("vocation tool editors isolate lists and persist empty", async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   ensureOut("e2e");
   const run = newRunId();
@@ -50,10 +50,10 @@ test("vocation tool editors isolate lists, persist empty, and reset defaults", a
     const founded = await foundColonyFast(server, client, grounded.name, { origin, residentCount: 1 });
     const colony = String(founded.evidence.colonyId);
     await openColonyPanelViaBook(server, client, grounded.name, founded.standBlock);
-    await clickTab(client, "folkways.tab.settings");
+    await clickTab(client, "folkways.page.build");
     const state = (reload = false) => server.run(STATE, { colony, reload });
     expect(await state()).toMatchObject({ building: false, farming: false, crafting: false });
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways.building" }, { scrollIntoView: true });
+    await clickElement(client, { id: "folkways.settings.open.tool.folkways.building.folkways.build" }, { scrollIntoView: true });
     await waitForElement(client, { id: "folkways.selector.rule_drop.0" });
     for (let rule = 0; rule < 3; rule++) {
       await clickElement(client, { id: "folkways.selector.rule_drop.0" }, { scrollIntoView: true });
@@ -61,13 +61,13 @@ test("vocation tool editors isolate lists, persist empty, and reset defaults", a
     await clickElement(client, { id: "folkways.selector.confirm" });
     await expect.poll(state).toMatchObject({ building: true, buildingRules: 0, farming: false });
     expect(await state(true)).toMatchObject({ building: true, buildingRules: 0, farming: false });
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways.farming" }, { scrollIntoView: true });
+    await clickTab(client, "folkways.page.farm");
+    await clickElement(client, { id: "folkways.settings.open.tool.folkways.farming.folkways.farming" }, { scrollIntoView: true });
     await waitForElement(client, { id: "folkways.selector.rule_drop.0" });
     await clickElement(client, { id: "folkways.selector.confirm" });
     await expect.poll(state).toMatchObject({ buildingRules: 0, farming: true, farmingRules: 1 });
-    await clickElement(client, { id: "folkways.settings.reset.tool.folkways.building" }, { scrollIntoView: true });
-    await expect.poll(state).toMatchObject({ building: false, farming: true, farmingRules: 1 });
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways.crafting" }, { scrollIntoView: true });
+    await clickTab(client, "folkways.page.wares");
+    await clickElement(client, { id: "folkways.settings.open.tool.folkways.crafting.folkways.wares" }, { scrollIntoView: true });
     await waitForElement(client, { id: "folkways.selector.confirm" });
     expect((await panelElements(client)).some(e => e.id === "folkways.selector.rule_drop.0" && e.displayed)).toBe(false);
     await clickElement(client, { id: "folkways.selector.confirm" });
@@ -75,8 +75,10 @@ test("vocation tool editors isolate lists, persist empty, and reset defaults", a
     await clickTab(client, "folkways.page.build");
     await waitForElement(client, { id: "folkways.settings.open.tool.folkways.building.folkways.build" });
     await clickElement(client, { id: "folkways.settings.open.tool.folkways.building.folkways.build" }, { scrollIntoView: true });
-    await waitForElement(client, { id: "folkways.selector.rule_drop.2" });
-    expect(await state(true)).toMatchObject({ building: false, farming: true, crafting: true });
+    await waitForElement(client, { id: "folkways.selector.confirm" });
+    expect((await panelElements(client)).some(e => e.id === "folkways.selector.rule_drop.0" && e.displayed)).toBe(false);
+    await clickElement(client, { id: "folkways.selector.confirm" });
+    expect(await state(true)).toMatchObject({ building: true, buildingRules: 0, farming: true, farmingRules: 1, crafting: true });
   } catch (error) {
     pair?.failing(error);
     throw error;

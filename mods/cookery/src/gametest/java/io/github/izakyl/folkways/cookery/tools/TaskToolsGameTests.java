@@ -125,8 +125,9 @@ public final class TaskToolsGameTests {
             front.setSetting(farming.id(), "tool", new ColonySettings.Value.Items(List.of()));
             helper.assertTrue(work.planned(rig.level).isPresent() && !work.ready(rig.level),
                 "crafting's allowed sickle cannot be borrowed for a harvesting node");
-            front.resetTool(farming);
-            helper.assertTrue(work.planned(rig.level).isEmpty() && work.ready(rig.level), "farming's own defaults allow the harvest");
+            front.setSetting(farming.id(), "tool", new ColonySettings.Value.Items(List.of(
+                ItemFilter.item(BuiltInRegistries.ITEM.getKey(sickle)))));
+            helper.assertTrue(work.planned(rig.level).isEmpty() && work.ready(rig.level), "farming's own list allows the harvest");
             rig.finish(work);
             helper.assertValueEqual(executed.get(), 1, "one farming action used the borrowed sickle");
             helper.assertValueEqual(Goods.countIn(rig.rack, Goods.specOf(sickle.getDefaultInstance())), 1L,

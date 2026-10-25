@@ -109,7 +109,7 @@ public final class VocationToolsGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void defaultsEmptyAndResetSurviveReload(GameTestHelper helper) {
+    public static void defaultsAndEmptySurviveReload(GameTestHelper helper) {
         var colony = new ColonyData().works();
         Vocation building = Vocations.required(BUILDING);
         var front = ColonyFront.of(colony);
@@ -120,11 +120,6 @@ public final class VocationToolsGameTests {
         front = ColonyFront.of(colony);
         helper.assertTrue(front.settings(BUILDING).valueOf("tool").isPresent(), "an explicitly empty list persists");
         helper.assertFalse(KitRules.allows(colony, building, Items.IRON_PICKAXE), "empty forbids every tool after reload");
-        front.resetTool(building);
-        ColonyFront.forget(colony.id());
-        front = ColonyFront.of(colony);
-        helper.assertTrue(front.settings(BUILDING).valueOf("tool").isEmpty(), "reset restores inherited defaults across reload");
-        helper.assertTrue(KitRules.allows(colony, building, Items.IRON_PICKAXE), "reset restores this vocation's kit");
         ColonyFront.forget(colony.id());
         helper.succeed();
     }
@@ -180,7 +175,9 @@ public final class VocationToolsGameTests {
                 "legacy rules are copied exactly to each unconfigured vocation, including empty lists");
         }
         helper.assertValueEqual(colony.kept(ColonyFront.OWNER).getInt("toolVersion"), 1, "migration is versioned in the save");
-        front.resetTool(Vocations.required(FARMING));
+        saved = colony.kept(ColonyFront.OWNER);
+        saved.getCompound("settings").getCompound(FARMING.toString()).remove("tool");
+        colony.keep(ColonyFront.OWNER, saved);
         ColonyFront.forget(colony.id());
         front = ColonyFront.of(colony);
         helper.assertTrue(front.settings(FARMING).valueOf("tool").isEmpty(), "the old seed is never applied a second time");

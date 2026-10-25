@@ -41,7 +41,7 @@ public final class RailContent {
     public static final String QUICK_HANDS = "conducting_quick_hands";
 
     static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.rail",
-        ResourceLocation.withDefaultNamespace("minecart")).tools(VOCATION);
+        ResourceLocation.withDefaultNamespace("minecart"));
 
     private static final VocationSpec SPEC =
         new VocationSpec(VOCATION, List.of(

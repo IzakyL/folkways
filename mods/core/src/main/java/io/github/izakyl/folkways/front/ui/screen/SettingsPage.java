@@ -27,7 +27,6 @@ import io.github.izakyl.folkways.front.engine.colony.ColonySchemas;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.front.engine.colony.ColonyZone;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -68,12 +67,6 @@ public final class SettingsPage implements Draw {
     @Override
     public UIElement build(Player player) {
         UIElement table = Rows.table();
-        table.addChildren(Rows.note(Component.translatable("folkways.settings.tools.by_vocation")));
-        for (var vocation : Vocations.all().stream()
-                .sorted(Comparator.comparing(trade -> trade.id().toString())).toList()) {
-            table.addChildren(tools(player, vocation));
-        }
-
         Button resetLayout = new Button()
             .setText(Component.translatable("folkways.settings.reset_layout"))
             .setOnClick(event -> Desk.resetLayout());
@@ -120,23 +113,12 @@ public final class SettingsPage implements Draw {
         return page;
     }
 
-    public static UIElement tools(Player player, Vocation vocation) {
-        return tools(player, vocation, "");
-    }
-
     static UIElement tools(Player player, Vocation vocation, String context) {
         Schema.Setting.Items items = CoreSettings.tool(vocation);
         UIElement editor = opener(player, vocation.id(), items);
         Tokens.name(editor, "folkways.settings.open.tool." + Tokens.of(vocation.id()) + context);
-        Button reset = new Button().setText(Component.translatable("folkways.settings.tools.reset"))
-            .setOnServerClick(event -> Pages.colonyOf(player)
-                .ifPresent(colony -> ColonyFront.of(colony).resetTool(vocation)));
-        Tokens.name(reset, "folkways.settings.reset.tool." + Tokens.of(vocation.id()) + context);
-        Label hint = Rows.note(Component.empty());
-        hint.bind(DataBindingBuilder.componentS2C(() -> itemsOf(player, new Scope.AtColony(vocation.id()), items).isEmpty()
-            ? Component.translatable("folkways.settings.tools.empty") : Component.empty()).build());
-        return Rows.page().addChildren(Rows.row().addChildren(Rows.icon(iconOf(items.icon())),
-            Rows.name(Component.translatable("folkways.vocation." + Tokens.of(vocation.id()))), editor, reset), hint);
+        return Rows.row().addChildren(Rows.icon(iconOf(items.icon())),
+            Rows.name(Component.translatable("folkways.vocation." + Tokens.of(vocation.id()))), editor);
     }
 
     static UIElement control(Player player, ResourceLocation scope, Schema.Setting setting) {

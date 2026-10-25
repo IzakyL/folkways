@@ -115,12 +115,6 @@ public final class ColonySettings implements Settings {
         return new ColonySettings(next);
     }
 
-    public ColonySettings without(String key) {
-        Map<String, Value> next = new LinkedHashMap<>(byKey);
-        next.remove(key);
-        return new ColonySettings(next);
-    }
-
     public ColonySettings conformedTo(Schema schema) {
         return conformedTo(schema, Set.of());
     }
