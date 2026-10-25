@@ -33,6 +33,7 @@ test("closing V and switching hands suspends only temporary RTS selection, prese
   try {
     const run = newRunId();
     pair = await launchPair({
+      config: "blockwright.toml#combat",
       server: { instance: `combat-suspend-server-${run}` },
       client: { instance: `combat-suspend-client-${run}` },
       snapshot: { entityTypes: ["folkways:resident"] },

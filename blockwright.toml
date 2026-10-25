@@ -380,6 +380,10 @@ iris = { target = ["client"] }
 [profile.maids.mods]
 touhou_little_maid = { target = ["server", "client"] }
 
+# The optional RTS selection and command handler must be present for battle input tests.
+[profile.combat.mods]
+folkways_war = { target = ["server", "client"] }
+
 # The e2e pair with Shoulder Surfing Reloaded on the client, for the book's aim under its camera.
 [profile.shoulder.mods]
 shouldersurfing = { target = ["client"] }
