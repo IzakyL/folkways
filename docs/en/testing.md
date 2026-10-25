@@ -33,8 +33,12 @@ residents and the integrations its scenarios require. Modular Golems requires
 `-PmodularGolemsTests=true`; its work-defaults test covers all three golem kinds.
 Core also runs the existing LDLib2 dependency tests; other owners do not repeat them.
 
-Selected game directories are `run/gametest/<mod>/<base|cookery|modulargolems>/`. Combined runs
-use `run/gametest/`. Before launching a server directly through Gradle, accept
+Game directories are `run/gametest/<mod>/<profile>/`; combined runs use `all` as the mod.
+The profile joins enabled optional suites in the fixed order `cookery`, `modulargolems`,
+`tavern`, or is `base` when none are enabled (for example, `cookery-modulargolems`).
+Tavern requires Cookery and adds its own suffix, even though it reuses Cookery's fixtures,
+so every installed-mod combination has a separate world.
+Before launching a server directly through Gradle, accept
 the [Minecraft EULA](https://www.minecraft.net/eula) in that directory's
 `eula.txt`. Only do so if you accept it.
 
@@ -157,7 +161,7 @@ node tests/shared/cookery/recipe-graph.mjs \
   tests/out/cookery-recipe-graph.json
 ```
 
-For a combined run, the audit input is `run/gametest/cookery-recipe-audit.json`.
+For a combined run, the audit input is `run/gametest/all/cookery/cookery-recipe-audit.json`.
 
 ## What CI runs
 

@@ -32,7 +32,10 @@
 模块化傀儡需要 `-PmodularGolemsTests=true`，其默认工作配置测试覆盖三类傀儡。
 Core 会一并运行已有 LDLib2 依赖测试，其他模组不重复运行。
 
-按模组选中的游戏目录为 `run/gametest/<mod>/<base|cookery|modulargolems>/`，合并运行使用 `run/gametest/`。
+游戏目录为 `run/gametest/<mod>/<profile>/`，合并运行的模组名为 `all`。
+环境名按固定顺序拼接已启用的可选套件 `cookery`、`modulargolems`、`tavern`，
+未启用时为 `base`，例如 `cookery-modulargolems`。
+Tavern 需要 Cookery；虽然复用 Cookery 的 fixtures，仍有独立后缀，确保每种模组组合使用独立世界。
 直接通过 Gradle 启动服务器前，需要先在对应目录的 `eula.txt` 中接受 [Minecraft EULA](https://www.minecraft.net/eula)。
 仅在同意其条款后执行。
 
@@ -138,7 +141,7 @@ node tests/shared/cookery/recipe-graph.mjs \
   tests/out/cookery-recipe-graph.json
 ```
 
-若使用合并运行，审计输入路径为 `run/gametest/cookery-recipe-audit.json`。
+若使用合并运行，审计输入路径为 `run/gametest/all/cookery/cookery-recipe-audit.json`。
 
 ## CI 实际运行内容
 

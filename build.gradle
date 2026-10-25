@@ -33,9 +33,10 @@ if (gameTestMod == "cookery" && !cookeryTests) {
     throw new GradleException("Cookery GameTests require -PcookeryTests=true")
 }
 def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gameTestMod}" }
-def gameTestDirectory = gameTestMod
-    ? "run/gametest/${gameTestMod}/${cookeryTests ? 'cookery' : modularGolemsTests ? 'modulargolems' : 'base'}"
-    : "run/gametest"
+// Every installed-mod combination owns its world, including Tavern's extra registries.
+def gameTestSuites = [cookery: cookeryTests, modulargolems: modularGolemsTests, tavern: tavernTests]
+    .findAll { suite, enabled -> enabled }.keySet().join("-") ?: "base"
+def gameTestDirectory = "run/gametest/${gameTestMod ?: 'all'}/${gameTestSuites}"
 
 repositories {
     mavenCentral()
