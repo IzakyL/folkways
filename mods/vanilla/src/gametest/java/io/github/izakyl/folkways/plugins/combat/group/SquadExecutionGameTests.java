@@ -33,6 +33,7 @@ import net.minecraft.gametest.framework.GameTestListener;
 import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.monster.Zombie;
@@ -102,6 +103,34 @@ public final class SquadExecutionGameTests {
                 helper.assertTrue(f.commands.current(people.getFirst().id()).orElseThrow() == replacement,
                     "attack completion and old-group release preserve the new individual handle");
             }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large")
+    public static void targetRemovalKeepsHealthyDiscardsUnloadAndWorldChangesDistinctFromKilled(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        List<Body> people = f.people(1);
+        for (Entity.RemovalReason reason : List.of(Entity.RemovalReason.DISCARDED,
+                Entity.RemovalReason.UNLOADED_TO_CHUNK, Entity.RemovalReason.CHANGED_DIMENSION, Entity.RemovalReason.KILLED)) {
+            Zombie target = f.enemy(14, 10);
+            helper.assertTrue(target.getHealth() > 0, "each removal begins with a healthy loaded target");
+            UnitGroup group = f.groups.attackSelection(people, target, f.player);
+            f.ownership.trackGroup(f.player, group);
+            UUID generation = group.commandId().orElseThrow();
+            ResidentCommands.Order attack = f.commands.current(people.getFirst().id()).orElseThrow();
+            target.remove(reason);
+            ResidentCommands.AttackEnd expected = reason == Entity.RemovalReason.KILLED
+                ? ResidentCommands.AttackEnd.TARGET_DEFEATED : ResidentCommands.AttackEnd.TARGET_LOST;
+            helper.assertValueEqual(attack.attackEnd(), expected, "the target's actual removal reason determines its terminal attack classification");
+            f.groups.tick(f.level.getServer());
+            helper.assertTrue(f.groups.ofResident(people.getFirst().id()).orElseThrow() == group
+                    && group.commandId().filter(generation::equals).isPresent()
+                    && group.phase() == UnitGroup.Phase.REFORMING && f.ownership.owns(f.player, people.getFirst()),
+                "both loss and explicit KILLED retain actual squad identity, command generation and control while reforming");
+            helper.assertValueEqual(group.endReason(), reason == Entity.RemovalReason.KILLED
+                ? UnitGroup.EndReason.TARGET_DEFEATED : UnitGroup.EndReason.TARGET_LOST,
+                "squad aggregation preserves the same removal classification");
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty_large")

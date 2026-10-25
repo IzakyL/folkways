@@ -413,7 +413,7 @@ public final class ResidentCommands {
                 || !WorldSpaces.at(commander).sameRealm(order.destination)) { return AttackEnd.AUTHORITY_LOST; }
         ServerLevel level = (ServerLevel) order.body.mob().level();
         if (!(level.getEntity(order.target) instanceof Mob target)) { return AttackEnd.TARGET_LOST; }
-        if (!target.isAlive()) { return AttackEnd.TARGET_DEFEATED; }
+        if (!target.isAlive()) { return CommandContent.defeated(target) ? AttackEnd.TARGET_DEFEATED : AttackEnd.TARGET_LOST; }
         if (!Threats.explicitlyAttackable(target, order.body.mob(), commander)
                 || !level.hasChunkAt(target.blockPosition())) { return AttackEnd.TARGET_LOST; }
         if (!WorldSpaces.at(target).sameRealm(order.destination)

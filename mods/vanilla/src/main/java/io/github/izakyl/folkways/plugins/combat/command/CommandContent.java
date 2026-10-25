@@ -11,6 +11,8 @@ import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
@@ -35,12 +37,17 @@ public final class CommandContent {
         });
     }
 
+    static boolean defeated(Mob target) {
+        // isAlive also becomes false for a healthy discarded, unloaded or transferred entity.
+        return target.isDeadOrDying() || target.getRemovalReason() == Entity.RemovalReason.KILLED;
+    }
+
     @SubscribeEvent
     public static void left(EntityLeaveLevelEvent event) {
         if (event.getLevel() instanceof ServerLevel level) {
-            if (event.getEntity() instanceof net.minecraft.world.entity.Mob target) {
+            if (event.getEntity() instanceof Mob target) {
                 Colonies.all(level.getServer()).forEach(colony -> colony.service(ID, ResidentCommands.class)
-                    .ifPresent(commands -> commands.targetLeft(target.getUUID(), !target.isAlive())));
+                    .ifPresent(commands -> commands.targetLeft(target.getUUID(), defeated(target))));
             }
             Bodies.of(event.getEntity()).ifPresent(body -> body.colonyId()
                 .flatMap(id -> Colonies.of(level.getServer(), id))
