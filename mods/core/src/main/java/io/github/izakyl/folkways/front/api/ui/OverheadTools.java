@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.ResourceLocation;
 
@@ -21,6 +22,10 @@ public final class OverheadTools {
     public interface Handler {
         /** Key hints for this tool while it is selected in the overhead view. */
         default List<Cue> cues() { return List.of(); }
+        /** Keep only the tool's own short cues in the left rail; full help belongs in hover tooltips. */
+        default boolean compactHints() { return false; }
+        /** Whether Core may draw the resident's usual look card while this overhead tool is active. */
+        default boolean showResidentCard(UUID resident) { return true; }
         /** Space reserved at the bottom of the overhead view for this tool's controls. */
         default int bottomInset() { return 0; }
         /** A pointer gesture can reserve the descent modifier without changing the camera's global bindings. */

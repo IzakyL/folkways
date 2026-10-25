@@ -106,6 +106,8 @@ public final class KeyHints {
 
     private static List<Cue> inHand(Minecraft minecraft, HeldBook book) {
         List<Cue> cues = new ArrayList<>();
+        boolean compactToolHints = Overhead.on()
+            && OverheadTools.selectedHandler().map(OverheadTools.Handler::compactHints).orElse(false);
         if (book.colonyId() == null) {
             cues.add(Cue.of("folkways.keys.open", Cue.Key.USE));
         } else if (HeldPlacement.holding()) {
@@ -123,9 +125,11 @@ public final class KeyHints {
                 }
             }
         }
-        cues.add(Overhead.on() ? Cue.of("folkways.keys.gesture", Cue.Key.TAB)
-            : Cue.of("folkways.keys.gesture", Cue.Key.SNEAK, Cue.Key.WHEEL));
-        if (Overhead.on()) {
+        if (!compactToolHints) {
+            cues.add(Overhead.on() ? Cue.of("folkways.keys.gesture", Cue.Key.TAB)
+                : Cue.of("folkways.keys.gesture", Cue.Key.SNEAK, Cue.Key.WHEEL));
+        }
+        if (Overhead.on() && !compactToolHints) {
             cues.add(Cue.of("folkways.keys.overhead.fly", Cue.Key.WALK));
             cues.add(Cue.of("folkways.keys.overhead.up", Cue.Key.JUMP));
             cues.add(Cue.of("folkways.keys.overhead.down", Cue.Key.SNEAK));
@@ -137,7 +141,7 @@ public final class KeyHints {
             }
             cues.add(Cue.of("folkways.keys.overhead.near", Cue.Key.WHEEL));
             cues.add(Cue.of("folkways.keys.overhead.leave", Cue.Key.OVERHEAD));
-        } else if (book.colonyId() != null) {
+        } else if (!Overhead.on() && book.colonyId() != null) {
             cues.add(Cue.of("folkways.keys.overhead", Cue.Key.OVERHEAD));
         }
         return cues;

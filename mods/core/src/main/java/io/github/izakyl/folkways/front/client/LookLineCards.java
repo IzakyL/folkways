@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.front.client;
 
+import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.client.ColonyLookCard.Row;
 import io.github.izakyl.folkways.front.engine.net.LookLines;
 import java.util.List;
@@ -31,9 +32,14 @@ public final class LookLineCards {
         float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
         Vec3 camera = event.getCamera().getPosition();
         Frustum frustum = event.getFrustum();
+        boolean overhead = Overhead.on();
+        OverheadTools.Handler handler = overhead ? OverheadTools.selectedHandler().orElse(null) : null;
         for (LookLines look : looks) {
             Entity resident = minecraft.level.getEntity(look.entityId());
-            if (resident == null || !frustum.isVisible(resident.getBoundingBox())) {
+            if (resident == null || overhead && handler != null && !handler.showResidentCard(resident.getUUID())) {
+                continue;
+            }
+            if (!frustum.isVisible(resident.getBoundingBox())) {
                 continue;
             }
             Vec3 anchor = resident.getPosition(partialTick)

@@ -48,6 +48,7 @@ final class CombatController implements OverheadTools.Handler {
     private static final int SELECTED = 0xFF8FEAC3;
     private static final int DRAFT = 0xFFFFDC7A;
     private static final int CLOSE_RADIUS = 12;
+    private static final int MAX_ROUTE_SAMPLES = 512;
     private final CombatCards cards = new CombatCards();
     private final LinkedHashSet<UUID> selected = new LinkedHashSet<>();
     private final Map<Integer, List<UUID>> shortcuts = new HashMap<>();
@@ -60,6 +61,7 @@ final class CombatController implements OverheadTools.Handler {
     private int cycleStart = -1;
     private boolean routeOpen;
     private boolean routeAttackMove;
+    private UUID routeCommandId;
     private boolean attackMoveArmed;
     private int attackMoveArmGeneration;
     private PendingRoute pendingReplacement;
@@ -152,6 +154,7 @@ final class CombatController implements OverheadTools.Handler {
                     route.clear(); route.addAll(state.points());
                     cycleStart = state.cycleStart(); routeOpen = state.open();
                     routeAttackMove = state.attackMove();
+                    routeCommandId = state.state().commandId();
                 }
                 if (state.operation() == CombatControlPacket.Operation.RELEASE) {
                     if (state.accepted()) { tell("folkways.war.release_accepted", Math.max(0, previousSelectionSize - next.size())); }
@@ -168,6 +171,7 @@ final class CombatController implements OverheadTools.Handler {
                 route.clear(); route.addAll(state.points());
                 cycleStart = state.cycleStart(); routeOpen = state.open();
                 routeAttackMove = state.state().attackMove();
+                routeCommandId = state.state().commandId();
                 resolvePendingRoute(state);
                 if (state.accepted()) {
                     switch (state.intent()) {
@@ -201,6 +205,7 @@ final class CombatController implements OverheadTools.Handler {
                 && reply.intent() == CombatWaypointReply.Intent.WAYPOINT) {
             pending.awaitingAdditionAck = false;
             if (!reply.accepted()) { pendingReplacement = null; return; }
+            if (reply.cycleStart() >= 0) { pending.cycleStart = reply.cycleStart(); }
             pending.additions.removeFirst();
             sendNextPendingAddition(pending);
         }
@@ -231,6 +236,12 @@ final class CombatController implements OverheadTools.Handler {
             Cue.of("folkways.keys.combat.order", Cue.Key.ALT_CLICK),
             Cue.of("folkways.keys.combat.route", Cue.Key.MODIFIER, Cue.Key.ALT_CLICK));
     }
+
+    @Override
+    public boolean compactHints() { return true; }
+
+    @Override
+    public boolean showResidentCard(UUID resident) { return !selected.contains(resident); }
 
     @Override
     public int bottomInset() { return CombatCards.HEIGHT; }
@@ -285,19 +296,12 @@ final class CombatController implements OverheadTools.Handler {
         PendingRoute pending = pendingReplacement;
         List<WorldPos> inputRoute = pending == null ? route : pending.points;
         int inputCycleStart = pending == null ? cycleStart : pending.cycleStart;
-        boolean inputOpen = pending == null ? routeOpen : inputCycleStart < 0;
         if (Screen.hasControlDown() && inputCycleStart >= 0) {
             tell("folkways.war.route_closed"); return true;
         }
-        int closing = Screen.hasControlDown() ? nearWaypoint(x, y, inputRoute, inputOpen) : -1;
+        int closing = Screen.hasControlDown() && pending == null ? nearWaypoint(x, y, route, routeOpen) : -1;
         if (closing >= 0) {
             if (closing >= inputRoute.size() - 1) { tell("folkways.war.cycle_too_short"); return true; }
-            if (pending != null) {
-                pending.cycleStart = closing;
-                pending.additions.addLast(inputRoute.get(closing));
-                sendNextPendingAddition(pending);
-                return true;
-            }
             if (attackMoveArmed && !routeAttackMove) { tell("folkways.war.attack_move_new_route"); return true; }
             if (sendRouteRequest(() -> CombatPackets.append(List.copyOf(selected), inputRoute.get(closing), routeAttackMove)) < 0) {
                 tell("folkways.war.syncing");
@@ -319,6 +323,14 @@ final class CombatController implements OverheadTools.Handler {
         if (Screen.hasControlDown()) {
             if (pending != null) {
                 if (pending.cycleStart >= 0) { tell("folkways.war.route_closed"); return true; }
+                int existing = pending.points.indexOf(point.get());
+                if (existing >= 0) {
+                    if (existing >= pending.points.size() - 1) { tell("folkways.war.cycle_too_short"); return true; }
+                    pending.cycleStart = existing;
+                    pending.additions.addLast(point.get());
+                    sendNextPendingAddition(pending);
+                    return true;
+                }
                 if (pending.points.size() >= CombatPackets.MAX_POINTS) {
                     tell("folkways.war.route_full", CombatPackets.MAX_POINTS); return true;
                 }
@@ -479,10 +491,14 @@ final class CombatController implements OverheadTools.Handler {
         CombatProjection projection = new CombatProjection(minecraft);
         double nearest = CLOSE_RADIUS;
         int found = -1;
+        int width = minecraft.getWindow().getGuiScaledWidth();
+        int height = minecraft.getWindow().getGuiScaledHeight();
         for (int index = 0; index < points.size(); index++) {
             Optional<CombatProjection.Pixel> pixel = WorldSpaces.world(minecraft.level, points.get(index))
                 .flatMap(world -> projection.point(world.add(0, .12, 0)));
             if (pixel.isPresent()) {
+                if (pixel.get().x() < -7 || pixel.get().x() > width + 7
+                        || pixel.get().y() < -7 || pixel.get().y() > height + 7) { continue; }
                 double distance = Math.hypot(pixel.get().x() - x, pixel.get().y() - y);
                 if (distance <= nearest) { nearest = distance; found = index; }
             }
@@ -494,51 +510,126 @@ final class CombatController implements OverheadTools.Handler {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         Minecraft minecraft = Minecraft.getInstance();
         CombatProjection projection = new CombatProjection(minecraft);
-        CombatProjection.Rect area = CombatProjection.Rect.between(startX, startY, endX, endY);
-        for (ResidentEntity resident : residents.values()) {
-            boolean chosen = selected.contains(resident.getUUID());
-            AABB box = resident.getBoundingBox().move(resident.getPosition(partialTick).subtract(resident.position()));
-            projection.bounds(box).ifPresent(bounds -> {
-                if (chosen || dragging && area.intersects(bounds)) { outline(graphics, bounds, chosen ? SELECTED : DRAFT); }
-            });
-        }
         if (dragging) {
+            CombatProjection.Rect area = CombatProjection.Rect.between(startX, startY, endX, endY);
             graphics.fill((int) area.left(), (int) area.top(), (int) area.right(), (int) area.bottom(), 0x2849D2A6);
             outline(graphics, area, SELECTED);
         }
-        drawRoute(graphics, projection, mouseX, mouseY);
+        drawSelectedHealth(graphics, projection, partialTick);
+        drawRoute(graphics, projection, mouseX, mouseY, partialTick);
         if (moveMarker != null && Util.getMillis() <= markerUntil) {
             WorldSpaces.world(minecraft.level, moveMarker).flatMap(projection::point).ifPresent(pixel ->
-                outline(graphics, new CombatProjection.Rect(pixel.x() - 5, pixel.y() - 5, pixel.x() + 5, pixel.y() + 5), SELECTED));
+                {
+                    if (pixel.x() >= -6 && pixel.x() <= minecraft.getWindow().getGuiScaledWidth() + 6
+                            && pixel.y() >= -6 && pixel.y() <= minecraft.getWindow().getGuiScaledHeight() + 6) {
+                        outline(graphics, new CombatProjection.Rect(pixel.x() - 5, pixel.y() - 5,
+                            pixel.x() + 5, pixel.y() + 5), SELECTED);
+                    }
+                });
         }
-        Component status = Util.getMillis() <= noticeUntil ? notice : !rosterReady()
+        var state = CombatPackets.state();
+        boolean routeFailure = state.phase().contains("failed") || switch (state.result()) {
+            case "failed", "partial_failure", "no_survivors", "no_safe_anchor", "regroup_timed_out",
+                "route_no_path", "route_member_blocked", "route_timed_out", "timed_out", "authority_lost", "out_of_range" -> true;
+            default -> false;
+        };
+        Component status = !routeFailure && Util.getMillis() <= noticeUntil ? notice : !rosterReady()
             ? Component.translatable("folkways.war.syncing") : Component.empty();
         cards.render(graphics, mouseX, mouseY, selected, residents, shortcuts, route.size(),
-            routeStatus(), status, attackMoveArmed);
+            routeStatus(), status, attackMoveArmed, routeFailure);
     }
 
-    private void drawRoute(GuiGraphics graphics, CombatProjection projection, int mouseX, int mouseY) {
+    private void drawSelectedHealth(GuiGraphics graphics, CombatProjection projection, float partialTick) {
+        int screenWidth = Minecraft.getInstance().getWindow().getGuiScaledWidth();
+        int screenHeight = Minecraft.getInstance().getWindow().getGuiScaledHeight();
+        for (UUID id : selected) {
+            ResidentEntity resident = residents.get(id);
+            if (resident == null) { continue; }
+            Vec3 head = resident.getPosition(partialTick).add(0, resident.getBbHeight() + 0.18, 0);
+            Optional<CombatProjection.Pixel> projected = projection.point(head);
+            if (projected.isEmpty()) { continue; }
+            int centerX = Mth.floor(projected.get().x()), y = Mth.floor(projected.get().y());
+            if (centerX < -12 || centerX > screenWidth + 12 || y < -6 || y > screenHeight + 6) { continue; }
+            int left = centerX - 9;
+            int fill = Math.round(18 * Mth.clamp(resident.getHealth() / Math.max(1, resident.getMaxHealth()), 0, 1));
+            int color = resident.getHealth() / Math.max(1, resident.getMaxHealth()) > .5F ? SELECTED : 0xFFFF776E;
+            graphics.fill(left - 1, y - 1, left + 19, y + 4, 0xB0000000);
+            graphics.fill(left, y, left + 18, y + 3, 0xFF592F2D);
+            graphics.fill(left, y, left + fill, y + 3, color);
+        }
+    }
+
+    private void drawRoute(GuiGraphics graphics, CombatProjection projection, int mouseX, int mouseY, float partialTick) {
         Minecraft minecraft = Minecraft.getInstance();
-        CombatProjection.Pixel previous = null;
-        int closing = pendingReplacement == null && Screen.hasControlDown()
+        if (route.isEmpty()) { return; }
+        var state = CombatPackets.state();
+        boolean matchingCommand = routeCommandId != null && routeCommandId.equals(state.commandId());
+        boolean complete = matchingCommand && state.routeComplete();
+        boolean reviewing = Screen.hasControlDown() && pendingReplacement == null;
+        if (complete && !reviewing) { return; }
+        int currentStop = matchingCommand && state.stop() >= 0
+            ? Mth.clamp(state.stop(), 0, route.size() - 1) : 0;
+        int firstStop = reviewing ? 0 : currentStop;
+        int[] sampleBudget = {MAX_ROUTE_SAMPLES};
+        int screenWidth = minecraft.getWindow().getGuiScaledWidth();
+        int screenHeight = minecraft.getWindow().getGuiScaledHeight();
+        CombatProjection.Pixel squadCenter = selectedCenter(projection, partialTick).orElse(null);
+        CombatProjection.Pixel previous = reviewing ? null : squadCenter;
+        int closing = reviewing
             ? nearWaypoint(mouseX, mouseY, route, routeOpen) : -1;
-        for (int index = 0; index < route.size(); index++) {
+        if (!reviewing && previous == null) {
+            previous = WorldSpaces.world(minecraft.level, route.get(currentStop))
+                .flatMap(world -> projection.point(world.add(0, 0.12, 0))).orElse(null);
+        }
+        if (reviewing && !complete && squadCenter != null) {
+            WorldSpaces.world(minecraft.level, route.get(currentStop)).flatMap(world -> projection.point(world.add(0, 0.12, 0)))
+                .ifPresent(target -> segment(graphics, squadCenter.x(), squadCenter.y(), target.x(), target.y(), SELECTED, sampleBudget));
+        }
+        int ghost = 0x638FEAC3;
+        for (int index = firstStop; index < route.size(); index++) {
             Optional<Vec3> world = WorldSpaces.world(minecraft.level, route.get(index));
             Optional<CombatProjection.Pixel> point = world.flatMap(at -> projection.point(at.add(0, 0.12, 0)));
             if (point.isEmpty()) { previous = null; continue; }
             CombatProjection.Pixel at = point.get();
-            if (previous != null) { segment(graphics, previous.x(), previous.y(), at.x(), at.y(), SELECTED); }
-            int radius = 6;
-            int color = closing == index && index < route.size() - 1 ? DRAFT : SELECTED;
-            outline(graphics, new CombatProjection.Rect(at.x() - radius, at.y() - radius, at.x() + radius, at.y() + radius), color);
-            graphics.drawString(minecraft.font, Integer.toString(index + 1), (int) at.x() + 6, (int) at.y() - 4, SELECTED, true);
+            boolean oldSegment = reviewing && (complete || index < currentStop);
+            int pathColor = oldSegment ? ghost : SELECTED;
+            if (previous != null) { segment(graphics, previous.x(), previous.y(), at.x(), at.y(), pathColor, sampleBudget); }
+            if (at.x() >= -7 && at.x() <= screenWidth + 7 && at.y() >= -7 && at.y() <= screenHeight + 7) {
+                int radius = 6;
+                int color = closing == index && index < route.size() - 1 ? DRAFT
+                    : reviewing && (complete || index < currentStop) ? ghost : SELECTED;
+                outline(graphics, new CombatProjection.Rect(at.x() - radius, at.y() - radius,
+                    at.x() + radius, at.y() + radius), color);
+                graphics.drawString(minecraft.font, Integer.toString(index + 1), (int) at.x() + 6,
+                    (int) at.y() - 4, color, true);
+            }
             previous = at;
         }
         if (previous != null && cycleStart >= 0 && cycleStart < route.size()) {
             CombatProjection.Pixel last = previous;
             WorldSpaces.world(minecraft.level, route.get(cycleStart)).flatMap(world -> projection.point(world.add(0, .12, 0)))
-                .ifPresent(first -> segment(graphics, last.x(), last.y(), first.x(), first.y(), SELECTED));
+                .ifPresent(first -> segment(graphics, last.x(), last.y(), first.x(), first.y(),
+                    reviewing && complete ? ghost : SELECTED, sampleBudget));
+            for (int index = cycleStart + 1; index <= currentStop && index < route.size(); index++) {
+                int nextIndex = index;
+                WorldSpaces.world(minecraft.level, route.get(nextIndex - 1)).flatMap(world -> projection.point(world.add(0, .12, 0)))
+                    .ifPresent(from -> WorldSpaces.world(minecraft.level, route.get(nextIndex)).flatMap(world -> projection.point(world.add(0, .12, 0)))
+                        .ifPresent(to -> segment(graphics, from.x(), from.y(), to.x(), to.y(), SELECTED, sampleBudget)));
+            }
         }
+    }
+
+    private Optional<CombatProjection.Pixel> selectedCenter(CombatProjection projection, float partialTick) {
+        Vec3 center = Vec3.ZERO;
+        int count = 0;
+        for (UUID id : selected) {
+            ResidentEntity resident = residents.get(id);
+            if (resident == null) { continue; }
+            center = center.add(resident.getPosition(partialTick));
+            count++;
+        }
+        return count == 0 ? Optional.empty()
+            : projection.point(center.scale(1.0 / count).add(0, 0.12, 0));
     }
 
     private static void outline(GuiGraphics graphics, CombatProjection.Rect rect, int color) {
@@ -547,16 +638,41 @@ final class CombatController implements OverheadTools.Handler {
         graphics.fill(left, top, left + 1, bottom + 1, color); graphics.fill(right, top, right + 1, bottom + 1, color);
     }
 
-    private static void segment(GuiGraphics graphics, double x1, double y1, double x2, double y2, int color) {
-        // Clamp before drawing so a distant off-screen waypoint cannot create an unbounded GUI loop.
+    private static void segment(GuiGraphics graphics, double x1, double y1, double x2, double y2, int color, int[] sampleBudget) {
         int width = Minecraft.getInstance().getWindow().getGuiScaledWidth();
         int height = Minecraft.getInstance().getWindow().getGuiScaledHeight();
-        int steps = Math.min(256, Math.max(1, (int) Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 3)));
-        for (int step = 0; step <= steps; step++) {
+        double[] clipped = clipSegment(x1, y1, x2, y2, width, height);
+        if (clipped == null || sampleBudget[0] <= 0) { return; }
+        x1 = clipped[0]; y1 = clipped[1]; x2 = clipped[2]; y2 = clipped[3];
+        int steps = Math.min(64, Math.max(1, (int) Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 3)));
+        steps = Math.min(steps, sampleBudget[0]);
+        for (int step = 0; step <= steps && sampleBudget[0] > 0; step++, sampleBudget[0]--) {
             double t = step / (double) steps;
             int x = (int) Mth.lerp(t, x1, x2), y = (int) Mth.lerp(t, y1, y2);
-            if (x >= 0 && x < width && y >= 0 && y < height) { graphics.fill(x, y, x + 2, y + 2, color); }
+            graphics.fill(x, y, x + 2, y + 2, color);
         }
+    }
+
+    /** Liang-Barsky clip: invisible off-screen legs consume no pixel budget. */
+    private static double[] clipSegment(double x1, double y1, double x2, double y2, int width, int height) {
+        double dx = x2 - x1, dy = y2 - y1;
+        double[] t = {0.0, 1.0};
+        if (!clip(-dx, x1, t) || !clip(dx, width - 1.0 - x1, t)
+                || !clip(-dy, y1, t) || !clip(dy, height - 1.0 - y1, t)) { return null; }
+        return new double[] {x1 + t[0] * dx, y1 + t[0] * dy, x1 + t[1] * dx, y1 + t[1] * dy};
+    }
+
+    private static boolean clip(double p, double q, double[] t) {
+        if (p == 0.0) { return q >= 0.0; }
+        double ratio = q / p;
+        if (p < 0.0) {
+            if (ratio > t[1]) { return false; }
+            if (ratio > t[0]) { t[0] = ratio; }
+        } else {
+            if (ratio < t[0]) { return false; }
+            if (ratio < t[1]) { t[1] = ratio; }
+        }
+        return true;
     }
 
     private void tell(String key, Object... args) { notice = Component.translatable(key, args); noticeUntil = Util.getMillis() + 5000; }
@@ -572,11 +688,18 @@ final class CombatController implements OverheadTools.Handler {
         var state = CombatPackets.state();
         Component command = Component.translatable("folkways.war.command." + state.command());
         Component phase = Component.translatable("folkways.war.phase." + state.phase());
+        Component summary;
         if ("none".equals(state.result())) {
-            return Component.translatable("folkways.war.status", command, phase);
+            summary = Component.translatable("folkways.war.status", command, phase);
+        } else {
+            Component result = Component.translatable("folkways.war.result." + state.result());
+            summary = Component.translatable("folkways.war.status_result", command, phase, result);
         }
-        Component result = Component.translatable("folkways.war.result." + state.result());
-        return Component.translatable("folkways.war.status_result", command, phase, result);
+        if (state.waiting() > 0 && ("waiting_for_member".equals(state.phase())
+                || "reforming".equals(state.phase()) || "failed_waiting".equals(state.phase()))) {
+            return Component.translatable("folkways.war.status_waiting", summary, state.waiting());
+        }
+        return summary;
     }
 
     @Override
@@ -594,7 +717,7 @@ final class CombatController implements OverheadTools.Handler {
     public void cancelPointer() { dragging = false; }
 
     private void clearRoute() {
-        route.clear(); cycleStart = -1; routeOpen = false; routeAttackMove = false;
+        route.clear(); cycleStart = -1; routeOpen = false; routeAttackMove = false; routeCommandId = null;
         cancelPendingRoute();
         CombatPackets.clearRoute();
     }
