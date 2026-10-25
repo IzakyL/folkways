@@ -34,14 +34,15 @@ final class EquipmentRefillNode implements Node, Staged {
     private final EquipmentPlans.Offer offer;
     private final long deadline;
     private final boolean automatic;
+    private final boolean inherited;
     private final NodeSpec spec;
     private Container borrowed;
     private String failure;
 
     EquipmentRefillNode(EquipmentPlans plans, ResidentEntity body, long revision, ResidentCommands.Order order,
-            EquipmentPlans.Demand demand, EquipmentPlans.Offer offer, long deadline, boolean automatic) {
+            EquipmentPlans.Demand demand, EquipmentPlans.Offer offer, long deadline, boolean automatic, boolean inherited) {
         this.plans = plans; this.body = body; this.revision = revision; this.order = order;
-        this.demand = demand; this.offer = offer; this.deadline = deadline; this.automatic = automatic;
+        this.demand = demand; this.offer = offer; this.deadline = deadline; this.automatic = automatic; this.inherited = inherited;
         WorkSite site = offer.store().<WorkSite>map(WorkSite.AtBlock::new)
             .orElseGet(() -> WorkSite.on(body.level(), body.id(), body.blockPosition()));
         spec = NodeSpec.of(UUID.randomUUID(), EquipmentPlans.ID, site, offer.stances(), Workload.Once.of(5))
@@ -55,6 +56,7 @@ final class EquipmentRefillNode implements Node, Staged {
     EquipmentPlans.Offer offer() { return offer; }
     long deadline() { return deadline; }
     boolean automatic() { return automatic; }
+    boolean inherited() { return inherited; }
     Urge urge() { return new Urge(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways", "equipment_refill/" + spec.id()),
         Urge.DIRE - .25, true, () -> this); }
     @Override public NodeSpec spec() { return spec; }

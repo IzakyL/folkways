@@ -87,6 +87,27 @@ public final class ResidentEquipment {
         return !mainLocked(resident);
     }
 
+    /** Automatic selection never claims borrowed tools, foreign property, or material cargo of a live task. */
+    public static boolean automaticWeaponCandidate(ResidentEntity resident, ItemStack stack) {
+        if (mainLocked(resident) || stack.isEmpty() || TaskTools.holds(resident.id(), stack)
+                || PersonalItems.marked(stack) && !PersonalItems.belongsTo(resident, stack)) return false;
+        if (!PersonalItems.marked(stack) && resident.doing().filter(doing -> {
+            var activity = doing.toward().orElse(doing.what());
+            return !activity.equals(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways", "resident_command"))
+                && !activity.equals(io.github.izakyl.folkways.plugins.patrol.PatrolContent.FIGHTING);
+        }).isPresent()) return false;
+        return !PersonalItems.marked(stack) || PersonalItems.purpose(resident, stack)
+            .filter(purpose -> purpose.equals("mainhand") || purpose.equals("spare")).isPresent();
+    }
+
+    /** Exact native sessions may continue with their own physical hand after its pack origin is empty. */
+    public static boolean selectedForCombat(ResidentEntity resident, ItemStack actual) {
+        if (actual.isEmpty() || TaskTools.holds(resident.id(), actual)
+                || PersonalItems.marked(actual) && !PersonalItems.belongsTo(resident, actual)) return false;
+        if (mainLocked(resident)) return actual == assigned(resident);
+        return resident.hasWeaponSession() && actual == resident.getMainHandItem() || automaticWeaponCandidate(resident, actual);
+    }
+
     public static CompoundTag read(ServerPlayer actor, ResidentEntity resident) {
         if (colony(actor, resident).isEmpty()) return new CompoundTag();
         CompoundTag data = snapshot(actor, resident);
@@ -234,6 +255,7 @@ public final class ResidentEquipment {
 
     /** Ownership ends when the item or its loaded ammunition leaves the resident's custody. */
     public static void released(ItemStack actual) {
+        DefaultEquipment.detach(actual);
         PersonalItems.clear(actual);
         var loaded = actual.get(DataComponents.CHARGED_PROJECTILES);
         if (loaded != null && !loaded.isEmpty()) {
@@ -257,12 +279,14 @@ public final class ResidentEquipment {
         if (source.equals("resident") ? !usable(resident, candidate) : PersonalItems.marked(candidate)) return "not_personal";
         if (!accepts(resident, slot, candidate)) return "invalid";
         int mainCell = assignedCell(resident);
-        if (slot == EquipmentSlot.MAINHAND && source.equals("resident") && cell == mainCell) return "no_change";
+        if (slot == EquipmentSlot.MAINHAND && source.equals("resident") && cell == mainCell) {
+            DefaultEquipment.detach(assigned(resident)); Equipment.lock(resident, slot, true); return "no_change";
+        }
         ItemStack original = slot == EquipmentSlot.MAINHAND ? assigned(resident) : resident.getItemBySlot(slot);
         if (TaskTools.holds(resident.id(), original)) return "busy";
         if (PersonalItems.marked(original) && !PersonalItems.belongsTo(resident, original)) return "not_personal";
         ItemStack incoming = from.removeItem(cell, 1);
-        ItemStack old = original.copy();
+        ItemStack old = original.copy(); DefaultEquipment.detach(old); DefaultEquipment.detach(incoming);
         if (slot == EquipmentSlot.MAINHAND && mainCell >= 0) pack.setItem(mainCell, ItemStack.EMPTY);
         if (!old.isEmpty()) {
             if (source.equals("player")) released(old);
@@ -309,10 +333,10 @@ public final class ResidentEquipment {
         if (original.isEmpty()) return "empty";
         if (PersonalItems.marked(original) && !PersonalItems.belongsTo(resident, original)) return "not_personal";
         if (slot == EquipmentSlot.MAINHAND) {
-            PersonalItems.mark(resident, original, "spare");
+            DefaultEquipment.detach(original); PersonalItems.mark(resident, original, "spare");
         } else {
             SimpleContainer pack = copy(resident.pack(), resident.pack().getContainerSize());
-            ItemStack old = original.copy(); PersonalItems.mark(resident, old, "spare");
+            ItemStack old = original.copy(); DefaultEquipment.detach(old); PersonalItems.mark(resident, old, "spare");
             if (!Containers.insert(pack, old).isEmpty()) return "no_room";
             if (!roomForReturn(resident, pack)) return "no_room";
             if (!wear(resident, slot, original, ItemStack.EMPTY)) return "invalid";
@@ -326,6 +350,7 @@ public final class ResidentEquipment {
     private static String lock(ResidentEntity resident, EquipmentSlot slot, boolean value) {
         if (slot == EquipmentSlot.MAINHAND && busy(resident)) return "busy";
         if (TaskTools.holds(resident.id(), slot == EquipmentSlot.MAINHAND ? assigned(resident) : resident.getItemBySlot(slot))) return "busy";
+        DefaultEquipment.detach(slot == EquipmentSlot.MAINHAND ? assigned(resident) : resident.getItemBySlot(slot));
         Equipment.lock(resident, slot, value);
         return "ok";
     }
@@ -414,7 +439,7 @@ public final class ResidentEquipment {
             ItemStack spare = original.copy(); PersonalItems.mark(resident, spare, "spare");
             if (!Containers.insert(pack, spare).isEmpty()) return "no_room";
         }
-        ItemStack actual = incoming.copyWithCount(1); PersonalItems.mark(resident, actual, slot.getName());
+        ItemStack actual = incoming.copyWithCount(1); DefaultEquipment.detach(actual); PersonalItems.mark(resident, actual, slot.getName());
         if (slot == EquipmentSlot.MAINHAND && !Containers.insert(pack, actual).isEmpty()) return "no_room";
         if (!roomForReturn(resident, pack)) return "no_room";
         SimpleContainer before = copy(resident.pack(), resident.pack().getContainerSize());

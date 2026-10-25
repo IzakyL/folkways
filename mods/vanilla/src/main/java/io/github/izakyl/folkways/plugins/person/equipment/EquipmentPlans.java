@@ -97,6 +97,7 @@ public final class EquipmentPlans {
     private final Map<UUID, EquipmentRefillNode> pending = new LinkedHashMap<>();
     private record AutomaticAmmo(ItemStack weapon, Goal goal) { }
     private final Map<UUID, AutomaticAmmo> automaticAmmo = new LinkedHashMap<>();
+    private final DefaultEquipment defaults;
     private final Set<UUID> ammunitionDisabled = new java.util.LinkedHashSet<>();
     private record Preview(String kind, String scope, ListTag members) { }
     private final Map<ServerPlayer, Preview> previews = new WeakHashMap<>();
@@ -128,6 +129,7 @@ public final class EquipmentPlans {
             goals.put(row.getUUID("resident"), new Goal(target, row.getBoolean("active"),
                 row.getBoolean("active") ? "waiting" : "selected"));
         }
+        defaults = new DefaultEquipment(this, colony, server);
     }
 
     public static void declare(Declaring event) {
@@ -135,7 +137,7 @@ public final class EquipmentPlans {
         event.colony(ID, scope -> {
             EquipmentPlans plans = new EquipmentPlans(scope.colony(), scope.server());
             scope.share(plans); scope.urges(plans::urges); scope.tick(plans::tick);
-            scope.closed(why -> { plans.pending.clear(); plans.previews.clear(); plans.automaticAmmo.clear(); });
+            scope.closed(why -> { plans.defaults.closed(); plans.pending.clear(); plans.previews.clear(); plans.automaticAmmo.clear(); });
         });
     }
 
@@ -144,8 +146,12 @@ public final class EquipmentPlans {
         return colony.service(ID, EquipmentPlans.class).map(plans -> !plans.ammunitionDisabled.contains(resident)).orElse(true);
     }
 
+    public CompoundTag defaultSnapshot() { return defaults.snapshot(); }
+    public String updateDefaults(ServerPlayer actor, CompoundTag requested) { return defaults.update(actor, requested); }
+    boolean hasExplicit(UUID resident) { return goals.containsKey(resident); }
+
     public static boolean manages(Colony colony, UUID resident) {
-        return colony.service(ID, EquipmentPlans.class).map(plans -> plans.goals.containsKey(resident)).orElse(false);
+        return colony.service(ID, EquipmentPlans.class).map(plans -> plans.goals.containsKey(resident) || plans.defaults.manages(resident)).orElse(false);
     }
 
     /** Only an existing stable order lends its runner; its command identity and route remain untouched. */
@@ -167,6 +173,7 @@ public final class EquipmentPlans {
         data.put("templates", choices);
         data.put("ammunition", ammunitionSnapshot(resident));
         data.putBoolean("shared", true);
+        data.put("defaults", defaults.snapshot());
         CompoundTag scopes = new CompoundTag();
         for (String scope : List.of("self", "selection", "group")) {
             List<UUID> members = members(actor, resident, scope);
@@ -255,6 +262,7 @@ public final class EquipmentPlans {
                 CompoundTag preview = preview(body.get(), selected); preview.putBoolean("accepted", true);
                 results.add(preview); accepted++; continue;
             } else if (kind.equals("template_apply")) {
+                DefaultEquipment.detach(body.get());
                 Goal goal = new Goal(selected, false, "selected");
                 Goal previous = goals.get(id); goal.revision = previous == null ? 1 : previous.revision + 1;
                 goals.put(id, goal); pending.remove(id);
@@ -304,7 +312,7 @@ public final class EquipmentPlans {
         return row;
     }
 
-    private Optional<ResidentEntity> loaded(UUID id) {
+    Optional<ResidentEntity> loaded(UUID id) {
         for (ServerLevel level : server.getAllLevels()) {
             if (level.getEntity(id) instanceof ResidentEntity resident && resident.isAlive() && !resident.isRemoved()
                     && resident.colonyId().filter(colony.id()::equals).isPresent() && colony.holdingOf(id).isPresent()) return Optional.of(resident);
@@ -342,7 +350,7 @@ public final class EquipmentPlans {
         return gaps;
     }
 
-    private List<Demand> demands(ResidentEntity body, Template template) {
+    List<Demand> demands(ResidentEntity body, Template template) {
         List<Demand> wanted = new ArrayList<>();
         for (EquipmentSlot slot : ResidentEquipment.SLOTS) {
             ResourceLocation target = template.targets().get(slot);
@@ -355,11 +363,11 @@ public final class EquipmentPlans {
         return List.copyOf(wanted);
     }
 
-    private static ItemStack equipped(ResidentEntity body, EquipmentSlot slot) {
+    static ItemStack equipped(ResidentEntity body, EquipmentSlot slot) {
         return slot == EquipmentSlot.MAINHAND ? ResidentEquipment.assigned(body) : body.getItemBySlot(slot);
     }
 
-    private boolean safe(ResidentEntity body) { return safe(body, null, false); }
+    boolean safe(ResidentEntity body) { return safe(body, null, false); }
 
     private boolean safe(ResidentEntity body, ResidentCommands.Order lease) { return safe(body, lease, true); }
 
@@ -376,7 +384,14 @@ public final class EquipmentPlans {
                 && !held.engaged() && !held.yieldingToDanger();
         }
         return !CombatSelectionOwnership.of(colony).reserved(body.id())
-            && (body.doing().isEmpty() || body.doing().filter(doing -> doing.what().equals(ID) || existingLease && doing.what().equals(io.github.izakyl.folkways.plugins.person.living.LivingContent.EATING)).isPresent());
+            && (body.doing().isEmpty() || body.doing().filter(doing -> {
+                ResourceLocation activity = doing.toward().orElse(doing.what());
+                return activity.equals(ID)
+                    // Idle leisure can lend the same runner; walking toward ordinary work cannot.
+                    || activity.equals(ResourceLocation.fromNamespaceAndPath("folkways", "strolling"))
+                    || activity.equals(ResourceLocation.fromNamespaceAndPath("folkways", "relaxing"))
+                    || existingLease && activity.equals(io.github.izakyl.folkways.plugins.person.living.LivingContent.EATING);
+            }).isPresent());
     }
 
     private static boolean danger(ResidentEntity body) {
@@ -393,16 +408,18 @@ public final class EquipmentPlans {
         AutomaticAmmo automatic = automatic(body);
         boolean quiet = automatic == null || CombatReadiness.quiet(body);
         Goal explicit = goals.get(body.id());
-        boolean automaticRequest = explicit == null || !explicit.active;
-        Goal goal = automaticRequest ? automatic == null ? null : automatic.goal() : explicit;
+        Goal inherited = defaults.goal(body);
+        boolean inheritedRequest = (explicit == null || !explicit.active) && inherited != null;
+        boolean automaticRequest = !inheritedRequest && (explicit == null || !explicit.active);
+        Goal goal = inheritedRequest ? inherited : automaticRequest ? automatic == null ? null : automatic.goal() : explicit;
         EquipmentRefillNode current = pending.get(body.id());
         if (current != null && valid(current) && level.getGameTime() < current.deadline()) return List.of(current.urge());
         pending.remove(body.id());
         if (goal == null || !goal.active) return List.of();
         if (!safe(body) || body.doing().filter(doing -> doing.what().equals(io.github.izakyl.folkways.plugins.person.living.LivingContent.EATING)).isPresent()
-                || automaticRequest && (!quiet || UnitGroups.of(colony).ofResident(body.id())
+                || (automaticRequest || inheritedRequest) && (!CombatReadiness.quiet(body) || !quiet || UnitGroups.of(colony).ofResident(body.id())
                     .filter(group -> !group.maintenanceAllowed(false)).isPresent())) { status(goal, "busy"); return List.of(); }
-        List<Demand> demands = automaticRequest ? automaticDemands(body) : demands(body, goal.template);
+        List<Demand> demands = automaticRequest ? automaticDemands(body) : inheritedRequest ? defaults.demands(body, goal.template) : demands(body, goal.template);
         if (demands.isEmpty()) {
             goal.active = false; status(goal, "equipped"); if (!automaticRequest) save(); return List.of();
         }
@@ -413,7 +430,7 @@ public final class EquipmentPlans {
             Optional<Offer> offer = offer(body, demand);
             if (offer.isEmpty()) continue;
             var order = ResidentCommands.of(colony).current(body.id()).orElse(null);
-            EquipmentRefillNode request = new EquipmentRefillNode(this, body, goal.revision, order, demand, offer.get(), level.getGameTime() + 240, automaticRequest);
+            EquipmentRefillNode request = new EquipmentRefillNode(this, body, goal.revision, order, demand, offer.get(), level.getGameTime() + 240, automaticRequest, inheritedRequest);
             pending.put(body.id(), request); status(goal, "fetching"); return List.of(request.urge());
         }
         goal.retryAt = level.getGameTime() + RETRY; status(goal, locked ? "locked" : "missing");
@@ -422,11 +439,13 @@ public final class EquipmentPlans {
 
     private Goal requestGoal(EquipmentRefillNode request) {
         AutomaticAmmo automatic = automaticAmmo.get(request.body().id());
-        return request.automatic() ? automatic == null ? null : automatic.goal() : goals.get(request.body().id());
+        return request.inherited() ? defaults.existing(request.body().id())
+            : request.automatic() ? automatic == null ? null : automatic.goal() : goals.get(request.body().id());
     }
 
     boolean valid(EquipmentRefillNode request) {
         Goal goal = requestGoal(request);
+        if (request.inherited() && (goal == null || !defaults.current(request.body(), goal) || !CombatReadiness.quiet(request.body()))) return false;
         if (request.automatic()) {
             if (!CombatReadiness.quiet(request.body())) return false;
             AutomaticAmmo automatic = automaticAmmo.get(request.body().id());
@@ -439,7 +458,7 @@ public final class EquipmentPlans {
         return goal != null && goal.active && goal.revision == request.revision()
             && pending.get(request.body().id()) == request && loaded(request.body().id()).orElse(null) == request.body()
             && safe(request.body(), request.order()) && ResidentCommands.of(colony).current(request.body().id()).orElse(null) == request.order()
-            && (request.automatic() ? automaticDemands(request.body()) : demands(request.body(), goal.template)).stream()
+            && (request.automatic() ? automaticDemands(request.body()) : request.inherited() ? defaults.demands(request.body(), goal.template) : demands(request.body(), goal.template)).stream()
                 .anyMatch(demand -> demand.slot() == request.demand().slot() && demand.accepts(request.offer().expected())
                     && demand.count() >= request.offer().count())
             && (request.demand().ammunition() || !Equipment.locked(request.body(), request.demand().slot()));
@@ -543,7 +562,7 @@ public final class EquipmentPlans {
         return Optional.empty();
     }
 
-    private List<WorldPos> stores(ResidentEntity body) {
+    List<WorldPos> stores(ResidentEntity body) {
         ServerLevel level = (ServerLevel) body.level();
         return colony.storesIn(level.dimension()).stream().filter(at -> at.sameRealm(WorldSpaces.at(body)))
             .filter(at -> WorldSpaces.world(level, at).filter(pos -> pos.distanceToSqr(body.position()) <= 32 * 32).isPresent())
@@ -586,7 +605,14 @@ public final class EquipmentPlans {
         if (!valid(request) || supplied.size() != 1) return "busy";
         ItemStack incoming = supplied.getFirst();
         if (!request.demand().accepts(incoming) || incoming.getCount() != request.offer().count()) return "invalid";
-        if (!request.demand().ammunition()) return ResidentEquipment.automatic(request.body(), request.demand().slot(), incoming);
+        if (!request.demand().ammunition()) {
+            String result = ResidentEquipment.automatic(request.body(), request.demand().slot(), incoming);
+            if (result.equals("ok") && request.inherited()) {
+                DefaultEquipment.issued(request.body(), request.demand().slot());
+                if (request.demand().slot() == EquipmentSlot.MAINHAND) ResidentEquipment.target(request.body(), requestGoal(request).template.ammo());
+            }
+            return result;
+        }
         SimpleContainer pack = copy(request.body().pack());
         ItemStack actual = incoming.copy(); PersonalItems.mark(request.body(), actual, "ammo");
         if (!Containers.insert(pack, actual).isEmpty() || !ResidentEquipment.roomForReturn(request.body(), pack)) return "no_room";
@@ -601,6 +627,7 @@ public final class EquipmentPlans {
     }
 
     private void tick(MinecraftServer ignored) {
+        defaults.tick();
         Set<UUID> roster = colony.residents().stream().map(resident -> resident.id()).collect(java.util.stream.Collectors.toSet());
         boolean removed = goals.keySet().removeIf(id -> !roster.contains(id));
         automaticAmmo.keySet().retainAll(roster);
