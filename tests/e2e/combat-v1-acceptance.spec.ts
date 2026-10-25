@@ -291,4 +291,3 @@ return Map.of("x",(left+right)/2,"y",(top+bottom)/2,"left",left,"top",top,"right
   "width",mc.getWindow().getGuiScaledWidth(),"height",mc.getWindow().getGuiScaledHeight());`,
   }),
 });
-

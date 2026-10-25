@@ -172,6 +172,7 @@ jobs:
 
           Install **folkways-core** and **folkways-vanilla**, plus LDLib2. Add **folkways-create** only with Create,
           **folkways-modulargolems** only with Modular Golems, and **folkways-cookery** only with Kaleidoscope Cookery 1.6.0.
+          Add **folkways-war** for optional RTS controls in the V overhead view. Epic Fight integration is delivered separately.
           All Folkways jars must come from the same build.
           EOF
           gh release create nightly jars/*.jar --prerelease --target "$GITHUB_SHA" \
