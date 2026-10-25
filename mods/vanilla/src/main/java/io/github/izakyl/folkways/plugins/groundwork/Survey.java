@@ -94,9 +94,10 @@ final class Survey {
             List<BlockPos> plant = Foraging.cells(level, cell, cells);
             if (plant.isEmpty() || plant.stream().anyMatch(at -> claimed.contains(at) || spared.test(at)
                     || level.getBlockState(at).getDestroySpeed(level, at) < 0.0F)) continue;
-            stances(cell).ifPresent(where -> {
+            BlockPos root = Foraging.vine(level.getBlockState(cell)) ? plant.getLast() : cell;
+            stances(root).ifPresent(where -> {
                 found.addAll(plant);
-                jobs.add(new Job(Job.keyOf(cell), site(cell), cell, plant, List.of(), where));
+                jobs.add(new Job(Job.keyOf(root), site(root), root, plant, List.of(), where));
             });
         }
         return jobs;

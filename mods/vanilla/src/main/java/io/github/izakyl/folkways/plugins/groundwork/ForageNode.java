@@ -30,11 +30,13 @@ import net.minecraft.world.phys.AABB;
 final class ForageNode extends GroundNode {
     private final Block plant;
     private final Predicate<BlockPos> spared;
+    private final Set<BlockPos> marked;
 
-    ForageNode(ServerLevel level, Chores.Chore chore, Predicate<BlockPos> spared) {
+    ForageNode(ServerLevel level, Chores.Chore chore, Predicate<BlockPos> spared, Set<BlockPos> marked) {
         super(declare(level, chore), chore);
         this.plant = level.getBlockState(chore.job().cell()).getBlock();
         this.spared = spared;
+        this.marked = Set.copyOf(marked);
     }
 
     private static NodeSpec declare(ServerLevel level, Chores.Chore chore) {
@@ -55,9 +57,11 @@ final class ForageNode extends GroundNode {
     Outcome work(ServerLevel level, Worker who, Job job) {
         BlockPos cell = job.cell();
         BlockState state = level.getBlockState(cell);
-        if (!state.is(plant) || !Foraging.root(state)) return Outcome.done();
-        List<BlockPos> cells = Foraging.cells(level, cell, Set.copyOf(job.cells()));
-        if (cells.isEmpty() || !job.cells().equals(cells) || cells.stream().anyMatch(at -> !level.isLoaded(at)
+        boolean vine = Foraging.vine(state);
+        if ((!state.is(plant) && !(vine && Foraging.vine(plant.defaultBlockState())))
+                || !Foraging.root(state)) return Outcome.done();
+        List<BlockPos> cells = Foraging.cells(level, cell, marked);
+        if (cells.isEmpty() || !vine && !job.cells().equals(cells) || cells.stream().anyMatch(at -> !level.isLoaded(at)
                 || spared.test(at) || level.getBlockState(at).getDestroySpeed(level, at) < 0.0F)) {
             return refuse(GroundRefusal.NOTHING_TO_WORK);
         }

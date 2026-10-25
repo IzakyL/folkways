@@ -46,7 +46,7 @@ import net.minecraft.world.level.block.state.BlockState;
 final class GroundPresence implements Facing {
 
     private static final String TAG_MADE = "made";
-    private static final int FORAGE_VERSION = 2;
+    private static final int FORAGE_VERSION = 3;
 
     // Targets are discovered once; later sweeps only update access to the remaining work.
     private final class Site {
@@ -55,6 +55,7 @@ final class GroundPresence implements Facing {
         private final Map<String, Set<String>> targets = new LinkedHashMap<>();
         private boolean discovering;
         private boolean rediscoverForage;
+        private boolean rekeyForage;
         private boolean loaded;
         private String configuration;
         private final Map<String, Chores> works = new LinkedHashMap<>();
@@ -102,8 +103,21 @@ final class GroundPresence implements Facing {
             }
             if (settings.flag(GroundworkContent.FORAGE)) {
                 List<Job> forage = survey.forage(spared, claimed);
+                if (discovering && rekeyForage) {
+                    Set<String> wanted = targets.get(GroundworkContent.FORAGE);
+                    if (wanted != null) {
+                        Set<String> keys = new LinkedHashSet<>();
+                        for (Job job : forage) {
+                            if (wanted.contains(job.key()) || Foraging.vine(level.getBlockState(job.cell()))
+                                    && job.cells().stream().anyMatch(cell -> wanted.contains(Job.keyOf(cell)))) {
+                                keys.add(job.key());
+                            }
+                        }
+                        targets.put(GroundworkContent.FORAGE, keys);
+                    }
+                }
                 forage.forEach(plant -> claimed.addAll(plant.cells()));
-                settle(GroundworkContent.FORAGE, (at, chore) -> new ForageNode(at, chore, spared), forage);
+                settle(GroundworkContent.FORAGE, (at, chore) -> new ForageNode(at, chore, spared, view.cells()), forage);
             }
             if (grass || flowers) {
                 Predicate<BlockState> pulled = Survey.weeds(grass, flowers);
@@ -177,6 +191,7 @@ final class GroundPresence implements Facing {
             }
             scan(level, zone);
             rediscoverForage = false;
+            rekeyForage = false;
             initialized.add(this.zone);
             targets.keySet().removeIf(work -> work.equals(GroundworkContent.WEED)
                 ? !zone.settings().flag(GroundworkContent.WEED) && !zone.settings().flag(GroundworkContent.FLOWERS)
@@ -258,7 +273,8 @@ final class GroundPresence implements Facing {
                 Site site = new Site(id);
                 site.configuration = saved.string("configuration").orElse(null);
                 // In-place harvesting recorded only ripe roots. Rebuild just forage's targets for plant removal.
-                site.rediscoverForage = saved.integer("forage_version").orElse(0) < FORAGE_VERSION;
+                site.rediscoverForage = saved.integer("forage_version").orElse(0) < 2;
+                site.rekeyForage = saved.integer("forage_version").orElse(0) < FORAGE_VERSION;
                 // Older sites had no forage switch. Preserve their already discovered targets when it stays off.
                 if (site.configuration != null && !site.configuration.contains(",forage=")) {
                     site.configuration = site.configuration.replaceFirst("(haul=(?:true|false))", "$1,forage=false");

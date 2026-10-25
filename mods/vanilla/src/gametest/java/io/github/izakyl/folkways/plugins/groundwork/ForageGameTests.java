@@ -128,6 +128,85 @@ public final class ForageGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void growingVineColumnsKeepTheirSavedTargets(GameTestHelper helper) {
+        try (Fixture f = new Fixture(helper)) {
+            BlockPos top = f.cell.above(2);
+            place(f.level, top.above(), Blocks.STONE.defaultBlockState());
+            place(f.level, top, Blocks.CAVE_VINES_PLANT.defaultBlockState().setValue(CaveVines.BERRIES, true));
+            place(f.level, top.below(), Blocks.CAVE_VINES.defaultBlockState());
+            Set<BlockPos> marked = Set.of(f.cell, top.below(), top);
+            f.zone(marked, GroundworkContent.FORAGE);
+            List<Job> before = new Survey(f.level, marked).forage(at -> false, Set.of());
+            f.presence.closed(Closing.SHUTDOWN);
+            place(f.level, top.below(), Blocks.CAVE_VINES_PLANT.defaultBlockState());
+            f.place(Blocks.CAVE_VINES.defaultBlockState().setValue(CaveVines.BERRIES, true));
+            List<Job> after = new Survey(f.level, marked).forage(at -> false, Set.of());
+            helper.assertTrue(before.getFirst().key().equals(after.getFirst().key()), "downward growth keeps the column key");
+            GroundPresence loaded = new GroundPresence(f.colony);
+            loaded.refresh(f.level.getServer());
+            List<Node> nodes = loaded.goals(f.colony.view(f.level)).stream().flatMap(goal -> goal.nodes().stream()).toList();
+            helper.assertTrue(nodes.size() == 1, "the saved target survives growth and reload");
+            Outcome.Done done = (Outcome.Done) nodes.getFirst().commit(f.level, f.fixture.worker);
+            for (BlockPos cell : marked) helper.assertTrue(f.level.getBlockState(cell).isAir(), "the grown column is removed");
+            helper.assertTrue(count(done, Items.GLOW_BERRIES) == 2, "the whole column pays its current fruit");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void savedBottomVineKeysMigrateWithoutRediscoveringSpentPlants(GameTestHelper helper) {
+        try (Fixture f = new Fixture(helper)) {
+            BlockPos top = f.cell.above(2);
+            place(f.level, top.above(), Blocks.STONE.defaultBlockState());
+            place(f.level, top, Blocks.CAVE_VINES_PLANT.defaultBlockState());
+            place(f.level, top.below(), Blocks.CAVE_VINES.defaultBlockState());
+            place(f.level, f.cell.east(), berry(3));
+            Set<BlockPos> marked = Set.of(f.cell, top.below(), top, f.cell.east());
+            f.zone(marked, GroundworkContent.FORAGE);
+            f.presence.closed(Closing.SHUTDOWN);
+            var saved = f.colony.kept(GroundworkContent.ID);
+            var site = saved.getList("sites", 10).getCompound(0);
+            site.putInt("forage_version", 2);
+            var pending = new net.minecraft.nbt.ListTag();
+            pending.add(net.minecraft.nbt.StringTag.valueOf(Job.keyOf(top.below())));
+            site.getCompound("targets").put(GroundworkContent.FORAGE, pending);
+            f.colony.keep(GroundworkContent.ID, saved);
+            place(f.level, top.below(), Blocks.CAVE_VINES_PLANT.defaultBlockState());
+            f.place(Blocks.CAVE_VINES.defaultBlockState());
+            GroundPresence loaded = new GroundPresence(f.colony);
+            loaded.refresh(f.level.getServer());
+            List<Node> nodes = loaded.goals(f.colony.view(f.level)).stream().flatMap(goal -> goal.nodes().stream()).toList();
+            helper.assertTrue(nodes.size() == 1, "only the saved vine remains pending after key migration");
+            nodes.getFirst().commit(f.level, f.fixture.worker);
+            helper.assertTrue(f.level.getBlockState(top).isAir() && f.level.getBlockState(f.cell).isAir(),
+                "the old bottom key now clears the grown marked column");
+            helper.assertTrue(f.level.getBlockState(f.cell.east()).is(Blocks.SWEET_BERRY_BUSH), "spent forage stays spent");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void plannedVineHeadsCanGrowIntoStemsBeforeCommit(GameTestHelper helper) {
+        try (Fixture f = new Fixture(helper)) {
+            BlockPos top = f.cell.above(2);
+            place(f.level, top.above(), Blocks.STONE.defaultBlockState());
+            place(f.level, top, Blocks.CAVE_VINES.defaultBlockState().setValue(CaveVines.BERRIES, true));
+            Set<BlockPos> marked = Set.of(f.cell, top.below(), top);
+            f.zone(marked, GroundworkContent.FORAGE);
+            Node node = f.only();
+            node.planned(f.level);
+            place(f.level, top, Blocks.CAVE_VINES_PLANT.defaultBlockState().setValue(CaveVines.BERRIES, true));
+            place(f.level, top.below(), Blocks.CAVE_VINES_PLANT.defaultBlockState());
+            f.place(Blocks.CAVE_VINES.defaultBlockState().setValue(CaveVines.BERRIES, true));
+            Outcome.Done done = (Outcome.Done) node.commit(f.level, f.fixture.worker);
+            for (BlockPos cell : marked) helper.assertTrue(f.level.getBlockState(cell).isAir(), "growth does not spend an untouched vine");
+            helper.assertTrue(count(done, Items.GLOW_BERRIES) == 2, "new marked segments are cut bottom-up with their loot");
+            node.ended(f.level, Ending.DONE);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void protectedVineSegmentsPreventCuttingTheirColumn(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             f.place(Blocks.CAVE_VINES.defaultBlockState().setValue(CaveVines.BERRIES, true));
@@ -149,6 +228,8 @@ public final class ForageGameTests {
     public static void clearOverridesForageAndRemovesTheBush(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             f.place(berry(3));
+            place(f.level, f.cell.east(3), Blocks.BARREL.defaultBlockState());
+            f.colony.hold(GroundworkContent.ID, new Held.Block(WorldPos.of(f.level, f.cell.east(3)))).orElseThrow();
             f.zone(GroundworkContent.CLEAR, GroundworkContent.FORAGE);
             helper.assertTrue(f.nodes().isEmpty(), "clear files an order instead of foraging");
             var book = f.colony.kept(BuildContent.ID).getCompound("book");
@@ -248,7 +329,7 @@ public final class ForageGameTests {
             helper.assertTrue(f.level.getBlockState(f.cell.east()).isAir(), "the migrated young bush is removed");
             helper.assertTrue(f.level.getBlockState(f.cell.west()).is(Blocks.SHORT_GRASS), "unrelated completed work stays spent");
             helper.assertTrue(f.colony.kept(GroundworkContent.ID).getList("sites", 10).getCompound(0)
-                .getInt("forage_version") == 2, "the new target revision is saved");
+                .getInt("forage_version") == 3, "the new target revision is saved");
         }
         helper.succeed();
     }
@@ -285,8 +366,8 @@ public final class ForageGameTests {
         f.colony.stores(GroundworkContent.ID, f.level.dimension(), List.of(WorldPos.of(f.level, barrel)));
         var person = f.fixture.worker.body();
         person.moveTo(f.cell.getX() + 2.5, f.cell.getY(), f.cell.getZ() + 1.5);
-        f.colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
         f.level.addFreshEntity(person);
+        f.colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
         var body = io.github.izakyl.folkways.core.api.resident.body.Bodies.of(person).orElseThrow();
         body.joinColony(f.colony.id());
         f.colony.entered(body);
