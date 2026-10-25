@@ -21,7 +21,7 @@ determines who keeps the colony, and the party owner holds the founder's rights.
 ## Work and storage
 
 Rank each resident's trades on the **Workforce** page. The colony chooses the
-tasks, supplies and order of work. Fields, pens, fisheries and patrol routes
+tasks, supplies and order of work. Fields, pens, apiaries, fisheries and patrol routes
 describe where work happens; stock orders describe what a container should hold.
 
 Each container can allow or refuse residents taking goods and using it for
@@ -47,6 +47,41 @@ These terms match registry identifiers. Select an item found by name to add it
 to a filter. A search saved as a filter rule uses IDs and tags; it does not use
 translated names or Pinyin. Its meaning therefore does not depend on a player's
 language or JEC settings.
+
+If residents stop working, enable **Debug logs** on the Colony Book's **Settings**
+page. Every ten seconds, your chat shows the current planning duration, idle
+residents, task counts, recent blockers and whether the route optimizer used its
+fallback. Blockers and task samples describe the last completed schedule; they can
+be older than the live resident counts while planning is busy. Only the player
+who enabled the option receives these messages. Closing the book keeps it enabled;
+disconnecting disables it.
+
+With the same option enabled, task interruptions, work and path failures, planning
+exceptions and optimizer fallbacks appear as they happen. Work messages identify
+the resident, task, position and target; pickup messages also name the dropped
+item and its entity ID. Interruptions name the preempting behavior and the observed
+combat target and recent damage source. These are clues, not proof of what triggered
+the behavior. Events cover the colony across dimensions. Repeats are grouped for
+five seconds and bursts are limited to four messages per two seconds; queued
+occurrences retain their counts, with an overflow summary for larger bursts.
+Turning the option off discards that reader's pending messages.
+
+Route optimization has a work budget and, in the normal planning mode, a
+100-millisecond deadline. If either is exhausted, the scheduler restores and
+publishes its initial valid assignment so residents can work while further
+improvement waits for another schedule.
+
+## Pastures
+
+The target is the number of grown animals to retain. Residents breed ready adult
+pairs while the total is below or at the target. At the target, one additional
+birth is allowed; feeding waits while surplus young grow. Only adults above the
+retained count are culled, so a newborn does not replace a breeding adult.
+
+For example, retain two cows: two adults breed, their calf grows, then one of
+the three adults is culled and the cycle can repeat after the normal breeding
+cooldown. A target of zero disables breeding and culls all adults. One animal
+has no breeding partner; keep at least two for continued meat production.
 
 ## Trades, levels and perks
 
@@ -208,6 +243,21 @@ neither Cookery nor a straw hat is required. When the Cookery extension is
 installed, its planting materials participate in the same reserve system.
 
 The creative supply box also belongs to Vanilla and works without Cookery.
+
+## Beekeeping
+
+Frame an apiary around bee nests and beehives, then choose **Honey Bottle** or
+**Honeycomb** in its settings. Residents with the Herd trade harvest full hives;
+honey bottles need glass bottles, while honeycomb needs shears. Bees continue
+to pollinate and produce honey through the vanilla mechanics, so provide bees
+and nearby flowers.
+
+For hives without effective campfire smoke, the apiary requests campfire
+construction on the ground beneath them. Builders use colony supplies to fill
+these requests. Harvesting waits until the hive has effective smoke. The apiary
+shows how many hives lack smoke. If there is no suitable ground space or the
+smoke path is blocked, adjust the layout; relight any existing extinguished
+campfires yourself.
 
 ## Buildings
 

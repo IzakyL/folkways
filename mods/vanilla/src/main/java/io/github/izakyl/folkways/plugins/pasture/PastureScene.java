@@ -44,7 +44,7 @@ public final class PastureScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("pasture", "Pastures: say how many head, and the herd holds there");
+        scene.title("pasture", "Pastures: keep breeders and harvest grown surplus");
         PonderScenery.openWorld(scene, util, PLATE);
         PonderScenery.grassGround(scene, util, PLATE);
 
@@ -61,14 +61,14 @@ public final class PastureScene {
 
         scene.overlay().showOutline(PASTURE, "pasture", util.select().fromTo(1, 0, 1, 6, 2, 6), 180);
         scene.overlay().showText(90)
-            .text("Frame a pen the way you frame a plot. It has three settings: the animal it keeps (cows, sheep, pigs or chickens), a target head count from 0 to 64, and a shear switch.")
+            .text("Frame a pen the way you frame a plot. Choose its animal (cows, sheep, pigs or chickens), how many adults to retain from 0 to 64, and whether to shear.")
             .pointAt(util.vector().topOf(3, 1, 3))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
 
         scene.overlay().showText(90)
-            .text("The Pastures page lists every pen: its animal, how many stand in it against the target, and how many of those are grown.")
+            .text("The Pastures page lists every pen: its animal, total head, retained adult target and current grown head. Young animals are included in the total.")
             .pointAt(util.vector().topOf(3, 1, 1))
             .placeNearTarget()
             .attachKeyFrame();
@@ -80,15 +80,20 @@ public final class PastureScene {
         scene.idle(5);
         herder.hold(scene, new ItemStack(Items.WHEAT, 2));
         scene.idle(20);
-        cow(scene, util.vector().topOf(4, 0, 3), 0.0F, true);
+        ElementLink<EntityElement> calf = cow(scene, util.vector().topOf(4, 0, 3), 0.0F, true);
         herder.hold(scene, ItemStack.EMPTY);
         scene.overlay().showText(90)
-            .text("Below the target, residents feed the grown animals in pairs, and the pairs breed. Young ones count toward the head as soon as they are born.")
+            .text("Below or at the target, residents feed ready adults in pairs. At the target, breeding continues for one surplus calf; feeding then waits while the surplus grows.")
             .pointAt(util.vector().topOf(4, 1, 3))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
 
+        scene.world().modifyEntity(calf, entity -> {
+            if (entity instanceof Cow cow) {
+                cow.setAge(0);
+            }
+        });
         ElementLink<EntityElement> extraA = cow(scene, util.vector().topOf(2, 0, 5), 45.0F, false);
         ElementLink<EntityElement> extraB = cow(scene, util.vector().topOf(5, 0, 2), -135.0F, false);
         cow(scene, util.vector().topOf(4, 0, 5), 90.0F, false);
@@ -100,7 +105,7 @@ public final class PastureScene {
         scene.world().modifyEntity(extraB, Entity::discard);
         herder.hold(scene, new ItemStack(Items.BEEF, 3));
         scene.overlay().showText(100)
-            .text("Above the target, the whole surplus is culled in one go, always from the grown animals. Six head against a target of four: two cows go. A target of 0 culls every grown one.")
+            .text("Only grown head above the retained adult target are culled. With a target of four, six grown cows provide two carcasses; a calf never costs the herd a retained adult. A target of 0 clears every grown animal.")
             .pointAt(util.vector().topOf(3, 1, 3))
             .placeNearTarget()
             .attachKeyFrame();

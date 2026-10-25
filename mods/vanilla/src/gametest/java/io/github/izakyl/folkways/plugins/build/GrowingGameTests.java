@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.api.colony.Holding;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.terms.Closures;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -411,8 +412,16 @@ public final class GrowingGameTests {
             helper.assertValueEqual(round(rig), 1, "the stair is not drawn before the completed round is settled");
             presence.settle(level.getServer());
         }).thenWaitUntil(() -> helper.assertValueEqual(round(rig), 2, "the mine waits on its first flight"))
-            .thenExecute(() -> helper.assertValueEqual(standing(rig), 1,
-                "the stair is filed once the headframe stands"))
+            .thenExecute(() -> {
+                helper.assertValueEqual(standing(rig), 1, "the stair is filed once the headframe stands");
+                presence.settle(level.getServer());
+                UUID order = rig.saved().get().getCompound("book").getList("buildOrders", Tag.TAG_COMPOUND)
+                    .getCompound(0).getUUID("id");
+                helper.assertTrue(presence.site(order).isPresent(), "the first stair flight has an active work site");
+                helper.assertTrue(Closures.in(level).stream().anyMatch(site ->
+                        site.holds(mark.below()) && site.holds(mark.above(4))),
+                    "the stair's work area retains the headframe above it so residents can return through completed rounds");
+            })
             .thenSucceed();
     }
 }
