@@ -104,7 +104,10 @@ public final class PatrolSupplyGameTests {
     public static void optionalWeaponsRespectAnExplicitToolBanWithoutBecomingEveryResidentsKit(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         ColonyFront front = ColonyFront.of(scene.colony);
-        List<ItemFilter> original = front.settings(PatrolContent.VOCATION).entries(CoreSettings.TOOL_KEY);
+        List<ItemFilter> original = front.settings(PatrolContent.VOCATION).valueOf(CoreSettings.TOOL_KEY)
+            .filter(ColonySettings.Value.Items.class::isInstance).map(ColonySettings.Value.Items.class::cast)
+            .map(ColonySettings.Value.Items::value)
+            .orElseGet(() -> CoreSettings.tool(Vocations.required(PatrolContent.VOCATION)).byDefault());
         ItemFilter bow = ItemFilter.item(ResourceLocation.withDefaultNamespace("bow"));
         ItemFilter crossbow = ItemFilter.item(ResourceLocation.withDefaultNamespace("crossbow"));
         helper.assertTrue(KitRules.allows(scene.colony, Vocations.required(PatrolContent.VOCATION), Items.BOW) && KitRules.allows(scene.colony, Vocations.required(PatrolContent.VOCATION), Items.CROSSBOW),
@@ -419,8 +422,9 @@ public final class PatrolSupplyGameTests {
             colony.stores(STORE_OWNER, level.dimension(), List.of(source));
             body = PersonBody.RESIDENT.get().create(level);
             BlockPos start = anchor.block(level); body.moveTo(start.getX() + .5, start.getY(), start.getZ() + .5);
+            level.addFreshEntity(body);
             colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
-            body.joinColony(colony.id()); level.addFreshEntity(body);
+            body.joinColony(colony.id());
             simulation = new LaborFixture(colony, level);
             helper.onEachTick(() -> {
                 previousStock = countInStore(Items.BOW) + countInStore(Items.ARROW);

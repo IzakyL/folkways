@@ -203,7 +203,7 @@ var colony = Colonies.of(server, UUID.fromString(args.string("colony"))).orElseT
 var resident = PersonBody.RESIDENT.get().create(level);
 resident.moveTo(args.number("homeX"), args.number("stockY"), args.number("homeZ"));
 resident.setPersistenceRequired();
-colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow(); resident.joinColony(colony.id()); level.addFreshEntity(resident);
+level.addFreshEntity(resident); colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow(); resident.joinColony(colony.id());
 PatrolSupplies.of(colony).loadout(resident, PatrolSupplies.Loadout.BOW);
 ResidentCommands.of(colony).guard(resident, WorldSpaces.at(resident), new Vec3(1, 0, 0));
 return Map.of("colony", args.string("colony"), "resident", resident.id().toString(),
@@ -270,7 +270,7 @@ var args = Args.of(ctx); var server = (MinecraftServer)ctx.server(); var level =
 var colony = Colonies.of(server, UUID.fromString(args.string("colony"))).orElseThrow();
 var resident = PersonBody.RESIDENT.get().create(level);
 resident.moveTo(args.number("homeX"), args.number("stockY"), args.number("homeZ")); resident.setPersistenceRequired();
-colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow(); resident.joinColony(colony.id()); level.addFreshEntity(resident);
+level.addFreshEntity(resident); colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow(); resident.joinColony(colony.id());
 return Map.of("colony", args.string("colony"), "resident", resident.id().toString(),
  "stockX", args.number("stockX"), "stockY", args.number("stockY"), "stockZ", args.number("stockZ"),
  "homeX", args.number("homeX"), "homeZ", args.number("homeZ"));

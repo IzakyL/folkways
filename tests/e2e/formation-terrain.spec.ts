@@ -127,8 +127,9 @@ for (int n = 0; n < 4; n++) {
   var body = PersonBody.RESIDENT.get().create(level);
   body.moveTo(x + 2.5, y, z + 7.5 + n * 2);
   body.pack().insert(new ItemStack(n % 2 == 0 ? Items.IRON_SWORD : Items.IRON_AXE));
+  level.addFreshEntity(body);
   colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
-  body.joinColony(colony.id()); level.addFreshEntity(body); bodies.add(body);
+  body.joinColony(colony.id()); bodies.add(body);
 }
 var group = UnitGroups.of(colony).create(bodies);
 group.patrol(List.of(

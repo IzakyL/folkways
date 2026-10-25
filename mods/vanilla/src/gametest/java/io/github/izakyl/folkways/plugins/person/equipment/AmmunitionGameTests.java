@@ -240,7 +240,8 @@ public final class AmmunitionGameTests {
             player.setData(FolkwaysPlayerAttachments.CURRENT_COLONY, Optional.of(colony.id()));
             body = PersonBody.RESIDENT.get().create(level); body.setNoAi(!running);
             BlockPos at = helper.absolutePos(new BlockPos(2, 1, 3)); body.moveTo(at.getX() + .5, at.getY(), at.getZ() + .5);
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow(); body.joinColony(colony.id()); level.addFreshEntity(body);
+            level.addFreshEntity(body);
+            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow(); body.joinColony(colony.id());
             player.moveTo(body.getX() + 1, body.getY(), body.getZ()); anchor = WorldPos.of(level, at);
             BlockPos warehouse = helper.absolutePos(new BlockPos(15, 1, 3)); level.setBlockAndUpdate(warehouse, Blocks.BARREL.defaultBlockState());
             source = WorldPos.of(level, warehouse); store = Containers.at(level, warehouse).orElseThrow(); colony.stores(EquipmentPlans.ID, level.dimension(), List.of(source));

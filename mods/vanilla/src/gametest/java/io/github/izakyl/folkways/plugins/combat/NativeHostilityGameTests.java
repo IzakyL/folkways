@@ -361,11 +361,11 @@ public final class NativeHostilityGameTests {
         Body resident(boolean enrolled, BlockPos at) {
             Body body = PersonBody.RESIDENT.get().create(helper.getLevel());
             body.mob().setNoAi(true);
+            place(body.mob(), at);
             if (enrolled) {
                 colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
             }
-            place(body.mob(), at);
             return body;
         }
 

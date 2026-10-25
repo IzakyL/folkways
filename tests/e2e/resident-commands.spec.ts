@@ -113,8 +113,9 @@ for (int n = 0; n < 4; n++) {
   body.moveTo(x + 2.5, y, z + 7.5 + n * 2);
   body.pack().insert(new ItemStack(Items.IRON_INGOT, 8));
   var axe = new ItemStack(Items.IRON_AXE); axe.setDamageValue(7); body.pack().insert(axe);
+  level.addFreshEntity(body);
   colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
-  body.joinColony(colony.id()); level.addFreshEntity(body);
+  body.joinColony(colony.id());
 }
 return Map.of("colony", colony.id().toString(), "group", "", "x", args.string("x"), "y", args.string("y"), "z", args.string("z"));
 ` }),

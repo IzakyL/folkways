@@ -57,8 +57,9 @@ public final class MeleeReachGameTests {
         enemy.setNoAi(true); enemy.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.CARVED_PUMPKIN));
         enemy.getAttribute(Attributes.MAX_HEALTH).setBaseValue(60); enemy.setHealth(60);
         guard.pack().insert(new ItemStack(Items.IRON_SWORD));
+        level.addFreshEntity(guard);
         colony.hold(PersonContent.ID, Held.Entity.of(guard)).orElseThrow(); guard.joinColony(colony.id());
-        level.addFreshEntity(guard); level.addFreshEntity(enemy);
+        level.addFreshEntity(enemy);
         BlockPos oldStance = helper.absolutePos(new BlockPos(8, 1, 5));
         helper.assertTrue(Reach.standingAt(guard.position(), oldStance)
                 && Reach.workableCells(level, enemy.blockPosition()).contains(oldStance),

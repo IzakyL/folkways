@@ -398,8 +398,9 @@ public final class ResidentSupportGameTests {
             var body = PersonBody.RESIDENT.get().create(level);
             helper.assertTrue(body != null, "the registered person creates the actual test resident");
             body.moveTo(Vec3.atBottomCenterOf(at(x, z).block(level))); body.getRandom().setSeed(924);
+            level.addFreshEntity(body);
             helper.assertTrue(holder.hold(PersonContent.ID, Held.Entity.of(body)).isPresent(), "the colony holds the actual resident");
-            body.joinColony(holder.id()); level.addFreshEntity(body); entities.add(body);
+            body.joinColony(holder.id()); entities.add(body);
             if (armed) arm(holder, body);
             return body;
         }

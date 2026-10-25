@@ -131,9 +131,9 @@ public final class LivingPreemptionGameTests {
             BlockPos feet = helper.absolutePos(new BlockPos(2, 1, 2));
             helper.setBlock(new BlockPos(2, 0, 2), Blocks.STONE);
             body.mob().moveTo(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
+            level.addFreshEntity(body.mob());
             colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
             body.joinColony(colony.id());
-            level.addFreshEntity(body.mob());
             player.moveTo(body.mob().position());
             Charters.keep(colony, Charter.founded("rest control test", player.getUUID()));
             player.setData(FolkwaysPlayerAttachments.CURRENT_COLONY, Optional.of(colony.id()));

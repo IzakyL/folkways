@@ -291,9 +291,10 @@ public final class DefaultEquipmentGameTests {
         ResidentEntity add(boolean noAi) {
             ResidentEntity resident = PersonBody.RESIDENT.get().create(level); resident.setNoAi(noAi);
             BlockPos at = helper.absolutePos(new BlockPos(2, 1, 3 + residents.size())); resident.moveTo(at.getX() + .5, at.getY(), at.getZ() + .5);
+            level.addFreshEntity(resident);
             colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow(); resident.joinColony(colony.id());
             if (manufacturingOnly) manufacturingWorker(resident);
-            level.addFreshEntity(resident); residents.add(resident); return resident;
+            residents.add(resident); return resident;
         }
         void manufacturingWorker(ResidentEntity resident) {
             for (var vocation : io.github.izakyl.folkways.core.api.vocation.Vocations.all()) {

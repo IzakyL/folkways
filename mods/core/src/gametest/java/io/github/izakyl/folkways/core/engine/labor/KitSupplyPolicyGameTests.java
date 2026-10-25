@@ -89,17 +89,27 @@ public final class KitSupplyPolicyGameTests {
             WorldPos source = WorldPos.of(level, chest);
             colony.stores(OWNER, level.dimension(), List.of(source));
             body.moveTo(chest.getX() - 2.5, chest.getY(), chest.getZ() + .5);
-            colony.hold(PersonBody.ID, Held.Entity.of(body)).orElseThrow();
-            body.joinColony(colony.id()); level.addFreshEntity(body);
+            helper.assertTrue(level.addFreshEntity(body), "the equipment-policy fixture body is present before colony admission");
+            colony.hold(PersonBody.ID, Held.Entity.of(body)).orElseThrow(() ->
+                new IllegalStateException("equipment-policy fixture could not hold loaded resident " + body.id()));
+            body.joinColony(colony.id());
             body.getPersistentData().putBoolean(MONITORED, true);
+            // A policy test needs an actual carried-kit obligation, not merely an optional/shared tool permission.
             var selected = Vocations.all().stream().filter(trade -> body.licences().of(trade).isPresent())
+                .filter(trade -> !body.kind().worksBarehanded(trade.id()) && KitRules.allows(colony, trade, tool.getItem()))
                 .filter(trade -> trade.kit().stream().anyMatch(goods -> Goods.matches(tool, goods)))
-                .findFirst().orElseThrow();
+                .findFirst().orElseThrow(() -> new IllegalStateException(
+                    "equipment-policy fixture has no licensed mandatory kit for its physical iron pickaxe; trades="
+                        + Vocations.all().stream().map(trade -> trade.id() + ":licensed="
+                            + body.licences().of(trade).isPresent() + ",allowed="
+                            + KitRules.allows(colony, trade, tool.getItem()) + ",kit=" + trade.kit()).toList()));
             for (var trade : Vocations.all()) {
                 if (trade != selected && !trade.id().equals(Vocations.HAULING)) {
                     body.licences().trade(trade).ifPresent(licence -> body.licences().allow(licence, false));
                 }
             }
+            helper.assertTrue(Kit.of(colony, body).specs().stream().anyMatch(goods -> Goods.matches(tool, goods)),
+                "the selected vocation really requires the finite warehouse pickaxe under its current tool permissions");
             long licenceRevision = body.licences().revision();
             var survey = new Survey(); var kits = new Kits();
             List<Message> messages = new ArrayList<>();

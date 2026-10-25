@@ -240,9 +240,9 @@ public final class CombatRecoveryGameTests {
             body.mob().moveTo(home.getX() + .5, home.getY(), home.getZ() + .5);
             if (bread > 0) { body.pack().setItem(0, new ItemStack(Items.BREAD, bread)); }
             setBreadRation();
+            level.addFreshEntity(body.mob());
             colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
             body.joinColony(colony.id());
-            level.addFreshEntity(body.mob());
             commands = ResidentCommands.of(colony);
             living = colony.service(LivingContent.ID, LivingPresence.class).orElseThrow();
             simulation = new LaborFixture(colony, level);

@@ -509,9 +509,9 @@ public final class CombatSelectionOwnershipGameTests {
             Body body = PersonBody.RESIDENT.get().create(level);
             BlockPos feet = at(x).block(level);
             body.mob().moveTo(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
+            level.addFreshEntity(body.mob());
             colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
             body.joinColony(colony.id());
-            level.addFreshEntity(body.mob());
             people.add(body);
             return body;
         }

@@ -160,9 +160,9 @@ for (int index = 0; index < each; index++) {
   resident.setHealth(1024.0f);
   resident.pack().insert(new ItemStack(Items.IRON_SWORD));
   resident.setPersistenceRequired();
+  level.addFreshEntity(resident);
   colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow();
   resident.joinColony(colony.id());
-  level.addFreshEntity(resident);
   ResidentCommands.of(colony).guard(resident, WorldSpaces.at(resident), new Vec3(1, 0, 0));
   residents.add(resident.getUUID().toString());
 

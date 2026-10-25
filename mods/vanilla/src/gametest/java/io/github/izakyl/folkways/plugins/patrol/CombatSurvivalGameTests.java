@@ -288,9 +288,9 @@ public final class CombatSurvivalGameTests {
             body.getRandom().setSeed(7901);
             body.pack().insert(new ItemStack(bow ? Items.BOW : Items.IRON_SWORD));
             if (bow) body.pack().insert(new ItemStack(Items.ARROW, 12));
+            level.addFreshEntity(body);
             helper.assertTrue(colony.hold(PersonContent.ID, Held.Entity.of(body)).isPresent(), "the actual body is admitted to this colony");
             body.joinColony(colony.id());
-            level.addFreshEntity(body);
             start = body.position();
             commands = ResidentCommands.of(colony);
             order = commands.guard(body, WorldSpaces.at(body), new Vec3(1, 0, 0)).deliberateGuard();

@@ -156,8 +156,9 @@ for (int n = 0; n < 4; n++) {
   var resident = PersonBody.RESIDENT.get().create(level);
   resident.moveTo(x + 2.5, y, z + 7.5 + n * 2);
   resident.pack().insert(new ItemStack(n % 2 == 0 ? Items.IRON_SWORD : Items.IRON_AXE));
+  level.addFreshEntity(resident);
   colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow();
-  resident.joinColony(colony.id()); level.addFreshEntity(resident); bodies.add(resident);
+  resident.joinColony(colony.id()); bodies.add(resident);
 }
 var group = UnitGroups.of(colony).create(bodies);
 var route = new ArrayList<Deployment>();

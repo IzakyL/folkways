@@ -515,7 +515,8 @@ public final class ResidentEquipmentGameTests {
             player.setData(FolkwaysPlayerAttachments.CURRENT_COLONY, Optional.of(colony.id()));
             body = PersonBody.RESIDENT.get().create(level); body.setNoAi(true);
             BlockPos at = helper.absolutePos(new BlockPos(2, 1, 2)); body.moveTo(at.getX() + .5, at.getY(), at.getZ() + .5);
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow(); body.joinColony(colony.id()); level.addFreshEntity(body);
+            level.addFreshEntity(body);
+            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow(); body.joinColony(colony.id());
             near();
         }
         void near() { player.moveTo(body.getX() + 1, body.getY(), body.getZ()); }

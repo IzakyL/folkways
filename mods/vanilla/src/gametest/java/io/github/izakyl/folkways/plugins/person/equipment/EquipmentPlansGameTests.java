@@ -405,7 +405,8 @@ public final class EquipmentPlansGameTests {
         ResidentEntity add() {
             ResidentEntity resident = PersonBody.RESIDENT.get().create(level); resident.setNoAi(true);
             BlockPos at = helper.absolutePos(new BlockPos(2, 1, 2)); resident.moveTo(at.getX() + .5, at.getY(), at.getZ() + .5);
-            colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow(); resident.joinColony(colony.id()); level.addFreshEntity(resident); residents.add(resident); return resident;
+            level.addFreshEntity(resident);
+            colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow(); resident.joinColony(colony.id()); residents.add(resident); return resident;
         }
         void act(String kind, String template, String scope, String name) {
             CompoundTag snapshot = ResidentEquipment.read(player, body);

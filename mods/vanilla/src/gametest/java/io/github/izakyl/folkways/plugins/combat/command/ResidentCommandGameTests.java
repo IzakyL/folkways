@@ -524,10 +524,10 @@ public final class ResidentCommandGameTests {
             Body body = PersonBody.RESIDENT.get().create(level);
             BlockPos absolute = helper.absolutePos(at);
             body.mob().moveTo(absolute.getX() + .5, absolute.getY(), absolute.getZ() + .5);
+            level.addFreshEntity(body.mob());
             colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
             body.joinColony(colony.id());
             bodies.add(body);
-            level.addFreshEntity(body.mob());
             return body;
         }
         void submit(Node job) { colony.submit(WORK, level.dimension(), new Grown(List.of(job), List.of()), (id, how) -> { }); }

@@ -93,8 +93,8 @@ public final class CombatDeskGameTests {
         Colony foreign = Colonies.mint(helper.getLevel().getServer());
         Body outsider = PersonBody.RESIDENT.get().create(helper.getLevel());
         outsider.mob().moveTo(f.player.getX(), f.player.getY(), f.player.getZ());
-        foreign.hold(PersonContent.ID, Held.Entity.of(outsider.mob())).orElseThrow(); outsider.joinColony(foreign.id());
         helper.getLevel().addFreshEntity(outsider.mob());
+        foreign.hold(PersonContent.ID, Held.Entity.of(outsider.mob())).orElseThrow(); outsider.joinColony(foreign.id());
         try {
             helper.assertFalse(f.desk.act(f.player, "resident", outsider.id().toString()), "a loaded foreign resident is still unauthorized");
             for (int n = 0; n < 8; n++) { helper.assertTrue(f.desk.act(f.player, "resident", f.people.get(n).id().toString()), "up to eight distinct people can be selected"); }
@@ -164,8 +164,9 @@ public final class CombatDeskGameTests {
                 Body body = PersonBody.RESIDENT.get().create(level);
                 BlockPos feet = helper.absolutePos(new BlockPos(2 + n % 3 * 2, 1, 2 + n / 3 * 2));
                 body.mob().moveTo(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
+                level.addFreshEntity(body.mob());
                 colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow(); body.joinColony(colony.id());
-                level.addFreshEntity(body.mob()); people.add(body);
+                people.add(body);
             }
         }
         void close() { people.forEach(body -> body.mob().discard()); colony.raze(); }

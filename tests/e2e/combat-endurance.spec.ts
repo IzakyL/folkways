@@ -232,9 +232,9 @@ body.getAttribute(Attributes.MAX_HEALTH).setBaseValue(1024.0);
 body.setHealth(1024.0F);
 body.pack().insert(new ItemStack(Items.IRON_SWORD));
 body.setPersistenceRequired();
+level.addFreshEntity(body);
 colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
 body.joinColony(colony.id());
-level.addFreshEntity(body);
 ResourceLocation ground = ResourceLocation.fromNamespaceAndPath("folkways", "ground");
 var settings = ColonySettings.byDefault(ColonySchemas.ofDelegation(ground))
     .with("clear", new ColonySettings.Value.Flag(true));
