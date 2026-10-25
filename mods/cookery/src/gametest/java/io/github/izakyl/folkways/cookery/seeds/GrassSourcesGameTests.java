@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -196,73 +197,69 @@ public final class GrassSourcesGameTests {
         // The 24-block template does not load this distant resident. Keep the real colony view live.
         boolean forced = !level.getForcedChunks().contains(travellingChunk.toLong())
             && level.setChunkForced(travellingChunk.x, travellingChunk.z, true);
-        afterEntityTicking(helper, travellingFeet, 1000, () -> {
-            try {
-                helper.assertTrue(level.isPositionEntityTicking(travellingFeet),
-                    "the travelling resident's real chunk ticks before the sweep starts");
-                for (boolean restore : List.of(false, true)) {
-                    try (Fixture rig = new Fixture(helper)) {
-                        rig.mark(restore); rig.wearHat();
-                        if (restore) rig.body.pack().setItem(1, new ItemStack(Items.BONE_MEAL));
-                        else rig.level.setBlock(rig.center.above(), Blocks.SHORT_GRASS.defaultBlockState(), Block.UPDATE_ALL);
+        try {
+            // GameTestServer runs without the normal 20 TPS pacing. Pump chunk tasks while
+            // waiting in real time, so fast test ticks cannot outrun asynchronous generation.
+            // The 30-second loading watchdog is independent of the test's tick timeout.
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+            level.getServer().managedBlock(() -> {
+                level.getChunkSource().pollTask();
+                return level.isPositionEntityTicking(travellingFeet) || System.nanoTime() >= deadline;
+            });
+            helper.assertTrue(level.isPositionEntityTicking(travellingFeet),
+                "the travelling resident's real chunk ticks before the sweep starts");
+            for (boolean restore : List.of(false, true)) {
+                try (Fixture rig = new Fixture(helper)) {
+                    rig.mark(restore); rig.wearHat();
+                    if (restore) rig.body.pack().setItem(1, new ItemStack(Items.BONE_MEAL));
+                    else rig.level.setBlock(rig.center.above(), Blocks.SHORT_GRASS.defaultBlockState(), Block.UPDATE_ALL);
+                    rig.presence.refresh(rig.level.getServer());
+                    var submitted = new java.util.ArrayList<Node>();
+                    var withdrawn = new java.util.ArrayList<UUID>();
+                    var colony = (io.github.izakyl.folkways.core.engine.colony.ColonyWorks) rig.colony;
+                    colony.listen(rig.level.dimension(), new io.github.izakyl.folkways.core.engine.colony.ColonyWorks.Listening() {
+                        public void submitted(net.minecraft.resources.ResourceLocation owner, io.github.izakyl.folkways.core.api.work.Grown work) { submitted.addAll(work.nodes()); }
+                        public void withdrawn(net.minecraft.resources.ResourceLocation owner, UUID node) { withdrawn.add(node); }
+                        public void offered() { }
+                    });
+                    var asking = new io.github.izakyl.folkways.core.api.colony.Asking(rig.colony, SeedPresence.ID, () -> { });
+                    var offered = rig.presence.goals(rig.colony.view(rig.level));
+                    Node source = offered.getFirst().nodes().getFirst();
+                    asking.offer(Map.of(rig.level.dimension(), offered));
+                    helper.assertValueEqual(submitted.size(), 1, "one grass operation is submitted through the real colony root contract");
+                    Node original = submitted.getFirst();
+                    helper.assertTrue(original.planned(rig.level).isEmpty(), "the original source takes its exclusive turn");
+                    rig.body.moveTo(travellingFeet.getX() + 0.5, travellingFeet.getY(), travellingFeet.getZ() + 0.5);
+                    helper.assertTrue(rig.colony.view(rig.level).residents().stream().anyMatch(resident -> resident.id().equals(rig.body.id())),
+                        "the far resident remains present in the real loaded colony view");
+                    for (int period = 0; period < 10; period++) {
                         rig.presence.refresh(rig.level.getServer());
-                        var submitted = new java.util.ArrayList<Node>();
-                        var withdrawn = new java.util.ArrayList<UUID>();
-                        var colony = (io.github.izakyl.folkways.core.engine.colony.ColonyWorks) rig.colony;
-                        colony.listen(rig.level.dimension(), new io.github.izakyl.folkways.core.engine.colony.ColonyWorks.Listening() {
-                            public void submitted(net.minecraft.resources.ResourceLocation owner, io.github.izakyl.folkways.core.api.work.Grown work) { submitted.addAll(work.nodes()); }
-                            public void withdrawn(net.minecraft.resources.ResourceLocation owner, UUID node) { withdrawn.add(node); }
-                            public void offered() { }
-                        });
-                        var asking = new io.github.izakyl.folkways.core.api.colony.Asking(rig.colony, SeedPresence.ID, () -> { });
-                        var offered = rig.presence.goals(rig.colony.view(rig.level));
-                        Node source = offered.getFirst().nodes().getFirst();
-                        asking.offer(Map.of(rig.level.dimension(), offered));
-                        helper.assertValueEqual(submitted.size(), 1, "one grass operation is submitted through the real colony root contract");
-                        Node original = submitted.getFirst();
-                        helper.assertTrue(original.planned(rig.level).isEmpty(), "the original source takes its exclusive turn");
-                        rig.body.moveTo(travellingFeet.getX() + 0.5, travellingFeet.getY(), travellingFeet.getZ() + 0.5);
-                        helper.assertTrue(rig.colony.view(rig.level).residents().stream().anyMatch(resident -> resident.id().equals(rig.body.id())),
-                            "the far resident remains present in the real loaded colony view");
-                        for (int period = 0; period < 10; period++) {
-                            rig.presence.refresh(rig.level.getServer());
-                            var wanted = rig.presence.goals(rig.colony.view(rig.level));
-                            helper.assertTrue(wanted.size() == 1 && wanted.getFirst().nodes().getFirst() == source
-                                    && source.id().equals(original.id()),
-                                "the same adopted source stays wanted under its decorated root's id while its resident is still far away");
-                            asking.offer(Map.of(rig.level.dimension(), wanted));
-                        }
-                        helper.assertTrue(withdrawn.isEmpty() && submitted.size() == 1, "repeated sweeps neither withdraw nor resubmit the active source");
-                        helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), restore ? 1L : 0L,
-                            "travelling never consumes a future restoration's real bone meal");
-                        // Clothing borrowing wraps the source in a WHEREVER root; the native action
-                        // still executes at the original source's real offered work stance.
-                        var feet = source.spec().stances().cells().iterator().next().cell();
-                        rig.body.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
-                        rig.finish(original);
-                        colony.ended(rig.level.dimension(), original.id(), Ending.DONE);
-                        if (restore) {
-                            helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 0L,
-                                "one actual bone meal is spent only after arrival");
-                            helper.assertTrue(rig.allowed.stream().anyMatch(cell -> rig.level.getBlockState(cell.above()).is(Blocks.SHORT_GRASS)),
-                                "the retained original task performs the actual native growth");
-                        } else helper.assertTrue(rig.level.getBlockState(rig.center.above()).isAir(), "the retained task removes the real original grass once");
+                        var wanted = rig.presence.goals(rig.colony.view(rig.level));
+                        helper.assertTrue(wanted.size() == 1 && wanted.getFirst().nodes().getFirst() == source
+                                && source.id().equals(original.id()),
+                            "the same adopted source stays wanted under its decorated root's id while its resident is still far away");
+                        asking.offer(Map.of(rig.level.dimension(), wanted));
                     }
+                    helper.assertTrue(withdrawn.isEmpty() && submitted.size() == 1, "repeated sweeps neither withdraw nor resubmit the active source");
+                    helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), restore ? 1L : 0L,
+                        "travelling never consumes a future restoration's real bone meal");
+                    // Clothing borrowing wraps the source in a WHEREVER root; the native action
+                    // still executes at the original source's real offered work stance.
+                    var feet = source.spec().stances().cells().iterator().next().cell();
+                    rig.body.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
+                    rig.finish(original);
+                    colony.ended(rig.level.dimension(), original.id(), Ending.DONE);
+                    if (restore) {
+                        helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 0L,
+                            "one actual bone meal is spent only after arrival");
+                        helper.assertTrue(rig.allowed.stream().anyMatch(cell -> rig.level.getBlockState(cell.above()).is(Blocks.SHORT_GRASS)),
+                            "the retained original task performs the actual native growth");
+                    } else helper.assertTrue(rig.level.getBlockState(rig.center.above()).isAir(), "the retained task removes the real original grass once");
                 }
-                helper.succeed();
-            } finally {
-                if (forced) level.setChunkForced(travellingChunk.x, travellingChunk.z, false);
             }
-        });
-    }
-
-    // A forced ticket requests asynchronous loading; elapsed test ticks do not prove entity ticking.
-    // Keep the original real-ticking assertion and cleanup at the bounded deadline if it never loads.
-    private static void afterEntityTicking(GameTestHelper helper, BlockPos feet, int remaining, Runnable ready) {
-        if (helper.getLevel().isPositionEntityTicking(feet) || remaining == 0) {
-            ready.run();
-        } else {
-            helper.runAfterDelay(1, () -> afterEntityTicking(helper, feet, remaining - 1, ready));
+            helper.succeed();
+        } finally {
+            if (forced) level.setChunkForced(travellingChunk.x, travellingChunk.z, false);
         }
     }
 
