@@ -11,11 +11,12 @@ This increment continues draft e40ebc7 and incorporates master e70e8f18's per-vo
 | Core                              | Residents, labour, item ownership, lifecycle, general travel and exclusive execution                               |
 | Vanilla                           | Everyday hostility, defence, patrol, orders, actual groups, placement, movement and weapon contracts               |
 | War                               | RTS selection, shortcut sets, pointer orders and immediate route queues; raids and strategic AI remain future work |
+| Optional Epic Fight               | Native item strikes, bounded native actions and patched rendering through Vanilla interfaces                       |
 | Separate gun integrations, future | Native TaCZ or Point Blank execution through Vanilla contracts                                                     |
 
-Core and Vanilla require neither War nor gun mods. Create, Cookery and Modular Golems retain independent extensions.
+Core and Vanilla require neither War, Epic Fight nor gun mods. Create, Cookery and Modular Golems retain independent extensions.
 
-In source, `mods/core` owns generic control, scheduling and item protection through `core.api` and `core.engine`. Vanilla's `plugins.combat` owns commands, UnitGroups, weapons and support; `plugins.person.equipment` owns resident outfits. The `war` package in `mods/war` submits V-view selection and pointer intent to Vanilla's server interfaces without directly navigating residents or moving equipment. Concrete Epic Fight integration is split into a separate follow-up module; generic `WeaponAdapter`, `WeaponSession`, `CombatMotions` and Core `BodyActions` remain in the foundation.
+In source, `mods/core` owns generic control, scheduling and item protection through `core.api` and `core.engine`. Vanilla's `plugins.combat` owns commands, UnitGroups, weapons and support; `plugins.person.equipment` owns resident outfits. The `war` package in `mods/war` submits V-view selection and pointer intent to Vanilla's server interfaces without directly navigating residents or moving equipment. Concrete Epic Fight integration lives in the independent `mods/epicfite` module's `epicfight` package; generic `WeaponAdapter`, `WeaponSession`, `CombatMotions` and Core `BodyActions` remain in the foundation.
 
 ## P0/P1: hostility and defence
 
@@ -277,7 +278,13 @@ The equipment area has separate manual and loadout tabs, without enlarging the V
 
 `ResidentShields.guard/lower` uses the real offhand and native blocking path, preserving direction, the five-tick raise delay, piercing and bypass rules. Real blocking consumes durability; breakage consumes the shield once. Axe disable lasts 100 ticks and is saved and synchronized. Melee without an available shield retains its ten-tick attack. A successful raise fixes that attack at twenty ticks: defense through tick fourteen, shield down for the final five ticks, damage at tick twenty. Breakage or disable cannot advance that pending hit. Bows and crossbows retain exclusive main-hand use with the shield lowered.
 
-This first delivery includes native weapons and shields. Concrete Epic Fight animation, collision and model integration belongs to a separate follow-up PR and is excluded from this build. Neither Core nor Vanilla depends on that mod; public weapon and action interfaces remain available for an independent bridge.
+The Vanilla foundation and Epic Fight bridge are separate deliveries. Independent `mods/epicfite` (mod ID `folkways_epicfight`, artifact `folkways-epicfight`) requires exactly Epic Fight **21.17.3.1**. It depends on Core and Vanilla, with no War dependency. War is installed only in the combined input acceptance profile. Neither Core nor Vanilla requires Epic Fight.
+
+The bridge borrows the canonical designated inventory stack into the resident's real main hand. Native animation collisions cause damage and recheck the live target, permission, realm, distance and sight. A shield has a cancellable preparation window before the strike. Stop revokes collision authorization; close returns the item idempotently through normal inventory insertion. Inventory transactions may replace Java stack representations: conservation is checked by actual container ownership, full components, durability and unique quantity, rather than Java reference identity across a transfer. While borrowed, the actual hand is the one selected stack.
+
+The bridge retains a conservative 2.5-block attack range. Native `CapabilityItem.getReach()` describes animation approach spacing and is not treated as a collision radius. DPS ranking uses actual item damage and capability/weight-adjusted attack speed as an estimate; native animation phases and collisions determine real damage. The native iron spear has explicit equipment, collision, durability and stop/return regression coverage. No arbitrary third-party weapon reach or combo guarantee is inferred.
+
+Every strike also captures its current command identity, including an initially absent command. A replacement MOVE/RETREAT or release invalidates that identity. The native pre-animation callback closes the obsolete session before advancing animation, while each collision admission checks the same live context. Autonomous GUARD and uncommanded self-defence therefore cannot retain an old strike for the interval before the BodyRunner performs its ordinary cleanup. Explicit-target authorization remains an additional check.
 
 Core `BodyActions` lets independent animation extensions pause ordinary body actions after revocation and cleanup, so stun cannot freeze a loan's return. `WeaponSession.defeatedTarget` and public patrol `StrikeNode` settle real animation-frame kills once. `acceptsBarehanded` retains the native unarmed animation entry point.
 
@@ -287,7 +294,7 @@ Patrol discovery starts at twenty-four blocks plus effects. Autonomous combat po
 
 Healthy residents recognize nearby creepers: six blocks ordinarily, eight when ignited or swelling, and ten when charged. `CombatEvasion` tries at most twelve candidate paths; the current BodyRunner owns one `EvasionNode` for at most 100 ticks without replacing the command. Emergency explosive avoidance may retreat within a sixteen-block local station domain; ordinary kiting retains twelve. A failed proposal does not enter a new unbounded random escape, while original damage/fire fear remains. Movement, retreat and replacement commands revoke old actions. Kiting is retreat, stop, shoot, and retreat again when approached, without moving fire or a guaranteed kill when range or terrain is insufficient.
 
-Vanilla `CombatMotions` is an optional native-action interface whose exclusive session belongs to the current node. Extensions must check solid footing, walls, ledges, loading, realm, live authority and the local domain each frame. If unavailable, the same node uses its existing navigator. Cancellation, authority loss, saving and unloading must reclaim actions and temporary state before another controller proceeds, without another navigator or background attack goal. This build registers no third-party action adapter and makes no claim of delivered Epic Fight dodges or animation integration.
+Vanilla `CombatMotions` is an optional native-action interface whose exclusive session belongs to the current node. Extensions must check solid footing, walls, ledges, loading, realm, live authority and the local domain each frame. If unavailable, the same node uses its existing navigator. Cancellation, authority loss, saving and unloading must reclaim actions and temporary state before another controller proceeds, without another navigator or background attack goal. The optional Epic Fight module supplies native STEP windows and sprint actions within those limits, without calling player-only dodge skills or inventing invulnerability. Native STEP is bounded to twenty ticks/three blocks with a forty-tick cooldown; sprint uses the existing path. Client acceptance records actual animation, renderer and movement state; it does not synthesize an action to claim coverage.
 
 ### Generic ammunition and post-combat recovery
 
@@ -336,8 +343,10 @@ These contracts received an independent RTS design audit; static approval is sep
 ./gradlew -PgameTestMod=vanilla runGameTestServer
 ./gradlew -PcookeryTests=true -PgameTestMod=vanilla runGameTestServer
 ./gradlew -PgameTestMod=core runGameTestServer
+./gradlew -PepicfightTests=true -PgameTestMod=epicfite runGameTestServer
 npm run test:unit
 npm run typecheck
+npm run test:e2e -- tests/e2e/epicfight-acceptance.spec.ts --workers=1
 npm run test:e2e -- tests/e2e/native-hostility.spec.ts tests/e2e/resident-commands.spec.ts tests/e2e/combat-hostility-policy.spec.ts tests/e2e/formation-patrol.spec.ts tests/e2e/weapon-sessions.spec.ts --workers=1
 npm run test:e2e -- tests/e2e/combat-page.spec.ts tests/e2e/combat-supplies.spec.ts tests/e2e/combat-endurance.spec.ts tests/e2e/formation-terrain.spec.ts tests/e2e/combat-golems.spec.ts --workers=1
 ```

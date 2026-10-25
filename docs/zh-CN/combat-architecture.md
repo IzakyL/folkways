@@ -11,11 +11,12 @@
 | Core               | 居民、劳动、物品所有权、生命周期、通用出行与互斥执行                       |
 | Vanilla            | 日常敌对、自卫、巡逻、命令、实际小队、站位、具体行走及武器契约             |
 | War                | RTS 框选、数字快捷选择组、鼠标命令与实时路径队列；袭击、战略 AI 等留待以后 |
+| 可选 Epic Fight    | 通过 Vanilla 接口执行原生物品打击、有界动作与补丁渲染                      |
 | 独立枪械扩展，未来 | 通过 Vanilla 契约调用 TaCZ、Point Blank 各自的原生逻辑                     |
 
-Core、Vanilla 不依赖 War 或枪械模组。Create、Cookery、Modular Golems 保持独立扩展。
+Core、Vanilla 不依赖 War、Epic Fight 或枪械模组。Create、Cookery、Modular Golems 保持独立扩展。
 
-对应源码边界如下：`mods/core` 的 `core.api`、`core.engine` 管通用控制权、调度与物品保护；`mods/vanilla` 的 `plugins.combat` 管命令、UnitGroup、武器和支援，`plugins.person.equipment` 管居民配装。`mods/war` 的 `war` 包只将 V 界面选择与鼠标输入提交给 Vanilla 的服务端接口，不直接导航或转移装备。具体 Epic Fight 桥接从本版拆出，在独立后续模块评审；通用 `WeaponAdapter`、`WeaponSession`、`CombatMotions` 及 Core `BodyActions` 留在上述基础模块。
+对应源码边界如下：`mods/core` 的 `core.api`、`core.engine` 管通用控制权、调度与物品保护；`mods/vanilla` 的 `plugins.combat` 管命令、UnitGroup、武器和支援，`plugins.person.equipment` 管居民配装。`mods/war` 的 `war` 包只将 V 界面选择与鼠标输入提交给 Vanilla 的服务端接口，不直接导航或转移装备。具体 Epic Fight 桥接位于独立 `mods/epicfite` 的 `epicfight` 包；通用 `WeaponAdapter`、`WeaponSession`、`CombatMotions` 及 Core `BodyActions` 留在上述基础模块。
 
 ## P0/P1：日常敌对与防御
 
@@ -287,7 +288,13 @@ Core 的 `PersonalItems` 在真实 ItemStack 的自定义数据中记录居民�
 
 `ResidentShields.guard/lower` 只使用真实副手及原版格挡路径，保留正面方向、五 tick 起盾延迟、穿透与伤害绕过规则。真实伤害消耗盾耐久，破盾只消耗一次；斧破盾禁用一百 tick，冷却可保存并同步。近战没有可用盾时沿用十 tick 攻击；起盾成功的攻击固定为二十 tick，前十四 tick 防守、最后五 tick 收盾、第二十 tick 命中，途中损坏或禁盾不提前命中。弓弩使用主手期间收盾，不同时拉弓和格挡。
 
-第一版只交付原版武器与盾牌。Epic Fight 的具体动画、碰撞和模型桥接在独立后续 PR 评审，不包含在本版构建。Core、Vanilla 均不依赖该模组；公共武器及动作接口保留，供后续桥接以独立模块接入。
+Vanilla 基础与 Epic Fight 桥接独立交付。`mods/epicfite`（模组 ID `folkways_epicfight`，产物 `folkways-epicfight`）严格要求原生 **21.17.3.1**。它依赖 Core、Vanilla，不依赖 War；只有联合输入验收配置才安装 War。Core、Vanilla 均不要求安装 Epic Fight。
+
+桥接把当前指定的真实库存物借到居民主手，由原生动画碰撞造成伤害，并逐次检查即时目标、授权、空间、距离与视线。持盾有可撤销的打击准备期。停止撤销碰撞授权，关闭会话通过普通库存插入幂等归还。库存事务允许更换 Java 栈表示；守恒依据真实容器归属、完整组件、耐久与唯一数量验证，不要求跨转交保持 Java 对象引用相同。持械期间，主手必须是被选择的那一个真实栈。
+
+桥接保留保守的 2.5 格打击范围。原生 `CapabilityItem.getReach()` 是动画贴近停距，不作为碰撞半径。DPS 排序使用实际物品伤害与原生能力、负重调整后的攻速估算，真实伤害仍由动作阶段与碰撞决定。原生铁矛有明确配装、真实碰撞、耐久及停火归还回归；不推断任意第三方武器的射程或连段保证。
+
+每次打击还绑定开启时的命令身份，原本没有命令也作为明确状态。新 MOVE、RETREAT 或解除控制使原身份失效；原生预动画回调先关闭旧会话再推进动画，每次碰撞准入也重查同一即时上下文。自主 GUARD 与无命令自卫因此不能在 BodyRunner 正常清理前保留旧攻击窗口。显式目标授权仍作为额外检查。
 
 Core `BodyActions` 允许独立动画扩展暂停普通身体动作，但先处理撤销和清理，避免眩晕冻结借还。`WeaponSession.defeatedTarget` 与公开的巡逻 `StrikeNode` 结算动画帧间的真实击杀，最多奖励一次；`acceptsBarehanded` 保留可用的原生空手动画入口。
 
@@ -297,7 +304,7 @@ Core `BodyActions` 允许独立动画扩展暂停普通身体动作，但先处�
 
 健康居民也会识别近距苦力怕：普通六格、点燃或膨胀八格、闪电苦力怕十格。`CombatEvasion` 最多试十二条候选路径，`EvasionNode` 由当前 BodyRunner 执行一次最多一百 tick 的退位，不替换原命令。紧急避爆可在原站位十六格局部域内退让，普通风筝仍十二格；失败不转入新的无界随机逃离，原有受击、火焰恐惧保留。移动、撤退和新命令撤销旧避让。第一版风筝是“退位—停步射击—逼近再退”，不是移动射击；武器射程不足或无路时不保证击杀。
 
-`CombatMotions` 是 Vanilla 的可选原生动作接口，独占会话由当前节点打开和关闭。扩展必须逐帧检查地面、墙体、悬崖、加载范围、空间、即时授权和局部域；无安全动作就沿已有导航退位。取消、失权、存档和卸载须先回收动作及临时状态，再允许后续控制，不得增加第二个导航者或后台攻击 Goal。本版不注册第三方动作适配器，也不宣称史诗战斗闪避或动画已交付。
+`CombatMotions` 是 Vanilla 的可选原生动作接口，独占会话由当前节点打开和关闭。扩展必须逐帧检查地面、墙体、悬崖、加载范围、空间、即时授权和局部域；无安全动作就沿已有导航退位。取消、失权、存档和卸载须先回收动作及临时状态，再允许后续控制，不得增加第二个导航者或后台攻击 Goal。可选 Epic Fight 模块在这些边界内提供原生 STEP 窗口与冲刺，不调用玩家专用闪避技能、不伪造无敌。STEP 最多二十 tick、三格，冷却四十 tick；冲刺沿已有路径执行。客户端验收记录实际动画、渲染与移动状态，不注入动作冒充覆盖。
 
 ### 通用弹药与脱战恢复
 
@@ -346,8 +353,10 @@ Core `BodyActions` 允许独立动画扩展暂停普通身体动作，但先处�
 ./gradlew -PgameTestMod=vanilla runGameTestServer
 ./gradlew -PcookeryTests=true -PgameTestMod=vanilla runGameTestServer
 ./gradlew -PgameTestMod=core runGameTestServer
+./gradlew -PepicfightTests=true -PgameTestMod=epicfite runGameTestServer
 npm run test:unit
 npm run typecheck
+npm run test:e2e -- tests/e2e/epicfight-acceptance.spec.ts --workers=1
 npm run test:e2e -- tests/e2e/native-hostility.spec.ts tests/e2e/resident-commands.spec.ts tests/e2e/combat-hostility-policy.spec.ts tests/e2e/formation-patrol.spec.ts tests/e2e/weapon-sessions.spec.ts --workers=1
 npm run test:e2e -- tests/e2e/combat-page.spec.ts tests/e2e/combat-supplies.spec.ts tests/e2e/combat-endurance.spec.ts tests/e2e/formation-terrain.spec.ts tests/e2e/combat-golems.spec.ts --workers=1
 npm run test:e2e -- tests/e2e/combat-camera.spec.ts tests/e2e/overhead-blackbox.spec.ts --workers=1
