@@ -52,6 +52,16 @@ final class CreateSchematicPlacement implements SchematicPlacement.Adapter {
     // Further than any belt Create lets a connector make.
     private static final int LONGEST_BELT = 256;
 
+    /** Converts Create's template origin to the corner expected by a normalized Folkways blueprint. */
+    static BlockPos corner(BlockPos anchor, Vec3i size, StructurePlaceSettings settings) {
+        // The printer places at anchor + calculateRelativePosition(settings, cell). Blueprint.transformed
+        // subtracts the transformed volume's minimum, so its build order must add that minimum back here.
+        // Use the whole template, including empty margins, rather than the printer's occupied bounds.
+        BlockPos near = StructureTemplate.calculateRelativePosition(settings, BlockPos.ZERO);
+        BlockPos far = StructureTemplate.calculateRelativePosition(settings, new BlockPos(size).offset(-1, -1, -1));
+        return anchor.offset(BlockPos.min(near, far));
+    }
+
     @Override
     public SchematicPlacement.Printed print(ServerLevel level, StructureTemplate template, Vec3i size) {
         SchematicLevel printer = new SchematicLevel(BlockPos.ZERO, level);
