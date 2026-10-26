@@ -1,5 +1,5 @@
 import { expect, test, type TestInfo } from "@playwright/test";
-import { writeFileSync } from "node:fs";
+import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { defineTask, javaTask, media, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
@@ -107,6 +107,8 @@ test("Epic Fight converts a synced Steve GEO for native combat and rebuilds it a
     await capture(pair.client, info, "epicfight-geo-after-reload.png");
   } catch (error) {
     pair?.failing(error);
+    // A disconnected client cannot pass the UI settle used by screenshots. Preserve its actual JVM logs first.
+    if (pair) await attachRuntimeLogs(pair, info);
     if (pair) { try { await capture(pair.client, info, "epicfight-geo-failure.png"); } catch { /* retain original failure */ } }
     throw error;
   } finally {
@@ -137,6 +139,20 @@ async function capture(client: MinecraftClient, info: TestInfo, name: string) {
   const file = info.outputPath(name);
   await media.screenshot(client, { path: file, hideGui: false });
   await info.attach(name, { path: file, contentType: "image/png" });
+}
+async function attachRuntimeLogs(pair: E2EPair, info: TestInfo) {
+  for (const [side, instance] of [["server", pair.server.instance], ["client", pair.client.instance]] as const) {
+    for (const folder of ["logs", "debug", "crash-reports"]) {
+      const root = path.join(instance.instanceDir, folder);
+      if (!existsSync(root)) continue;
+      for (const file of readdirSync(root, { withFileTypes: true })) {
+        if (!file.isFile() || !/\.(log|txt)$/.test(file.name)) continue;
+        try { await info.attach(`epicfight-geo-${side}-${folder}-${file.name}`, {
+          path: path.join(root, file.name), contentType: "text/plain" });
+        } catch { /* Preserve the original gameplay failure. */ }
+      }
+    }
+  }
 }
 async function flat(pair: E2EPair, p: Vec) {
   await mustCommand(pair.server, "difficulty normal");

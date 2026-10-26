@@ -124,12 +124,19 @@ jobs:
             spec: tests/e2e/founding-smoke.spec.ts
           - label: Epic Fight
             artifact: epicfight
-            spec: >-
-              tests/e2e/epicfight-acceptance.spec.ts
-              tests/e2e/epicfight-terrain.spec.ts
-              tests/e2e/epicfight-geo.spec.ts
-              tests/e2e/epicfight-lifecycle.spec.ts
-              tests/e2e/epicfight-multiplayer.spec.ts
+            spec: tests/e2e/epicfight-acceptance.spec.ts
+          - label: Epic Fight terrain
+            artifact: epicfight-terrain
+            spec: tests/e2e/epicfight-terrain.spec.ts
+          - label: Epic Fight GEO
+            artifact: epicfight-geo
+            spec: tests/e2e/epicfight-geo.spec.ts
+          - label: Epic Fight save restart
+            artifact: epicfight-lifecycle
+            spec: tests/e2e/epicfight-lifecycle.spec.ts
+          - label: Epic Fight multiplayer
+            artifact: epicfight-multiplayer
+            spec: tests/e2e/epicfight-multiplayer.spec.ts
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
