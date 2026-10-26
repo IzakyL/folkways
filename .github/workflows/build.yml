@@ -124,7 +124,12 @@ jobs:
             spec: tests/e2e/founding-smoke.spec.ts
           - label: Epic Fight
             artifact: epicfight
-            spec: tests/e2e/epicfight-acceptance.spec.ts
+            spec: >-
+              tests/e2e/epicfight-acceptance.spec.ts
+              tests/e2e/epicfight-terrain.spec.ts
+              tests/e2e/epicfight-geo.spec.ts
+              tests/e2e/epicfight-lifecycle.spec.ts
+              tests/e2e/epicfight-multiplayer.spec.ts
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5

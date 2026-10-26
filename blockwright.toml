@@ -398,6 +398,14 @@ folkways_war = { target = ["server", "client"] }
 epicfight = { target = ["server", "client"] }
 folkways_epicfight = { target = ["server", "client"] }
 
+# A second real account on the same Epic Fight server for the multiplayer e2e scenario.
+[profile.epicfight_guest.neoforge.client]
+account = { username = "EpicFightGuest", uuid = "00000000000000000000000000ef0020" }
+
+[profile.epicfight_guest.mods]
+epicfight = { target = ["server", "client"] }
+folkways_epicfight = { target = ["server", "client"] }
+
 [profile.epicfight_combat.mods]
 epicfight = { target = ["server", "client"] }
 folkways_epicfight = { target = ["server", "client"] }
