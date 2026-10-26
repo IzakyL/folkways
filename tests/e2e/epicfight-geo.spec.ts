@@ -1,12 +1,14 @@
 import { expect, test, type TestInfo } from "@playwright/test";
+import { seedInstance } from "@izakyl/blockwright-client";
 import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { defineTask, javaTask, media, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import { frames } from "../shared/harness/bw-helpers";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
+import { REPO_ROOT } from "../shared/harness/out-paths";
 import { newRunId } from "../shared/harness/run-id";
-import { MODEL_ASSETS, placeServerModel, readServerLibrary, reloadServerModels, waitForModelsOnClient } from "../shared/ui/model-folder";
+import { MODEL_ASSETS, readServerLibrary, waitForModelsOnClient } from "../shared/ui/model-folder";
 import { mustCommand } from "../shared/ui/world-ui";
 
 const LOOK = "folkways:model/steve/tartaric_acid";
@@ -22,14 +24,23 @@ type Draw = { present: boolean; patch: boolean; overlay: boolean; screen: string
 type ReloadState = { state: string; error: string };
 type Evidence = Array<{ step: string; value: unknown }>;
 
-test("Epic Fight converts a synced Steve GEO for native combat and rebuilds it after a real client reload", async ({}, info) => {
+test("Epic Fight initially syncs an installed Steve GEO and rebuilds native combat rendering after a real client reload", async ({}, info) => {
   test.setTimeout(420_000);
   let pair: E2EPair | undefined, scene: Scene | undefined;
   const evidence: Evidence = [];
   try {
     const run = newRunId();
+    // Install a normal server data pack before startup. Server live /reload currently makes native EF reject
+    // its own animation registry in Linux CI; that separate failure is retained, not hidden by a test cache edit.
+    const seeded = seedInstance(`epicfight-geo-server-${run}`, { cwd: REPO_ROOT });
+    const pack = "world/datapacks/folkways-e2e-models";
+    seeded.write(`${pack}/pack.mcmeta`, JSON.stringify({ pack: {
+      pack_format: 48, description: "Folkways Minecraft 1.21.1 GEO acceptance" } }));
+    seeded.copy(path.join(MODEL_ASSETS, "steve"), `${pack}/data/folkways/folkways/resident_model/steve`);
+    seeded.write(`${pack}/data/folkways/folkways/resident_model/steve/folkways.json`, JSON.stringify({ weight: 400 }));
+    evidence.push({ step: "real data pack installed before dedicated-server startup; no live server reload", value: { instance: seeded.instance, pack } });
     pair = await launchPair({ config: "blockwright.toml#epicfight",
-      server: { instance: `epicfight-geo-server-${run}` }, client: { instance: `epicfight-geo-client-${run}` },
+      server: seeded.launch, client: { instance: `epicfight-geo-client-${run}` },
       snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie"] } });
     const player = await waitForGroundedPlayer(pair.server);
     const origin = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };
@@ -37,11 +48,8 @@ test("Epic Fight converts a synced Steve GEO for native combat and rebuilds it a
     await mustCommand(pair.server, `gamemode spectator ${player.name}`);
     await mustCommand(pair.server, `tp ${player.name} ${origin.x + 2.5} ${origin.y + 1} ${origin.z + .5} 0 10`);
 
-    const placed = await placeServerModel(pair.server, path.join(MODEL_ASSETS, "steve"), "steve", { weight: 400 });
-    evidence.push({ step: "real server data pack", value: placed });
-    await reloadServerModels(pair.server);
     const library = await readServerLibrary(pair.server);
-    evidence.push({ step: "server library after reload", value: { resolved: library.resolved, entries: library.entryIds } });
+    evidence.push({ step: "server library after normal startup", value: { resolved: library.resolved, entries: library.entryIds } });
     expect(library.resolved).toBe(true);
     expect(library.entryIds).toContain(LOOK);
     evidence.push({ step: "client received and settled model resource transfer", value: await waitForModelsOnClient(pair.client, GEOMETRY_FILE) });

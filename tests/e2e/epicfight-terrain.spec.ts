@@ -63,7 +63,12 @@ for (const corner of [false, true]) test(corner
       for (let attempt = 0; attempt < 30; attempt++) {
         await frames(pair.client, 2); rendered = await pair.client.run(RENDER, scene);
         evidence.push({ step: "client really draws the synchronized native STEP and pose", value: rendered });
-        if (rendered.present && rendered.dodge && rendered.draws > initialDraw.draws) break;
+        const live = await sample(pair, scene, evidence, "the same native STEP remains live while its position packet catches up");
+        expect(live.motionToken, "client interpolation must catch up during the original real STEP").toBe(stepping.motionToken);
+        if (rendered.present && rendered.dodge && rendered.draws > initialDraw.draws
+            && Math.hypot(rendered.x - scene.x - 2.5, rendered.z - scene.z - 6.5) > .1) break;
+        // Tracking sends positions periodically. Advance the normal action, never inject a motion or position packet.
+        await tick.sprint(pair.server, 1);
       }
       expect(rendered?.dodge, "the real remote client must observe DodgeAnimation, not a test-written motion flag").toBe(true);
       expect(rendered!.draws).toBeGreaterThan(initialDraw.draws);
@@ -71,6 +76,7 @@ for (const corner of [false, true]) test(corner
       await capture(pair.client, info, "epicfight-terrain-native-step.png");
       const beforeClick = await pair.server.run(READ, scene); geometry(beforeClick, scene);
       expect(beforeClick.motion && beforeClick.dodge, "the server is frozen with the original STEP still live before pointer replacement").toBe(true);
+      expect(beforeClick.motionToken).toBe(stepping.motionToken);
       oldMotion = beforeClick.motionToken; expect(oldMotion).not.toBe("");
     } else {
       let sawCornerSide = false, sawFallbackNavigation = false;
