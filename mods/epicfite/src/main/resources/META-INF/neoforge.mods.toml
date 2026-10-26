@@ -52,3 +52,6 @@ type = "optional"
 versionRange = "[4.9,)"
 ordering = "AFTER"
 side = "CLIENT"
+
+[[mixins]]
+config = "folkways-epicfight-evidence.mixins.json"
