@@ -8,7 +8,7 @@ import { frames } from "../shared/harness/bw-helpers";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { REPO_ROOT } from "../shared/harness/out-paths";
 import { newRunId } from "../shared/harness/run-id";
-import { MODEL_ASSETS, readServerLibrary, waitForModelsOnClient } from "../shared/ui/model-folder";
+import { MODEL_ASSETS, clientHasModelFile, placeServerModel, readServerLibrary, reloadServerModels } from "../shared/ui/model-folder";
 import { mustCommand } from "../shared/ui/world-ui";
 
 const LOOK = "folkways:model/steve/tartaric_acid";
@@ -22,25 +22,40 @@ type Draw = { present: boolean; patch: boolean; overlay: boolean; screen: string
   mode: string; resource: boolean; textureResource: boolean; armor: string[]; sequence: number; gameTick: number;
   mesh: string; texture: string; sourceRenderer: string; entryScale: number; meshIdentity: number };
 type ReloadState = { state: string; error: string };
-type Evidence = Array<{ step: string; value: unknown }>;
+type Evidence = Array<{ step: string; value: unknown; stamp?: string }>;
+type Connection = { connected: boolean; identity: string; level: boolean; screen: string; overlay: string; pending: boolean };
+type PairingRecord = { seq: number; phase: string; connectionIdentity: string; animationsSize: number;
+  wireNames: string[]; animationNames: string[]; errors: string[]; comparisonAvailable: boolean;
+  serverMissing: string[]; clientMissing: string[] };
+type Guard = { queued: number; deferred: number; replayed: number; dropped: number; generation: number;
+  session: number; reloading: boolean; reloadFailed: boolean;
+  events: Array<{ phase: string; reason: string; connectionId: string; generation: number; queued: number }> };
+type Gate = { entered: boolean; released: boolean; reloadDone: boolean; error: string };
 
-test("Epic Fight initially syncs an installed Steve GEO and rebuilds native combat rendering after a real client reload", async ({}, info) => {
+for (const scenario of ["startup", "online", "disconnect"] as const) test(scenario === "disconnect"
+  ? "Epic Fight discards old deferred pairing on a real disconnect and pairs a rejoined connection"
+  : scenario === "online" ? "Epic Fight online server reload preserves real animation pairing, GEO combat and client resource reload"
+    : "Epic Fight initially syncs an installed Steve GEO and rebuilds native combat rendering after a real client reload", async ({}, info) => {
   test.setTimeout(420_000);
   let pair: E2EPair | undefined, scene: Scene | undefined;
   const evidence: Evidence = [];
+  const onlineServerReload = scenario !== "startup";
   try {
     const run = newRunId();
-    // Install a normal server data pack before startup. Server live /reload currently makes native EF reject
-    // its own animation registry in Linux CI; that separate failure is retained, not hidden by a test cache edit.
-    const seeded = seedInstance(`epicfight-geo-server-${run}`, { cwd: REPO_ROOT });
-    const pack = "world/datapacks/folkways-e2e-models";
-    seeded.write(`${pack}/pack.mcmeta`, JSON.stringify({ pack: {
-      pack_format: 48, description: "Folkways Minecraft 1.21.1 GEO acceptance" } }));
-    seeded.copy(path.join(MODEL_ASSETS, "steve"), `${pack}/data/folkways/folkways/resident_model/steve`);
-    seeded.write(`${pack}/data/folkways/folkways/resident_model/steve/folkways.json`, JSON.stringify({ weight: 400 }));
-    evidence.push({ step: "real data pack installed before dedicated-server startup; no live server reload", value: { instance: seeded.instance, pack } });
+    const serverName = `epicfight-geo-${onlineServerReload ? "online" : "startup"}-server-${run}`;
+    let serverOptions: { instance: string; reuseInstanceDir?: boolean } = { instance: serverName };
+    if (!onlineServerReload) {
+      const seeded = seedInstance(serverName, { cwd: REPO_ROOT });
+      const pack = "world/datapacks/folkways-e2e-models";
+      seeded.write(`${pack}/pack.mcmeta`, JSON.stringify({ pack: {
+        pack_format: 48, description: "Folkways Minecraft 1.21.1 GEO acceptance" } }));
+      seeded.copy(path.join(MODEL_ASSETS, "steve"), `${pack}/data/folkways/folkways/resident_model/steve`);
+      seeded.write(`${pack}/data/folkways/folkways/resident_model/steve/folkways.json`, JSON.stringify({ weight: 400 }));
+      serverOptions = seeded.launch;
+      evidence.push({ step: "real data pack installed before dedicated-server startup", value: { instance: seeded.instance, pack } });
+    }
     pair = await launchPair({ config: "blockwright.toml#epicfight",
-      server: seeded.launch, client: { instance: `epicfight-geo-client-${run}` },
+      server: serverOptions, client: { instance: `epicfight-geo-${onlineServerReload ? "online" : "startup"}-client-${run}` },
       snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie"] } });
     const player = await waitForGroundedPlayer(pair.server);
     const origin = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };
@@ -48,11 +63,41 @@ test("Epic Fight initially syncs an installed Steve GEO and rebuilds native comb
     await mustCommand(pair.server, `gamemode spectator ${player.name}`);
     await mustCommand(pair.server, `tp ${player.name} ${origin.x + 2.5} ${origin.y + 1} ${origin.z + .5} 0 10`);
 
+    const baseline = await waitForInitialPairing(pair, evidence);
+    const originalConnection = baseline.connection.identity;
+    if (onlineServerReload) {
+      await pair.client.run(PREPARATION_GATE, { action: "start" });
+      await expect.poll(async () => (await pair!.client.run(PREPARATION_GATE, { action: "state" })).entered,
+        { timeout: 15_000, message: "an actual preparation listener must be holding Minecraft's real reload" }).toBe(true);
+      evidence.push({ step: "normal data pack installed while the player remains connected", value:
+        await placeServerModel(pair.server, path.join(MODEL_ASSETS, "steve"), "steve", { weight: 400 }) });
+      await reloadServerModels(pair.server);
+      const held = await waitForDeferred(pair, evidence, baseline.guard.deferred, originalConnection);
+      expect(held.guard.reloading).toBe(true);
+      expect(held.guard.queued).toBeGreaterThan(0);
+      expect(held.client.filter(row => row.phase === "client-send" && row.seq > latestSequence(baseline.client)),
+        "no half-built CP table may be emitted while the real preparation future is held").toEqual([]);
+      evidence.push({ step: "real resource preparation held; actual server packet deferred without sending a CP table", value: held });
+      if (scenario === "disconnect") {
+        await cancelAndRejoin(pair, evidence, originalConnection, held.guard, baseline.client, baseline.server);
+        return;
+      }
+      await pair.client.run(PREPARATION_GATE, { action: "release" });
+      await waitForLiveModel(pair, evidence, originalConnection);
+      const accepted = await pairing(pair, evidence, "original native validator accepted the replay on the same connection");
+      const validations = accepted.server.filter(row => row.phase === "server-validate" && row.seq > latestSequence(baseline.server));
+      expect(validations.length).toBeGreaterThan(0);
+      for (const row of validations) assertAccepted(row);
+      expect(accepted.guard.replayed).toBeGreaterThan(baseline.guard.replayed);
+      expect(accepted.guard.queued).toBe(0);
+    }
     const library = await readServerLibrary(pair.server);
-    evidence.push({ step: "server library after normal startup", value: { resolved: library.resolved, entries: library.entryIds } });
+    evidence.push({ step: "server library after startup or real online reload", value: { resolved: library.resolved, entries: library.entryIds } });
     expect(library.resolved).toBe(true);
     expect(library.entryIds).toContain(LOOK);
-    evidence.push({ step: "client received and settled model resource transfer", value: await waitForModelsOnClient(pair.client, GEOMETRY_FILE) });
+    await waitForLiveModel(pair, evidence, originalConnection);
+    evidence.push({ step: "client received actual model files and finished its real resource futures", value: { file: GEOMETRY_FILE } });
+    expect((await pairing(pair, evidence, "native pairing after actual model transfer")).connection.identity).toBe(originalConnection);
 
     scene = await pair.server.run(SETUP, origin);
     const initial = await pair.server.run(SERVER_STATE, scene);
@@ -82,6 +127,24 @@ test("Epic Fight initially syncs an installed Steve GEO and rebuilds native comb
     assertGeo(before!);
     await capture(pair.client, info, "epicfight-geo-before-reload.png");
 
+    if (onlineServerReload) {
+      const fighting = await pair.server.run(SERVER_STATE, scene);
+      const beforeExistingReload = await pairing(pair, evidence, "the existing resident is fighting before another real server reload");
+      await reloadServerModels(pair.server);
+      await waitForLiveModel(pair, evidence, originalConnection);
+      const afterExistingReload = await pairing(pair, evidence, "same resident and connection after reloading the already installed model pack");
+      const checked = afterExistingReload.server.filter(row => row.phase === "server-validate" && row.seq > latestSequence(beforeExistingReload.server));
+      expect(checked.length).toBeGreaterThan(0); checked.forEach(assertAccepted);
+      let continued = false;
+      for (let attempt = 0; attempt < 180; attempt++) {
+        const state = await pair.server.run(SERVER_STATE, scene);
+        if (attempt % 10 === 0) evidence.push({ step: "the same existing guard continues actual native collisions after server reload", value: state });
+        if (state.hitByResident && state.targetHealth < fighting.targetHealth) { continued = true; break; }
+        await tick.sprint(pair.server, 1); await frames(pair.client, 2);
+      }
+      expect(continued, "server reload must preserve actual native combat for an existing resident").toBe(true);
+    }
+
     // Minecraft's own reload future drives the production reload listener and its mesh disposal.
     // A unique system property records only that future's completion; it never changes renderer state.
     const token = `folkways.geo.reload.${run}`;
@@ -95,6 +158,7 @@ test("Epic Fight initially syncs an installed Steve GEO and rebuilds native comb
     }
     evidence.push({ step: "real Minecraft reload future result", value: completion });
     expect(completion).toEqual({ state: "complete", error: "" });
+    expect((await pairing(pair, evidence, "native pairing after the real client reload future completed")).connection.identity).toBe(originalConnection);
 
     const postReloadBaseline = await pair.client.run(DRAW, scene);
     evidence.push({ step: "draw counter when reload future completed", value: postReloadBaseline });
@@ -115,11 +179,13 @@ test("Epic Fight initially syncs an installed Steve GEO and rebuilds native comb
     await capture(pair.client, info, "epicfight-geo-after-reload.png");
   } catch (error) {
     pair?.failing(error);
+    if (pair) { try { await pairing(pair, evidence, "native pairing at failure without UI settling"); } catch { /* Preserve the original failure. */ } }
     // A disconnected client cannot pass the UI settle used by screenshots. Preserve its actual JVM logs first.
     if (pair) await attachRuntimeLogs(pair, info);
     if (pair) { try { await capture(pair.client, info, "epicfight-geo-failure.png"); } catch { /* retain original failure */ } }
     throw error;
   } finally {
+    if (pair) { try { await pair.client.run(WORKER_GATE, { action: "release" }); } catch { /* Keep the first failure. */ } }
     const file = info.outputPath("epicfight-geo-evidence.json");
     writeFileSync(file, JSON.stringify(evidence, null, 2), "utf8");
     await info.attach("epicfight-geo-evidence.json", { path: file, contentType: "application/json" });
@@ -127,6 +193,158 @@ test("Epic Fight initially syncs an installed Steve GEO and rebuilds native comb
     await pair?.teardown(info);
   }
 });
+
+async function pairing(pair: E2EPair, evidence: Evidence, step: string) {
+  const server = await pair.server.run(PAIRING);
+  const client = await pair.client.run(PAIRING);
+  const connection = await pair.client.run(CONNECTION);
+  const guard = await pair.client.run(GUARD);
+  const value = { server, client, connection, guard };
+  const stamp = JSON.stringify([latestSequence(server), latestSequence(client), connection, guard.queued,
+    guard.deferred, guard.replayed, guard.dropped, guard.generation, guard.session, guard.reloading]);
+  if (evidence.at(-1)?.stamp !== stamp) evidence.push({ step, value, stamp });
+  return value;
+}
+function latestSequence(rows: PairingRecord[]) { return rows.at(-1)?.seq ?? 0; }
+function assertAccepted(row: PairingRecord) {
+  expect(row.comparisonAvailable, "the observed native comparison must be complete").toBe(true);
+  expect(row.errors).toEqual([]); expect(row.serverMissing).toEqual([]); expect(row.clientMissing).toEqual([]);
+  expect(row.wireNames.length).toBe(row.animationNames.length);
+}
+async function waitForInitialPairing(pair: E2EPair, evidence: Evidence) {
+  for (let attempt = 0; attempt < 150; attempt++) {
+    const value = await pairing(pair, evidence, "initial native pairing and resource reload settle");
+    const accepted = value.server.filter(row => row.phase === "server-validate").at(-1);
+    if (accepted && value.connection.connected && value.connection.identity && !value.connection.overlay
+        && !value.connection.pending && !value.guard.reloading && !value.guard.queued) {
+      assertAccepted(accepted); return value;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error("initial real native pairing did not settle; see pairing evidence");
+}
+async function waitForDeferred(pair: E2EPair, evidence: Evidence, before: number, identity: string) {
+  for (let attempt = 0; attempt < 150; attempt++) {
+    const value = await pairing(pair, evidence, "real server packet arrives during held resource preparation");
+    expect(value.connection.connected).toBe(true); expect(value.connection.identity).toBe(identity);
+    if (value.guard.deferred > before && value.guard.queued > 0) return value;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error("the real server reload did not trigger a deferred animation pairing request");
+}
+async function waitForLiveModel(pair: E2EPair, evidence: Evidence, identity: string) {
+  const deadline = Date.now() + 120_000;
+  let last: Connection | undefined;
+  while (Date.now() < deadline) {
+    const value = await pairing(pair, evidence, "observing real online reload and animation pairing");
+    last = value.connection;
+    if (!last.connected || last.identity !== identity || last.screen === "DisconnectedScreen")
+      throw new Error(`real connection changed during online server reload: ${JSON.stringify(last)}; see pairing evidence`);
+    if (clientHasModelFile(pair.client, GEOMETRY_FILE) && last.connected && last.level
+        && !last.pending && !last.overlay && !last.screen && !value.guard.reloading && !value.guard.queued) {
+      await pair.client.settle({ timeoutMs: 15_000 });
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+  throw new Error(`online server reload did not settle: ${JSON.stringify(last)}`);
+}
+
+async function cancelAndRejoin(pair: E2EPair, evidence: Evidence, oldIdentity: string, held: Guard,
+    baseline: PairingRecord[], baselineServer: PairingRecord[]) {
+  await pair.client.run(DISCONNECT);
+  let cleared = false;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    // Minecraft disconnect discards queued game-thread tasks. Keep immutable observations
+    // and the test CF completion on an agent worker while the actual logout takes place.
+    const guard = await pair.client.run(GUARD);
+    evidence.push({ step: "actual logout drops old deferred requests while resources remain held", value: guard });
+    cleared ||= guard.events.some(event => event.phase === "dropped" && event.connectionId === oldIdentity
+      && /logout|connection-changed/.test(event.reason));
+    if (cleared && guard.dropped >= held.dropped + held.queued) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  expect(cleared, "logging out must discard the actual queued old-connection packets").toBe(true);
+  expect((await pair.client.run(GUARD)).dropped).toBeGreaterThanOrEqual(held.dropped + held.queued);
+  let newOrigin = "";
+  for (let attempt = 0; attempt < 150; attempt++) {
+    const guard = await pair.client.run(GUARD);
+    const deferred = guard.events.filter(event => event.phase === "deferred" && event.connectionId
+      && event.connectionId !== oldIdentity).at(-1);
+    if (deferred && guard.reloading && guard.queued > 0) {
+      newOrigin = deferred.connectionId;
+      evidence.push({ step: "the new real connection also waits on the still-held process-wide future", value: guard });
+      break;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  expect(newOrigin, "a new login must be deferred before the original real preparation gate is released").not.toBe("");
+  const stillHeld = await pair.client.run(WORKER_GATE, { action: "state" });
+  expect(stillHeld.entered && !stillHeld.released).toBe(true);
+  expect((await pair.client.run(GUARD)).reloading, "the process-wide future stays tracked after logout").toBe(true);
+  await pair.client.run(WORKER_GATE, { action: "release" });
+  // Blockwright's configured auto-connect makes another genuine login in this same JVM.
+  const deadline = Date.now() + 60_000;
+  let rejoined: Awaited<ReturnType<typeof pairing>> | undefined;
+  while (Date.now() < deadline) {
+    const value = await pairing(pair, evidence, "a new real connection pairs after the held global reload");
+    const accepted = value.server.filter(row => row.phase === "server-validate" && row.seq > latestSequence(baselineServer)).at(-1);
+    if (value.connection.connected && value.connection.identity === newOrigin
+        && value.connection.level && !value.connection.overlay && !value.connection.pending
+        && !value.guard.reloading && !value.guard.queued && accepted) {
+      assertAccepted(accepted); rejoined = value; break;
+    }
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+  expect(rejoined, "the same client JVM must genuinely reconnect and pass the native validator").toBeDefined();
+  expect(rejoined!.client.some(row => row.phase === "client-send" && row.seq > latestSequence(baseline)
+    && row.connectionIdentity === newOrigin), "the new connection must send its own genuine pairing response").toBe(true);
+  const accepted = rejoined!.server.filter(row => row.phase === "server-validate" && row.seq > latestSequence(baselineServer)).at(-1)!;
+  expect(accepted.connectionIdentity).not.toBe(baselineServer.filter(row => row.phase === "server-validate").at(-1)!.connectionIdentity);
+  expect(rejoined!.client.filter(row => row.phase === "client-send" && row.seq > latestSequence(baseline)
+    && row.connectionIdentity === oldIdentity), "old deferred payloads must never be replayed into a new connection").toEqual([]);
+  expect(rejoined!.guard.queued).toBe(0);
+  expect((await world.players(pair.server)).length).toBe(1);
+}
+
+const PAIRING = defineTask<void, PairingRecord[]>({ name: "folkways.epicfight.geo.observe-wire-pairing", side: "any", thread: "worker", settle: false,
+  source: javaTask({ imports: ["io.github.izakyl.folkways.epicfight.AnimationPairingEvidence"],
+    body: `return AnimationPairingEvidence.snapshot();` }) });
+const CONNECTION = defineTask<void, Connection>({ name: "folkways.epicfight.geo.observe-live-connection", side: "client", settle: false,
+  source: javaTask({ imports: ["java.util.Map", "net.minecraft.client.Minecraft"], body: `
+var mc=Minecraft.getInstance();var pending=Minecraft.class.getDeclaredField("pendingReload");pending.setAccessible(true);
+return Map.of("connected",mc.getConnection()!=null&&mc.getConnection().getConnection().isConnected(),"level",mc.level!=null,
+ "identity",mc.getConnection()==null?"":Integer.toHexString(System.identityHashCode(mc.getConnection().getConnection())),
+ "screen",mc.screen==null?"":mc.screen.getClass().getSimpleName(),"overlay",mc.getOverlay()==null?"":mc.getOverlay().getClass().getSimpleName(),"pending",pending.get(mc)!=null);` }) });
+const GUARD = defineTask<void, Guard>({ name: "folkways.epicfight.geo.observe-reload-guard", side: "client", thread: "worker", settle: false,
+  source: javaTask({ imports: ["io.github.izakyl.folkways.epicfight.client.AnimationPairingReloadGuard"],
+    body: `return AnimationPairingReloadGuard.snapshot();` }) });
+const PREPARATION_GATE = defineTask<{ action: "start" | "state" | "release" }, Gate>({
+  name: "folkways.epicfight.geo.real-resource-preparation-gate", side: "client", settle: false,
+  source: javaTask({ imports: ["java.util.Map", "java.util.concurrent.CompletableFuture", "java.util.concurrent.atomic.AtomicBoolean",
+    "net.minecraft.client.Minecraft", "net.minecraft.server.packs.resources.ReloadableResourceManager"],
+    members: `private static volatile CompletableFuture<Void> gate;
+private static volatile CompletableFuture<Void> actualReload;
+private static final AtomicBoolean armed=new AtomicBoolean();
+private static volatile boolean entered;
+private static volatile String error="";`, body: `
+var action=Args.of(ctx).string("action");
+if(action.equals("start")){
+ if(gate!=null)throw new IllegalStateException("one preparation gate per isolated client");
+ gate=new CompletableFuture<>();armed.set(true);
+ ((ReloadableResourceManager)Minecraft.getInstance().getResourceManager()).registerReloadListener((barrier,resources,prepareProfiler,applyProfiler,background,game)->{
+  if(armed.compareAndSet(true,false)){entered=true;return gate.thenCompose(unused->barrier.wait((Void)null)).thenRunAsync(()->{},game);}
+  return barrier.wait((Void)null).thenRunAsync(()->{},game);
+ });
+ actualReload=Minecraft.getInstance().reloadResourcePacks();
+ actualReload.whenComplete((unused,failure)->{if(failure!=null)error=failure.toString();});
+}else if(action.equals("release")&&gate!=null)gate.complete(null);
+return Map.of("entered",entered,"released",gate!=null&&gate.isDone(),"reloadDone",actualReload!=null&&actualReload.isDone(),"error",error);` }) });
+const WORKER_GATE = { ...PREPARATION_GATE, thread: "worker" as const };
+const DISCONNECT = defineTask<void, boolean>({ name: "folkways.epicfight.geo.actual-network-disconnect", side: "client", settle: false,
+  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.network.chat.Component"], body: `
+var connection=Minecraft.getInstance().getConnection();if(connection==null)throw new IllegalStateException("a real connected client is required");
+connection.getConnection().disconnect(Component.literal("Folkways real reload cancellation test"));return true;` }) });
 
 const ARMOR = ["minecraft:iron_helmet", "minecraft:iron_chestplate", "minecraft:iron_leggings", "minecraft:iron_boots"];
 function assertGeo(draw: Draw) {
