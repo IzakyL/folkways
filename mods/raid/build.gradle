@@ -1,0 +1,16 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_raid"
+ext.modName = "folkways-raid"
+apply from: rootProject.file("gradle/mod.gradle")
+evaluationDependsOn(":core")
+evaluationDependsOn(":vanilla")
+
+dependencies {
+    api project(":vanilla")
+    gametestImplementation project(":core").sourceSets.gameTestFixtures.output
+}

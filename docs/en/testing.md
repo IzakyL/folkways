@@ -250,6 +250,15 @@ TACZ integration: `./gradlew -PtaczTests=true runGameTestServer` enables its com
 `./gradlew -PtaczTests=true -PgameTestMod=tacz runGameTestServer` selects only its fixtures.
 The isolated suite directory is `run/gametest/tacz/tacz`. See [TACZ](tacz.md) for the real-client spec.
 
+## Raid module checks
+
+```sh
+./gradlew -PraidTests=true runGameTestServer
+./gradlew -PraidTests=true -PgameTestMod=raid runGameTestServer
+```
+
+The base suite omits Raid. These commands install `folkways_raid` without RTS; the second selects its 49 cases (26 ported raid cases, 21 safeguard regressions, one new sentry case and one admin-command case). CI also runs Core and Vanilla with Raid installed. The `blockwright.toml#raid` profile opts clients and servers into the module. See [Colony raids](raids.md) for scope and limits.
+
 ### Damage-control tool
 
 ```sh

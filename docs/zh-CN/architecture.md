@@ -4,7 +4,7 @@
 
 ## 模组划分
 
-Folkways 包含**两个必装模组和七个可选扩展**，分别对应 `mods/` 下的 Gradle 子项目。
+Folkways 包含**两个必装模组和八个可选扩展**，分别对应 `mods/` 下的 Gradle 子项目。
 它们有独立的模组 ID，共用 `folkways` 内容命名空间。
 根项目负责运行测试和收集 jar，不会构建自己的模组。
 
@@ -18,6 +18,7 @@ Folkways 包含**两个必装模组和七个可选扩展**，分别对应 `mods/
 | `:cookery` → `mods/cookery`             | `folkways_cookery`       | 原生 Cookery 农业、厨具、共享工具、森罗酒馆酿酒和教程         |
 | `:warfare` → `mods/warfare`             | `folkways_warfare`       | 可选 Superb Warfare 武器与武器站                              |
 | `:tacz` → `mods/tacz`                   | `folkways_tacz`          | 可选 TACZ 枪械与配置                                          |
+| `:raid` → `mods/raid`                   | `folkways_raid`          | 可选殖民地袭击、额度、劫掠与战报                              |
 | `:firefighting` → `mods/firefighting`   | `folkways_firefighting`  | Create: FireFighting Additions 0.2.5-beta-fix2 的消防工具整合 |
 
 ```mermaid
@@ -27,6 +28,7 @@ flowchart BT
     ModularGolems[Modular Golems] --> Vanilla
     Cookery --> Vanilla
     RTS --> Vanilla
+    Raid --> Vanilla
     Warfare --> Vanilla
     TACZ --> Vanilla
     Firefighting --> Vanilla

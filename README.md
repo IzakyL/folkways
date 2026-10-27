@@ -60,13 +60,14 @@ date until the first versioned release is published.
 Install **Core and Vanilla**, then add extensions for the mods you use.
 **All Folkways jars must come from the same build.**
 
-| Jar                                                        | When to install                                                                    |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Folkways Core (`folkways-core-*.jar`)                      | Always: colony engine, Colony Book and panel                                       |
-| Folkways Vanilla (`folkways-vanilla-*.jar`)                | Always: residents and their work among vanilla blocks                              |
-| Folkways × Create (`folkways-create-*.jar`)                | With Create: trains, parcels, track and schematics                                 |
-| Folkways × Modular Golems (`folkways-modulargolems-*.jar`) | With Modular Golems: golems as residents                                           |
-| Folkways × Kaleidoscope Cookery (`folkways-cookery-*.jar`) | With Kaleidoscope Cookery 1.6.0: native crops, appliances and shared kitchen tools |
+| Jar                                                        | When to install                                                                                      |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Folkways Core (`folkways-core-*.jar`)                      | Always: colony engine, Colony Book and panel                                                         |
+| Folkways Vanilla (`folkways-vanilla-*.jar`)                | Always: residents and their work among vanilla blocks                                                |
+| Folkways × Create (`folkways-create-*.jar`)                | With Create: trains, parcels, track and schematics                                                   |
+| Folkways × Modular Golems (`folkways-modulargolems-*.jar`) | With Modular Golems: golems as residents                                                             |
+| Folkways × Kaleidoscope Cookery (`folkways-cookery-*.jar`) | With Kaleidoscope Cookery 1.6.0: native crops, appliances and shared kitchen tools                   |
+| Folkways Raid (`folkways-raid-*.jar`)                      | Optional colony raids; requires Core and Vanilla, without RTS. See [Colony raids](docs/en/raids.md). |
 
 Ponder and Flywheel are bundled in Core; the Starlark interpreter is bundled in
 Vanilla. They do not need separate installation.

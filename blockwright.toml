@@ -470,6 +470,14 @@ kotlinforforge = { target = ["server", "client"] }
 folkways_tacz = { target = ["server", "client"] }
 tacz = { target = ["server", "client"] }
 
+# Optional autonomous colony raids.
+[mods.folkways_raid]
+path = "build/libs/folkways-raid-neoforge-*.jar"
+target = []
+
+[profile.raid.mods]
+folkways_raid = { target = ["server", "client"] }
+
 # The firefighting extension is opt-in, beside the pinned addon and Create.
 [mods.folkways_firefighting]
 path = "build/libs/folkways-firefighting-*.jar"

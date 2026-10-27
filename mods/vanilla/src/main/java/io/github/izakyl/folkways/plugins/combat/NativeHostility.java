@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.combat;
 
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
+import java.util.function.Predicate;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -55,10 +56,21 @@ public final class NativeHostility {
             && Bodies.of(target).flatMap(body -> body.colonyId()).isPresent();
     }
 
+    // Strategic extensions narrow acquisition while native goals still execute combat.
+    public static void restrictResidents(Mob mob, Predicate<LivingEntity> permits) {
+        install(mob);
+        mob.targetSelector.getAvailableGoals().stream().map(goal -> goal.getGoal())
+            .filter(ResidentTargetGoal.class::isInstance).map(ResidentTargetGoal.class::cast)
+            .forEach(goal -> goal.permits = permits);
+    }
+
     private static final class ResidentTargetGoal extends NearestAttackableTargetGoal<Mob> {
+
+        private Predicate<LivingEntity> permits = target -> true;
 
         private ResidentTargetGoal(Mob mob) {
             super(mob, Mob.class, 10, true, false, NativeHostility::eligible);
+            targetConditions.selector(target -> eligible(target) && permits.test(target));
         }
 
         @Override
@@ -78,6 +90,7 @@ public final class NativeHostility {
             return targetsResidents(mob)
                 && mob.getTarget() != null
                 && eligible(mob.getTarget())
+                && permits.test(mob.getTarget())
                 && super.canContinueToUse();
         }
     }

@@ -4,7 +4,7 @@
 
 ## Modules
 
-Folkways has **two required mods and seven optional extensions**, each a Gradle
+Folkways has **two required mods and eight optional extensions**, each a Gradle
 project under `mods/`. They use separate mod IDs and share the `folkways`
 content namespace. The root project runs tests and collects jars rather than
 building a mod of its own.
@@ -19,6 +19,7 @@ building a mod of its own.
 | `:cookery` → `mods/cookery`             | `folkways_cookery`       | Native Cookery farming, appliances, shared tools, Kaleidoscope Tavern wine and lessons |
 | `:warfare` → `mods/warfare`             | `folkways_warfare`       | Optional Superb Warfare weapons and stations                                           |
 | `:tacz` → `mods/tacz`                   | `folkways_tacz`          | Optional TACZ firearms and profiles                                                    |
+| `:raid` → `mods/raid`                   | `folkways_raid`          | Optional colony raids, budgets, plunder and reports                                    |
 | `:firefighting` → `mods/firefighting`   | `folkways_firefighting`  | Damage control tools for Create: FireFighting Additions 0.2.5-beta-fix2                |
 
 ```mermaid
@@ -28,6 +29,7 @@ flowchart BT
     ModularGolems[Modular Golems] --> Vanilla
     Cookery --> Vanilla
     RTS --> Vanilla
+    Raid --> Vanilla
     Warfare --> Vanilla
     TACZ --> Vanilla
     Firefighting --> Vanilla
