@@ -219,6 +219,15 @@ TACZ 集成：`./gradlew -PtaczTests=true runGameTestServer` 运行组合测试�
 `./gradlew -PtaczTests=true -PgameTestMod=tacz runGameTestServer` 仅运行其测试，
 目录为 `run/gametest/tacz/tacz`。真实客户端场景见 [TACZ](tacz.md)。
 
+## Raid 模组检查
+
+```sh
+./gradlew -PraidTests=true runGameTestServer
+./gradlew -PraidTests=true -PgameTestMod=raid runGameTestServer
+```
+
+基础套件不加载 Raid。这两条命令安装 `folkways_raid` 而不安装 RTS；第二条只运行本模块 49 个用例（26 个原有袭击用例、21 个安全回归、一个新增哨兵用例和一个管理命令用例）。CI 同时在安装 Raid 后运行 Core 与 Vanilla。`blockwright.toml#raid` 配置为客户端和服务器启用扩展。范围与限制见[殖民地袭击](raids.md)。
+
 ### 损害管制工具
 
 ```sh

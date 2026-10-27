@@ -42,9 +42,9 @@ jobs:
       matrix:
         include:
           - mod: core
-            profiles: base cookery rts
+            profiles: base cookery rts raid
           - mod: vanilla
-            profiles: base cookery rts warfare
+            profiles: base cookery rts warfare raid
           - mod: create
             profiles: base
           - mod: cookery
@@ -57,6 +57,8 @@ jobs:
             profiles: tacz
           - mod: firefighting
             profiles: firefighting
+          - mod: raid
+            profiles: raid
     name: GameTests (${{ matrix.mod }})
     steps:
       - uses: actions/checkout@v5
@@ -103,6 +105,9 @@ jobs:
             fi
             if [[ "$profile" == firefighting ]]; then
               gradle_args+=(-PfirefightingTests=true)
+            fi
+            if [[ "$profile" == raid ]]; then
+              gradle_args+=(-PraidTests=true)
             fi
             status=failure
             if timeout --signal=TERM --kill-after=60s 50m ./gradlew "${gradle_args[@]}" --console=plain runGameTestServer 2>&1 | tee "run/gametest/ci/$GAME_TEST_MOD-$profile.log"; then

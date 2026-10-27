@@ -2,7 +2,7 @@
 
 [Architecture](architecture.md) · [简体中文](../zh-CN/combat-architecture.md)
 
-Vanilla provides everyday hostility, defence, escape, drawn patrol routes, finite supplies and real melee, bow and crossbow sessions. Optional `folkways_rts` owns direct resident commands and their server/client interaction. This split changes ownership without changing accepted command or input semantics. The optional Superb Warfare and TACZ integrations are described below. Strategic AI remains unimplemented.
+Vanilla provides everyday hostility, defence, escape, drawn patrol routes, finite supplies and real melee, bow and crossbow sessions. Optional `folkways_rts` owns direct resident commands and their server/client interaction. This split changes ownership without changing accepted command or input semantics. The optional Superb Warfare and TACZ integrations are described below; optional `folkways_raid` adds colony raids through Vanilla defence. Strategic AI remains unimplemented.
 
 ## Module ownership
 
@@ -1121,19 +1121,67 @@ resident in the firing corridor, correctly preventing fire. Moving that resident
 the fixture; the final native test verifies both physical shots and revoked queued permission.
 Large-suite world saves completed separately from the GameTest result reporting.
 
-## Optional combat cleanup
+## Optional colony raids
 
-The independent `rts_design_auditor` approved the static design of the optional module,
-page, command and profile removal. Sole-use movement and resident-target filtering
-helpers are removed. Existing input and modifier ownership, selection, server authority,
-command failure feedback and lifecycle contracts remain accepted. Native defence,
-finite supplies, station cleanup and damage control retain their existing owners.
-Acceptance checks require no registration of the removed module, profile or page,
-while retaining native hostility and existing command refusals.
+`mods/raid` registers `folkways_raid` through `FolkwaysRaidMod` and requires Core and Vanilla on both sides. It has no RTS dependency. Raid owns triggering, wave slots, role goals, budgets, plunder, persistent cargo returns, a keeper-authorized Raids page, boss bars and OP2 `/folkways raids` commands. Core adds only general `MobTravel`; Vanilla adds an optional predicate narrowing the existing native resident-target goal. Autonomous defenders use existing equipment profiles, drawn patrol routes, sentry zones and station leases. Actual sightings report raiders into `SpottedTargets`; raid start does not grant hidden observations or control residents.
 
-Build, unit and translation checks are separate engineering evidence. Live-client
-and E2E gameplay validation and migration of old optional-module saves are outside
-this batch; it adds no RTS roadmap work.
+The independent `rts_design_auditor` granted final static design approval for this scope, including resource-location parsing of namespaced admin definition IDs. Existing input/modifier ownership, manual-order priority, selection reservations, fear, finite ammunition and station cleanup remain unchanged. Acceptance checks natural bow-sentry spotting, projectile/ammunition use, a real wave-member kill and confirmed death accounting, plus the existing native combat, permissions, paused fuses, missing-member, cargo and authority cases. Static design review is separate from server GameTests and live-client gameplay validation.
+
+Saved data from unreleased PR #68 development builds is unsupported and has no migration. See [Colony raids](raids.md) for the supported ledger, configuration, data definitions, safeguards and source history. Boarding/frame raids, FTB protection, third-party raider pools, actual process-restart and client rendering acceptance remain deferred. This port adds no strategic AI or RTS roadmap work.
+
+### Raid engineering results before the staffing rebase
+
+On Linux with JDK 21, using `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64` and the isolated `GRADLE_USER_HOME=/tmp/folkways-raid-gradle`, the final feature code passed:
+
+| Command                                                           | Result                                                                   |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `./gradlew build`                                                 | PASS; 50 tasks, 0 failures                                               |
+| `./gradlew runGameTestServer`                                     | PASS; 1,233 required tests, 0 failed                                     |
+| `./gradlew -PraidTests=true runGameTestServer`                    | PASS; 1,282 required tests, 0 failed                                     |
+| `./gradlew -PraidTests=true -PgameTestMod=raid runGameTestServer` | PASS; 49 required tests, 0 failed                                        |
+| `npm run test:i18n`                                               | PASS; 1 reported file, 0 failures; direct execution confirms all 8 cases |
+| `npm run typecheck`                                               | PASS; all 7 TypeScript projects, 0 errors                                |
+| `npm run format:md:check`                                         | PASS; 0 files needing formatting                                         |
+
+All 21 original safeguard regressions remain in the 49-case Raid suite. The former guard case now uses a real drawn patrol with an assigned equipment profile. New cases cover natural bow-sentry spotting, an owned projectile, finite ammunition, actual wave-member death and victory accounting, and OP2 command parsing of namespaced definition IDs. Initial fixture failures came from registering resident holdings before adding their entities to the level; both local and foreign-resident enrollment now follow the current lifecycle. There are no failing test names in the final runs. Final Java continuation normalization was verified to change whitespace only, with all 23 ported Java files within 120 columns, followed by a successful rebuild. These results do not establish live-client rendering or actual process-restart acceptance.
+
+### Raid integration after the staffing rebase
+
+The rebase retains both shared Vanilla group movement and profile staffing alongside optional raids.
+Raid continues to delegate defender execution to Vanilla; it introduces no separate sentry or station
+operator selector. Configured sentry zones obtain defenders only from filled exact-profile slots.
+Unconfigured zones retain manual postings, and unconfigured routes retain individual patrol laps.
+A nearby live resident still prevents undefended store capture regardless of staffing membership.
+
+The independent `rts_design_auditor` granted static design approval for this integration. Accepted
+contracts include replacing legacy postings on the first slot, retaining desired pins during profile
+mismatch, visible mismatch and shortage, refusing direct posting into a composition, and resuming
+native defense when the exact profile returns. Input and modifier ownership, selection reservations,
+deliberate-control precedence, server authority, sight, finite ammunition and station/session cleanup
+retain the approved base contracts. No new movement or command semantics are introduced.
+
+The raid regression retains legacy bow defense and adds configured-slot defense. Both exercise
+natural spotting, real projectile use, finite ammunition, a real wave-member kill and confirmed
+victory accounting. The configured case also checks slot mismatch, shortage, posting refusal and
+profile recovery. Active-fire invalidation and station leases remain covered by the base regressions.
+Static approval and server tests are separate evidence; live-client staffing and raid display review,
+actual process restart and arbitrary-terrain/scale validation remain deferred.
+
+### Raid rebase engineering results
+
+Using Linux/JDK 21 and `GRADLE_USER_HOME=/tmp/folkways-raid-gradle`, the rebased branch passed:
+
+| Command                                                           | Result                                    |
+| ----------------------------------------------------------------- | ----------------------------------------- |
+| `./gradlew build`                                                 | PASS; 50 tasks, 0 failures                |
+| `./gradlew runGameTestServer`                                     | PASS; 1,247 required tests, 0 failures    |
+| `./gradlew -PraidTests=true runGameTestServer`                    | PASS; 1,297 required tests, 0 failures    |
+| `./gradlew -PraidTests=true -PgameTestMod=raid runGameTestServer` | PASS; 50 required tests, 0 failures       |
+| `npm run test:i18n`                                               | PASS; 1 reported test file, 0 failures    |
+| `npm run typecheck`                                               | PASS; all 7 TypeScript projects, 0 errors |
+
+The Raid suite now contains 50 cases. No GameTest failed in these runs. The first sandboxed build
+attempt could not initialize Gradle's local networking; rerunning outside that restriction passed.
 
 ## Validation entry points
 
@@ -1164,7 +1212,7 @@ See [Testing](testing.md) for platform, EULA, dependencies, CI matrix and logs. 
 
 ## Combat integration and focused overhead tools
 
-The integration merges TACZ and damage control, retaining the
+The integration merges TACZ, Raid and damage control in that order, retaining the
 optional Warfare module. Registration, test profiles and translations include all
 modules. `PersonBody` participates in both sentry posts and damage control.
 
@@ -1955,7 +2003,7 @@ native SBW raised-gun posture, occupied firing stations, visible suppression and
 repair, and absence of chat/toast/failure interference. Server counters and this
 static audit do not establish those visual acceptance results.
 
-The old establishing shot, individual weapon/station catalogues
+The old establishing shot, individual weapon/station catalogues, raid attack scene
 and draft takes are outside the revised film. Rebinding coverage, modifier-conflict
 regressions, lifecycle interruption scenarios, arbitrary terrain, broad weapon
 coverage, large-scale performance and the wider RTS roadmap remain deferred; the

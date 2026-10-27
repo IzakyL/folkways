@@ -1,0 +1,11 @@
+{
+  "values": [
+    "#minecraft:dragon_immune",
+    "#minecraft:wither_immune",
+    "#minecraft:beds",
+    "minecraft:obsidian",
+    "minecraft:crying_obsidian",
+    "minecraft:tnt",
+    "minecraft:respawn_anchor"
+  ]
+}
