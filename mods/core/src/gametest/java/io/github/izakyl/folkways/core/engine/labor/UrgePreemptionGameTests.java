@@ -9,6 +9,8 @@ import io.github.izakyl.folkways.core.api.participation.Participation;
 import io.github.izakyl.folkways.core.api.participation.Participations;
 import io.github.izakyl.folkways.core.api.participation.Stake;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.BodyActions;
+import io.github.izakyl.folkways.core.api.resident.body.TaskTools;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
@@ -29,12 +31,17 @@ import io.github.izakyl.folkways.core.engine.plan.Shown;
 import io.github.izakyl.folkways.core.engine.plan.WeaveDelta;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
@@ -51,9 +58,11 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class UrgePreemptionGameTests {
     private static final ResourceLocation OWNER = id("preemption");
     private static final Map<UUID, List<Urge>> OFFERS = new HashMap<>();
+    private static final Set<UUID> ACTION_BLOCKED = new HashSet<>();
 
     @SubscribeEvent
     public static void declare(Declaring event) {
+        BodyActions.register(id("preemption_body_action_gate"), body -> !ACTION_BLOCKED.contains(body.id()));
         event.urges(OWNER, (colony, who, view) -> OFFERS.getOrDefault(colony.id(), List.of()));
         Participations.register(PersonBody.ID, Stake.urge(OWNER), Participation.ALWAYS);
     }
@@ -243,6 +252,99 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void blockedCurrentWorkKeepsOwnershipAndToolWhileBusyTimeFreezes(GameTestHelper helper) {
+        try (Harness h = new Harness(helper)) {
+            AtomicInteger advances = new AtomicInteger();
+            AtomicInteger releases = new AtomicInteger();
+            ItemStack tool = h.tool();
+            ItemStack expected = tool.copy();
+            Node work = h.loanNode(tool, advances, releases);
+            h.start(work);
+            h.runner.tick(h.labor, h.level, h.body);
+            helper.assertValueEqual(advances.get(), 1, "the actual continuous workload borrows its task tool");
+            helper.assertTrue(TaskTools.holds(h.body.id(), tool), "the real packed tool is held by this task");
+            int busy = h.runner.busyTicks();
+            BlockPos feet = h.body.mob().blockPosition();
+            BlockPos destination = feet.offset(2, 0, 0);
+            var path = new net.minecraft.world.level.pathfinder.Path(List.of(
+                new net.minecraft.world.level.pathfinder.Node(feet.getX() + 1, feet.getY(), feet.getZ()),
+                new net.minecraft.world.level.pathfinder.Node(destination.getX(), destination.getY(), destination.getZ())), destination, true);
+            helper.assertTrue(h.body.mob().getNavigation().moveTo(path, 1), "fixture starts a real native navigation path before blocking");
+            helper.assertFalse(h.body.mob().getNavigation().isDone(), "the native path is active before the gate closes");
+            ACTION_BLOCKED.add(h.body.id());
+            for (int tick = 0; tick < 8; tick++) h.runner.tick(h.labor, h.level, h.body);
+            helper.assertTrue(h.runner.holding().orElseThrow().equals(work.id()), "blocked work retains its runner ownership");
+            helper.assertTrue(h.labor.state(work.id()).orElseThrow() == NodeState.WORKING, "a temporary gate does not cancel the node");
+            helper.assertValueEqual(advances.get(), 1, "blocked ticks never execute the continuous workload");
+            helper.assertValueEqual(h.runner.busyTicks(), busy, "paused world ticks do not accrue busy labor time");
+            helper.assertTrue(h.body.mob().getNavigation().isDone(), "the gate stops the real native navigation path");
+            helper.assertValueEqual(releases.get(), 0, "temporary blocking does not release the owned resource");
+            helper.assertTrue(TaskTools.holds(h.body.id(), tool), "the real task tool stays reserved while blocked");
+            helper.assertTrue(h.body.pack().getItem(0) == tool && ItemStack.matches(tool, expected), "blocking preserves the actual tool and every component");
+            ACTION_BLOCKED.remove(h.body.id());
+            h.runner.tick(h.labor, h.level, h.body);
+            helper.assertValueEqual(advances.get(), 2, "the same workload resumes when its gate opens");
+            helper.assertValueEqual(h.runner.busyTicks(), busy + 1, "busy time resumes for executed work only");
+            h.runner.letGo(h.labor, h.level, h.body);
+            helper.assertValueEqual(releases.get(), 1, "normal release closes the original task tool once");
+            helper.assertFalse(TaskTools.holds(h.body.id(), tool), "normal release removes the tool reservation");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void cancellationWhileBlockedStillReleasesTaskToolExactlyOnce(GameTestHelper helper) {
+        try (Harness h = new Harness(helper)) {
+            AtomicInteger advances = new AtomicInteger();
+            AtomicInteger releases = new AtomicInteger();
+            ItemStack tool = h.tool();
+            ItemStack expected = tool.copy();
+            Node work = h.loanNode(tool, advances, releases);
+            h.start(work);
+            h.runner.tick(h.labor, h.level, h.body);
+            ACTION_BLOCKED.add(h.body.id());
+            h.labor.phases().cancelled(work.id());
+            h.runner.tick(h.labor, h.level, h.body);
+            helper.assertFalse(h.runner.executing(), "terminal ownership is cleared before the temporary execution gate");
+            helper.assertValueEqual(releases.get(), 1, "cancelled work receives its real release callback despite blocking");
+            helper.assertFalse(TaskTools.holds(h.body.id(), tool), "cancellation releases the live task-tool reservation");
+            helper.assertValueEqual(advances.get(), 1, "cancellation cannot advance paused work");
+            h.runner.tick(h.labor, h.level, h.body);
+            h.runner.tick(h.labor, h.level, h.body);
+            h.runner.letGo(h.labor, h.level, h.body);
+            helper.assertValueEqual(releases.get(), 1, "later blocked ticks and repeated letGo cannot release twice");
+            helper.assertValueEqual(h.body.pack().count(Items.IRON_AXE), 1, "cleanup neither loses nor duplicates the physical tool");
+            helper.assertTrue(ItemStack.matches(h.body.pack().getItem(0), expected), "cleanup preserves all physical tool components and durability");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void blockedIdleRunnerCannotClaimQueuedWorkAndOtherBodiesStayAllowed(GameTestHelper helper) {
+        try (Harness h = new Harness(helper); Harness other = new Harness(helper)) {
+            AtomicInteger advances = new AtomicInteger();
+            Node work = h.node((Workload.Continuous) (level, who) -> { advances.incrementAndGet(); return true; }, true, new AtomicInteger());
+            h.queue(work);
+            ACTION_BLOCKED.add(h.body.id());
+            for (int tick = 0; tick < 8; tick++) h.runner.tick(h.labor, h.level, h.body);
+            helper.assertFalse(h.runner.executing(), "blocked idle runner does not begin a new node");
+            helper.assertTrue(h.runner.queued().contains(work.id()), "the queued work is preserved for later");
+            helper.assertTrue(h.labor.state(work.id()).orElseThrow() == NodeState.PENDING, "blocked idle work remains unclaimed");
+            helper.assertValueEqual(h.runner.busyTicks(), 0, "blocked idle time earns no busy ticks");
+            helper.assertValueEqual(advances.get(), 0, "blocked idle work never executes");
+            Node otherWork = other.node(Workload.Once.of(1000), true, new AtomicInteger());
+            other.start(otherWork);
+            helper.assertTrue(other.runner.holding().orElseThrow().equals(otherWork.id()), "test gate affects only its explicit resident UUID");
+            ACTION_BLOCKED.remove(h.body.id());
+            h.runner.tick(h.labor, h.level, h.body);
+            helper.assertTrue(h.runner.holding().orElseThrow().equals(work.id()), "opening the gate lets the same idle runner claim queued work");
+            h.runner.tick(h.labor, h.level, h.body);
+            helper.assertValueEqual(advances.get(), 1, "the newly claimed work runs only after the gate opens");
+        }
+        helper.succeed();
+    }
+
     private static ResourceLocation id(String path) {
         return ResourceLocation.fromNamespaceAndPath("folkways_test", path);
     }
@@ -337,6 +439,33 @@ public final class UrgePreemptionGameTests {
             };
         }
 
+        ItemStack tool() {
+            ItemStack tool = new ItemStack(Items.IRON_AXE);
+            tool.setDamageValue(7);
+            tool.set(DataComponents.CUSTOM_NAME, Component.literal("body action gate task tool"));
+            tool.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
+            body.pack().setItem(0, tool);
+            return tool;
+        }
+
+        Node loanNode(ItemStack tool, AtomicInteger advances, AtomicInteger releases) {
+            UUID task = UUID.randomUUID();
+            Workload.Continuous load = (world, who) -> {
+                TaskTools.keep(task, body.id(), stack -> stack == tool);
+                advances.incrementAndGet();
+                return true;
+            };
+            NodeSpec spec = NodeSpec.of(task, OWNER, WorkSite.at(level, at), Stances.WHEREVER, load).done();
+            return new Node() {
+                public NodeSpec spec() { return spec; }
+                public Outcome commit(ServerLevel world, Worker who) { return Outcome.done(); }
+                public void released(ServerLevel world, Worker who, Ending why) {
+                    TaskTools.release(task);
+                    releases.incrementAndGet();
+                }
+            };
+        }
+
         void offers(Urge... offered) {
             OFFERS.put(colony.id(), List.of(offered));
         }
@@ -361,6 +490,7 @@ public final class UrgePreemptionGameTests {
         }
 
         public void close() {
+            ACTION_BLOCKED.remove(body.id());
             OFFERS.remove(colony.id());
             runner.letGo(labor, level, body);
             labor.close();
