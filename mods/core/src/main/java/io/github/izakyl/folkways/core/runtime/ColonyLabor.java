@@ -28,6 +28,7 @@ import io.github.izakyl.folkways.core.plan.internal.Vertex;
 import io.github.izakyl.folkways.core.plan.internal.WeaveDelta;
 import io.github.izakyl.folkways.core.plan.internal.WeaveView;
 import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.BodyActions;
 import io.github.izakyl.folkways.core.resident.api.Doings;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.travel.internal.ColonyWays;
@@ -303,6 +304,11 @@ public final class ColonyLabor implements WorkListener {
     }
 
     public void tickChecked(BodyRunner runner, ServerLevel level, Body body) {
+        // check() has already run revocation, cancellation and soft deadlines; a gate only pauses execution.
+        if (!BodyActions.allowed(body)) {
+            body.mob().getNavigation().stop();
+            return;
+        }
         if (runner.tickChecked(level, body)) {
             take(runner, level, body);
         }
