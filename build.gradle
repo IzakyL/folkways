@@ -16,6 +16,7 @@ def modProjects = [
     folkways_tacz: ":tacz",
     folkways_firefighting: ":firefighting",
     folkways_carts: ":carts",
+    folkways_epicfight: ":epicfite",
 ]
 modProjects.values().each { evaluationDependsOn(it) }
 
@@ -23,6 +24,7 @@ modProjects.values().each { evaluationDependsOn(it) }
 def modularGolemsTests = providers.gradleProperty("modularGolemsTests").map { it.toBoolean() }.getOrElse(false)
 def cartsTests = providers.gradleProperty("cartsTests").map { it.toBoolean() }.getOrElse(false)
 def firefightingTests = providers.gradleProperty("firefightingTests").map { it.toBoolean() }.getOrElse(false)
+def epicfightTests = providers.gradleProperty("epicfightTests").map { it.toBoolean() }.getOrElse(false)
 def cookeryTests = providers.gradleProperty("cookeryTests").map { it.toBoolean() }.getOrElse(false)
 def warfareTests = providers.gradleProperty("warfareTests").map { it.toBoolean() }.getOrElse(false)
 def taczTests = providers.gradleProperty("taczTests").map { it.toBoolean() }.getOrElse(false)
@@ -45,11 +47,12 @@ def testedMods = modProjects.findAll { id, path -> (path != ":modulargolems" || 
     && (path != ":warfare" || warfareTests)
     && (path != ":tacz" || taczTests)
     && (path != ":firefighting" || firefightingTests)
-    && (path != ":carts" || cartsTests) }
+    && (path != ":carts" || cartsTests)
+    && (path != ":epicfite" || epicfightTests) }
 if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "modulargolems",
-    "rts", "warfare", "tacz", "firefighting", "chiselsandbits", "carts"])) {
+    "rts", "warfare", "tacz", "firefighting", "chiselsandbits", "carts", "epicfite"])) {
     throw new GradleException("Unknown GameTest mod '${gameTestMod}'; "
-        + "choose core, vanilla, create, cookery, modulargolems, rts, warfare, tacz, firefighting, chiselsandbits or carts")
+        + "choose core, vanilla, create, cookery, modulargolems, rts, warfare, tacz, firefighting, chiselsandbits, carts or epicfite")
 }
 if (gameTestMod == "modulargolems" && !modularGolemsTests) {
     throw new GradleException("Modular Golems GameTests require -PmodularGolemsTests=true")
@@ -75,11 +78,14 @@ if (gameTestMod == "chiselsandbits" && !chiselsTests) {
 if (gameTestMod == "carts" && !cartsTests) {
     throw new GradleException("Carts GameTests require -PcartsTests=true")
 }
+if (gameTestMod == "epicfite" && !epicfightTests) {
+    throw new GradleException("Epic Fight GameTests require -PepicfightTests=true")
+}
 def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gameTestMod}" }
 // Every installed-mod combination owns its world, including Tavern's extra registries.
 def gameTestSuites = [cookery: cookeryTests, modulargolems: modularGolemsTests, tavern: tavernTests,
     rts: rtsTests, warfare: warfareTests, tacz: taczTests, firefighting: firefightingTests,
-    chiselsandbits: chiselsTests, createPlacement: createPlacementTests, carts: cartsTests]
+    chiselsandbits: chiselsTests, createPlacement: createPlacementTests, carts: cartsTests, epicfight: epicfightTests]
     .findAll { suite, enabled -> enabled }.keySet().join("-") ?: "base"
 def gameTestDirectory = providers.gradleProperty("gameTestDirectory")
     .getOrElse("run/gametest/${gameTestMod ?: 'all'}/${gameTestSuites}")
@@ -171,6 +177,7 @@ dependencies {
     if (cookeryTests) { runtimeOnly core.lib("kaleidoscope_cookery") }
     if (firefightingTests) { runtimeOnly core.lib("createfirefightingadd") }
     if (cartsTests) { runtimeOnly core.lib("astikorcartsredux") }
+    if (epicfightTests) { runtimeOnly core.lib("epicfight"), core.lib("geckolib") }
     if (tavernTests) { runtimeOnly core.lib("kaleidoscope_tavern") }
     if (warfareTests) { runtimeOnly core.lib("superbwarfare"), core.lib("kotlinforforge"), core.lib("geckolib") }
     if (modularGolemsTests) {

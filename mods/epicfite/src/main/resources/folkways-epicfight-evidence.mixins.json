@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.epicfight.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AnimationManagerEvidenceMixin"
+  ],
+  "client": [
+    "EpicFightNetworkManagerEvidenceMixin",
+    "MinecraftReloadPairingGuardMixin",
+    "AnimationManagerPairingGuardMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
