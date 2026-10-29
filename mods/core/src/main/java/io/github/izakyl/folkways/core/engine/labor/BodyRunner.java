@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.resident.Going;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.resident.body.BodyActions;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.Stand;
@@ -206,6 +207,27 @@ final class BodyRunner {
     }
 
     void tick(ColonyLabor labor, ServerLevel level, Body body) {
+        // A native hurt reaction may pause execution, never cancellation or borrowed-item cleanup.
+        if (current != null) {
+            activeBody = body;
+            Phases states = phases(labor);
+            if (!states.check(current.id())) {
+                Node stopped = current;
+                states.failure(stopped.id()).ifPresentOrElse(why -> {
+                    putDown(body);
+                    failed(labor, level, body, stopped, why);
+                    clear(body);
+                }, () -> letGo(labor, level, body, "check:" + states.of(stopped.id()) + (states.waiting(stopped.id()) ? ":waiting" : "")));
+                return;
+            }
+        } else if (within != null && !labor.phases().check(within.id())) {
+            inside(labor, level, body);
+            return;
+        }
+        if (!BodyActions.allowed(body)) {
+            body.mob().getNavigation().stop();
+            return;
+        }
         if (within != null && (own == null || own.urge() == null)) {
             try {
                 ((Workload.Within) within.spec().workload()).tick(level, labor.hands(body, withinPlan));
@@ -225,18 +247,6 @@ final class BodyRunner {
             }
             rerouted = false;
             take(labor, level, body);
-            return;
-        }
-        // The same resident may come back as a new entity, as a train's rider does when its carriage is put back.
-        activeBody = body;
-        Phases states = phases(labor);
-        if (!states.check(current.id())) {
-            Node stopped = current;
-            states.failure(stopped.id()).ifPresentOrElse(why -> {
-                putDown(body);
-                failed(labor, level, body, stopped, why);
-                clear(body);
-            }, () -> letGo(labor, level, body, "check:" + states.of(stopped.id()) + (states.waiting(stopped.id()) ? ":waiting" : "")));
             return;
         }
         busy++;

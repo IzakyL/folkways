@@ -29,7 +29,7 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 
 ## 模组一览
 
-本仓库构建九个模组，`mods/` 下每个目录对应一个，产物为 `folkways-<目录名>-*.jar`。所有扩展都需要 Core 和 Vanilla。
+本仓库构建十个模组，`mods/` 下每个目录对应一个；产物名以表格说明为准。所有扩展都需要 Core 和 Vanilla。
 
 | 模组                                      | 目录                 | 额外依赖                                                                              | 作用                                                                   |
 | ----------------------------------------- | -------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -42,6 +42,7 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 | Folkways × TACZ                           | `mods/tacz`          | TACZ 1.1.8-hotfix-r7                                                                  | 居民使用 TACZ 枪械，弹药取自殖民地库存                                 |
 | Folkways × Superb Warfare                 | `mods/warfare`       | 卓越前线 0.8.9.2、Kotlin for Forge 5.12.0                                             | 居民使用其枪械和火炮阵地，弹药取自殖民地库存                           |
 | Folkways × Create: FireFighting Additions | `mods/firefighting`  | Folkways × Create、机械动力 6.0.10+（低于 6.1）、Create: FireFighting Additions 0.2.5 | 居民用消防栓水带灭火，并为手提灭火器补充灭火剂                         |
+| Folkways × Epic Fight                     | `mods/epicfite`（jar：`folkways-epicfight`） | 必须使用 Epic Fight 21.17.3.1；Core 和 Vanilla 须来自同一次 Folkways 构建。RTS 可选，无强制依赖 | 居民使用 Epic Fight 原生近战、受击动作和日常移动动画，并以 GEO 模型渲染 |
 
 ## 安装
 
@@ -80,6 +81,7 @@ Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无�
 | [Modular Golems / 模块化傀儡](https://modrinth.com/mod/modular-golems) 3.1.43+，配合 Folkways × Modular Golems                         | 傀儡加入居民名单，像人类居民一样承担工种                                                                            |
 | [Kaleidoscope Cookery / 森罗厨房](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0，配合 Folkways × Kaleidoscope Cookery | 水田种植、食材处理、原生厨具、共享工具、厨房置物架、割草采种，以及十三节教程                                        |
 | [Kaleidoscope Tavern / 森罗酒馆](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0，配合 Cookery 扩展                      | 搭棚种葡萄，榨汁、发酵、装瓶酿酒，居民为用餐区吧台补货并在那里喝酒；一节教程                                        |
+| [Epic Fight](https://modrinth.com/mod/epic-fight) 21.17.3.1，配合 Folkways × Epic Fight                                              | 居民使用 Epic Fight 原生近战攻击、受击动作和日常移动动画，并渲染 Bedrock GEO 模型；RTS 可选                           |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                                     | 使用基岩版格式的居民模型                                                                                            |
 | [Touhou Little Maid / 车万女仆](https://modrinth.com/mod/touhou-little-maid) 1.5+，需 GeckoLib                                         | 将内置及已安装扩展包中的模型用作居民外观，可逐个或按包选择                                                          |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                                 | 殖民书沿第三人称相机的准星瞄准                                                                                      |
@@ -100,7 +102,7 @@ npm run setup
 ```
 
 Setup 会下载锁定版本的集成依赖，并生成 Gradle 必需的清单。
-九个模组 jar 汇总到 `build/libs/`。
+十个模组 jar 汇总到 `build/libs/`。
 Blockwright 源码已支持 Windows，当前锁定的 npm 发布包早于这次改动。
 Windows 下可使用从源码构建的 SDK 和 `gradlew.bat`，详见[开发环境](CONTRIBUTING.zh-CN.md#开发环境)。
 

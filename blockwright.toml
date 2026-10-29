@@ -475,6 +475,16 @@ tacz = { target = ["server", "client"] }
 path = "build/libs/folkways-firefighting-*.jar"
 target = []
 
+# Optional native Epic Fight bridge, installed only in its integration profiles.
+[mods.folkways_epicfight]
+path = "build/libs/folkways-epicfight-*.jar"
+target = []
+
+[mods.epicfight]
+url = "https://cdn.modrinth.com/data/vu3NZ5Ma/versions/8HHhJt6i/epic-fight-21.17.3.1-mc1.21.1-neoforge.jar"
+sha512 = "d39c1d4a2198e7f2080cdc98de890d26d658a02b44c8399a301c7c0005d9991ff97cc94881823a9daa8952f3b89eb3d9197c2f83cf0fbba9c7992c77921b2122"
+target = []
+
 [mods.createfirefightingadd]
 url = "https://cdn.modrinth.com/data/tlmPPRct/versions/nRSRtbX2/createfirefightingadd-0.2.5-beta-fix2.jar"
 sha512 = "f0d4cb80163efd03f17c2791c235600cbadfca294f7d33d2b05256044239a449a3342e9dc0c6d9daa93a0a8a5dfeba8db86a091d5b08ad2bfb09106ee6692dcc"
@@ -494,6 +504,25 @@ iris = { target = ["client"] }
 device = "gpu"
 width = 1280
 height = 720
+
+# Epic Fight remains opt-in for both server and client instances.
+[profile.epicfight.mods]
+epicfight = { target = ["server", "client"] }
+folkways_epicfight = { target = ["server", "client"] }
+
+# The second offline client uses the same native integration for multiplayer pairing coverage.
+[profile.epicfight-guest.neoforge.client]
+account = { username = "EpicFightGuest", uuid = "00000000000000000000000000ef0020" }
+
+[profile.epicfight-guest.mods]
+epicfight = { target = ["server", "client"] }
+folkways_epicfight = { target = ["server", "client"] }
+
+# RTS input is opt-in for the combined Epic Fight acceptance scenarios.
+[profile.epicfight-acceptance.mods]
+epicfight = { target = ["server", "client"] }
+folkways_epicfight = { target = ["server", "client"] }
+folkways_rts = { target = ["server", "client"] }
 
 [mods.folkways_capture]
 path = "tests/promo/capture/build/libs/folkways-capture-neoforge-*.jar"
