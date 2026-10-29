@@ -41,6 +41,12 @@ versions. Back up your world before trying a nightly build.
 - **Set tables and build homes.** Dining areas serve table meals, beds grade their
   rooms, and mood moves work speed between 75% and 115%. Idle residents stroll,
   chat and pet animals; cats, wolves and parrots move in as the colony grows.
+- **Equip and defend.** Assign loadout profiles with weapons, armor and supplies,
+  then staff patrol routes and sentry posts. RTS adds direct resident commands;
+  the TACZ and Superb Warfare extensions add supported firearms.
+- **Protect and restore buildings.** Mark damage-control areas for residents to
+  put out fires. Record a baseline and enable repairs to replace missing building
+  blocks with materials from colony stores.
 
 ## Mods
 
@@ -53,11 +59,11 @@ This repository builds nine mods, one per directory under `mods/`. Each ships as
 | Folkways Vanilla                          | `mods/vanilla`       | Core                                                                                | Residents and their trades among vanilla blocks: farming, herding, fishing, crafting, hauling and building                      |
 | Folkways × Create                         | `mods/create`        | Create 6.0+                                                                         | Residents drive trains, send parcels through packaging and postboxes, lay track and build from schematics                       |
 | Folkways × Modular Golems                 | `mods/modulargolems` | Modular Golems 3.1.43+                                                              | Golems join the roster and take trades like people                                                                              |
-| Folkways × Kaleidoscope Cookery           | `mods/cookery`       | Kaleidoscope Cookery 1.6.0; Kaleidoscope Tavern 1.2.0 optional                      | Residents grow, prepare, cook and store food with its native appliances; with Tavern, they make and serve wine                  |
+| Folkways × Kaleidoscope Cookery           | `mods/cookery`       | Kaleidoscope Cookery 1.6.x; Kaleidoscope Tavern 1.2.x optional                      | Residents grow, prepare, cook and store food with its native appliances; with Tavern, they make and serve wine                  |
 | Folkways RTS                              | `mods/rts`           | —                                                                                   | Resident commands, squads and real-time controls                                                                                |
-| Folkways × TACZ                           | `mods/tacz`          | TACZ 1.1.8-hotfix-r7                                                                | Residents use TACZ guns with physical ammunition from colony supplies                                                           |
-| Folkways × Superb Warfare                 | `mods/warfare`       | Superb Warfare 0.8.9.2, Kotlin for Forge 5.12.0                                     | Residents use its firearms and emplacements with ammunition from colony stores                                                  |
-| Folkways × Create: FireFighting Additions | `mods/firefighting`  | Folkways × Create, Create 6.0.10+ (below 6.1), Create: FireFighting Additions 0.2.5 | Residents fight fires with hydrant hoses and refill portable extinguishers                                                      |
+| Folkways × TACZ                           | `mods/tacz`          | TACZ 1.21.1 NeoForge port 1.1.8-hotfix-r7                                            | Residents use supported TACZ guns with physical ammunition from colony supplies                                                 |
+| Folkways × Superb Warfare                 | `mods/warfare`       | Superb Warfare 0.8.9.2, Kotlin for Forge 5.12.0+ (below 6)                           | Residents use supported firearms and emplacements with ammunition from colony stores                                        |
+| Folkways × Create: FireFighting Additions | `mods/firefighting`  | Folkways × Create, Create 6.0.10+ (below 6.1), Create: FireFighting Additions 0.2.5-beta-fix2 | Residents fight fires with portable extinguishers and hydrant hoses, and refill extinguishers                                           |
 
 ## Installation
 
@@ -77,6 +83,9 @@ Install **Core and Vanilla**, then add extensions for the mods you use.
 **All Folkways jars must come from the same build.**
 
 See [Mods](#mods) for what each jar adds and what it needs.
+TACZ 1.1.8-hotfix-r7, Superb Warfare 0.8.9.2 and FireFighting Additions
+0.2.5-beta-fix2 are exact requirements, not minimum versions. RTS is optional
+for these integrations and for autonomous patrol and damage-control work.
 
 Ponder and Flywheel are bundled in Core; the Starlark interpreter is bundled in
 Vanilla. They do not need separate installation.
@@ -93,6 +102,17 @@ Vanilla. They do not need separate installation.
 
 The panel's **Lessons** tab contains Ponder tutorials for the rest of the mod.
 
+For combat, open **Loadout profiles**, create a profile and assign human residents.
+Keep the selected weapons, armor and matching ammunition in registered stores
+that allow taking items. Enable the **Patrol** trade and staff patrol routes
+or sentry posts for autonomous defense; install RTS for direct commands.
+
+For damage control, hold the Colony Book, press **V** and choose **Damage Control**.
+Mark two corners, protect the area and allow residents to work in **Damage control**.
+Repairs are off by default: right-click the area, use **Reset baseline** and enable
+**Restore missing blocks**. Containers, crops, fluids and machines are excluded;
+different blocks already occupying a recorded cell are reported as conflicts.
+
 ## Optional integrations
 
 | Mod                                                                                                                         | What it adds                                                                                                                                                                             |
@@ -100,8 +120,11 @@ The panel's **Lessons** tab contains Ponder tutorials for the rest of the mod.
 | [Create](https://modrinth.com/mod/create) 6.0+, with Folkways × Create                                                      | Schematic building, train driving, elevator rides, track laying and orders through a stock keeper's package network. Core handles walking around contraptions even without the extension |
 | [Sable](https://modrinth.com/mod/sable)                                                                                     | Residents path onto and off sub-levels, including Create Aeronautics ships                                                                                                               |
 | [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems                           | Golems join the roster and take trades alongside people                                                                                                                                  |
-| [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0, with Folkways × Kaleidoscope Cookery | Flooded-rice farming, ingredient preparation, native appliances, shared tools, kitchen racks, grass-seed gathering and thirteen lessons                                                  |
-| [Kaleidoscope Tavern](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0, with the Cookery extension             | Grape vineyards under pergolas, pressing, fermenting and bottling wine, and dining-area bar counters residents stock and drink at; one lesson                                            |
+| [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.x, with Folkways × Kaleidoscope Cookery | Flooded-rice farming, ingredient preparation, native appliances, shared tools, kitchen racks, grass-seed gathering and thirteen lessons                                                  |
+| [Kaleidoscope Tavern](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.x, with the Cookery extension             | Grape vineyards under pergolas, pressing, fermenting and bottling wine, and dining-area bar counters residents stock and drink at; one lesson                                            |
+| [TACZ 1.21.1 NeoForge port](https://modrinth.com/mod/OypNE65K) 1.1.8-hotfix-r7, with Folkways × TACZ | Residents fire and reload supported guns using physical matching ammunition; weapon choices preserve the gun model rather than matching only its shared item ID |
+| [Superb Warfare](https://modrinth.com/mod/superb-warfare) 0.8.9.2, with Folkways × Superb Warfare and Kotlin for Forge 5.12.0+ (below 6) | Residents use supported firearms and emplacements, consuming ammunition from colony stores |
+| [Create: FireFighting Additions](https://modrinth.com/mod/create-firefighting-additions) 0.2.5-beta-fix2, with Folkways × Create: FireFighting Additions and its dependencies listed above | Damage-control workers use and refill water-filled portable extinguishers, or use a hydrant cabinet supplied with a hose, nozzle and water |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                          | Bedrock-format resident models                                                                                                                                                           |
 | [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib                                       | Built-in and installed add-on models become selectable resident looks, individually or by pack                                                                                           |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                      | Colony Book aiming follows its third-person crosshair                                                                                                                                    |
