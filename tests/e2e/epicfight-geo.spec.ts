@@ -101,8 +101,23 @@ for (const scenario of ["startup", "online", "disconnect"] as const) test(scenar
     expect((await pairing(pair, evidence, "native pairing after actual model transfer")).connection.identity).toBe(originalConnection);
 
     scene = await pair.server.run(SETUP, origin);
-    const initial = await pair.server.run(SERVER_STATE, scene);
+    let initial: ServerState | undefined;
+    for (let attempt = 0; attempt < 120; attempt++) {
+      const state = await pair.server.run(SERVER_STATE, scene);
+      const armorReady = state.armor.length === ARMOR.length
+        && state.armor.every((item, slot) => item === ARMOR[slot]);
+      if (attempt % 10 === 0 || attempt === 119 || armorReady) {
+        evidence.push({ step: `real profile armor equip tick ${attempt}`, value: state });
+      }
+      if (armorReady) {
+        initial = state;
+        break;
+      }
+      await tick.sprint(pair.server, 1);
+    }
     evidence.push({ step: "server native patch, pinned look and physical armor", value: initial });
+    expect(initial, "the real LoadoutProfile armor entries must equip from the resident pack within bounded server ticks").toBeDefined();
+    initial = initial!;
     expect(initial.patch).toBe(true);
     expect(initial.look).toBe(LOOK);
     expect(initial.armor).toEqual(ARMOR);
