@@ -77,6 +77,7 @@ def expanded = [
     "minecraft_requirement": project.minecraft_requirement,
     "neoforge_requirement": project.neoforge_requirement,
     "ldlib_requirement": project.ldlib_requirement,
+    "epicfight_version": project.epicfight_version,
 ]
 
 processResources {

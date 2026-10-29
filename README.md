@@ -44,8 +44,8 @@ versions. Back up your world before trying a nightly build.
 
 ## Mods
 
-This repository builds nine mods, one per directory under `mods/`. Each ships as
-`folkways-<directory>-*.jar`. Every extension requires Core and Vanilla.
+This repository builds ten mods, one per directory under `mods/`; the table lists
+each jar's name. Every extension requires Core and Vanilla.
 
 | Mod                                       | Directory            | Also requires                                                                       | What it does                                                                                                                    |
 | ----------------------------------------- | -------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -58,6 +58,7 @@ This repository builds nine mods, one per directory under `mods/`. Each ships as
 | Folkways × TACZ                           | `mods/tacz`          | TACZ 1.1.8-hotfix-r7                                                                | Residents use TACZ guns with physical ammunition from colony supplies                                                           |
 | Folkways × Superb Warfare                 | `mods/warfare`       | Superb Warfare 0.8.9.2, Kotlin for Forge 5.12.0                                     | Residents use its firearms and emplacements with ammunition from colony stores                                                  |
 | Folkways × Create: FireFighting Additions | `mods/firefighting`  | Folkways × Create, Create 6.0.10+ (below 6.1), Create: FireFighting Additions 0.2.5 | Residents fight fires with hydrant hoses and refill portable extinguishers                                                      |
+| Folkways × Epic Fight                     | `mods/epicfite` (jar: `folkways-epicfight`) | Epic Fight 21.17.3.1 exactly; Core and Vanilla from the same Folkways build. RTS is optional and not required | Residents use native Epic Fight melee, hit reactions, everyday movement and GEO rendering |
 
 ## Installation
 
@@ -102,6 +103,7 @@ The panel's **Lessons** tab contains Ponder tutorials for the rest of the mod.
 | [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems                           | Golems join the roster and take trades alongside people                                                                                                                                  |
 | [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0, with Folkways × Kaleidoscope Cookery | Flooded-rice farming, ingredient preparation, native appliances, shared tools, kitchen racks, grass-seed gathering and thirteen lessons                                                  |
 | [Kaleidoscope Tavern](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0, with the Cookery extension             | Grape vineyards under pergolas, pressing, fermenting and bottling wine, and dining-area bar counters residents stock and drink at; one lesson                                            |
+| [Epic Fight](https://modrinth.com/mod/epic-fight) 21.17.3.1 exactly, with Folkways × Epic Fight                            | Residents use native melee strikes, hit reactions and everyday movement animations; Epic Fight renders their Bedrock-format GEO models. RTS is optional                          |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                          | Bedrock-format resident models                                                                                                                                                           |
 | [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib                                       | Built-in and installed add-on models become selectable resident looks, individually or by pack                                                                                           |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                      | Colony Book aiming follows its third-person crosshair                                                                                                                                    |
@@ -123,7 +125,7 @@ npm run setup
 ```
 
 Setup downloads the pinned integration dependencies and writes the manifest
-required by Gradle. The nine mod jars are collected in `build/libs/`.
+required by Gradle. The ten mod jars are collected in `build/libs/`.
 Blockwright's native Windows support is available in its source tree; the pinned
 npm release predates it. For Windows builds using a source-built SDK and
 `gradlew.bat`, see [development setup](CONTRIBUTING.md#development-setup).
