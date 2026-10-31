@@ -68,8 +68,14 @@ final class EfficientBuilder {
     private static final int WATCH_STAGE_TICKS = 200;
     private static final int WATCH_LAST_TICKS = 400;
 
-    /** Arrivals in a row with an ask met before the site asks for more material again. */
+    /** Arrivals in a row whose asking was met before the site asks for a wider trip again. */
     private static final int ARRIVALS_TO_GROW = 3;
+
+    /** Stacks one hand is asked for at first; the site halves that when nothing comes of an asking. */
+    private static final double START_TRIP_STACKS = 6.0D;
+
+    /** The narrowest trip the site will ask for, however little the colony can fill. */
+    private static final double LEAST_TRIP_STACKS = 2.0D;
 
     /**
      * How long a hand may be asked for and not come before the asking is taken back and made again. This is a
@@ -110,11 +116,11 @@ final class EfficientBuilder {
     private ServerLevel standing;
 
     /**
-     * How much of the configured trip the site asks for, as a fraction. Turned down when an asking goes unfilled and
-     * back up once askings are met again: a list wider than the stores hold is a node waiting for goods, not a hand
-     * at work, and a list narrow enough to fill is always better than none.
+     * How many stacks of material the site asks one hand for, in stacks. It starts small, halves when an asking goes
+     * unfilled and climbs again once askings are met, up to the configured trip: a list wider than the colony can
+     * fill is a node waiting for goods, not a hand at work, and a narrow list that fills is always better than none.
      */
-    private double tripScale = 1.0D;
+    private double trip = START_TRIP_STACKS;
 
     /** Arrivals in a row whose asking was met: enough of them and the site asks for a wider trip again. */
     private int arrivals;
@@ -175,7 +181,8 @@ final class EfficientBuilder {
         if (target.cells().isEmpty()) {
             return;
         }
-        LOGGER.info("efficient site {}: up to {} stack(s) of material a hand", shortId(), tripStacks());
+        LOGGER.info("efficient site {}: trips start at {} stack(s), up to {}", shortId(), tripStacks(),
+            EfficientConstruction.settings().stacksPerTrip());
         staff();
     }
 
@@ -655,7 +662,7 @@ final class EfficientBuilder {
             if (done >= take) {
                 break;
             }
-            withdraw(hand.id());
+            withdrawUnfilled(hand.id());
             done++;
         }
         if (done > 0) {
@@ -670,6 +677,17 @@ final class EfficientBuilder {
             abandoned.addAll(gone.slice());
         }
         askedAt.remove(node);
+    }
+
+    // An asking nobody came for is taken back, and the site asks for less next time: the trip it asked for was wider
+    // than the colony could fill, so a narrower one is more likely to bring a hand.
+    private void withdrawUnfilled(UUID node) {
+        PresenceNode hand = present.get(node);
+        boolean neverCame = hand != null && !hand.arrived();
+        withdraw(node);
+        if (neverCame) {
+            turnDown();
+        }
     }
 
     // Everything the site was waiting on is let go and the site starts again: what is built stays built.
@@ -701,8 +719,7 @@ final class EfficientBuilder {
             }
         }
         for (UUID node : stale) {
-            withdraw(node);
-            turnDown();
+            withdrawUnfilled(node);
             LOGGER.info("efficient site {}: a hand never came; asking again", shortId());
         }
     }
@@ -710,10 +727,12 @@ final class EfficientBuilder {
     // An asking nothing came of: the site asks for less on the next one, down to a couple of stacks.
     private void turnDown() {
         arrivals = 0;
-        if (tripScale <= 0.15D) {
+        double least = Math.min(LEAST_TRIP_STACKS, EfficientConstruction.settings().stacksPerTrip());
+        double next = Math.max(least, trip / 2.0D);
+        if (next >= trip) {
             return;
         }
-        tripScale = Math.max(0.15D, tripScale * 0.5D);
+        trip = next;
         LOGGER.info("efficient site {}: an ask went unfilled; the next trip is {} stack(s)", shortId(), tripStacks());
     }
 
@@ -740,11 +759,14 @@ final class EfficientBuilder {
             + "build, {} other hand(s) on the same spot", shortId(),
             node.stance() == null ? "-" : node.stance().toShortString(), waited, stacks, node.slice().size(), shared);
         arrivals++;
-        if (arrivals >= ARRIVALS_TO_GROW && tripScale < 1.0D) {
-            tripScale = Math.min(1.0D, tripScale * 1.5D);
+        if (arrivals >= ARRIVALS_TO_GROW) {
             arrivals = 0;
-            LOGGER.info("efficient site {}: askings are being met; the next trip is {} stack(s)", shortId(),
-                tripStacks());
+            double most = EfficientConstruction.settings().stacksPerTrip();
+            if (trip < most) {
+                trip = Math.min(most, trip * 1.5D);
+                LOGGER.info("efficient site {}: askings are being met; the next trip is {} stack(s)", shortId(),
+                    tripStacks());
+            }
         }
     }
 
@@ -846,9 +868,11 @@ final class EfficientBuilder {
         return needs;
     }
 
-    /** How many stacks one hand is asked for now: the configured trip, turned down while askings go unfilled. */
+    /** How many stacks one hand is asked for now, between the narrowest trip and the configured one. */
     private double tripStacks() {
-        return Math.max(2.0D, EfficientConstruction.settings().stacksPerTrip() * tripScale);
+        double most = EfficientConstruction.settings().stacksPerTrip();
+        double least = Math.min(LEAST_TRIP_STACKS, most);
+        return Math.max(least, Math.min(most, trip));
     }
 
     private long tripItems() {

@@ -25,10 +25,10 @@ public final class EfficientConstructionConfig {
             .defineInRange("workersPerSite", 8, 1, 64);
 
         STACKS_PER_TRIP = BUILDER
-            .comment("How many stacks of material one resident is asked to bring on a trip. The run it is given is cut"
-                + " to what that many stacks pay for, so a hand arrives with everything it will lay instead of coming"
-                + " back halfway. More means fewer journeys and a harder list for the colony to fill; the site asks"
-                + " for less by itself when its asks keep going unfilled.")
+            .comment("The most stacks of material one resident is asked for on a trip, and the point the site climbs"
+                + " back to once its asks are being met. A site starts at six stacks, halves that whenever an asking"
+                + " brings nobody, and grows again while askings are filled. More means fewer journeys and a harder"
+                + " list for the colony to fill: a creative supply box, for one, dispenses a single stack per trip.")
             .defineInRange("stacksPerTrip", 18, 1, 36);
 
         BUILDER.pop();
