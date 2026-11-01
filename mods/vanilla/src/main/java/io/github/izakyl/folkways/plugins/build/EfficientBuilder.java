@@ -77,8 +77,12 @@ final class EfficientBuilder {
     /** How many waits for a hand are kept to reckon what a walk to this site costs. */
     private static final int WAITS_KEPT = 8;
 
-    /** Stacks one hand is asked for at first; the site halves that when nothing comes of an asking. */
-    private static final double START_TRIP_STACKS = 6.0D;
+    /**
+     * Stacks one hand is asked for at first; the site halves that when nothing comes of an asking. A resident's pack
+     * holds 11 cells at its smallest, and a trip has to leave room for what the work breaks as well, so this starts
+     * well under that and the configured trip is only ever a ceiling.
+     */
+    private static final double START_TRIP_STACKS = 4.0D;
 
     /** The narrowest trip the site will ask for, however little the colony can fill. */
     private static final double LEAST_TRIP_STACKS = 2.0D;
