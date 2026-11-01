@@ -68,8 +68,14 @@ final class EfficientBuilder {
     private static final int WATCH_STAGE_TICKS = 200;
     private static final int WATCH_LAST_TICKS = 400;
 
+    /** How long a site may lay nothing before it asks the colony for less material on the next asking. */
+    private static final int TRIP_DOWN_TICKS = 1200;
+
     /** Arrivals in a row whose asking was met before the site asks for a wider trip again. */
     private static final int ARRIVALS_TO_GROW = 3;
+
+    /** How many waits for a hand are kept to reckon what a walk to this site costs. */
+    private static final int WAITS_KEPT = 8;
 
     /** Stacks one hand is asked for at first; the site halves that when nothing comes of an asking. */
     private static final double START_TRIP_STACKS = 6.0D;
@@ -129,6 +135,14 @@ final class EfficientBuilder {
     private int watch;
     private long watchAt = Long.MIN_VALUE;
     private int healed;
+
+    /** The waits for a hand to reach the site, kept as a ring: what a walk here costs, averaged over the last few. */
+    private final long[] waits = new long[WAITS_KEPT];
+    private int waitsAt;
+    private int waitsSeen;
+
+    /** When the site last asked for less material, so it does not do it twice in the same breath. */
+    private long downAt = Long.MIN_VALUE;
 
     EfficientBuilder(UUID order, BuildSite.Asks asks, BuildTarget target, Set<BlockPos> latched,
             Set<Joint> joined, Map<BlockPos, BuildRefusal> refused) {
@@ -196,11 +210,13 @@ final class EfficientBuilder {
             return false;
         }
         forgetHandsThatNeverCame(level);
+        turnDownWhenIdle(level);
         watch(level);
         if (level.getGameTime() % 200L == 0L) {
             LOGGER.info("efficient site {}: built {}/{} cell(s), {} piece(s) left, hands here {}/{} asked, "
-                + "pool {} item(s), trip {} stack(s), watch {}", shortId(), latched.size(), target.cells().size(),
-                works.size() - finished.size(), arrived(), present.size(), poolItems(), tripStacks(), watch);
+                + "pool {} item(s), trip {} stack(s), due {} tick(s), watch {}", shortId(), latched.size(),
+                target.cells().size(), works.size() - finished.size(), arrived(), present.size(), poolItems(),
+                tripStacks(), watchTicks(), watch);
         }
         staff();
         boolean changed = dirty;
@@ -617,26 +633,32 @@ final class EfficientBuilder {
         return how instanceof Ending.Failed failed ? "failed:" + failed.why() : how.getClass().getSimpleName();
     }
 
-    // A site that lays nothing is a site nobody can work at: its askings are taken back one at a time, then half of
-    // them, then all of them, so the colony may put a different resident, or a different journey, where this one was.
+    // A site that lays nothing is a site nobody can work at: the askings nobody has come for are taken back one at a
+    // time, then half of them, then all of them, so the colony may put a different resident, or a different journey,
+    // where this one was. An asking still within the time a walk here takes is not judged at all: a hand on its way
+    // is not a hand that will not come, and taking its asking back only sends another resident out behind it.
     private void watch(ServerLevel level) {
         long now = level.getGameTime();
-        long idle = now - lastShotAt;
-        long standstill = WATCH_TICKS << Math.min(3, Math.max(0, healed - 2));
-        if (idle < standstill) {
+        long standstill = watchTicks() << Math.min(3, Math.max(0, healed - 2));
+        if (now - lastShotAt < standstill) {
+            watch = 0;
+            return;
+        }
+        List<PresenceNode> stuck = stuckAsks(now);
+        if (stuck.isEmpty()) {
             watch = 0;
             return;
         }
         if (watch == 0) {
             watch = 1;
             watchAt = now;
-            clearIdleAsks(true);
+            takeAsks(stuck, true);
             return;
         }
         if (watch == 1 && now - watchAt >= WATCH_STAGE_TICKS) {
             watch = 2;
             watchAt = now;
-            clearIdleAsks(false);
+            takeAsks(stuckAsks(now), false);
             return;
         }
         if (watch == 2 && now - watchAt >= WATCH_LAST_TICKS) {
@@ -647,26 +669,52 @@ final class EfficientBuilder {
         }
     }
 
-    // Hands that have laid nothing are places on the site nobody is using: their asking is taken back. Only the
-    // oldest of them goes first, so a site that is merely slow does not lose every hand at once.
-    private void clearIdleAsks(boolean onlyOne) {
-        List<PresenceNode> idle = new ArrayList<>();
+    /**
+     * How long a hand may be asked for and not come before it counts as stuck here. A site that has had hands before
+     * knows what the walk costs and judges by the average of the last few; one that has not would only be guessing, so
+     * it waits the backstop out and lets asking for less material {@link #turnDownWhenIdle} do the work instead.
+     */
+    private long watchTicks() {
+        if (waitsSeen == 0) {
+            return ASK_TICKS;
+        }
+        long total = 0L;
+        for (int at = 0; at < waitsSeen; at++) {
+            total += waits[at];
+        }
+        return Math.max(WATCH_TICKS, (total / waitsSeen) * 3L);
+    }
+
+    // The askings nobody has come for that have had the time a walk here takes: the only ones the site may judge.
+    private List<PresenceNode> stuckAsks(long now) {
+        long due = watchTicks();
+        List<PresenceNode> stuck = new ArrayList<>();
         for (PresenceNode hand : present.values()) {
-            if (hand.laid() <= 0) {
-                idle.add(hand);
+            Long since = askedAt.get(hand.id());
+            if (hand.arrived() || hand.laid() > 0 || since == null) {
+                continue;
+            }
+            if (now - since >= due) {
+                stuck.add(hand);
             }
         }
-        int take = onlyOne ? Math.min(1, idle.size()) : (idle.size() + 1) / 2;
+        return stuck;
+    }
+
+    // Asks nobody came for are taken back, so the colony may send someone who can reach this site.
+    private void takeAsks(List<PresenceNode> stuck, boolean onlyOne) {
+        int take = onlyOne ? Math.min(1, stuck.size()) : (stuck.size() + 1) / 2;
         int done = 0;
-        for (PresenceNode hand : idle) {
+        for (PresenceNode hand : stuck) {
             if (done >= take) {
                 break;
             }
-            withdrawUnfilled(hand.id());
+            withdraw(hand.id());
             done++;
         }
         if (done > 0) {
-            LOGGER.info("efficient site {}: nothing laid; {} asking(s) taken back", shortId(), done);
+            LOGGER.info("efficient site {}: no hand came in {} tick(s); {} asking(s) taken back", shortId(),
+                watchTicks(), done);
         }
     }
 
@@ -679,15 +727,19 @@ final class EfficientBuilder {
         askedAt.remove(node);
     }
 
-    // An asking nobody came for is taken back, and the site asks for less next time: the trip it asked for was wider
-    // than the colony could fill, so a narrower one is more likely to bring a hand.
-    private void withdrawUnfilled(UUID node) {
-        PresenceNode hand = present.get(node);
-        boolean neverCame = hand != null && !hand.arrived();
-        withdraw(node);
-        if (neverCame) {
-            turnDown();
+    // A site that lays nothing for long enough is asking for more material than the colony can bring. Asking for
+    // less costs nothing and is what lets a stuck site start again by itself, so it is done whoever is on the way.
+    private void turnDownWhenIdle(ServerLevel level) {
+        long now = level.getGameTime();
+        if (now - lastShotAt < TRIP_DOWN_TICKS) {
+            downAt = Long.MIN_VALUE;
+            return;
         }
+        if (downAt != Long.MIN_VALUE && now - downAt < TRIP_DOWN_TICKS) {
+            return;
+        }
+        downAt = now;
+        turnDown();
     }
 
     // Everything the site was waiting on is let go and the site starts again: what is built stays built.
@@ -719,7 +771,7 @@ final class EfficientBuilder {
             }
         }
         for (UUID node : stale) {
-            withdrawUnfilled(node);
+            withdraw(node);
             LOGGER.info("efficient site {}: a hand never came; asking again", shortId());
         }
     }
@@ -755,6 +807,13 @@ final class EfficientBuilder {
         }
         Long since = askedAt.get(node.id());
         long waited = since == null || standing == null ? -1L : standing.getGameTime() - since;
+        if (waited >= 0L) {
+            waits[waitsAt] = waited;
+            waitsAt = (waitsAt + 1) % WAITS_KEPT;
+            if (waitsSeen < WAITS_KEPT) {
+                waitsSeen++;
+            }
+        }
         LOGGER.info("efficient site {}: a hand is here at {} after {} tick(s) with {} stack(s), {} piece(s) to "
             + "build, {} other hand(s) on the same spot", shortId(),
             node.stance() == null ? "-" : node.stance().toShortString(), waited, stacks, node.slice().size(), shared);
