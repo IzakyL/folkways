@@ -6,17 +6,45 @@ import io.github.izakyl.folkways.core.api.inventory.ColonyInventory;
 import io.github.izakyl.folkways.core.api.inventory.SlotSnapshot;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.stream.Stream;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.item.ItemStack;
 
 public final class ColonyStocks {
 
     private static final Map<ColonyInventory, Counted> TOTALS = new WeakHashMap<>();
 
-    private record Counted(InventorySnapshot.Version version, Map<ItemSpec, Long> goods) {
+    private record Stock(ItemStack stack, long count) {
+    }
+
+    private static final class Counted {
+        private final InventorySnapshot.Version version;
+        private final Map<ItemSpec, Long> goods;
+        private final List<Stock> stacks;
+        private final Map<ItemSpec, Long> matches = new HashMap<>();
+        private int matchingTick = Integer.MIN_VALUE;
+
+        private Counted(InventorySnapshot.Version version, Map<ItemSpec, Long> goods) {
+            this.version = version;
+            this.goods = goods;
+            stacks = goods.entrySet().stream()
+                .map(entry -> new Stock(Goods.display(entry.getKey()), entry.getValue())).toList();
+        }
+
+        private long available(ItemSpec spec, int tick) {
+            // Tags can change on a reload without changing inventory contents.
+            if (matchingTick != tick) {
+                matchingTick = tick;
+                matches.clear();
+            }
+            return matches.computeIfAbsent(spec, query -> stacks.stream()
+                .filter(stock -> Goods.matches(stock.stack(), query)).mapToLong(Stock::count).sum());
+        }
     }
 
     private ColonyStocks() {
@@ -24,16 +52,15 @@ public final class ColonyStocks {
 
     public static Map<ItemSpec, Integer> tally(Colony colony, MinecraftServer server) {
         Map<ItemSpec, Integer> held = new LinkedHashMap<>();
-        counted(colony).forEach((spec, count) -> held.put(spec, count.intValue()));
+        counted(colony).goods.forEach((spec, count) -> held.put(spec, count.intValue()));
         return held;
     }
 
-    public static long available(Colony colony, MinecraftServer server, ItemSpec spec) {
-        return counted(colony).entrySet().stream().filter(entry -> Goods.matches(Goods.display(entry.getKey()), spec))
-            .mapToLong(Map.Entry::getValue).sum();
+    public static synchronized long available(Colony colony, MinecraftServer server, ItemSpec spec) {
+        return counted(colony).available(spec, server.getTickCount());
     }
 
-    private static synchronized Map<ItemSpec, Long> counted(Colony colony) {
+    private static synchronized Counted counted(Colony colony) {
         ColonyInventory inventory = colony.inventory();
         InventorySnapshot snapshot = inventory.snapshot();
         if (!snapshot.coverage().complete()) {
@@ -41,17 +68,18 @@ public final class ColonyStocks {
         }
         var version = snapshot.version();
         Counted previous = TOTALS.get(inventory);
-        if (previous != null && previous.version().epoch().equals(version.epoch())
-            && previous.version().contents() == version.contents()
-            && previous.version().topology() == version.topology()) {
-            return previous.goods();
+        if (previous != null && previous.version.epoch().equals(version.epoch())
+            && previous.version.contents() == version.contents()
+            && previous.version.topology() == version.topology()) {
+            return previous;
         }
         Map<ItemSpec, Long> held = new LinkedHashMap<>();
         slots(snapshot).map(SlotSnapshot::stackCopy).filter(stack -> !stack.isEmpty())
             .forEach(stack -> held.merge(Goods.specOf(stack), (long) stack.getCount(), Long::sum));
         Map<ItemSpec, Long> goods = Map.copyOf(held);
-        TOTALS.put(inventory, new Counted(version, goods));
-        return goods;
+        Counted counted = new Counted(version, goods);
+        TOTALS.put(inventory, counted);
+        return counted;
     }
 
     private static Stream<SlotSnapshot> slots(InventorySnapshot snapshot) {

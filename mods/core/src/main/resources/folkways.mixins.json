@@ -4,6 +4,7 @@
   "package": "io.github.izakyl.folkways.core.shell.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "ColonyDisplayMixin",
     "MobAccessor",
     "PathfindingContextMixin"
   ],
