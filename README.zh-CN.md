@@ -31,7 +31,7 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 
 ## 模组一览
 
-本仓库构建九个模组，`mods/` 下每个目录对应一个，产物为 `folkways-<目录名>-*.jar`。所有扩展都需要 Core 和 Vanilla。
+本仓库构建十个模组，`mods/` 下每个目录对应一个，产物为 `folkways-<目录名>-*.jar`。所有扩展都需要 Core 和 Vanilla。
 
 | 模组                                      | 目录                 | 额外依赖                                                                              | 作用                                                                   |
 | ----------------------------------------- | -------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -44,6 +44,7 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 | Folkways × TACZ                           | `mods/tacz`          | TACZ 1.21.1 NeoForge 移植版 1.1.8-hotfix-r7                                            | 居民使用受支持的 TACZ 枪械，弹药取自殖民地库存                         |
 | Folkways × Superb Warfare                 | `mods/warfare`       | 卓越前线 0.8.9.2、Kotlin for Forge 5.12.0+（低于 6）                                   | 居民使用受支持的枪械和火炮阵地，弹药取自殖民地库存                     |
 | Folkways × Create: FireFighting Additions | `mods/firefighting`  | Folkways × Create、机械动力 6.0.10+（低于 6.1）、Create: FireFighting Additions 0.2.5-beta-fix2 | 居民用手提灭火器和消防栓水带灭火，并为灭火器补液                     |
+| Folkways × Efficient Construction | `mods/efficientconstruction` | — | 工地按固定节奏自行推进，居民只负责把材料带到场；不装时建造行为不变 |
 
 ## 安装
 

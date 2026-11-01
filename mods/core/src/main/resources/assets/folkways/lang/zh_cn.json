@@ -1291,5 +1291,6 @@
   "folkways.damage_control.worker": "执行居民：%s",
   "folkways.overhead.mode.build": "建设",
   "folkways.overhead.mode.rts": "RTS",
-  "folkways.overhead.mode.damage_control": "损管"
+  "folkways.overhead.mode.damage_control": "损管",
+  "folkways.efficient_construction.site_no_storage": "工地 %s 没地方存放挖出来的东西，居民已停工。请清理或新增仓库。"
 }

@@ -789,7 +789,7 @@ final class EfficientBuilder implements EfficientSite {
     // digs out. The word is said every time the site stands down rather than left to a log, and the log keeps the
     // slower beat.
     private void tellNoRoom(ServerLevel level) {
-        Component said = Component.translatable("folkways_efficient_construction.site_no_storage",
+        Component said = Component.translatable("folkways.efficient_construction.site_no_storage",
             Component.literal(anchor.toShortString()));
         for (ServerPlayer player : level.players()) {
             if (player.blockPosition().closerThan(anchor, 128.0D)) {
