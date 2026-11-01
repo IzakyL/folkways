@@ -37,7 +37,7 @@ public record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<Bloc
         this(realm, cells, unloaded, List.of(), storageOrigin);
     }
 
-    BuildTarget {
+    public BuildTarget {
         cells = Collections.unmodifiableMap(new LinkedHashMap<>(cells));
         unloaded = Collections.unmodifiableSet(new LinkedHashSet<>(unloaded));
         joints = List.copyOf(joints);

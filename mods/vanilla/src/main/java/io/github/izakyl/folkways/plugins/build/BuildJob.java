@@ -71,7 +71,7 @@ public record BuildJob(Kind kind, WorldPos focus, Stances footings,
 
     static final ItemSpec BUCKET = ItemSpec.of(ResourceLocation.withDefaultNamespace("bucket"));
 
-    BuildJob {
+    public BuildJob {
         before = Collections.unmodifiableMap(new LinkedHashMap<>(before));
         after = Collections.unmodifiableMap(new LinkedHashMap<>(after));
         joint = List.copyOf(joint);

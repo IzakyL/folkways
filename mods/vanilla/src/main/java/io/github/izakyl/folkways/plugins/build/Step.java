@@ -23,7 +23,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 public record Step(BuildJob.Kind kind, BlockPos focus, Map<BlockPos, BlockState> before, Map<BlockPos, BlockState> after,
         Optional<Joint> joint, List<Need> cost) {
 
-    Step {
+    public Step {
         before = Collections.unmodifiableMap(new LinkedHashMap<>(before));
         after = Collections.unmodifiableMap(new LinkedHashMap<>(after));
         cost = List.copyOf(cost);
