@@ -24,16 +24,16 @@ import net.minecraft.world.level.block.state.BlockState;
 public record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, List<Joint> joints,
         BlockPos storageOrigin, Map<BlockPos, BlockData> data) {
 
-    BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, List<Joint> joints,
+    public BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, List<Joint> joints,
             BlockPos storageOrigin) {
         this(realm, cells, unloaded, joints, storageOrigin, Map.of());
     }
 
-    BuildTarget(Realm realm, Map<BlockPos, BlockState> cells) {
+    public BuildTarget(Realm realm, Map<BlockPos, BlockState> cells) {
         this(realm, cells, Set.of(), List.of(), BlockPos.ZERO);
     }
 
-    BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, BlockPos storageOrigin) {
+    public BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, BlockPos storageOrigin) {
         this(realm, cells, unloaded, List.of(), storageOrigin);
     }
 
