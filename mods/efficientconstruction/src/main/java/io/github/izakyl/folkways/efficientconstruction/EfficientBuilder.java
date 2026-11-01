@@ -202,6 +202,9 @@ final class EfficientBuilder implements EfficientSite {
     private long runMax;
     private int runCalls;
 
+    /** When the site last said it had cells left that no piece was ever asked for. */
+    private long toldSettleAt = Long.MIN_VALUE;
+
     /** When the site last said it had nowhere to put the ore it would dig out. */
     private long toldNoRoomAt = Long.MIN_VALUE;
 
@@ -270,6 +273,9 @@ final class EfficientBuilder implements EfficientSite {
             return false;
         }
         standing = level;
+        if (finished.size() >= works.size()) {
+            settleCells(level);
+        }
         if (nothingLeft()) {
             return false;
         }
@@ -937,6 +943,30 @@ final class EfficientBuilder implements EfficientSite {
     /** Every cell met and every joint made: the order is built. */
     public boolean complete() {
         return !closed && latched.size() == target.cells().size() && joined.containsAll(target.joints());
+    }
+
+    /**
+     * Looks once more at the cells no piece was ever asked for. A plan can come to its end with a few of them: ground
+     * the order cleared, a cell the world already matched, one that only needed setting straight. Latching what the
+     * world now holds lets the site finish instead of waiting for work that will never be asked for.
+     */
+    private void settleCells(ServerLevel level) {
+        int left = 0;
+        for (Map.Entry<BlockPos, BlockState> cell : target.cells().entrySet()) {
+            if (latched.contains(cell.getKey())) {
+                continue;
+            }
+            if (level.hasChunkAt(cell.getKey()) && target.satisfied(level, cell.getKey())) {
+                latched.add(cell.getKey());
+                refused.remove(cell.getKey());
+            } else {
+                left++;
+            }
+        }
+        if (left > 0 && standing != null && standing.getGameTime() - toldSettleAt >= 200L) {
+            toldSettleAt = standing.getGameTime();
+            LOGGER.info("efficient site {}: {} cell(s) left with no piece to build them", shortId(), left);
+        }
     }
 
     private boolean nothingLeft() {
