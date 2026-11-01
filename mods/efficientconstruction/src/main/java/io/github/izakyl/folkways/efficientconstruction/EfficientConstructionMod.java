@@ -6,6 +6,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import org.slf4j.Logger;
 
@@ -29,13 +30,15 @@ public final class EfficientConstructionMod {
         activate(EfficientConstruction.Settings.DEFAULTS);
         modBus.addListener(ModConfigEvent.Loading.class, event -> applyConfig());
         modBus.addListener(ModConfigEvent.Reloading.class, event -> applyConfig());
+        NeoForge.EVENT_BUS.addListener(EfficientConstructionCommand::register);
     }
 
     private static void applyConfig() {
         activate(new EfficientConstruction.Settings(
             EfficientConstructionConfig.TICKS_PER_BLOCK.get(),
             EfficientConstructionConfig.WORKERS_PER_SITE.get(),
-            EfficientConstructionConfig.STACKS_PER_TRIP.get()));
+            EfficientConstructionConfig.STACKS_PER_TRIP.get(),
+            EfficientConstructionConfig.STOW_ON_SITE.get()));
     }
 
     // A Folkways Vanilla built without the efficient-construction seam cannot be extended this way: say so plainly

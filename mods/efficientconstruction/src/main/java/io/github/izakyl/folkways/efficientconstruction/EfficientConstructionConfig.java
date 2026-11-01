@@ -10,6 +10,7 @@ public final class EfficientConstructionConfig {
     static final ModConfigSpec.IntValue TICKS_PER_BLOCK;
     static final ModConfigSpec.IntValue WORKERS_PER_SITE;
     static final ModConfigSpec.IntValue STACKS_PER_TRIP;
+    static final ModConfigSpec.BooleanValue STOW_ON_SITE;
     static final ModConfigSpec SPEC;
 
     static {
@@ -31,6 +32,13 @@ public final class EfficientConstructionConfig {
                 + " hold next to the blocks the work breaks: a pack is eleven cells at its smallest, so a wide trip is"
                 + " refused outright as PACK_BUSY and no hand is sent at all.")
             .defineInRange("stacksPerTrip", 6, 1, 36);
+
+        STOW_ON_SITE = BUILDER
+            .comment("Whether a hand arriving at a site first puts away what it carries that the site has no use for:"
+                + " anything that is neither material the run spends, nor food, nor a tool, goes into the colony's"
+                + " stores nearby, so the pack has room for the trip. Another trade filling a pack is what leaves a"
+                + " site with nobody to send, so this is on unless it is in the way.")
+            .define("stowOnSite", true);
 
         BUILDER.pop();
         SPEC = BUILDER.build();

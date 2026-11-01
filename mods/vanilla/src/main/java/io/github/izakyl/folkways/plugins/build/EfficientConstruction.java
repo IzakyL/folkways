@@ -17,9 +17,9 @@ public final class EfficientConstruction {
      * halfway through. Wide runs mean fewer journeys; the colony still has to hold the goods for the asking to be met,
      * and a list too wide to fill leaves the node waiting for goods instead of sending a hand.
      */
-    public record Settings(int ticksPerBlock, int workersPerSite, int stacksPerTrip) {
+    public record Settings(int ticksPerBlock, int workersPerSite, int stacksPerTrip, boolean stowOnSite) {
 
-        public static final Settings DEFAULTS = new Settings(16, 8, 18);
+        public static final Settings DEFAULTS = new Settings(16, 8, 18, true);
 
         public Settings {
             if (ticksPerBlock < 1) {

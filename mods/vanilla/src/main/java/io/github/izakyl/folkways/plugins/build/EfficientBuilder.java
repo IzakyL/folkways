@@ -1,7 +1,9 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Need;
@@ -15,6 +17,7 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Xp;
 import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
+import io.github.izakyl.folkways.core.engine.plan.Stores;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -239,6 +242,7 @@ final class EfficientBuilder {
         }
         int unsupported = 0;
         int broke = 0;
+        int toolShort = 0;
         boolean mine = false;
         for (int id : hand.slice()) {
             Layering.Work work = byId.get(id);
@@ -284,6 +288,13 @@ final class EfficientBuilder {
             if (!hand.canPay(cost)) {
                 continue;
             }
+            // Nothing is dug out bare-handed: a piece that breaks a block only a tool can take waits for a hand
+            // carrying one, and the run moves on to what can be done meanwhile.
+            Map<BlockPos, BlockState> dug = breaking(level, job);
+            if (needsTool(dug) && toolFor(dug) == null) {
+                toolShort++;
+                continue;
+            }
             claimed.add(id);
             BlockPos stance = hand.stance() == null ? anchor : hand.stance();
             hand.paid();
@@ -291,8 +302,8 @@ final class EfficientBuilder {
         }
         if (level.getGameTime() - toldWhyAt >= 200L) {
             toldWhyAt = level.getGameTime();
-            LOGGER.info("efficient site {}: nothing up, finished={} claimed={} unsupported={} broken={}",
-                shortId(), finished.size(), claimed.size(), unsupported, broke);
+            LOGGER.info("efficient site {}: nothing up, finished={} claimed={} unsupported={} broken={} no_tool={}",
+                shortId(), finished.size(), claimed.size(), unsupported, broke, toolShort);
         }
         // Its own run of the plan is built and the site still holds something to build with: it takes another run
         // rather than leaving, so the material already on the site is spent before anyone walks back for more.
@@ -343,10 +354,21 @@ final class EfficientBuilder {
                 return Outcome.failed(BuildRefusal.OCCUPIED);
             }
             int cells = fill(job).size();
-            List<ItemStack> drops = lay(level, job);
+            // Whatever is in the way is dug out with a hand's own tool, as a resident digging it would: the tool
+            // chooses the drops and wears with every block taken.
+            Map<BlockPos, BlockState> dug = breaking(level, job);
+            HeldTool tool = needsTool(dug) ? toolFor(dug) : null;
+            if (tool == null && needsTool(dug)) {
+                // The tool went out of the pack since the piece was handed over: the piece waits for another hand.
+                return Outcome.failed(BuildRefusal.OCCUPIED);
+            }
+            List<ItemStack> drops = lay(level, job, tool == null ? ItemStack.EMPTY : tool.stack());
+            if (tool != null) {
+                wear(tool, dug.size());
+            }
             hand.laid(cells);
             work.step().ifPresent(step -> latch(level, step));
-            drops.forEach(stack -> Block.popResource(level, job.focus().cell(), stack));
+            gather(level, job.focus().cell(), drops);
             finished.add(work.id());
         }
         if (!toldFirstShot && !finished.isEmpty()) {
@@ -387,7 +409,7 @@ final class EfficientBuilder {
         return after;
     }
 
-    private List<ItemStack> lay(ServerLevel level, BuildJob job) {
+    private List<ItemStack> lay(ServerLevel level, BuildJob job, ItemStack tool) {
         Map<BlockPos, BlockState> before = new LinkedHashMap<>();
         job.before().forEach((pos, state) -> {
             BlockPos at = pos.cell();
@@ -404,8 +426,115 @@ final class EfficientBuilder {
         Map<BlockPos, BlockData> data = new LinkedHashMap<>();
         job.data().forEach((pos, payload) -> data.put(pos.cell(), payload));
         spill(level, before.keySet());
-        return Rubble.lay(level, null, before, after, shot, job.focus().cell(), data, ItemStack.EMPTY,
+        return Rubble.lay(level, null, before, after, shot, job.focus().cell(), data, tool,
             SchematicPlacement.icon(job.cost()), true);
+    }
+
+    // The blocks this shot will break, as they stand now: what a hand digs out before the piece goes in.
+    private static Map<BlockPos, BlockState> breaking(ServerLevel level, BuildJob job) {
+        Map<BlockPos, BlockState> breaking = new LinkedHashMap<>();
+        job.before().forEach((pos, state) -> {
+            BlockPos at = pos.cell();
+            if (!level.hasChunkAt(at)) {
+                return;
+            }
+            BlockState was = level.getBlockState(at);
+            if (BuildJob.inTheWay(was)) {
+                breaking.put(at, was);
+            }
+        });
+        return breaking;
+    }
+
+    // Whether any of it can only be taken with a tool, as stone and ore can.
+    private static boolean needsTool(Map<BlockPos, BlockState> dug) {
+        for (BlockState was : dug.values()) {
+            if (was.requiresCorrectToolForDrops()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * A tool the hands on the site carry that takes every block of this shot which needs one, or null when none does.
+     * It is any slot of any pack, not the hand in use: a resident keeps its tools where it keeps everything else.
+     */
+    @Nullable
+    private HeldTool toolFor(Map<BlockPos, BlockState> dug) {
+        List<BlockState> wanted = new ArrayList<>();
+        for (BlockState was : dug.values()) {
+            if (was.requiresCorrectToolForDrops()) {
+                wanted.add(was);
+            }
+        }
+        if (wanted.isEmpty()) {
+            return null;
+        }
+        for (PresenceNode hand : onSite()) {
+            Container pack = hand.pack();
+            if (pack == null) {
+                continue;
+            }
+            for (int slot = 0; slot < pack.getContainerSize(); slot++) {
+                ItemStack stack = pack.getItem(slot);
+                if (stack.isEmpty()) {
+                    continue;
+                }
+                boolean takes = true;
+                for (BlockState state : wanted) {
+                    if (!stack.isCorrectToolForDrops(state)) {
+                        takes = false;
+                        break;
+                    }
+                }
+                if (takes) {
+                    return new HeldTool(pack, slot, stack);
+                }
+            }
+        }
+        return null;
+    }
+
+    // A block taken wears the tool that took it, by the hand's own reckoning; one worn out is gone.
+    private static void wear(HeldTool tool, int blocks) {
+        if (blocks <= 0 || !tool.stack().isDamageableItem()) {
+            return;
+        }
+        int left = tool.stack().getMaxDamage() - tool.stack().getDamageValue();
+        if (blocks >= left) {
+            tool.pack().setItem(tool.slot(), ItemStack.EMPTY);
+        } else {
+            tool.stack().setDamageValue(tool.stack().getDamageValue() + blocks);
+        }
+        tool.pack().setChanged();
+    }
+
+    /** A tool one of the hands on the site carries, and where it lies, so taking blocks can wear it. */
+    private record HeldTool(Container pack, int slot, ItemStack stack) {
+    }
+
+    // What the shot broke goes into the packs of the hands on the site before anything is dropped at all.
+    private void gather(ServerLevel level, BlockPos at, List<ItemStack> drops) {
+        for (ItemStack stack : drops) {
+            if (stack.isEmpty()) {
+                continue;
+            }
+            ItemStack left = stack;
+            for (PresenceNode hand : onSite()) {
+                Container pack = hand.pack();
+                if (pack == null) {
+                    continue;
+                }
+                left = Containers.insert(pack, left);
+                if (left.isEmpty()) {
+                    break;
+                }
+            }
+            if (!left.isEmpty()) {
+                Block.popResource(level, at, left);
+            }
+        }
     }
 
     // Whatever a broken cell held is put on the ground rather than lost with the block.
@@ -423,6 +552,95 @@ final class EfficientBuilder {
                 }
             }
         }
+    }
+
+    /**
+     * A hand puts away what the site has no use for: material this run spends, food and tools stay, and the rest goes
+     * into the colony's stores the hand can reach, so the pack has room for the trip it was asked to carry. Asked
+     * again as it leaves, keeping only food and tools, so what it did not spend does not walk off with it.
+     */
+    void stow(PresenceNode hand, boolean all) {
+        Worker who = hand.worker();
+        Container pack = hand.pack();
+        ServerLevel level = standing;
+        if (who == null || pack == null || level == null) {
+            return;
+        }
+        List<ItemSpec> keep = new ArrayList<>();
+        if (!all) {
+            for (Need need : hand.spec().needs()) {
+                keep.add(need.spec());
+            }
+        }
+        int free = freeSlots(pack);
+        int wanted = all ? 0 : cellsOf(hand.spec().needs());
+        if (!all && free >= wanted) {
+            return;
+        }
+        int stowed = 0;
+        for (int slot = 0; slot < pack.getContainerSize() && (all || free < wanted); slot++) {
+            ItemStack stack = pack.getItem(slot);
+            if (stack.isEmpty() || keep(stack, keep)) {
+                continue;
+            }
+            ItemStack left = putAway(level, who, stack.copy());
+            if (left.getCount() >= stack.getCount()) {
+                continue;
+            }
+            pack.setItem(slot, left.isEmpty() ? ItemStack.EMPTY : left);
+            stowed++;
+            free++;
+        }
+        if (stowed > 0) {
+            pack.setChanged();
+            LOGGER.info("efficient site {}: a hand put away {} stack(s) to make room", shortId(), stowed);
+        }
+    }
+
+    // What a hand keeps by: what it eats, what it works with, and the material its own run is due to spend.
+    private static boolean keep(ItemStack stack, List<ItemSpec> wanted) {
+        if (stack.isEdible() || stack.isDamageableItem()) {
+            return true;
+        }
+        for (ItemSpec spec : wanted) {
+            if (Goods.matches(stack, spec)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Puts away what is left of a stack into the stores the hand can reach: what fits nowhere comes back to it.
+    private static ItemStack putAway(ServerLevel level, Worker who, ItemStack stack) {
+        ItemStack left = stack;
+        for (Worker.Store store : who.within()) {
+            if (left.isEmpty()) {
+                break;
+            }
+            if (!StoreRule.stores(Stores.rulesAt(level, store.at()))) {
+                continue;
+            }
+            left = Containers.insert(store.contents(), left);
+        }
+        return left;
+    }
+
+    private static int freeSlots(Container pack) {
+        int free = 0;
+        for (int slot = 0; slot < pack.getContainerSize(); slot++) {
+            if (pack.getItem(slot).isEmpty()) {
+                free++;
+            }
+        }
+        return free;
+    }
+
+    private static int cellsOf(List<Need> needs) {
+        long cells = 0L;
+        for (Need need : needs) {
+            cells += (need.count() + 63L) / 64L;
+        }
+        return (int) Math.min(Integer.MAX_VALUE, cells);
     }
 
     // What a turn between two laid ends costs, read off the blocks it joins. Null when the joiner cannot quote it.
@@ -621,6 +839,9 @@ final class EfficientBuilder {
     /** The hand's own stay is over: why it is over is the only thing that says where the site's pace went. */
     void handLeft(PresenceNode hand, Ending how) {
         if (present.containsKey(hand.id())) {
+            // What it did not spend comes off it before it goes, so the material stays at the site and its pack does
+            // not walk back to the colony full of another order's goods.
+            stow(hand, true);
             gone(hand, how);
         }
     }

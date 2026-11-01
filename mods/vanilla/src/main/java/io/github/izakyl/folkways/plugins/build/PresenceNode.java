@@ -69,6 +69,8 @@ final class PresenceNode implements Node, Workload.Within {
             this.who = who;
             site.touched();
             site.handArrived(this, who);
+            // What the site has no use for is put away before the trip is carried, so the pack holds the trip.
+            site.stow(this, false);
         }
         // The shot this hand was given came back for want of goods nothing on the site could pay for: it is better
         // sent back for another basket than kept standing where it can do nothing.
@@ -92,6 +94,12 @@ final class PresenceNode implements Node, Workload.Within {
     @Nullable
     Container pack() {
         return who == null ? null : who.pack();
+    }
+
+    /** The resident itself, or null before it has been met: what the site needs to put its goods away. */
+    @Nullable
+    Worker worker() {
+        return who;
     }
 
     /** Its run is built and the site still holds material: the hand takes the next run rather than leaving. */
