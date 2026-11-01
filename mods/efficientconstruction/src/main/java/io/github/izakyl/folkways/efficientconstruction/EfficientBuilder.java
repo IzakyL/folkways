@@ -35,7 +35,6 @@ import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Xp;
 import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import io.github.izakyl.folkways.core.engine.plan.Stores;
-import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -47,6 +46,9 @@ import java.util.Set;
 import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
@@ -83,6 +85,17 @@ final class EfficientBuilder implements EfficientSite {
 
     /** How few pieces must be left before the site reads out why the rest will not go up. */
     private static final int TAIL_PIECES = 200;
+
+    /** Ore, and what comes of it: what a mine is dug for is never left lying on the ground. */
+    private static final TagKey<Block> ORE_BLOCKS =
+        TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("c", "ores"));
+
+    private static final List<TagKey<Item>> PRECIOUS = List.of(
+        TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "ores")),
+        TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "raw_materials")),
+        TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "gems")),
+        TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "dusts")),
+        TagKey.create(Registries.ITEM, ResourceLocation.withDefaultNamespace("coals")));
 
     /** How long the site may lay nothing before its askings are taken back, one at a time and then all of them. */
     private static final int WATCH_TICKS = 600;
@@ -168,6 +181,20 @@ final class EfficientBuilder implements EfficientSite {
     private int waitsAt;
     private int waitsSeen;
 
+    /** What the site's own work costs the server thread, kept between readouts. */
+    private long staffNanos;
+    private long staffMax;
+    private int staffCalls;
+    private long handNanos;
+    private long handMax;
+    private int handCalls;
+    private long runNanos;
+    private long runMax;
+    private int runCalls;
+
+    /** When the site last said it had nowhere to put the ore it would dig out. */
+    private long toldNoRoomAt = Long.MIN_VALUE;
+
     /** When the site last asked for less material, so it does not do it twice in the same breath. */
     private long downAt = Long.MIN_VALUE;
 
@@ -243,12 +270,20 @@ final class EfficientBuilder implements EfficientSite {
             reportTail(level);
         }
         if (level.getGameTime() % 200L == 0L) {
+            reportCost();
             LOGGER.info("efficient site {}: built {}/{} cell(s), {} piece(s) left, hands here {}/{} asked, "
                 + "pool {} item(s), trip {} stack(s), due {} tick(s), watch {}", shortId(), latched.size(),
                 target.cells().size(), works.size() - finished.size(), arrived(), present.size(), poolItems(),
                 tripStacks(), watchTicks(), watch);
         }
+        long staffStart = System.nanoTime();
         staff();
+        long staffSpent = System.nanoTime() - staffStart;
+        staffNanos += staffSpent;
+        staffCalls++;
+        if (staffSpent > staffMax) {
+            staffMax = staffSpent;
+        }
         boolean changed = dirty;
         dirty = false;
         return changed;
@@ -256,6 +291,20 @@ final class EfficientBuilder implements EfficientSite {
 
     /** What a hand that is here does next: a shot of its own slice of the plan, in the order the plan lays it. */
     Workload.Within.Turn hand(ServerLevel level, PresenceNode hand) {
+        long started = System.nanoTime();
+        try {
+            return handNow(level, hand);
+        } finally {
+            long spent = System.nanoTime() - started;
+            handNanos += spent;
+            handCalls++;
+            if (spent > handMax) {
+                handMax = spent;
+            }
+        }
+    }
+
+    private Workload.Within.Turn handNow(ServerLevel level, PresenceNode hand) {
         if (closed || complete()) {
             return Workload.Within.LEAVE;
         }
@@ -267,6 +316,7 @@ final class EfficientBuilder implements EfficientSite {
         int broke = 0;
         int toolShort = 0;
         int noGoods = 0;
+        int noRoom = 0;
         boolean mine = false;
         for (int id : hand.slice()) {
             Layering.Work work = byId.get(id);
@@ -320,6 +370,18 @@ final class EfficientBuilder implements EfficientSite {
                 toolShort++;
                 continue;
             }
+            // A mine is dug for what it yields: a piece whose ore would fit nowhere waits for room, and the site
+            // says how much room is missing rather than leaving the player to guess.
+            int shortBy = oreRoomShort(hand, dug);
+            if (shortBy > 0) {
+                noRoom += shortBy;
+                if (level.getGameTime() - toldNoRoomAt >= 200L) {
+                    toldNoRoomAt = level.getGameTime();
+                    LOGGER.info("efficient site {}: {} more cell(s) of room needed for the ore under this piece",
+                        shortId(), shortBy);
+                }
+                continue;
+            }
             claimed.add(id);
             BlockPos stance = hand.stance() == null ? anchor : hand.stance();
             hand.paid();
@@ -328,7 +390,8 @@ final class EfficientBuilder implements EfficientSite {
         if (level.getGameTime() - toldWhyAt >= 200L) {
             toldWhyAt = level.getGameTime();
             LOGGER.info("efficient site {}: nothing up, finished={} claimed={} unsupported={} broken={} no_tool={} "
-                + "no_goods={}", shortId(), finished.size(), claimed.size(), unsupported, broke, toolShort, noGoods);
+                + "no_goods={} no_room={}", shortId(), finished.size(), claimed.size(), unsupported, broke, toolShort,
+                noGoods, noRoom);
         }
         // Its own run of the plan is built and the site still holds something to build with: it takes another run
         // rather than leaving, so the material already on the site is spent before anyone walks back for more.
@@ -350,12 +413,41 @@ final class EfficientBuilder implements EfficientSite {
         return Workload.Within.WAIT;
     }
 
+    // What this site's own work costs the server thread, in microseconds: the figures that say whether it is the
+    // site keeping the tick busy or something else entirely.
+    private void reportCost() {
+        if (staffCalls == 0 && handCalls == 0 && runCalls == 0) {
+            return;
+        }
+        LOGGER.info("efficient site {}: cost staff {}us avg/{}us max ({} tick(s)), hand {}us avg/{}us max "
+            + "({} turn(s)), run {}us avg/{}us max ({} asking(s))", shortId(),
+            staffNanos / Math.max(1, staffCalls) / 1000L, staffMax / 1000L, staffCalls,
+            handNanos / Math.max(1, handCalls) / 1000L, handMax / 1000L, handCalls,
+            runNanos / Math.max(1, runCalls) / 1000L, runMax / 1000L, runCalls);
+        staffNanos = 0L;
+        staffMax = 0L;
+        staffCalls = 0;
+        handNanos = 0L;
+        handMax = 0L;
+        handCalls = 0;
+        runNanos = 0L;
+        runMax = 0L;
+        runCalls = 0;
+    }
+
     // What is left of a site and why none of it has gone up: pieces that wait for something to stand on, pieces the
     // hands here cannot pay for, and pieces that could go up now. Read only once few are left, so a site with
     // thousands of them to go is not walked every few seconds.
     private void reportTail(ServerLevel level) {
         int left = works.size() - finished.size();
         if (left <= 0 || left > TAIL_PIECES) {
+            return;
+        }
+        // What the goods side of this reads off is what the hands here carry: with none here, every piece would look
+        // short of goods when the truth is that nobody came, so the line says that instead.
+        if (onSite().isEmpty()) {
+            LOGGER.info("efficient site {}: {} piece(s) left, no hand on site to say what they wait for",
+                shortId(), left);
             return;
         }
         int waiting = 0;
@@ -434,7 +526,7 @@ final class EfficientBuilder implements EfficientSite {
             }
             hand.laid(cells);
             work.step().ifPresent(step -> latch(level, step));
-            gather(level, job.focus().cell(), drops);
+            gather(hand, level, job.focus().cell(), drops);
             finished.add(work.id());
         }
         if (!toldFirstShot && !finished.isEmpty()) {
@@ -578,15 +670,19 @@ final class EfficientBuilder implements EfficientSite {
     private record HeldTool(Container pack, int slot, ItemStack stack) {
     }
 
-    // What the shot broke goes into the packs of the hands on the site before anything is dropped at all.
-    private void gather(ServerLevel level, BlockPos at, List<ItemStack> drops) {
+    // What the shot broke goes into the packs of the hands on the site first, then the colony's stores, and only
+    // what none of them can take is left on the ground. Ore goes into a store whether or not its rules admit it: a
+    // mine is dug for what it yields, and that is not to be lost to a chest that was sorted for something else.
+    private void gather(PresenceNode hand, ServerLevel level, BlockPos at, List<ItemStack> drops) {
+        Worker who = hand.handWorker();
+        List<ItemStack> spilled = new ArrayList<>();
         for (ItemStack stack : drops) {
             if (stack.isEmpty()) {
                 continue;
             }
             ItemStack left = stack;
-            for (PresenceNode hand : onSite()) {
-                Container pack = hand.pack();
+            for (PresenceNode other : onSite()) {
+                Container pack = other.pack();
                 if (pack == null) {
                     continue;
                 }
@@ -595,10 +691,76 @@ final class EfficientBuilder implements EfficientSite {
                     break;
                 }
             }
+            if (!left.isEmpty() && who != null) {
+                left = putAway(level, who, left);
+            }
+            if (!left.isEmpty() && who != null && precious(left)) {
+                left = putAwayAnywhere(who, left);
+            }
             if (!left.isEmpty()) {
-                Block.popResource(level, at, left);
+                spilled.add(left);
             }
         }
+        if (spilled.isEmpty()) {
+            return;
+        }
+        for (ItemStack stack : spilled) {
+            Block.popResource(level, at, stack);
+        }
+        LOGGER.info("efficient site {}: {} drop(s) left on the ground, no pack or store had room",
+            shortId(), spilled.size());
+    }
+
+    // Ore, and what comes of it: what a mine is dug for.
+    private static boolean precious(ItemStack stack) {
+        for (TagKey<Item> tag : PRECIOUS) {
+            if (stack.is(tag)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Puts a stack into any store the hand can reach, whatever its rules say: only what is never to be lost goes here.
+    private static ItemStack putAwayAnywhere(Worker who, ItemStack stack) {
+        ItemStack left = stack;
+        for (Worker.Store store : who.within()) {
+            if (left.isEmpty()) {
+                break;
+            }
+            left = Containers.insert(store.contents(), left);
+        }
+        return left;
+    }
+
+    /**
+     * How many more cells the ore of this piece needs than the packs and stores here have: zero when it all fits.
+     * A piece that digs out ore nothing can take waits for room rather than spilling what a mine is dug for.
+     */
+    private int oreRoomShort(PresenceNode hand, Map<BlockPos, BlockState> dug) {
+        int ore = 0;
+        for (BlockState was : dug.values()) {
+            if (was.is(ORE_BLOCKS)) {
+                ore++;
+            }
+        }
+        if (ore == 0) {
+            return 0;
+        }
+        int free = 0;
+        for (PresenceNode other : onSite()) {
+            Container pack = other.pack();
+            if (pack != null) {
+                free += freeSlots(pack);
+            }
+        }
+        Worker who = hand.handWorker();
+        if (who != null) {
+            for (Worker.Store store : who.within()) {
+                free += freeSlots(store.contents());
+            }
+        }
+        return Math.max(0, ore - free);
     }
 
     // Whatever a broken cell held is put on the ground rather than lost with the block.
@@ -813,6 +975,20 @@ final class EfficientBuilder implements EfficientSite {
      * asked for the material its own run will spend, so it arrives with everything it will lay.
      */
     private Run nextRun() {
+        long started = System.nanoTime();
+        try {
+            return nextRunNow();
+        } finally {
+            long spent = System.nanoTime() - started;
+            runNanos += spent;
+            runCalls++;
+            if (spent > runMax) {
+                runMax = spent;
+            }
+        }
+    }
+
+    private Run nextRunNow() {
         Map<ItemSpec, Long> cost = new LinkedHashMap<>();
         List<Integer> ids = new ArrayList<>();
         long cap = tripItems();
