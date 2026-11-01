@@ -12,8 +12,10 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiConsumer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -65,7 +67,7 @@ public final class EfficientConstructionGameTests {
      */
     @GameTest(template = TEMPLATE, timeoutTicks = 20)
     public static void theAddonRaisesTheSiteItIsAskedFor(GameTestHelper helper) {
-        BuildTarget target = new BuildTarget(Realm.of(helper.getLevel()), Map.of());
+        BuildTarget target = new BuildTarget(Realm.of(helper.getLevel()), Map.<BlockPos, BlockState>of());
         EfficientSite site = EfficientConstruction.open(UUID.randomUUID(), new NeverAsked(), target,
             new HashSet<>(), new HashSet<>(), new HashMap<>());
         helper.assertTrue(site != null, "the add-on hands back the site that raises itself");
