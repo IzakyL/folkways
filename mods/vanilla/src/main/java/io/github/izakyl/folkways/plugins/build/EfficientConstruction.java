@@ -1,5 +1,12 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.plugins.build.draft.Joint;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import javax.annotation.Nullable;
+import net.minecraft.core.BlockPos;
+
 /**
  * The switch an optional add-on flips to build an order with the site raising itself instead of the residents
  * placing one block at a time.
@@ -39,17 +46,46 @@ public final class EfficientConstruction {
         }
     }
 
+    /**
+     * How the add-on raises a site: it is handed the order it is building and answers with the site that raises it.
+     * The site then asks for nothing further of the add-on, only of the interface both sides know.
+     */
+    public interface Factory {
+
+        EfficientSite create(UUID order, BuildSite.Asks asks, BuildTarget target, Set<BlockPos> latched,
+                Set<Joint> joined, Map<BlockPos, BuildRefusal> refused);
+    }
+
     private static volatile Settings settings = Settings.DEFAULTS;
 
     private static volatile boolean active;
+
+    private static volatile Factory factory;
 
     private EfficientConstruction() {
     }
 
     /** Turns the efficient site on for every order from now on. Called by the add-on's mod constructor. */
     public static void activate(Settings requested) {
+        activate(requested, null);
+    }
+
+    /** Turns the efficient site on, naming the add-on that raises one: without a builder there is no site. */
+    public static void activate(Settings requested, Factory builder) {
         settings = requested == null ? Settings.DEFAULTS : requested;
+        factory = builder;
         active = true;
+    }
+
+    /**
+     * The site that raises this order, made by the add-on, or null when no add-on named a builder: the caller keeps
+     * the ordinary site then, which is exactly what a world without the add-on has.
+     */
+    @Nullable
+    public static EfficientSite open(UUID order, BuildSite.Asks asks, BuildTarget target, Set<BlockPos> latched,
+            Set<Joint> joined, Map<BlockPos, BuildRefusal> refused) {
+        Factory builder = factory;
+        return builder == null ? null : builder.create(order, asks, target, latched, joined, refused);
     }
 
     public static boolean active() {

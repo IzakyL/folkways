@@ -27,14 +27,14 @@ public final class EfficientConstructionMod {
     public EfficientConstructionMod(IEventBus modBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.SERVER, EfficientConstructionConfig.SPEC);
         // Flip the switch now, at the settings' defaults, so a site filed before the config is read still uses it.
-        activate(EfficientConstruction.Settings.DEFAULTS);
+        activate(EfficientBuilder::new, EfficientConstruction.Settings.DEFAULTS);
         modBus.addListener(ModConfigEvent.Loading.class, event -> applyConfig());
         modBus.addListener(ModConfigEvent.Reloading.class, event -> applyConfig());
         NeoForge.EVENT_BUS.addListener(EfficientConstructionCommand::register);
     }
 
     private static void applyConfig() {
-        activate(new EfficientConstruction.Settings(
+        activate(EfficientBuilder::new, new EfficientConstruction.Settings(
             EfficientConstructionConfig.TICKS_PER_BLOCK.get(),
             EfficientConstructionConfig.WORKERS_PER_SITE.get(),
             EfficientConstructionConfig.STACKS_PER_TRIP.get(),
@@ -43,9 +43,10 @@ public final class EfficientConstructionMod {
 
     // A Folkways Vanilla built without the efficient-construction seam cannot be extended this way: say so plainly
     // and leave the ordinary building work in place rather than failing the game's start.
-    private static void activate(EfficientConstruction.Settings settings) {
+    private static void activate(EfficientConstruction.Factory builder,
+            EfficientConstruction.Settings settings) {
         try {
-            EfficientConstruction.activate(settings);
+            EfficientConstruction.activate(settings, builder);
         } catch (LinkageError missing) {
             LOGGER.error("Folkways: Efficient Construction needs a Folkways build that carries the "
                 + "efficient-construction seam, and the installed folkways-vanilla does not. "

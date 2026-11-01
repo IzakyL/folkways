@@ -22,7 +22,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 // it), left that body in the wall, and one that stayed there - a tower's top course laid round the worker's head,
 // say - suffocated. Mobs are pushed the shortest clear distance out of the new block, or onto a nearby work stance.
 // A block may also lift a mob up onto its top when the space above is clear.
-final class Bystanders {
+public final class Bystanders {
 
     private static final double STEP_UP = 1.0D;
     private static final double CLEAR = 1.0E-3D;
@@ -34,7 +34,7 @@ final class Bystanders {
 
     // Steps every mob out of the way of what is laid, and answers true; or moves nobody and answers false when
     // someone cannot be stepped clear.
-    static boolean clear(ServerLevel level, Map<BlockPos, BlockState> laid, Collection<BlockPos> stances) {
+    public static boolean clear(ServerLevel level, Map<BlockPos, BlockState> laid, Collection<BlockPos> stances) {
         List<AABB> solid = new ArrayList<>();
         Map<BlockPos, VoxelShape> shapes = new LinkedHashMap<>();
         for (Map.Entry<BlockPos, BlockState> cell : laid.entrySet()) {

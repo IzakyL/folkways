@@ -21,7 +21,7 @@ import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 /** What an order builds: the states the schematicannon would print, cell by cell, and the shots that print them. */
-record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, List<Joint> joints,
+public record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, List<Joint> joints,
         BlockPos storageOrigin, Map<BlockPos, BlockData> data) {
 
     BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, List<Joint> joints,
@@ -82,7 +82,7 @@ record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> u
     }
 
     /** The cannon's only check: a cell that already holds the state it would print is skipped. */
-    boolean satisfied(LevelReader level, BlockPos pos) {
+    public boolean satisfied(LevelReader level, BlockPos pos) {
         return BuildPlanner.satisfied(level.getBlockState(pos), wanted(pos));
     }
 
@@ -139,11 +139,11 @@ record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> u
             this::wanted, this::dataAt);
     }
 
-    WorldPos cell(BlockPos pos) {
+    public WorldPos cell(BlockPos pos) {
         return new WorldPos(realm, pos.subtract(storageOrigin));
     }
 
-    boolean occupies(BlockGetter level, BlockPos worldPos) {
+    public boolean occupies(BlockGetter level, BlockPos worldPos) {
         BlockState state = cells.get(worldPos);
         return state != null && !state.isAir()
             && !state.getCollisionShape(level, worldPos).isEmpty();

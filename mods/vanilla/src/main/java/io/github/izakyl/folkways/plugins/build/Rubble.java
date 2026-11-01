@@ -21,7 +21,7 @@ import net.minecraft.world.level.material.Fluids;
  * Writes a piece of work into the world as the schematicannon writes a shot: no shape is worked out again and no
  * neighbour is told. What the work breaks is gathered first, since the colony keeps it.
  */
-final class Rubble {
+public final class Rubble {
 
     // The cannon's own flags: the block goes to the clients, its neighbours keep their shapes.
     static final int SHOT = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
@@ -33,7 +33,7 @@ final class Rubble {
      * Fires the shot at {@code anchor}: what stands in the way is broken (its drops returned when {@code breaking}),
      * any part of it outside the shot is cleared, and the shot is placed. A fluid is poured instead, and flows.
      */
-    static List<ItemStack> lay(ServerLevel level, @Nullable LivingEntity body, Map<BlockPos, BlockState> before,
+    public static List<ItemStack> lay(ServerLevel level, @Nullable LivingEntity body, Map<BlockPos, BlockState> before,
             Map<BlockPos, BlockState> after, Set<BlockPos> shot, BlockPos anchor, Map<BlockPos, BlockData> data,
             ItemStack tool, ItemStack icon, boolean breaking) {
         List<ItemStack> drops = breaking ? broken(level, body, before, tool) : new ArrayList<>();

@@ -69,9 +69,9 @@ import net.minecraft.world.level.pathfinder.Path;
  * <p>A piece that ends undone comes up again as it was, the pieces after it waiting on it meanwhile, unless its
  * cells were met some other way. Nothing is looked at again on a clock.
  */
-final class BuildSite {
+public final class BuildSite {
 
-    interface Asks {
+    public interface Asks {
 
         default Optional<Colony> colony() {
             return Optional.empty();
@@ -215,7 +215,7 @@ final class BuildSite {
     private final Asks asks;
     // Set only when the efficient-construction add-on is installed: the site then raises itself.
     @Nullable
-    private EfficientBuilder efficient;
+    private EfficientSite efficient;
     private final Emptying emptying;
     private final BuildTarget target;
     private final TemporaryScaffolds temporary;
@@ -286,9 +286,11 @@ final class BuildSite {
         // Work that opted out of scaffolds is single-cell infrastructure, not an order: it keeps the ordinary site,
         // so the colony is not asked for a crew to lay one block of floor.
         if (EfficientConstruction.active() && scaffoldsAllowed) {
-            efficient = new EfficientBuilder(order, asks, target, latched, joined, refused);
-            efficient.start(level, met, metJoints);
-            return;
+            efficient = EfficientConstruction.open(order, asks, target, latched, joined, refused);
+            if (efficient != null) {
+                efficient.start(level, met, metJoints);
+                return;
+            }
         }
         dimension = level.dimension();
         standing = level;
