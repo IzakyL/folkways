@@ -46,12 +46,14 @@ import java.util.Set;
 import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -100,12 +102,8 @@ final class EfficientBuilder implements EfficientSite {
     private static final TagKey<Block> ORE_BLOCKS =
         TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("c", "ores"));
 
-    private static final List<TagKey<Item>> PRECIOUS = List.of(
-        TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "ores")),
-        TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "raw_materials")),
-        TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "gems")),
-        TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", "dusts")),
-        TagKey.create(Registries.ITEM, ResourceLocation.withDefaultNamespace("coals")));
+    /** How long a site that has nowhere to put its haul stands down before it looks again. */
+    private static final int NO_ROOM_TICKS = 600;
 
     /** How long the site may lay nothing before its askings are taken back, one at a time and then all of them. */
     private static final int WATCH_TICKS = 600;
@@ -201,6 +199,9 @@ final class EfficientBuilder implements EfficientSite {
     private long runNanos;
     private long runMax;
     private int runCalls;
+
+    /** Until when the site stands down for want of anywhere to put what it digs out. */
+    private long noRoomUntil = Long.MIN_VALUE;
 
     /** When the site last said it had cells left that no piece was ever asked for. */
     private long toldSettleAt = Long.MIN_VALUE;
@@ -382,6 +383,12 @@ final class EfficientBuilder implements EfficientSite {
             // Nothing is dug out bare-handed: a piece that breaks a block only a tool can take waits for a hand
             // carrying one, and the run moves on to what can be done meanwhile.
             Map<BlockPos, BlockState> dug = breaking(level, job);
+            if (!dug.isEmpty() && !anyRoomAtAll(hand)) {
+                tellNoRoom(level);
+                noRoomUntil = level.getGameTime() + NO_ROOM_TICKS;
+                rest(NO_ROOM_TICKS);
+                return Workload.Within.LEAVE;
+            }
             if (needsTool(dug) && toolFor(dug) == null) {
                 toolShort++;
                 continue;
@@ -682,6 +689,40 @@ final class EfficientBuilder implements EfficientSite {
         }
     }
 
+    /**
+     * The site this order gets: none when the order digs more than it lays. A mine or a quarry is worked from the
+     * inside, and hands that raise a site from outside can only stand about its rim, far from the work and stranger
+     * to watch than the ordinary crew that walks in. Those orders keep the crew they had.
+     */
+    static EfficientSite make(UUID order, BuildSite.Asks asks, BuildTarget target, Set<BlockPos> latched,
+            Set<Joint> joined, Map<BlockPos, BuildRefusal> refused) {
+        if (underground(target)) {
+            LOGGER.info("efficient: order {} lies mostly below the ground it is anchored to, the crew walks in", order);
+            return null;
+        }
+        return new EfficientBuilder(order, asks, target, latched, joined, refused);
+    }
+
+    // Whether most of an order lies well under the cell its stores are anchored to, and it reaches deep enough below
+    // that no one would mistake it for a house with a cellar.
+    private static boolean underground(BuildTarget target) {
+        if (target.cells().isEmpty()) {
+            return false;
+        }
+        int below = 0;
+        int low = Integer.MAX_VALUE;
+        int high = Integer.MIN_VALUE;
+        int anchorY = target.storageOrigin().getY();
+        for (BlockPos cell : target.cells().keySet()) {
+            if (cell.getY() < anchorY - 2) {
+                below++;
+            }
+            low = Math.min(low, cell.getY());
+            high = Math.max(high, cell.getY());
+        }
+        return high - low >= 4 && below * 2 >= target.cells().size();
+    }
+
     /** A tool one of the hands on the site carries, and where it lies, so taking blocks can wear it. */
     private record HeldTool(Container pack, int slot, ItemStack stack) {
     }
@@ -710,9 +751,6 @@ final class EfficientBuilder implements EfficientSite {
             if (!left.isEmpty() && who != null) {
                 left = putAway(level, who, left);
             }
-            if (!left.isEmpty() && who != null && precious(left)) {
-                left = putAwayAnywhere(who, left);
-            }
             if (!left.isEmpty()) {
                 spilled.add(left);
             }
@@ -727,26 +765,41 @@ final class EfficientBuilder implements EfficientSite {
             shortId(), spilled.size());
     }
 
-    // Ore, and what comes of it: what a mine is dug for.
-    private static boolean precious(ItemStack stack) {
-        for (TagKey<Item> tag : PRECIOUS) {
-            if (stack.is(tag)) {
+    // Whether anything at all can still take what a piece would dig out: a full pack is one thing, but a site with
+    // no free cell anywhere between its hands and the colony's stores would spill what it digs, and waits instead.
+    private boolean anyRoomAtAll(PresenceNode hand) {
+        for (PresenceNode other : onSite()) {
+            Container pack = other.pack();
+            if (pack != null && freeSlots(pack) > 0) {
                 return true;
+            }
+        }
+        Worker who = hand.handWorker();
+        if (who != null) {
+            for (Worker.Store store : who.within()) {
+                if (freeSlots(store.contents()) > 0) {
+                    return true;
+                }
             }
         }
         return false;
     }
 
-    // Puts a stack into any store the hand can reach, whatever its rules say: only what is never to be lost goes here.
-    private static ItemStack putAwayAnywhere(Worker who, ItemStack stack) {
-        ItemStack left = stack;
-        for (Worker.Store store : who.within()) {
-            if (left.isEmpty()) {
-                break;
+    // Says, above the hotbar of whoever is near the site, that it has stopped for want of somewhere to put what it
+    // digs out. The word is said every time the site stands down rather than left to a log, and the log keeps the
+    // slower beat.
+    private void tellNoRoom(ServerLevel level) {
+        Component said = Component.translatable("folkways_efficient_construction.site_no_storage",
+            Component.literal(anchor.toShortString()));
+        for (ServerPlayer player : level.players()) {
+            if (player.blockPosition().closerThan(anchor, 128.0D)) {
+                player.displayClientMessage(said, true);
             }
-            left = Containers.insert(store.contents(), left);
         }
-        return left;
+        if (level.getGameTime() - toldNoRoomAt >= 6000L) {
+            toldNoRoomAt = level.getGameTime();
+            LOGGER.info("efficient site {}: stood down, no free cell anywhere for what it digs out", shortId());
+        }
     }
 
     /**
@@ -980,7 +1033,7 @@ final class EfficientBuilder implements EfficientSite {
         if (closed || level == null || nothingLeft()) {
             return;
         }
-        if (level.getGameTime() < staffAt) {
+        if (level.getGameTime() < staffAt || level.getGameTime() < noRoomUntil) {
             return;
         }
         int wanted = Math.min(EfficientConstruction.settings().workersPerSite(), Math.max(1, stances.size()));

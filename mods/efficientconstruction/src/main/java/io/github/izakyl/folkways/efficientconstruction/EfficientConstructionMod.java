@@ -27,14 +27,14 @@ public final class EfficientConstructionMod {
     public EfficientConstructionMod(IEventBus modBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.SERVER, EfficientConstructionConfig.SPEC);
         // Flip the switch now, at the settings' defaults, so a site filed before the config is read still uses it.
-        activate(EfficientBuilder::new, EfficientConstruction.Settings.DEFAULTS);
+        activate(EfficientBuilder::make, EfficientConstruction.Settings.DEFAULTS);
         modBus.addListener(ModConfigEvent.Loading.class, event -> applyConfig());
         modBus.addListener(ModConfigEvent.Reloading.class, event -> applyConfig());
         NeoForge.EVENT_BUS.addListener(EfficientConstructionCommand::register);
     }
 
     private static void applyConfig() {
-        activate(EfficientBuilder::new, new EfficientConstruction.Settings(
+        activate(EfficientBuilder::make, new EfficientConstruction.Settings(
             EfficientConstructionConfig.TICKS_PER_BLOCK.get(),
             EfficientConstructionConfig.WORKERS_PER_SITE.get(),
             EfficientConstructionConfig.STACKS_PER_TRIP.get(),
