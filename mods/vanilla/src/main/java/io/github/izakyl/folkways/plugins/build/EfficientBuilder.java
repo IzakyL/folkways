@@ -364,7 +364,7 @@ final class EfficientBuilder {
             }
             List<ItemStack> drops = lay(level, job, tool == null ? ItemStack.EMPTY : tool.stack());
             if (tool != null) {
-                wear(tool, dug.size());
+                wear(who, tool, dug.size());
             }
             hand.laid(cells);
             work.step().ifPresent(step -> latch(level, step));
@@ -496,18 +496,16 @@ final class EfficientBuilder {
         return null;
     }
 
-    // A block taken wears the tool that took it, by the hand's own reckoning; one worn out is gone.
-    private static void wear(HeldTool tool, int blocks) {
+    // A block taken wears the tool that took it, by the game's own reckoning: unbreakable tools are left alone and
+    // one worn out is gone, as it would be in a resident's hand.
+    private static void wear(Worker who, HeldTool tool, int blocks) {
         if (blocks <= 0 || !tool.stack().isDamageableItem()) {
             return;
         }
-        int left = tool.stack().getMaxDamage() - tool.stack().getDamageValue();
-        if (blocks >= left) {
-            tool.pack().setItem(tool.slot(), ItemStack.EMPTY);
-        } else {
-            tool.stack().setDamageValue(tool.stack().getDamageValue() + blocks);
+        if (who.body().level() instanceof ServerLevel level) {
+            tool.stack().hurtAndBreak(blocks, level, who.body(), gone -> { });
+            tool.pack().setChanged();
         }
-        tool.pack().setChanged();
     }
 
     /** A tool one of the hands on the site carries, and where it lies, so taking blocks can wear it. */
@@ -560,7 +558,7 @@ final class EfficientBuilder {
      * again as it leaves, keeping only food and tools, so what it did not spend does not walk off with it.
      */
     void stow(PresenceNode hand, boolean all) {
-        Worker who = hand.worker();
+        Worker who = hand.handWorker();
         Container pack = hand.pack();
         ServerLevel level = standing;
         if (who == null || pack == null || level == null) {
@@ -599,7 +597,7 @@ final class EfficientBuilder {
 
     // What a hand keeps by: what it eats, what it works with, and the material its own run is due to spend.
     private static boolean keep(ItemStack stack, List<ItemSpec> wanted) {
-        if (stack.isEdible() || stack.isDamageableItem()) {
+        if (stack.getFoodProperties(null) != null || stack.isDamageableItem()) {
             return true;
         }
         for (ItemSpec spec : wanted) {

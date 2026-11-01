@@ -98,7 +98,7 @@ final class PresenceNode implements Node, Workload.Within {
 
     /** The resident itself, or null before it has been met: what the site needs to put its goods away. */
     @Nullable
-    Worker worker() {
+    Worker handWorker() {
         return who;
     }
 
