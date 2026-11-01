@@ -87,6 +87,15 @@ final class EfficientBuilder implements EfficientSite {
     /** How few pieces must be left before the site reads out why the rest will not go up. */
     private static final int TAIL_PIECES = 200;
 
+    /**
+     * How many pieces a hand takes on when its own run is done: enough to keep it busy for a while, and few enough
+     * that looking for the next one it can do still costs less than laying it.
+     */
+    private static final int CONTINUE_PIECES = 96;
+
+    /** How long the site waits after asking before it costs another run: a hand takes a while to be taken up. */
+    private static final int ASK_REST_TICKS = 8;
+
     /** Ore, and what comes of it: what a mine is dug for is never left lying on the ground. */
     private static final TagKey<Block> ORE_BLOCKS =
         TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("c", "ores"));
@@ -397,9 +406,9 @@ final class EfficientBuilder implements EfficientSite {
         // Its own run of the plan is built and the site still holds something to build with: it takes another run
         // rather than leaving, so the material already on the site is spent before anyone walks back for more.
         if (!mine) {
-            Run next = nextRun();
-            if (!next.ids().isEmpty()) {
-                hand.reslice(next.ids());
+            List<Integer> next = nextIds();
+            if (!next.isEmpty()) {
+                hand.reslice(next);
                 hand.paid();
                 return Workload.Within.WAIT;
             }
@@ -964,6 +973,9 @@ final class EfficientBuilder implements EfficientSite {
         }
         if (added > 0) {
             LOGGER.info("efficient site {}: asked for {} hand(s), {} at the site", shortId(), added, present.size());
+            // A hand asked for at once is not asked for again on the next tick: what it was given takes time to be
+            // taken up, and costing another run every tick is the most this site ever asks of the server thread.
+            rest(ASK_REST_TICKS);
         }
     }
 
@@ -1034,6 +1046,42 @@ final class EfficientBuilder implements EfficientSite {
             items += adding;
         }
         return new Run(ids, cost);
+    }
+
+    /**
+     * The next pieces of the plan nobody has taken, without costing them. A hand carrying on needs work, not a
+     * shopping list: only asking for a hand has to know what its run will spend, and costing a whole run is the most
+     * a site ever does to the server thread in one tick.
+     */
+    private List<Integer> nextIds() {
+        List<Integer> ids = new ArrayList<>();
+        List<Integer> given = new ArrayList<>(abandoned);
+        abandoned.clear();
+        for (int id : given) {
+            if (ids.size() >= CONTINUE_PIECES) {
+                abandoned.add(id);
+                continue;
+            }
+            if (!finished.contains(id) && !claimed.contains(id)) {
+                ids.add(id);
+            }
+        }
+        int scanned = 0;
+        while (ids.size() < CONTINUE_PIECES && scanned < works.size()) {
+            if (sliceAt >= works.size()) {
+                sliceAt = 0;
+            }
+            Layering.Work work = works.get(sliceAt);
+            if (finished.contains(work.id()) || claimed.contains(work.id())) {
+                sliceAt++;
+                scanned++;
+                continue;
+            }
+            sliceAt++;
+            scanned++;
+            ids.add(work.id());
+        }
+        return ids;
     }
 
     // What one piece adds to a run's cost, and how many items that is. A piece that will not address adds nothing.
