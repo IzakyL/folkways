@@ -27,6 +27,7 @@ import io.github.izakyl.folkways.front.api.notice.Attempt;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
+import io.github.izakyl.folkways.front.api.ui.Children;
 import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
 import io.github.izakyl.folkways.front.api.ui.Draw;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
@@ -42,6 +43,7 @@ import io.github.izakyl.folkways.front.engine.colony.ColonySchemas;
 import io.github.izakyl.folkways.front.engine.colony.ColonyViews;
 import io.github.izakyl.folkways.front.engine.colony.Endorsements;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -594,6 +596,12 @@ public final class DomainPage implements Draw {
         private Label footer;
         private boolean form;
         private String structure = "";
+        private UIElement formTop;
+        private final Map<Integer, FormSection> sections = new LinkedHashMap<>();
+        private final List<Label> figureLabels = new ArrayList<>();
+
+        private record FormSection(UIElement column, UIElement section, UIElement contents) {
+        }
         private int[][] kinds = new int[ROW_SLOTS][ACT_SLOTS];
         private ResourceLocation[][] opens = new ResourceLocation[ROW_SLOTS][ACT_SLOTS];
         private BlockPos[][] pings = new BlockPos[ROW_SLOTS][ACT_SLOTS];
@@ -713,13 +721,19 @@ public final class DomainPage implements Draw {
         }
 
         private void acceptFigures(HolderLookup.Provider registries, ListTag list) {
-            figures.clearAllChildren();
             figures.setDisplay(!list.isEmpty());
+            List<UIElement> wanted = new ArrayList<>();
             for (int index = 0; index < list.size(); index++) {
                 CompoundTag entry = list.getCompound(index);
-                figures.addChildren(Rows.figure(Component.translatable(entry.getString(LABEL)),
-                    Pages.readText(registries, entry.get(VALUE))));
+                if (index == figureLabels.size()) {
+                    figureLabels.add(Rows.figure(Component.empty(), Component.empty()));
+                }
+                Label label = figureLabels.get(index);
+                label.setText(Component.translatable(entry.getString(LABEL)).withColor(Rows.QUIET & 0xFFFFFF)
+                    .append(" ").append(Pages.readText(registries, entry.get(VALUE))));
+                wanted.add(label);
             }
+            Children.reconcile(figures, wanted);
         }
 
         // Only regroup when structure changes; live count updates retain their editor and focus.
@@ -733,16 +747,77 @@ public final class DomainPage implements Draw {
                 return;
             }
             structure = shape.toString();
-            for (Row row : rows) {
-                if (row.cell.getParent() != null) {
-                    row.cell.getParent().removeChild(row.cell);
-                }
-            }
-            grid.clearAllChildren();
             grid.layout(layout -> layout.flexDirection(form ? FlexDirection.COLUMN : FlexDirection.ROW)
                 .gapAll(form ? 4 : 0));
-            UIElement section = null;
-            UIElement sectionRows = null;
+            Map<UIElement, List<UIElement>> wanted = new LinkedHashMap<>();
+            List<UIElement> gridChildren = new ArrayList<>();
+            wanted.put(grid, gridChildren);
+            if (!form) {
+                rows.forEach(row -> gridChildren.add(row.cell));
+                Children.reconcile(wanted);
+                return;
+            }
+            if (formTop == null) {
+                formTop = top();
+            }
+            List<UIElement> columns = new ArrayList<>();
+            wanted.put(formTop, columns);
+            FormSection section = null;
+            int count = 0;
+            for (int index = 0; index < rows.size(); index++) {
+                Row row = rows.get(index);
+                if (index >= list.size()) {
+                    gridChildren.add(row.cell);
+                    continue;
+                }
+                boolean heading = list.getCompound(index).getBoolean(HEADING);
+                if (section == null || heading) {
+                    section = sections.computeIfAbsent(index, ignored -> section());
+                    boolean first = count == 0;
+                    if (count < 2) {
+                        if (first) {
+                            gridChildren.add(formTop);
+                        }
+                        columns.add(section.column());
+                        wanted.put(section.column(), List.of(section.section()));
+                        boolean narrow = formTop.hasClass("folkways_stacked_sections");
+                        section.column().layout(layout -> layout.widthPercent(narrow ? 100 : first ? 33 : 67)
+                            .paddingRight(!narrow && first ? 2 : 0).paddingLeft(!narrow && !first ? 2 : 0)
+                            .paddingBottom(narrow && first ? 4 : 0));
+                        section.section().layout(layout -> layout.flexGrow(1));
+                    } else {
+                        gridChildren.add(section.section());
+                        section.section().layout(layout -> layout.flexGrow(0));
+                    }
+                    section.contents().layout(layout -> layout
+                        .flexDirection(first ? FlexDirection.COLUMN : FlexDirection.ROW)
+                        .flexWrap(first ? FlexWrap.NO_WRAP : FlexWrap.WRAP));
+                    List<UIElement> sectionChildren = new ArrayList<>();
+                    if (heading) {
+                        sectionChildren.add(row.cell);
+                    }
+                    sectionChildren.add(section.contents());
+                    wanted.put(section.section(), sectionChildren);
+                    wanted.put(section.contents(), new ArrayList<>());
+                    count++;
+                    if (heading) {
+                        continue;
+                    }
+                }
+                wanted.get(section.contents()).add(row.cell);
+            }
+            Children.reconcile(wanted);
+        }
+
+        private FormSection section() {
+            UIElement section = Rows.page().addClass("folkways_form_section");
+            section.layout(layout -> layout.paddingHorizontal(4).paddingVertical(4).gapAll(2).flexShrink(0));
+            UIElement column = new UIElement().layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
+                .flexShrink(0).minWidth(0));
+            return new FormSection(column, section, Rows.grid(270));
+        }
+
+        private UIElement top() {
             UIElement top = Rows.strip();
             top.layout(layout -> layout.alignItems(AlignItems.STRETCH).gapAll(0).flexShrink(0));
             top.addEventListener(UIEvents.LAYOUT_CHANGED, event -> {
@@ -763,45 +838,7 @@ public final class DomainPage implements Draw {
                         .paddingBottom(narrow && first ? 4 : 0));
                 }
             });
-            int sections = 0;
-            for (int index = 0; index < rows.size(); index++) {
-                Row row = rows.get(index);
-                if (!form || index >= list.size()) {
-                    grid.addChildren(row.cell);
-                    continue;
-                }
-                boolean heading = list.getCompound(index).getBoolean(HEADING);
-                if (section == null || heading) {
-                    section = Rows.page().addClass("folkways_form_section");
-                    section.layout(layout -> layout.paddingHorizontal(4).paddingVertical(4).gapAll(2).flexShrink(0));
-                    sectionRows = Rows.grid(270);
-                    if (sections < 2) {
-                        if (sections == 0) {
-                            grid.addChildren(top);
-                        }
-                        boolean first = sections == 0;
-                        section.layout(layout -> layout.flexGrow(1));
-                        if (first) {
-                            sectionRows.layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
-                                .flexWrap(FlexWrap.NO_WRAP));
-                        }
-                        UIElement column = new UIElement().layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
-                            .widthPercent(first ? 33 : 67).flexShrink(0).minWidth(0)
-                            .paddingRight(first ? 2 : 0).paddingLeft(first ? 0 : 2));
-                        column.addChildren(section);
-                        top.addChildren(column);
-                    } else {
-                        grid.addChildren(section);
-                    }
-                    sections++;
-                    if (heading) {
-                        section.addChildren(row.cell, sectionRows);
-                        continue;
-                    }
-                    section.addChildren(sectionRows);
-                }
-                sectionRows.addChildren(row.cell);
-            }
+            return top;
         }
 
         private void acceptRows(HolderLookup.Provider registries, ListTag list) {
