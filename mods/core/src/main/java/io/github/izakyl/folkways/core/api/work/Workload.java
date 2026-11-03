@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.api.work;
 
+import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.effect.Stats;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -60,6 +61,11 @@ public sealed interface Workload {
         Turn LEAVE = new Turn.Leave();
 
         Turn next(ServerLevel level, Worker who);
+
+        // An enclosing work area may accept arrival before the planned standing place is reached.
+        default boolean arrived(ServerLevel level, Body body, Stances positions, boolean atStance) {
+            return atStance;
+        }
 
         // Presentation can continue while an inner piece winds up, without delaying its work clock.
         default void tick(ServerLevel level, Worker who) {

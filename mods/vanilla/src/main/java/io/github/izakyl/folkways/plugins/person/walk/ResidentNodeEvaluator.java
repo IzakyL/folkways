@@ -29,6 +29,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
     // How high a body steps without a jump.
     private static final double STEP = 0.6D;
+    // Leave time for slow swimming, a turn at the end and the final climb out.
+    private static final int MOST_SUBMERGED_STEPS = 8;
 
     private final BlockPos.MutableBlockPos probePos = new BlockPos.MutableBlockPos();
     @Nullable
@@ -203,6 +205,7 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
             count = append(neighbors, count, climbNode(node.x, node.y + 1, node.z), node);
             count = append(neighbors, count, climbNode(node.x, node.y - 1, node.z), node);
         }
+        count = keepBreathableRoutes(neighbors, count, node);
         // A misplaced resident may leave the forbidden area it starts in. Once outside,
         // its route cannot enter that area again or use another keepout as a shortcut.
         if (outOfBounds && !forbidden(node)) {
@@ -218,6 +221,36 @@ public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
             count = kept;
         }
         return count;
+    }
+
+    private int keepBreathableRoutes(Node[] neighbors, int count, Node from) {
+        // Section surveys supply isolated Targets, not path histories; their cached edges stay body-independent.
+        if (from.cameFrom == null) {
+            return count;
+        }
+        int eyeY = from.y + (int) mob.getEyeHeight();
+        if (currentContext.getBlockState(probePos.set(from.x, eyeY, from.z)).getFluidState().isEmpty()
+                || Breathing.canStay(mob, currentContext.level(), new BlockPos(from.x, from.y, from.z))) {
+            return count;
+        }
+        int submerged = 0;
+        for (Node at = from; at != null && submerged < MOST_SUBMERGED_STEPS; at = at.cameFrom) {
+            if (Breathing.canStay(mob, currentContext.level(), new BlockPos(at.x, at.y, at.z))) {
+                break;
+            }
+            submerged++;
+        }
+        if (submerged < MOST_SUBMERGED_STEPS) {
+            return count;
+        }
+        int kept = 0;
+        for (int i = 0; i < count; i++) {
+            Node next = neighbors[i];
+            if (Breathing.canStay(mob, currentContext.level(), new BlockPos(next.x, next.y, next.z))) {
+                neighbors[kept++] = next;
+            }
+        }
+        return kept;
     }
 
     // A climb is walked into from beside it, but only through a side that is open at the feet. A ladder's plate

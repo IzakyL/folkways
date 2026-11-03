@@ -875,7 +875,12 @@ final class BodyRunner {
     }
 
     private boolean standing(Body body) {
-        return footing instanceof Stances.Wherever || Reach.standingIn(body.mob(), footing);
+        boolean atStance = footing instanceof Stances.Wherever || Reach.standingIn(body.mob(), footing);
+        if (current.spec().workload() instanceof Workload.Within shift
+                && body.mob().level() instanceof ServerLevel level) {
+            return shift.arrived(level, body, footing, atStance);
+        }
+        return atStance;
     }
 
     private BlockPos cellOf(Body body) {

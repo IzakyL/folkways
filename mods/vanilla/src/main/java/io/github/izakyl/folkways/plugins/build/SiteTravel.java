@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.core.api.terms.Closures;
 import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.plugins.person.walk.Breathing;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
@@ -76,6 +77,7 @@ public final class SiteTravel {
     private static boolean safe(ServerLevel level, Mob body, BlockPos feet) {
         return level.isLoaded(feet) && level.isLoaded(feet.above()) && level.isLoaded(feet.below())
             && level.getWorldBorder().isWithinBounds(feet) && Footing.withFeetAt(level, feet)
+            && Breathing.canStay(body, feet)
             && level.noCollision(body, body.getBoundingBox().move(
                 feet.getX() + 0.5D - body.getX(), feet.getY() - body.getY(), feet.getZ() + 0.5D - body.getZ()));
     }

@@ -33,6 +33,7 @@ versions. Back up your world before trying a nightly build.
 - **Build from drawings.** Choose patterns for roads, arch bridges, walls, docks,
   mines, railways, arcades and terraced fields. Builders clear the site and use
   the colony's stores.
+  Enable `blueprints.simpleConstruction` (default `false`) to have builders stop on entering the site and work in place.
 - **Care for residents.** They sleep in their own beds, carry three days of
   rations, tire from work and travel, and flee danger. Data packs can replace
   colony name and appearance pools.

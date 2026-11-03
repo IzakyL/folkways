@@ -47,6 +47,7 @@ public final class FolkwaysVanillaConfig {
     private static final ModConfigSpec.IntValue SENTRY_CALL_RESPONDERS;
     private static final ModConfigSpec.IntValue SENTRY_CALL_TICKS;
     private static final ModConfigSpec.IntValue MAX_BUILD_CELLS;
+    private static final ModConfigSpec.BooleanValue SIMPLE_CONSTRUCTION;
     private static final ModConfigSpec.LongValue MAX_BLUEPRINT_VOLUME;
     private static final ModConfigSpec.IntValue DRAW_SECONDS;
     private static final ModConfigSpec.ConfigValue<List<? extends String>> REFUSED_RECIPES;
@@ -174,6 +175,10 @@ public final class FolkwaysVanillaConfig {
         BUILDER.pop();
 
         BUILDER.push("blueprints");
+        SIMPLE_CONSTRUCTION = BUILDER
+            .comment("Builders stop upon entering their work area and build in place without access scaffolds.",
+                "Materials, tools and work time are unchanged. Read while the work runs; not stored in orders.")
+            .define("simpleConstruction", false);
         MAX_BUILD_CELLS = BUILDER
             .comment("Most cells one blueprint or drawn pattern may set, counting the cells it digs out",
                 "as well as the blocks it lays, but not the empty air around them. A long wall or road",
@@ -369,6 +374,10 @@ public final class FolkwaysVanillaConfig {
 
     public static int maxBuildCells() {
         return read(MAX_BUILD_CELLS);
+    }
+
+    public static boolean simpleConstruction() {
+        return read(SIMPLE_CONSTRUCTION);
     }
 
     public static long maxBlueprintVolume() {
