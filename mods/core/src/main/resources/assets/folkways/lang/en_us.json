@@ -1291,6 +1291,5 @@
   "folkways.damage_control.worker": "Assigned worker: %s",
   "folkways.overhead.mode.build": "Build",
   "folkways.overhead.mode.rts": "RTS",
-  "folkways.overhead.mode.damage_control": "Damage Control",
-  "folkways.efficient_construction.site_no_storage": "Site %s has nowhere to put what it digs out - the crew has stood down. Clear a store or bring another one."
+  "folkways.overhead.mode.damage_control": "Damage Control"
 }

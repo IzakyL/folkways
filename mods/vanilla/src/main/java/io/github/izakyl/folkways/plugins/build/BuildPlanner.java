@@ -10,12 +10,12 @@ import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
-public final class BuildPlanner {
+final class BuildPlanner {
 
     private BuildPlanner() {
     }
 
-    public static boolean satisfied(BlockState current, BlockState target) {
+    static boolean satisfied(BlockState current, BlockState target) {
         if (target.isAir()) {
             return current.isAir();
         }

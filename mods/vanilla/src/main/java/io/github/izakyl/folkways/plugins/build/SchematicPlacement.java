@@ -258,7 +258,7 @@ public final class SchematicPlacement {
     }
 
     /** The stack a shot is shown carrying, handed to the block as it is placed: its first requirement. */
-    public static ItemStack icon(List<Need> cost) {
+    static ItemStack icon(List<Need> cost) {
         return cost.stream().findFirst().map(need -> Goods.display(need.spec())).orElse(ItemStack.EMPTY);
     }
 

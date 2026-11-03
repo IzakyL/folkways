@@ -30,7 +30,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * One piece of work. A laying job is one schematicannon shot at {@code focus}: {@code shot} are the target cells it
  * leaves placed, and the rest of {@code after} is what it clears of the blocks standing there.
  */
-public record BuildJob(Kind kind, WorldPos focus, Stances footings,
+record BuildJob(Kind kind, WorldPos focus, Stances footings,
                 Map<WorldPos, BlockState> before, Map<WorldPos, BlockState> after, List<WorldPos> joint,
                 List<Need> cost, Map<WorldPos, BlockData> data, Set<WorldPos> shot) {
 
@@ -71,7 +71,7 @@ public record BuildJob(Kind kind, WorldPos focus, Stances footings,
 
     static final ItemSpec BUCKET = ItemSpec.of(ResourceLocation.withDefaultNamespace("bucket"));
 
-    public BuildJob {
+    BuildJob {
         before = Collections.unmodifiableMap(new LinkedHashMap<>(before));
         after = Collections.unmodifiableMap(new LinkedHashMap<>(after));
         joint = List.copyOf(joint);
@@ -194,7 +194,7 @@ public record BuildJob(Kind kind, WorldPos focus, Stances footings,
         return true;
     }
 
-    public static boolean inTheWay(BlockState standing) {
+    static boolean inTheWay(BlockState standing) {
         return !standing.isAir() && !standing.liquid() && !standing.canBeReplaced();
     }
 }

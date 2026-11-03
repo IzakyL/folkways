@@ -273,26 +273,6 @@ final class BuildPresence implements Facing {
         return Attempt.went();
     }
 
-    // The order's site is forgotten, not the order: the next settling opens it again against the world as it now
-    // stands, and whatever the old site had counted as met is looked at afresh rather than trusted. What is built
-    // stays built, so this costs only the work that was stuck.
-    boolean restart(UUID order) {
-        BuildSite site = sites.remove(order);
-        if (site == null) {
-            return false;
-        }
-        site.close();
-        met.remove(order);
-        joined.remove(order);
-        unkept = true;
-        return true;
-    }
-
-    /** Every order this colony is building, filed in the order they were taken up. */
-    List<BlueprintBuildOrder> orders() {
-        return List.copyOf(book.allBuildOrders());
-    }
-
     // An order called off keeps its site only to take down what scaffolding it left; its work is withdrawn now.
     private void cancel(UUID order) {
         cancelled.add(order);

@@ -36,9 +36,9 @@ import net.minecraft.world.level.material.Fluids;
  * Nothing waits for room to stand in or a way to walk, so no piece is ever refused for want of them: those are for
  * the work to find when it is done.
  */
-public final class Layering {
+final class Layering {
 
-    public enum Kind {
+    enum Kind {
         LAY,
         STRIP,
         DRAIN,
@@ -47,11 +47,11 @@ public final class Layering {
         SOAK
     }
 
-    public record Work(int id, Kind kind, BlockPos focus, Optional<Step> step, Optional<Joint> joint, boolean up, int band,
+    record Work(int id, Kind kind, BlockPos focus, Optional<Step> step, Optional<Joint> joint, boolean up, int band,
             long key, List<BlockPos> stances) {
     }
 
-    public record Plan(int plane, List<Work> works, Map<Integer, Set<Integer>> after, Map<BlockPos, BuildRefusal> refused,
+    record Plan(int plane, List<Work> works, Map<Integer, Set<Integer>> after, Map<BlockPos, BuildRefusal> refused,
             int held, int led, int broken) {
 
         /**
@@ -122,12 +122,12 @@ public final class Layering {
         }
     }
 
-    public static Plan of(LevelReader level, BuildTarget target) {
+    static Plan of(LevelReader level, BuildTarget target) {
         return of(level, target, Set.of());
     }
 
     /** Plans what is left of the target: every cell not met yet, and not one of {@code latched}, met once already. */
-    public static Plan of(LevelReader level, BuildTarget target, Set<BlockPos> latched) {
+    static Plan of(LevelReader level, BuildTarget target, Set<BlockPos> latched) {
         return new Layering(level, target, latched).plan();
     }
 

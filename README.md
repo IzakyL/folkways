@@ -50,7 +50,7 @@ versions. Back up your world before trying a nightly build.
 
 ## Mods
 
-This repository builds ten mods, one per directory under `mods/`. Each ships as
+This repository builds nine mods, one per directory under `mods/`. Each ships as
 `folkways-<directory>-*.jar`. Every extension requires Core and Vanilla.
 
 | Mod                                       | Directory            | Also requires                                                                       | What it does                                                                                                                    |
@@ -64,7 +64,6 @@ This repository builds ten mods, one per directory under `mods/`. Each ships as
 | Folkways × TACZ                           | `mods/tacz`          | TACZ 1.21.1 NeoForge port 1.1.8-hotfix-r7                                            | Residents use supported TACZ guns with physical ammunition from colony supplies                                                 |
 | Folkways × Superb Warfare                 | `mods/warfare`       | Superb Warfare 0.8.9.2, Kotlin for Forge 5.12.0+ (below 6)                           | Residents use supported firearms and emplacements with ammunition from colony stores                                        |
 | Folkways × Create: FireFighting Additions | `mods/firefighting`  | Folkways × Create, Create 6.0.10+ (below 6.1), Create: FireFighting Additions 0.2.5-beta-fix2 | Residents fight fires with portable extinguishers and hydrant hoses, and refill extinguishers                                           |
-| Folkways × Efficient Construction | `mods/efficientconstruction` | — | A site raises itself at a steady pace while the residents who come only carry the materials; without the jar, building is unchanged |
 
 ## Installation
 
@@ -147,7 +146,7 @@ npm run setup
 ```
 
 Setup downloads the pinned integration dependencies and writes the manifest
-required by Gradle. The ten mod jars are collected in `build/libs/`.
+required by Gradle. The nine mod jars are collected in `build/libs/`.
 Blockwright's native Windows support is available in its source tree; the pinned
 npm release predates it. For Windows builds using a source-built SDK and
 `gradlew.bat`, see [development setup](CONTRIBUTING.md#development-setup).

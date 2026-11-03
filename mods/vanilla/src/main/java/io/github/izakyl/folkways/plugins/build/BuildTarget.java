@@ -21,23 +21,23 @@ import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 /** What an order builds: the states the schematicannon would print, cell by cell, and the shots that print them. */
-public record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, List<Joint> joints,
+record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, List<Joint> joints,
         BlockPos storageOrigin, Map<BlockPos, BlockData> data) {
 
-    public BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, List<Joint> joints,
+    BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, List<Joint> joints,
             BlockPos storageOrigin) {
         this(realm, cells, unloaded, joints, storageOrigin, Map.of());
     }
 
-    public BuildTarget(Realm realm, Map<BlockPos, BlockState> cells) {
+    BuildTarget(Realm realm, Map<BlockPos, BlockState> cells) {
         this(realm, cells, Set.of(), List.of(), BlockPos.ZERO);
     }
 
-    public BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, BlockPos storageOrigin) {
+    BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> unloaded, BlockPos storageOrigin) {
         this(realm, cells, unloaded, List.of(), storageOrigin);
     }
 
-    public BuildTarget {
+    BuildTarget {
         cells = Collections.unmodifiableMap(new LinkedHashMap<>(cells));
         unloaded = Collections.unmodifiableSet(new LinkedHashSet<>(unloaded));
         joints = List.copyOf(joints);
@@ -82,7 +82,7 @@ public record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<Bloc
     }
 
     /** The cannon's only check: a cell that already holds the state it would print is skipped. */
-    public boolean satisfied(LevelReader level, BlockPos pos) {
+    boolean satisfied(LevelReader level, BlockPos pos) {
         return BuildPlanner.satisfied(level.getBlockState(pos), wanted(pos));
     }
 
@@ -139,11 +139,11 @@ public record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<Bloc
             this::wanted, this::dataAt);
     }
 
-    public WorldPos cell(BlockPos pos) {
+    WorldPos cell(BlockPos pos) {
         return new WorldPos(realm, pos.subtract(storageOrigin));
     }
 
-    public boolean occupies(BlockGetter level, BlockPos worldPos) {
+    boolean occupies(BlockGetter level, BlockPos worldPos) {
         BlockState state = cells.get(worldPos);
         return state != null && !state.isAir()
             && !state.getCollisionShape(level, worldPos).isEmpty();

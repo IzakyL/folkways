@@ -20,10 +20,10 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
-public record Step(BuildJob.Kind kind, BlockPos focus, Map<BlockPos, BlockState> before, Map<BlockPos, BlockState> after,
+record Step(BuildJob.Kind kind, BlockPos focus, Map<BlockPos, BlockState> before, Map<BlockPos, BlockState> after,
         Optional<Joint> joint, List<Need> cost) {
 
-    public Step {
+    Step {
         before = Collections.unmodifiableMap(new LinkedHashMap<>(before));
         after = Collections.unmodifiableMap(new LinkedHashMap<>(after));
         cost = List.copyOf(cost);
@@ -143,16 +143,16 @@ public record Step(BuildJob.Kind kind, BlockPos focus, Map<BlockPos, BlockState>
         return new Step(BuildJob.Kind.LOWER, column.getFirst(), raised, empty);
     }
 
-    public BuildJob job(BuildTarget target, Stances footings) {
+    BuildJob job(BuildTarget target, Stances footings) {
         return job(null, target, footings);
     }
 
-    public BuildJob job(@Nullable ServerLevel level, BuildTarget target, Stances footings) {
+    BuildJob job(@Nullable ServerLevel level, BuildTarget target, Stances footings) {
         return job(level, target, footings, Set.of());
     }
 
     /** The job for this step. A laying step is one shot: it pays for and fires what the target aims at its focus. */
-    public BuildJob job(@Nullable ServerLevel level, BuildTarget target, Stances footings, Set<BlockPos> met) {
+    BuildJob job(@Nullable ServerLevel level, BuildTarget target, Stances footings, Set<BlockPos> met) {
         List<WorldPos> ends = joint.map(found -> List.of(target.cell(found.from()), target.cell(found.to())))
             .orElse(List.of());
         if (kind != BuildJob.Kind.LAY) {
