@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.plugins.build;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.ground.BlockChanges;
 import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
+import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Closures;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
@@ -26,6 +27,7 @@ import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import io.github.izakyl.folkways.plugins.person.walk.Breathing;
 import java.util.ArrayDeque;
@@ -458,6 +460,16 @@ final class BuildSite {
         }
 
         @Override
+        public boolean arrived(ServerLevel level, Body body, Stances positions, boolean atStance) {
+            if (!FolkwaysVanillaConfig.simpleConstruction()) {
+                return atStance;
+            }
+            return Breathing.canStay(body.mob(), body.mob().blockPosition())
+                && (atStance || Closures.in(level).stream().anyMatch(site -> site.holds(body.mob().blockPosition())
+                        && positions.cells().stream().anyMatch(site::holds)));
+        }
+
+        @Override
         public void ended(ServerLevel level, Node piece, Ending how) {
             if (how instanceof Ending.Done) {
                 did++;
@@ -506,6 +518,9 @@ final class BuildSite {
     // A hand descending into excavated air must bring its temporary access materials before the descent;
     // fetching them after the surrounding walls close would itself require that same access column.
     private int accessReserve(ServerLevel level, Stances positions) {
+        if (FolkwaysVanillaConfig.simpleConstruction()) {
+            return 0;
+        }
         int arrival = positions.cells().stream().filter(feet -> feet.in(level))
             .mapToInt(feet -> feet.block(level).getY()).max().orElse(Integer.MIN_VALUE);
         int bottom = target.cells().entrySet().stream().filter(entry -> entry.getValue().isAir())
@@ -693,6 +708,10 @@ final class BuildSite {
         Mob body = who.body();
         stay.who = who;
         stay.asked = now;
+        // Native arrival tolerance may accept a nearby dry stance before this body can breathe there.
+        if (FolkwaysVanillaConfig.simpleConstruction() && !Breathing.canStay(body, body.blockPosition())) {
+            return Workload.Within.WAIT;
+        }
         boolean coming = false;
         boolean full = false;
         boolean unknown = false;
@@ -736,7 +755,9 @@ final class BuildSite {
             stay.waitingSince = Long.MIN_VALUE;
             // Walking dresses the work; it never gates the next operation. Keep a destination long enough to
             // reach it instead of resetting the walk for every block laid on the way there.
-            if (stay.toward == null || stay.aim == null
+            if (FolkwaysVanillaConfig.simpleConstruction()) {
+                stay.toward = chosen;
+            } else if (stay.toward == null || stay.aim == null
                 || !SiteApproach.stands(level, stay.aim, chosen.cells())
                 || !Breathing.canStay(body, stay.aim)
                 || !Reach.withinReach(stay.aim, chosen.work().focus())
@@ -767,6 +788,13 @@ final class BuildSite {
 
     private void animate(Stay stay, ServerLevel level, Mob body) {
         Piece toward = stay.toward;
+        if (FolkwaysVanillaConfig.simpleConstruction()) {
+            body.getNavigation().stop();
+            if (toward != null) {
+                look(body, toward);
+            }
+            return;
+        }
         if (closed || toward == null) {
             return;
         }
@@ -1136,6 +1164,10 @@ final class BuildSite {
             if (changed) {
                 staff();
             }
+            return changed;
+        }
+        // Cleanup still runs above; simple construction needs no new access structures.
+        if (FolkwaysVanillaConfig.simpleConstruction()) {
             return changed;
         }
         int looked = 0;
