@@ -230,6 +230,49 @@ public final class WorkSurfaceGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty_large", timeoutTicks = 450)
+    public static void aBuilderInFloodedWorkDoesNotDrown(GameTestHelper helper) {
+        floor(helper);
+        for (int x = 5; x <= 11; x++) {
+            for (int z = 5; z <= 11; z++) {
+                for (int y = 1; y <= 2; y++) {
+                    helper.getLevel().setBlock(helper.absolutePos(new BlockPos(x, y, z)),
+                        Blocks.WATER.defaultBlockState(), 3);
+                }
+                if ((x != 11 || z != 8) && (x != 8 || z != 8)) {
+                    stone(helper, x, 3, z);
+                }
+            }
+        }
+        Mob body = body(helper, new BlockPos(8, 1, 8));
+        Worker worker = worker(body);
+        BlockPos roof = helper.absolutePos(new BlockPos(8, 3, 8));
+        SiteRig roofing = site(helper, roof);
+        helper.assertTrue(roofing.work(helper, roof, worker) instanceof Outcome.Done,
+            "the builder places the overhead block");
+        helper.assertTrue(helper.getLevel().getBlockState(roof).is(Blocks.STONE), "the roof is now closed above the builder");
+        BlockPos goal = helper.absolutePos(new BlockPos(8, 1, 9));
+        SiteRig rig = site(helper, goal);
+        Workload.Within shift = shift(rig);
+        Workload.Within.Turn turn = shift.next(helper.getLevel(), worker);
+        helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "the builder starts a real site turn: " + turn);
+        int[] firstDamage = {-1};
+        helper.onEachTick(() -> {
+            shift.tick(helper.getLevel(), worker);
+            if (firstDamage[0] < 0 && body.getHealth() < body.getMaxHealth()) {
+                firstDamage[0] = body.tickCount;
+            }
+        });
+        helper.startSequence().thenExecuteAfter(380, () -> {
+            helper.assertTrue(firstDamage[0] < 0, "builder drowned at entity tick " + firstDamage[0]
+                + ", air=" + body.getAirSupply() + ", feet=" + body.position()
+                + ", path=" + body.getNavigation().getPath());
+            helper.assertFalse(body.isUnderWater(), "the builder reaches breathable air");
+            helper.assertTrue(body.getAirSupply() == body.getMaxAirSupply(), "the builder recovers its breath");
+            body.discard();
+        }).thenSucceed();
+    }
+
     private static SiteRig site(GameTestHelper helper, BlockPos goal) {
         return SiteRig.start(helper.getLevel(), new BuildTarget(WorldPos.of(helper.getLevel(), goal).realm(),
             Map.of(goal, Blocks.STONE.defaultBlockState())));

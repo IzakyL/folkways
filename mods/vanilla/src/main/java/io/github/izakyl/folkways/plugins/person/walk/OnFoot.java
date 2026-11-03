@@ -56,11 +56,11 @@ public final class OnFoot implements Conveyance {
     @Override
     public Going step(ServerLevel level, Mob body, Set<WorldPos> to) {
         measure(body);
-        Set<BlockPos> cells = here(level, to);
+        Set<BlockPos> cells = here(level, body, to);
         if (cells.isEmpty()) {
             return new Going.Failed(lost);
         }
-        if (Reach.standingIn(body, new Stances.Cells(to))) {
+        if (Reach.standingIn(body, new Stances.Cells(allowed(level, body, to)))) {
             return Going.ARRIVED;
         }
         // Only dimension-local work areas permit relocation; aboard coordinates keep their usual travel.
@@ -70,7 +70,7 @@ public final class OnFoot implements Conveyance {
             sinceProgress = 0;
             settling = 0;
             repath(body, cells);
-            return Reach.standingIn(body, new Stances.Cells(to)) ? Going.ARRIVED : Going.UNDERWAY;
+            return Reach.standingIn(body, new Stances.Cells(allowed(level, body, to))) ? Going.ARRIVED : Going.UNDERWAY;
         }
         if (!closingIn(body, to)) {
             return new Going.Failed(lost);
@@ -105,7 +105,7 @@ public final class OnFoot implements Conveyance {
         activeWalkingTicks = 0;
         closest = Double.MAX_VALUE;
         sinceProgress = 0;
-        repath(body, here(level, to));
+        repath(body, here(level, body, to));
     }
 
     @Override
@@ -158,10 +158,20 @@ public final class OnFoot implements Conveyance {
         }
     }
 
-    private static Set<BlockPos> here(ServerLevel level, Set<WorldPos> cells) {
+    private static Set<WorldPos> allowed(ServerLevel level, Mob body, Set<WorldPos> cells) {
+        Set<WorldPos> safe = new LinkedHashSet<>();
+        for (WorldPos cell : cells) {
+            if (WorldSpaces.storage(level, cell).filter(feet -> Breathing.canStay(body, feet)).isPresent()) {
+                safe.add(cell);
+            }
+        }
+        return safe;
+    }
+
+    private static Set<BlockPos> here(ServerLevel level, Mob body, Set<WorldPos> cells) {
         Set<BlockPos> standing = new LinkedHashSet<>(cells.size());
         for (WorldPos cell : cells) {
-            WorldSpaces.storage(level, cell).ifPresent(standing::add);
+            WorldSpaces.storage(level, cell).filter(feet -> Breathing.canStay(body, feet)).ifPresent(standing::add);
         }
         return standing;
     }
@@ -194,7 +204,7 @@ public final class OnFoot implements Conveyance {
 
     private void repath(Mob body, Set<BlockPos> to) {
         body.getNavigation().stop();
-        Path path = body.getNavigation().createPath(to, 0);
+        Path path = to.isEmpty() ? null : body.getNavigation().createPath(to, 0);
         if (path != null) {
             body.getNavigation().moveTo(path, speed);
         }

@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.core.api.terms.ClimbableBlocks;
+import io.github.izakyl.folkways.plugins.person.walk.Breathing;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -127,6 +128,7 @@ final class Bystanders {
 
     private static boolean free(ServerLevel level, LivingEntity body, AABB box, Vec3 step, List<AABB> solid) {
         AABB moved = box.move(step);
-        return level.noCollision(body, box.expandTowards(step)) && solid.stream().noneMatch(moved::intersects);
+        return level.noCollision(body, box.expandTowards(step)) && solid.stream().noneMatch(moved::intersects)
+            && (!(body instanceof Mob mob) || Breathing.canStay(mob, BlockPos.containing(moved.getBottomCenter())));
     }
 }

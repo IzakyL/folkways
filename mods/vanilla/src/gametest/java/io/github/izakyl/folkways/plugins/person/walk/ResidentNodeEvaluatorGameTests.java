@@ -1,13 +1,16 @@
 package io.github.izakyl.folkways.plugins.person.walk;
 
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.api.ground.Grounds;
 import io.github.izakyl.folkways.core.api.terms.ClimbableBlocks;
 import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Keepouts;
+import io.github.izakyl.folkways.core.api.terms.ObstructedPathRegion;
 import io.github.izakyl.folkways.core.api.terms.Structures;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -81,6 +84,54 @@ public final class ResidentNodeEvaluatorGameTests {
             remove.run();
             removeOther.run();
         }
+    }
+
+    @GameTest(template = "empty_large")
+    public static void sharedSectionsDoNotDependOnTheSizingResidentsPotion(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos at = helper.absolutePos(new BlockPos(6, 1, 6));
+        for (BlockPos floor : BlockPos.betweenClosed(at.offset(-2, -1, -2), at.offset(2, -1, 2))) {
+            level.setBlock(floor, Blocks.STONE.defaultBlockState(), 2);
+        }
+        level.setBlock(at, Blocks.WATER.defaultBlockState(), 2);
+        level.setBlock(at.above(), Blocks.WATER.defaultBlockState(), 2);
+        var ordinary = io.github.izakyl.folkways.plugins.person.PersonBody.RESIDENT.get().create(level);
+        var protectedBody = io.github.izakyl.folkways.plugins.person.PersonBody.RESIDENT.get().create(level);
+        ordinary.moveTo(Vec3.atBottomCenterOf(at.west()));
+        protectedBody.moveTo(Vec3.atBottomCenterOf(at.west()));
+        protectedBody.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+            net.minecraft.world.effect.MobEffects.WATER_BREATHING, 600));
+        var bounds = net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(at.offset(-2, -1, -2),
+            at.offset(2, 3, 2));
+        try (var first = Grounds.watch(level, bounds); var second = Grounds.watch(level, bounds)) {
+            boolean plain = first.now(List.of(ordinary)).standable(at);
+            boolean protectedFirst = second.now(List.of(protectedBody)).standable(at);
+            helper.assertTrue(plain == protectedFirst, "the same section is independent of the sizing body's effect");
+            helper.assertTrue(first.now(List.of(protectedBody)).standable(at) == plain,
+                "a cached section remains unchanged when the sizing body changes");
+        }
+        ordinary.discard();
+        protectedBody.discard();
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void breathabilityUsesTheSearchRegionRatherThanTheMobsWorld(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos feet = helper.absolutePos(new BlockPos(2, 1, 2));
+        var mob = EntityType.VILLAGER.create(level);
+        mob.setPos(Vec3.atBottomCenterOf(feet));
+        var region = Structures.region(level, feet.offset(-2, -2, -2), feet.offset(2, 3, 2));
+        var flooded = new ObstructedPathRegion(level, feet, region,
+            Map.of(feet.above(), Blocks.WATER.defaultBlockState()));
+        helper.assertTrue(Breathing.canStay(mob, level, feet), "the actual world has air at head height");
+        helper.assertFalse(Breathing.canStay(mob, flooded, feet), "the search sees its hypothetical water");
+        level.setBlock(feet.above(), Blocks.WATER.defaultBlockState(), 2);
+        var drained = new ObstructedPathRegion(level, feet, region,
+            Map.of(feet.above(), Blocks.AIR.defaultBlockState()));
+        helper.assertFalse(Breathing.canStay(mob, level, feet), "the actual world now has water");
+        helper.assertTrue(Breathing.canStay(mob, drained, feet), "the search sees hypothetical air");
+        helper.succeed();
     }
 
     @GameTest(template = "empty")

@@ -20,6 +20,7 @@ import io.github.izakyl.folkways.plugins.person.look.ResidentModelPackets;
 import io.github.izakyl.folkways.plugins.person.look.ResidentModels;
 import io.github.izakyl.folkways.plugins.person.name.NamesPage;
 import io.github.izakyl.folkways.plugins.person.name.ResidentNames;
+import io.github.izakyl.folkways.plugins.person.walk.BreathingPresence;
 import io.github.izakyl.folkways.plugins.person.walk.Doorways;
 import io.github.izakyl.folkways.plugins.person.walk.Walking;
 import net.neoforged.bus.api.IEventBus;
@@ -43,6 +44,7 @@ public final class PersonPlugin {
             PersonBody.declare(event);
             LivingContent.declare(event);
             FearContent.declare(event);
+            BreathingPresence.declare(event);
         });
         modBus.addListener(Relating.class, PersonBody::relate);
         modBus.addListener(Registering.class, event -> {

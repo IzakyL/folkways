@@ -27,6 +27,7 @@ import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
+import io.github.izakyl.folkways.plugins.person.walk.Breathing;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -737,6 +738,7 @@ final class BuildSite {
             // reach it instead of resetting the walk for every block laid on the way there.
             if (stay.toward == null || stay.aim == null
                 || !SiteApproach.stands(level, stay.aim, chosen.cells())
+                || !Breathing.canStay(body, stay.aim)
                 || !Reach.withinReach(stay.aim, chosen.work().focus())
                 || Math.abs(chosen.work().focus().getY() - stay.toward.work().focus().getY()) > 1
                 || now - stay.towardSince >= APPROACH_TICKS || lowering(chosen)) {
@@ -834,6 +836,7 @@ final class BuildSite {
         List<BlockPos> preferred = new ArrayList<>(tops);
         preferred.addAll(piece.work().stances());
         List<BlockPos> poses = new ArrayList<>(SiteApproach.stances(level, piece.work().focus(), piece.cells(), preferred));
+        poses.removeIf(feet -> !Breathing.canStay(body, feet));
         poses.sort(Comparator.comparingInt((BlockPos feet) -> SiteApproach.heightGap(piece.work().focus(), feet))
             .thenComparingInt(feet -> level.getBlockState(feet).is(Blocks.SCAFFOLDING)
                 || level.getBlockState(feet.below()).is(Blocks.SCAFFOLDING) ? 1 : 0)
@@ -960,7 +963,7 @@ final class BuildSite {
         return aim != null && stay.toward != null
             && body.distanceToSqr(aim.getX() + 0.5D, body.getY(), aim.getZ() + 0.5D) <= 0.65D * 0.65D
             && Math.abs(body.getY() - aim.getY()) <= 0.6D
-            && SiteApproach.stands(level, aim, stay.toward.cells());
+            && SiteApproach.stands(level, aim, stay.toward.cells()) && Breathing.canStay(body, aim);
     }
 
     // Every exposed scaffold surface can be a destination, including the end of a horizontal walkway.

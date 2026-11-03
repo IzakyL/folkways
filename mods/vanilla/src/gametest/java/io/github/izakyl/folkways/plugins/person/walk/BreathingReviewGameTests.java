@@ -1,0 +1,392 @@
+package io.github.izakyl.folkways.plugins.person.walk;
+
+import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.api.Declaring;
+import io.github.izakyl.folkways.core.api.participation.Participation;
+import io.github.izakyl.folkways.core.api.participation.Participations;
+import io.github.izakyl.folkways.core.api.participation.Stake;
+import io.github.izakyl.folkways.core.api.work.Urge;
+import io.github.izakyl.folkways.core.api.colony.Colonies;
+import io.github.izakyl.folkways.core.api.colony.Held;
+import io.github.izakyl.folkways.core.api.terms.Keepouts;
+import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.api.work.Ending;
+import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.Node;
+import io.github.izakyl.folkways.core.api.work.NodeSpec;
+import io.github.izakyl.folkways.core.api.work.Outcome;
+import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.api.work.WorkSite;
+import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.engine.colony.ColonyData;
+import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
+import io.github.izakyl.folkways.core.engine.labor.ColonyLabor;
+import io.github.izakyl.folkways.core.engine.plan.Diagnosis;
+import io.github.izakyl.folkways.core.engine.plan.Unassigned;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.person.PersonContent;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.RegisterGameTestsEvent;
+import net.neoforged.neoforge.gametest.GameTestHolder;
+import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+
+@EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysMod.MOD_ID)
+@PrefixGameTestTemplate(false)
+public final class BreathingReviewGameTests {
+    private static final ResourceLocation COMPETITORS =
+        ResourceLocation.fromNamespaceAndPath("folkways_test", "breathing_competitors");
+    private static final Map<UUID, List<Urge>> OFFERS = new HashMap<>();
+
+    @SubscribeEvent
+    public static void declare(Declaring event) {
+        event.urges(COMPETITORS, (colony, who, view) -> OFFERS.getOrDefault(who.resident().id(), List.of()));
+        Participations.register(PersonBody.ID, Stake.urge(COMPETITORS), Participation.ALWAYS);
+    }
+
+    @SubscribeEvent
+    public static void register(RegisterGameTestsEvent event) {
+        event.register(BreathingReviewGameTests.class);
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 500)
+    public static void aResidentEscapesFloodwaterThroughAClosedDoor(GameTestHelper helper) {
+        BlockPos base = helper.absolutePos(new BlockPos(4, 1, 4));
+        room(helper, base);
+        BlockPos door = base.offset(4, 1, 2);
+        var state = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.EAST);
+        helper.getLevel().setBlock(door, state, 2);
+        helper.getLevel().setBlock(door.above(), state.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER), 2);
+        for (int x = 5; x <= 7; x++) {
+            helper.getLevel().setBlock(base.offset(x, 0, 2), Blocks.STONE.defaultBlockState(), 2);
+        }
+        ResidentEntity body = resident(helper, base.offset(2, 1, 2));
+        survives(helper, body, "closed door");
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 500)
+    public static void aResidentEscapesFloodwaterThroughAClosedTrapdoor(GameTestHelper helper) {
+        BlockPos base = helper.absolutePos(new BlockPos(4, 1, 4));
+        room(helper, base);
+        helper.getLevel().setBlock(base.offset(2, 3, 2), Blocks.OAK_TRAPDOOR.defaultBlockState(), 2);
+        ResidentEntity body = resident(helper, base.offset(2, 1, 2));
+        survives(helper, body, "closed trapdoor");
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 500)
+    public static void aResidentEscapesADeepFloodedShaft(GameTestHelper helper) {
+        BlockPos base = helper.absolutePos(new BlockPos(7, 1, 7));
+        for (int x = -1; x <= 1; x++) {
+            for (int z = -1; z <= 1; z++) {
+                for (int y = 0; y <= 8; y++) {
+                    helper.getLevel().setBlock(base.offset(x, y, z),
+                        (y == 0 || x != 0 || z != 0 ? Blocks.STONE : Blocks.WATER).defaultBlockState(), 2);
+                }
+            }
+        }
+        ResidentEntity body = resident(helper, base.above());
+        survives(helper, body, "deep shaft");
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 500)
+    public static void aResidentEscapesADeepFloodedStairwell(GameTestHelper helper) {
+        BlockPos base = helper.absolutePos(new BlockPos(3, 1, 4));
+        for (int x = 0; x <= 9; x++) {
+            for (int z = 0; z <= 4; z++) {
+                for (int y = 0; y <= 13; y++) {
+                    boolean wall = x == 0 || x == 9 || z == 0 || z == 4 || y <= x
+                        || x < 8 && y == x + 4;
+                    boolean flooded = y > x && y <= x + 3;
+                    helper.getLevel().setBlock(base.offset(x, y, z),
+                        (wall ? Blocks.STONE : flooded ? Blocks.WATER : Blocks.AIR).defaultBlockState(), 2);
+                }
+            }
+        }
+        ResidentEntity body = resident(helper, base.offset(1, 2, 2));
+        survives(helper, body, "deep flooded stairwell");
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 80)
+    public static void aProtectedResidentWithLowAirDoesNotInterruptWork(GameTestHelper helper) {
+        BlockPos base = helper.absolutePos(new BlockPos(4, 1, 4));
+        room(helper, base);
+        ResidentEntity body = resident(helper, base.offset(2, 1, 2));
+        body.setAirSupply(100);
+        body.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+            net.minecraft.world.effect.MobEffects.WATER_BREATHING, 200));
+        boolean[] interrupted = {false};
+        helper.onEachTick(() -> interrupted[0] |= WaterLabor.escaping(body));
+        helper.startSequence().thenExecuteAfter(40, () -> {
+            helper.assertFalse(interrupted[0], "water breathing never reserves a body with an existing air debt");
+            helper.assertTrue(body.getHealth() == body.getMaxHealth(), "the protected resident is unharmed");
+            body.discard();
+        }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 500)
+    public static void escapeAvoidsAnUnrelatedKeepout(GameTestHelper helper) {
+        BlockPos base = helper.absolutePos(new BlockPos(4, 1, 4));
+        room(helper, base);
+        BlockPos forbidden = base.offset(2, 2, 2);
+        helper.getLevel().setBlock(base.offset(2, 3, 2), Blocks.AIR.defaultBlockState(), 2);
+        helper.getLevel().setBlock(base.offset(3, 3, 2), Blocks.AIR.defaultBlockState(), 2);
+        Runnable remove = Keepouts.install((level, x, y, z) -> level == helper.getLevel()
+            && forbidden.equals(new BlockPos(x, y, z)));
+        helper.runAfterDelay(450, remove);
+        ResidentEntity body = resident(helper, base.offset(1, 1, 2));
+        boolean[] crossed = {false};
+        helper.onEachTick(() -> crossed[0] |= WaterLabor.escaping(body) && body.blockPosition().equals(forbidden));
+        helper.startSequence().thenExecuteAfter(420, () -> {
+            remove.run();
+            helper.assertFalse(crossed[0], "the escape does not enter a separate keepout");
+            helper.assertTrue(!body.isUnderWater() && body.getHealth() == body.getMaxHealth(),
+                "the resident finds the other opening");
+            body.discard();
+        }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 4000)
+    public static void anUnreachableUnderwaterRouteEndsWithoutRepeatedWork(GameTestHelper helper)
+            throws ReflectiveOperationException {
+        ServerLevel level = helper.getLevel();
+        BlockPos base = helper.absolutePos(new BlockPos(1, 1, 4));
+        for (int x = 0; x <= 21; x++) {
+            for (int z = 0; z <= 2; z++) {
+                level.setBlock(base.offset(x, 0, z), Blocks.STONE.defaultBlockState(), 2);
+                for (int y = 1; y <= 3; y++) {
+                    boolean wall = z != 1 || y == 3;
+                    boolean flooded = x >= 2 && x <= 19;
+                    level.setBlock(base.offset(x, y, z), (wall ? Blocks.STONE
+                        : flooded ? Blocks.WATER : Blocks.AIR).defaultBlockState(), 2);
+                }
+            }
+        }
+        ResidentEntity body = resident(helper, base.offset(0, 1, 1), false);
+        for (var trade : Vocations.all()) {
+            body.licences().trade(trade).ifPresent(licence -> body.licences().allow(licence, false));
+        }
+        BlockPos goal = base.offset(21, 1, 1);
+        var colony = Colonies.mint(level.getServer());
+        colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+        body.joinColony(colony.id());
+        colony.entered(body);
+        ColonyData data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
+        ColonyLabor labor = new ColonyLabor(data, level.dimension());
+        Class<?> lanes = Class.forName("io.github.izakyl.folkways.core.engine.labor.Lanes");
+        var inline = lanes.getDeclaredField("INLINE");
+        inline.setAccessible(true);
+        Object executor = inline.get(null);
+        var run = ColonyLabor.class.getMethod("run", ServerLevel.class, lanes);
+        var stop = ColonyLabor.class.getDeclaredMethod("close");
+        stop.setAccessible(true);
+        var readDiagnosis = ColonyLabor.class.getDeclaredMethod("diagnosis");
+        readDiagnosis.setAccessible(true);
+        boolean[] closed = {false};
+        boolean[] committed = {false};
+        boolean[] observing = {false};
+        int[] movementTicks = {0};
+        java.util.Set<String> movements = new java.util.LinkedHashSet<>();
+        List<Ending> ended = new ArrayList<>();
+        ResourceLocation owner = ResourceLocation.fromNamespaceAndPath("folkways_test", "water_route");
+        NodeSpec spec = NodeSpec.of(UUID.randomUUID(), owner, WorkSite.at(level, goal),
+            Stances.at(level, goal), Workload.Once.of(1)).doing(owner).done();
+        Node node = new Node() {
+            public NodeSpec spec() { return spec; }
+
+            public Outcome commit(ServerLevel at, Worker who) {
+                committed[0] = true;
+                return Outcome.done();
+            }
+        };
+        colony.submit(owner, level.dimension(), Grown.of(node), (id, how) -> ended.add(how));
+        helper.onEachTick(() -> {
+            if (closed[0]) {
+                return;
+            }
+            ColonyWays.advance(data, level);
+            if (observing[0] && !body.getNavigation().isDone() && body.doing()
+                    .filter(doing -> doing.what().equals(owner) || doing.toward().filter(owner::equals).isPresent())
+                    .isPresent()) {
+                movementTicks[0]++;
+                movements.add("doing=" + body.doing() + ", target=" + body.getNavigation().getTargetPos());
+            }
+            try {
+                run.invoke(labor, level, executor);
+            } catch (ReflectiveOperationException broken) {
+                throw new IllegalStateException(broken);
+            }
+        });
+        helper.startSequence().thenWaitUntil(() -> {
+                try {
+                    Diagnosis diagnosis = (Diagnosis) readDiagnosis.invoke(labor);
+                    helper.assertTrue(diagnosis.unassigned().stream().anyMatch(item -> item.node().equals(spec.id())
+                            && item.why() == Unassigned.Reason.NO_WAY),
+                        "the unreachable job reports no way: " + diagnosis.unassigned() + ", endings=" + ended);
+                } catch (ReflectiveOperationException broken) {
+                    throw new IllegalStateException(broken);
+                }
+                observing[0] = true;
+            }).thenExecuteAfter(200, () -> {
+                helper.assertFalse(committed[0], "the unreachable work does not complete: " + ended);
+                helper.assertTrue(movementTicks[0] == 0,
+                    "navigation ticks=" + movementTicks[0] + ", routes=" + movements);
+                helper.assertTrue(body.getHealth() == body.getMaxHealth(), "the resident does not drown");
+                closed[0] = true;
+                try {
+                    stop.invoke(labor);
+                } catch (ReflectiveOperationException broken) {
+                    throw new IllegalStateException(broken);
+                }
+                body.discard();
+                colony.raze();
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 500)
+    public static void noExitReturnsControlAndRetriesWhenAirAppears(GameTestHelper helper) {
+        BlockPos base = helper.absolutePos(new BlockPos(4, 1, 4));
+        room(helper, base);
+        ResidentEntity body = resident(helper, base.offset(2, 1, 2));
+        boolean[] released = {false};
+        ResidentEntity[] restored = {null};
+        helper.onEachTick(() -> {
+            if (body.getAirSupply() < 220 && !WaterLabor.escaping(body)) {
+                released[0] = true;
+            }
+        });
+        helper.startSequence().thenExecuteAfter(150, () -> {
+            helper.assertTrue(released[0], "an impossible search returns control between retries");
+            helper.getLevel().setBlock(base.offset(2, 3, 2), Blocks.AIR.defaultBlockState(), 2);
+        }).thenExecuteAfter(220, () -> {
+            helper.assertTrue(body.getHealth() == body.getMaxHealth() && !WaterLabor.escaping(body),
+                "the resident finds the newly opened air and releases control");
+            var saved = body.saveWithoutId(new net.minecraft.nbt.CompoundTag());
+            body.discard();
+            restored[0] = PersonBody.RESIDENT.get().create(helper.getLevel());
+            restored[0].load(saved);
+            helper.getLevel().addFreshEntity(restored[0]);
+            WaterLabor.enroll(helper, restored[0]);
+        }).thenExecuteAfter(20, () -> {
+            helper.assertFalse(WaterLabor.escaping(restored[0]), "a healthy reloaded resident keeps control free");
+            helper.assertTrue(restored[0].getAirSupply() == restored[0].getMaxAirSupply(),
+                "the reloaded resident is still breathing");
+            restored[0].discard();
+        }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 160)
+    public static void noExitRetriesAfterFortyTicksRatherThanTheRefusalCooldown(GameTestHelper helper) {
+        BlockPos base = helper.absolutePos(new BlockPos(4, 1, 4));
+        room(helper, base);
+        ResidentEntity body = resident(helper, base.offset(2, 1, 2));
+        int[] recovered = {-1};
+        helper.onEachTick(() -> {
+            if (body.tickCount > 15 && !body.isUnderWater() && recovered[0] < 0) {
+                recovered[0] = body.tickCount;
+            }
+        });
+        helper.startSequence().thenExecuteAfter(5, () -> body.setAirSupply(100))
+            .thenExecuteAfter(10, () -> {
+                helper.assertFalse(WaterLabor.escaping(body), "no exit ends normally and returns control");
+                helper.getLevel().setBlock(base.offset(4, 1, 2), Blocks.AIR.defaultBlockState(), 2);
+                helper.getLevel().setBlock(base.offset(4, 2, 2), Blocks.AIR.defaultBlockState(), 2);
+                helper.getLevel().setBlock(base.offset(5, 0, 2), Blocks.STONE.defaultBlockState(), 2);
+            }).thenExecuteAfter(100, () -> {
+                helper.assertTrue(recovered[0] >= 40 && recovered[0] < 95,
+                    "retry waits about 40 ticks, without the 100 tick refusal backoff: " + recovered[0]);
+                helper.assertTrue(body.getHealth() == body.getMaxHealth(), "the retry preserves the resident");
+                body.discard();
+            }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 400)
+    public static void escapeOutranksDireUrgesAndSurvivesAPassiveReservation(GameTestHelper helper) {
+        BlockPos base = helper.absolutePos(new BlockPos(4, 1, 4));
+        room(helper, base);
+        helper.getLevel().setBlock(base.offset(4, 1, 2), Blocks.AIR.defaultBlockState(), 2);
+        helper.getLevel().setBlock(base.offset(4, 2, 2), Blocks.AIR.defaultBlockState(), 2);
+        helper.getLevel().setBlock(base.offset(5, 0, 2), Blocks.STONE.defaultBlockState(), 2);
+        ResidentEntity body = resident(helper, base.offset(2, 1, 2));
+        NodeSpec spec = NodeSpec.of(UUID.randomUUID(), COMPETITORS,
+            WorkSite.on(helper.getLevel(), body.id(), body.blockPosition()), Stances.WHEREVER,
+            (Workload.Continuous) (level, who) -> true).doing(COMPETITORS).done();
+        Node competing = new Node() {
+            public NodeSpec spec() { return spec; }
+
+            public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
+        };
+        OFFERS.put(body.id(), List.of(
+            Urge.reserve(COMPETITORS),
+            new Urge(ResourceLocation.withDefaultNamespace("flee"), Urge.DIRE, true, () -> competing),
+            new Urge(ResourceLocation.withDefaultNamespace("leaving"), Urge.DIRE + 0.1, true, () -> competing)));
+        boolean[] escaped = {false};
+        helper.onEachTick(() -> escaped[0] |= WaterLabor.escaping(body));
+        helper.startSequence().thenExecuteAfter(5, () -> body.setAirSupply(100))
+            .thenExecuteAfter(200, () -> {
+                helper.assertTrue(escaped[0], "escape wins over both DIRE weights and a passive reservation");
+                helper.assertTrue(!body.isUnderWater() && body.getHealth() == body.getMaxHealth(),
+                    "reservation does not repeatedly cancel the escape node");
+                OFFERS.remove(body.id());
+                body.discard();
+            }).thenSucceed();
+    }
+
+    private static void room(GameTestHelper helper, BlockPos base) {
+        for (int x = 0; x <= 4; x++) {
+            for (int z = 0; z <= 4; z++) {
+                for (int y = 0; y <= 3; y++) {
+                    boolean wall = y == 0 || y == 3 || x == 0 || x == 4 || z == 0 || z == 4;
+                    helper.getLevel().setBlock(base.offset(x, y, z),
+                        (wall ? Blocks.STONE : Blocks.WATER).defaultBlockState(), 2);
+                }
+            }
+        }
+    }
+
+    private static ResidentEntity resident(GameTestHelper helper, BlockPos at) {
+        return resident(helper, at, true);
+    }
+
+    private static ResidentEntity resident(GameTestHelper helper, BlockPos at, boolean enroll) {
+        ResidentEntity body = PersonBody.RESIDENT.get().create(helper.getLevel());
+        body.moveTo(Vec3.atBottomCenterOf(at));
+        helper.getLevel().addFreshEntity(body);
+        if (enroll) {
+            WaterLabor.enroll(helper, body);
+        }
+        return body;
+    }
+
+    private static void survives(GameTestHelper helper, ResidentEntity body, String exit) {
+        int[] damage = {-1};
+        helper.onEachTick(() -> {
+            if (damage[0] < 0 && body.getHealth() < body.getMaxHealth()) {
+                damage[0] = body.tickCount;
+            }
+        });
+        helper.startSequence().thenExecuteAfter(420, () -> {
+            helper.assertTrue(damage[0] < 0 && !body.isUnderWater(), exit + ": damage=" + damage[0]
+                + ", air=" + body.getAirSupply() + ", at=" + body.position());
+            body.discard();
+        }).thenSucceed();
+    }
+}

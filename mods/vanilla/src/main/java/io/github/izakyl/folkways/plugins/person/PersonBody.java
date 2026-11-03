@@ -62,6 +62,7 @@ public final class PersonBody {
         Map<Stake, Participation> rows = new LinkedHashMap<>();
         rows.put(Stake.urge(LIVING), Participation.ALWAYS);
         rows.put(Stake.urge(FEAR), Participation.ALWAYS);
+        rows.put(Stake.urge(folkways("breathing")), Participation.ALWAYS);
         rows.put(Stake.urge(PATROL), Participation.ALWAYS);
         rows.put(Stake.urge(folkways("sentry_posts")), Participation.ALWAYS);
         rows.put(Stake.urge(folkways("damage_control")), Participation.ALWAYS);
