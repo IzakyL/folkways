@@ -3,13 +3,18 @@ package io.github.izakyl.folkways.front.engine.net;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
+import io.github.izakyl.folkways.front.api.Facing;
+import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.engine.colony.ColonyLooks;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.WeakHashMap;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -22,6 +27,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 public final class ColonyOverviews {
 
     private static final Map<ServerLevel, Map<UUID, Cached>> BY_LEVEL = new HashMap<>();
+    private static final Map<ServerPlayer, Map<UUID, CompoundTag>> SENT = new WeakHashMap<>();
+    private static final Map<ServerPlayer, Set<UUID>> UNAVAILABLE = new WeakHashMap<>();
     private static final long OVERVIEW_TICKS = 20;
     private static final long LOOK_TICKS = 10;
     private static final int CLEANUP_INTERVAL_TICKS = 20;
@@ -43,6 +50,15 @@ public final class ColonyOverviews {
         return colonies.computeIfAbsent(colony.id(), ignored -> new Cached());
     }
 
+    static ColonyOverviewPacket requested(ServerPlayer player, Colony colony, boolean recipesNeeded,
+            List<UUID> unavailable) {
+        UNAVAILABLE.put(player, Set.copyOf(unavailable));
+        if (recipesNeeded) {
+            SENT.remove(player);
+        }
+        return of(player, colony);
+    }
+
     static ColonyOverviewPacket of(ServerPlayer player, Colony colony) {
         ServerLevel level = player.serverLevel();
         Cached cached = cached(level, colony);
@@ -53,7 +69,17 @@ public final class ColonyOverviews {
         }
         var common = cached.overview;
         var near = player.blockPosition();
-        var ghosts = new ArrayList<>(common.ghosts());
+        var unavailable = UNAVAILABLE.getOrDefault(player, Set.of());
+        var ghosts = new ArrayList<>(common.ghosts().stream()
+            .filter(ghost -> ghost.order().filter(unavailable::contains).isEmpty()).toList());
+        if (!unavailable.isEmpty()) {
+            for (var facing : Facing.all(colony)) {
+                ghosts.addAll(facing.payloadGhosts(colony.view(level), unavailable,
+                    ColonyOverviewPacket.MAX_GHOSTS, near));
+            }
+            ghosts = new ArrayList<>(Ghost.limited(ghosts,
+                ColonyOverviewPacket.MAX_GHOSTS, near));
+        }
         if (ghosts.size() > ColonyOverviewPacket.MAX_GHOSTS) {
             ghosts.sort(Comparator.comparingDouble(ghost -> ghost.pos().distSqr(near)));
             ghosts.subList(ColonyOverviewPacket.MAX_GHOSTS, ghosts.size()).clear();
@@ -62,7 +88,22 @@ public final class ColonyOverviews {
         placards.sort(Comparator.comparingDouble(placard ->
             FolkwaysUiNetworkEvents.corner(placard.outline()).distSqr(near)));
         return new ColonyOverviewPacket(common.members(), common.zones(), List.copyOf(ghosts), common.paths(),
-            common.notes(), placards);
+            common.notes(), placards, changed(player, common.recipes()));
+    }
+
+    private static List<CompoundTag> changed(ServerPlayer player, List<CompoundTag> recipes) {
+        var before = SENT.getOrDefault(player, Map.of());
+        Map<UUID, CompoundTag> now = new HashMap<>();
+        var changed = new ArrayList<CompoundTag>();
+        for (var recipe : recipes) {
+            UUID order = recipe.getUUID("order");
+            now.put(order, recipe);
+            if (!recipe.equals(before.get(order))) {
+                changed.add(recipe);
+            }
+        }
+        SENT.put(player, now);
+        return List.copyOf(changed);
     }
 
     // Explicit edits must be visible immediately, including to other viewers of this colony.
@@ -119,5 +160,7 @@ public final class ColonyOverviews {
 
     public static void forgetServer() {
         BY_LEVEL.clear();
+        SENT.clear();
+        UNAVAILABLE.clear();
     }
 }

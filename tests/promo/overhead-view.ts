@@ -204,7 +204,7 @@ export class View {
   }
 
   /** One drawing from where the view stands: nothing moves but the mouse. */
-  async drawn(pattern: string, draft: Drawing, pace: number) {
+  async drawn(pattern: string, draft: Drawing, pace: number, raiseNow = false, onDraw?: () => Promise<void>) {
     const wait = (ms: number) => sleepMs(ms * pace);
     await this.gestured(draft, pace);
     const heights = draft.cells.map(cell => this.ground(cell).y);
@@ -216,7 +216,8 @@ export class View {
       if (draft.gesture === "line") await this.lifted(index, cell, draft.lift?.[index], draft.exact);
     }
     await wait(500);
-    const said = await this.commission(middle, pattern, draft.knobs ?? [], pace);
+    await onDraw?.();
+    const said = await this.commission(middle, pattern, draft.knobs ?? [], pace, raiseNow);
     return { cells: draft.cells, ...said };
   }
 
@@ -259,15 +260,21 @@ export class View {
    * Right-clicks what was drawn, takes the offer to raise a building there, picks the pattern, sets its knobs,
    * previews it, and comes back to build it.
    */
-  private async commission(spot: Vec, pattern: string, knobs: Knob[], pace: number) {
+  private async commission(spot: Vec, pattern: string, knobs: Knob[], pace: number, raiseNow = false) {
     const wait = (ms: number) => sleepMs(ms * pace);
     await this.click(spot, "right");
     const offer = await this.element(id => id.startsWith("folkways.zoneconfig.") && id.includes("draft"));
     await this.pick(offer);
     await this.pick(await this.element(id => id === "folkways.draft.choose"));
+    if (raiseNow) {
+      const shown = await this.shown();
+      if (!shown.some(one => one.id.endsWith(`.${pattern}`))) {
+        await this.pick(await this.element(id => id === "folkways.draft.folder.shared.folkways_chiselsandbits"));
+      }
+    }
     const picked = await this.element(id => id.startsWith("folkways.draft.pattern.") && id.endsWith(`.${pattern}`));
     await wait(400);
-    await this.pick(picked);
+    await this.pick(picked, true);
     await wait(500);
     for (const knob of knobs) {
       const id = `folkways.draft.knob.${knob.key}`;
@@ -281,11 +288,12 @@ export class View {
       } else if ("toggle" in knob) {
         await this.pick(id, true);
         for (const block of knob.toggle) {
-          const row = await this.element(one => one === `folkways.choice.option.${block.replace(":", ".")}`);
+          const prefix = raiseNow ? "folkways.selector.offer" : "folkways.choice.option";
+          const row = await this.element(one => one === `${prefix}.${block.replace(":", ".")}`);
           await this.pick(row, true);
           await wait(300);
         }
-        await this.pick("folkways.choice.confirm");
+        await this.pick(raiseNow ? "folkways.selector.confirm" : "folkways.choice.confirm");
       } else if ("value" in knob) {
         // The field holds its default: the caret goes to the end and the old digits are rubbed out first.
         await this.pick(id, true);
@@ -304,10 +312,11 @@ export class View {
     await this.back(pattern);
     await wait(1500);
     await this.click(spot, "right");
-    await this.element(id => id === "folkways.draft.confirm");
+    const action = raiseNow ? "folkways.draft.raise" : "folkways.draft.confirm";
+    await this.element(id => id === action);
     await wait(500);
-    await this.point("folkways.draft.confirm");
-    await clickUnverified(this.client, { id: "folkways.draft.confirm" });
+    await this.point(action);
+    await clickUnverified(this.client, { id: action });
     await this.back(pattern);
     return { offer, picked };
   }

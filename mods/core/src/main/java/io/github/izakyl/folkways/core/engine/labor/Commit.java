@@ -186,7 +186,9 @@ public final class Commit {
                 }
             }
         }
-        who.spill(left);
+        if (!left.isEmpty()) {
+            who.spill(left);
+        }
     }
 
     private record Supplied(Worker who, List<ItemStack> supplied) implements Worker {

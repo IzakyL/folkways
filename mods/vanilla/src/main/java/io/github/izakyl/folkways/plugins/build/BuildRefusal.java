@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 
 public enum BuildRefusal implements RefusalKind.Named {
     UNKNOWN_BLOCK,
+    MATERIALS_CHANGED,
     NO_WAY_TO_BUILD,
     NO_STANCE,
     ACCESS_DEPENDENCY,

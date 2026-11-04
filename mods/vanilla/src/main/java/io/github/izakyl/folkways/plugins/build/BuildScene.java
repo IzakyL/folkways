@@ -1,9 +1,11 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.front.api.GhostRecipes;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery.Body;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
 import io.github.izakyl.folkways.front.api.ponder.Scenes;
+import io.github.izakyl.folkways.plugins.build.draft.client.OrderPreviews;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
@@ -43,6 +45,8 @@ public final class BuildScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
+        event.enqueueWork(() -> GhostRecipes.install(
+            new OrderPreviews()));
         event.enqueueWork(() -> Scenes.folder(BuildContent.ID, "folkways.page.build",
             ResourceLocation.withDefaultNamespace("bricks"), Scenes.scene("building", BuildScene::program)));
     }

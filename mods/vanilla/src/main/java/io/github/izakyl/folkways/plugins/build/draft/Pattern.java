@@ -1,11 +1,17 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.api.structure.Voxelizer;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.notice.Notice;
+import io.github.izakyl.folkways.plugins.build.BlueprintUploads;
 import io.github.izakyl.folkways.plugins.build.Joints;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -18,17 +24,21 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.resources.ResourceLocation;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Module;
 import net.starlark.java.eval.Mutability;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.Starlark;
+import net.starlark.java.eval.StarlarkCallable;
+import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkSemantics;
 import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.syntax.FileOptions;
@@ -38,7 +48,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> accepts, List<String> phases,
-        Capture capture, Object draw) {
+        Capture capture, String detail, int grain, Object draw) {
+
+    public static final int DEFAULT_GRAIN = 8;
 
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-patterns");
 
@@ -94,10 +106,11 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
             if (drawing == null) {
                 return Optional.empty();
             }
+            String detail = detail(module.getGlobal("detail"));
             Pattern pattern = new Pattern(id, schema(module.getGlobal(KNOBS)),
                 new Face(offered(module.getGlobal(KNOBS)), words(module, loaded)),
                 accepts(module.getGlobal(ACCEPTS)), phases(module.getGlobal(PHASES)),
-                Capture.parse(module.getGlobal(CAPTURE)), drawing);
+                Capture.parse(module.getGlobal(CAPTURE)), detail, grain(module.getGlobal("grain"), detail), drawing);
             Set<ResourceLocation> unloaded = pattern.unloaded();
             if (!unloaded.isEmpty()) {
                 LOGGER.warn("{}: needs {}, which this game has not loaded", id, unloaded);
@@ -228,11 +241,16 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
             return new Drawn.Refused(DraftRefusal.WRONG_MARK, kind,
                 Optional.of(new Notice("folkways.draft.mark." + kind, List.of())));
         }
+        if (detail.equals("bits") && Voxelizer.installed().isEmpty()) {
+            return Drawn.refused(DraftRefusal.MISSING_VOXELIZER);
+        }
         Set<ResourceLocation> missing = wanting(commission.settings());
         if (!missing.isEmpty()) {
             return Drawn.refused(DraftRefusal.UNKNOWN_BLOCK, named(missing));
         }
-        try (Mutability mutability = Mutability.create("draw", id)) {
+        try (Mutability mutability = Mutability.create("draw", id);
+                var processing = detail.equals("bits") ? Voxelizer.installed().orElseThrow().drawing()
+                    : StructureCompat.processing()) {
             StarlarkThread thread = new StarlarkThread(mutability, SEMANTICS);
             thread.setPrintHandler((printing, message) -> LOGGER.info("{}: {}", id, message));
             long began = System.nanoTime();
@@ -246,7 +264,8 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
             if (parts.isEmpty()) {
                 return Drawn.refused(DraftRefusal.NOTHING_DRAWN);
             }
-            Drawn drawn = Lattice.of(new Massing(parts))
+            Drawn drawn = Lattice.of(new Massing(parts),
+                detail.equals("bits") ? Voxelizer.installed().orElseThrow() : null, grain)
                 .map(lattice -> Fitter.fit(lattice, commission.hint().anchor(), commission.seed()))
                 .orElseGet(() -> Drawn.refused(DraftRefusal.SITE_TOO_LARGE));
             if (!(drawn instanceof Drawn.Ready laid)) {
@@ -266,7 +285,14 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
             if (!drawing.reports().isEmpty()) {
                 LOGGER.info("{}: {}", id, drawing.reports());
             }
+            if (detail.equals("bits")) {
+                if (!uploadable(ready.draft())) {
+                    return Drawn.refused(DraftRefusal.SITE_TOO_LARGE, "voxel drawing exceeds the upload limit");
+                }
+            }
             return ready.counting(drawing.reports());
+        } catch (io.github.izakyl.folkways.core.api.structure.StructureCompat.Failure failed) {
+            return Drawn.refused(DraftRefusal.UNSUPPORTED_PAYLOAD);
         } catch (EvalException stopped) {
             DraftRefusal why = drawing.stoppedFor();
             return new Drawn.Refused(why == null ? DraftRefusal.PATTERN_FAILED : why, stopped.getMessage(),
@@ -274,6 +300,17 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             return Drawn.refused(DraftRefusal.PATTERN_FAILED, "interrupted");
+        }
+    }
+
+    private static boolean uploadable(Draft draft) {
+        try (var written = new ByteArrayOutputStream()) {
+            NbtIo.writeCompressed(DraftTemplate.of(draft,
+                SharedConstants.getCurrentVersion().getDataVersion().getVersion()), written);
+            Drafting.checkTime();
+            return BlueprintUploads.fits(written.toByteArray());
+        } catch (IOException failed) {
+            return false;
         }
     }
 
@@ -385,6 +422,33 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
             throw Starlark.errorf("a pattern accepts at least one of 'zone' and 'path'");
         }
         return kinds;
+    }
+
+    private static int grain(Object declared, String detail) throws EvalException {
+        if (declared == null) {
+            return DEFAULT_GRAIN;
+        }
+        if (!detail.equals("bits")) {
+            throw Starlark.errorf("grain is only valid with detail = 'bits'");
+        }
+        if (!(declared instanceof StarlarkInt value)
+                || !(value.toBigInteger().equals(BigInteger.valueOf(16))
+                    || value.toBigInteger().equals(BigInteger.valueOf(8))
+                    || value.toBigInteger().equals(BigInteger.valueOf(4)))) {
+            throw Starlark.errorf("grain must be 16, 8 or 4, got %s", Starlark.repr(declared));
+        }
+        return value.toInt("grain");
+    }
+
+    private static String detail(Object declared) throws EvalException {
+        // Existing patterns may name a phase function detail. Only a value declares the drawing mode.
+        if (declared == null || declared instanceof StarlarkCallable) {
+            return "blocks";
+        }
+        if (!(declared instanceof String value) || !(value.equals("blocks") || value.equals("bits"))) {
+            throw Starlark.errorf("detail must be 'blocks' or 'bits', got %s", Starlark.repr(declared));
+        }
+        return (String) declared;
     }
 
     private static List<String> phases(Object declared) throws EvalException {

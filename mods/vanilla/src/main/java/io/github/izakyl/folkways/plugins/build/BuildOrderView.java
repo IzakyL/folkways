@@ -1,10 +1,13 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -56,19 +59,58 @@ public record BuildOrderView(UUID id, BlockPos min, BlockPos max, int placed, in
     }
 
     static List<Ghost> pending(ServerLevel level, BuildTarget target, Set<BlockPos> met, Set<Joint> joined) {
+        return pending(level, target, met, joined, 2048, BlockPos.ZERO, 256 * 1024);
+    }
+
+    static List<Ghost> pending(ServerLevel level, BuildTarget target, Set<BlockPos> met, Set<Joint> joined,
+            int most, BlockPos near, int payloadBytes) {
         List<Ghost> owed = new ArrayList<>();
-        Map<BlockPos, SchematicPlacement.Launch> shots = target.shots();
-        for (Map.Entry<BlockPos, BlockState> cell : target.cells().entrySet()) {
-            BlockPos pos = cell.getKey();
-            BlockState wanted = cell.getValue();
-            SchematicPlacement.Launch shot = shots.get(pos);
-            if (met.contains(pos) || wanted.isAir() || shot == null || !level.hasChunkAt(pos)
-                || target.costs(level, shot, met).isEmpty()) {
-                continue;
+        if (most <= 0) return List.of();
+        var candidates = target.cells().entrySet().stream()
+            .filter(cell -> !met.contains(cell.getKey()) && !cell.getValue().isAir() && level.hasChunkAt(cell.getKey()))
+            .sorted(Comparator.comparingDouble(cell -> cell.getKey().distSqr(near))).limit(most).toList();
+        try (var processing = StructureCompat.processing()) {
+            Map<BlockPos, SchematicPlacement.Launch> shots = target.shots();
+            for (Map.Entry<BlockPos, BlockState> cell : candidates) {
+                BlockPos pos = cell.getKey();
+                BlockState wanted = cell.getValue();
+                SchematicPlacement.Launch shot = shots.get(pos);
+                int bytes = target.dataAt(pos).bytes();
+                if (bytes > payloadBytes || shot == null
+                    || target.costs(level, shot, met).isEmpty()) {
+                    continue;
+                }
+                payloadBytes -= bytes;
+                owed.add(new Ghost(pos, wanted,
+                    new StructurePayload(target.dataAt(pos).tag())));
             }
-            owed.add(new Ghost(pos, wanted));
+            pendingJoints(level, target, met, joined, most, owed);
+        } catch (StructureCompat.Failure limited) {
+            // Keep nearby previews already checked without spending another whole-blueprint budget.
         }
+        return List.copyOf(owed);
+    }
+
+    static List<Ghost> recipePending(ServerLevel level, BuildTarget target, Set<BlockPos> met,
+            Set<Joint> joined, int most, BlockPos near, UUID order) {
+        if (most <= 0) {
+            return List.of();
+        }
+        List<Ghost> owed = new ArrayList<>(target.cells().entrySet().stream()
+            .filter(cell -> !met.contains(cell.getKey()) && !cell.getValue().isAir() && level.hasChunkAt(cell.getKey()))
+            .sorted(Comparator.comparingDouble(cell -> cell.getKey().distSqr(near))).limit(most)
+            .map(cell -> new Ghost(cell.getKey(), cell.getValue())).toList());
+        pendingJoints(level, target, met, joined, most, owed);
+        return owed.stream().map(ghost -> new Ghost(ghost.pos(), ghost.state(), ghost.payload(), Optional.of(order),
+            target.dataAt(ghost.pos()).previewHash())).toList();
+    }
+
+    private static void pendingJoints(ServerLevel level, BuildTarget target, Set<BlockPos> met, Set<Joint> joined,
+            int most, List<Ghost> owed) {
         for (Joint joint : target.joints()) {
+            if (owed.size() >= most) {
+                break;
+            }
             BlockState start = target.cells().get(joint.from());
             BlockState end = target.cells().get(joint.to());
             if (joined.contains(joint) || start == null || end == null
@@ -76,34 +118,45 @@ public record BuildOrderView(UUID id, BlockPos min, BlockPos max, int placed, in
                 continue;
             }
             Joints.sketch(joint.from(), start, joint.to(), end).forEach((pos, state) -> {
-                if (!met.contains(pos) && level.getBlockState(pos).canBeReplaced()) {
+                if (owed.size() < most && !met.contains(pos) && level.getBlockState(pos).canBeReplaced()) {
                     owed.add(new Ghost(pos, state));
                 }
             });
         }
-        return List.copyOf(owed);
     }
 
     static Map<ItemSpec, Long> owed(ServerLevel level, BuildTarget target, Set<BlockPos> met) {
-        Map<ItemSpec, Long> owed = new LinkedHashMap<>();
-        Set<BlockPos> quoted = new LinkedHashSet<>();
-        for (SchematicPlacement.Launch shot : target.shots().values()) {
-            BlockPos anchor = shot.anchor();
-            if (!quoted.add(anchor) || met.contains(anchor) || !level.hasChunkAt(anchor)
-                || target.satisfied(level, anchor)) {
-                continue;
+        try (var processing = StructureCompat.processing()) {
+            Map<ItemSpec, Long> owed = new LinkedHashMap<>();
+            Set<BlockPos> carved = new LinkedHashSet<>();
+            Map<BlockPos, BlockState> carving = new LinkedHashMap<>();
+            for (Step step : Layering.carves(level, target, met)) {
+                step.after().keySet().stream().filter(cell -> !Carving.replacement(level, target, cell))
+                    .forEach(carved::add);
+                carving.putAll(step.after());
             }
-            for (Need need : target.costs(level, shot, met).orElse(List.of())) {
+            for (Need need : Carving.quote(level, carving, target::dataAt).needs()) {
                 owed.merge(need.spec(), need.count(), Long::sum);
             }
-            // A waterlogged block laid where no water stands has a bucket let into it after.
-            for (BlockPos cell : shot.produces()) {
-                if (!met.contains(cell) && Step.soaked(target.wanted(cell))
-                        && level.getFluidState(cell).getType() != Fluids.WATER) {
-                    owed.merge(ItemSpec.of(Items.WATER_BUCKET), 1L, Long::sum);
+            Set<BlockPos> quoted = new LinkedHashSet<>();
+            for (SchematicPlacement.Launch shot : target.shots().values()) {
+                BlockPos anchor = shot.anchor();
+                if (carved.contains(anchor) || !quoted.add(anchor) || met.contains(anchor) || !level.hasChunkAt(anchor)
+                    || target.satisfied(level, anchor)) {
+                    continue;
+                }
+                for (Need need : target.costs(level, shot, met).orElse(List.of())) {
+                    owed.merge(need.spec(), need.count(), Long::sum);
+                }
+                // A waterlogged block laid where no water stands has a bucket let into it after.
+                for (BlockPos cell : shot.produces()) {
+                    if (!met.contains(cell) && Step.soaked(target.wanted(cell))
+                            && level.getFluidState(cell).getType() != Fluids.WATER) {
+                        owed.merge(ItemSpec.of(Items.WATER_BUCKET), 1L, Long::sum);
+                    }
                 }
             }
+            return owed;
         }
-        return owed;
     }
 }

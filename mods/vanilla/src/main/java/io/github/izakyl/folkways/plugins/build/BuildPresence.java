@@ -1,12 +1,16 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
+import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.front.api.Facing;
@@ -19,8 +23,8 @@ import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
+import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.build.draft.Templates;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -30,10 +34,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -41,11 +49,11 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.core.HolderLookup;
 
 final class BuildPresence implements Facing {
 
@@ -53,6 +61,8 @@ final class BuildPresence implements Facing {
     private static final int TALLY_TICKS = 20;
 
     private static final int TOLD_WARES = 4;
+
+    static final int RETRY_TICKS = 200;
 
     private static final String TAG_BOOK = "book";
 
@@ -77,7 +87,15 @@ final class BuildPresence implements Facing {
     private final BlueprintBook book = new BlueprintBook();
     private final Map<UUID, TemporaryScaffolds> temporary = new LinkedHashMap<>();
     private final Set<UUID> cancelled = new LinkedHashSet<>();
+    private final Map<UUID, Carving.Cache> caches = new LinkedHashMap<>();
     private final Map<UUID, BuildSite> sites = new LinkedHashMap<>();
+    private final Map<UUID, BuildSite> opening = new LinkedHashMap<>();
+    private record Preparation(Blueprint source, CompletableFuture<Blueprint> future) {
+    }
+
+    private final Map<UUID, Preparation> preparing = new LinkedHashMap<>();
+    private final Map<UUID, Component> payloadFailures = new LinkedHashMap<>();
+    private final Map<UUID, Long> payloadRetryAt = new LinkedHashMap<>();
     private final Map<UUID, Drafted> drafted = new LinkedHashMap<>();
     private final Map<UUID, Map<ItemSpec, Long>> owed = new ConcurrentHashMap<>();
     private final Map<UUID, Set<BlockPos>> met = new LinkedHashMap<>();
@@ -133,6 +151,9 @@ final class BuildPresence implements Facing {
                 joined.put(order, metJoints);
             });
         }
+        for (Reader entry : saved.children("carvingCaches")) {
+            entry.uuid(TAG_ORDER).ifPresent(order -> cacheOf(order).load(entry));
+        }
         numbered = Math.max(0, saved.integer(TAG_NUMBERED).orElse(0));
         nameUnnamed();
         book.reportChangesTo(this::keep);
@@ -168,6 +189,8 @@ final class BuildPresence implements Facing {
         CompoundTag saved = Writer.of()
             .blob(TAG_BOOK, book.save(server.registryAccess()))
             .integer(TAG_NUMBERED, numbered)
+            .children("carvingCaches", caches.entrySet(), entry -> Writer.of(entry.getValue().save())
+                .uuid(TAG_ORDER, entry.getKey()).tag())
             .children(TAG_TEMPORARY, temporary.entrySet(), entry -> Writer.of(entry.getValue().save())
                 .uuid(TAG_ORDER, entry.getKey())
                 .flag(TAG_CANCELLED, cancelled.contains(entry.getKey()))
@@ -243,10 +266,11 @@ final class BuildPresence implements Facing {
     }
 
     Optional<BlueprintBuildOrder> file(ServerLevel level, Blueprint blueprint, BlockPos anchor, String typed,
-            Optional<UUID> playerId, String playerName, ResourceLocation pattern, Hint hint) {
+            Optional<UUID> playerId, String playerName, ResourceLocation pattern, Hint hint, CompoundTag settings,
+            Direction facing) {
         Optional<BlueprintBuildOrder> filed = place(level, blueprint, anchor, siteName(typed), playerId, playerName);
         filed.ifPresent(order -> {
-            drafted.put(order.id(), new Drafted(order.id(), pattern, hint));
+            drafted.put(order.id(), new Drafted(order.id(), pattern, hint, settings.copy(), facing));
             spend(typed);
             keep();
         });
@@ -275,7 +299,12 @@ final class BuildPresence implements Facing {
 
     // An order called off keeps its site only to take down what scaffolding it left; its work is withdrawn now.
     private void cancel(UUID order) {
+        refund(order);
         cancelled.add(order);
+        BuildSite staged = opening.remove(order);
+        if (staged != null) {
+            staged.close();
+        }
         scaffoldsOf(order);
         met.remove(order);
         joined.remove(order);
@@ -318,6 +347,7 @@ final class BuildPresence implements Facing {
                     if (opened) {
                         continue;
                     }
+                    opened = true;
                     site = open(level, order);
                     if (site == null) {
                         continue;
@@ -344,19 +374,85 @@ final class BuildPresence implements Facing {
     // loaded would stay refused for good. Until then it is tried again each tick.
     @Nullable
     private BuildSite open(ServerLevel level, BlueprintBuildOrder order) {
-        Optional<Blueprint> drawing = book.target(level, order.blueprintId());
-        BuildTarget target = cancelled.contains(order.id()) || drawing.isEmpty()
-            ? new BuildTarget(order.anchor().realm(), Map.of())
-            : BuildTarget.of(order, drawing.get()).in(level);
-        if (!loaded(level, target)) {
+        if (!cancelled.contains(order.id()) && level.getGameTime() < payloadRetryAt.getOrDefault(order.id(), 0L)) return null;
+        try {
+            Blueprint source = book.blueprint(order.blueprintId()).orElse(null);
+            if (source != null && !cancelled.contains(order.id())) {
+                Preparation preparation = preparing.get(order.blueprintId());
+                if (preparation == null || preparation.source() != source) {
+                    preparation = new Preparation(source, source.prepare());
+                    preparing.put(order.blueprintId(), preparation);
+                }
+                var future = preparation.future();
+                if (!future.isDone()) {
+                    return null;
+                }
+                try {
+                    Blueprint ready = future.join();
+                    book.prepared(source, ready);
+                    preparing.put(order.blueprintId(), new Preparation(ready,
+                        CompletableFuture.completedFuture(ready)));
+                } catch (CompletionException failed) {
+                    if (failed.getCause() instanceof StructureCompat.Failure invalid) {
+                        throw invalid;
+                    }
+                    throw StructureCompat.invalid();
+                }
+            }
+            BuildSite opened = openCompatible(level, order);
+            payloadFailures.remove(order.id());
+            payloadRetryAt.remove(order.id());
+            return opened;
+        } catch (StructureCompat.Failure failed) {
+            BuildSite staged = opening.remove(order.id());
+            if (staged != null) {
+                staged.close();
+            }
+            preparing.remove(order.blueprintId());
+            BuildSite partial = sites.remove(order.id());
+            if (partial != null) partial.close();
+            untallied.remove(order.id());
+            owed.remove(order.id());
+            payloadFailures.put(order.id(), failed.component());
+            payloadRetryAt.put(order.id(), level.getGameTime() + RETRY_TICKS);
             return null;
         }
-        BuildSite site = new BuildSite(order.id(), asks, target, scaffoldsOf(order.id()));
-        sites.put(order.id(), site);
-        site.start(level, met.getOrDefault(order.id(), Set.of()), joined.getOrDefault(order.id(), Set.of()));
-        untallied.add(order.id());
-        tallyOne(level, order, site);
-        return site;
+    }
+
+    @Nullable
+    private BuildSite openCompatible(ServerLevel level, BlueprintBuildOrder order) {
+        try (var processing = StructureCompat.processing()) {
+            BuildSite site = opening.get(order.id());
+            if (site == null) {
+                Optional<Blueprint> drawing = cancelled.contains(order.id())
+                    ? Optional.empty() : book.target(level, order.blueprintId());
+                BuildTarget target = cancelled.contains(order.id()) || drawing.isEmpty()
+                    ? new BuildTarget(order.anchor().realm(), Map.of())
+                    : BuildTarget.of(order, drawing.get()).in(level);
+                if (!loaded(level, target)) {
+                    return null;
+                }
+                site = new BuildSite(order.id(), asks, target, scaffoldsOf(order.id()));
+                site.cache = cacheOf(order.id());
+                site.begin(level, met.getOrDefault(order.id(), Set.of()), joined.getOrDefault(order.id(), Set.of()));
+                opening.put(order.id(), site);
+            }
+            if (!loaded(level, site.target())) {
+                return null;
+            }
+            // Small orders finish in this call; large ones retain their staged opener for the next tick.
+            long until = System.nanoTime() + 8_000_000L;
+            while (!site.advanceStart(level)) {
+                if (System.nanoTime() >= until) {
+                    return null;
+                }
+            }
+            opening.remove(order.id());
+            sites.put(order.id(), site);
+            untallied.add(order.id());
+            tallyOne(level, order, site);
+            return site;
+        }
     }
 
     private static boolean loaded(ServerLevel level, BuildTarget target) {
@@ -391,7 +487,7 @@ final class BuildPresence implements Facing {
         if (cancelled.contains(order.id()) || drawing.isEmpty()) {
             owed.remove(order.id());
         } else {
-            owed.put(order.id(), BuildOrderView.owed(level, site.target(), site.metCells()));
+            owed.put(order.id(), site.owed());
         }
     }
 
@@ -414,7 +510,44 @@ final class BuildPresence implements Facing {
         return Optional.ofNullable(sites.get(order));
     }
 
+    private Carving.Cache cacheOf(UUID order) {
+        return caches.computeIfAbsent(order, id -> new Carving.Cache(() -> unkept = true));
+    }
+
+    private void refund(UUID order) {
+        Carving.Cache cache = caches.get(order);
+        if (cache == null) {
+            return;
+        }
+        BlueprintBuildOrder filed = book.allBuildOrders().stream().filter(one -> one.id().equals(order))
+            .findFirst().orElse(null);
+        if (filed == null) {
+            return;
+        }
+        for (ServerLevel level : server.getAllLevels()) {
+            if (!filed.anchor().in(level)) {
+                continue;
+            }
+            BlockPos at = filed.anchor().block(level);
+            level.getChunk(at);
+            for (var amount : cache.drain()) {
+                long left = amount.count();
+                while (left > 0) {
+                    ItemStack stack = Goods.display(amount.spec());
+                    int count = (int) Math.min(left, stack.getMaxStackSize());
+                    stack.setCount(count);
+                    level.addFreshEntity(new ItemEntity(level,
+                        at.getX() + 0.5, at.getY() + 1, at.getZ() + 0.5, stack));
+                    left -= count;
+                }
+            }
+            caches.remove(order);
+            return;
+        }
+    }
+
     private void finish(UUID order) {
+        refund(order);
         temporary.remove(order);
         cancelled.remove(order);
         book.removeBuildOrder(order);
@@ -423,6 +556,12 @@ final class BuildPresence implements Facing {
     }
 
     private void retire(UUID order) {
+        BuildSite staged = opening.remove(order);
+        if (staged != null) {
+            staged.close();
+        }
+        payloadFailures.remove(order);
+        payloadRetryAt.remove(order);
         owed.remove(order);
         met.remove(order);
         joined.remove(order);
@@ -437,24 +576,86 @@ final class BuildPresence implements Facing {
     }
 
     public void closed(Closing why) {
+        opening.values().forEach(BuildSite::forget);
+        opening.clear();
+        preparing.clear();
         sites.values().forEach(BuildSite::forget);
         sites.clear();
     }
 
     @Override
     public List<Ghost> ghosts(ColonyView view) {
+        return ghosts(view, 2048, BlockPos.ZERO);
+    }
+
+    @Override
+    public List<Ghost> ghosts(ColonyView view, int most, BlockPos near) {
         ServerLevel level = view.level();
         List<Ghost> owed = new ArrayList<>();
-        for (BlueprintBuildOrder order : book.allBuildOrders()) {
-            if (cancelled.contains(order.id()) || !order.anchor().in(level)) {
-                continue;
+        int payloadBytes = 256 * 1024;
+        try (var processing = StructureCompat.processing()) {
+            for (BlueprintBuildOrder order : book.allBuildOrders()) {
+                if (owed.size() >= most) {
+                    break;
+                }
+                if (cancelled.contains(order.id()) || !order.anchor().in(level)) {
+                    continue;
+                }
+                BuildSite site = sites.get(order.id());
+                if (site != null) {
+                    Drafted recipe = drafted.get(order.id());
+                    if (recipe != null && Patterns.find(recipe.pattern()).isPresent()) {
+                        owed.addAll(BuildOrderView.recipePending(level, site.target(), site.metCells(),
+                            site.metJoints(), most - owed.size(), near, order.id()));
+                        continue;
+                    }
+                    var nearby = BuildOrderView.pending(level, site.target(), site.metCells(), site.metJoints(),
+                        most - owed.size(), near, payloadBytes);
+                    for (Ghost ghost : nearby) {
+                        payloadBytes -= ghost.payload().bytes();
+                    }
+                    owed.addAll(nearby);
+                }
             }
-            BuildSite site = sites.get(order.id());
-            if (site != null) {
-                owed.addAll(BuildOrderView.pending(level, site.target(), site.metCells(), site.metJoints()));
-            }
+        } catch (StructureCompat.Failure limited) {
+            // A preview never restarts the budget to finish farther-away orders.
         }
         return List.copyOf(owed);
+    }
+
+    @Override
+    public List<Ghost> payloadGhosts(ColonyView view, Set<UUID> orders, int most, BlockPos near) {
+        List<Ghost> ghosts = new ArrayList<>();
+        int bytes = StructurePayload.MAX_PREVIEW_BYTES;
+        try (var processing = StructureCompat.processing()) {
+            for (BlueprintBuildOrder order : book.allBuildOrders()) {
+                BuildSite site = sites.get(order.id());
+                Drafted recipe = drafted.get(order.id());
+                if (!orders.contains(order.id()) || recipe == null || Patterns.find(recipe.pattern()).isEmpty()
+                        || cancelled.contains(order.id()) || site == null
+                        || !order.anchor().in(view.level()) || ghosts.size() >= most) {
+                    continue;
+                }
+                var nearby = BuildOrderView.pending(view.level(), site.target(), site.metCells(), site.metJoints(),
+                    most - ghosts.size(), near, bytes);
+                for (Ghost ghost : nearby) {
+                    bytes -= ghost.payload().bytes();
+                }
+                ghosts.addAll(nearby);
+            }
+        } catch (StructureCompat.Failure limited) {
+            // Keep the same payload and processing budget as the ordinary preview.
+        }
+        return List.copyOf(ghosts);
+    }
+
+    @Override
+    public List<CompoundTag> previewRecipes(ColonyView view) {
+        return book.allBuildOrders().stream()
+            .filter(order -> !cancelled.contains(order.id()) && order.anchor().in(view.level()))
+            .map(order -> drafted.get(order.id()))
+            .filter(recipe -> recipe != null && Patterns.find(recipe.pattern()).isPresent())
+            .map(Drafted::save).toList();
     }
 
     @Override
@@ -521,7 +722,7 @@ final class BuildPresence implements Facing {
             Component.literal(order.name()),
             cancelled.contains(order.id())
                 ? Component.translatable("folkways.page.build.cleanup")
-                : detailOf(site),
+                : payloadFailures.getOrDefault(order.id(), detailOf(site)),
             List.of(new Board.Act.Ping(order.anchor().cell()),
                 new Board.Act.Do(BuildAct.cancelling(order.id()), "folkways.action.delete",
                     ResourceLocation.withDefaultNamespace("barrier"))));

@@ -1,13 +1,15 @@
 package io.github.izakyl.folkways.front.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import io.github.izakyl.folkways.front.api.ui.ModeOverlays;
-import io.github.izakyl.folkways.front.api.ui.OverheadTools;
-import io.github.izakyl.folkways.front.api.ZoneRing;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import io.github.izakyl.folkways.front.api.Ghost;
+import io.github.izakyl.folkways.front.api.GhostRecipes;
 import io.github.izakyl.folkways.front.api.Placard;
 import io.github.izakyl.folkways.front.api.ToolKinds;
+import io.github.izakyl.folkways.front.api.ZoneRing;
 import io.github.izakyl.folkways.front.api.notice.Line;
+import io.github.izakyl.folkways.front.api.ui.ModeOverlays;
+import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.engine.colony.ColonyPath;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
 import io.github.izakyl.folkways.front.engine.net.ColonyOverviewPacket;
@@ -61,6 +63,7 @@ public final class ColonyHighlightState {
     private static final float SATURATION = 0.62F;
     private static final float VALUE = 0.92F;
 
+    private static List<Ghost> owedGhosts = List.of();
     private static final GhostRenderer OWED = new GhostRenderer();
     private static final List<BlockPos> MEMBERS = new ArrayList<>();
     private static final List<ZoneSnapshot> ZONES = new ArrayList<>();
@@ -68,6 +71,7 @@ public final class ColonyHighlightState {
     private static final List<Placard> PLACARDS = new ArrayList<>();
     private static UUID activeColonyId;
     private static int requestCooldown;
+    private static boolean recipesNeeded = true;
     private static BlockPos pinged;
     private static long pingUntilMs;
 
@@ -79,6 +83,7 @@ public final class ColonyHighlightState {
     }
 
     public static void handleColonyOverview(ColonyOverviewPacket packet) {
+        recipesNeeded = false;
         PathSelection.overview(packet.paths());
         MEMBERS.clear();
         MEMBERS.addAll(packet.members());
@@ -87,7 +92,10 @@ public final class ColonyHighlightState {
             .forEach(ZONES::add);
         Level level = Minecraft.getInstance().level;
         if (level != null) {
-            OWED.show(level, packet.ghosts());
+            owedGhosts = packet.ghosts();
+            GhostRecipes.accept(packet.recipes(),
+                packet.placards().stream().map(Placard::id).toList());
+            OWED.show(level, GhostRecipes.show(level, owedGhosts));
         }
         NOTES.clear();
         packet.notes().forEach(note -> NOTES.put(note.id(), note.lines()));
@@ -133,14 +141,19 @@ public final class ColonyHighlightState {
             ZONES.clear();
             PathSelection.overview(List.of());
             OWED.clear();
+            owedGhosts = List.of();
+            GhostRecipes.clear();
             NOTES.clear();
             PLACARDS.clear();
+            recipesNeeded = true;
             requestCooldown = 0;
         }
 
+        OWED.show(minecraft.level, GhostRecipes.show(minecraft.level, owedGhosts));
         if (requestCooldown <= 0 && minecraft.getConnection() != null) {
             requestCooldown = REQUEST_INTERVAL_TICKS;
-            PacketDistributor.sendToServer(new RequestColonyOverviewPacket(colonyId));
+            PacketDistributor.sendToServer(new RequestColonyOverviewPacket(colonyId, recipesNeeded,
+                GhostRecipes.unavailable()));
         } else {
             requestCooldown--;
         }
@@ -520,6 +533,9 @@ public final class ColonyHighlightState {
         ZONES.clear();
         PathSelection.overview(List.of());
         OWED.clear();
+        owedGhosts = List.of();
+        GhostRecipes.clear();
+        recipesNeeded = true;
         NOTES.clear();
         PLACARDS.clear();
         activeColonyId = null;

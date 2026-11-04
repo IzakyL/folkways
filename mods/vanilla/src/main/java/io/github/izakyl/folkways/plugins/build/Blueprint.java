@@ -2,6 +2,9 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
+import io.github.izakyl.folkways.plugins.build.draft.Drafting;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -9,6 +12,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
@@ -59,8 +63,46 @@ public record Blueprint(UUID id, String name, List<BlueprintBlock> blocks, List<
      * Freezes the construction target before it becomes an order: the blueprint as the schematicannon would print
      * it. A target is resolved once; reloading, placing or building it never resolves it again.
      */
+    public CompletableFuture<Blueprint> prepare() {
+        if (blocks.stream().noneMatch(block -> StructureCompat.of(block.state()).isPresent())) {
+            compatible();
+            return CompletableFuture.completedFuture(this);
+        }
+        return Drafting.prepare(() -> {
+            compatible();
+            List<BlueprintBlock> prepared = new ArrayList<>();
+            for (BlueprintBlock block : blocks) {
+                if (StructureCompat.of(block.state()).isEmpty()) {
+                    StructureCompat.validate(new StructurePayload(block.data().tag()));
+                    prepared.add(block);
+                    continue;
+                }
+                // Untrusted files are checked on the drafting pool, one bounded cell at a time.
+                try (var processing = StructureCompat.processing()) {
+                    StructurePayload payload = block.data().payload(block.state());
+                    StructureCompat.inspect(block.state(), payload);
+                    prepared.add(new BlueprintBlock(block.offset(), block.state(), BlockData.of(payload.tag())));
+                }
+            }
+            return new Blueprint(id, name, prepared, unloaded, joints, volume, createdGameTime, confirmed);
+        });
+    }
+
     public Blueprint confirm(ServerLevel level) {
-        return confirmed ? this : SchematicPlacement.resolve(level, this);
+        try (var processing = StructureCompat.processing()) {
+            compatible();
+            for (BlueprintBlock block : blocks) StructureCompat.inspect(block.state(), new StructurePayload(block.data().tag()));
+            return confirmed ? this : SchematicPlacement.resolve(level, this);
+        }
+    }
+
+    public void compatible() {
+        blocks.forEach(block -> StructureCompat.validate(new StructurePayload(block.data().tag())));
+        for (UnloadedBlock block : unloaded) {
+            StructureCompat.validate(new StructurePayload(block.data().tag()));
+            // A configured cell must wait for its missing mod, keeping both its payload and its price.
+            if (block.data().present()) throw new StructureCompat.Failure("folkways.refusal.build.missing_integration");
+        }
     }
 
     public Blueprint(UUID id, String name, List<BlueprintBlock> blocks, List<UnloadedBlock> unloaded,
@@ -105,6 +147,7 @@ public record Blueprint(UUID id, String name, List<BlueprintBlock> blocks, List<
             unloaded.stream().map(UnloadedBlock::save)).toList();
         return Writer.of()
             .flag(TAG_CONFIRMED, confirmed)
+            .integer("payloadVersion", 1)
             .uuid(TAG_ID, id)
             .string(TAG_NAME, name)
             .longValue(TAG_CREATED_GAME_TIME, createdGameTime)
@@ -154,7 +197,14 @@ public record Blueprint(UUID id, String name, List<BlueprintBlock> blocks, List<
             .orElseGet(() -> BlueprintVolume.around(offsets));
         return volume.map(parsed -> new Blueprint(id.get(), reader.string(TAG_NAME).orElse(""), blocks, unloaded,
             joints, parsed, reader.longValue(TAG_CREATED_GAME_TIME).orElse(0L),
-            reader.flag(TAG_CONFIRMED).orElse(false)));
+            migratedConfirmation(reader, blocks, unloaded)));
+    }
+
+    private static boolean migratedConfirmation(Reader reader, List<BlueprintBlock> blocks, List<UnloadedBlock> unloaded) {
+        // Earlier chiseled orders were confirmed without voxel costs. Reconfirm their remaining cells once.
+        return reader.flag(TAG_CONFIRMED).orElse(false) && (reader.integer("payloadVersion").orElse(0) >= 1
+            || blocks.stream().noneMatch(block -> block.data().present() && StructureCompat.of(block.state()).isPresent())
+                && unloaded.stream().noneMatch(block -> block.data().present()));
     }
 
     private static String normalizeName(String value) {

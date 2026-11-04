@@ -1,6 +1,6 @@
-import { defineTask, javaTask, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, tick, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { ADMIT_SETTLERS, BIND_COLONY, MARK_MEMBERS, runColonyTask } from "../shared/colony/colony-tasks";
-import type { Vec } from "../shared/colony/colony-founding";
+import { countResidents, type Vec } from "../shared/colony/colony-founding";
 
 export async function foundPromoColonyFast(server: MinecraftServer, player: string, cells: Vec[]) {
   const bound = await runColonyTask(server, BIND_COLONY, { player });
@@ -20,8 +20,15 @@ export async function admitPromoSettlersFast(
     const result = await runColonyTask(server, ADMIT_SETTLERS, {
       player, colony_id, count: count - residents,
     });
-    const roster = Number(result.roster);
-    if (!(roster > residents)) throw new Error(`Promo admission made no progress: ${JSON.stringify(result)}`);
+    let roster = Number(result.roster);
+    // Endorsements can finish beside the tick; a pending receipt is not a failed admission.
+    for (let waited = 0; result.pending && roster <= residents && waited < 200; waited += 20) {
+      await tick.sprint(server, 20);
+      roster = await countResidents(server);
+    }
+    if (!(roster > residents)) {
+      throw new Error(`Promo admission made no progress: ${JSON.stringify(result)}`);
+    }
     residents = roster;
     rounds.push(result);
   }

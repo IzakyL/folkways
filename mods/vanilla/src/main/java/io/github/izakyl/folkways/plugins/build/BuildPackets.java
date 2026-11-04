@@ -2,14 +2,22 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Books;
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.library.Shelves;
 import io.github.izakyl.folkways.plugins.build.draft.Chosen;
+import io.github.izakyl.folkways.plugins.build.draft.Drafting;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import io.github.izakyl.folkways.plugins.build.draft.Pattern;
+import io.github.izakyl.folkways.plugins.build.draft.PatternPackets;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.build.draft.Templates;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -34,6 +42,7 @@ public final class BuildPackets {
 
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
         event.registrar(FolkwaysMod.NETWORK_VERSION)
+            .playToServer(CaptureBlueprintPacket.TYPE, CaptureBlueprintPacket.STREAM_CODEC, BuildPackets::handleCapture)
             .playToServer(BlueprintChunkPacket.TYPE, BlueprintChunkPacket.STREAM_CODEC,
                 BuildPackets::handleChunk)
             .playToServer(UploadBlueprintPacket.TYPE, UploadBlueprintPacket.STREAM_CODEC,
@@ -41,6 +50,52 @@ public final class BuildPackets {
             .playToServer(PlaceBlueprintPacket.TYPE, PlaceBlueprintPacket.STREAM_CODEC,
                 BuildPackets::handlePlace)
             .playToServer(CommissionPacket.TYPE, CommissionPacket.STREAM_CODEC, BuildPackets::handleCommission);
+    }
+
+    private static void handleCapture(CaptureBlueprintPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player)
+                || Books.ofHeldBook(player, packet.colony()).isEmpty()) return;
+            Optional<LibraryPath> name = LibraryPath.of(packet.name());
+            if (name.isEmpty() || ResourceLocation.tryBuild(Shelves.NAMESPACE, packet.name()) == null) {
+                refuse(player, Component.translatable("folkways.blueprints.capture.name_invalid"));
+                return;
+            }
+            ServerLevel level = player.serverLevel();
+            try {
+                var box = net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(packet.from(), packet.to());
+                CompoundTag file = BlueprintCapture.read(level, box, pos -> level.mayInteract(player, pos));
+                saveCapture(packet.name(), file);
+                Templates.reload(level.getServer().getResourceManager());
+                PatternPackets.offerToEveryone(level.getServer());
+                player.displayClientMessage(Component.translatable("folkways.blueprints.capture.saved", packet.name()), true);
+            } catch (StructureCompat.Failure failed) {
+                refuse(player, failed.component());
+            } catch (IllegalArgumentException | IOException failed) {
+                refuse(player, Component.translatable("folkways.blueprints.capture.failed"));
+            }
+        });
+    }
+
+    private static void saveCapture(String name, CompoundTag file) throws IOException {
+        byte[] bytes;
+        try (ByteArrayOutputStream written = new ByteArrayOutputStream()) {
+            NbtIo.writeCompressed(file, written);
+            bytes = written.toByteArray();
+        }
+        if (!BlueprintUploads.fits(bytes)) throw new IllegalArgumentException("Capture exceeds the upload limit");
+        Path blueprint = Templates.BLUEPRINTS.path().resolve(name + ".nbt");
+        Path piece = Templates.SHELF.path().resolve(name + ".nbt");
+        if (Files.exists(blueprint) || Files.exists(piece)) throw new IOException("Capture name already used");
+        Files.createDirectories(blueprint.getParent());
+        Files.createDirectories(piece.getParent());
+        Files.write(blueprint, bytes, StandardOpenOption.CREATE_NEW);
+        try {
+            Files.write(piece, bytes, StandardOpenOption.CREATE_NEW);
+        } catch (IOException failed) {
+            Files.deleteIfExists(blueprint);
+            throw failed;
+        }
     }
 
     private static void handleChunk(BlueprintChunkPacket packet, IPayloadContext context) {
@@ -59,9 +114,13 @@ public final class BuildPackets {
             byte[] bytes = packet.file().length > 0 ? packet.file()
                 : BlueprintUploads.assembled(player.getUUID()).orElse(packet.file());
             Optional<String> name = LibraryPath.of(packet.name()).map(LibraryPath::name);
-            Optional<CompoundTag> file = name.flatMap(ignored -> readStructure(bytes));
-            setDown(player, packet.colonyId(), name.orElse(""), file, packet.siteName(), packet.anchor(),
-                packet.airIsEmpty(), packet.rotation(), packet.mirror(), packet.raiseInCreative());
+            Drafting.prepare(() -> name.flatMap(ignored -> readStructure(bytes)))
+                .thenAccept(file -> player.server.execute(() -> {
+                    if (!player.isRemoved()) {
+                        setDown(player, packet.colonyId(), name.orElse(""), file, packet.siteName(), packet.anchor(),
+                            packet.airIsEmpty(), packet.rotation(), packet.mirror(), packet.raiseInCreative());
+                    }
+                }));
         });
     }
 
@@ -95,25 +154,50 @@ public final class BuildPackets {
         StructureNbt.AirMeaning airMeaning = airIsEmpty
             ? StructureNbt.AirMeaning.EXCAVATE
             : StructureNbt.AirMeaning.UNCONSTRAINED;
-        Optional<Blueprint> shape = read(file.get(), level, name, airMeaning,
-            raise ? Integer.MAX_VALUE : BlueprintBook.maxCaptureBlocks());
+        Optional<Blueprint> shape = read(file.get(), level, name, airMeaning, BlueprintBook.maxCaptureBlocks());
         if (shape.isEmpty()) {
             refuse(player, whyNot(file.get(), level, name, airMeaning));
             return;
         }
-        Optional<Blueprint> blueprint = shape.get().transformed(rotation, mirror);
-        if (blueprint.isEmpty()) {
-            refuse(player, Component.translatable("folkways.blueprint.unreadable"));
+        Drafting.prepare(() ->
+            shape.get().transformed(rotation, mirror).orElseThrow(StructureCompat::invalid))
+            .thenCompose(Blueprint::prepare).whenComplete((prepared, failure) -> level.getServer().execute(() -> {
+                if (player.isRemoved()) {
+                    return;
+                }
+                if (failure != null) {
+                    Throwable cause = failure;
+                    while (cause.getCause() != null) {
+                        cause = cause.getCause();
+                    }
+                    refuse(player, cause instanceof StructureCompat.Failure invalid ? invalid.component()
+                        : Component.translatable("folkways.refusal.build.micro_data_invalid"));
+                    return;
+                }
+                filePrepared(player, colonyId, prepared, anchor, siteName, raise);
+            }));
+    }
+
+    private static void filePrepared(ServerPlayer player, UUID colonyId, Blueprint prepared, BlockPos anchor,
+            String siteName, boolean raise) {
+        ServerLevel level = player.serverLevel();
+        Optional<BuildPresence> site = Books.ofHeldBook(player, colonyId)
+            .flatMap(colony -> BuildContent.presenceIn(colony.service(BuildContent.ID, Object.class)));
+        if (site.isEmpty()) {
             return;
         }
         if (raise) {
-            raise(level, blueprint.get(), anchor);
-            player.displayClientMessage(
-                Component.translatable("folkways.blueprint.raised", blueprint.get().name()), true);
+            raise(player, prepared, anchor);
             return;
         }
-        Optional<BlueprintBuildOrder> filed = site.get().file(level, blueprint.get(), anchor,
-            siteName, Optional.of(player.getUUID()), player.getGameProfile().getName());
+        Optional<BlueprintBuildOrder> filed;
+        try {
+            filed = site.get().file(level, prepared, anchor,
+                siteName, Optional.of(player.getUUID()), player.getGameProfile().getName());
+        } catch (StructureCompat.Failure failed) {
+            refuse(player, failed.component());
+            return;
+        }
         if (filed.isEmpty()) {
             refuse(player, Component.translatable("folkways.blueprint.too_many",
                 BlueprintBook.MAX_BUILD_ORDERS));
@@ -159,20 +243,35 @@ public final class BuildPackets {
                 refuse(player, ((Rounds.Once.Refused) once).why());
                 return;
             }
-            raise(level, drafted.blueprint(), drafted.corner());
-            player.displayClientMessage(
-                Component.translatable("folkways.blueprint.raised", drafted.blueprint().name()), true);
+            raise(player, drafted.blueprint(), drafted.corner());
         }));
     }
 
-    private static void raise(ServerLevel level, Blueprint blueprint, BlockPos anchor) {
-        blueprint = blueprint.confirm(level);
-        SchematicPlacement.print(level, blueprint, anchor);
-        // What runs between two of the blocks, as a track's slopes and bends do, is laid as a builder lays it.
-        for (Joint joint : blueprint.joints()) {
-            Joint between = joint.moved(anchor);
-            Joints.joiner().cost(level, between.from(), between.to())
-                .ifPresent(cost -> Joints.joiner().join(level, between.from(), between.to(), cost));
+    private static void raise(ServerPlayer player, Blueprint blueprint, BlockPos anchor) {
+        ServerLevel level = player.serverLevel();
+        try {
+            Blueprint confirmed = blueprint.confirm(level);
+            Rounds.logged(SchematicPlacement.print(level, confirmed, anchor).handle((done, failure) -> {
+                if (player.isRemoved()) {
+                    return null;
+                }
+                if (failure != null) {
+                    if (failure instanceof StructureCompat.Failure refused) {
+                        refuse(player, refused.component());
+                        return null;
+                    }
+                    throw new java.util.concurrent.CompletionException(failure);
+                }
+                for (Joint joint : confirmed.joints()) {
+                    Joint between = joint.moved(anchor);
+                    Joints.joiner().cost(level, between.from(), between.to())
+                        .ifPresent(cost -> Joints.joiner().join(level, between.from(), between.to(), cost));
+                }
+                player.displayClientMessage(Component.translatable("folkways.blueprint.raised", confirmed.name()), true);
+                return null;
+            }));
+        } catch (StructureCompat.Failure failed) {
+            refuse(player, failed.component());
         }
     }
 

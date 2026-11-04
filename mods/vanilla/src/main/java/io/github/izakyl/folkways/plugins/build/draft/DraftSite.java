@@ -295,6 +295,25 @@ public final class DraftSite implements StarlarkValue {
         }
     }
 
+    @StarlarkBuiltin(name = "path_bay", doc = "A level path bay with exact length and adjoining floor steps.")
+    public record PathBay(Scope scope, double run, int rise) implements StarlarkValue {
+
+        @StarlarkMethod(name = "room", doc = "The oriented bounding room.", structField = true)
+        public Scope room() {
+            return scope;
+        }
+
+        @StarlarkMethod(name = "length", doc = "Exact distance between the bay's end supports.", structField = true)
+        public StarlarkFloat length() {
+            return StarlarkFloat.of(run);
+        }
+
+        @StarlarkMethod(name = "rise", doc = "The largest adjoining floor step, in cells.", structField = true)
+        public StarlarkInt heightChange() {
+            return StarlarkInt.of(rise);
+        }
+    }
+
     @StarlarkBuiltin(name = "path", doc = "A marked line of points.")
     public record PathLine(List<BlockPos> cells) implements StarlarkValue {
 
@@ -372,6 +391,69 @@ public final class DraftSite implements StarlarkValue {
                 found.add(lying(cells.get(at - 1), cells.get(at)));
             }
             return StarlarkList.immutableCopyOf(found);
+        }
+
+        @StarlarkMethod(name = "bays", doc = "Level bays along each stretch, plus square junctions at turns."
+            + " Regular bays span at most step cells, widths centre exactly on the line, and floors step by bay.",
+            parameters = {
+                @Param(name = "step"), @Param(name = "width")})
+        public StarlarkList<PathBay> bays(StarlarkInt step, StarlarkInt width) throws EvalException {
+            int spacing = step.toInt("step");
+            int span = width.toInt("width");
+            if (spacing < 1 || span < 1) {
+                throw Starlark.errorf("bay spacing and width must be positive");
+            }
+            List<PathBay> found = new ArrayList<>();
+            for (int at = 1; at < cells.size(); at++) {
+                BlockPos a = cells.get(at - 1);
+                BlockPos b = cells.get(at);
+                double length = across(a, b);
+                if (length == 0) {
+                    continue;
+                }
+                double lead = at > 1 && turning(at - 1) ? (span - 1) / 2.0 : 0;
+                double tail = at < cells.size() - 1 && turning(at) ? (span - 1) / 2.0 : 0;
+                double usable = length - lead - tail;
+                if (usable <= 0) {
+                    continue;
+                }
+                int count = Math.max(Math.abs(b.getY() - a.getY()) + 1, (int) Math.ceil(usable / spacing));
+                Frame along = lying(a, b).frame();
+                for (int bay = 0; bay < count; bay++) {
+                    Drafting.checkTime();
+                    double start = usable * bay / count;
+                    double end = usable * (bay + 1) / count;
+                    int height = b.getY() - a.getY();
+                    int intervals = Math.max(1, count - 1);
+                    int elevation = (int) Math.floor(height * (double) bay / intervals);
+                    Frame frame = along.moved((1 - span) / 2.0, elevation, lead + start);
+                    int nextHeight = (int) Math.floor(height * (double) Math.min(count - 1, bay + 1) / intervals);
+                    int previousHeight = (int) Math.floor(height * (double) Math.max(0, bay - 1) / intervals);
+                    Scope scope = Scope.of(frame, span, 1, (int) Math.ceil(end - start) + 1, "", "", false);
+                    int rise = Math.max(Math.abs(nextHeight - elevation), Math.abs(previousHeight - elevation));
+                    found.add(new PathBay(scope, end - start, rise));
+                }
+            }
+            for (int at = 1; at < cells.size() - 1; at++) {
+                if (!turning(at)) {
+                    continue;
+                }
+                BlockPos previous = cells.get(at - 1);
+                BlockPos point = cells.get(at);
+                Frame incoming = lying(previous, point).frame();
+                Vec3 centre = new Vec3(point.getX() + 0.5, point.getY(), point.getZ() + 0.5);
+                Frame crossing = new Frame(centre, incoming.right(), incoming.up(), incoming.forward())
+                    .moved(-span / 2.0, 0, -span / 2.0);
+                found.add(new PathBay(Scope.of(crossing, span, 1, span, "junction", "", false), span - 1, 0));
+            }
+            return StarlarkList.immutableCopyOf(found);
+        }
+
+        private boolean turning(int at) {
+            BlockPos a = cells.get(at).subtract(cells.get(at - 1));
+            BlockPos b = cells.get(at + 1).subtract(cells.get(at));
+            return (long) a.getX() * b.getZ() != (long) a.getZ() * b.getX()
+                || (long) a.getX() * b.getX() + (long) a.getZ() * b.getZ() < 0;
         }
 
         private static Scope lying(BlockPos from, BlockPos to) {

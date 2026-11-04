@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.ground.BlockChanges;
 import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import io.github.izakyl.folkways.core.api.terms.Closures;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
@@ -44,16 +45,17 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
+import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.pathfinder.Path;
@@ -253,6 +255,14 @@ final class BuildSite {
     private long toldAt = NEVER;
     @Nullable
     private ServerLevel standing;
+    private Layering.Planning planning;
+    private Layering.Plan planned;
+    Carving.Cache cache = new Carving.Cache(() -> { });
+
+    private final Map<Integer, Node> openingNodes = new LinkedHashMap<>();
+    private int openingIndex;
+    private int openingPhase;
+
     BuildSite(UUID order, Asks asks, BuildTarget target, TemporaryScaffolds temporary) {
         this.order = order;
         this.asks = asks;
@@ -270,6 +280,20 @@ final class BuildSite {
         return order;
     }
 
+    Map<ItemSpec, Long> owed() {
+        Map<ItemSpec, Long> owed = new LinkedHashMap<>();
+        List<Carving.Quote> carving = new ArrayList<>();
+        for (Piece piece : Stream.concat(live.values().stream(), held.values().stream()).toList()) {
+            if (piece.node() instanceof CarveNode node) {
+                carving.add(node.quotation());
+            } else if (piece.work().kind() != Layering.Kind.SCAFFOLD) {
+                piece.node().spec().needs().forEach(need -> owed.merge(need.spec(), need.count(), Long::sum));
+            }
+        }
+        Carving.combined(carving, cache).forEach(need -> owed.merge(need.spec(), need.count(), Long::sum));
+        return owed;
+    }
+
     BuildTarget target() {
         return target;
     }
@@ -283,6 +307,13 @@ final class BuildSite {
     }
 
     void start(ServerLevel level, Set<BlockPos> met, Set<Joint> metJoints) {
+        begin(level, met, metJoints);
+        while (!advanceStart(level)) {
+            // Tests and small synchronous callers finish the same staged opener.
+        }
+    }
+
+    void begin(ServerLevel level, Set<BlockPos> met, Set<Joint> metJoints) {
         dimension = level.dimension();
         standing = level;
         met.forEach(cell -> latched.add(cell.offset(target.storageOrigin())));
@@ -295,47 +326,79 @@ final class BuildSite {
         latched.retainAll(target.cells().keySet());
         metJoints.forEach(joint -> joined.add(joint.moved(target.storageOrigin())));
         joined.retainAll(target.joints());
-        Layering.Plan plan = Layering.of(level, target, latched);
-        refused.putAll(plan.refused());
-        Map<Integer, Node> nodes = new LinkedHashMap<>();
-        for (Layering.Work work : plan.works()) {
-            if (work.kind() == Layering.Kind.JOIN) {
-                work.joint().filter(joint -> !joined.contains(joint)).ifPresent(joints::add);
-                continue;
+        planning = Layering.planning(level, target, latched);
+    }
+
+    String startingStage() {
+        return planned == null ? planning.stage() : "nodes:" + openingPhase + ":" + openingIndex;
+    }
+
+    boolean advanceStart(ServerLevel level) {
+        if (planned == null) {
+            if (!planning.advance()) {
+                return false;
             }
-            Optional<Stances> footings = Stances.of(level, work.stances());
-            Step step = work.step().orElseThrow();
-            // Where the plan would have a body stand is only where the piece is reckoned from: it is done from
-            // wherever near it the worker has come to.
-            if (footings.isEmpty()) {
-                footings = Optional.of(Stances.at(level, work.focus()));
-            }
-            if (footings.isEmpty()) {
-                step.after().keySet().forEach(cell -> refused.put(cell, BuildRefusal.NO_STANCE));
-                continue;
-            }
-            Node node = node(level, step, footings.get());
-            nodes.put(work.id(), node);
-            held.put(node.id(), new Piece(work, node));
-            keyed.add(work.id());
-            nodeOf.put(work.id(), node.id());
-            step.after().keySet().stream().filter(target.cells()::containsKey)
-                .forEach(cell -> pieceAt.put(cell, node.id()));
+            planned = planning.result();
+            refused.putAll(planned.refused());
+            return false;
         }
-        plan.after().forEach((id, befores) -> {
-            if (nodes.containsKey(id)) {
-                for (int before : befores) {
-                    if (nodes.containsKey(before)) {
-                        waitsOn.computeIfAbsent(id, key -> new LinkedHashSet<>()).add(before);
+        Layering.Plan plan = planned;
+        Map<Integer, Node> nodes = openingNodes;
+        if (openingPhase == 0) {
+            long until = System.nanoTime() + 8_000_000L;
+            while (openingIndex < plan.works().size() && System.nanoTime() < until) {
+                Layering.Work work = plan.works().get(openingIndex++);
+                if (work.kind() == Layering.Kind.JOIN) {
+                    work.joint().filter(joint -> !joined.contains(joint)).ifPresent(joints::add);
+                    continue;
+                }
+                Optional<Stances> footings = Stances.of(level, work.stances());
+                Step step = work.step().orElseThrow();
+                // Where the plan would have a body stand is only where the piece is reckoned from: it is done from
+                // wherever near it the worker has come to.
+                if (footings.isEmpty()) {
+                    footings = Optional.of(Stances.at(level, work.focus()));
+                }
+                if (footings.isEmpty()) {
+                    step.after().keySet().forEach(cell -> refused.put(cell, BuildRefusal.NO_STANCE));
+                    continue;
+                }
+                Node node = node(level, step, footings.get());
+                nodes.put(work.id(), node);
+                held.put(node.id(), new Piece(work, node));
+                keyed.add(work.id());
+                nodeOf.put(work.id(), node.id());
+                step.after().keySet().stream().filter(target.cells()::containsKey)
+                    .forEach(cell -> pieceAt.put(cell, node.id()));
+            }
+            if (openingIndex < plan.works().size()) {
+                return false;
+            }
+            plan.after().forEach((id, befores) -> {
+                if (nodes.containsKey(id)) {
+                    for (int before : befores) {
+                        if (nodes.containsKey(before)) {
+                            waitsOn.computeIfAbsent(id, key -> new LinkedHashSet<>()).add(before);
+                        }
                     }
                 }
-            }
-        });
-        closeOff(level);
+            });
+            openingPhase++;
+            return false;
+        }
+        if (openingPhase == 1) {
+            closeOff(level);
+            openingPhase++;
+            return false;
+        }
         release();
         lowerSpare(level);
         listen(level);
         joinWhatIsLaid(level);
+        planning = null;
+        planned = null;
+        openingNodes.clear();
+        return true;
     }
 
     // The shared ways are closed over the site and a little past it while it stands. Residents use ordinary
@@ -413,14 +476,21 @@ final class BuildSite {
             List<Amount> left = new ArrayList<>();
             List<ToolUse> tools = new ArrayList<>();
             int ticks = WALK_TICKS;
+            List<Carving.Quote> carving = new ArrayList<>();
             for (Piece piece : batch) {
                 ids.add(piece.node().id());
                 NodeSpec one = piece.node().spec();
-                one.needs().forEach(need -> goods.merge(need.spec(), need.count(), Long::sum));
+                if (piece.node() instanceof CarveNode node) {
+                    carving.add(node.quotation());
+                } else {
+                    one.needs().forEach(need -> goods.merge(need.spec(), need.count(), Long::sum));
+                }
                 left.addAll(one.leaves());
                 one.tools().stream().filter(use -> !tools.contains(use)).forEach(tools::add);
                 ticks += one.estimate();
             }
+            // Never fund a turn with excavation that has not happened yet.
+            Carving.funding(carving, cache).forEach(need -> goods.merge(need.spec(), need.count(), Long::sum));
             this.batch = ids;
             int reserve = batch.stream().anyMatch(piece -> piece.work().id() >= 0) ? accessReserve(level, positions) : 0;
             if (reserve > 0) {
@@ -512,6 +582,9 @@ final class BuildSite {
             current = piece.work().stances().stream()
                 .filter(feet -> SiteApproach.stands(level, feet, piece.cells())).toList();
         }
+        if (current.isEmpty()) {
+            current = SiteApproach.below(piece.work().focus(), feet -> SiteApproach.stands(level, feet, piece.cells()));
+        }
         return Stances.of(level, current);
     }
 
@@ -575,6 +648,7 @@ final class BuildSite {
             staffingPending = true;
             return;
         }
+        // New inventory or geometry can arrive after an earlier staffing pass in the same tick.
         staffingPending = false;
         // A turn nothing is left for is called off while its worker is still on the way; one whose worker is here
         // ends when that one has done what it holds the goods for. Hands are asked for everything that is up, as
@@ -600,15 +674,20 @@ final class BuildSite {
             Set<UUID> before = before(piece);
             waits.put(id, before);
             before.forEach(first -> after.computeIfAbsent(first, key -> new ArrayList<>()).add(piece));
-            if (before.isEmpty() && up(piece)) {
+            if (before.isEmpty()) {
                 seeds.add(piece);
             }
         }
         // A way to raise comes first: other work waits on it, whatever order it came up in.
         seeds.sort(Comparator.comparingInt(piece -> piece.work().id() < 0 ? 0 : 1));
         Set<UUID> taken = new HashSet<>();
+        long until = System.nanoTime() + 8_000_000L;
         for (Piece seed : seeds) {
-            if (!taken.add(seed.node().id())) {
+            if (System.nanoTime() >= until) {
+                staffingPending = true;
+                break;
+            }
+            if (!taken.add(seed.node().id()) || !up(seed)) {
                 continue;
             }
             Optional<Stances> positions = positions(level, seed);
@@ -632,7 +711,11 @@ final class BuildSite {
                 }
             }
             for (Piece more : seeds) {
-                if (more.work().id() < 0 || taken.contains(more.node().id()) || !load.takes(more, true)) {
+                if (System.nanoTime() >= until) {
+                    staffingPending = true;
+                    break;
+                }
+                if (more.work().id() < 0 || taken.contains(more.node().id()) || !up(more) || !load.takes(more, true)) {
                     continue;
                 }
                 taken.add(more.node().id());
@@ -969,6 +1052,8 @@ final class BuildSite {
     private BuildNode node(ServerLevel level, Step step, Stances footings) {
         BuildNode node = BuildNode.of(step.job(level, target, footings, latched), (ended, how) -> { }, temporary)
             .emptying(emptying);
+        node.cache = cache;
+        node.price();
         if (step.kind() == BuildJob.Kind.RAISE || step.kind() == BuildJob.Kind.LOWER || step.kind() == BuildJob.Kind.JOIN) {
             return node;
         }
@@ -1340,6 +1425,9 @@ final class BuildSite {
 
     // Whether the worker holds what the piece takes, in its pack.
     private Optional<Boolean> supplied(Worker who, Piece piece) {
+        if (piece.node() instanceof CarveNode carve) {
+            carve.price();
+        }
         if (piece.node().spec().needs().isEmpty()) {
             return Optional.of(true);
         }
@@ -1565,7 +1653,8 @@ final class BuildSite {
                 }
                 // A shot fired is a shot done, as for the cannon: what the world makes of the cell afterwards
                 // never undoes it.
-                if (done && BuildPlanner.satisfied(step.after().get(cell), wanted) || target.satisfied(level, cell)) {
+                if (done && step.kind() != BuildJob.Kind.CARVE && BuildPlanner.satisfied(step.after().get(cell), wanted)
+                    || target.satisfied(level, cell)) {
                     latched.add(cell);
                     refused.remove(cell);
                 } else {
@@ -1588,6 +1677,18 @@ final class BuildSite {
         }
         // A hitch that passes, someone in the way or the walk giving out, rests the piece a while and no more;
         // only a piece that cannot be built is counted against, and at last given up.
+        if (piece.node() instanceof CarveNode carve) {
+            try {
+                carve.requote(level);
+            } catch (StructureCompat.Failure invalid) {
+                live.remove(id);
+                if (step != null) {
+                    step.after().keySet().stream().filter(target.cells()::containsKey)
+                        .forEach(cell -> refused.put(cell, BuildRefusal.NO_WAY_TO_BUILD));
+                }
+                return true;
+            }
+        }
         piece.restUntil = level.getGameTime() + REST_TICKS;
         boolean hitch = heard.how() instanceof Ending.Failed failed && failed.why() != BuildRefusal.NO_WAY_TO_BUILD
             || heard.how() instanceof Ending.Dropped;

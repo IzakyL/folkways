@@ -5,6 +5,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -334,6 +335,30 @@ public final class Vocabulary implements StarlarkValue {
         return shaped(() -> new Outline(written));
     }
 
+    @StarlarkMethod(name = "curved_hip", doc = "A continuous concave hip shell with smoothly raised corners."
+        + " Rise, upturn and vertical thickness are measured in blocks.", parameters = {
+            @Param(name = "scope"),
+            @Param(name = "rise", defaultValue = "2.0", named = true, positional = false),
+            @Param(name = "upturn", defaultValue = "1.0", named = true, positional = false),
+            @Param(name = "thickness", defaultValue = "0.25", named = true, positional = false)})
+    public Shape curvedHip(Scope scope, Object rise, Object upturn, Object thickness) throws EvalException {
+        double up = number(rise, "rise");
+        double corner = number(upturn, "upturn");
+        double shell = number(thickness, "thickness");
+        return new Shape(shaped(() -> new Solid.CurvedHip(scope.frame(), scope.size(), up, corner, shell)));
+    }
+
+    @StarlarkMethod(name = "fractional_box", doc = "A box with continuous local [x,y,z] limits in block units.",
+        parameters = {@Param(name = "scope"), @Param(name = "low"), @Param(name = "high")})
+    public Shape fractionalBox(Scope scope, Sequence<?> low, Sequence<?> high) throws EvalException {
+        if (low.size() != 3 || high.size() != 3) {
+            throw Starlark.errorf("a fractional box needs two [x,y,z] triples");
+        }
+        Vec3 a = new Vec3(number(low.get(0), "x"), number(low.get(1), "y"), number(low.get(2), "z"));
+        Vec3 b = new Vec3(number(high.get(0), "x"), number(high.get(1), "y"), number(high.get(2), "z"));
+        return new Shape(shaped(() -> new Solid.FractionalBox(scope.frame(), a, b)));
+    }
+
     @StarlarkMethod(name = "box", doc = "The scope, filled.", parameters = {@Param(name = "scope")})
     public Shape box(Scope scope) {
         return new Shape(scope.solid());
@@ -410,6 +435,33 @@ public final class Vocabulary implements StarlarkValue {
     public Shape cylinder(Scope scope, String axis) throws EvalException {
         int along = scope.along(axis);
         return new Shape(shaped(() -> new Solid.Cylinder(scope.frame(), scope.size(), along, false)));
+    }
+
+    @StarlarkMethod(name = "curved_beam",
+        doc = "A parabolic beam, with thickness and end lift in hundredths of a block.",
+        parameters = {@Param(name = "scope"), @Param(name = "thickness"), @Param(name = "lift")})
+    public Shape curvedBeam(Scope scope, StarlarkInt thickness, StarlarkInt lift) throws EvalException {
+        double thick = thickness.toInt("thickness") / 100.0;
+        double up = lift.toInt("lift") / 100.0;
+        return new Shape(shaped(() -> new Solid.CurvedBeam(scope.frame(), scope.size(), thick, up)));
+    }
+
+    @StarlarkMethod(name = "frustum",
+        doc = "A round tapered column. Radii, top lean, height and base elevation use hundredths of a block;"
+            + " zero height fills the remaining scope.",
+        parameters = {@Param(name = "scope"), @Param(name = "bottom"), @Param(name = "top"),
+            @Param(name = "lean", defaultValue = "0", named = true, positional = false),
+            @Param(name = "height", defaultValue = "0", named = true, positional = false),
+            @Param(name = "base", defaultValue = "0", named = true, positional = false)})
+    public Shape frustum(Scope scope, StarlarkInt bottom, StarlarkInt top, StarlarkInt lean, StarlarkInt height,
+            StarlarkInt base) throws EvalException {
+        double radius = bottom.toInt("bottom") / 100.0;
+        double tip = top.toInt("top") / 100.0;
+        double shift = lean.toInt("lean") / 100.0;
+        double elevation = base.toInt("base") / 100.0;
+        double tall = height.toInt("height") == 0 ? scope.size().getY() - elevation : height.toInt("height") / 100.0;
+        return new Shape(shaped(() -> new Solid.Frustum(scope.frame(), scope.size(), radius, tip, shift, tall,
+            elevation)));
     }
 
     @StarlarkMethod(name = "cone", doc = "A cone standing in the scope, its point at the top.",
@@ -602,6 +654,46 @@ public final class Vocabulary implements StarlarkValue {
         return new Shape(shaped(() -> new Solid.Vault(scope.frame(), scope.size(), up, wider)));
     }
 
+    @StarlarkMethod(name = "pointed_vault", doc = "A two-centred pointed opening across local z, extruded along x."
+        + " rise is at least half the span; grow offsets both circular radii and the straight jambs."
+        + " inset draws its horizontal footprint inward continuously before growing the profile."
+        + " clipped keeps a grown profile inside that horizontal footprint.",
+        parameters = {@Param(name = "scope"), @Param(name = "rise"),
+            @Param(name = "grow", defaultValue = "0", named = true, positional = false),
+            @Param(name = "inset", defaultValue = "0", named = true, positional = false),
+            @Param(name = "clipped", defaultValue = "False", named = true, positional = false)})
+    public Shape pointedVault(Scope scope, Object rise, Object grow, Object inset, boolean clipped) throws EvalException {
+        double up = number(rise, "rise");
+        double wider = number(grow, "grow");
+        double margin = number(inset, "inset");
+        return new Shape(shaped(() -> new Solid.PointedVault(scope.frame(), scope.size(), up, wider, margin, clipped)));
+    }
+
+    @StarlarkMethod(name = "tube", doc = "A round tube along local [x, y, z] points in a scope."
+        + " Coordinates and radius are continuous; segment ends are round.",
+        parameters = {@Param(name = "scope"), @Param(name = "points"), @Param(name = "radius")})
+    public Shape tube(Scope scope, Sequence<?> points, Object radius) throws EvalException {
+        List<Vec3> line = new ArrayList<>();
+        for (Object point : points) {
+            if (!(point instanceof Sequence<?> triple) || triple.size() != 3) {
+                throw Starlark.errorf("a tube follows [x, y, z] triples");
+            }
+            line.add(new Vec3(number(triple.get(0), "x"), number(triple.get(1), "y"), number(triple.get(2), "z")));
+        }
+        double reach = number(radius, "radius");
+        return new Shape(shaped(() -> new Solid.Tube(scope.frame(), line, reach)));
+    }
+
+    @StarlarkMethod(name = "pitched_roof", doc = "A continuous two-plane roof across local x, with its ridge along z."
+        + " rise is the eave-to-ridge height; thickness is measured vertically.",
+        parameters = {@Param(name = "scope"), @Param(name = "rise"),
+            @Param(name = "thickness", defaultValue = "0.375", named = true, positional = false)})
+    public Shape pitchedRoof(Scope scope, Object rise, Object thickness) throws EvalException {
+        double up = number(rise, "rise");
+        double course = number(thickness, "thickness");
+        return new Shape(shaped(() -> new Solid.PitchedRoof(scope.frame(), scope.size(), up, course)));
+    }
+
     @StarlarkMethod(name = "group", doc = "Several shapes or scopes as one.", parameters = {@Param(name = "shapes")})
     public Shape group(Sequence<?> shapes) throws EvalException {
         List<Solid> solids = new ArrayList<>();
@@ -755,7 +847,7 @@ public final class Vocabulary implements StarlarkValue {
         Vec3i size = found.size();
         List<Set<Integer>> slices = slicesOf(stretch, size.getX(), size.getY(), size.getZ());
         return slices.equals(found.stretch()) ? found
-            : shaped(() -> new Piece(found.cells(), size, slices));
+            : shaped(() -> new Piece(found.cells(), size, slices, found.payloads()));
     }
 
     private static List<Set<Integer>> slicesOf(Dict<?, ?> stretch, int width, int height, int depth)
@@ -861,6 +953,7 @@ public final class Vocabulary implements StarlarkValue {
             };
         }
         Map<BlockPos, BlockState> local = new LinkedHashMap<>();
+        Map<BlockPos, StructurePayload> payload = new LinkedHashMap<>();
         for (Map.Entry<BlockPos, BlockState> cell : chosen.cells().entrySet()) {
             BlockPos at = cell.getKey();
             int x = at.getX() + offset[0];
@@ -868,13 +961,15 @@ public final class Vocabulary implements StarlarkValue {
             int z = at.getZ() + offset[2];
             if (x >= 0 && x < room[0] && y >= 0 && y < room[1] && z >= 0 && z < room[2]) {
                 local.put(at, cell.getValue());
+                if (chosen.payloads().containsKey(at)) payload.put(at, chosen.payloads().get(at));
             }
         }
         if (local.isEmpty()) {
             throw Starlark.errorf("nothing of this piece lies inside the scope it was stamped into");
         }
-        Map<BlockPos, BlockState> cells = new Piece(local, new Vec3i(chosen.span(0), chosen.span(1), chosen.span(2)))
-            .laidInto(scope, offset);
+        Piece clipped = new Piece(local, chosen.size(), List.of(), payload);
+        Map<BlockPos, BlockState> cells = clipped.laidInto(scope, offset);
+        Map<BlockPos, StructurePayload> payloads = clipped.payloadsInto(scope, offset);
 
         List<Swap> swaps = new ArrayList<>();
         for (Map.Entry<?, ?> entry : swap.entrySet()) {
@@ -882,7 +977,7 @@ public final class Vocabulary implements StarlarkValue {
         }
         Set<BlockPos> filled = new LinkedHashSet<>(cells.keySet());
         return new Made(new Massing.Part(role, labelsOf(labels), shaped(() -> new Solid.Cells(filled)),
-            shaped(() -> new Skin.Stamped(cells, swaps)), overOf(over), role));
+            shaped(() -> new Skin.Stamped(cells, swaps, payloads)), overOf(over), role));
     }
 
     @StarlarkMethod(
@@ -1510,4 +1605,43 @@ public final class Vocabulary implements StarlarkValue {
         }
         return plain;
     }
+
+    @StarlarkMethod(name = "tapered_box", doc = "A rectangular solid with continuously inset top edges, in blocks.",
+        parameters = {@Param(name = "scope"), @Param(name = "inset_x"), @Param(name = "inset_z")})
+    public Shape taperedBox(Scope scope, Object insetX, Object insetZ) throws EvalException {
+        double x = number(insetX, "inset_x");
+        double z = number(insetZ, "inset_z");
+        return new Shape(shaped(() -> new Solid.TaperedBox(scope.frame(), scope.size(), x, z)));
+    }
+
+    @StarlarkMethod(name = "profiled_sweep", doc = "A continuous rounded roof or pavement along local triples."
+        + " The quartic crown and upturned edge follow the nearest point of the line, including its elevation."
+        + " flat_ends clips the two ends to transverse planes instead of round caps.",
+        parameters = {@Param(name = "scope"), @Param(name = "points"), @Param(name = "width"),
+            @Param(name = "elevation"), @Param(name = "rise"), @Param(name = "upturn"), @Param(name = "thickness"),
+            @Param(name = "flat_ends", defaultValue = "False", named = true, positional = false)})
+    public Shape profiledSweep(Scope scope, Sequence<?> points, Object width, Object elevation, Object rise,
+            Object upturn, Object thickness, boolean flatEnds) throws EvalException {
+        List<Vec3> line = new ArrayList<>();
+        for (Object point : points) {
+            if (!(point instanceof Sequence<?> triple) || triple.size() != 3) {
+                throw Starlark.errorf("a profiled sweep follows [x, y, z] triples");
+            }
+            line.add(new Vec3(number(triple.get(0), "x"), number(triple.get(1), "y"), number(triple.get(2), "z")));
+        }
+        double wide = number(width, "width");
+        double base = number(elevation, "elevation");
+        double crown = number(rise, "rise");
+        double edge = number(upturn, "upturn");
+        double course = number(thickness, "thickness");
+        return new Shape(shaped(() -> new Solid.ProfiledSweep(scope.frame(), line, wide, base, crown, edge,
+            course, flatEnds)));
+    }
+
+    @StarlarkMethod(name = "offset_scope", doc = "Move a scope continuously along its local axes, in block units.",
+        parameters = {@Param(name = "scope"), @Param(name = "x"), @Param(name = "y"), @Param(name = "z")})
+    public Scope offsetScope(Scope scope, Object x, Object y, Object z) throws EvalException {
+        return scope.framed(scope.frame().moved(number(x, "x"), number(y, "y"), number(z, "z")), scope.size());
+    }
+
 }

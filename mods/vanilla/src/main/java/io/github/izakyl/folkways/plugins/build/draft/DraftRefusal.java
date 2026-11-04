@@ -13,7 +13,9 @@ public enum DraftRefusal implements RefusalKind {
     READ_TOO_FAR,
     TIMED_OUT,
     WRONG_MARK,
-    UNKNOWN_BLOCK;
+    UNKNOWN_BLOCK,
+    UNSUPPORTED_PAYLOAD,
+    MISSING_VOXELIZER;
 
     @Override
     public String translationKey() {

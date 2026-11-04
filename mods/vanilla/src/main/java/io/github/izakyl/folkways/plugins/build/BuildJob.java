@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Amount;
@@ -17,6 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -32,7 +34,12 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 record BuildJob(Kind kind, WorldPos focus, Stances footings,
                 Map<WorldPos, BlockState> before, Map<WorldPos, BlockState> after, List<WorldPos> joint,
-                List<Need> cost, Map<WorldPos, BlockData> data, Set<WorldPos> shot) {
+                List<Need> cost, Map<WorldPos, BlockData> data, Set<WorldPos> shot, Optional<Carving.Quote> carving) {
+    BuildJob(Kind kind, WorldPos focus, Stances footings, Map<WorldPos, BlockState> before,
+            Map<WorldPos, BlockState> after, List<WorldPos> joint, List<Need> cost,
+            Map<WorldPos, BlockData> data, Set<WorldPos> shot) {
+        this(kind, focus, footings, before, after, joint, cost, data, shot, Optional.empty());
+    }
 
     BuildJob(Kind kind, WorldPos focus, Stances footings, Map<WorldPos, BlockState> before,
             Map<WorldPos, BlockState> after, List<WorldPos> joint, List<Need> cost) {
@@ -42,6 +49,7 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
 
     enum Kind {
         LAY,
+        CARVE,
         STRIP,
         DRAIN,
         RAISE,
@@ -53,14 +61,14 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
     ResourceLocation doing() {
         return switch (kind) {
             case STRIP, DRAIN, LOWER -> BuildContent.CLEARING;
-            case LAY, RAISE, JOIN, SOAK -> BuildContent.BUILDING;
+            case LAY, CARVE, RAISE, JOIN, SOAK -> BuildContent.BUILDING;
         };
     }
 
     Block block() {
         BlockState state = switch (kind) {
             case STRIP, DRAIN, LOWER -> before.get(focus);
-            case LAY, RAISE, JOIN, SOAK -> after.get(focus);
+            case LAY, CARVE, RAISE, JOIN, SOAK -> after.get(focus);
         };
         return state == null ? Blocks.AIR : state.getBlock();
     }
@@ -124,6 +132,7 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
     List<Need> feed() {
         return switch (kind) {
             case LAY -> adjusts() ? List.of() : cost;
+            case CARVE -> carving.map(Carving.Quote::needs).orElse(cost);
             case RAISE -> List.of(new Need(SCAFFOLDING, after.size()));
             case JOIN, SOAK -> cost;
             case STRIP, DRAIN, LOWER -> List.of();
@@ -136,6 +145,7 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
             case STRIP -> Leaves.ofBlocks(before.values().stream()
                 .filter(state -> !state.isAir() && !state.liquid()).toList());
             case LAY -> adjusts() ? List.of() : laidLeaves();
+            case CARVE -> carving.map(Carving.Quote::leaves).orElse(List.of());
             case LOWER -> List.of(new Amount(SCAFFOLDING, after.size()));
             case SOAK -> List.of(new Amount(BUCKET, 1));
             case DRAIN, RAISE, JOIN -> List.of();
@@ -156,7 +166,7 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
     int laborTicks() {
         // One clock per affected cell, independent of walking distance, material price, or sort order.
         // A door or a column changes several cells atomically and pays the same per-cell clock.
-        return LAY_TICKS * Math.max(1, after.size());
+        return carving.map(Carving.Quote::ticks).orElse(LAY_TICKS * Math.max(1, after.size()));
     }
 
     List<ToolUse> tools() {
@@ -170,8 +180,18 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
         return switch (kind) {
             case LAY -> adjusts() ? Optional.empty() : before.values().stream().filter(BuildJob::inTheWay).findFirst();
             case STRIP -> Optional.of(standing()).filter(state -> !state.isAir() && !state.liquid());
+            case CARVE -> carvedRubble();
             case DRAIN, RAISE, LOWER, JOIN, SOAK -> Optional.empty();
         };
+    }
+
+    private Optional<BlockState> carvedRubble() {
+        var handler = Stream.concat(before.values().stream(), after.values().stream())
+            .map(StructureCompat::of).flatMap(Optional::stream)
+            .findFirst().or(StructureCompat::carver);
+        return before.values().stream().filter(BuildJob::inTheWay)
+            .filter(state -> StructureCompat.of(state).isEmpty())
+            .filter(state -> handler.map(found -> found.solid(state).isEmpty()).orElse(true)).findFirst();
     }
 
     /**

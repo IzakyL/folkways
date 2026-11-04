@@ -51,13 +51,14 @@ versions. Back up your world before trying a nightly build.
 
 ## Mods
 
-This repository builds nine mods, one per directory under `mods/`. Each ships as
+This repository builds ten mods, one per directory under `mods/`. Each ships as
 `folkways-<directory>-*.jar`. Every extension requires Core and Vanilla.
 
 | Mod                                       | Directory            | Also requires                                                                       | What it does                                                                                                                    |
 | ----------------------------------------- | -------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Folkways Core                             | `mods/core`          | —                                                                                   | The colony engine: residents who plan their own work, their pathfinding, and the Colony Book and panel. Adds no work on its own |
 | Folkways Vanilla                          | `mods/vanilla`       | Core                                                                                | Residents and their trades among vanilla blocks: farming, herding, fishing, crafting, hauling and building                      |
+| Folkways × Chisels & Bits                 | `mods/chiselsandbits` | Chisels & Bits 21.1.33                                             | Residents build and reshape carvings using whole blocks, with a small rounding loss                                                 |
 | Folkways × Create                         | `mods/create`        | Create 6.0+                                                                         | Residents drive trains, send parcels through packaging and postboxes, lay track and build from schematics                       |
 | Folkways × Modular Golems                 | `mods/modulargolems` | Modular Golems 3.1.43+                                                              | Golems join the roster and take trades like people                                                                              |
 | Folkways × Kaleidoscope Cookery           | `mods/cookery`       | Kaleidoscope Cookery 1.6.x; Kaleidoscope Tavern 1.2.x optional                      | Residents grow, prepare, cook and store food with its native appliances; with Tavern, they make and serve wine                  |
@@ -135,6 +136,13 @@ different blocks already occupying a recorded cell are reported as conflicts.
 
 JEC searches follow its keyboard and fuzzy-spelling settings.
 
+Patterns can declare `detail = "bits"` to draw curves at voxel resolution.
+
+With Folkways × Chisels & Bits and Chisels & Bits 21.1.33, select an area and save it
+as a blueprint or template. Residents use whole blocks of each material to build and reshape
+carvings, with a small rounding loss. Bundled voxel patterns include a torii, rotunda, Gothic cloister,
+flying-eave pavilion, stone arch bridge, rampart, and curved gallery.
+
 ## Building from source
 
 With a **Java 21 JDK** and **Node.js 22.14+**, run the locked setup on **Linux x64**
@@ -147,7 +155,7 @@ npm run setup
 ```
 
 Setup downloads the pinned integration dependencies and writes the manifest
-required by Gradle. The nine mod jars are collected in `build/libs/`.
+required by Gradle. The ten mod jars are collected in `build/libs/`.
 Blockwright's native Windows support is available in its source tree; the pinned
 npm release predates it. For Windows builds using a source-built SDK and
 `gradlew.bat`, see [development setup](CONTRIBUTING.md#development-setup).

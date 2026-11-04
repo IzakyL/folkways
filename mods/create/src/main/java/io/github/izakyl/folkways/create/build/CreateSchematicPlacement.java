@@ -1,6 +1,11 @@
 package io.github.izakyl.folkways.create.build;
 
+import com.simibubi.create.api.schematic.state.SchematicStateFilter;
+import com.simibubi.create.api.schematic.state.SchematicStateFilterRegistry;
 import com.simibubi.create.content.contraptions.StructureTransform;
+import com.simibubi.create.content.kinetics.base.KineticBlockEntity;
+import com.simibubi.create.foundation.blockEntity.IMergeableBE;
+import com.simibubi.create.foundation.blockEntity.IMultiBlockEntityContainer;
 import com.simibubi.create.content.kinetics.simpleRelays.AbstractSimpleShaftBlock;
 import com.simibubi.create.content.kinetics.belt.BeltBlock;
 import com.simibubi.create.content.kinetics.belt.BeltBlockEntity;
@@ -15,6 +20,7 @@ import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.plugins.build.BlockData;
 import io.github.izakyl.folkways.plugins.build.Costs;
 import io.github.izakyl.folkways.plugins.build.SchematicPlacement;
+import io.github.izakyl.folkways.plugins.build.VanillaSchematics;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -28,6 +34,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -44,8 +51,8 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
-/** Placement through the schematicannon's own code: its printer level, requirements, data and placement. */
-final class CreateSchematicPlacement implements SchematicPlacement.Adapter {
+/** Create printer, requirements and data rules, with Folkways placement and Create-specific hooks. */
+final class CreateSchematicPlacement extends VanillaSchematics {
 
     private static final ResourceLocation SHAFT = ResourceLocation.fromNamespaceAndPath("create", "shaft");
 
@@ -142,8 +149,45 @@ final class CreateSchematicPlacement implements SchematicPlacement.Adapter {
     }
 
     @Override
-    public void place(ServerLevel level, BlockPos pos, BlockState state, ItemStack stack, @Nullable CompoundTag data) {
-        BlockHelper.placeSchematicBlock(level, state, pos, stack, data);
+    protected BlockState filterState(@Nullable BlockEntity previous, BlockState state) {
+        var filter = SchematicStateFilterRegistry.REGISTRY.get(state);
+        if (filter != null) {
+            return filter.filterStates(previous, state);
+        }
+        if (state.getBlock() instanceof SchematicStateFilter block) {
+            return block.filterStates(previous, state);
+        }
+        return state;
+    }
+
+    @Override
+    protected void placeState(ServerLevel level, BlockPos pos, BlockState state) {
+        if (isBelt(state)) {
+            level.setBlock(pos, state, Block.UPDATE_CLIENTS);
+        } else {
+            super.placeState(level, pos, state);
+        }
+    }
+
+    @Override
+    protected boolean loadData(ServerLevel level, BlockPos pos, BlockState state, CompoundTag data,
+            @Nullable BlockEntity previous) {
+        // Track crossings merge their connections instead of replacing the existing track entity.
+        if (previous instanceof IMergeableBE mergeable) {
+            BlockEntity incoming = BlockEntity.loadStatic(pos, state, data, level.registryAccess());
+            if (incoming != null && previous.getType().equals(incoming.getType())) {
+                mergeable.accept(incoming);
+                return true;
+            }
+        }
+        BlockEntity entity = level.getBlockEntity(pos);
+        if (entity instanceof KineticBlockEntity kinetic) {
+            kinetic.warnOfMovement();
+        }
+        if (entity instanceof IMultiBlockEntityContainer container && !container.isController()) {
+            data.put("Controller", NbtUtils.writeBlockPos(container.getController()));
+        }
+        return super.loadData(level, pos, state, data, previous);
     }
 
     /**
@@ -154,7 +198,7 @@ final class CreateSchematicPlacement implements SchematicPlacement.Adapter {
     public Optional<SchematicPlacement.Launch> launch(Function<BlockPos, BlockState> target, BlockPos pos) {
         BlockState state = target.apply(pos);
         if (!isBelt(state)) {
-            return SchematicPlacement.Adapter.super.launch(target, pos);
+            return super.launch(target, pos);
         }
         if (state.getValue(BeltBlock.PART) == BeltPart.MIDDLE || !isBelt(
                 SchematicannonBlockEntity.stripBeltIfNotLast(state))) {
@@ -173,7 +217,7 @@ final class CreateSchematicPlacement implements SchematicPlacement.Adapter {
             Function<BlockPos, BlockData> data, ItemStack stack) {
         BlockState state = states.apply(launch.anchor());
         if (!isBelt(state)) {
-            SchematicPlacement.Adapter.super.fire(level, launch, states, data, stack);
+            super.fire(level, launch, states, data, stack);
             return;
         }
         List<BlockPos> segments = segments(states, launch.anchor());

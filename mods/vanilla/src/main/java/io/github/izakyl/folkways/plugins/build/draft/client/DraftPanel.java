@@ -376,10 +376,15 @@ public final class DraftPanel {
     // A cell the world already holds as drawn is left as it stands, and has nothing to show.
     private static List<Ghost> ghostsOf(Drawn.Ready ready) {
         Level level = Minecraft.getInstance().level;
-        return ready.draft().cells().stream()
-            .map(cell -> new Ghost(ready.corner().offset(cell.offset()), cell.state()))
+        List<Ghost> ghosts = ready.draft().cells().stream()
+            .map(cell -> new Ghost(ready.corner().offset(cell.offset()), cell.state(), cell.payload()))
             .filter(ghost -> level == null || !level.getBlockState(ghost.pos()).equals(ghost.state()))
             .toList();
+        if (ghosts.stream().noneMatch(ghost -> ghost.payload().present())) {
+            return ghosts;
+        }
+        var player = Minecraft.getInstance().player;
+        return Ghost.limited(ghosts, 2048, player == null ? ready.corner() : player.blockPosition());
     }
 
     private static ItemStack stackOf(ResourceLocation item) {

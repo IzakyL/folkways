@@ -8,11 +8,14 @@ import io.github.izakyl.folkways.front.api.notice.Attempt;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -91,8 +94,21 @@ public interface Facing {
         return List.of();
     }
 
+    default List<Ghost> payloadGhosts(ColonyView colony, Set<UUID> orders, int most, BlockPos near) {
+        return List.of();
+    }
+
+    default List<CompoundTag> previewRecipes(ColonyView colony) {
+        return List.of();
+    }
+
     default List<Ghost> ghosts(ColonyView colony) {
         return List.of();
+    }
+
+    default List<Ghost> ghosts(ColonyView colony, int most, BlockPos near) {
+        return ghosts(colony).stream().sorted(Comparator.comparingDouble(ghost -> ghost.pos().distSqr(near)))
+            .limit(most).toList();
     }
 
     static Optional<Facing> of(Colony colony, ResourceLocation owner) {

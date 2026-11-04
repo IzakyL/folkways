@@ -2,11 +2,13 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Reach;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -15,6 +17,9 @@ final class SiteApproach {
 
     private static final int SPAN = 4;
     private static final int MOST_STANCES = 24;
+    private static final int BELOW_SPAN = 2;
+    private static final int BELOW_START = 4;
+    private static final int BELOW_DROP = 24;
 
     private SiteApproach() {
     }
@@ -60,6 +65,23 @@ final class SiteApproach {
             selected.add(feet);
         }
         return List.copyOf(selected);
+    }
+
+    // The planner's fallback when nothing is in reach: the nearest usable ground underneath the operation.
+    // Runtime reentry must search the current ground too, since other hands can close every planned stance.
+    static List<BlockPos> below(BlockPos focus, Predicate<BlockPos> stands) {
+        List<BlockPos> found = new ArrayList<>();
+        for (int dy = -BELOW_START; found.isEmpty() && dy >= -BELOW_DROP; dy--) {
+            for (int dx = -BELOW_SPAN; dx <= BELOW_SPAN; dx++) {
+                for (int dz = -BELOW_SPAN; dz <= BELOW_SPAN; dz++) {
+                    BlockPos feet = focus.offset(dx, dy, dz);
+                    if (stands.test(feet)) {
+                        found.add(feet);
+                    }
+                }
+            }
+        }
+        return found;
     }
 
     /** Prefer a floor beside the operation, with at most one block of comfortable work above or below it. */

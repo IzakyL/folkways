@@ -1,0 +1,31 @@
+# python3 tests/promo/film/candb.py — same typography, gradients, music and encodes as the existing shorts.
+[scenes.construction]
+captions = ["已支持 Chisels & Bits 建筑"]
+
+[scenes.pavilion]
+tag = "已包含的可程序化生成的含C&B碎块建筑"
+captions = ["飞檐亭"]
+
+[scenes.gothic_cloister]
+tag = "已包含的可程序化生成的含C&B碎块建筑"
+captions = ["尖拱回廊"]
+
+[scenes.stone_arch_bridge]
+tag = "已包含的可程序化生成的含C&B碎块建筑"
+captions = ["石拱桥"]
+
+[scenes.rotunda]
+tag = "已包含的可程序化生成的含C&B碎块建筑"
+captions = ["穹顶圆亭"]
+
+[scenes.torii]
+tag = "已包含的可程序化生成的含C&B碎块建筑"
+captions = ["鸟居"]
+
+[scenes.rampart]
+tag = "已包含的可程序化生成的含C&B碎块建筑"
+captions = ["堡垒城墙"]
+
+[scenes.curved_gallery]
+tag = "已包含的可程序化生成的含C&B碎块建筑"
+captions = ["曲线长廊"]

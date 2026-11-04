@@ -1,8 +1,10 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.api.structure.StructurePayload;
+import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.terms.Goods;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -87,7 +89,7 @@ public final class SchematicPlacement {
 
         Costs.Quote requirement(BlockState state, @Nullable BlockEntity entity);
 
-        /** The cannon's {@code placeSchematicBlock}. */
+        /** Places a schematic cell using Folkways rules and integration-specific hooks. */
         void place(ServerLevel level, BlockPos pos, BlockState state, ItemStack stack, @Nullable CompoundTag data);
 
         default Optional<Launch> launch(Function<BlockPos, BlockState> target, BlockPos pos) {
@@ -108,8 +110,17 @@ public final class SchematicPlacement {
         default void fire(ServerLevel level, Launch launch, Function<BlockPos, BlockState> states,
                 Function<BlockPos, BlockData> data, ItemStack stack) {
             BlockState state = states.apply(launch.anchor());
-            BlockEntity entity = data.apply(launch.anchor()).entity(level, launch.anchor(), state);
-            place(level, launch.anchor(), state, stack, prepare(level, state, entity));
+            BlockData kept = data.apply(launch.anchor());
+            if (StructureCompat.of(state).isPresent()) {
+                StructurePayload payload = kept.payload(state);
+                StructureCompat.inspect(state, payload);
+                CompoundTag nativeData = StructureCompat.of(state).orElseThrow()
+                    .placementData(level.registryAccess(), launch.anchor(), state, payload);
+                place(level, launch.anchor(), state, stack, nativeData);
+            } else {
+                BlockEntity entity = kept.entity(level, launch.anchor(), state);
+                place(level, launch.anchor(), state, stack, prepare(level, state, entity));
+            }
         }
     }
 
@@ -157,6 +168,12 @@ public final class SchematicPlacement {
                 }
                 continue;
             }
+            if (StructureCompat.of(cell.state()).isPresent()) {
+                StructureCompat.inspect(cell.state(), cell.data().payload(cell.state()));
+                states.put(pos, cell.state());
+                data.put(pos, BlockData.of(cell.data().payload(cell.state()).tag()));
+                continue;
+            }
             BlockState read = rules.zeroAge(printed.state(pos));
             if (read.isAir() && !cell.state().isAir()) {
                 continue;
@@ -167,13 +184,18 @@ public final class SchematicPlacement {
                 for (UnloadedBlock.Turn turn : cell.data().turns()) {
                     rules.turn(entity, turn.mirror(), turn.rotation());
                 }
-                CompoundTag saved = entity.saveWithFullMetadata(level.registryAccess());
-                data.put(pos, BlockData.of(saved));
+                CompoundTag saved = StructureCompat.of(read).map(handler -> handler.capture(entity))
+                    .orElseGet(() -> entity.saveWithFullMetadata(level.registryAccess()));
+                data.put(pos, BlockData.of(StructureCompat.tagged(read, saved).tag()));
             }
         }
         Set<BlockPos> kept = new LinkedHashSet<>();
         for (Map.Entry<BlockPos, BlockState> cell : states.entrySet()) {
             BlockState state = cell.getValue();
+            if (StructureCompat.of(state).isPresent()) {
+                kept.add(cell.getKey());
+                continue;
+            }
             if (state.isAir() || state.getBlock() instanceof LiquidBlock) {
                 kept.add(cell.getKey());
                 continue;
@@ -198,33 +220,97 @@ public final class SchematicPlacement {
             source.createdGameTime(), true);
     }
 
-    /** Prints a resolved blueprint at once, shot by shot, as a creative player raises it. */
-    static void print(ServerLevel level, Blueprint resolved, BlockPos anchor) {
-        Map<BlockPos, BlockState> states = new LinkedHashMap<>();
-        Map<BlockPos, BlockData> data = new LinkedHashMap<>();
-        for (BlueprintBlock cell : resolved.blocks()) {
-            states.put(cell.worldPos(anchor), cell.state());
-            data.put(cell.worldPos(anchor), cell.data());
+    /** Raises an accepted blueprint through the same bounded printer used by creative placement. */
+    static java.util.concurrent.CompletableFuture<Void> print(ServerLevel level, Blueprint resolved, BlockPos anchor) {
+        return CreativePrinting.enqueue(level, resolved, anchor);
+    }
+
+    /** A validated whole operation whose individual shots can be spread across server ticks. */
+    static final class Printing {
+        private final ServerLevel level;
+        private final Adapter printer = adapter;
+        private final Map<BlockPos, BlockState> states = new LinkedHashMap<>();
+        private final Map<BlockPos, BlockData> data = new LinkedHashMap<>();
+        private final java.util.Iterator<Map.Entry<BlockPos, BlockState>> remaining;
+        private final long started = System.nanoTime();
+        private final long payloads;
+        private long activeNanos;
+        private long longestSlice;
+        private int slices;
+        final java.util.concurrent.CompletableFuture<Void> done = new java.util.concurrent.CompletableFuture<>();
+
+        Printing(ServerLevel level, Blueprint resolved, BlockPos anchor) {
+            this.level = level;
+            // Charge cached copies too, before any world mutation. Applying the accepted work is sliced below;
+            // a legitimate large carving must not be abandoned halfway through a synchronous time budget.
+            try (var processing = StructureCompat.processing()) {
+                for (BlueprintBlock cell : resolved.blocks()) {
+                    StructureCompat.inspectPlacement(cell.state(), cell.data().payload(cell.state()));
+                    states.put(cell.worldPos(anchor), cell.state());
+                    data.put(cell.worldPos(anchor), cell.data());
+                }
+            }
+            payloads = resolved.blocks().stream().filter(cell -> cell.data().present()).count();
+            remaining = states.entrySet().iterator();
         }
-        Function<BlockPos, BlockState> target = pos -> states.getOrDefault(pos, Blocks.AIR.defaultBlockState());
-        Function<BlockPos, BlockData> payload = pos -> data.getOrDefault(pos, BlockData.EMPTY);
-        states.forEach((pos, state) -> {
+
+        boolean advance(long deadline) {
+            long began = System.nanoTime();
+            try {
+                // At least one shot makes progress even when it alone exceeds the preferred slice duration.
+                while (remaining.hasNext()) {
+                    var cell = remaining.next();
+                    place(cell.getKey(), cell.getValue());
+                    if (System.nanoTime() >= deadline) {
+                        break;
+                    }
+                }
+                return !remaining.hasNext();
+            } finally {
+                long elapsed = System.nanoTime() - began;
+                activeNanos += elapsed;
+                longestSlice = Math.max(longestSlice, elapsed);
+                slices++;
+            }
+        }
+
+        private void place(BlockPos pos, BlockState state) {
+            Function<BlockPos, BlockState> target = cell -> states.getOrDefault(cell, Blocks.AIR.defaultBlockState());
+            Function<BlockPos, BlockData> payload = cell -> data.getOrDefault(cell, BlockData.EMPTY);
             if (state.isAir()) {
                 level.setBlock(pos, state, Rubble.SHOT);
             } else if (state.getBlock() instanceof LiquidBlock) {
                 level.setBlock(pos, state, Block.UPDATE_ALL);
             } else {
-                adapter.launch(target, pos).ifPresent(launch -> {
-                    adapter.fire(level, launch, target, payload,
-                        icon(costs(level, launch, target, payload).orElse(List.of())));
-                    // Raised at once, a block the target wants waterlogged comes up with its water.
+                printer.launch(target, pos).ifPresent(launch -> {
+                    // Creative placement spends nothing; quoting a microstructure's display icon would only
+                    // repeat its expensive material calculation and serialize the carving again.
+                    ItemStack display = StructureCompat.of(state).isPresent() ? ItemStack.EMPTY
+                        : icon(costs(level, launch, target, payload).orElse(List.of()));
+                    printer.fire(level, launch, target, payload, display);
                     BlockState laid = level.getBlockState(pos);
                     if (Step.soaked(state) && laid.is(state.getBlock())) {
                         level.setBlock(pos, laid.setValue(BlockStateProperties.WATERLOGGED, true), Block.UPDATE_ALL);
                     }
+                    for (BlockPos cell : launch.produces()) {
+                        BlockEntity entity = level.getBlockEntity(cell);
+                        if (entity != null) {
+                            entity.setChanged();
+                            level.sendBlockUpdated(cell, entity.getBlockState(), entity.getBlockState(),
+                                Block.UPDATE_CLIENTS);
+                        }
+                    }
                 });
             }
-        });
+        }
+
+        void complete() {
+            org.slf4j.LoggerFactory.getLogger("folkways-patterns").info(
+                "CREATIVE_PRINT cells={} payloads={} millis={} activeMillis={} maxSliceMillis={} slices={}",
+                states.size(), payloads, (System.nanoTime() - started) / 1_000_000D,
+                activeNanos / 1_000_000D, longestSlice / 1_000_000D, slices);
+            done.complete(null);
+        }
     }
 
     /** The block entity the cannon reckons a cell's requirement from: a fresh one, given only the trusted data. */
@@ -235,10 +321,12 @@ public final class SchematicPlacement {
             return null;
         }
         CompoundTag prepared = adapter.prepare(level, state, stored);
-        BlockEntity fresh = BlockData.EMPTY.entity(level, pos, state);
-        if (fresh != null && prepared != null) {
-            fresh.loadWithComponents(prepared, level.registryAccess());
+        if (StructureCompat.of(state).isPresent()) {
+            if (prepared == null) throw StructureCompat.invalid();
+            return BlockData.of(prepared).entity(level, pos, state);
         }
+        BlockEntity fresh = BlockData.EMPTY.entity(level, pos, state);
+        if (fresh != null && prepared != null) fresh.loadWithComponents(prepared, level.registryAccess());
         return fresh;
     }
 
@@ -248,6 +336,13 @@ public final class SchematicPlacement {
         Map<ItemSpec, Long> counted = new LinkedHashMap<>();
         for (BlockPos cell : launch.charged()) {
             BlockState state = states.apply(cell);
+            var handler = StructureCompat.of(state);
+            if (handler.isPresent()) {
+                var volume = handler.get().voxels(data.apply(cell).payload(state));
+                volume.counts().forEach((material, count) -> counted.merge(material,
+                    (long) (count + volume.perBlock() - 1) / volume.perBlock(), Long::sum));
+                continue;
+            }
             Costs.Quote quote = adapter.requirement(state, entity(level, cell, state, data.apply(cell)));
             if (quote.needs().isEmpty()) {
                 return Optional.empty();
@@ -281,7 +376,7 @@ public final class SchematicPlacement {
             CompoundTag block = new CompoundTag();
             block.put("pos", ints(cell.offset().getX(), cell.offset().getY(), cell.offset().getZ()));
             block.putInt("state", index);
-            if (cell.data().present()) {
+            if (cell.data().present() && StructureCompat.of(cell.state()).isEmpty()) {
                 block.put("nbt", cell.data().tag());
             }
             blocks.add(block);

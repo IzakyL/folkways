@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.core.api.structure.Voxelizer;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrays;
@@ -14,6 +15,8 @@ public final class Lattice {
 
     private static final int MASK_BITS = 8;
     private static final int MASK = (1 << MASK_BITS) - 1;
+
+    private VoxelFit voxels;
 
     private final BlockPos origin;
     private final List<Massing.Part> parts;
@@ -30,6 +33,15 @@ public final class Lattice {
     }
 
     public static Optional<Lattice> of(Massing massing) {
+        return of(massing, null);
+    }
+
+    static Optional<Lattice> of(Massing massing,
+            Voxelizer encoder) {
+        return of(massing, encoder, Pattern.DEFAULT_GRAIN);
+    }
+
+    static Optional<Lattice> of(Massing massing, Voxelizer encoder, int grain) {
         List<Massing.Part> parts = massing.parts();
         if (parts.isEmpty()) {
             return Optional.empty();
@@ -51,7 +63,22 @@ public final class Lattice {
                 return Optional.empty();
             }
         }
-        return Optional.of(new Lattice(new BlockPos(reach.minX(), reach.minY(), reach.minZ()), parts, covered));
+        Lattice lattice = new Lattice(new BlockPos(reach.minX(), reach.minY(), reach.minZ()), parts, covered);
+        if (encoder != null) {
+            lattice.voxels = new VoxelFit(encoder, grain);
+            if (!lattice.voxels.paint(parts)) {
+                return Optional.empty();
+            }
+            lattice.voxels.cells().forEach((cell, layers) -> {
+                if (!covered.containsKey(cell.longValue())) {
+                    covered.put(cell.longValue(), layers.getLast().part() << MASK_BITS);
+                }
+            });
+            if (covered.size() > most) {
+                return Optional.empty();
+            }
+        }
+        return Optional.of(lattice);
     }
 
     private static void paint(List<Massing.Part> parts, int index, Long2IntOpenHashMap covered) {
@@ -85,6 +112,10 @@ public final class Lattice {
                 }
             }
         }
+    }
+
+    VoxelFit voxels() {
+        return voxels;
     }
 
     public BlockPos origin() {

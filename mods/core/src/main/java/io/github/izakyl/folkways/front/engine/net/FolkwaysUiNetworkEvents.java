@@ -63,7 +63,8 @@ public final class FolkwaysUiNetworkEvents {
         registrar.playToServer(RequestColonyOverviewPacket.TYPE, RequestColonyOverviewPacket.STREAM_CODEC,
             asPlayer((packet, player) -> ColonyAuthority.ofHeldBook(player, packet.colonyId())
                 .ifPresent(authority -> PacketDistributor.sendToPlayer(player,
-                    ColonyOverviews.of(player, authority.colony())))));
+                    ColonyOverviews.requested(player, authority.colony(),
+                        packet.recipesNeeded(), packet.unavailable())))));
         registrar.playToServer(ToggleColonyMemberPacket.TYPE, ToggleColonyMemberPacket.STREAM_CODEC,
             asPlayer((packet, player) -> ColonyAuthority
                 .ofHeldBook(player, packet.colonyId(), Optional.of(packet.pos()))
@@ -214,7 +215,8 @@ public final class FolkwaysUiNetworkEvents {
             }
         }
         return new ColonyOverviewPacket(ColonyGround.cells(level, colony), zones, List.copyOf(ghosts),
-            paths.stream().map(ColonyPath::save).toList(), notes, placards);
+            paths.stream().map(ColonyPath::save).toList(), notes, placards,
+            facings.stream().flatMap(facing -> facing.previewRecipes(view).stream()).limit(512).toList());
     }
 
     // A card over a block or a site also tells the work standing still inside it, unless it tells that itself.

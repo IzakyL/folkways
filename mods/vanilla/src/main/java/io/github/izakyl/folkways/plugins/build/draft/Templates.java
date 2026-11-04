@@ -57,7 +57,7 @@ public final class Templates {
     }
 
     public static Set<ResourceLocation> blueprints() {
-        return library.keySet().stream().filter(Templates::isBlueprint).collect(Collectors.toUnmodifiableSet());
+        return files.keySet().stream().filter(Templates::isBlueprint).collect(Collectors.toUnmodifiableSet());
     }
 
     public static boolean isBlueprint(ResourceLocation id) {
@@ -88,7 +88,7 @@ public final class Templates {
         readShelf(resources, BLUEPRINTS, BLUEPRINT, read, packs, refused);
         Map<ResourceLocation, Piece> found = piecesOf(read, refused);
         library = found;
-        files = Map.copyOf(read.keySet().stream().filter(found::containsKey)
+        files = Map.copyOf(read.keySet().stream().filter(id -> isBlueprint(id) || found.containsKey(id))
             .collect(Collectors.toMap(id -> id, read::get)));
         report(SHELF, found, packs, refused, false);
         report(BLUEPRINTS, found, packs, refused, true);

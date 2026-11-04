@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.base.persist.Entries;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -106,6 +106,12 @@ public final class BlueprintBook {
         return order;
     }
 
+    void prepared(Blueprint source, Blueprint ready) {
+        if (blueprints.get(source.id()) == source) {
+            blueprints.put(source.id(), ready);
+        }
+    }
+
     Optional<Blueprint> blueprint(UUID id) {
         return Optional.ofNullable(blueprints.get(id));
     }
@@ -113,6 +119,7 @@ public final class BlueprintBook {
     /** The blueprint as its target: one filed before targets were resolved this way is resolved now, once. */
     Optional<Blueprint> target(ServerLevel level, UUID id) {
         Blueprint found = blueprints.get(id);
+        if (found != null) found.compatible();
         if (found == null || found.confirmed()) {
             return Optional.ofNullable(found);
         }

@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
@@ -83,7 +84,12 @@ record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> u
 
     /** The cannon's only check: a cell that already holds the state it would print is skipped. */
     boolean satisfied(LevelReader level, BlockPos pos) {
-        return BuildPlanner.satisfied(level.getBlockState(pos), wanted(pos));
+        BlockState goal = wanted(pos);
+        if (!BuildPlanner.satisfied(level.getBlockState(pos), goal)) {
+            return false;
+        }
+        return StructureCompat.of(goal)
+            .map(handler -> handler.matches(level.getBlockEntity(pos), dataAt(pos).payload(goal))).orElse(true);
     }
 
     BlockState wanted(BlockPos pos) {

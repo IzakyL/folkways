@@ -155,6 +155,19 @@ record Step(BuildJob.Kind kind, BlockPos focus, Map<BlockPos, BlockState> before
     BuildJob job(@Nullable ServerLevel level, BuildTarget target, Stances footings, Set<BlockPos> met) {
         List<WorldPos> ends = joint.map(found -> List.of(target.cell(found.from()), target.cell(found.to())))
             .orElse(List.of());
+        if (kind == BuildJob.Kind.CARVE && level != null) {
+            Map<BlockPos, BlockState> remaining = new LinkedHashMap<>();
+            Map<WorldPos, BlockData> payloads = new LinkedHashMap<>();
+            after.forEach((pos, state) -> {
+                if (!met.contains(pos)) {
+                    remaining.put(pos, state);
+                    payloads.put(target.cell(pos), target.dataAt(pos));
+                }
+            });
+            Carving.Quote quote = Carving.quote(level, remaining, target::dataAt);
+            return new BuildJob(kind, target.cell(focus), footings, addressed(target, before), addressed(target, after),
+                ends, quote.needs(), payloads, addressed(target, after).keySet(), Optional.of(quote));
+        }
         if (kind != BuildJob.Kind.LAY) {
             return new BuildJob(kind, target.cell(focus), footings, addressed(target, before), addressed(target, after),
                 ends, cost, Map.of(), Set.of());

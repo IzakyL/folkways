@@ -51,6 +51,10 @@ public final class Drafting {
     private Drafting() {
     }
 
+    public static <T> CompletableFuture<T> prepare(Supplier<T> preparation) {
+        return CompletableFuture.supplyAsync(preparation, POOL);
+    }
+
     public static CompletableFuture<Drawn> draw(Pattern pattern, Commission commission) {
         return run(pattern, () -> pattern.drawOn(commission), Function.identity());
     }

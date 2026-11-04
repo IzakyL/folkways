@@ -4,9 +4,9 @@ import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.plugins.build.draft.Commission;
 import io.github.izakyl.folkways.plugins.build.draft.Draft;
 import io.github.izakyl.folkways.plugins.build.draft.DraftTemplate;
-import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Drafting;
 import io.github.izakyl.folkways.plugins.build.draft.Drawn;
+import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Pattern;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.build.draft.World;
@@ -68,8 +68,12 @@ final class Rounds {
     static CompletableFuture<Once> drawOnce(ServerLevel level, Pattern pattern, Hint hint, Settings settings,
             Direction facing) {
         World world = pattern.capture(level, hint);
-        return onServer(level, Drafting.draw(pattern, new Commission(hint, settings, world, facing,
-            Patterns.seedOf(pattern, hint)))).thenApply(drawn -> blueprinted(level, pattern, drawn));
+        return onServer(level, draw(pattern, hint, settings, facing, world))
+            .thenApply(drawn -> blueprinted(level, pattern, drawn));
+    }
+
+    static CompletableFuture<Drawn> draw(Pattern pattern, Hint hint, Settings settings, Direction facing, World world) {
+        return Drafting.draw(pattern, new Commission(hint, settings, world, facing, Patterns.seedOf(pattern, hint)));
     }
 
     private static Once blueprinted(ServerLevel level, Pattern pattern, Drawn drawn) {

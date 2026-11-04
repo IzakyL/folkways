@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -35,15 +36,19 @@ abstract class BuildNode implements Node {
 
     private static final int RETRY_TICKS = 100;
 
+    Carving.Cache cache = new Carving.Cache(() -> { });
+
+    private Carving.Quote quotation;
     private final BuildJob job;
     private final Ends ends;
-    private final NodeSpec spec;
+    private NodeSpec spec;
     private Predicate<BlockPos> met = cell -> false;
     private Emptying emptying;
     private boolean onlyReplaceable;
 
     BuildNode(BuildJob job, Ends ends) {
         this.job = job;
+        this.quotation = job.carving().orElse(null);
         this.ends = ends;
         this.spec = NodeSpec.of(UUID.randomUUID(), BuildContent.ID, new WorkSite.AtBlock(job.focus()),
                 job.footings(), Workload.Once.of(job.laborTicks(), worker -> job.kind() == BuildJob.Kind.STRIP
@@ -63,12 +68,38 @@ abstract class BuildNode implements Node {
     static BuildNode of(BuildJob job, Ends ends, TemporaryScaffolds temporary) {
         return switch (job.kind()) {
             case LAY -> new LayNode(job, ends);
+            case CARVE -> new CarveNode(job, ends);
             case STRIP -> new StripNode(job, ends);
             case DRAIN -> new DrainNode(job, ends);
             case RAISE, LOWER -> new ScaffoldNode(job, ends, temporary);
             case JOIN -> new JoinNode(job, ends);
             case SOAK -> new SoakNode(job, ends);
         };
+    }
+
+    final void requote(ServerLevel level) {
+        if (job.kind() != BuildJob.Kind.CARVE) {
+            return;
+        }
+        var quote = Carving.quote(level, remaining(level, job.after(), false), pos -> job.data().entrySet().stream()
+            .filter(entry -> entry.getKey().block(level).equals(pos)).map(Map.Entry::getValue).findFirst()
+            .orElse(BlockData.EMPTY), cache);
+        quotation = quote;
+        price();
+    }
+
+    final Carving.Quote quotation() {
+        return quotation;
+    }
+
+    final void price() {
+        if (quotation == null) {
+            return;
+        }
+        var quote = Carving.priced(quotation, cache);
+        spec = new NodeSpec(spec.id(), spec.owner(), spec.site(), spec.stances(), quote.needs(), spec.gives(),
+            quote.leaves(), spec.tools(), spec.workload(), spec.effort(), spec.pace(), spec.vocation(), spec.gesture(),
+            spec.focus(), spec.estimate(), spec.doing(), spec.about(), spec.subject());
     }
 
     final BuildNode keeping(Predicate<BlockPos> met) {
@@ -88,7 +119,7 @@ abstract class BuildNode implements Node {
 
     final Optional<BuildRefusal> obstruction(ServerLevel level) {
         if (finished(level) || job.kind() != BuildJob.Kind.STRIP && job.kind() != BuildJob.Kind.LAY
-            && job.kind() != BuildJob.Kind.DRAIN) {
+            && job.kind() != BuildJob.Kind.DRAIN && job.kind() != BuildJob.Kind.CARVE) {
             return Optional.empty();
         }
         Map<BlockPos, BlockState> cells = remaining(level, job.before(), true);
@@ -214,7 +245,13 @@ abstract class BuildNode implements Node {
     boolean finished(ServerLevel level) {
         for (Map.Entry<WorldPos, BlockState> cell : job.after().entrySet()) {
             BlockPos pos = cell.getKey().block(level);
-            if (!met.test(pos) && !BuildPlanner.satisfied(level.getBlockState(pos), cell.getValue())) {
+            boolean satisfied = BuildPlanner.satisfied(level.getBlockState(pos), cell.getValue());
+            var handler = StructureCompat.of(cell.getValue());
+            if (satisfied && handler.isPresent() && !met.test(pos)) {
+                satisfied = handler.get().matches(level.getBlockEntity(pos),
+                    job.data().getOrDefault(cell.getKey(), BlockData.EMPTY).payload(cell.getValue()));
+            }
+            if (!met.test(pos) && !satisfied) {
                 return false;
             }
         }

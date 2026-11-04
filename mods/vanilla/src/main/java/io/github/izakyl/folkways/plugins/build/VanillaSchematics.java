@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -45,11 +46,10 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 import net.neoforged.neoforge.common.SpecialPlantable;
 
 /**
- * The schematicannon's rules copied for a world without Create (Create 6.0.10): its printer level, {@code
- * setZeroAge}, ignored parts, default item requirements, trusted block entity data and {@code placeSchematicBlock}.
- * What only Create's own blocks and registries add is left out.
+ * Folkways placement and default schematic rules, based on Create 6.0.10.
+ * Integrations extend the placement hooks for their own state and block entity rules.
  */
-final class VanillaSchematics implements SchematicPlacement.Adapter {
+public class VanillaSchematics implements SchematicPlacement.Adapter {
 
     private static final int NO_SHAPE_UPDATES = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
 
@@ -95,11 +95,16 @@ final class VanillaSchematics implements SchematicPlacement.Adapter {
 
     @Override
     public void turn(BlockEntity entity, Mirror mirror, Rotation rotation) {
+        StructureCompat.of(entity.getBlockState()).ifPresent(handler -> handler.turn(entity, mirror, rotation));
     }
 
     @Nullable
     @Override
     public CompoundTag prepare(ServerLevel level, BlockState state, @Nullable BlockEntity entity) {
+        var handler = StructureCompat.of(state);
+        if (handler.isPresent() && entity != null) {
+            return handler.get().capture(entity);
+        }
         if (entity == null || !state.is(BlockTags.BANNERS) && !state.is(BlockTags.ALL_SIGNS)) {
             return null;
         }
@@ -137,6 +142,14 @@ final class VanillaSchematics implements SchematicPlacement.Adapter {
 
     @Override
     public Costs.Quote requirement(BlockState state, @Nullable BlockEntity entity) {
+        var handler = StructureCompat.of(state);
+        if (handler.isPresent()) {
+            try {
+                return Costs.Quote.of(handler.get().materials(entity));
+            } catch (IllegalArgumentException invalid) {
+                return Costs.Quote.unsupported();
+            }
+        }
         Block block = state.getBlock();
         if (block == Blocks.AIR) {
             return Costs.Quote.of(List.of());
@@ -172,13 +185,10 @@ final class VanillaSchematics implements SchematicPlacement.Adapter {
 
     @Override
     public void place(ServerLevel level, BlockPos pos, BlockState state, ItemStack stack, @Nullable CompoundTag data) {
+        BlockEntity previous = level.getBlockEntity(pos);
         Block block = state.getBlock();
+        state = filterState(previous, state);
         boolean alreadyPlaced = false;
-        if (block instanceof ChiseledBookShelfBlock) {
-            for (BooleanProperty slot : ChiseledBookShelfBlock.SLOT_OCCUPIED_PROPERTIES) {
-                state = state.setValue(slot, false);
-            }
-        }
         if (state.hasProperty(BlockStateProperties.EXTENDED)) {
             state = state.setValue(BlockStateProperties.EXTENDED, false);
         }
@@ -206,26 +216,50 @@ final class VanillaSchematics implements SchematicPlacement.Adapter {
             return;
         }
         if (!alreadyPlaced) {
-            if (state.getBlock() instanceof BaseRailBlock) {
-                placeRailWithoutUpdate(level, state, pos);
-            } else {
-                level.setBlock(pos, state, NO_SHAPE_UPDATES);
-            }
-            if (data != null) {
-                BlockEntity entity = level.getBlockEntity(pos);
-                if (entity != null) {
-                    data.putInt("x", pos.getX());
-                    data.putInt("y", pos.getY());
-                    data.putInt("z", pos.getZ());
-                    entity.loadWithComponents(data, level.registryAccess());
-                }
-            }
-            try {
+            placeState(level, pos, state);
+        }
+        if (data != null && loadData(level, pos, state, data, previous)) {
+            return;
+        }
+        try {
+            if (StructureCompat.of(state).isEmpty()) {
                 state.getBlock().setPlacedBy(level, pos, state, null, stack);
-            } catch (Exception ignored) {
-                // The cannon places without a placer; a block that insists on one keeps what it already has.
+            }
+        } catch (Exception ignored) {
+            // The cannon places without a placer; a block that insists on one keeps what it already has.
+        }
+    }
+
+    /** Removes state that a schematic must not recreate, such as occupied bookshelf slots. */
+    protected BlockState filterState(@Nullable BlockEntity previous, BlockState state) {
+        if (state.getBlock() instanceof ChiseledBookShelfBlock) {
+            for (BooleanProperty slot : ChiseledBookShelfBlock.SLOT_OCCUPIED_PROPERTIES) {
+                state = state.setValue(slot, false);
             }
         }
+        return state;
+    }
+
+    /** Writes a state while preserving schematic shapes; integrations may need different update flags. */
+    protected void placeState(ServerLevel level, BlockPos pos, BlockState state) {
+        if (state.getBlock() instanceof BaseRailBlock) {
+            placeRailWithoutUpdate(level, state, pos);
+        } else {
+            level.setBlock(pos, state, NO_SHAPE_UPDATES);
+        }
+    }
+
+    /** Returns true when an integration merged into an existing entity and needs no placement callback. */
+    protected boolean loadData(ServerLevel level, BlockPos pos, BlockState state, CompoundTag data,
+            @Nullable BlockEntity previous) {
+        BlockEntity entity = level.getBlockEntity(pos);
+        if (entity != null) {
+            data.putInt("x", pos.getX());
+            data.putInt("y", pos.getY());
+            data.putInt("z", pos.getZ());
+            entity.loadWithComponents(data, level.registryAccess());
+        }
+        return false;
     }
 
     private static void placeRailWithoutUpdate(ServerLevel level, BlockState state, BlockPos pos) {

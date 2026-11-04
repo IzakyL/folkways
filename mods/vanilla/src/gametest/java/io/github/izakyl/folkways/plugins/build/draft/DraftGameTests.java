@@ -1,5 +1,8 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
+import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.api.structure.Voxelizer;
+import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.ORIGIN;
 import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.count;
 import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.describe;
@@ -11,12 +14,12 @@ import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.refused;
 import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.stateAt;
 import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.zone;
 
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
@@ -46,6 +49,24 @@ public final class DraftGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(DraftGameTests.class);
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 80)
+    public static void bitsDetailRequiresAnIntegrationAndRejectsInvalidValues(GameTestHelper helper) {
+        String drawing = "def draw(site):\n    return [part(\"box\", site.zone, [\"minecraft:stone\"])]\n";
+        for (String invalid : List.of("\"fine\"", "16", "None", "[]")) {
+            List<String> reasons = new ArrayList<>();
+            helper.assertTrue(Pattern.parse(id("bad_detail"), "detail = " + invalid + "\n" + drawing,
+                ignored -> Optional.empty(), reasons::add).isEmpty(), "invalid detail fails parsing");
+            helper.assertTrue(reasons.size() == 1 && reasons.getFirst().contains("detail must be 'blocks' or 'bits'"),
+                "the reason names the allowed values");
+        }
+        if (Voxelizer.installed().isEmpty()) {
+            Pattern pattern = parse("detail = \"bits\"\n" + drawing);
+            helper.assertValueEqual(refused(helper, draw(pattern, zone(1, 1, 1))).why(),
+                DraftRefusal.MISSING_VOXELIZER, "missing integration explicitly refuses");
+        }
+        helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 80)
@@ -283,7 +304,7 @@ public final class DraftGameTests {
                 load("minecraft:lib/a", "A")
                 def draw(site):
                     return []
-                """, wanted -> java.util.Optional.ofNullable(libraries.get(wanted.toString()))).isEmpty(),
+                """, wanted -> Optional.ofNullable(libraries.get(wanted.toString()))).isEmpty(),
             "a load cycle leaves no pattern behind");
         helper.succeed();
     }

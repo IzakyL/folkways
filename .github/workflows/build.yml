@@ -56,6 +56,8 @@ jobs:
             profiles: tacz
           - mod: firefighting
             profiles: firefighting
+          - mod: chiselsandbits
+            profiles: chiselsandbits create-placement
     name: GameTests (${{ matrix.mod }})
     steps:
       - uses: actions/checkout@v5
@@ -102,6 +104,12 @@ jobs:
             fi
             if [[ "$profile" == firefighting ]]; then
               gradle_args+=(-PfirefightingTests=true)
+            fi
+            if [[ "$profile" == chiselsandbits ]]; then
+              gradle_args+=(-PchiselsTests=true)
+            fi
+            if [[ "$profile" == create-placement ]]; then
+              gradle_args+=(-PchiselsTests=true -PcreatePlacementTests=true)
             fi
             status=failure
             if timeout --signal=TERM --kill-after=60s 50m ./gradlew "${gradle_args[@]}" --console=plain runGameTestServer 2>&1 | tee "run/gametest/ci/$GAME_TEST_MOD-$profile.log"; then

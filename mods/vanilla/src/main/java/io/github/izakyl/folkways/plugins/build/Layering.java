@@ -1,5 +1,8 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
@@ -21,6 +24,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluid;
@@ -40,6 +44,7 @@ final class Layering {
 
     enum Kind {
         LAY,
+        CARVE,
         STRIP,
         DRAIN,
         JOIN,
@@ -73,12 +78,13 @@ final class Layering {
 
     private static final int REACH = 2;
     private static final int MOST_FLOODED = 1 << 21;
+    static final int MOST_CARVED = 32;
+    static final int CARVE_SPAN = 8;
     private static final int MOST_DRAINED = 256;
     private static final long HOP = 1L;
     private static final int BAND_SHIFT = 20;
     private static final int STANCE_SPAN = 2;
     private static final int STANCE_DROP = 4;
-    private static final int FAR_DROP = 24;
     private static final int MOST_STANCES = 12;
     // Prefer stances that remain usable across a few nearby changes in the suggested construction order.
     private static final int STANCE_SLACK = 4;
@@ -87,6 +93,7 @@ final class Layering {
     private final BuildTarget target;
     private final List<Draft> drafts = new ArrayList<>();
     private final Map<BlockPos, Integer> owner = new HashMap<>();
+    private final Map<BlockPos, Integer> cleared = new HashMap<>();
     private final Map<BlockPos, BuildRefusal> refused = new LinkedHashMap<>();
     private final Map<Integer, Set<Integer>> hard = new HashMap<>();
     private final Set<BlockPos> latched;
@@ -131,58 +138,161 @@ final class Layering {
         return new Layering(level, target, latched).plan();
     }
 
+    static List<Step> carves(LevelReader level, BuildTarget target, Set<BlockPos> met) {
+        Layering layering = new Layering(level, target, met);
+        List<BlockPos> pending = layering.pending();
+        Set<BlockPos> open = new HashSet<>(pending);
+        for (BlockPos cell : pending) {
+            if (!layering.owner.containsKey(cell) && !layering.cleared.containsKey(cell)
+                && Carving.cell(level, target, cell)) {
+                layering.carve(cell, open);
+            }
+        }
+        return layering.live().stream().map(draft -> draft.step).toList();
+    }
+
+    static Planning planning(LevelReader level, BuildTarget target, Set<BlockPos> met) {
+        return new Layering(level, target, met).new Planning();
+    }
+
     private Plan plan() {
-        lay(pending());
-        joints();
-        Sketch done = new Sketch(level);
-        drafts.stream().filter(draft -> !draft.dropped).forEach(draft -> done.drawAll(draft.after()));
-        for (Draft draft : drafts) {
-            switch (draft.kind) {
-                case LAY -> held(draft, done);
-                case STRIP -> cleared(draft);
-                case DRAIN -> drained(draft);
-                case JOIN, SCAFFOLD, SOAK -> { }
-            }
+        Planning planning = new Planning();
+        while (!planning.advance()) {
+            // Synchronous callers use the same stages as the tick-driven order opener.
         }
-        for (Draft draft : drafts) {
-            if (!draft.dropped && (draft.kind == Kind.SOAK || wet(target.wanted(draft.focus)))) {
-                walledIn(draft);
-            }
-        }
-        Opening opening = opening();
-        int plane = opening.plane();
-        Map<Integer, Long> keys = new HashMap<>();
-        int broken = spread(opening, keys);
-        Map<Integer, Set<Integer>> after = new HashMap<>();
-        int held = 0;
-        for (Map.Entry<Integer, Set<Integer>> edges : hard.entrySet()) {
-            if (keys.containsKey(edges.getKey())) {
-                for (int before : edges.getValue()) {
-                    // spread resolves mutually dependent structures by choosing an order. Keep that order in
-                    // the executable graph too: copying a backward edge would recreate the cycle it broke.
-                    if (keys.containsKey(before) && keys.get(before) < keys.get(edges.getKey())) {
-                        after.computeIfAbsent(edges.getKey(), id -> new LinkedHashSet<>()).add(before);
-                        held++;
+        return planning.result();
+    }
+
+    final class Planning {
+        private final List<BlockPos> pending = pending();
+        private final Set<BlockPos> open = new HashSet<>(pending);
+        private final Sketch done = new Sketch(level);
+        private final Map<Integer, Long> keys = new HashMap<>();
+        private final List<Work> works = new ArrayList<>();
+        private Map<Integer, Set<Integer>> after = Map.of();
+        private boolean replacementsPlanned;
+        private int phase;
+        private int index;
+        private int plane;
+        private Opening opening;
+        private int held;
+        private int broken;
+        private Plan result;
+        boolean advance() {
+            long until = System.nanoTime() + 8_000_000L;
+            switch (phase) {
+                case 0 -> {
+                    if (!replacementsPlanned) {
+                        // Clear every replacement part before a multi-cell shot can claim its footprint.
+                        for (BlockPos cell : pending) {
+                            if (!owner.containsKey(cell) && !cleared.containsKey(cell)
+                                && Carving.replacement(level, target, cell)) {
+                                carve(cell, open);
+                            }
+                        }
+                        replacementsPlanned = true;
+                    }
+                    while (index < pending.size() && System.nanoTime() < until) {
+                        int end = Math.min(index + 8, pending.size());
+                        lay(pending.subList(index, end), open);
+                        index = end;
+                    }
+                    if (index < pending.size()) {
+                        return false;
+                    }
+                    for (Draft draft : live()) {
+                        if (draft.kind == Kind.LAY) {
+                            draft.after().keySet().forEach(cell -> {
+                                Integer before = cleared.get(cell);
+                                if (before != null) {
+                                    Layering.this.wait(draft.id, before);
+                                }
+                            });
+                        }
+                    }
+                    finishLay(pending);
+                    joints();
+                    live().forEach(draft -> done.drawAll(draft.after()));
+                }
+                case 1 -> {
+                    while (index < drafts.size() && System.nanoTime() < until) {
+                        Draft draft = drafts.get(index++);
+                        switch (draft.kind) {
+                            case LAY -> held(draft, done);
+                            case CARVE -> {
+                                held(draft, done);
+                                cleared(draft);
+                            }
+                            case STRIP -> cleared(draft);
+                            case DRAIN -> drained(draft);
+                            case JOIN, SCAFFOLD, SOAK -> { }
+                        }
+                        if (!draft.dropped && (draft.kind == Kind.SOAK || wet(target.wanted(draft.focus)))) {
+                            walledIn(draft);
+                        }
+                    }
+                    if (index < drafts.size()) {
+                        return false;
                     }
                 }
+                case 2 -> {
+                    opening = opening();
+                    plane = opening.plane();
+                }
+                case 3 -> {
+                    broken = spread(opening, keys);
+                    after = new HashMap<>();
+                    held = 0;
+                    for (Map.Entry<Integer, Set<Integer>> edges : hard.entrySet()) {
+                        if (keys.containsKey(edges.getKey())) {
+                            for (int before : edges.getValue()) {
+                                // spread resolves mutually dependent structures by choosing an order. Keep that order
+                                // in
+                                // the executable graph too: copying a backward edge would recreate the cycle it broke.
+                                if (keys.containsKey(before) && keys.get(before) < keys.get(edges.getKey())) {
+                                    after.computeIfAbsent(edges.getKey(), id -> new LinkedHashSet<>()).add(before);
+                                    held++;
+                                }
+                            }
+                        }
+                    }
+                    for (Draft draft : live()) {
+                        long key = keys.get(draft.id);
+                        draft.after().forEach((cell, state) -> {
+                            changedAt.merge(cell, key, Math::min);
+                            changedTo.put(cell, state);
+                        });
+                    }
+                }
+                case 4 -> {
+                    while (index < drafts.size() && System.nanoTime() < until) {
+                        Draft draft = drafts.get(index++);
+                        if (!draft.dropped) {
+                            long key = keys.get(draft.id);
+                            works.add(new Work(draft.id, draft.kind, draft.focus, Optional.ofNullable(draft.step),
+                                Optional.ofNullable(draft.joint), draft.focus.getY() >= plane, band(draft, plane), key,
+                                stances(draft, key)));
+                        }
+                    }
+                    if (index < drafts.size()) {
+                        return false;
+                    }
+                    works.sort(Comparator.comparingLong(Work::key).thenComparingInt(Work::id));
+                    result = new Plan(plane, List.copyOf(works), after, Map.copyOf(refused), held, 0, broken);
+                    return true;
+                }
+                default -> throw new IllegalStateException("planning already completed");
             }
+            phase++;
+            index = 0;
+            return false;
         }
-        for (Draft draft : live()) {
-            long key = keys.get(draft.id);
-            draft.after().forEach((cell, state) -> {
-                changedAt.merge(cell, key, Math::min);
-                changedTo.put(cell, state);
-            });
+        String stage() {
+            return "layering:" + phase + ":" + index;
         }
-        List<Work> works = new ArrayList<>();
-        for (Draft draft : live()) {
-            long key = keys.get(draft.id);
-            works.add(new Work(draft.id, draft.kind, draft.focus, Optional.ofNullable(draft.step),
-                Optional.ofNullable(draft.joint), draft.focus.getY() >= plane, band(draft, plane), key,
-                stances(draft, key)));
+        Plan result() {
+            return result;
         }
-        works.sort(Comparator.comparingLong(Work::key).thenComparingInt(Work::id));
-        return new Plan(plane, List.copyOf(works), after, Map.copyOf(refused), held, 0, broken);
     }
 
     private List<Draft> live() {
@@ -205,14 +315,19 @@ final class Layering {
         return pending;
     }
 
-    private void lay(List<BlockPos> pending) {
-        Set<BlockPos> open = new HashSet<>(pending);
+    private void lay(List<BlockPos> pending, Set<BlockPos> open) {
         for (BlockPos cell : pending) {
             if (owner.containsKey(cell) || refused.containsKey(cell)) {
                 continue;
             }
             BlockState goal = target.wanted(cell);
             BlockState standing = level.getBlockState(cell);
+            if (Carving.cell(level, target, cell) && !cleared.containsKey(cell)) {
+                carve(cell, open);
+                if (!cleared.containsKey(cell)) {
+                    continue;
+                }
+            }
             if (goal.isAir() && standing.liquid()) {
                 drain(cell, standing.getFluidState().getType(), open);
             } else if (goal.isAir()) {
@@ -232,15 +347,95 @@ final class Layering {
                 if (unlayable(launch.get()) || unbreakable(remaining.cells().keySet())) {
                     refused.put(cell, BuildRefusal.NO_WAY_TO_BUILD);
                 } else {
-                    laid(cell, Step.lay(level, print, latched::contains));
+                    Sketch empty = new Sketch(level);
+                    cleared.keySet().forEach(part -> empty.draw(part, Blocks.AIR.defaultBlockState()));
+                    laid(cell, Step.lay(empty, print, latched::contains));
                 }
             }
         }
+    }
+
+    private void finishLay(List<BlockPos> pending) {
         // A part whose shot is done or refused is never aimed at by itself: the cannon would not either.
         for (BlockPos cell : pending) {
             if (!owner.containsKey(cell) && !refused.containsKey(cell)) {
                 refused.put(cell, BuildRefusal.NO_WAY_TO_BUILD);
             }
+        }
+    }
+
+    // One horizontal slice avoids contracting vertical support dependencies into the same piece.
+    private void carve(BlockPos seed, Set<BlockPos> pending) {
+        Map<BlockPos, BlockState> before = new LinkedHashMap<>();
+        Map<BlockPos, BlockState> after = new LinkedHashMap<>();
+        Set<BlockPos> seen = new HashSet<>();
+        Set<ItemSpec> materials = new HashSet<>();
+        ArrayDeque<BlockPos> open = new ArrayDeque<>();
+        open.add(seed);
+        while (!open.isEmpty() && after.size() < MOST_CARVED) {
+            BlockPos cell = open.remove();
+            if (!seen.add(cell) || !pending.contains(cell) || owner.containsKey(cell) || refused.containsKey(cell)
+                || cell.getY() != seed.getY() || Math.floorDiv(cell.getX(), CARVE_SPAN) != Math.floorDiv(seed.getX(),
+                    CARVE_SPAN)
+                || Math.floorDiv(cell.getZ(), CARVE_SPAN) != Math.floorDiv(seed.getZ(), CARVE_SPAN)
+                || cleared.containsKey(cell) || !Carving.cell(level, target, cell)) {
+                continue;
+            }
+            BlockState goal = Carving.replacement(level, target, cell)
+                ? Blocks.AIR.defaultBlockState() : target.wanted(cell);
+            Step step = Step.lay(level, new Footprint(cell, Map.of(cell, goal)), latched::contains);
+            Map<BlockPos, BlockState> proposed = new LinkedHashMap<>(after);
+            proposed.putAll(step.after());
+            try {
+                Carving.Quote quote = Carving.quote(level, step.after(), target::dataAt);
+                Set<ItemSpec> with = new HashSet<>(materials);
+                quote.needs().forEach(need -> with.add(need.spec()));
+                quote.leaves().forEach(amount -> with.add(amount.spec()));
+                long slots = with.stream().mapToLong(material -> {
+                    int stack = Goods.display(material).getMaxStackSize();
+                    return (proposed.size() + stack - 1L) / stack;
+                }).sum();
+                int minX = proposed.keySet().stream().mapToInt(BlockPos::getX).min().orElse(cell.getX());
+                int maxX = proposed.keySet().stream().mapToInt(BlockPos::getX).max().orElse(cell.getX());
+                int minZ = proposed.keySet().stream().mapToInt(BlockPos::getZ).min().orElse(cell.getZ());
+                int maxZ = proposed.keySet().stream().mapToInt(BlockPos::getZ).max().orElse(cell.getZ());
+                int minY = proposed.keySet().stream().mapToInt(BlockPos::getY).min().orElse(cell.getY());
+                int maxY = proposed.keySet().stream().mapToInt(BlockPos::getY).max().orElse(cell.getY());
+                // Two of the six turn slots remain available for scaffolds and incidental drops.
+                if (proposed.size() > MOST_CARVED || slots > 4 || maxX - minX >= CARVE_SPAN || maxZ - minZ >= CARVE_SPAN
+                    || maxY - minY >= 4 || unbreakable(step.after().keySet())) {
+                    if (after.isEmpty()) {
+                        refused.put(cell, BuildRefusal.NO_WAY_TO_BUILD);
+                    }
+                    continue;
+                }
+                materials = with;
+            } catch (StructureCompat.Failure invalid) {
+                refused.put(cell, BuildRefusal.NO_WAY_TO_BUILD);
+                continue;
+            }
+            step.before().forEach(before::putIfAbsent);
+            after.putAll(step.after());
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (dx != 0 || dz != 0) {
+                        open.add(cell.offset(dx, 0, dz));
+                    }
+                }
+            }
+        }
+        if (!after.isEmpty()) {
+            double x = after.keySet().stream().mapToInt(BlockPos::getX).average().orElse(seed.getX());
+            double z = after.keySet().stream().mapToInt(BlockPos::getZ).average().orElse(seed.getZ());
+            BlockPos middle = after.keySet().stream().min(Comparator.comparingDouble(cell ->
+                Math.pow(cell.getX() - x, 2) + Math.pow(cell.getZ() - z, 2))).orElse(seed);
+            Draft carve = add(Kind.CARVE, middle, new Step(BuildJob.Kind.CARVE, middle, before, after), null);
+            after.keySet().forEach(cell -> {
+                if (Carving.replacement(level, target, cell)) {
+                    cleared.put(cell, carve.id);
+                    owner.remove(cell);
+                }
+            });
         }
     }
 
@@ -339,7 +534,8 @@ final class Layering {
             for (Direction direction : Direction.values()) {
                 BlockPos next = at.relative(direction);
                 Integer by = owner.get(next);
-                if (by == null || by == draft.id || drafts.get(by).kind != Kind.LAY) {
+                if (by == null || by == draft.id || drafts.get(by).kind != Kind.LAY
+                    && drafts.get(by).kind != Kind.CARVE) {
                     continue;
                 }
                 BlockState was = done.lift(next);
@@ -364,12 +560,13 @@ final class Layering {
                     continue;
                 }
                 BlockState state = level.getBlockState(next);
-                if (drafts.get(by).kind == Kind.LAY && !state.getFluidState().isEmpty()
+                if ((drafts.get(by).kind == Kind.LAY || drafts.get(by).kind == Kind.CARVE)
+                    && !state.getFluidState().isEmpty()
                         && seals(next, direction)) {
                     wait(draft.id, by);
                     continue;
                 }
-                if (drafts.get(by).kind != Kind.STRIP) {
+                if (drafts.get(by).kind != Kind.STRIP && drafts.get(by).kind != Kind.CARVE) {
                     continue;
                 }
                 if (!state.isAir() && !state.liquid() && BuildPlanner.stays(level, next, state)
@@ -688,15 +885,8 @@ final class Layering {
         if (!sure.isEmpty()) {
             found = sure;
         }
-        for (int dy = -STANCE_DROP; found.isEmpty() && dy >= -FAR_DROP; dy--) {
-            for (int dx = -STANCE_SPAN; dx <= STANCE_SPAN; dx++) {
-                for (int dz = -STANCE_SPAN; dz <= STANCE_SPAN; dz++) {
-                    BlockPos feet = focus.offset(dx, dy, dz);
-                    if (!own.contains(feet) && standsAt(feet, key)) {
-                        found.add(feet);
-                    }
-                }
-            }
+        if (found.isEmpty()) {
+            found = SiteApproach.below(focus, feet -> !own.contains(feet) && standsAt(feet, key));
         }
         found.sort(Comparator.comparingDouble(feet -> feet.distSqr(focus)));
         return List.copyOf(found.subList(0, Math.min(MOST_STANCES, found.size())));

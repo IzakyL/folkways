@@ -43,7 +43,7 @@ public final class Commissions {
                 return new Said(false, ((Rounds.Once.Refused) once).why());
             }
             return site.file(level, drafted.blueprint(), drafted.corner(), siteName, playerId, playerName,
-                    pattern.id(), hint)
+                    pattern.id(), hint, settings.save(), facing)
                 .map(order -> new Said(true, Component.translatable("folkways.blueprint.placed", order.name())))
                 .orElseGet(() -> new Said(false,
                     Component.translatable("folkways.blueprint.too_many", BlueprintBook.MAX_BUILD_ORDERS)));
