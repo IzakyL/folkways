@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.front.api.ui.RegisteringUi;
 import io.github.izakyl.folkways.front.engine.Enrollments;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
 
@@ -32,7 +33,7 @@ public final class PageKinds {
 
     public static List<PageKind> all() {
         List<PageKind> pages = new ArrayList<>(CORE);
-        for (Enrollment enrolled : Enrollments.all().values()) {
+        for (Enrollment enrolled : orderedEnrollments()) {
             List<PageKind> declared = enrolled.pages();
             if (!declared.isEmpty()) {
                 pages.add(declared.get(0));
@@ -44,10 +45,19 @@ public final class PageKinds {
 
     public static List<PageKind> every() {
         List<PageKind> pages = new ArrayList<>(CORE);
-        for (Enrollment enrolled : Enrollments.all().values()) {
+        for (Enrollment enrolled : orderedEnrollments()) {
             pages.addAll(enrolled.pages());
         }
         return List.copyOf(pages);
+    }
+
+    // LDLib2 assigns sync and RPC IDs while walking the UI. Peers may load the same plugins in a
+    // different order, so page construction follows stable owner IDs, preserving each plugin's page order.
+    private static List<Enrollment> orderedEnrollments() {
+        return Enrollments.all().entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .map(Map.Entry::getValue)
+            .toList();
     }
 
     public static boolean shows(Colony colony, ResourceLocation page) {

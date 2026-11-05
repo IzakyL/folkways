@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.front.ui.panel;
 import io.github.izakyl.folkways.front.api.ui.Bay;
 import io.github.izakyl.folkways.front.api.ui.Inlay;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,8 @@ public final class Inlays {
         }
         List<Entry> entries = new ArrayList<>(filled.size());
         filled.forEach((owner, factory) -> entries.add(new Entry(owner, factory)));
+        // These children share the screen's positional sync/RPC IDs on both peers.
+        entries.sort(Comparator.comparing(Entry::owner));
         return List.copyOf(entries);
     }
 }
