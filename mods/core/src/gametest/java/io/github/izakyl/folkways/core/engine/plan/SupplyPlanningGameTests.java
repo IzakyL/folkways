@@ -14,16 +14,15 @@ import io.github.izakyl.folkways.core.api.work.Intent;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Refinement;
 import io.github.izakyl.folkways.core.api.work.Stall;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
+import io.github.izakyl.folkways.core.testing.Nodes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +32,6 @@ import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -54,9 +52,6 @@ public final class SupplyPlanningGameTests {
     private static final ItemSpec BALE = ItemSpec.of(ResourceLocation.withDefaultNamespace("hay_block"));
     private static final RefusalKind BUSY = () -> "folkways_test.busy";
 
-    private record Action(NodeSpec spec) implements Node {
-        public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
-    }
     private record Guarded(NodeSpec spec, Hold hold) implements Intent { }
 
     private static class Counted implements Hold {
@@ -79,14 +74,14 @@ public final class SupplyPlanningGameTests {
             public ResourceLocation id() { return OWNER; }
             public Optional<Change> rewrite(Intent intent, Grown graph) {
                 return intent instanceof Guarded guarded
-                    ? Optional.of(Change.of(Grown.of(new Action(guarded.spec()))).holding(guarded.hold()))
+                    ? Optional.of(Change.of(Grown.of(Nodes.done(guarded.spec()))).holding(guarded.hold()))
                     : Optional.empty();
             }
         });
     }
 
     private static Node consumer(PlanningFixture f, Need... needs) {
-        return new Action(NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(f.target),
+        return Nodes.done(NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(f.target),
             Stances.at(f.target), Workload.Once.of(1)).needs(needs).done());
     }
 
@@ -102,7 +97,7 @@ public final class SupplyPlanningGameTests {
             public WorkSite site() { return new WorkSite.AtBlock(f.source); }
             public List<Refinement.Change> options(Intent intent, Grown graph) {
                 if (!(intent instanceof Produce produce) || !produce.wanted().admits(BREAD)) return List.of();
-                Node oven = new Action(NodeSpec.of(UUID.randomUUID(), OWNER, site(), Stances.at(f.source),
+                Node oven = Nodes.done(NodeSpec.of(UUID.randomUUID(), OWNER, site(), Stances.at(f.source),
                     Workload.Once.of(1)).gives(new Amount(BREAD, produce.count())).done());
                 return List.of(Refinement.Change.of(Grown.of(oven)).holding(hold));
             }
@@ -124,7 +119,7 @@ public final class SupplyPlanningGameTests {
             if (!(intent instanceof Produce produce) || !produce.wanted().admits(BREAD)) return List.of();
             if (produce.count() > 1) enlargedQueueSizes.add(queue.size());
             long count = Math.min(capacity, produce.count());
-            var oven = new Action(NodeSpec.of(UUID.randomUUID(), OWNER, site(), Stances.at(fixture.source),
+            var oven = Nodes.done(NodeSpec.of(UUID.randomUUID(), OWNER, site(), Stances.at(fixture.source),
                 Workload.Once.of(20)).estimate(1200).gives(new Amount(BREAD, count)).done());
             var hold = new Hold() {
                 private Set<UUID> before = Set.of();
@@ -363,7 +358,7 @@ public final class SupplyPlanningGameTests {
     public static void refusedWorkshopHoldAdmitsNothing(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var hold = new Counted(false);
-        var planner = new Solving(new Claims(), new Cooldowns());
+        var planner = new Solving();
         try {
             Planned solved = planner.handle(known(f, List.of(), List.of(bakery(f, hold))),
                 List.of(new Message.Submitted(OWNER, Grown.of(consumer(f, new Need(BREAD, 4))))), 0);
@@ -381,7 +376,7 @@ public final class SupplyPlanningGameTests {
     public static void anAskShortOfGoodsStallsWhereItsWorkIs(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         Node eats = consumer(f, new Need(BREAD, 4));
-        var planner = new Solving(new Claims(), new Cooldowns());
+        var planner = new Solving();
         try {
             Planned short_ = planner.handle(known(f, List.of(), List.of()),
                 List.of(new Message.Submitted(OWNER, Grown.of(eats))), 0);
@@ -390,6 +385,12 @@ public final class SupplyPlanningGameTests {
             helper.assertTrue(short_.woven().stalls().equals(List.of(wanting)),
                 "with no bread anywhere, the ask stalls at its own work for want of bread: "
                     + short_.woven().stalls());
+            helper.assertTrue(short_.weave().vertices().isEmpty() && short_.diagnosis().shortfalls().size() == 1,
+                "a need with no source leaves nothing planned");
+            Shortfall gap = short_.diagnosis().shortfalls().getFirst();
+            helper.assertTrue(gap.holes().equals(List.of(Edge.idOf(eats.id(), 0)))
+                    && gap.consumer().equals(eats.id()) && gap.missing() == 4,
+                "the shortfall names the open edge and the consumer it was for");
             var held = List.of(new Stock.Holding(new Stash(f.source), new ItemStack(Items.BREAD, 4)));
             Planned fed = planner.handle(known(f, held, List.of()), List.of(Message.ANSWERED), 1);
             helper.assertTrue(fed.weave().vertices().containsKey(eats.id()) && fed.woven().stalls().isEmpty(),
@@ -406,7 +407,7 @@ public final class SupplyPlanningGameTests {
         var hold = new Counted(true);
         var known = known(f, List.of(), List.of(bakery(f, hold)));
         Node eats = consumer(f, new Need(BREAD, 4));
-        var planner = new Solving(new Claims(), new Cooldowns());
+        var planner = new Solving();
         try {
             Planned solved = planner.handle(known, List.of(new Message.Submitted(OWNER, Grown.of(eats))), 0);
             helper.assertTrue(solved.weave().vertices().size() == 2 && solved.diagnosis().shortfalls().isEmpty(),
@@ -432,7 +433,7 @@ public final class SupplyPlanningGameTests {
             var hold = new Counted(grants);
             var guarded = new Guarded(NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(f.source),
                 Stances.WHEREVER, Workload.Once.of(1)).done(), hold);
-            var planner = new Solving(new Claims(), new Cooldowns());
+            var planner = new Solving();
             try {
                 Planned solved = planner.handle(known, List.of(new Message.Submitted(OWNER, Grown.of(guarded))), 0);
                 helper.assertTrue(hold.taken == 1 && solved.weave().vertices().containsKey(guarded.id()) == grants
@@ -448,26 +449,6 @@ public final class SupplyPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void shortfallNamesTheSupplyThatCouldNotBeResolved(GameTestHelper helper) {
-        var f = new PlanningFixture(helper);
-        Node eats = consumer(f, new Need(BREAD, 4));
-        var planner = new Solving(new Claims(), new Cooldowns());
-        try {
-            Planned solved = planner.handle(known(f, List.of(), List.of()),
-                List.of(new Message.Submitted(OWNER, Grown.of(eats))), 0);
-            helper.assertTrue(solved.weave().vertices().isEmpty() && solved.diagnosis().shortfalls().size() == 1,
-                "a need with no source leaves nothing planned");
-            Shortfall gap = solved.diagnosis().shortfalls().getFirst();
-            helper.assertTrue(gap.holes().equals(List.of(Edge.idOf(eats.id(), 0)))
-                    && gap.consumer().equals(eats.id()) && gap.missing() == 4,
-                "the shortfall names the open edge and the consumer it was for");
-        } finally {
-            planner.closed();
-        }
-        helper.succeed();
-    }
-
     private static Workshop recipe(PlanningFixture f, int key, ItemSpec makes, long perRun, Need takes, int ticks) {
         return new Workshop() {
             public ResourceLocation id() { return OWNER; }
@@ -476,7 +457,7 @@ public final class SupplyPlanningGameTests {
             public List<Refinement.Change> options(Intent intent, Grown graph) {
                 if (!(intent instanceof Produce produce) || !Goods.overlap(produce.wanted(), makes)) return List.of();
                 long runs = (produce.count() + perRun - 1) / perRun;
-                Node station = new Action(NodeSpec.of(UUID.randomUUID(), OWNER, site(), Stances.at(f.source),
+                Node station = Nodes.done(NodeSpec.of(UUID.randomUUID(), OWNER, site(), Stances.at(f.source),
                     Workload.Once.of(1)).needs(new Need(takes.spec(), takes.count() * runs))
                     .gives(new Amount(makes, perRun * runs)).estimate((int) (ticks * runs)).done());
                 return List.of(Refinement.Change.of(Grown.of(station)));
@@ -502,7 +483,7 @@ public final class SupplyPlanningGameTests {
             recipe(f, 11, BREAD, 1, new Need(WHEAT, 3), 200),
             recipe(f, 12, BREAD, 9, new Need(BALE, 1), 20),
             recipe(f, 13, BALE, 1, new Need(baled, 9), 20));
-        var planner = new Solving(new Claims(), new Cooldowns());
+        var planner = new Solving();
         try {
             Planned solved = planner.handle(known(f, held, workshops),
                 List.of(new Message.Submitted(OWNER, Grown.of(eats))), 0);

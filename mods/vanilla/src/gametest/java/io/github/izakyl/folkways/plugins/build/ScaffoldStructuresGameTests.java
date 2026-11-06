@@ -6,8 +6,8 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -165,7 +165,6 @@ public final class ScaffoldStructuresGameTests {
     }
 
     private static Worker worker() {
-        return (Worker) Proxy.newProxyInstance(ScaffoldStructuresGameTests.class.getClassLoader(),
-            new Class<?>[] {Worker.class}, (proxy, method, args) -> method.getName().equals("supplied") ? List.of() : null);
+        return Proxies.of(Worker.class, (proxy, method, args) -> method.getName().equals("supplied") ? List.of() : null);
     }
 }

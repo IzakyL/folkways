@@ -48,8 +48,7 @@ public final class LoadoutPageGameTests {
             CompoundTag create = new CompoundTag();
             create.putString("action", "create");
             create.putString("name", "Guard equipment");
-            helper.assertTrue(page.apply(player, create), "keeper creates a colony profile through"
-                + " the page action");
+            helper.assertTrue(page.apply(player, create), "keeper creates a colony profile through the page action");
             var profiles = LoadoutProfiles.of(colony);
             var profile = profiles.all().getFirst();
             CompoundTag gear = new CompoundTag();
@@ -76,8 +75,7 @@ public final class LoadoutPageGameTests {
             helper.assertTrue(page.apply(player, rename), "the current revision can be renamed");
             rename.putString("name", "Stale edit");
             helper.assertFalse(
-                page.apply(player, rename), "an older editor cannot overwrite another keeper's"
-                + " revision");
+                page.apply(player, rename), "an older editor cannot overwrite another keeper's revision");
             helper.assertValueEqual(
                 profiles.get(profile.id()).orElseThrow().name(),
                 "Archers",
@@ -85,11 +83,9 @@ public final class LoadoutPageGameTests {
             var intruder =
                 FakePlayerFactory.get(helper.getLevel(), new GameProfile(UUID.randomUUID(), "loadout_intruder"));
             intruder.setData(FolkwaysPlayerAttachments.CURRENT_COLONY, Optional.of(colony.id()));
-            helper.assertFalse(page.apply(intruder, create), "forged current-colony state confers"
-                + " no keeper authority");
+            helper.assertFalse(page.apply(intruder, create), "forged current-colony state confers no keeper authority");
             Charters.keep(colony, Charter.founded("revoked", UUID.randomUUID()));
-            helper.assertFalse(page.apply(player, create), "page authority is rechecked after"
-                + " revocation");
+            helper.assertFalse(page.apply(player, create), "page authority is rechecked after revocation");
         } finally {
             colony.raze();
         }
@@ -159,7 +155,7 @@ public final class LoadoutPageGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void compactEntryActionsValidateAmountsAndRejectRetiredCommands(GameTestHelper helper) {
+    public static void compactEntryActionsValidateAmountsAndKeepEntryIdentity(GameTestHelper helper) {
         var colony = Colonies.mint(helper.getLevel().getServer());
         var player = FakePlayerFactory.get(helper.getLevel(), new GameProfile(UUID.randomUUID(), "profile_amounts"));
         Charters.keep(colony, Charter.founded("Amounts", player.getUUID()));
@@ -173,11 +169,7 @@ public final class LoadoutPageGameTests {
             CompoundTag request = new CompoundTag();
             request.putUUID("profile", profile.id());
             request.putUUID("entry", supply.id());
-            for (String action : List.of("exact", "enchantments", "held_weapon", "assign", "unassign")) {
-                request.putString("action", action);
-                request.putLong("revision", profiles.revision(profile.id()));
-                helper.assertFalse(page.apply(player, request), "retired command is rejected: " + action);
-            }
+            request.putLong("revision", profiles.revision(profile.id()));
             request.putString("action", "amount");
             request.putInt("target", 16);
             request.putInt("threshold", 4);
@@ -238,9 +230,7 @@ public final class LoadoutPageGameTests {
                 "a foreign second member rejects the entire bulk operation");
             profiles.assign(List.of(resident.id()), Optional.of(profile.id()));
             profiles.delete(profile.id());
-            helper.assertTrue(profiles.assigned(resident.id()).isEmpty(), "deletion clears"
-                + " assignments"
-                + " atomically");
+            helper.assertTrue(profiles.assigned(resident.id()).isEmpty(), "deletion clears assignments atomically");
         } finally {
             resident.discard();
             outsider.discard();

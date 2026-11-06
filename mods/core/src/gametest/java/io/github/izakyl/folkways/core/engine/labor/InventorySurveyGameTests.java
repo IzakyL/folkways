@@ -18,7 +18,7 @@ import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryTestWork;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.engine.plan.Manifest;
 import io.github.izakyl.folkways.core.engine.plan.Stands;
 import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
@@ -69,7 +69,7 @@ public final class InventorySurveyGameTests {
         survey.reserved(Set.of(body.id()));
         try {
             survey.answer(level, data, Map.of(body.id(), body), seen -> { });
-            InventoryTestWork.finish(data.inventory(), level.getServer());
+            InventoryObservations.work(data.inventory(), level.getServer(), 100);
             survey.answer(level, data, Map.of(body.id(), body), seen -> { });
             var observed = data.works().inventory().snapshot().residents().get(body.id());
             helper.assertTrue(observed.state() == State.OBSERVED && observed.pack().get(4).stackCopy().getCount() == 6
@@ -96,7 +96,7 @@ public final class InventorySurveyGameTests {
         ColonyData data = new ColonyData();
         Survey survey = new Survey();
         survey.answer(level, data, Map.of(body.id(), body), seen -> { });
-        InventoryTestWork.finish(data.inventory(), level.getServer());
+        InventoryObservations.work(data.inventory(), level.getServer(), 100);
         survey.answer(level, data, Map.of(body.id(), body), seen -> { });
         var before = data.inventory().snapshot().residents().get(body.id());
         Worker worker = new Hands(body, Stands.NONE, Placement.NOWHERE, drop -> { }, List::of);

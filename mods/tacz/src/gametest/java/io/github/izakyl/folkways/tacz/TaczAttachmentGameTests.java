@@ -50,11 +50,10 @@ public final class TaczAttachmentGameTests {
         ItemStack actual = scene.body.pack().getItem(0);
         helper.assertTrue(TaczGuns.supported(actual), "ordinary gun is a positive control");
         attach(actual, attachment, helper);
-        helper.assertFalse(TaczGuns.supported(actual), "actual attachment effects reject this"
-            + " physical gun");
+        helper.assertFalse(TaczGuns.supported(actual), "actual attachment effects reject this physical gun");
         helper.assertTrue(
             Weapons.open(TaczWeaponGameTests.worker(scene.body)).isEmpty(),
-            "unsafe gun never" + " claims the" + " hand");
+            "unsafe gun never claims the hand");
         String ammo = attachment.equals("ammo_mod_he") ? "12g" : "556x45";
         helper.assertValueEqual(scene.total(ammo), 6, "refusal spends no rounds");
         helper.succeed();
@@ -72,24 +71,17 @@ public final class TaczAttachmentGameTests {
         scene.open();
         scene.session.fire(scene.target);
         helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(scene.shots.get() == 1, "first ordinary"
-                + " round"
-                + " fires"))
-            .thenExecute(() -> scene.waitUntil = System.currentTimeMillis() + 600)
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    System.currentTimeMillis() >= scene.waitUntil,
-                    "allow delayed burst tasks to run"))
+            .thenWaitUntil(() -> helper.assertTrue(scene.shots.get() == 1, "first ordinary round fires"))
+            .thenExecute(() -> scene.waitMillis(600))
+            .thenWaitUntil(scene::waited)
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
                     scene.shots.get(),
                     1,
-                    "no delayed explosive round escapes the" + " discharge guard");
+                    "no delayed explosive round escapes the discharge guard");
                 helper.assertValueEqual(
-                    scene.total("556x45"), 5, "blocked burst rounds remain in the"
-                    + " gun");
+                    scene.total("556x45"), 5, "blocked burst rounds remain in the gun");
             })
             .thenSucceed();
     }
@@ -102,10 +94,8 @@ public final class TaczAttachmentGameTests {
         operator.getDataHolder().drawTimestamp = System.currentTimeMillis() - 10_000;
         operator.getDataHolder().baseTimestamp = System.currentTimeMillis() - 60_000;
         operator.getCacheProperty().setCache(GunProperties.IGNITE, new Ignite(true, true));
-        helper.assertTrue(TaczGuns.supported(scene.actual()), "the physical gun itself remains"
-            + " conventional");
-        helper.assertFalse(scene.session.fire(scene.target), "final runtime ignition prevents"
-            + " firing");
+        helper.assertTrue(TaczGuns.supported(scene.actual()), "the physical gun itself remains conventional");
+        helper.assertFalse(scene.session.fire(scene.target), "final runtime ignition prevents firing");
         helper.assertValueEqual(scene.shots.get(), 0, "no projectile is created");
         helper.assertValueEqual(scene.total("45acp"), 6, "runtime rejection spends nothing");
         helper.succeed();
@@ -129,19 +119,14 @@ public final class TaczAttachmentGameTests {
             };
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, listener);
         try {
-            helper.assertTrue(scene.session.fire(scene.target), "an ordinary shot is initially"
-                + " permitted");
+            helper.assertTrue(scene.session.fire(scene.target), "an ordinary shot is initially permitted");
             scene.session.tick();
-            helper.assertValueEqual(changed.get(), 1, "late listener changes the bullet's final"
-                + " payload");
+            helper.assertValueEqual(changed.get(), 1, "late listener changes the bullet's final payload");
             helper.assertValueEqual(
-                scene.total("45acp"), 5, "native discharge really attempted to spawn its"
-                + " round");
-            helper.assertValueEqual(scene.shots.get(), 0, "the explosive entity never enters the"
-                + " world");
+                scene.total("45acp"), 5, "native discharge really attempted to spawn its round");
+            helper.assertValueEqual(scene.shots.get(), 0, "the explosive entity never enters the world");
             helper.assertValueEqual(
-                scene.target.getHealth(), 1000F, "no direct or explosion damage reaches the"
-                + " target");
+                scene.target.getHealth(), 1000F, "no direct or explosion damage reaches the target");
         } finally {
             NeoForge.EVENT_BUS.unregister(listener);
         }
@@ -153,8 +138,7 @@ public final class TaczAttachmentGameTests {
         ((IAttachment) actual.getItem()).setAttachmentId(actual, TaczWeaponGameTests.id(attachment));
         IGun operator = (IGun) gun.getItem();
         helper.assertTrue(
-            operator.allowAttachment(gun, actual), "the pinned attachment is valid on the"
-            + " ordinary gun");
+            operator.allowAttachment(gun, actual), "the pinned attachment is valid on the ordinary gun");
         operator.installAttachment(helper.getLevel().registryAccess(), gun, actual);
     }
 }

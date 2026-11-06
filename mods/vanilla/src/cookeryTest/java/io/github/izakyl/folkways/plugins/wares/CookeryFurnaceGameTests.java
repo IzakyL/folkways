@@ -1,19 +1,16 @@
 package io.github.izakyl.folkways.plugins.wares;
 
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.google.gson.JsonParser;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
@@ -35,7 +32,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -95,7 +91,7 @@ public final class CookeryFurnaceGameTests {
             .map(node -> (Smelt) node).findFirst().orElseThrow();
         Grown work = Smelt.SMELTING.expand(selected).orElseThrow();
         Node take = work.nodes().stream().filter(node -> node instanceof TakeCookedNode).findFirst().orElseThrow();
-        work.nodes().stream().filter(node -> node != take).forEach(node -> helper.assertTrue(Commit.run(level, node, rig) instanceof Outcome.Done,
+        work.nodes().stream().filter(node -> node != take).forEach(node -> helper.assertTrue(Commit.run(level, node, rig.worker) instanceof Outcome.Done,
             id + ": real input and real fuel load through colony work"));
         long started = level.getGameTime();
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(take.ready(level), id + ": actual native cooker output becomes available"))
@@ -108,7 +104,7 @@ public final class CookeryFurnaceGameTests {
                 try {
                     helper.assertTrue(level.getGameTime() - started >= (long) recipe.getCookingTime() * 2,
                         id + ": both native cooking cycles elapsed");
-                    Outcome settled = Commit.run(level, take, rig);
+                    Outcome settled = Commit.run(level, take, rig.worker);
                     helper.assertTrue(settled instanceof Outcome.Done, id + ": actual served output settles");
                     ((Outcome.Done) settled).made().forEach(stack -> helper.assertTrue(Containers.insert(rig.pack, stack).isEmpty(), "actual output fits"));
                     helper.assertValueEqual(Goods.countIn(rig.pack, Goods.specOf(output)), 2L, id + ": exactly two native foods are delivered");
@@ -120,7 +116,8 @@ public final class CookeryFurnaceGameTests {
             }).thenSucceed();
     }
 
-    private static final class Rig implements Worker {
+    private static final class Rig {
+        final Worker worker;
         final ServerLevel level;
         final BlockPos cell;
         final WorldPos at;
@@ -132,15 +129,7 @@ public final class CookeryFurnaceGameTests {
             level.setBlockAndUpdate(cell.below(), Blocks.STONE.defaultBlockState());
             actor = PersonBody.RESIDENT.get().create(level); actor.setPos(Vec3.atBottomCenterOf(cell.east())); level.addFreshEntity(actor);
             stances = Stances.at(level, actor.blockPosition()); pack = new SimpleContainer(input.copy(), new ItemStack(Items.COAL), ItemStack.EMPTY);
+            worker = TestWorker.of(actor).pack(pack);
         }
-        public Resident resident() { return actor.resident(); }
-        public Mob body() { return actor; }
-        public Container pack() { return pack; }
-        public List<Store> within() { return List.of(); }
-        public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-        public void spill(ItemStack stack) { if (!stack.isEmpty()) throw new IllegalStateException("unexpected spill " + stack); }
-        public Effects effects() { return actor.effects(); }
-        public List<Node> route() { return List.of(); }
-        public Placement placement() { return Placement.NOWHERE; }
     }
 }

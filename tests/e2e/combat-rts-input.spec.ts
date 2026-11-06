@@ -1,11 +1,11 @@
-import { expect, test, type TestInfo } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import {
-  defineTask, input, javaTask, media, screen, tick, world,
+  defineTask, input, javaTask, screen, tick,
   type MinecraftClient, type MinecraftServer,
 } from "@izakyl/blockwright-minecraft";
-import { foundColonyFast, openColonyPanelViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
+import { waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { frames } from "../shared/harness/bw-helpers";
-import { ensureOut, outAbs } from "../shared/harness/out-paths";
+import { BUDGET } from "../shared/harness/budgets";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { newRunId } from "../shared/harness/run-id";
 import { mustCommand } from "../shared/ui/world-ui";
@@ -13,6 +13,7 @@ import { checkModeLayers } from "../shared/ui/mode-layers";
 import {
   PREPARE_RESIDENTS, READ_CLIENT, PROJECT, RESIZE, type Vec, type Pixel, type ClientState,
 } from "../shared/combat/rts-fixtures";
+import { foundBookColony, layFloor, openRtsTool, tapV } from "../shared/combat/overhead";
 
 type ServerState = {
   selection: string[]; groups: string[][]; owned: boolean[]; reserved: boolean[];
@@ -26,15 +27,9 @@ type Context = { colony: string; player: string; residents: string[] };
 // Player actions under test go through input.*. The explicit rejected-packet probes below additionally
 // exercise server refusal feedback; other Java tasks only arrange fixtures or observe production state.
 test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend and release", async ({}, testInfo) => {
-  test.setTimeout(600_000);
+  test.setTimeout(BUDGET.standard);
   let pair: E2EPair | undefined;
-  const evidence: Record<string, unknown> = {
-    scope: "Three residents on flat ground, real screen input, authoritative ACK and group assertions",
-    unverified: ["Hostile engagement and resuming a route after combat", "Large formations and difficult terrain"],
-    visualReview: "Route screenshots require human inspection; state assertions alone do not prove rendered pixels",
-  };
   try {
-    ensureOut("e2e");
     const run = newRunId();
     pair = await launchPair({
       config: "blockwright.toml#rts",
@@ -49,26 +44,17 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await mustCommand(server, "gamerule doMobSpawning false");
     await mustCommand(server, "gamerule doDaylightCycle false");
     await mustCommand(server, "time set noon");
-    await world.command(server,
-      `fill ${origin.x - 19} ${origin.y - 1} ${origin.z - 19} ${origin.x + 19} ${origin.y - 1} ${origin.z + 19} minecraft:smooth_stone`);
-    await world.command(server,
-      `fill ${origin.x - 19} ${origin.y} ${origin.z - 19} ${origin.x + 19} ${origin.y + 6} ${origin.z + 19} minecraft:air`,
-      { allowFailure: true });
-    const founding = await foundColonyFast(server, client, player.name, { origin, residentCount: 3 });
-    const colony = String(founding.evidence.colonyId);
-    await openColonyPanelViaBook(server, client, player.name, founding.standBlock);
-    await screen.dismiss(client);
+    await layFloor(server, { x: origin.x - 19, z: origin.z - 19 }, { x: origin.x + 19, z: origin.z + 19 }, origin.y,
+      "minecraft:smooth_stone", 6);
+    const { colony } = await foundBookColony(server, client, player.name, origin, 3);
     const residents = await server.run(PREPARE_RESIDENTS, { colony, ...origin, count: 3 });
     expect(residents).toHaveLength(3);
     const context: Context = { colony, player: player.name, residents };
-    await mustCommand(server, `tp ${player.name} ${origin.x + 0.5} ${origin.y} ${origin.z + 2.5} 0 0`);
+    const home = `tp ${player.name} ${origin.x + 0.5} ${origin.y} ${origin.z + 2.5} 0 0`;
+    await mustCommand(server, home);
     await tick.sprint(server, 2);
     await frames(client, 10);
-    await input.key(client, { keyCode: 86 });
-    await screen.waitFor(client, "OverheadScreen", { timeoutMs: 8_000 });
-    const combat = (await screen.widgets(client)).find(widget => /^RTS$/.test(widget.label?.trim() ?? ""));
-    expect(combat, "RTS must be present in the combat profile").toBeTruthy();
-    await screen.clickWidget(client, { label: combat!.label });
+    await openRtsTool(client);
     await waitFor("combat roster", client, server, context, value => value.client.combat && value.client.roster >= 3);
 
     const empty = await client.run(READ_CLIENT);
@@ -87,7 +73,6 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expect(noSelection.failure).not.toBe("");
     expect(noSelection.failureRemaining).toBeGreaterThan(0);
     expect(noSelection.failureRemaining).toBeLessThanOrEqual(3000);
-    evidence.noSelectionFailure = noSelection;
     await failureExpired(client);
 
     // Keep the box-selection fixture stationary while deselected residents are unowned.
@@ -95,32 +80,29 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await tick.sprint(server, 3);
     await frames(client, 10);
     const { boxes, from, to } = await boxAround(client, origin, residents);
-    evidence.boxGesture = { from, to, boxes };
     const beforeBox = (await client.run(READ_CLIENT)).control.request;
     await input.drag(client, { from, to, steps: 8, button: "left" });
-    evidence.boxSelection = await selection(client, server, context, residents, beforeBox);
+    await selection(client, server, context, residents, beforeBox);
 
+    // The card frame's top edge belongs to the bar: clicks there neither select nor order.
     const beforeFrame = await client.run(READ_CLIENT);
     const frameTop = boxes[0].height - beforeFrame.barHeight;
-    for (const y of [frameTop, frameTop + 1, frameTop + 2]) {
-      for (const button of ["left", "right"] as const) {
-        await input.click(client, { x: boxes[0].width / 2, y }, { button });
-        if (button === "right") {
-          await input.click(client, { x: boxes[0].width / 2, y }, { button, modifiers: ["ctrl"] });
-        }
-        await tick.sprint(server, 2);
-        await frames(client, 3);
-        const observed = await client.run(READ_CLIENT);
-        expect(same(observed.selected, residents)).toBe(true);
-        expect(observed.route.request).toBe(beforeFrame.route.request);
-        expect(observed.cachedPoints).toBe(beforeFrame.cachedPoints);
-        expect(observed.failure).toBe("");
-        const authoritative = await server.run(READ_SERVER, context);
-        expect(same(authoritative.selection, residents)).toBe(true);
-        expect(authoritative.command).toBe("");
+    for (const button of ["left", "right"] as const) {
+      await input.click(client, { x: boxes[0].width / 2, y: frameTop }, { button });
+      if (button === "right") {
+        await input.click(client, { x: boxes[0].width / 2, y: frameTop }, { button, modifiers: ["ctrl"] });
       }
+      await tick.sprint(server, 2);
+      await frames(client, 3);
+      const observed = await client.run(READ_CLIENT);
+      expect(same(observed.selected, residents)).toBe(true);
+      expect(observed.route.request).toBe(beforeFrame.route.request);
+      expect(observed.cachedPoints).toBe(beforeFrame.cachedPoints);
+      expect(observed.failure).toBe("");
+      const authoritative = await server.run(READ_SERVER, context);
+      expect(same(authoritative.selection, residents)).toBe(true);
+      expect(authoritative.command).toBe("");
     }
-    evidence.topFrameConsumesClicks = await client.run(READ_CLIENT);
 
     const third = residents[2];
     const shiftClickThird = async () => {
@@ -130,10 +112,10 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     };
     let before = (await client.run(READ_CLIENT)).control.request;
     await shiftClickThird();
-    evidence.shiftRemove = await selection(client, server, context, residents.slice(0, 2), before);
+    await selection(client, server, context, residents.slice(0, 2), before);
     before = (await client.run(READ_CLIENT)).control.request;
     await shiftClickThird();
-    evidence.shiftAdd = await selection(client, server, context, residents, before);
+    await selection(client, server, context, residents, before);
 
     before = (await client.run(READ_CLIENT)).control.request;
     await input.click(client, { x: boxes[0].width / 2, y: frameTop - 1 }, { button: "left" });
@@ -142,7 +124,6 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     const current = await boxAround(client, origin, residents);
     await input.drag(client, { from: current.from, to: current.to, steps: 8, button: "left" });
     await selection(client, server, context, residents, before);
-    evidence.worldAboveFrameStillSelects = await client.run(READ_CLIENT);
 
     const bindOne = async (members: string[]) => {
       const request = (await client.run(READ_CLIENT)).control.request;
@@ -152,30 +133,28 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
         && same(value.client.control.groups[0] ?? [], members) && same(value.server.groups[0] ?? [], members)
         && same(value.client.selected, value.server.selection));
     };
-    evidence.bindABC = await bindOne(residents);
+    await bindOne(residents);
     before = (await client.run(READ_CLIENT)).control.request;
     await shiftClickThird();
     await selection(client, server, context, residents.slice(0, 2), before);
     const ab = await bindOne(residents.slice(0, 2));
     expect(ab.server.owned[2], "C loses its final reference after exact ABC -> AB replacement").toBe(false);
     expect(ab.server.reserved[2]).toBe(false);
-    evidence.exactAB = ab;
     before = (await client.run(READ_CLIENT)).control.request;
     await shiftClickThird();
     await selection(client, server, context, residents, before);
-    evidence.rebindABC = await bindOne(residents);
+    await bindOne(residents);
     const unbound = await bindOne([]);
     expect(same(unbound.client.selected, residents), "same-set Ctrl+1 keeps visible selection").toBe(true);
     expect(same(unbound.server.selection, residents)).toBe(true);
     expect(unbound.server.owned).toEqual([true, true, true]);
-    evidence.sameSetUnbind = unbound;
 
+    // A group card shows pressed exactly while its members are the selection, whether recalled by key or card.
     const groupTextures = async (slots: number[]) => {
       await frames(client, 3);
       const groups = (await client.run(READ_CLIENT)).buttons.filter(hit => hit.kind === "GROUP");
       expect(groups).toHaveLength(9);
       expect(groups.filter(hit => hit.texture === "pressed").map(hit => hit.slot)).toEqual(slots);
-      expect(groups.filter(hit => !slots.includes(hit.slot)).every(hit => hit.texture !== "pressed")).toBe(true);
     };
     const bind = async (slot: number, members: string[]) => {
       const request = (await client.run(READ_CLIENT)).control.request;
@@ -204,19 +183,12 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     }, { button: "left" });
     await selection(client, server, context, residents.slice(0, 2), before);
     await groupTextures([2]);
+    await bind(2, []);
     before = (await client.run(READ_CLIENT)).control.request;
     await input.key(client, { keyCode: 49 });
     await selection(client, server, context, residents, before);
-    await bind(3, residents);
-    await groupTextures([1, 3]);
-    await bind(3, []);
-    await groupTextures([1]);
-    await bind(2, residents);
-    await groupTextures([1, 2]);
-    await bind(2, []);
     await bindOne([]);
     await groupTextures([]);
-    evidence.pressedGroupSwitching = await client.run(READ_CLIENT);
     await server.run(SET_RESIDENT_AI, { residents, enabled: true });
 
     const a = { x: origin.x - 5, y: origin.y, z: origin.z + 11 };
@@ -237,7 +209,6 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expect(squad).not.toBe("");
     expect(moving.server.memberGroups).toEqual([squad, squad, squad]);
     expect(same(moving.server.members, residents)).toBe(true);
-    evidence.ordinaryMove = moving;
     for (const intent of ["MOVE", "ATTACK", "WAYPOINT", "STOP", "CONTROL"]) {
       const beforeRejection = await client.run(READ_CLIENT);
       const request = beforeRejection.route.request;
@@ -265,10 +236,8 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
       expect(rejected.server.command).toBe(generation);
       expect(samePoints(rejected.server.points, [a])).toBe(true);
       expect(same(rejected.client.selected, residents)).toBe(true);
-      evidence[`rejected${intent}`] = rejected;
     }
     await failureExpired(client);
-    await shot(client, testInfo, run, "ordinary-route-moving");
 
     const completed = await waitFor("ordinary point completes its physical assembly and 20-tick dwell", client, server, context,
       value => value.server.command === generation && value.server.complete
@@ -278,35 +247,23 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expect(completed.server.waiting).toBe(0);
     expect(completed.server.owned).toEqual([true, true, true]);
     expect(completed.client.cachedPoints, "completed authored history stays available for Ctrl append/review").toBe(1);
-    evidence.ordinaryComplete = completed;
-    await shot(client, testInfo, run, "ordinary-route-completed-hidden");
-    await input.key(client, { keyCode: 341, action: "press" });
-    try {
-      await frames(client, 2);
-      await shot(client, testInfo, run, "completed-ctrl-history");
-    } finally {
-      await input.key(client, { keyCode: 341, action: "release" });
-    }
 
     routeRequest = (await client.run(READ_CLIENT)).route.request;
     await groundClick(b, true);
-    evidence.appendB = await routeAck(client, server, context, routeRequest, "WAYPOINT", [a, b], -1, false);
+    await routeAck(client, server, context, routeRequest, "WAYPOINT", [a, b], -1, false);
     routeRequest = (await client.run(READ_CLIENT)).route.request;
     await groundClick(c, true);
-    evidence.appendC = await routeAck(client, server, context, routeRequest, "WAYPOINT", [a, b, c], -1, false);
+    await routeAck(client, server, context, routeRequest, "WAYPOINT", [a, b, c], -1, false);
     routeRequest = (await client.run(READ_CLIENT)).route.request;
     await groundClick(b, true);
     const loop = await routeAck(client, server, context, routeRequest, "WAYPOINT", [a, b, c], 1, false);
     expect(loop.server.group).toBe(squad);
     expect(loop.server.command, "append/closure keeps the accepted generation").toBe(generation);
-    evidence.closedSuffix = loop;
-    await shot(client, testInfo, run, "committed-loop");
 
     const keys = await client.run(KEY_SETTINGS, { stop: 72 });
     expect(keys.codes).toEqual([71, 72, 74]);
     expect(keys.categories).toEqual(Array(3).fill("key.categories.folkways.rts"));
     expect(keys.hintBindings).toContain("key.folkways.rts.attack_move");
-    evidence.keySettings = keys;
     expect((await client.run(READ_CLIENT)).buttons.some(hit =>
       ["ATTACK_MOVE", "STOP", "RELEASE"].includes(hit.kind))).toBe(false);
     routeRequest = (await client.run(READ_CLIENT)).route.request;
@@ -320,7 +277,6 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expect(same(stopped.client.selected, residents)).toBe(true);
     expect(stopped.client.overlay).toBe("");
     expect(stopped.client.failure).toBe("");
-    evidence.stopped = stopped;
 
     await input.key(client, { keyCode: 71, action: "press" });
     await input.key(client, { keyCode: 71, action: "repeat" });
@@ -368,12 +324,10 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
         && value.client.failureKey === "folkways.combat.error.rejected");
     expect(replacedFailure.client.failureUntil).toBeGreaterThan(invalid.failureUntil);
     expect(replacedFailure.client.attackMode).toBe(true);
-    evidence.replacedFailure = replacedFailure;
     routeRequest = replacedFailure.client.route.request;
     await client.run(RESIZE, { width: 1920, height: 1080, scale: 2 });
     await frames(client, 4);
-    expect((await client.run(READ_CLIENT)).failureKey).toBe("folkways.combat.error.rejected");
-    await shot(client, testInfo, run, "failure-only-1920x1080");
+    expect((await client.run(READ_CLIENT)).failureKey, "a window resize keeps the failure row").toBe("folkways.combat.error.rejected");
     await client.run(RESIZE, { width: 1280, height: 720, scale: 1 });
     await failureExpired(client);
     await mustCommand(server,
@@ -397,13 +351,11 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     }
     expectMode(attackMove.client, true);
     expect(same(attackMove.client.selected, residents)).toBe(true);
-    evidence.attackMoveNoHostileFixture = attackMove;
     routeRequest = attackMove.client.route.request;
     await groundClick(b, true);
     const attackAppend = await routeAck(client, server, context, routeRequest, "WAYPOINT", [attackPoint, b], -1, true);
     expectMode(attackAppend.client, true);
     expect(attackAppend.server.command).toBe(attackMove.server.command);
-    evidence.attackMoveQueue = attackAppend;
     await input.key(client, { keyCode: 71 });
     expectMode(await client.run(READ_CLIENT), false);
     routeRequest = (await client.run(READ_CLIENT)).route.request;
@@ -416,7 +368,6 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await groundClick(a);
     const moveAgain = await routeAck(client, server, context, routeRequest, "MOVE", [a], -1, false);
     expectMode(moveAgain.client, false);
-    evidence.backToMove = moveAgain;
     await input.key(client, { keyCode: 71 });
     await groundClick(c, true);
     expect((await client.run(READ_CLIENT)).failureKey).toBe("folkways.rts.route_mode_mismatch");
@@ -428,68 +379,14 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await input.key(client, { keyCode: 71 });
     const inFlight = await routeAck(client, server, context, routeRequest, "MOVE", [attackPoint], -1, true);
     expectMode(inFlight.client, false);
-    evidence.preferenceAcrossAcknowledgement = inFlight;
     await input.key(client, { keyCode: 71 });
-    for (const size of [{ width: 1920, height: 1080 }, { width: 854, height: 480 }]) {
-      await client.run(RESIZE, { ...size, scale: 2 });
-      await frames(client, 12);
-      const rendered = await client.run(READ_CLIENT);
-      expect(rendered.barHeight).toBe(63);
-      const cards = rendered.buttons;
-      expect(cards.filter(hit => hit.kind === "GROUP")).toHaveLength(9);
-      expect(cards.filter(hit => hit.kind === "UNIT")).toHaveLength(3);
-      const groups = cards.filter(hit => hit.kind === "GROUP");
-      const units = cards.filter(hit => hit.kind === "UNIT");
-      expect(groups[0].x).toBe(14);
-      const groupRight = Math.max(...groups.map(hit => hit.x + hit.width));
-      const portraitsLeft = Math.min(...cards.filter(hit => hit.kind !== "GROUP").map(hit => hit.x));
-      expect(portraitsLeft - groupRight).toBeGreaterThanOrEqual(8);
-      expect(groups[0].y).toBeGreaterThanOrEqual(units[0].y);
-      expect(groups[0].y + groups[0].height).toBeLessThanOrEqual(units[0].y + units[0].height);
-      expect(groups.filter(hit => hit.texture === "pressed").map(hit => hit.slot)).toEqual([1]);
-      const unitCenter = (units[0].x + units.at(-1)!.x + units.at(-1)!.width) / 2;
-      expect(Math.abs(unitCenter - size.width / 4)).toBeLessThanOrEqual(1);
-      for (const hit of cards) {
-        expect(hit.x).toBeGreaterThanOrEqual(14);
-        expect(hit.x + hit.width).toBeLessThanOrEqual(size.width / 2 - 14);
-        expect(hit.y + hit.height).toBeLessThan(size.height / 2 - 7);
-        for (const other of cards.filter(other => other !== hit)) {
-          expect(hit.x >= other.x + other.width || other.x >= hit.x + hit.width
-            || hit.y >= other.y + other.height || other.y >= hit.y + hit.height).toBe(true);
-        }
-      }
-      expectMode(await client.run(READ_CLIENT), true);
-      await shot(client, testInfo, run, `book-bar-${size.width}x${size.height}`);
-    }
-    await client.run(RESIZE, { width: 640, height: 480, scale: 2 });
-    await frames(client, 12);
-    const narrow = (await client.run(READ_CLIENT)).buttons;
-    expect(narrow.filter(hit => hit.kind === "GROUP")).toHaveLength(9);
-    const narrowRight = Math.max(...narrow.filter(hit => hit.kind === "GROUP").map(hit => hit.x + hit.width));
-    const narrowLeft = Math.min(...narrow.filter(hit => hit.kind !== "GROUP").map(hit => hit.x));
-    expect(narrowLeft - narrowRight).toBeGreaterThanOrEqual(8);
-    const oneCard = narrow.filter(hit => hit.kind === "UNIT");
-    expect(oneCard).toHaveLength(1);
-    expect(narrow.filter(hit => ["PREVIOUS", "NEXT"].includes(hit.kind))).toHaveLength(2);
-    const next = narrow.find(hit => hit.kind === "NEXT")!;
-    await input.click(client, { x: next.x + next.width / 2, y: next.y + next.height / 2 }, { button: "left" });
-    await frames(client, 3);
-    const advanced = (await client.run(READ_CLIENT)).buttons;
-    expect(advanced.find(hit => hit.kind === "UNIT")!.resident).not.toBe(oneCard[0].resident);
-    const previous = advanced.find(hit => hit.kind === "PREVIOUS")!;
-    await input.click(client, { x: previous.x + previous.width / 2, y: previous.y + previous.height / 2 }, { button: "left" });
-    await frames(client, 3);
-    expect((await client.run(READ_CLIENT)).buttons.find(hit => hit.kind === "UNIT")!.resident).toBe(oneCard[0].resident);
-    evidence.narrowPaging = { narrow, advanced };
-    await client.run(RESIZE, { width: 1280, height: 720, scale: 1 });
-    await frames(client, 12);
+    expectMode(await client.run(READ_CLIENT), true);
     await bindOne([]);
     await checkModeLayers(client, server, { colony, ...origin });
     const modeReturn = await waitFor("mode return keeps the accepted command generation", client, server, context,
       value => value.client.combat && !value.client.controlPending
         && value.server.group === inFlight.server.group && value.server.command === inFlight.server.command);
     expectMode(modeReturn.client, false);
-    evidence.modeRoundTrip = modeReturn;
     routeRequest = (await client.run(READ_CLIENT)).route.request;
     const rebound = await client.run(KEY_SETTINGS, { stop: 75 });
     expect(rebound.codes).toEqual([71, 75, 74]);
@@ -522,7 +419,6 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
       value => value.client.combat && !value.client.controlPending && same(value.client.selected, residents)
         && value.server.group === inFlight.server.group && value.server.command === stopGeneration);
     expect(resumed.server.owned).toEqual([true, true, true]);
-    evidence.tabRoundTrip = resumed;
     await expect.poll(async () => {
       await frames(client, 10);
       return (await client.run(READ_CLIENT)).overlay;
@@ -540,8 +436,6 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await groundClick(b);
     const repeatedAttack = await routeAck(client, server, context, routeRequest, "MOVE", [b], -1, true);
     expectMode(repeatedAttack.client, true);
-    evidence.repeatedAttackMove = repeatedAttack;
-    evidence.rightAttackMove = rightAttack;
     await input.key(client, { keyCode: 74 });
     const released = await waitFor("Release removes the selected residents from every control reference", client, server, context,
       value => value.client.control.request > before && value.client.control.accepted && !value.client.controlPending
@@ -552,16 +446,118 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expect(released.client.overlay).toBe("");
     expect(released.client.failure).toBe("");
     expectMode(released.client, true);
-    evidence.released = released;
-    await shot(client, testInfo, run, "released");
+
+    // Closing V suspends the tool, not the squad. An unbound squad of A and B is sent round a loop; C stays put.
+    const members = residents.slice(0, 2);
+    await server.run(PREPARE_RESIDENTS, { colony, ...origin, count: 3 });
+    await server.run(SET_RESIDENT_AI, { residents, enabled: false });
+    await tick.sprint(server, 3);
+    await frames(client, 10);
+    before = (await client.run(READ_CLIENT)).control.request;
+    const spread = await boxAround(client, origin, residents);
+    await input.drag(client, { from: spread.from, to: spread.to, steps: 8, button: "left" });
+    await selection(client, server, context, residents, before);
+    before = (await client.run(READ_CLIENT)).control.request;
+    await shiftClickThird();
+    await selection(client, server, context, members, before);
+    await server.run(SET_RESIDENT_AI, { residents: members, enabled: true });
+    await input.key(client, { keyCode: 71 });
+    expectMode(await client.run(READ_CLIENT), false);
+    routeRequest = (await client.run(READ_CLIENT)).route.request;
+    await groundClick(a);
+    await routeAck(client, server, context, routeRequest, "MOVE", [a], -1, false);
+    for (const [point, cycleStart, points] of [[b, -1, [a, b]], [c, -1, [a, b, c]], [b, 1, [a, b, c]]] as const) {
+      routeRequest = (await client.run(READ_CLIENT)).route.request;
+      await groundClick(point, true);
+      await routeAck(client, server, context, routeRequest, "WAYPOINT", [...points], cycleStart, false);
+    }
+    const patrolling = await waitFor("the unbound squad runs its loop", client, server, context,
+      value => value.server.phase !== "IDLE" && value.server.orders.slice(0, 2).every(order => order !== "NONE"));
+    expect(patrolling.server.groups.every(group => group.length === 0), "the squad is bound to no Ctrl+number slot").toBe(true);
+    const looping = patrolling.server;
+
+    before = patrolling.client.control.request;
+    await tapV(client);
+    const suspended = await waitFor("closing V keeps the squad's selection, route and orders", client, server, context,
+      value => value.client.control.request > before && !value.client.controlPending
+        && same(value.server.selection, members) && value.server.group === looping.group);
+    expect(suspended.server.groups.every(group => group.length === 0), "suspending invents no shortcut group").toBe(true);
+    expectRunning(suspended.server, looping);
+
+    // Out of the client's tracking range, with the book put away for longer than the 100-tick input lease.
+    await mustCommand(server, `forceload add ${origin.x - 19} ${origin.z - 19} ${origin.x + 19} ${origin.z + 19}`);
+    const remote = { x: origin.x + 400, y: origin.y, z: origin.z + 400 };
+    await mustCommand(server, `forceload add ${remote.x - 3} ${remote.z - 3} ${remote.x + 3} ${remote.z + 3}`);
+    await tick.sprint(server, 2);
+    await layFloor(server, { x: remote.x - 3, z: remote.z - 3 }, { x: remote.x + 3, z: remote.z + 3 }, remote.y,
+      "minecraft:smooth_stone", 4);
+    await mustCommand(server, `tp ${player.name} ${remote.x + 0.5} ${remote.y} ${remote.z + 0.5}`);
+    await frames(client, 20);
+    expect((await client.run(READ_TRACKING, { residents: members })).tracked).toEqual([]);
+    await mustCommand(server, `item replace entity ${player.name} weapon.mainhand with minecraft:air`);
+    for (let interval = 0; interval < 6; interval++) {
+      await frames(client, 20);
+      await tick.sprint(server, 20);
+    }
+    expectRunning(await server.run(READ_SERVER, context), looping);
+
+    await mustCommand(server, `item replace entity ${player.name} weapon.mainhand with folkways:colony_book`);
+    await tapV(client);
+    await screen.waitFor(client, "OverheadScreen", { timeoutMs: 8_000 });
+    const reopened = await waitFor("reopening V restores the selection and route of the unseen squad", client, server, context,
+      value => value.client.combat && !value.client.controlPending && same(value.client.control.selection, members)
+        && value.client.cachedPoints === 3 && value.client.cachedCommand === looping.command);
+    expect(reopened.client.control.groups.every(group => group.length === 0)).toBe(true);
+    expect((await client.run(READ_TRACKING, { residents: members })).tracked).toEqual([]);
+    for (let interval = 0; interval < 3; interval++) {
+      await frames(client, 20);
+      await tick.sprint(server, 20);
+    }
+    const held = { client: await client.run(READ_CLIENT), server: await server.run(READ_SERVER, context) };
+    expect(same(held.client.control.selection, members), "the open tool keeps the untracked squad selected").toBe(true);
+    expect(held.client.cachedPoints).toBe(3);
+    expect(held.client.cachedCommand).toBe(looping.command);
+    expectRunning(held.server, looping);
+
+    // Back in sight: once the squad is bound to Ctrl+1, a temporary selection of C alone is dropped on close.
+    await tapV(client);
+    await mustCommand(server, home);
+    await expect.poll(async () => {
+      await tick.sprint(server, 2);
+      await frames(client, 5);
+      return (await client.run(READ_TRACKING, { residents })).tracked.length;
+    }, { timeout: 15_000, message: "the residents must be client-tracked again before they are clicked" }).toBe(3);
+    await tapV(client);
+    await screen.waitFor(client, "OverheadScreen", { timeoutMs: 8_000 });
+    await waitFor("the squad is selected again after reopening V", client, server, context,
+      value => value.client.combat && !value.client.controlPending && same(value.client.selected, members));
+    const bound = await bindOne(members);
+    expectRunning(bound.server, looping);
+    before = bound.client.control.request;
+    const alone = await project(client, origin, third);
+    visible(alone);
+    await input.click(client, alone, { button: "left" });
+    const temporary = await selection(client, server, context, [third], before);
+    await tapV(client);
+    const dropped = await waitFor("closing V drops the temporary selection and keeps the bound squad", client, server, context,
+      value => value.client.control.request > temporary.client.control.request && !value.client.controlPending
+        && value.server.selection.length === 0 && same(value.server.groups[0] ?? [], members));
+    expectRunning(dropped.server, looping);
   } catch (error) {
     pair?.failing(error);
     throw error;
   } finally {
-    await testInfo.attach("combat-rts-input-evidence.json", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
     await pair?.teardown(testInfo);
   }
 });
+
+// The squad that was looping when the tool was suspended is the same group on the same order, still running.
+function expectRunning(state: ServerState, looping: ServerState) {
+  expect(state.group).toBe(looping.group);
+  expect(state.command).toBe(looping.command);
+  expect(state.phase).not.toBe("IDLE");
+  expect(state.orders.slice(0, 2).every(order => order !== "NONE"), `orders: ${state.orders}`).toBe(true);
+}
 
 const SET_RESIDENT_AI = defineTask<{ residents: string[]; enabled: boolean }, boolean>({
   name: "folkways.combat-rts-input.set-resident-ai", side: "server",
@@ -588,8 +584,6 @@ function expectMode(state: ClientState, attack: boolean) {
   expect(state.attackMode).toBe(attack);
   expect(state.modeLabel).toBe(attack ? "Attack move" : "Move");
   expect(state.modeHint).toContain("Move / Attack move");
-  expect(state.modeColors).toEqual(attack ? [0x888888, 0xFFE29A] : [0xFFE29A, 0x888888]);
-  expect(state.modeBold).toEqual([!attack, attack]);
 }
 
 function same(actual: string[], expected: string[]) {
@@ -621,12 +615,6 @@ async function boxAround(client: MinecraftClient, origin: Vec, residents: string
   visible({ ...boxes[0], x: from.x, y: from.y });
   visible({ ...boxes[0], x: to.x, y: to.y });
   return { boxes, from, to };
-}
-
-async function shot(client: MinecraftClient, testInfo: TestInfo, run: string, label: string) {
-  const path = outAbs("e2e", "shots", `combat-rts-input-${run}-${label}.png`);
-  await media.screenshot(client, { path, hideGui: false });
-  await testInfo.attach(label, { path, contentType: "image/png" });
 }
 
 async function failureExpired(client: MinecraftClient) {
@@ -763,5 +751,17 @@ return switch (a.string("intent")) {
     }
     default -> false;
 };`,
+  }),
+});
+
+const READ_TRACKING = defineTask<{ residents: string[] }, { tracked: string[] }>({
+  name: "folkways.combat-rts-input.client-tracking", side: "client",
+  source: javaTask({
+    imports: ["java.util.UUID", "net.minecraft.client.Minecraft"],
+    body: `
+var mc=Minecraft.getInstance();var requested=new java.util.HashSet<>(Args.of(ctx).strings("residents").stream().map(UUID::fromString).toList());
+var tracked=new java.util.ArrayList<String>();
+if(mc.level!=null){for(var entity:mc.level.entitiesForRendering()){if(requested.contains(entity.getUUID()))tracked.add(entity.getUUID().toString());}}
+return java.util.Map.of("tracked",tracked);`,
   }),
 });

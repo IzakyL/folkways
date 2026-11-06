@@ -46,106 +46,67 @@ public final class RailTimetableGameTests {
         event.register(RailTimetableGameTests.class);
     }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void aLineThatDoesNotLoopStopsAtItsLastStation(GameTestHelper helper) {
-        List<TransitNetwork.Stop> stops = Itinerary.after(List.of(call("A", 100, 20), call("B", 100, 20)),
-            false, 1, 20);
+    private record Told(String what, List<Itinerary.Call> calls, boolean loops, List<TransitNetwork.Stop> expected) { }
 
-        helper.assertTrue(stops.equals(List.of(new TransitNetwork.Stop("B", 120, 140))),
-            "having left A on a line that does not loop, only B is still to come, got " + stops);
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void theStopsStillToComeAreOnlyThoseTheTrainCanBeSeenToMake(GameTestHelper helper) {
+        List<Told> cases = List.of(
+            new Told("having left A on a line that does not loop, only B is still to come",
+                List.of(call("A", 100, 20), call("B", 100, 20)), false,
+                List.of(new TransitNetwork.Stop("B", 120, 140))),
+            new Told("a looping line runs on past its last station into the next lap",
+                List.of(call("A", 100, 20), call("B", 100, 20)), true,
+                List.of(new TransitNetwork.Stop("B", 120, 140), new TransitNetwork.Stop("A", 240, 260),
+                    new TransitNetwork.Stop("B", 360, 380), new TransitNetwork.Stop("A", 480, 500))),
+            new Told("the train has never run B -> A, so the return is not quoted",
+                List.of(new Itinerary.Call("A", OptionalInt.empty(), OptionalInt.of(20)), call("B", 100, 20)), true,
+                List.of(new TransitNetwork.Stop("B", 120, 140))),
+            new Told("nobody can say when the train leaves B, so it must be boarded as it arrives",
+                List.of(call("A", 100, 20), new Itinerary.Call("B", OptionalInt.of(100), OptionalInt.empty())), true,
+                List.of(new TransitNetwork.Stop("B", 120, 120))));
+        for (Told told : cases) {
+            List<TransitNetwork.Stop> stops = Itinerary.after(told.calls(), told.loops(), 1, 20);
+            helper.assertTrue(stops.equals(told.expected()), told.what() + ", got " + stops);
+        }
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void aLineThatLoopsIsSeenComingBackForItsNextRun(GameTestHelper helper) {
-        List<TransitNetwork.Stop> stops = Itinerary.after(List.of(call("A", 100, 20), call("B", 100, 20)),
-            true, 1, 20);
-
-        helper.assertTrue(stops.equals(List.of(new TransitNetwork.Stop("B", 120, 140),
-                new TransitNetwork.Stop("A", 240, 260), new TransitNetwork.Stop("B", 360, 380),
-                new TransitNetwork.Stop("A", 480, 500))),
-            "a looping line runs on past its last station into the next lap, got " + stops);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void aLegNeverRunIsNotInvented(GameTestHelper helper) {
-        List<TransitNetwork.Stop> stops = Itinerary.after(
-            List.of(new Itinerary.Call("A", OptionalInt.empty(), OptionalInt.of(20)), call("B", 100, 20)),
-            true, 1, 20);
-
-        helper.assertTrue(stops.equals(List.of(new TransitNetwork.Stop("B", 120, 140))),
-            "the train has never run B -> A, so the return is not quoted, got " + stops);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void aStopHeldForSomethingOtherThanTimeEndsWhatCanBeTold(GameTestHelper helper) {
-        List<TransitNetwork.Stop> stops = Itinerary.after(
-            List.of(call("A", 100, 20), new Itinerary.Call("B", OptionalInt.of(100), OptionalInt.empty())),
-            true, 1, 20);
-
-        helper.assertTrue(stops.equals(List.of(new TransitNetwork.Stop("B", 120, 120))),
-            "nobody can say when the train leaves B, so it must be boarded as it arrives, got " + stops);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void theTimetableIsReadFromWhenItWasTaken(GameTestHelper helper) {
-        Timetable runs = RailLegs.runsOf(CAPTURED_AT, line(List.of("A", "B"), "A",
-            new TransitNetwork.Stop("A", 0, 20), new TransitNetwork.Stop("B", 120, 140)));
+    public static void theTimetableIsReadFromWhenItWasTakenAndCountedFromTheNextDeparture(GameTestHelper helper) {
+        TransitSnapshot.Line seen = line(List.of("A", "B"), "A",
+            new TransitNetwork.Stop("A", 0, 20), new TransitNetwork.Stop("B", 120, 140));
+        Timetable runs = RailLegs.runsOf(CAPTURED_AT, seen);
 
         helper.assertTrue(runs.equals(new Timetable(List.of("A", "B"),
                 new long[] {CAPTURED_AT, CAPTURED_AT + 120}, new long[] {CAPTURED_AT + 20, CAPTURED_AT + 140})),
             "calls are timed from the moment the snapshot was taken, got " + runs);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void runsAreCountedFromTheTrainsNextDeparture(GameTestHelper helper) {
-        TransitSnapshot.Line seen = line(List.of("A", "B"), "A",
-            new TransitNetwork.Stop("A", 0, 20), new TransitNetwork.Stop("B", 120, 140));
-        Timetable runs = RailLegs.runsOf(CAPTURED_AT, new TransitSnapshot.Line(seen.train(), seen.stations(),
+        Timetable counted = RailLegs.runsOf(CAPTURED_AT, new TransitSnapshot.Line(seen.train(), seen.stations(),
             seen.platforms(), seen.footings(), seen.timetable(), seen.currentStation(), seen.freeSeats(),
             seen.vacancies(), seen.conducted(), seen.crew(), 7L));
-
-        helper.assertTrue(runs.lastDeparture("A", "B").equals(OptionalLong.of(7)),
+        helper.assertTrue(counted.lastDeparture("A", "B").equals(OptionalLong.of(7)),
             "leaving A is the train's seventh departure when the snapshot says it leaves next at 7, got "
-                + runs.lastDeparture("A", "B"));
+                + counted.lastDeparture("A", "B"));
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void aTrainIsBoardedUntilItLeaves(GameTestHelper helper) {
-        Timetable runs = new Timetable(List.of("A", "B"), new long[] {0, 100}, new long[] {20, 120});
-
-        helper.assertTrue(runs.arriveBy("A", "B", 20).equals(OptionalLong.of(100)),
-            "reaching A as the train leaves still makes it, got " + runs.arriveBy("A", "B", 20));
-        helper.assertTrue(runs.arriveBy("A", "B", 21).isEmpty(),
+    public static void aRiderCatchesTheFirstRunStillAtThePlatform(GameTestHelper helper) {
+        Timetable once = new Timetable(List.of("A", "B"), new long[] {0, 100}, new long[] {20, 120});
+        helper.assertTrue(once.arriveBy("A", "B", 20).equals(OptionalLong.of(100)),
+            "reaching A as the train leaves still makes it, got " + once.arriveBy("A", "B", 20));
+        helper.assertTrue(once.arriveBy("A", "B", 21).isEmpty(),
             "the train does not wait for a rider who comes after it leaves");
-        helper.succeed();
-    }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void aRiderWhoMissesOneRunTakesTheNext(GameTestHelper helper) {
         Timetable runs = new Timetable(List.of("A", "B", "A", "B"),
             new long[] {0, 100, 200, 300}, new long[] {20, 120, 220, 320});
-
         helper.assertTrue(runs.arriveBy("A", "B", 50).equals(OptionalLong.of(300)),
             "missing the first run from A lands on the next, got " + runs.arriveBy("A", "B", 50));
         helper.assertTrue(runs.lastDeparture("A", "B").equals(OptionalLong.of(3)),
             "the last run from A to B is the train's third departure, got " + runs.lastDeparture("A", "B"));
         helper.assertTrue(runs.arriveBy("B", "A", 130).isEmpty(),
             "no B -> A run is left once the last B that has an A after it has gone");
-        helper.succeed();
-    }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void aFareCaughtOnThePlatformHoldsToTheRunItCatches(GameTestHelper helper) {
-        Timetable runs = new Timetable(List.of("A", "B", "A", "B"),
-            new long[] {0, 100, 200, 300}, new long[] {20, 120, 220, 320});
         UUID train = UUID.randomUUID();
-
         helper.assertTrue(new RailFare(train, runs, "A", "B").boardingAt(10).equals(
                 new RailFare(train, runs, "A", "B", OptionalLong.of(1))),
             "on the platform before the first run leaves, the first run is the one caught");

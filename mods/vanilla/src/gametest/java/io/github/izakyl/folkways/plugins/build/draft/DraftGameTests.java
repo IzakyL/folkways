@@ -14,7 +14,6 @@ import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.refused;
 import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.stateAt;
 import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.zone;
 
-import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +27,6 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -230,26 +228,6 @@ public final class DraftGameTests {
         Draft first = ready(helper, pattern.drawOn(commission));
         Draft again = ready(helper, pattern.drawOn(commission));
         helper.assertValueEqual(describe(first), describe(again), "the same site draws the same building");
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 80)
-    public static void aPatternDeclaresItsKnobsBeforeItDraws(GameTestHelper helper) {
-        Pattern pattern = parse("""
-            knobs = [
-                count("storeys", 1, 3, default = 1),
-                items("walls", default = ["#minecraft:planks"]),
-                choice("pitch", ["steep", "shallow"], default = "steep"),
-            ]
-
-            def draw(site):
-                return [part("floor", site.zone, site.items("walls"))]
-            """);
-        helper.assertValueEqual(pattern.knobs().settings().size(), 3, "three knobs declared");
-        helper.assertTrue(pattern.knobs().find("storeys").orElseThrow() instanceof Schema.Setting.Count,
-            "storeys is a number the player dials");
-        helper.assertTrue(pattern.knobs().find("walls").orElseThrow() instanceof Schema.Setting.Items,
-            "walls is a slot the player fills");
         helper.succeed();
     }
 

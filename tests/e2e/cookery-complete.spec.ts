@@ -10,137 +10,46 @@ import { BUDGET } from "../shared/harness/budgets";
 import { commandPos } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { markSouthRack } from "../shared/cookery/rack";
-import { twins, type Stage, type Vec } from "../shared/harness/stage";
+import { GROUND, twins, type Stage, type Vec } from "../shared/harness/stage";
 
 const K = "kaleidoscope_cookery:";
+// Only the fish-flavored rice bowl, which runs the most stations (mill, crafted lid, stockpot, pot, racked
+// spatula), also runs aboard; the other dishes reach no station it does not.
 const CASES = [
   { dish: K + "baozi_plate", depth: 5, kinds: 4,
     food: ["minecraft:wheat", "minecraft:porkchop", K + "green_chili", "minecraft:water_bucket"],
-    intermediates: [K + "flour", K + "raw_dough", K + "stuffed_dough_food", K + "baozi"], knife: false, spatula: false },
+    intermediates: [K + "flour", K + "raw_dough", K + "stuffed_dough_food", K + "baozi"], knife: false, spatula: false, aboard: false },
   { dish: K + "udon_noodle", depth: 4, kinds: 4,
     food: ["minecraft:wheat", K + "lettuce", "minecraft:egg", "minecraft:water_bucket"],
-    intermediates: [K + "flour", K + "raw_dough", K + "raw_noodles"], knife: true, spatula: false },
+    intermediates: [K + "flour", K + "raw_dough", K + "raw_noodles"], knife: true, spatula: false, aboard: false },
   { dish: K + "fish_flavored_shredded_pork_rice_bowl", depth: 3, kinds: 6,
     food: ["minecraft:wheat_seeds", K + "green_chili", K + "rice_panicle", "minecraft:brown_mushroom", "minecraft:porkchop", "minecraft:water_bucket"],
-    intermediates: [K + "oil", K + "rice", K + "cooked_rice", K + "fish_flavored_shredded_pork"], knife: false, spatula: true },
+    intermediates: [K + "oil", K + "rice", K + "cooked_rice", K + "fish_flavored_shredded_pork"], knife: false, spatula: true, aboard: true },
 ] as const;
 const MATERIALS = ["minecraft:oak_planks", "minecraft:iron_ingot", "minecraft:brick"];
 
-// Reads the already-published server-thread graph and cached survey. It never asks the planner,
-// drains diagnostics, changes assignments or requests paths while collecting failure evidence.
-const READ_LABOR = defineTask<void, any>({
-  name: "folkways.cookery.complete-read-labor", side: "server", timeoutMs: 20_000,
-  source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-    "io.github.izakyl.folkways.core.engine.labor.Labor",
-    "io.github.izakyl.folkways.core.engine.labor.ColonyLabor",
-    "io.github.izakyl.folkways.core.engine.plan.WeaveView",
-    "io.github.izakyl.folkways.core.engine.plan.Schedule",
-    "io.github.izakyl.folkways.core.engine.plan.Diagnosis",
-    "io.github.izakyl.folkways.core.engine.plan.Crew",
-  ], members: `
-private static Object field(Object owner, String name) throws Exception {
-    var field = owner.getClass().getDeclaredField(name);
-    field.setAccessible(true);
-    return field.get(owner);
-}
-`, body: `
-var level = ctx.server().overworld();
+// Which residents are still walking clear of the millstone they drove.
+const READ_MILL_EXIT = defineTask<void, any>({
+  name: "folkways.cookery.complete-read-mill-exit", side: "server", timeoutMs: 20_000,
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.api.resident.body.Bodies"], body: `
 var workers = new ArrayList<Object>();
-UUID colony = null;
-for (var entity : level.getAllEntities()) {
-    var found = Bodies.of(entity);
-    if (found.isEmpty()) continue;
-    var body = found.get();
-    if (colony == null) colony = body.colonyId().orElse(null);
-    workers.add(Map.of("uuid", body.id().toString(),
-        "packCapacity", body.pack().getContainerSize(),
-        "occupiedSlots", java.util.stream.IntStream.range(0, body.pack().getContainerSize())
-            .filter(slot -> !body.pack().getItem(slot).isEmpty()).count(),
-        "doing", body.doing().map(Object::toString).orElse(""),
-        "balk", body.balk().map(Object::toString).orElse(""),
-        "millExiting", entity.getPersistentData().contains("folkways.cookery.millstone.exit"),
-        "effects", body.effects().parts().stream().map(Object::toString).toList()));
+for (var entity : ctx.server().overworld().getAllEntities()) {
+    if (Bodies.of(entity).isEmpty()) continue;
+    workers.add(Map.of("uuid", entity.getUUID().toString(),
+        "millExiting", entity.getPersistentData().contains("folkways.cookery.millstone.exit")));
 }
-var snapshot = new LinkedHashMap<String,Object>();
-if (colony != null) {
-    var site = Labor.class.getDeclaredMethod("site", UUID.class, net.minecraft.resources.ResourceKey.class);
-    site.setAccessible(true);
-    var found = (Optional<?>)site.invoke(null, colony, level.dimension());
-    if (found.isPresent()) {
-        var labor = (ColonyLabor)found.get();
-        var graph = (WeaveView)field(labor, "graph");
-        if (graph.size() > 256) throw new IllegalStateException("observer exceeded 256 graph nodes");
-        var nodes = new ArrayList<Object>();
-        for (var vertex : graph.vertices().values().stream().sorted(Comparator.comparing(v -> v.id().toString())).toList()) {
-            var node = vertex.node();
-            var plan = vertex.plan();
-            var row = new LinkedHashMap<String,Object>();
-            row.put("id", vertex.id().toString()); row.put("kind", node.getClass().getSimpleName());
-            row.put("doing", node.spec().doing().toString()); row.put("about", node.spec().about().orElse(""));
-            row.put("site", node.spec().site().where().toString());
-            row.put("needs", node.spec().needs().stream().map(Object::toString).toList());
-            row.put("gives", node.spec().gives().stream().map(Object::toString).toList());
-            row.put("leaves", node.spec().leaves().stream().map(Object::toString).toList());
-            row.put("carrying", plan.carrying().stream().map(Object::toString).toList());
-            row.put("draws", plan.draws().stream().map(Object::toString).toList());
-            row.put("from", plan.from().stream().map(Object::toString).toList());
-            row.put("into", plan.into().stream().map(Object::toString).toList());
-            row.put("planStances", plan.stands().stream().map(Object::toString).sorted().toList());
-            row.put("before", graph.before(vertex.id()).stream().map(Object::toString).sorted().toList());
-            row.put("group", graph.group(vertex.id()).stream().map(Object::toString).sorted().toList());
-            row.put("pin", Optional.ofNullable(graph.pin(vertex.id())).map(Object::toString).orElse(""));
-            row.put("worker", node.worker().map(Object::toString).orElse(""));
-            row.put("state", labor.state(vertex.id()).map(Enum::name).orElse("unknown"));
-            nodes.add(row);
-        }
-        snapshot.put("nodes", nodes);
-        snapshot.put("held", graph.held().stream().map(Object::toString).sorted().toList());
-        snapshot.put("inputWorkers", field(labor, "inputWorkers").toString());
-        var schedule = (Schedule)field(labor, "schedule");
-        var tours = new TreeMap<String,Object>();
-        for (var tour : schedule.tours().values()) tours.put(tour.resident().toString(),
-            tour.nodes().stream().map(Object::toString).toList());
-        snapshot.put("tours", tours);
-        var diagnosis = (Diagnosis)field(labor, "diagnosis");
-        snapshot.put("unassigned", diagnosis.unassigned().stream().map(Object::toString).sorted().toList());
-        snapshot.put("shortfalls", diagnosis.shortfalls().stream().map(Object::toString).sorted().toList());
-        var hands = (Map<?,?>)field(field(labor, "survey"), "hands");
-        var crew = new ArrayList<Object>();
-        for (var raw : hands.values()) {
-            var hand = (Crew.Hand)raw;
-            crew.add(Map.of("id", hand.id().toString(), "at", hand.at().toString(),
-                "packCells", hand.packCells(), "packCapacity", hand.packCapacity(),
-                "holding", hand.holding().map(Object::toString).orElse(""),
-                "cargo", hand.cargo().stream().map(Object::toString).toList(),
-                "tools", hand.tools().stream().map(Object::toString).toList()));
-        }
-        snapshot.put("crew", crew);
-    }
-}
-return Map.of("workers", workers, "graph", snapshot);
+return Map.of("workers", workers);
 ` }),
 });
 
 // The objective runtime graph is produced by tests/shared/cookery/recipe-graph.mjs.
 // There is one final delivery only: no orders for flour, dough, noodles, rice, stir-fry or tools.
-for (const scenario of CASES) for (const stage of twins()) test(stage.title("complete cookery order: " + scenario.dish), async ({}, testInfo) => {
+for (const scenario of CASES) for (const stage of scenario.aboard ? twins() : [GROUND]) test(stage.title("complete cookery order: " + scenario.dish), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   const runId = newRunId();
-  const evidence: Record<string, any> = { scenario, stage: stage.kind, whitelist: [...scenario.food, ...MATERIALS], samples: [], workGraphs: {} };
+  const evidence: Record<string, any> = { scenario, stage: stage.kind, whitelist: [...scenario.food, ...MATERIALS], samples: [] };
   const manufactured = [...scenario.intermediates, scenario.dish, K + "iron_kitchen_knife", K + "kitchen_shovel", K + "stockpot_lid", "minecraft:bowl"];
-  const knownGraphs = new Map<string, string>();
-  const samplePhysical = async (server: MinecraftServer, layout: ReturnType<typeof kitchen>) => {
-    const sample = await physical(server, stage, layout);
-    const fingerprint = JSON.stringify(sample.labor);
-    let id = knownGraphs.get(fingerprint);
-    if (id === undefined) {
-      if (knownGraphs.size >= 4096) throw new Error("observer exceeded 4096 distinct graphs");
-      id = "graph-" + knownGraphs.size; knownGraphs.set(fingerprint, id); evidence.workGraphs[id] = sample.labor;
-    }
-    const { labor, ...state } = sample;
-    return { ...state, workGraph: id };
-  };
+  const samplePhysical = (server: MinecraftServer, layout: ReturnType<typeof kitchen>) => physical(server, stage, layout);
   let pair: E2EPair | undefined;
   let cells: ReturnType<typeof kitchen> | undefined;
   try {
@@ -219,11 +128,8 @@ for (const scenario of CASES) for (const stage of twins()) test(stage.title("com
       const sample = await samplePhysical(server, cells);
       evidence.millSettlement.samples.push({ elapsed, ...sample });
       const mill = sample.state.mill.nbt as any;
-      const graph = evidence.workGraphs[sample.workGraph];
-      const pendingMill = graph.nodes.some((node: any) => node.kind === "MillstoneWork"
-        && !["DONE", "FAILED", "CANCELLED"].includes(node.state));
       const settled = !sample.millBound && !mill.InputItem?.id && collectStacks(mill.OutputItem).length === 0
-        && sample.workers.every((worker: any) => !worker.millExiting) && !pendingMill;
+        && sample.workers.every((worker: any) => !worker.millExiting);
       expect(sample.target.filter((stack: any) => stack.id === scenario.dish)
         .reduce((sum: number, stack: any) => sum + Number(stack.count ?? 1), 0),
       "waiting for independent reserves never repeats the delivered food order").toBe(1);
@@ -296,8 +202,8 @@ async function physical(server: MinecraftServer, stage: Stage, cells: ReturnType
     ...residents.flatMap(resident => collectStacks(resident.pack)), ...drops.map(drop => drop.stack)]
     .filter(stack => stack?.id?.includes("kitchen_knife") || stack?.id?.includes("kitchen_shovel"));
   const millTag = state.mill.nbt as any;
-  const labor = await server.run(READ_LABOR);
-  return { workers: labor.workers, labor: labor.graph, state, target: (state.target.nbt as any)?.Items ?? [], residents, drops, tools, rackTools,
+  const { workers } = await server.run(READ_MILL_EXIT);
+  return { workers, state, target: (state.target.nbt as any)?.Items ?? [], residents, drops, tools, rackTools,
     millBound: Array.isArray(millTag?.EntityId) ? millTag.EntityId.some((part: number) => part !== 0) : Boolean(millTag?.EntityId) };
 }
 

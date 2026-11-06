@@ -2,25 +2,28 @@ package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
+import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
+import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.WorkProgress;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
-import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
 import io.github.izakyl.folkways.rts.combat.command.ResidentCommands;
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -33,6 +36,7 @@ import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -69,7 +73,7 @@ public final class MeleeReachGameTests {
         level.addFreshEntity(guard);
         colony.hold(PersonContent.ID, Held.Entity.of(guard)).orElseThrow();
         guard.joinColony(colony.id());
-        PatrolSupplies.of(colony).loadout(guard, LoadoutRegistry.MELEE);
+        arm(colony, guard, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
         level.addFreshEntity(enemy);
         BlockPos oldStance = helper.absolutePos(new BlockPos(8, 1, 5));
         helper.assertTrue(
@@ -107,22 +111,7 @@ public final class MeleeReachGameTests {
                 enemy.discard();
                 colony.raze();
             };
-        helper.testInfo.addListener(
-            new GameTestListener() {
-                public void testStructureLoaded(GameTestInfo info) {
-                }
-
-                public void testPassed(GameTestInfo info, GameTestRunner runner) {
-                    close.run();
-                }
-
-                public void testFailed(GameTestInfo info, GameTestRunner runner) {
-                    close.run();
-                }
-
-                public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
-                }
-            });
+        Cleanup.on(helper, close);
         helper.onEachTick(
             () -> {
                 if (closed.get()) {
@@ -183,5 +172,15 @@ public final class MeleeReachGameTests {
                     "the same guard order remains in control");
             })
             .thenSucceed();
+    }
+
+    private static void arm(Colony colony, Body body, String name, ItemSpec weapon) {
+        LoadoutProfiles profiles = LoadoutProfiles.of(colony);
+        LoadoutProfile profile =
+            profiles.all().stream()
+            .filter(one -> one.name().equals(name))
+            .findFirst()
+            .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

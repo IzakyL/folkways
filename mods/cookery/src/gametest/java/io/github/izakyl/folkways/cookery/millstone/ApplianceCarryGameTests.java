@@ -8,8 +8,8 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.TeapotBlockEn
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.Stand;
@@ -28,8 +28,6 @@ import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Refinement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
@@ -68,7 +66,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -270,16 +267,7 @@ public final class ApplianceCarryGameTests {
     }
 
     private static Worker worker(ResidentEntity actor, SimpleContainer pack, WorldPos source, Container store, Placement placement) {
-        return new Worker() {
-            public Resident resident() { return actor.resident(); }
-            public Mob body() { return actor; }
-            public Container pack() { return pack; }
-            public List<Store> within() { return List.of(new Store(source, store)); }
-            public ItemStack held(ToolNeed need) { for (ItemStack stack : pack.getItems()) { if (Tools.answers(stack, need)) { return stack; } } return ItemStack.EMPTY; }
-            public void spill(ItemStack stack) { if (!stack.isEmpty()) { throw new IllegalStateException("unexpected spill: " + stack); } }
-            public Effects effects() { return Effects.NONE; }
-            public List<Node> route() { return List.of(); }
-            public Placement placement() { return placement; }
-        };
+        return TestWorker.of(actor).pack(pack).within(new Worker.Store(source, store)).heldFromPack()
+            .effects(Effects.NONE).placement(placement);
     }
 }

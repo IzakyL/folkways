@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.*;
 import io.github.izakyl.folkways.core.engine.travel.*;
+import io.github.izakyl.folkways.core.testing.Nodes;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -14,7 +15,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -28,9 +28,6 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class RefinementSafetyGameTests {
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "refinement");
-    private record Action(NodeSpec spec) implements Node {
-        public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
-    }
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(RefinementSafetyGameTests.class); }
@@ -43,7 +40,7 @@ public final class RefinementSafetyGameTests {
         Map<UUID, Vertex> vertices = new LinkedHashMap<>();
         for (int n = 0; n < 12; n++) {
             Node node = action(origin.at(origin.cell().offset(n % 4, 0, n / 4)), Workload.Once.of(10));
-            vertices.put(node.id(), new Vertex(node.id(), node, Placement.NOWHERE));
+            vertices.put(node.id(), Shown.vertex(node));
         }
         WeaveView weave = new WeaveView();
         weave.apply(Shown.delta(vertices, List.of(), List.of(), Map.of(), Set.of()));
@@ -51,8 +48,7 @@ public final class RefinementSafetyGameTests {
         helper.assertTrue(tours.limited(), "the deliberately exhausted budget really takes the fallback");
         assignedExactly(helper, first, vertices.keySet());
         Node added = action(origin, Workload.Once.of(10));
-        weave.apply(Shown.delta(Map.of(added.id(), new Vertex(added.id(), added, Placement.NOWHERE)),
-            List.of(), List.of(), Map.of(), Set.of()));
+        weave.apply(Shown.delta(added));
         Schedule next = tours.schedule(weave, Set.of(added.id()), crew, ways(), 1, false);
         Set<UUID> expected = new HashSet<>(vertices.keySet());
         expected.add(added.id());
@@ -153,7 +149,7 @@ public final class RefinementSafetyGameTests {
         Placement carrying = new Placement(Set.of(),
             List.of(new Amount(ItemSpec.of(ResourceLocation.withDefaultNamespace("bread")), 1)), List.of(), List.of());
         Map<UUID, Vertex> nodes = Map.of(blocked.id(), new Vertex(blocked.id(), blocked, carrying),
-            ready.id(), new Vertex(ready.id(), ready, Placement.NOWHERE));
+            ready.id(), Shown.vertex(ready));
         WeaveDelta delta = Shown.delta(nodes, List.of(), List.of(),
             Map.of(blocked.id(), full.id(), ready.id(), free.id()), nodes.keySet());
         Scheduler.Scheduled laid = scheduler.handle(List.of(
@@ -175,7 +171,8 @@ public final class RefinementSafetyGameTests {
     }
 
     private static Node action(WorldPos at, Workload workload) {
-        return new Action(NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(at), Stances.at(at), workload).done());
+        return Nodes.done(NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(at), Stances.at(at), workload)
+            .done());
     }
 
     private static Crew.Hand hand(WorldPos at, int free) {

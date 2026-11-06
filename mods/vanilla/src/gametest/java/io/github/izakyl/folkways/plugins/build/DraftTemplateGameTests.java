@@ -45,7 +45,7 @@ public final class DraftTemplateGameTests {
     @GameTest(template = TEMPLATE, timeoutTicks = 80)
     public static void allThreeThingsACellCanSaySurviveTheFile(GameTestHelper helper) {
         BlockState wall = Blocks.COBBLESTONE.defaultBlockState();
-        Draft draft = new Draft(Extent.of(3, 2, 1).orElseThrow(), List.of(
+        Draft draft = new Draft(Extent.of(5, 4, 3).orElseThrow(), List.of(
             new Draft.Cell(new BlockPos(0, 0, 0), wall),
             new Draft.Cell(new BlockPos(1, 0, 0), Blocks.AIR.defaultBlockState()),
             new Draft.Cell(new BlockPos(2, 1, 0), wall)));
@@ -58,6 +58,14 @@ public final class DraftTemplateGameTests {
             "a cell that must end up empty");
         helper.assertTrue(stateAt(read, 2, 0, 0) == null,
             "a cell nothing covered is not in the drawing at all");
+        helper.assertValueEqual(read.volume().size(), new Vec3i(5, 4, 3), "the drawing's own box comes back");
+
+        Blueprint cleared = through(helper, new Draft(Extent.of(2, 1, 1).orElseThrow(), List.of(
+            new Draft.Cell(new BlockPos(0, 0, 0), Blocks.AIR.defaultBlockState()),
+            new Draft.Cell(new BlockPos(1, 0, 0), Blocks.AIR.defaultBlockState()))));
+        helper.assertValueEqual(cleared.blocks().size(), 2, "a drawing that only clears comes back");
+        helper.assertTrue(cleared.blocks().stream().allMatch(cell -> cell.state().isAir()),
+            "and still says the world must end up empty there");
         helper.succeed();
     }
 
@@ -78,29 +86,6 @@ public final class DraftTemplateGameTests {
         helper.assertValueEqual(piece.cells().get(new BlockPos(0, 0, 2)), wall,
             "the row nearest the file's north is the piece's front row");
         helper.assertValueEqual(piece.cells().get(new BlockPos(1, 0, 0)), wood, "and the far row its back");
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 80)
-    public static void theDrawingsOwnBoxSurvivesTheFile(GameTestHelper helper) {
-        Draft draft = new Draft(Extent.of(5, 4, 3).orElseThrow(), List.of(
-            new Draft.Cell(new BlockPos(0, 0, 0), Blocks.COBBLESTONE.defaultBlockState())));
-
-        helper.assertValueEqual(through(helper, draft).volume().size(),
-            new Vec3i(5, 4, 3), "the declared box");
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 80)
-    public static void aDrawingThatOnlyClearsSurvivesTheFile(GameTestHelper helper) {
-        Draft draft = new Draft(Extent.of(2, 1, 1).orElseThrow(), List.of(
-            new Draft.Cell(new BlockPos(0, 0, 0), Blocks.AIR.defaultBlockState()),
-            new Draft.Cell(new BlockPos(1, 0, 0), Blocks.AIR.defaultBlockState())));
-
-        Blueprint read = through(helper, draft);
-        helper.assertValueEqual(read.blocks().size(), 2, "both cleared cells come back");
-        helper.assertTrue(read.blocks().stream().allMatch(cell -> cell.state().isAir()),
-            "and both still say the world must end up empty here");
         helper.succeed();
     }
 

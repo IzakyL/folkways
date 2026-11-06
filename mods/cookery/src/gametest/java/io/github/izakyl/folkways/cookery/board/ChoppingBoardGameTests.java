@@ -1,12 +1,11 @@
 package io.github.izakyl.folkways.cookery.board;
 
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoardBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -20,12 +19,9 @@ import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Refinement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
@@ -43,11 +39,9 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -123,19 +117,6 @@ public final class ChoppingBoardGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void actualBoardCutsOneIngredientAndDeliversEveryProduct(GameTestHelper helper) {
-        try (Fixture fixture = new Fixture(helper)) {
-            BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
-            fixture.finish(work);
-            fixture.assertProducts(3, 1);
-            helper.assertTrue(fixture.board().getCurrentCutStack().isEmpty(), "the real board is empty after take-out");
-            helper.assertTrue(fixture.level.getEntitiesOfClass(ItemEntity.class, new AABB(fixture.pos).inflate(0.5)).isEmpty(),
-                "the produced meat and bone enter the worker's logistics instead of remaining on the floor");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void secondaryProductCanBeRequestedByProduction(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork work = fixture.plan(new ItemStack(Items.BONE));
@@ -196,36 +177,15 @@ public final class ChoppingBoardGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void interruptedCuttingResumesWithoutDrawingAnotherIngredient(GameTestHelper helper) {
-        try (Fixture fixture = new Fixture(helper)) {
-            BoardWork first = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
-            fixture.step(first);
-            fixture.step(first);
-            fixture.step(first);
-            helper.assertValueEqual(fixture.board().getCurrentCutCount(), 2, "two real cuts are persisted");
-            fixture.holds.getFirst().release(Ending.DROPPED);
-            first.ended(fixture.level, Ending.DROPPED);
-            List<Grown> recovery = fixture.recovery();
-            BoardWork resumed = (BoardWork) recovery.getFirst().nodes().getFirst();
-            helper.assertValueEqual(fixture.recovery().getFirst().nodes().getFirst().id(), resumed.id(), "recovery has a stable task id");
-            helper.assertTrue(resumed.spec().needs().isEmpty(), "the input already in the board is not requested again");
-            helper.assertTrue(resumed.planned(fixture.level).isEmpty(), "recovery books the idle board");
-            fixture.finish(resumed);
-            resumed.ended(fixture.level, Ending.DONE);
-            fixture.assertProducts(3, 1);
-            helper.assertTrue(fixture.recovery().isEmpty(), "completed products cannot be recovered twice");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void boardSaveAndLoadRetainsTheOwnedBatchAndAllInputComponents(GameTestHelper helper) {
+    public static void interruptedCuttingSurvivesASaveAndResumesWithoutDrawingAnotherIngredient(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             Component name = Component.literal("Reserved chicken");
             fixture.pack.getItem(0).set(DataComponents.CUSTOM_NAME, name);
             BoardWork first = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
             fixture.step(first);
             fixture.step(first);
+            fixture.step(first);
+            helper.assertValueEqual(fixture.board().getCurrentCutCount(), 2, "two real cuts are persisted");
             CompoundTag saved = fixture.board().saveWithoutMetadata(fixture.level.registryAccess());
             ChoppingBoardBlockEntity loaded = new ChoppingBoardBlockEntity(fixture.pos, fixture.level.getBlockState(fixture.pos));
             loaded.loadWithComponents(saved, fixture.level.registryAccess());
@@ -233,11 +193,16 @@ public final class ChoppingBoardGameTests {
             helper.assertValueEqual(loaded.getCurrentCutStack().get(DataComponents.CUSTOM_NAME), name,
                 "the real block entity retains the full input stack");
             fixture.holds.getFirst().release(Ending.DROPPED);
-            BoardWork resumed = (BoardWork) fixture.recovery().getFirst().nodes().getFirst();
-            helper.assertTrue(resumed.planned(fixture.level).isEmpty(), "a saved batch can be resumed by its colony");
+            first.ended(fixture.level, Ending.DROPPED);
+            List<Grown> recovery = fixture.recovery();
+            BoardWork resumed = (BoardWork) recovery.getFirst().nodes().getFirst();
+            helper.assertValueEqual(fixture.recovery().getFirst().nodes().getFirst().id(), resumed.id(), "recovery has a stable task id");
+            helper.assertTrue(resumed.spec().needs().isEmpty(), "the input already in the board is not requested again");
+            helper.assertTrue(resumed.planned(fixture.level).isEmpty(), "a saved batch is resumed by its colony, booking the idle board");
             fixture.finish(resumed);
             resumed.ended(fixture.level, Ending.DONE);
             fixture.assertProducts(3, 1);
+            helper.assertTrue(fixture.recovery().isEmpty(), "completed products cannot be recovered twice");
         }
         helper.succeed();
     }
@@ -493,43 +458,29 @@ public final class ChoppingBoardGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void withdrawingAPlannedBoardStopsItsAlreadyPreparedPutWithoutSpendingInput(GameTestHelper helper) {
-        try (Fixture fixture = new Fixture(helper)) {
-            BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
-            Node put = ((Workload.Within.Turn.Piece) work.next(fixture.level, fixture)).node();
-            fixture.bookings.withdraw(fixture.at);
-            helper.assertTrue(work.refusal(fixture.level).isPresent() && put.refusal(fixture.level).isPresent(),
-                "both the outer plan and its already prepared operation report cancellation");
-            helper.assertTrue(work.next(fixture.level, fixture) instanceof Workload.Within.Turn.Leave,
-                "canceled work leaves instead of waiting forever for a missing first turn");
-            helper.assertTrue(Commit.run(fixture.level, put, fixture) instanceof Outcome.Failed,
-                "even a put already in its wind-up cannot operate an unmarked kitchen");
-            helper.assertValueEqual(Goods.countIn(fixture.pack, Goods.specOf(new ItemStack(Items.CHICKEN))), 1L,
-                "the core returns the old operation's ingredient exactly once");
-            helper.assertTrue(fixture.board().getCurrentCutStack().isEmpty(), "the unmarked board remains empty");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void readmittingTheSameBoardAndTurnIdCannotReviveAnOldPut(GameTestHelper helper) {
+    public static void withdrawingAPlannedBoardStopsItsPreparedPutEvenAfterTheSameIdIsReadmitted(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork old = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
-            Node put = ((Workload.Within.Turn.Piece) old.next(fixture.level, fixture)).node();
+            Node put = ((Workload.Within.Turn.Piece) old.next(fixture.level, fixture.worker)).node();
             fixture.bookings.withdraw(fixture.at);
+            helper.assertTrue(old.refusal(fixture.level).isPresent() && put.refusal(fixture.level).isPresent(),
+                "both the outer plan and its already prepared operation report cancellation");
+            helper.assertTrue(old.next(fixture.level, fixture.worker) instanceof Workload.Within.Turn.Leave,
+                "canceled work leaves instead of waiting forever for a missing first turn");
             fixture.bookings.admit(fixture.at);
             Hold replacement = fixture.bookings.hold(fixture.at, old.id());
             helper.assertTrue(replacement.take().isEmpty(), "a new generation can book the same stable id");
             fixture.holds.add(replacement);
             helper.assertTrue(old.refusal(fixture.level).isPresent(), "the old node cannot borrow the new same-id booking");
-            helper.assertTrue(Commit.run(fixture.level, put, fixture) instanceof Outcome.Failed,
-                "the old prepared operation retains its original generation");
+            helper.assertTrue(Commit.run(fixture.level, put, fixture.worker) instanceof Outcome.Failed,
+                "a put already in its wind-up retains its original generation and cannot operate the re-marked kitchen");
             helper.assertValueEqual(Goods.countIn(fixture.pack, Goods.specOf(new ItemStack(Items.CHICKEN))), 1L,
-                "re-marking cannot spend the old operation's input");
-            helper.assertTrue(fixture.board().getCurrentCutStack().isEmpty(), "the old operation never loads the re-marked board");
+                "the core returns the old operation's ingredient exactly once");
+            helper.assertTrue(fixture.board().getCurrentCutStack().isEmpty(), "the old operation never loads the board");
         }
         helper.succeed();
     }
+
     private static Runnable installFrame(Fixture fixture, UUID id, Vec3[] origin) {
         WorldSpaces.Frame frame = new WorldSpaces.Frame() {
             public UUID id() { return id; }
@@ -608,7 +559,9 @@ public final class ChoppingBoardGameTests {
         }
         throw new AssertionError("a deterministic native knife roll exists");
     }
-    private static final class Fixture implements Worker, AutoCloseable {
+    private static final class Fixture implements AutoCloseable {
+
+        final Worker worker;
 
         final GameTestHelper helper;
         final ServerLevel level;
@@ -640,6 +593,10 @@ public final class ChoppingBoardGameTests {
             this.stances = Stances.at(level, body.mob().blockPosition());
             pack.setItem(0, new ItemStack(Items.CHICKEN));
             pack.setItem(1, new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get()));
+
+            worker = TestWorker.of(body).pack(pack).heldFromPack()
+                .spill(stack -> helper.assertTrue(stack.isEmpty(), "nothing is spilled by the fixture"));
+
         }
 
         ChoppingBoardBlockEntity board() {
@@ -670,11 +627,11 @@ public final class ChoppingBoardGameTests {
         }
 
         Outcome step(BoardWork work) {
-            Workload.Within.Turn turn = work.next(level, this);
+            Workload.Within.Turn turn = work.next(level, worker);
             if (!(turn instanceof Workload.Within.Turn.Piece piece)) {
                 throw new IllegalStateException("expected another board operation, got " + turn);
             }
-            Outcome outcome = Commit.run(level, piece.node(), this);
+            Outcome outcome = Commit.run(level, piece.node(), worker);
             if (outcome instanceof Outcome.Done done) {
                 done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(),
                     "every real product fits in the test pack"));
@@ -687,8 +644,8 @@ public final class ChoppingBoardGameTests {
 
         void finish(BoardWork work) {
             for (int turn = 0; turn < 20; turn++) {
-                if (work.next(level, this) instanceof Workload.Within.Turn.Leave) {
-                    helper.assertTrue(work.commit(level, this) instanceof Outcome.Done, "the whole batch completes");
+                if (work.next(level, worker) instanceof Workload.Within.Turn.Leave) {
+                    helper.assertTrue(work.commit(level, worker) instanceof Outcome.Done, "the whole batch completes");
                     return;
                 }
                 helper.assertTrue(step(work) instanceof Outcome.Done, "each actual board operation succeeds");
@@ -709,31 +666,6 @@ public final class ChoppingBoardGameTests {
             return pack.getItem(1);
         }
 
-        @Override
-        public Resident resident() { return body.resident(); }
-        @Override
-        public Mob body() { return body.mob(); }
-        @Override
-        public Container pack() { return pack; }
-        @Override
-        public List<Store> within() { return List.of(); }
-        @Override
-        public ItemStack held(ToolNeed need) {
-            for (int slot = 0; slot < pack.getContainerSize(); slot++) {
-                if (Tools.answers(pack.getItem(slot), need)) {
-                    return pack.getItem(slot);
-                }
-            }
-            return ItemStack.EMPTY;
-        }
-        @Override
-        public void spill(ItemStack stack) { helper.assertTrue(stack.isEmpty(), "nothing is spilled by the fixture"); }
-        @Override
-        public Effects effects() { return body.effects(); }
-        @Override
-        public List<Node> route() { return List.of(); }
-        @Override
-        public Placement placement() { return Placement.NOWHERE; }
 
         @Override
         public void close() {

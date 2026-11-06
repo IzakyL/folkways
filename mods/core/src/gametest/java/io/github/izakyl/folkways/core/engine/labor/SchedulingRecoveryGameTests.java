@@ -79,7 +79,7 @@ public final class SchedulingRecoveryGameTests {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(listener);
         LaborIncident.subscriptions(Set.of(data.colonyId()));
         try {
-            Fixture scene = new Fixture(helper, 1, null, Placement.NOWHERE, null, labor);
+            Fixture scene = new Fixture(helper, 1, labor);
             scene.enqueue(scene.initial(), scene.crew);
             scene.pipeline.applyReady(helper.getLevel());
             events.clear();
@@ -98,7 +98,7 @@ public final class SchedulingRecoveryGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void aPartialLayoutRetriesWithoutMessagesAndKeepsItsPublishedDiff(GameTestHelper helper) {
-        Fixture scene = new Fixture(helper, 3, null, Placement.NOWHERE, null);
+        Fixture scene = new Fixture(helper, 3);
         scene.begin();
         int queried = scene.queries;
         for (int i = 0; i < 100; i++) scene.pipeline.applyReady(helper.getLevel());
@@ -118,7 +118,7 @@ public final class SchedulingRecoveryGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void changesReceivedDuringBackoffJoinTheCurrentGraphOnce(GameTestHelper helper) {
-        Fixture scene = new Fixture(helper, 2, null, Placement.NOWHERE, null);
+        Fixture scene = new Fixture(helper, 2);
         scene.begin();
         Vertex added = scene.vertex(scene.end.at(scene.end.cell().offset(2, 0, 0)));
         Resident newcomer = new Resident(UUID.randomUUID(), OWNER);
@@ -142,7 +142,7 @@ public final class SchedulingRecoveryGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void closingDuringARecoveryRejectsItsLatePublication(GameTestHelper helper) {
-        Fixture scene = new Fixture(helper, 1, null, Placement.NOWHERE, null);
+        Fixture scene = new Fixture(helper, 1);
         scene.begin();
         List<Runnable> cleanup = new ArrayList<>();
         scene.whenRecovered = () -> scene.pipeline.close(Runnable::run, cleanup::add);
@@ -191,7 +191,7 @@ public final class SchedulingRecoveryGameTests {
         AsyncRecovery(GameTestHelper helper, boolean closeDuringRecovery) {
             this.helper = helper;
             this.closeDuringRecovery = closeDuringRecovery;
-            scene = new Fixture(helper, 1, null, Placement.NOWHERE, null);
+            scene = new Fixture(helper, 1);
             pool = Executors.newSingleThreadExecutor(task -> {
                 Thread worker = new Thread(task, "folkways-test-schedule-recovery");
                 worker.setDaemon(true);
@@ -337,8 +337,6 @@ public final class SchedulingRecoveryGameTests {
         final Vertex head;
         final Vertex tail;
         final Crew crew;
-        final Node active;
-        final Placement activePlan;
         final List<Scheduler.Scheduled> published = new ArrayList<>();
         final Ways ways;
         int left;
@@ -348,27 +346,25 @@ public final class SchedulingRecoveryGameTests {
         Runnable whenRecovered = () -> { };
         Consumer<Scheduler.Scheduled> delivered = ignored -> { };
 
-        Fixture(GameTestHelper helper, int failures, Node active, Placement activePlan, Resident owner) {
-            this(helper, failures, active, activePlan, owner, null);
+        Fixture(GameTestHelper helper, int failures) {
+            this(helper, failures, null);
         }
 
-        Fixture(GameTestHelper helper, int failures, Node active, Placement activePlan, Resident owner, ColonyLabor labor) {
+        // Laid by the scheduler of `labor`'s own pipeline, or by one of its own when there is none.
+        Fixture(GameTestHelper helper, int failures, ColonyLabor labor) {
             this.helper = helper;
             this.left = failures;
-            this.active = active;
-            this.activePlan = activePlan;
             scheduler = labor == null ? new Scheduler() : (Scheduler) field(field(labor, "pipeline"), "scheduler");
             pipeline = labor == null ? new Pipeline(inbox, new Planner(new Claims(), new Cooldowns()), scheduler)
                 : (Pipeline) field(labor, "pipeline");
-            second = owner == null ? new Resident(UUID.randomUUID(), OWNER) : owner;
+            second = new Resident(UUID.randomUUID(), OWNER);
             start = WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(1, 1, 1)));
             end = start.at(start.cell().offset(4, 0, 0));
             old = vertex(start);
             head = vertex(start.at(start.cell().offset(2, 0, 0)));
             tail = vertex(end);
             crew = new Crew(List.of(new Crew.Hand(first, start, 6, 6, 1, List.of(), List.of(), Optional.empty()),
-                new Crew.Hand(second, start, 6, 6, 1, List.of(), List.of(),
-                    active == null ? Optional.empty() : Optional.of(active.id()))));
+                new Crew.Hand(second, start, 6, 6, 1, List.of(), List.of(), Optional.empty())));
             ways = new Ways() {
                 public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
                     return Faring.yes(Journey.afoot(1, goals));
@@ -417,13 +413,8 @@ public final class SchedulingRecoveryGameTests {
             Map<UUID, Optional<UUID>> pins = new LinkedHashMap<>();
             pins.put(head.id(), Optional.of(first.id()));
             pins.put(tail.id(), Optional.of(first.id()));
-            if (active != null) {
-                put.put(active.id(), new Vertex(active.id(), active, activePlan));
-                pins.put(active.id(), Optional.of(second.id()));
-            }
             return new WeaveDelta(put, Set.of(old.id()), Set.of(new Before(head.id(), tail.id())), Set.of(),
-                Map.of(),
-                pins, Set.copyOf(put.keySet()), List.of(), Optional.empty());
+                Map.of(), pins, Set.copyOf(put.keySet()), List.of(), Optional.empty());
         }
 
         void enqueue(WeaveDelta delta, Crew hands) {
@@ -467,10 +458,13 @@ public final class SchedulingRecoveryGameTests {
         }
 
         private Vertex vertex(WorldPos at) {
-            NodeSpec spec = NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(at), Stances.at(at), Workload.Once.of(1)).done();
+            NodeSpec spec = NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(at), Stances.at(at),
+                Workload.Once.of(1)).done();
             Node node = new Node() {
                 public NodeSpec spec() { return spec; }
-                public Outcome commit(ServerLevel level, Worker who) { throw new AssertionError("scheduling never executes work"); }
+                public Outcome commit(ServerLevel level, Worker who) {
+                    throw new AssertionError("scheduling never executes work");
+                }
             };
             return new Vertex(node.id(), node, new Placement(Set.of(new Stand(at)), List.of(), List.of(), List.of()));
         }

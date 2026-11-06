@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
-import { defineTask, javaTask, input, media, screen, tick, world } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, input, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements, scrollElementIntoView, ancestorsOf, type Element } from "../ldlib2";
-import { boardAct, boardActs, boardRows, openSite, settlePanel } from "../shared/ui/site-panel";
+import { boardAct, boardActs, openSite, settlePanel } from "../shared/ui/site-panel";
 import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
 import { foundColonyFast, foundingBox, optInViaBook, waitForGroundedPlayer,
   entityTypeMatches,
 } from "../shared/colony/colony-founding";
 import { prepareSafeWalkwayOn, safeWalkwayBox } from "../shared/ui/world-ui";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { ensureOut, tracePath, shotPath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, frames, safeAction, tryCommand, waitForElement } from "../shared/harness/bw-helpers";
@@ -124,8 +124,11 @@ for (const stage of twins()) test(stage.title("container panel carry-set MAINTAI
     const final = await pollReplenish(server, stage.at(targetChest), stage.at(sourceChest));
     expect(final.targetHasStock).toBe(true);
     expect(final.sourceHasRemainder).toBe(true);
-    await setMaintainDemandViaUI(server, client, playerName, targetChest, "minecraft:iron_ingot", 8, stage);
-    await previewChineseContainer(server, client, playerName, targetChest, stage);
+    // How the form is drawn does not depend on where the chest stands: its geometry is checked on the ground.
+    if (stage.kind === "ground") {
+      await setMaintainDemandViaUI(server, client, playerName, targetChest, "minecraft:iron_ingot", 8, stage);
+      await previewChineseContainer(server, client, playerName, targetChest, stage);
+    }
   } catch (error) {
     pair?.failing(error);
     throw error;
@@ -201,8 +204,7 @@ async function containerAccess(server: any, client: any, playerName: string, che
 
 async function exerciseFilterPicker(server: any, client: any, playerName: string, chest: any, source: any, stage: any) {
   const rules = await openContainerRules(server, client, playerName, chest, stage);
-  await assertContainerForm(client, rules);
-  await media.screenshot(client, { path: shotPath("e2e", stage.name("container-overview")) });
+  if (stage.kind === "ground") await assertContainerForm(client, rules);
   const opener = (await boardAct(client, "edit", "folkways.orders", rules.filter)).id;
   const result = (item: string) => `folkways.selector.result.minecraft.${item}`;
   await assertFilterState(client, rules, "black", 0);
@@ -214,7 +216,6 @@ async function exerciseFilterPicker(server: any, client: any, playerName: string
     await clickElement(client, { id: result(item) });
     expect(await selectedFilterRules(client)).toContain(`minecraft:${item}`);
   }
-  await media.screenshot(client, { path: shotPath("e2e", stage.name("container-multi-filter")) });
   await clickElement(client, { id: "folkways.selector.confirm" });
   await waitForElement(client, { id: "folkways.selector.close" }, { state: "absent" });
   await settlePanel(server, client);
@@ -246,10 +247,6 @@ async function exerciseFilterPicker(server: any, client: any, playerName: string
   await clickBoardAction(client, (await boardAct(client, "do", "folkways.orders", rules.admission, 0)).id);
   await settlePanel(server, client);
   await assertFilterState(client, rules, "black", 1);
-  await scrollElementIntoView(client, { id: `folkways.board.row.folkways.orders.${rules.filter}` });
-  await media.screenshot(client, { path: shotPath("e2e", stage.name("container-rules")) });
-  await scrollElementIntoView(client, { id: `folkways.board.row.folkways.orders.${rules.draft}` });
-  await media.screenshot(client, { path: shotPath("e2e", stage.name("container-order-form")) });
   // Filters belong to a container, rather than the shared settings page.
   const sourceRules = await openContainerRules(server, client, playerName, source, stage);
   await assertFilterState(client, sourceRules, "black", 0);
@@ -345,9 +342,6 @@ async function assertContainerForm(client: any, rules: { first: number; filter: 
     expect(entry.width, "each existing order needs the full section width").toBeGreaterThanOrEqual(heading.width - 2);
     expect(entry.width, "existing orders need enough space for item, stock and action").toBeGreaterThanOrEqual(240);
   }
-  // Return to the heading so the overview records the form's top instead of the last action clicked.
-  const top = (await boardRows(client)).find(row => row.page === "folkways.orders")!;
-  await scrollElementIntoView(client, { id: top.id });
 }
 
 function assertDrawnText(elements: Element[], target: string | Element, purpose: string) {
@@ -441,13 +435,6 @@ async function previewChineseContainer(server: any, client: any, playerName: str
       expect(descendantsText(await panelElements(client), token), "second click restores original permission")
         .toEqual(originalText);
     }
-    const top = (await boardRows(client)).find(row => row.page === "folkways.orders")!;
-    await scrollElementIntoView(client, { id: top.id });
-    await input.move(client, { x: 0, y: 0 });
-    await frames(client, 3);
-    await media.screenshot(client, {
-      path: shotPath("e2e", stage.name(scale === 1 ? "container-overview-zh-cn" : "container-overview-zh-cn-compact")),
-    });
   }
   await screen.dismiss(client);
 }

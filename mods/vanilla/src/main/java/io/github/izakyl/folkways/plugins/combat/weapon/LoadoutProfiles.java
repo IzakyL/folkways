@@ -40,14 +40,12 @@ public final class LoadoutProfiles {
         this.colony = colony;
         this.changed = changed;
         CompoundTag saved = colony.kept(SAVED);
-        boolean converted = false;
         for (Tag value : saved.getList("profiles", Tag.TAG_COMPOUND)) {
             CompoundTag row = (CompoundTag) value;
             List<LoadoutProfile.Entry> entries = new ArrayList<>();
             for (Tag item : row.getList("entries", Tag.TAG_COMPOUND)) {
                 CompoundTag entry = (CompoundTag) item;
-                CompoundTag items = withoutPins(entry.getCompound("items"));
-                converted |= !items.equals(entry.get("items"));
+                CompoundTag items = entry.getCompound("items");
                 Optional<ItemSpec> decoded =
                     ItemSpec.CODEC
                     .parse(registries().createSerializationContext(NbtOps.INSTANCE), items)
@@ -68,14 +66,7 @@ public final class LoadoutProfiles {
                     entry.getInt("target"),
                     entry.getInt("threshold")));
             }
-            LoadoutProfile profile =
-                new LoadoutProfile(
-                row.getUUID("id"),
-                row.getString("name"),
-                entries,
-                row.contains("legacy")
-                ? Optional.ofNullable(LoadoutRegistry.read(row.getCompound("legacy")))
-                : Optional.empty());
+            LoadoutProfile profile = new LoadoutProfile(row.getUUID("id"), row.getString("name"), entries);
             profiles.put(profile.id(), profile);
         }
         for (Tag value : saved.getList("assignments", Tag.TAG_COMPOUND)) {
@@ -84,36 +75,9 @@ public final class LoadoutProfiles {
                 assignments.put(row.getUUID("resident"), row.getUUID("profile"));
             }
         }
-        if (saved.getInt("version") < 3) {
-            for (Tag value : saved.getList("loadouts", Tag.TAG_COMPOUND)) {
-                CompoundTag row = (CompoundTag) value;
-                LoadoutRegistry.Selection legacy = LoadoutRegistry.read(row);
-                if (row.hasUUID("resident") && legacy != null) {
-                    assignments.put(row.getUUID("resident"), migrate(legacy).id());
-                }
-            }
-            if (!assignments.isEmpty()) {
-                save();
-            }
-        }
-        // Retained extension options can be resolved when its provider is installed again.
-        boolean resolved = false;
-        for (LoadoutProfile profile : List.copyOf(profiles.values())) {
-            if (profile.entries().isEmpty() && profile.legacy().isPresent()) {
-                List<LoadoutProfile.Entry> entries = legacyEntries(profile.legacy().get());
-                if (!entries.isEmpty()) {
-                    profiles.put(
-                        profile.id(), new LoadoutProfile(profile.id(), profile.name(), entries, profile.legacy()));
-                    resolved = true;
-                }
-            }
-        }
-        if (resolved || converted) {
-            save();
-        }
     }
 
-    /** Remove retired profile pins before decoding, including pins whose component codecs are now absent. */
+    /** Strip exact components, enchantments and held gun attachments from requested profile items. */
     public static CompoundTag withoutPins(CompoundTag saved) {
         CompoundTag items = saved.copy();
         ListTag alternatives = items.getList("anyOf", Tag.TAG_COMPOUND);
@@ -182,7 +146,7 @@ public final class LoadoutProfiles {
 
     public LoadoutProfile create(String name) {
         thread();
-        LoadoutProfile profile = new LoadoutProfile(UUID.randomUUID(), name, List.of(), Optional.empty());
+        LoadoutProfile profile = new LoadoutProfile(UUID.randomUUID(), name, List.of());
         profiles.put(profile.id(), profile);
         save();
         return profile;
@@ -197,7 +161,7 @@ public final class LoadoutProfiles {
                 unavailableItems.put(new EntryKey(copy.id(), entry.id()), raw.copy());
             }
         }
-        replace(new LoadoutProfile(copy.id(), copy.name(), source.entries(), source.legacy()));
+        replace(new LoadoutProfile(copy.id(), copy.name(), source.entries()));
         return get(copy.id()).orElseThrow();
     }
 
@@ -287,52 +251,8 @@ public final class LoadoutProfiles {
                     });
             }
         }
-        replace(new LoadoutProfile(id, profile.name(), entries, Optional.empty()));
+        replace(new LoadoutProfile(id, profile.name(), entries));
         return get(id).orElseThrow();
-    }
-
-    LoadoutProfile migrate(LoadoutRegistry.Selection selection) {
-        thread();
-        Optional<LoadoutProfile> existing =
-            profiles.values().stream()
-            .filter(profile -> profile.legacy().filter(selection::equals).isPresent())
-            .findFirst();
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-        String name = selection.id().getPath();
-        name = Character.toUpperCase(name.charAt(0)) + name.substring(1);
-        LoadoutProfile profile =
-            new LoadoutProfile(
-            UUID.randomUUID(),
-            name.substring(0, Math.min(80, name.length())),
-            legacyEntries(selection),
-            Optional.of(selection));
-        profiles.put(profile.id(), profile);
-        return profile;
-    }
-
-    private List<LoadoutProfile.Entry> legacyEntries(LoadoutRegistry.Selection selection) {
-        Optional<ItemSpec> weapon =
-            selection.provider().flatMap(provider -> provider.legacyWeapon(selection.options()));
-        if (weapon.isEmpty()) {
-            return List.of();
-        }
-        List<LoadoutProfile.Entry> entries = new ArrayList<>();
-        entries.add(LoadoutProfile.Entry.weapon(weapon.get()));
-        for (ItemStack stack : LoadoutProfile.samples(weapon.get())) {
-            for (LoadoutProvider.LegacySupply supply :
-                selection.provider().orElseThrow().legacySupplies(selection.options(), stack)) {
-                if (entries.stream()
-                    .noneMatch(
-                    entry ->
-                        entry.kind() == LoadoutProfile.Kind.SUPPLY
-                            && entry.items().equals(supply.items()))) {
-                    entries.add(LoadoutProfile.Entry.supply(supply.items(), supply.target(), supply.threshold()));
-                }
-            }
-        }
-        return List.copyOf(entries);
     }
 
     void retain(Collection<UUID> residents) {
@@ -362,14 +282,6 @@ public final class LoadoutProfiles {
                 entries.add(item);
             }
             row.put("entries", entries);
-            profile.legacy()
-                .ifPresent(
-                selection -> {
-                    CompoundTag legacy = new CompoundTag();
-                    legacy.putString("loadout", selection.id().toString());
-                    legacy.put("options", selection.options());
-                    row.put("legacy", legacy);
-                });
             rows.add(row);
         }
         saved.put("profiles", rows);

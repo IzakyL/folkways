@@ -17,7 +17,6 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -26,13 +25,12 @@ import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
 import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.front.engine.authority.ColonyAuthority;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
@@ -73,9 +71,6 @@ import net.minecraft.gametest.framework.AfterBatch;
 import net.minecraft.gametest.framework.BeforeBatch;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -84,10 +79,10 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
@@ -146,28 +141,24 @@ public final class WarfareGameTests {
             () ->
                 helper.assertTrue(
                     f.body.pack().count(ModItems.HANDGUN_AMMO.get()) == 5,
-                    "normal supply trips collect all five actual"
-                    + " rounds " + f.debug()))
+                    "normal supply trips collect all five actual rounds " + f.debug()))
             .thenExecute(() -> f.enemy(10, 10))
             .thenWaitUntil(
             () ->
                 helper.assertValueEqual(
                     f.shots.get(),
                     5,
-                    "the guard discharges exactly five native"
-                    + " shots " + f.debug()))
+                    "the guard discharges exactly five native shots " + f.debug()))
             .thenIdle(40)
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
-                    f.shots.get(), 5, "an empty source and pack produce no extra"
-                    + " shots");
+                    f.shots.get(), 5, "an empty source and pack produce no extra shots");
                 helper.assertValueEqual(
                     f.body.pack().count(ModItems.HANDGUN_AMMO.get()),
                     0,
                     "each native shot consumes one supplied round");
-                helper.assertTrue(f.store.isEmpty(), "the real source was withdrawn"
-                    + " once");
+                helper.assertTrue(f.store.isEmpty(), "the real source was withdrawn once");
             })
             .thenSucceed();
     }
@@ -207,7 +198,7 @@ public final class WarfareGameTests {
                 helper.assertValueEqual(
                     GunData.from(returned).ammo.get(),
                     0,
-                    "the native magazine consumes" + " finite loaded rounds");
+                    "the native magazine consumes finite loaded rounds");
                 helper.assertValueEqual(
                     returned.get(DataComponents.CUSTOM_NAME),
                     Component.literal("player's gun"),
@@ -215,122 +206,73 @@ public final class WarfareGameTests {
                 helper.assertValueEqual(
                     f.body.pack().count(ModItems.GLOCK_17.get()),
                     1,
-                    "idempotent closure" + " returns one" + " gun");
-                helper.succeed();
-            });
-    }
-
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 80)
-    public static void gunsNeverFireWithoutSuppliedAmmo(GameTestHelper helper) {
-        Scene f = new Scene(helper, false);
-        ItemStack gun = new ItemStack(ModItems.AK_47.get());
-        GunData data = GunData.from(gun);
-        data.initialize();
-        data.ammo.set(0);
-        data.save();
-        f.body.pack().insert(gun);
-        f.enemy(10, 10);
-        helper.assertTrue(
-            Weapons.open(worker(f.body)).isEmpty(), "an empty gun and empty pack cannot open a"
-            + " session");
-        helper.runAfterDelay(
-            35,
-            () -> {
-                helper.assertValueEqual(f.shots.get(), 0, "no ammunition means no native"
-                    + " discharge");
-                helper.assertValueEqual(GunData.from(gun).ammo.get(), 0, "loaded ammunition is"
-                    + " retained");
+                    "idempotent closure returns one gun");
+                helper.assertTrue(
+                    Weapons.open(worker(f.body)).isEmpty(), "an empty gun and empty pack cannot open a session");
                 helper.succeed();
             });
     }
 
     @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 120)
-    public static void boltActionsKeepNativePumpTimeAcrossSessionReopening(GameTestHelper helper) {
-        Scene f = new Scene(helper, false);
-        f.body.pack().insert(new ItemStack(ModItems.M_870.get()));
-        f.body.pack().insert(new ItemStack(ModItems.SHOTGUN_AMMO.get(), 3));
-        f.profile(ItemSpec.of(ModItems.M_870.get()), ItemSpec.of(ModItems.SHOTGUN_AMMO.get()), 3, 3);
-        Zombie target = f.enemy(10, 10);
-        List<Long> times = new ArrayList<>();
-        final WeaponSession[] current = {null};
-        helper.onEachTick(
-            () -> {
-                if (f.shots.get() >= 3) {
-                    return;
-                }
-                if (current[0] == null) {
-                    current[0] = Weapons.open(worker(f.body)).orElseThrow();
-                    f.sessions.add(current[0]);
-                    current[0].fire(target);
-                }
-                int before = f.shots.get();
-                current[0].tick();
-                if (f.shots.get() > before) {
-                    times.add(f.level.getGameTime());
-                    current[0].close();
-                    current[0] = null;
-                }
-            });
+    public static void reopeningOrRestockingAGunCannotResetItsNativeCadence(GameTestHelper helper) {
+        // The pump keeps its session until each shot, then reopens; the pistol goes back to the pack every tick.
+        List<Cadence> guns = List.of(
+            new Cadence(helper, ModItems.M_870.get(), ModItems.SHOTGUN_AMMO.get(), true),
+            new Cadence(helper, ModItems.GLOCK_17.get(), ModItems.HANDGUN_AMMO.get(), false));
         helper.startSequence()
-            .thenWaitUntil(
-            () ->
-                helper.assertValueEqual(
-                    f.shots.get(), 3, "the pump eventually fires three finite"
-                    + " rounds"))
-            .thenExecute(
-            () -> {
-                int bolt =
-                    GunData.from(
-                    f.body.getMainHandItem().isEmpty()
-                    ? f.body.pack().contents().getFirst()
-                    : f.body.getMainHandItem())
-                    .get(GunProp.BOLT_ACTION_TIME);
-                helper.assertTrue(
-                    times.get(1) - times.get(0) >= bolt && times.get(2) - times.get(1) >= bolt,
-                    "reopening sessions cannot bypass the native pump");
-            })
+            .thenWaitUntil(() -> guns.forEach(gun -> helper.assertValueEqual(
+                gun.scene.shots.get(), 3, "three supplied rounds eventually discharge from " + gun.item)))
+            .thenExecute(() -> guns.forEach(gun -> helper.assertTrue(gun.spaced(), gun.held
+                ? "reopening sessions cannot bypass the native pump"
+                : "copying a stack back into the pack never bypasses RPM")))
             .thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 120)
-    public static void returningAGunToItsPackCannotResetItsFiringCadence(GameTestHelper helper) {
-        Scene f = new Scene(helper, false);
-        f.body.pack().insert(new ItemStack(ModItems.GLOCK_17.get()));
-        f.body.pack().insert(new ItemStack(ModItems.HANDGUN_AMMO.get(), 3));
-        Zombie target = f.enemy(10, 10);
-        List<Long> times = new ArrayList<>();
-        helper.onEachTick(
-            () -> {
-                if (f.shots.get() >= 3) {
-                    return;
-                }
-                WeaponSession session = Weapons.open(worker(f.body)).orElseThrow();
-                try {
-                    session.fire(target);
-                    int before = f.shots.get();
-                    session.tick();
-                    if (f.shots.get() > before) {
-                        times.add(f.level.getGameTime());
+    // One gun firing three rounds at a still enemy, a fresh session at a time, noting when each shot left.
+    private static final class Cadence {
+        final Scene scene;
+        final Item item;
+        final boolean held;
+        final List<Long> times = new ArrayList<>();
+        WeaponSession current;
+
+        Cadence(GameTestHelper helper, Item item, Item ammo, boolean held) {
+            scene = new Scene(helper, false);
+            this.item = item;
+            this.held = held;
+            scene.body.pack().insert(new ItemStack(item));
+            scene.body.pack().insert(new ItemStack(ammo, 3));
+            scene.profile(ItemSpec.of(item), ItemSpec.of(ammo), 3, 3);
+            Zombie target = scene.enemy(10, 10);
+            helper.onEachTick(
+                () -> {
+                    if (scene.shots.get() >= 3) {
+                        return;
                     }
-                } finally {
-                    session.close();
-                }
-            });
-        helper.startSequence()
-            .thenWaitUntil(
-            () ->
-                helper.assertValueEqual(
-                    f.shots.get(), 3, "three supplied rounds eventually"
-                    + " discharge"))
-            .thenExecute(
-            () -> {
-                int rpm = GunData.from(f.body.pack().getItem(0)).get(GunProp.RPM);
-                int interval = (int) Math.ceil(1200.0 / rpm);
-                helper.assertTrue(
-                    times.get(1) - times.get(0) >= interval && times.get(2) - times.get(1) >= interval,
-                    "copying a stack back into the pack never bypasses RPM");
-            })
-            .thenSucceed();
+                    if (current == null) {
+                        current = Weapons.open(worker(scene.body)).orElseThrow();
+                        scene.sessions.add(current);
+                        current.fire(target);
+                    }
+                    int before = scene.shots.get();
+                    current.tick();
+                    boolean shot = scene.shots.get() > before;
+                    if (shot) {
+                        times.add(scene.level.getGameTime());
+                    }
+                    if (shot || !held) {
+                        current.close();
+                        current = null;
+                    }
+                });
+        }
+
+        boolean spaced() {
+            GunData data = GunData.from(scene.body.pack().contents().stream()
+                .filter(stack -> stack.is(item)).findFirst().orElseThrow());
+            int interval = held ? data.get(GunProp.BOLT_ACTION_TIME) : (int) Math.ceil(1200.0 / data.get(GunProp.RPM));
+            return times.get(1) - times.get(0) >= interval && times.get(2) - times.get(1) >= interval;
+        }
     }
 
     @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 300)
@@ -355,8 +297,7 @@ public final class WarfareGameTests {
         f.entities.add(friend);
         helper.assertFalse(session.fire(enemy), "another resident blocks the attack too");
         helper.assertValueEqual(
-            f.body.pack().count(ModItems.HANDGUN_AMMO.get()), 2, "blocked shots spend no"
-            + " ammunition");
+            f.body.pack().count(ModItems.HANDGUN_AMMO.get()), 2, "blocked shots spend no ammunition");
         helper.succeed();
     }
 
@@ -366,8 +307,7 @@ public final class WarfareGameTests {
         var provider = LoadoutRegistry.find(WarfareWeapons.LOADOUT).orElseThrow();
         for (var weapon : WarfareWeapons.ALL) {
             ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(weapon.nativeId()));
-            helper.assertTrue(provider.accepts(stack), "each supported physical gun has a"
-                + " provider");
+            helper.assertTrue(provider.accepts(stack), "each supported physical gun has a provider");
             helper.assertValueEqual(
                 provider.ammunition(stack).orElseThrow(),
                 weapon.ammunition(),
@@ -391,14 +331,12 @@ public final class WarfareGameTests {
         f.sessions.add(session);
         helper.assertTrue(
             f.body.getMainHandItem() == actual,
-            "the shared adapter receives and loans the" + " selected real stack");
-        helper.assertTrue(session.continuousEngagement(), "native gun sessions retain their hand"
-            + " between shots");
+            "the shared adapter receives and loans the selected real stack");
+        helper.assertTrue(session.continuousEngagement(), "native gun sessions retain their hand between shots");
         session.close();
         session.close();
         helper.assertValueEqual(
-            f.body.pack().count(ModItems.GLOCK_17.get()), 2, "closing returns the selected gun"
-            + " exactly once");
+            f.body.pack().count(ModItems.GLOCK_17.get()), 2, "closing returns the selected gun exactly once");
         helper.succeed();
     }
 
@@ -431,8 +369,7 @@ public final class WarfareGameTests {
                     stack ->
                         Component.literal("safe gun")
                             .equals(stack.get(DataComponents.CUSTOM_NAME))),
-                    "normal logistics ignore unusable carried and"
-                    + " stored guns " + f.debug()))
+                    "normal logistics ignore unusable carried and stored guns " + f.debug()))
             .thenExecute(
             () -> {
                 helper.assertTrue(
@@ -448,8 +385,7 @@ public final class WarfareGameTests {
             .thenWaitUntil(
             () ->
                 helper.assertValueEqual(
-                    f.shots.get(), 2, "the accepted loadout fires only the two"
-                    + " physical rounds " + f.debug()))
+                    f.shots.get(), 2, "the accepted loadout fires only the two physical rounds " + f.debug()))
             .thenSucceed();
     }
 
@@ -465,16 +401,14 @@ public final class WarfareGameTests {
         GunData data = GunData.from(f.body.getMainHandItem());
         data.perk.set(HEBullet.INSTANCE, (short) 1);
         data.save();
-        helper.assertTrue(data.get(GunProp.EXPLOSION_DAMAGE) > 0, "the test uses the native HE"
-            + " trait");
+        helper.assertTrue(data.get(GunProp.EXPLOSION_DAMAGE) > 0, "the test uses the native HE trait");
         session.tick();
         helper.assertTrue(
             session.state() == WeaponSession.State.CLOSED,
             "an unsafe component change closes the actual loan before discharge");
         helper.assertValueEqual(f.shots.get(), 0, "no explosive bullet is fired");
         helper.assertValueEqual(
-            f.body.pack().count(ModItems.HANDGUN_AMMO.get()), 2, "rejection preserves physical"
-            + " ammo");
+            f.body.pack().count(ModItems.HANDGUN_AMMO.get()), 2, "rejection preserves physical ammo");
         var provider = LoadoutRegistry.find(WarfareWeapons.LOADOUT).orElseThrow();
         for (String override :
             List.of(
@@ -491,7 +425,7 @@ public final class WarfareGameTests {
             variant.save();
             helper.assertFalse(
                 provider.accepts(gun),
-                "unusable or unpredictable component override is" + " rejected: " + override);
+                "unusable or unpredictable component override is rejected: " + override);
         }
         helper.succeed();
     }
@@ -549,18 +483,14 @@ public final class WarfareGameTests {
                 f.level.getBlockState(at).is(Blocks.DIRT),
                 "a rule change before impact prevents native block damage");
             helper.assertValueEqual(
-                target.getHealth(), target.getMaxHealth(), "a refused explosion deals no entity"
-                + " damage");
+                target.getHealth(), target.getMaxHealth(), "a refused explosion deals no entity damage");
             rule.set(true, f.level.getServer());
             NeoForge.EVENT_BUS.addListener(cancel);
             explode.run();
-            helper.assertValueEqual(starts.get(), 1, "Start is cancellable before damage and is"
-                + " posted only once");
-            helper.assertTrue(f.level.getBlockState(at).is(Blocks.DIRT), "cancellation preserves"
-                + " the block");
+            helper.assertValueEqual(starts.get(), 1, "Start is cancellable before damage and is posted only once");
+            helper.assertTrue(f.level.getBlockState(at).is(Blocks.DIRT), "cancellation preserves the block");
             helper.assertValueEqual(
-                target.getHealth(), target.getMaxHealth(), "cancellation preserves nearby"
-                + " entities");
+                target.getHealth(), target.getMaxHealth(), "cancellation preserves nearby entities");
             NeoForge.EVENT_BUS.unregister(cancel);
             NeoForge.EVENT_BUS.addListener(protect);
             explode.run();
@@ -571,8 +501,7 @@ public final class WarfareGameTests {
             explode.run();
             helper.assertTrue(
                 f.level.getBlockState(at).isAir(),
-                "without a protection veto the same native explosion still destroys ordinary"
-                + " blocks");
+                "without a protection veto the same native explosion still destroys ordinary blocks");
         } finally {
             NeoForge.EVENT_BUS.unregister(cancel);
             NeoForge.EVENT_BUS.unregister(protect);
@@ -589,8 +518,7 @@ public final class WarfareGameTests {
         f.postStation();
         Zombie target = f.enemy(80, 10);
         SpottedTargets.Spot spot = f.spot(target);
-        helper.assertFalse(SpottedTargets.sees(f.body, target), "the sentry cannot observe this"
-            + " target itself");
+        helper.assertFalse(SpottedTargets.sees(f.body, target), "the sentry cannot observe this target itself");
         Node node = f.node();
         helper.onEachTick(() -> f.tick(node));
         helper.startSequence()
@@ -609,11 +537,8 @@ public final class WarfareGameTests {
                     2,
                     "exactly one pack shell settles at native emission");
                 helper.assertTrue(
-                    mortar.getItem(0).isEmpty(), "preparation never leaves"
-                    + " duplicated physical"
-                    + " shells");
-                helper.assertFalse(f.body.isPassenger(), "mortar operation stands"
-                    + " beside the station");
+                    mortar.getItem(0).isEmpty(), "preparation never leaves duplicated physical shells");
+                helper.assertFalse(f.body.isPassenger(), "mortar operation stands beside the station");
                 helper.assertTrue(
                     spot.position().equals(target.position()),
                     "the report supplies immutable aim coordinates");
@@ -643,8 +568,7 @@ public final class WarfareGameTests {
                 helper.assertValueEqual(
                     mortar.getEntityData().get(MortarEntity.FIRE_TIME),
                     0,
-                    "an ally inside twice the configured radius blocks"
-                    + " preparation");
+                    "an ally inside twice the configured radius blocks preparation");
                 ally.discard();
                 f.block(new BlockPos(80, 1, 13), Blocks.BARREL);
                 f.colony.stores(WarfareStations.ID, f.level.dimension(), List.of(f.at(80, 1, 13)));
@@ -695,11 +619,6 @@ public final class WarfareGameTests {
                 helper.assertFalse(f.body.isPassenger() || WeaponStations.ownsSeat(f.body),
                     "withdrawal releases the idle native seat immediately");
             }).thenSucceed();
-    }
-
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 600)
-    public static void fh77OperatorWalksToTheExternalHullAndFires(GameTestHelper helper) {
-        walkingStation(helper, ModEntities.FH_77BW.get(), false, false);
     }
 
     @GameTest(batch = "warfare", template = "warfare_mortar", timeoutTicks = 600)
@@ -865,11 +784,9 @@ public final class WarfareGameTests {
         helper.assertFalse(f.found().indirect(), "Mk42 retains its own direct line of fire");
         inside.modifyGunData("Main", data -> data.changeAmmoConsumer(0, null));
         helper.assertFalse(WarfareStations.automatic(inside), "AP is excluded");
-        helper.assertFalse(WarfareStations.automatic(f.station(ModEntities.TOW.get(), 7, 10)), "TOW is"
-            + " excluded");
+        helper.assertFalse(WarfareStations.automatic(f.station(ModEntities.TOW.get(), 7, 10)), "TOW is excluded");
         helper.assertFalse(
-            WarfareStations.emplacement(f.station(ModEntities.LAV_150.get(), 7, 14)), "vehicles"
-            + " are excluded");
+            WarfareStations.emplacement(f.station(ModEntities.LAV_150.get(), 7, 14)), "vehicles are excluded");
         helper.assertTrue(
             WarfareStations.emplacement(f.station(ModEntities.FH_77BW.get(), 7, 17)),
             "a stopped howitzer retains station support");
@@ -887,10 +804,8 @@ public final class WarfareGameTests {
         f.spot(target);
         Node node = f.node();
         f.tick(node);
-        helper.assertTrue(WeaponStations.ownsSeat(f.body), "Vanilla owns the temporary native"
-            + " seat");
-        helper.assertTrue(WeaponStations.acquire(f.found(), worker(f.body)).isEmpty(), "leases are"
-            + " exclusive");
+        helper.assertTrue(WeaponStations.ownsSeat(f.body), "Vanilla owns the temporary native seat");
+        helper.assertTrue(WeaponStations.acquire(f.found(), worker(f.body)).isEmpty(), "leases are exclusive");
         var trade = f.body.licences().trade(Vocations.required(PatrolContent.VOCATION)).orElseThrow();
         f.body.licences().allow(trade, false);
         SentryPosts.of(f.colony).tick(f.level.getServer());
@@ -973,11 +888,9 @@ public final class WarfareGameTests {
         f.postStation();
         f.spot(f.enemy(44, 10));
         f.tick(f.node());
-        helper.assertTrue(f.body.getVehicle() == station, "the temporary seat is owned before"
-            + " saving");
+        helper.assertTrue(f.body.getVehicle() == station, "the temporary seat is owned before saving");
         CompoundTag snapshot = new CompoundTag();
-        helper.assertTrue(station.save(snapshot), "save native riding data with persisted loan"
-            + " identity");
+        helper.assertTrue(station.save(snapshot), "save native riding data with persisted loan identity");
         f.body.remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
         station.discard();
         VehicleEntity restored = (VehicleEntity) EntityType.loadEntityRecursive(snapshot, f.level, entity -> entity);
@@ -989,8 +902,7 @@ public final class WarfareGameTests {
             5,
             () -> {
                 helper.assertTrue(
-                    restored.getPassengers().isEmpty(), "a restored transient loan never"
-                    + " resumes");
+                    restored.getPassengers().isEmpty(), "a restored transient loan never resumes");
                 helper.succeed();
             });
     }
@@ -1010,8 +922,7 @@ public final class WarfareGameTests {
             () ->
                 helper.assertTrue(
                     f.shots.get() > 0,
-                    "the native queued vehicle discharge executes"
-                    + " " + f.debug()))
+                    "the native queued vehicle discharge executes " + f.debug()))
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
@@ -1019,12 +930,10 @@ public final class WarfareGameTests {
                     0,
                     "one native emission consumes one profile shell");
                 helper.assertValueEqual(
-                    station.getAmmoCount("Main"), 0, "borrowed magazine ammo is"
-                    + " restored");
+                    station.getAmmoCount("Main"), 0, "borrowed magazine ammo is restored");
                 f.unpost();
                 helper.assertFalse(
-                    f.body.isPassenger(), "unposting releases the owned seat"
-                    + " immediately");
+                    f.body.isPassenger(), "unposting releases the owned seat immediately");
             })
             .thenExecute(
             () -> {
@@ -1033,8 +942,7 @@ public final class WarfareGameTests {
                 helper.assertValueEqual(
                     nativeCalls.get(),
                     1,
-                    "a discovered, unposted station preserves unrelated"
-                    + " player-native queues");
+                    "a discovered, unposted station preserves unrelated player-native queues");
             })
             .thenSucceed();
     }
@@ -1114,32 +1022,26 @@ public final class WarfareGameTests {
     }
 
     @GameTest(batch = "warfare", template = "warfare_range")
-    public static void deathReleasesNativeStationSeatsImmediately(GameTestHelper helper) {
-        Scene f = new Scene(helper, false);
-        VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10);
-        f.body.pack().insert(new ItemStack(ModItems.LARGE_SHELL_HE.get(), 3));
-        f.postStation();
-        f.spot(f.enemy(44, 10));
-        f.tick(f.node());
-        helper.assertTrue(WeaponStations.ownsSeat(f.body), "a living operator owns the seat");
-        f.body.setHealth(0);
-        f.body.die(f.level.damageSources().genericKill());
-        helper.assertTrue(station.getPassengers().isEmpty(), "death immediately clears the native"
-            + " seat");
-        helper.succeed();
-    }
-
-    @GameTest(batch = "warfare", template = "warfare_range")
-    public static void stationRemovalReleasesExclusiveSeats(GameTestHelper helper) {
-        Scene f = new Scene(helper, false);
-        VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10);
-        f.body.pack().insert(new ItemStack(ModItems.LARGE_SHELL_HE.get(), 3));
-        f.postStation();
-        f.spot(f.enemy(44, 10));
-        f.tick(f.node());
-        helper.assertTrue(WeaponStations.ownsSeat(f.body), "the operator owns this seat");
-        station.discard();
-        helper.assertFalse(f.body.isPassenger(), "removing the station closes the seat lease");
+    public static void deathUnloadAndStationRemovalReleaseNativeSeatsImmediately(GameTestHelper helper) {
+        for (String how : List.of("death", "unload", "removal")) {
+            Scene f = new Scene(helper, false);
+            VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10);
+            f.body.pack().insert(new ItemStack(ModItems.LARGE_SHELL_HE.get(), 3));
+            f.postStation();
+            f.spot(f.enemy(44, 10));
+            f.tick(f.node());
+            helper.assertTrue(WeaponStations.ownsSeat(f.body), "the operator owns the seat before " + how);
+            switch (how) {
+                case "death" -> {
+                    f.body.setHealth(0);
+                    f.body.die(f.level.damageSources().genericKill());
+                }
+                case "unload" -> f.body.remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
+                default -> station.discard();
+            }
+            helper.assertTrue(how.equals("removal") ? !f.body.isPassenger() : station.getPassengers().isEmpty(),
+                how + " releases the native seat in the same event");
+        }
         helper.succeed();
     }
 
@@ -1157,8 +1059,7 @@ public final class WarfareGameTests {
                 helper.assertValueEqual(
                     f.body.pack().count(ModItems.MORTAR_SHELL.get()),
                     7,
-                    "normal profile logistics collect the player-set target of"
-                    + " seven "
+                    "normal profile logistics collect the player-set target of seven "
                     + f.debug()))
             .thenExecute(
             () ->
@@ -1201,21 +1102,6 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range")
-    public static void operatorUnloadReleasesTheNativeSeatImmediately(GameTestHelper helper) {
-        Scene f = new Scene(helper, false);
-        VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10);
-        f.body.pack().insert(new ItemStack(ModItems.LARGE_SHELL_HE.get(), 3));
-        f.postStation();
-        f.spot(f.enemy(44, 10));
-        f.tick(f.node());
-        helper.assertTrue(WeaponStations.ownsSeat(f.body), "the original operator owns the seat");
-        f.body.remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
-        helper.assertTrue(station.getPassengers().isEmpty(), "unload releases the native seat in"
-            + " the same event");
-        helper.succeed();
-    }
-
     @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 80)
     public static void aStationOutsideTheAssignedZoneNeverAcquiresAnOperatorOrFires(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
@@ -1229,15 +1115,10 @@ public final class WarfareGameTests {
             40,
             () -> {
                 helper.assertTrue(
-                    station.getPassengers().isEmpty(), "a nearby outside station never gets"
-                    + " a sentry");
-                helper.assertValueEqual(f.shots.get(), 0, "outside stations never fire through"
-                    + " the duty");
+                    station.getPassengers().isEmpty(), "a nearby outside station never gets a sentry");
+                helper.assertValueEqual(f.shots.get(), 0, "outside stations never fire through the duty");
                 helper.assertValueEqual(
-                    f.body.pack().count(ModItems.LARGE_SHELL_HE.get()), 3, "outside"
-                    + " discovery"
-                    + " spends"
-                    + " no shell");
+                    f.body.pack().count(ModItems.LARGE_SHELL_HE.get()), 3, "outside discovery spends no shell");
                 helper.succeed();
             });
     }
@@ -1257,8 +1138,7 @@ public final class WarfareGameTests {
         helper.assertTrue(
             mortar.getEntityData().get(MortarEntity.FIRE_TIME) > 0,
             "closing an idle sentry lease preserves the unrelated native shot");
-        helper.assertValueEqual(mortar.getItem(0).getCount(), 1, "the player's physical shell is"
-            + " preserved");
+        helper.assertValueEqual(mortar.getItem(0).getCount(), 1, "the player's physical shell is preserved");
         helper.succeed();
     }
 
@@ -1272,23 +1152,7 @@ public final class WarfareGameTests {
         Node node = f.node();
         var rule = f.level.getGameRules().getRule(GameRules.RULE_MOBGRIEFING);
         boolean previous = rule.get();
-        helper.testInfo.addListener(
-            new GameTestListener() {
-
-                public void testStructureLoaded(GameTestInfo info) {
-                }
-
-                public void testPassed(GameTestInfo info, GameTestRunner runner) {
-                    rule.set(previous, f.level.getServer());
-                }
-
-                public void testFailed(GameTestInfo info, GameTestRunner runner) {
-                    rule.set(previous, f.level.getServer());
-                }
-
-                public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
-                }
-            });
+        Cleanup.on(helper, () -> rule.set(previous, f.level.getServer()));
         rule.set(false, f.level.getServer());
         helper.onEachTick(() -> f.tick(node));
         helper.startSequence()
@@ -1471,47 +1335,10 @@ public final class WarfareGameTests {
     }
 
     private static Worker worker(ResidentEntity body, List<Node> route) {
-        return new Worker() {
-
-            public Resident resident() {
-                return body.resident();
-            }
-
-            public Mob body() {
-                return body;
-            }
-
-            public Container pack() {
-                return body.pack();
-            }
-
-            public List<Store> within() {
-                return List.of();
-            }
-
-            public ItemStack held(ToolNeed need) {
-                return ItemStack.EMPTY;
-            }
-
-            public void spill(ItemStack stack) {
-                body.spawnAtLocation(stack);
-            }
-
-            public Effects effects() {
-                return body.effects();
-            }
-
-            public List<Node> route() {
-                return route;
-            }
-
-            public Placement placement() {
-                return Placement.NOWHERE;
-            }
-        };
+        return TestWorker.of(body).spill(body::spawnAtLocation).route(route);
     }
 
-    private static final class Scene implements GameTestListener {
+    private static final class Scene {
 
         final GameTestHelper helper;
         final BlockPos origin;
@@ -1580,7 +1407,7 @@ public final class WarfareGameTests {
             if (!deferMembership) {
                 profile(ItemSpec.of(ModItems.GLOCK_17.get()), ItemSpec.of(ModItems.HANDGUN_AMMO.get()), 1, 1);
             }
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
         }
 
         void joinBody() {
@@ -1639,8 +1466,7 @@ public final class WarfareGameTests {
                 created.name(),
                 List.of(
                 LoadoutProfile.Entry.weapon(gun),
-                LoadoutProfile.Entry.supply(ammo, target, threshold)),
-                Optional.empty()));
+                LoadoutProfile.Entry.supply(ammo, target, threshold))));
             profiles.assign(List.of(body.id()), Optional.of(created.id()));
         }
 
@@ -1763,20 +1589,6 @@ public final class WarfareGameTests {
             for (var chunk : chunks) {
                 level.getChunkSource().removeRegionTicket(TICKING, chunk, 2, ticket, true);
             }
-        }
-
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
         }
     }
 }

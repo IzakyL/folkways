@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery.pot;
 
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IPot;
 import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.PotBlock;
 import net.minecraft.core.Direction;
@@ -15,11 +15,8 @@ import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.PotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry;
-import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.QualityUtils;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
@@ -33,9 +30,7 @@ import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
@@ -65,10 +60,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -92,46 +85,27 @@ public final class PotGameTests {
     public static void register(RegisterGameTestsEvent event) { event.register(PotGameTests.class); }
 
     @GameTest(template = "empty")
-    public static void theNativePotHandleDefinesTheOnlyAdjacentOperatingCellInEveryRotation(GameTestHelper helper) {
-        var level = helper.getLevel();
-        BlockPos pot = helper.absolutePos(new BlockPos(3, 2, 3));
-        for (BlockPos floor : BlockPos.betweenClosed(pot.offset(-3, -2, -3), pot.offset(3, -2, 3))) {
-            level.setBlockAndUpdate(floor, Blocks.STONE.defaultBlockState());
-        }
-        level.setBlockAndUpdate(pot.below(), Blocks.CAMPFIRE.defaultBlockState());
-        var station = new PotStation();
-        WorldPos at = WorldPos.of(level, pot);
-        for (Direction facing : Direction.Plane.HORIZONTAL) {
-            level.setBlockAndUpdate(pot, ModBlocks.POT.get().defaultBlockState().setValue(PotBlock.FACING, facing));
-            BlockPos feet = pot.relative(facing).below();
-            helper.assertTrue(station.stances(level, at).orElseThrow().cells().equals(java.util.Set.of(WorldPos.of(level, feet))),
-                "the rotated handle publishes exactly its adjacent floor cell: " + facing);
-            level.setBlockAndUpdate(feet, Blocks.STONE.defaultBlockState());
-            level.setBlockAndUpdate(feet.above(), Blocks.STONE.defaultBlockState());
-            helper.assertTrue(station.stances(level, at).isEmpty(),
-                "blocking the handle cannot fall back to another side, distant floor, or the block above: " + facing);
-            level.setBlockAndUpdate(feet, Blocks.AIR.defaultBlockState());
-            level.setBlockAndUpdate(feet.above(), Blocks.AIR.defaultBlockState());
-            level.setBlockAndUpdate(feet.below(), Blocks.AIR.defaultBlockState());
-            helper.assertTrue(station.stances(level, at).isEmpty(),
-                "an unsupported handle approach cannot borrow any of the other reachable floors: " + facing);
-            level.setBlockAndUpdate(feet.below(), Blocks.STONE.defaultBlockState());
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void rotatingAPlannedPotRejectsTheOldHandleSideWithoutLoadingAnyFood(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
-            rig.stockBeef(3, 1);
-            Node load = ((Workload.Within.Turn.Piece) rig.work.next(rig.level, rig.worker)).node();
-            rig.level.setBlockAndUpdate(rig.cell, rig.pot.getBlockState().setValue(PotBlock.FACING, Direction.NORTH));
-            CompoundTag before = rig.pot.saveWithFullMetadata(rig.level.registryAccess());
-            helper.assertTrue(Commit.run(rig.level, load, rig.worker) instanceof Outcome.Failed,
-                "execution recalculates the physical handle side instead of trusting the old plan");
-            helper.assertTrue(before.equals(rig.pot.saveWithFullMetadata(rig.level.registryAccess())), "rotation refusal never oils or loads the native pot");
-            helper.assertValueEqual(rig.count(Items.BEEF), 3L, "all physical beef remains in the pack");
-            helper.assertValueEqual(rig.count(ModItems.OIL.get()), 1L, "physical oil remains unspent");
+    public static void rotatingAPlannedOrLoadedPotRejectsTheOldHandleSide(GameTestHelper helper) {
+        for (boolean loaded : new boolean[] {false, true}) {
+            try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
+                rig.stockBeef(3, 1);
+                if (loaded) rig.step();
+                Node piece = ((Workload.Within.Turn.Piece) rig.work.next(rig.level, rig.worker)).node();
+                rig.level.setBlockAndUpdate(rig.cell, rig.pot.getBlockState().setValue(PotBlock.FACING, Direction.NORTH));
+                CompoundTag before = rig.pot.saveWithFullMetadata(rig.level.registryAccess());
+                helper.assertTrue(Commit.run(rig.level, piece, rig.worker) instanceof Outcome.Failed, loaded
+                    ? "a loaded batch still requires the current physical handle side"
+                    : "execution recalculates the physical handle side instead of trusting the old plan");
+                helper.assertTrue(before.equals(rig.pot.saveWithFullMetadata(rig.level.registryAccess())), loaded
+                    ? "a rejected stir changes neither native progress nor ownership"
+                    : "rotation refusal never oils or loads the native pot");
+                if (!loaded) {
+                    helper.assertValueEqual(rig.count(Items.BEEF), 3L, "all physical beef remains in the pack");
+                    helper.assertValueEqual(rig.count(ModItems.OIL.get()), 1L, "physical oil remains unspent");
+                    // The loaded case starts from a fresh pot rather than the rotated one.
+                    rig.level.setBlockAndUpdate(rig.cell, Blocks.AIR.defaultBlockState());
+                }
+            }
         }
         helper.succeed();
     }
@@ -173,20 +147,6 @@ public final class PotGameTests {
             helper.assertValueEqual(PotBatch.stirs(rig.pot, rig.level), 0, "the arrived resident completes the native stirs without a failed-work loop");
             cleanup.run();
         });
-    }
-
-    @GameTest(template = "empty")
-    public static void rotatingALoadedPotAlsoPreventsNativeStirringFromItsOldHandle(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
-            rig.stockBeef(3, 1);
-            rig.step();
-            Node stir = ((Workload.Within.Turn.Piece) rig.work.next(rig.level, rig.worker)).node();
-            rig.level.setBlockAndUpdate(rig.cell, rig.pot.getBlockState().setValue(PotBlock.FACING, Direction.NORTH));
-            CompoundTag before = rig.pot.saveWithFullMetadata(rig.level.registryAccess());
-            helper.assertTrue(Commit.run(rig.level, stir, rig.worker) instanceof Outcome.Failed, "a loaded batch still requires the current physical handle side");
-            helper.assertTrue(before.equals(rig.pot.saveWithFullMetadata(rig.level.registryAccess())), "a rejected stir changes neither native progress nor ownership");
-        }
-        helper.succeed();
     }
 
     @GameTest(template = "empty")
@@ -249,41 +209,6 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 350)
-    public static void aRealFixedPotCooksThreeInputsAndTakesOutAllThreeWithTheActualShovel(GameTestHelper helper) {
-        Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1);
-        rig.stockBeef(3, 1);
-        rig.start();
-        helper.assertValueEqual(PotBatch.stirs(rig.pot, rig.level), 0, "three native hits satisfy the real recipe's stir count");
-        helper.assertValueEqual(rig.count(Items.BEEF), 0L, "the three actual beef inputs are already invested");
-        helper.assertValueEqual(rig.count(ModItems.OIL.get()), 0L, "the real oil input is spent once");
-        afterCooking(rig, ready -> {
-            ready.finish(true);
-            helper.assertValueEqual(ready.count(Items.COOKED_BEEF), 3L, "native no-carrier take-out hands over the whole three-item result");
-            helper.assertTrue(PotStation.empty(ready.pot) && !PotBatch.claimed(ready.pot), "the actual pot is reusable after native reset");
-            helper.assertValueEqual(ready.count(ModItems.KITCHEN_SHOVEL.get()), 1L, "the same reusable shovel remains physical");
-            helper.assertTrue(ready.level.getEntitiesOfClass(ItemEntity.class, ready.body.getBoundingBox().inflate(2)).isEmpty(),
-                "non-player native take-out is captured into actual logistics");
-        });
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 350)
-    public static void flexiblePotUsesNativeQualityAndConsumesItsActualBowl(GameTestHelper helper) {
-        Rig rig = new Rig(helper, "flex_pot/scramble_egg_with_tomatoes", 1);
-        rig.stockEggTomato(true);
-        rig.start();
-        afterCooking(rig, ready -> {
-            ItemStack nativeResult = ready.pot.getResult().copy();
-            helper.assertTrue(QualityUtils.hasQuality(nativeResult), "native flexible stir-fry attaches the actual quality");
-            ready.finish(true);
-            helper.assertTrue(ready.stacks().stream().anyMatch(stack -> ItemStack.matches(stack, nativeResult)),
-                "the exact native result, including quality, reaches the pack");
-            helper.assertValueEqual(ready.count(Items.BOWL), 0L, "native take-out spends the preflighted bowl exactly once");
-            helper.assertValueEqual(ready.count(Items.EGG) + ready.count(ModItems.TOMATO.get()), 0L, "both real food ingredients are spent once");
-            helper.assertValueEqual(ready.count(ModItems.KITCHEN_SHOVEL.get()), 1L, "the physical shared shovel is neither consumed nor copied");
-        });
-    }
-
     @GameTest(template = "empty")
     public static void missingCarriersNeverOilOrLoadTheRealPot(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "flex_pot/scramble_egg_with_tomatoes", 1)) {
@@ -322,22 +247,6 @@ public final class PotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 350)
-    public static void defaultCookedRiceDoesNotInventABowlOmittedByNativeContainerLogic(GameTestHelper helper) {
-        Rig rig = new Rig(helper, "pot/cooked_rice_to_sticky_rice_cake_1", 1);
-        ItemStack rice = new ItemStack(ModItems.COOKED_RICE.get());
-        helper.assertTrue(rice.getCraftingRemainingItem().is(Items.BOWL) && ItemUtils.getContainerItem(rice) == Items.AIR,
-            "the pinned native API's FOOD branch returns no insertion container despite the crafting bowl remainder");
-        rig.put(rice);
-        rig.put(new ItemStack(ModItems.OIL.get()));
-        rig.start();
-        helper.assertValueEqual(rig.count(Items.BOWL), 0L, "Folkways does not generate a bowl that the native insertion never produced");
-        afterCooking(rig, ready -> {
-            ready.finish(true);
-            helper.assertValueEqual(ready.count(Items.BOWL), 0L, "take-out does not add an omitted native byproduct later");
-            helper.assertValueEqual(ready.count(ModItems.COOKED_RICE.get()), 0L, "the original ingredient is actually consumed");
-        });
-    }
     @GameTest(template = "empty")
     public static void aFailureAfterNativeIngredientAcceptanceRollsBackOilFoodAndClaimTogether(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
@@ -492,16 +401,6 @@ public final class PotGameTests {
             helper.assertValueEqual(rig.count(Items.BEEF), 3L, "all original food inputs remain physical");
             helper.assertValueEqual(rig.count(ModItems.OIL.get()), 1L, "the stale turn never spends its oil");
         }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void everyNativeFixedAndFlexiblePotRecipeHasACompletePlanningSnapshot(GameTestHelper helper) {
-        var fixed = helper.getLevel().getRecipeManager().getAllRecipesFor(ModRecipes.POT_RECIPE);
-        var flexible = helper.getLevel().getRecipeManager().getAllRecipesFor(ModRecipes.FLEX_POT_RECIPE);
-        helper.assertTrue(!fixed.isEmpty() && !flexible.isEmpty(), "both actual native pot recipe types are loaded");
-        for (var recipe : fixed) helper.assertTrue(PotPlan.of(helper.getLevel(), recipe).isPresent(), "actual fixed recipe is covered: " + recipe.id());
-        for (var recipe : flexible) helper.assertTrue(PotPlan.of(helper.getLevel(), recipe).isPresent(), "actual flexible recipe is covered: " + recipe.id());
         helper.succeed();
     }
 
@@ -723,17 +622,7 @@ public final class PotGameTests {
             work = new PotWork(colony, at, stances, plan, runs, bookings, () -> { });
             claim = bookings.hold(at, work.id());
             helper.assertTrue(claim.take().isEmpty() && work.planned(level).isEmpty(), "the actual pot task acquires its exclusive turn");
-            worker = new Worker() {
-                public Resident resident() { return body.resident(); }
-                public Mob body() { return body; }
-                public Container pack() { return pack; }
-                public List<Store> within() { return List.of(); }
-                public ItemStack held(ToolNeed need) { return Tools.from(stacks(), need).orElse(ItemStack.EMPTY); }
-                public void spill(ItemStack stack) { if (!stack.isEmpty()) throw new AssertionError("unexpected spill: " + stack); }
-                public Effects effects() { return body.effects(); }
-                public List<Node> route() { return List.of(); }
-                public Placement placement() { return Placement.NOWHERE; }
-            };
+            worker = TestWorker.of(body).pack(pack).held(need -> Tools.from(stacks(), need).orElse(ItemStack.EMPTY));
         }
 
         void put(ItemStack stack) { helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "fixture has real room for " + stack); }

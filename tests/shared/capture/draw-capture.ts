@@ -17,7 +17,6 @@ export function drawEntries(result: DrawCaptureResult): DrawEntry[] {
 export const lineBoxes = (result: DrawCaptureResult): LineBox[] => media.drawEntries(result, "lineBox");
 export const filledBoxes = (result: DrawCaptureResult): FilledBox[] => media.drawEntries(result, "filledBox");
 export const drawTexts = (result: DrawCaptureResult): DrawText[] => media.drawEntries(result, "text");
-export const drawItems = (result: DrawCaptureResult): DrawItem[] => media.drawEntries(result, "item");
 export const worldTexts = (result: DrawCaptureResult): WorldText[] => media.drawEntries(result, "worldText");
 export const worldItems = (result: DrawCaptureResult): WorldItem[] => media.drawEntries(result, "worldItem");
 

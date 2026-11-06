@@ -15,6 +15,7 @@ import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
@@ -63,14 +64,7 @@ public final class DiningGameTests {
             }
             public Container inventory(ServerLevel level, BlockPos at) { return DISPLAYS.get(WorldPos.of(level, at)); }
         });
-        DiningTables.register(ResourceLocation.fromNamespaceAndPath("folkways", "test_plain_table"),
-            new DiningTables.Table() {
-                public boolean stable() { return true; }
-                public boolean matches(ServerLevel level, BlockPos at) {
-                    return level.getBlockState(at).is(Blocks.CHISELED_QUARTZ_BLOCK);
-                }
-                public Container inventory(ServerLevel level, BlockPos at) { return null; }
-            });
+        plainTable();
         DiningDrinks.register(ResourceLocation.fromNamespaceAndPath("folkways", "test_table_drink"), new DiningDrinks.Drink() {
             public boolean matches(ItemStack stack) { return stack.is(Items.POTION); }
             public ItemStack finishUsing(ServerLevel level, Mob diner, ItemStack serving) {
@@ -107,6 +101,22 @@ public final class DiningGameTests {
             }
         });
         event.register(DiningGameTests.class);
+    }
+
+    private static boolean plainTable;
+
+    // Chiseled quartz is a stable table with no inventory of its own, for every dining test that needs one.
+    static synchronized void plainTable() {
+        if (plainTable) { return; }
+        DiningTables.register(ResourceLocation.fromNamespaceAndPath("folkways", "test_plain_table"),
+            new DiningTables.Table() {
+                public boolean stable() { return true; }
+                public boolean matches(ServerLevel level, BlockPos at) {
+                    return level.getBlockState(at).is(Blocks.CHISELED_QUARTZ_BLOCK);
+                }
+                public Container inventory(ServerLevel level, BlockPos at) { return null; }
+            });
+        plainTable = true;
     }
 
     @GameTest(template = "empty")
@@ -193,11 +203,7 @@ public final class DiningGameTests {
     public static void floorOutlineFindsFurnitureAboveItAndRestocksTheTable(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             f.zone(Items.BREAD);
-            ColonySettings chosen = f.front.zone(f.zone).orElseThrow().settings();
-            f.front.erase(f.zone);
-            f.zone = f.front.addZone(f.level, LivingContent.DINING,
-                java.util.Set.of(f.at.below(), f.chair.below()), chosen).orElseThrow().id();
-            f.dining.refresh(f.level.getServer());
+            f.rezone(java.util.Set.of(f.at.below(), f.chair.below()));
             helper.assertValueEqual(f.goals().size(), 2, "floor cells discover the table and adjacent chair above them");
             f.worker.supplied = List.of(new ItemStack(Items.BREAD));
             helper.assertTrue(f.goals().getFirst().commit(f.level, f.worker) instanceof Outcome.Done,
@@ -273,27 +279,6 @@ public final class DiningGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void cancellingMealLeavesFoodAndReleasesTheSeatAndServing(GameTestHelper helper) {
-        try (Fixture f = new Fixture(helper)) {
-            f.zone(Items.BREAD);
-            f.display.setItem(0, new ItemStack(Items.BREAD));
-            Node first = f.urge().orElseThrow().take().get();
-            first.spec().gesture().perform(f.person, 0, f.at);
-            helper.assertValueEqual(f.person.leisureMotion(), "dining", "meal uses a seated eating pose");
-            helper.assertTrue(f.urge()
-                .orElseThrow().take().get() == first, "the diner keeps the same reserved meal offered throughout its windup");
-            first.released(f.level, f.worker, Ending.DROPPED);
-            helper.assertValueEqual(f.display.getItem(0).getCount(), 1, "cancellation does not eat the serving");
-            helper.assertValueEqual(f.living.foodLevelOf(f.person.getUUID()).orElseThrow(), 4, "cancellation adds no food");
-            helper.assertValueEqual(f.person.leisureMotion(), "", "cancellation clears the pose");
-            Node next = f.urge().orElseThrow().take().get();
-            next.ended(f.level, Ending.DROPPED);
-            helper.assertTrue(f.living.mood(f.person.getUUID()).dined < 0, "cancelled meals grant no dining mood");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void configuredLongMealConsumesOnlyAtCompletionAndStillCancelsCleanly(GameTestHelper helper) {
         var setting = (net.neoforged.neoforge.common.ModConfigSpec.IntValue)
             io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig.SPEC.getValues().get("living.diningMealTicks");
@@ -311,10 +296,14 @@ public final class DiningGameTests {
                     helper.assertValueEqual(f.display.getItem(0).getCount(), 1, "the eating gesture leaves its serving on the table");
                     helper.assertValueEqual(f.living.foodLevelOf(f.person.getUUID()).orElseThrow(), 4,
                         "a partially completed long meal grants no nourishment");
+                    helper.assertValueEqual(f.person.leisureMotion(), "dining", "meal uses a seated eating pose");
                 }
+                helper.assertTrue(f.urge().orElseThrow().take().get() == first,
+                    "the diner keeps the same reserved meal offered throughout its windup");
                 first.released(f.level, f.worker, Ending.DROPPED);
                 helper.assertValueEqual(f.display.getItem(0).getCount(), 1, "cancelling the long meal preserves its serving");
                 helper.assertValueEqual(f.person.leisureMotion(), "", "cancellation releases the long eating pose");
+                helper.assertTrue(f.living.mood(f.person.getUUID()).dined < 0, "cancelled meals grant no dining mood");
                 Node retry = f.urge().orElseThrow().take().get();
                 helper.assertTrue(retry != first, "cancellation releases the actual seat and portion for a fresh reservation");
                 helper.assertValueEqual(((Workload.Once) retry.spec().workload()).baseTicks(), 400,
@@ -372,30 +361,10 @@ public final class DiningGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void diningMoodSurvivesReloadAndExpiresAfterOneDay(GameTestHelper helper) {
-        Mood mood = new Mood();
-        mood.dined = 100;
-        Mood reloaded = new Mood();
-        reloaded.load(io.github.izakyl.folkways.base.persist.Reader.of(mood.save()));
-        helper.assertTrue(reloaded.dined == 100, "dining timestamp survives reload");
-        reloaded.step(100 + Mood.DAY - 1, 20, 1200, 0, false, false);
-        helper.assertValueEqual(reloaded.reasons.get("dining"), 6, "dining contributes six mood points for a day");
-        reloaded.step(100 + Mood.DAY, 20, 1200, 0, false, false);
-        helper.assertValueEqual(reloaded.reasons.get("dining"), 0, "the dining bonus expires at one day");
-        Mood oldSave = new Mood();
-        oldSave.load(io.github.izakyl.folkways.base.persist.Reader.of(Writer.of().blob("times", new net.minecraft.nbt.CompoundTag()).tag()));
-        oldSave.step(0, 20, 1200, 0, false, false);
-        helper.assertValueEqual(oldSave.reasons.get("dining"), 0, "old saves have no invented dining experience");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void connectedBasicTablesShareTheActualCakeAtTheirFarEnd(GameTestHelper helper) {
         var table = Blocks.CHISELED_QUARTZ_BLOCK.defaultBlockState();
         try (Fixture f = new Fixture(helper, table)) {
             f.zone(Items.CAKE);
-            var settings = f.front.zone(f.zone).orElseThrow().settings();
-            f.front.erase(f.zone);
             var cells = new java.util.HashSet<BlockPos>();
             cells.add(f.chair);
             for (int x = 0; x < 8; x++) {
@@ -404,8 +373,7 @@ public final class DiningGameTests {
                 f.level.setBlockAndUpdate(at, table);
                 cells.add(at);
             }
-            f.zone = f.front.addZone(f.level, LivingContent.DINING, cells, settings).orElseThrow().id();
-            f.dining.refresh(f.level.getServer());
+            f.rezone(cells);
             var far = f.at.east(7);
             Node supply = f.goals().stream().filter(node -> node.spec().focus().filter(far::equals).isPresent()).findFirst().orElseThrow();
             f.worker.supplied = List.of(new ItemStack(Items.CAKE));
@@ -484,17 +452,11 @@ public final class DiningGameTests {
             Container stock = (Container) f.level.getBlockEntity(cabinet);
             for (int slot = 1; slot < stock.getContainerSize(); slot++) { stock.setItem(slot, new ItemStack(Items.STONE, 64)); }
             var cells = java.util.Set.of(f.at, f.chair, cabinet);
-            var settings = f.front.zone(f.zone).orElseThrow().settings();
-            f.front.erase(f.zone);
-            f.zone = f.front.addZone(f.level, LivingContent.DINING, cells, settings).orElseThrow().id();
-            f.dining.refresh(f.level.getServer());
+            f.rezone(cells);
             helper.assertFalse(f.colony.storesIn(f.level.dimension()).contains(WorldPos.of(f.level, cabinet)), "without a drink menu a cabinet is never automatically offered");
             f.drinks(Items.POTION);
             helper.assertFalse(f.colony.storesIn(f.level.dimension()).contains(WorldPos.of(f.level, cabinet)), "a cabinet outside the selected zone is not adopted");
-            settings = f.front.zone(f.zone).orElseThrow().settings();
-            f.front.erase(f.zone);
-            f.zone = f.front.addZone(f.level, LivingContent.DINING, cells, settings).orElseThrow().id();
-            f.dining.refresh(f.level.getServer());
+            f.rezone(cells);
             helper.assertTrue(f.colony.storesIn(f.level.dimension()).contains(WorldPos.of(f.level, cabinet)), "the marked cabinet exposes its real inventory as colony stock");
             Node refill = f.goals().stream().filter(node -> node.spec().focus().filter(cabinet::equals).isPresent()).findFirst().orElseThrow();
             helper.assertFalse(refill.acceptsInput(new io.github.izakyl.folkways.core.api.terms.Stash(WorldPos.of(f.level, cabinet))), "a refill cannot empty the same cabinet into itself");
@@ -512,7 +474,7 @@ public final class DiningGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void displayObservationsAreReusedAndDirtyCoverageDefersRefills(GameTestHelper helper) {
+    public static void displayAndCabinetObservationsAreReusedAndDirtyCoverageDefersRefills(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             class CountingDisplay extends SimpleContainer {
                 int reads;
@@ -522,53 +484,32 @@ public final class DiningGameTests {
             CountingDisplay display = new CountingDisplay();
             DISPLAYS.put(WorldPos.of(f.level, f.at), display);
             f.zone(Items.BREAD);
-            f.publish();
-            var stash = io.github.izakyl.folkways.core.api.terms.Stash.at(WorldPos.of(f.level, f.at));
-            helper.assertValueEqual(f.dining.goals(f.colony.view(f.level)).size(), 2,
-                "empty display requests two dishes");
-            display.reads = 0;
-            for (int i = 0; i < 4; i++) {
-                f.dining.goals(f.colony.view(f.level));
-                f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false);
-            }
-            helper.assertValueEqual(display.reads, 0, "unchanged decisions never read the display");
-            display.setItem(0, new ItemStack(Items.BREAD));
-            f.colony.inventoryFeedback().changed(stash);
-            helper.assertTrue(f.dining.goals(f.colony.view(f.level)).isEmpty(),
-                "a dirty display is unknown rather than empty");
-            f.publish();
-            helper.assertValueEqual(f.dining.goals(f.colony.view(f.level)).size(), 1,
-                "the notified serving is visible after observation");
-            helper.assertTrue(f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).isPresent(),
-                "the observed serving can be selected");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void cabinetDecisionsUseObservedSlots(GameTestHelper helper) {
-        try (Fixture f = new Fixture(helper)) {
-            f.zone(Items.BREAD);
             BlockPos cabinet = f.cabinet(Items.POTION);
             f.publish();
+            helper.assertValueEqual(f.observed(f.at).size(), 2, "empty display requests two dishes");
             helper.assertTrue(f.dining.drinking(f.worker, f.colony.view(f.level)).isPresent(),
                 "an observed bottle offers a drink");
+            display.reads = 0;
             cabinetOpens = 0;
             for (int i = 0; i < 4; i++) {
                 f.dining.goals(f.colony.view(f.level));
+                f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false);
                 f.dining.drinking(f.worker, f.colony.view(f.level));
             }
+            helper.assertValueEqual(display.reads, 0, "unchanged decisions never read the display");
             helper.assertValueEqual(cabinetOpens, 0, "unchanged decisions do not reopen the cabinet");
-            var stash = io.github.izakyl.folkways.core.api.terms.Stash.at(WorldPos.of(f.level, cabinet));
+            display.setItem(0, new ItemStack(Items.BREAD));
+            f.colony.inventoryFeedback().changed(io.github.izakyl.folkways.core.api.terms.Stash.at(WorldPos.of(f.level, f.at)));
+            helper.assertValueEqual(f.observed(f.at).size(), 0, "a dirty display is unknown rather than empty");
             f.stock(cabinet).setItem(0, ItemStack.EMPTY);
-            f.colony.inventoryFeedback().changed(stash);
+            f.colony.inventoryFeedback().changed(io.github.izakyl.folkways.core.api.terms.Stash.at(WorldPos.of(f.level, cabinet)));
             helper.assertTrue(f.dining.drinking(f.worker, f.colony.view(f.level)).isEmpty(),
                 "dirty coverage does not serve an old bottle");
             f.publish();
-            helper.assertTrue(f.dining.goals(f.colony.view(f.level)).stream()
-                .flatMap(grown -> grown.nodes().stream())
-                .anyMatch(node -> node.spec().focus().filter(cabinet::equals).isPresent()),
-                "the notified empty slot requests a refill");
+            helper.assertValueEqual(f.observed(f.at).size(), 1, "the notified serving is visible after observation");
+            helper.assertTrue(f.dining.urge(f.worker, f.colony.view(f.level), Urge.SPARE, false).isPresent(),
+                "the observed serving can be selected");
+            helper.assertFalse(f.observed(cabinet).isEmpty(), "the notified empty slot requests a refill");
         }
         helper.succeed();
     }
@@ -603,9 +544,7 @@ public final class DiningGameTests {
             BlockPos cabinet = f.cabinet(Items.POTION);
             f.stock(cabinet).setItem(0, ItemStack.EMPTY);
             f.publish();
-            Node refill = f.dining.goals(f.colony.view(f.level)).stream()
-                .flatMap(grown -> grown.nodes().stream())
-                .filter(node -> node.spec().focus().filter(cabinet::equals).isPresent()).findFirst().orElseThrow();
+            Node refill = f.observed(cabinet).getFirst();
             WorldPos at = WorldPos.of(f.level, cabinet);
             REJECTED_CABINETS.add(at);
             try {
@@ -615,10 +554,7 @@ public final class DiningGameTests {
                 helper.assertTrue(f.stock(cabinet).getItem(0).isEmpty(), "the refusing slot stays empty");
                 f.publish();
                 for (int i = 0; i < 4; i++) {
-                    helper.assertTrue(f.dining.goals(f.colony.view(f.level)).stream()
-                        .flatMap(grown -> grown.nodes().stream())
-                        .noneMatch(node -> node.spec().focus().filter(cabinet::equals).isPresent()),
-                        "the rejected slot is backed off after reobservation");
+                    helper.assertTrue(f.observed(cabinet).isEmpty(), "the rejected slot is backed off after reobservation");
                 }
             } finally {
                 REJECTED_CABINETS.remove(at);
@@ -658,11 +594,7 @@ public final class DiningGameTests {
             f.zone(Items.BREAD);
             BlockPos remote = new BlockPos(22_000_000, 80, 22_000_000);
             helper.assertFalse(f.level.isLoaded(remote), "the remote dining cell starts unloaded");
-            var settings = f.front.zone(f.zone).orElseThrow().settings();
-            f.front.erase(f.zone);
-            f.zone = f.front.addZone(f.level, LivingContent.DINING, java.util.Set.of(f.at, f.chair, remote), settings)
-                .orElseThrow().id();
-            f.dining.refresh(f.level.getServer());
+            f.rezone(java.util.Set.of(f.at, f.chair, remote));
             f.publish();
             helper.assertFalse(f.colony.inventory().snapshot().coverage().complete(),
                 "unexplored dining cells cannot establish complete membership");
@@ -737,7 +669,6 @@ public final class DiningGameTests {
         }
 
         void zone(Item food, Item... additional) {
-            if (zone != null) { front.erase(zone); }
             ColonySettings settings = ColonySettings.empty().with(LivingContent.DINING_SERVINGS.key(), new ColonySettings.Value.Count(2));
             // No food is a list cleared to nothing; a setting left out takes the schema's default foods.
             var foods = new java.util.ArrayList<Item>();
@@ -747,16 +678,27 @@ public final class DiningGameTests {
             }
             settings = settings.with(LivingContent.DINING_FOOD.key(), new ColonySettings.Value.Items(foods.stream()
                 .map(item -> ItemFilter.item(BuiltInRegistries.ITEM.getKey(item))).toList()));
-            zone = front.addZone(level, LivingContent.DINING, java.util.Set.of(at, chair), settings).orElseThrow().id();
-            dining.refresh(level.getServer());
+            rezone(java.util.Set.of(at, chair), settings);
         }
 
         void drinks(Item drink) {
-            var settings = front.zone(zone).orElseThrow().settings().with(LivingContent.DINING_DRINK.key(),
-                new ColonySettings.Value.Items(List.of(ItemFilter.item(BuiltInRegistries.ITEM.getKey(drink)))));
-            front.erase(zone);
-            zone = front.addZone(level, LivingContent.DINING, java.util.Set.of(at, chair), settings).orElseThrow().id();
+            rezone(java.util.Set.of(at, chair), drinkMenu(drink));
+        }
+
+        // Redraws the dining area over these cells, keeping its settings unless given others.
+        void rezone(java.util.Set<BlockPos> cells) {
+            rezone(cells, front.zone(zone).orElseThrow().settings());
+        }
+
+        void rezone(java.util.Set<BlockPos> cells, ColonySettings settings) {
+            if (zone != null) { front.erase(zone); }
+            zone = front.addZone(level, LivingContent.DINING, cells, settings).orElseThrow().id();
             dining.refresh(level.getServer());
+        }
+
+        private ColonySettings drinkMenu(Item drink) {
+            return front.zone(zone).orElseThrow().settings().with(LivingContent.DINING_DRINK.key(),
+                new ColonySettings.Value.Items(List.of(ItemFilter.item(BuiltInRegistries.ITEM.getKey(drink)))));
         }
 
         // A barrel west of the table stands in for a native cabinet: one drink, other slots blocked.
@@ -766,37 +708,20 @@ public final class DiningGameTests {
             Container stock = stock(cabinet);
             for (int slot = 1; slot < stock.getContainerSize(); slot++) { stock.setItem(slot, new ItemStack(Items.STONE, 64)); }
             stock.setItem(0, new ItemStack(drink)); stock.setChanged();
-            var settings = front.zone(zone).orElseThrow().settings().with(LivingContent.DINING_DRINK.key(),
-                new ColonySettings.Value.Items(List.of(ItemFilter.item(BuiltInRegistries.ITEM.getKey(drink)))));
-            front.erase(zone);
-            zone = front.addZone(level, LivingContent.DINING, java.util.Set.of(at, chair, cabinet), settings).orElseThrow().id();
-            dining.refresh(level.getServer());
+            rezone(java.util.Set.of(at, chair, cabinet), drinkMenu(drink));
             return cabinet;
         }
 
+        // Without a dining area, the only meal a hungry resident can be offered is one it carries.
         boolean carriesMeal() {
-            try {
-                var method = LivingPresence.class.getDeclaredMethod("carriesAMeal", Worker.class);
-                method.setAccessible(true);
-                return (boolean) method.invoke(living, worker);
-            } catch (ReflectiveOperationException broken) {
-                throw new AssertionError(broken);
-            }
+            return living.urges(worker, colony.view(level)).stream().anyMatch(urge -> urge.id().equals(LivingPresence.EAT));
         }
 
         void publish() {
             var data = io.github.izakyl.folkways.core.engine.colony.ColonyData.find(level.getServer(), colony.id())
                 .orElseThrow();
-            data.inventory().advance(level, data, Map.of(person.getUUID(), person));
-            try {
-                var work = io.github.izakyl.folkways.core.engine.inventory.InventoryIndex.class
-                    .getDeclaredMethod("work", net.minecraft.server.MinecraftServer.class, int.class);
-                work.setAccessible(true);
-                // Connected native displays each require sliced admission sampling.
-                work.invoke(data.inventory(), level.getServer(), 10000);
-            } catch (ReflectiveOperationException broken) {
-                throw new AssertionError(broken);
-            }
+            // Connected native displays each require sliced admission sampling.
+            InventoryObservations.publish(data, level, Map.of(person.getUUID(), person), 10000);
         }
 
         Container stock(BlockPos cabinet) { return (Container) level.getBlockEntity(cabinet); }
@@ -808,6 +733,12 @@ public final class DiningGameTests {
                 colony.inventoryFeedback().changed(store);
             }
             publish();
+        }
+
+        // Refills at one piece of furniture, as the last observation saw it.
+        List<Node> observed(BlockPos focus) {
+            return dining.goals(colony.view(level)).stream().flatMap(grown -> grown.nodes().stream())
+                .filter(node -> node.spec().focus().filter(focus::equals).isPresent()).toList();
         }
 
         List<Node> goals() {

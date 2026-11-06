@@ -1,20 +1,19 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.worker;
+
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,9 +21,7 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -105,22 +102,22 @@ public final class BuildScaffoldCleanupGameTests {
 
     @GameTest(template = "empty_large", timeoutTicks = 320)
     public static void aResidentDescendsBeforeRemovingTheScaffoldItStandsOn(GameTestHelper helper) {
-        descent(helper, false);
+        descent(helper, false, false, false, false);
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 320)
     public static void cleanupAsksAnotherIdleResidentToDescendSafely(GameTestHelper helper) {
-        descent(helper, true);
+        descent(helper, true, false, false, false);
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 360)
     public static void aResidentReturnsFromTheHorizontalEndBeforeScaffoldCleanup(GameTestHelper helper) {
-        descent(helper, true, true);
+        descent(helper, true, true, false, false);
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 360)
     public static void cleanupCentresAResidentSupportedByTheScaffoldCorner(GameTestHelper helper) {
-        descent(helper, true, false, true);
+        descent(helper, true, false, true, false);
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 760)
@@ -260,18 +257,6 @@ public final class BuildScaffoldCleanupGameTests {
         helper.succeed();
     }
 
-    private static void descent(GameTestHelper helper, boolean otherWorker) {
-        descent(helper, otherWorker, false);
-    }
-
-    private static void descent(GameTestHelper helper, boolean otherWorker, boolean horizontal) {
-        descent(helper, otherWorker, horizontal, false);
-    }
-
-    private static void descent(GameTestHelper helper, boolean otherWorker, boolean horizontal, boolean corner) {
-        descent(helper, otherWorker, horizontal, corner, false);
-    }
-
     private static void descent(GameTestHelper helper, boolean otherWorker, boolean horizontal, boolean corner,
             boolean paused) {
         floor(helper);
@@ -361,21 +346,6 @@ public final class BuildScaffoldCleanupGameTests {
         return new BuildTarget(WorldPos.of(level, goal).realm(), Map.of(goal, Blocks.STONE.defaultBlockState()));
     }
 
-    private static Worker worker(Mob body) {
-        SimpleContainer pack = new SimpleContainer(new ItemStack(Items.STONE, 64), new ItemStack(Items.SCAFFOLDING, 64));
-        return (Worker) Proxy.newProxyInstance(BuildScaffoldCleanupGameTests.class.getClassLoader(), new Class<?>[] {Worker.class},
-            (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> body;
-                case "pack" -> pack;
-                case "resident" -> new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig"));
-                case "effects" -> Effects.NONE;
-                case "placement" -> Placement.NOWHERE;
-                case "held" -> ItemStack.EMPTY;
-                case "within", "route", "supplied" -> List.of();
-                default -> null;
-            });
-    }
-
     private static BlockPos at(GameTestHelper helper, int x, int y, int z) {
         return helper.absolutePos(new BlockPos(x, y, z));
     }
@@ -396,11 +366,4 @@ public final class BuildScaffoldCleanupGameTests {
         }
     }
 
-    private static void floor(GameTestHelper helper) {
-        for (int x = 1; x <= 21; x++) {
-            for (int z = 1; z <= 21; z++) {
-                helper.getLevel().setBlock(at(helper, x, 0, z), Blocks.STONE.defaultBlockState(), 3);
-            }
-        }
-    }
 }

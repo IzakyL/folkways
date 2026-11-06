@@ -1,12 +1,14 @@
 package io.github.izakyl.folkways.plugins.orders;
 
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.Stash;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import io.github.izakyl.folkways.core.api.terms.StoreRule;
@@ -16,7 +18,7 @@ import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonySnapshot;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
-import java.lang.reflect.Proxy;
+import java.lang.reflect.InvocationHandler;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -63,19 +65,15 @@ public final class OrdersPlanningGameTests {
         WorldPos at = WorldPos.of(level, cell);
         Colony observations = Colonies.mint(level.getServer());
         try {
-            AtomicReference<CompoundTag> kept = new AtomicReference<>(new CompoundTag());
             AtomicInteger withdrawals = new AtomicInteger();
-            Colony colony = (Colony) Proxy.newProxyInstance(Colony.class.getClassLoader(),
-                new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "inventory" -> observations.inventory();
-                    case "id" -> observations.id();
-                    case "kept" -> kept.get().copy();
-                    case "keep" -> { kept.set(((CompoundTag) args[1]).copy()); yield null; }
-                    case "submitted" -> Set.of();
-                    case "submit", "rule" -> null;
-                    case "withdraw" -> { withdrawals.incrementAndGet(); yield null; }
-                    default -> throw new AssertionError(method.getName());
-                });
+            Colony colony = colony((proxy, method, args) -> switch (method.getName()) {
+                case "inventory" -> observations.inventory();
+                case "id" -> observations.id();
+                case "submitted" -> Set.of();
+                case "submit", "rule" -> null;
+                case "withdraw" -> { withdrawals.incrementAndGet(); yield null; }
+                default -> throw new AssertionError(method.getName());
+            });
             OrdersPresence presence = new OrdersPresence(colony);
             Order order = new Order(at, ItemSpec.of(Items.IRON_INGOT), 3, 3, false);
             @SuppressWarnings("unchecked")
@@ -112,18 +110,14 @@ public final class OrdersPlanningGameTests {
         WorldPos at = WorldPos.of(level, cell);
         Colony observations = Colonies.mint(level.getServer());
         try {
-            AtomicReference<CompoundTag> kept = new AtomicReference<>(new CompoundTag());
-            Colony colony = (Colony) Proxy.newProxyInstance(Colony.class.getClassLoader(),
-                new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "inventory" -> observations.inventory();
-                    case "id" -> observations.id();
-                    case "kept" -> kept.get().copy();
-                    case "keep" -> { kept.set(((CompoundTag) args[1]).copy()); yield null; }
-                    case "submitted" -> Set.of();
-                    case "rule", "withdraw" -> null;
-                    case "submit" -> throw new AssertionError("unknown stock cannot trigger replenishment");
-                    default -> throw new AssertionError(method.getName());
-                });
+            Colony colony = colony((proxy, method, args) -> switch (method.getName()) {
+                case "inventory" -> observations.inventory();
+                case "id" -> observations.id();
+                case "submitted" -> Set.of();
+                case "rule", "withdraw" -> null;
+                case "submit" -> throw new AssertionError("unknown stock cannot trigger replenishment");
+                default -> throw new AssertionError(method.getName());
+            });
             OrdersPresence presence = new OrdersPresence(colony);
             Order order = new Order(at, ItemSpec.of(Items.IRON_INGOT), 32, 64, true);
             @SuppressWarnings("unchecked")
@@ -160,28 +154,22 @@ public final class OrdersPlanningGameTests {
         Order order = new Order(WorldPos.of(level, at), iron, 32, 64, true);
         var view = ColonySnapshot.of(new ColonyData(), level);
         AtomicInteger withdrawals = new AtomicInteger();
-        AtomicReference<CompoundTag> kept = new AtomicReference<>(new CompoundTag());
         Set<UUID> submitted = new LinkedHashSet<>();
         Colony observations = Colonies.mint(level.getServer());
         UUID colonyId = UUID.randomUUID();
-        Colony colony = (Colony) Proxy.newProxyInstance(Colony.class.getClassLoader(),
-            new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "inventory" -> observations.inventory();
-                case "kept" -> kept.get().copy();
-                case "views" -> throw new AssertionError("orders may target containers outside marked colony cells");
-                case "submitted" -> Set.copyOf(submitted);
-                case "submit" -> { submitted.add(idOf((Grown) args[2])); yield null; }
-                case "withdraw" -> { withdrawals.incrementAndGet(); submitted.remove(args[1]); yield null; }
-                case "keep" -> { kept.set(((CompoundTag) args[1]).copy()); yield null; }
-                case "rule" -> null;
-                case "id" -> colonyId;
-                default -> throw new AssertionError(method.getName());
-            });
+        Colony colony = colony((proxy, method, args) -> switch (method.getName()) {
+            case "inventory" -> observations.inventory();
+            case "views" -> throw new AssertionError("orders may target containers outside marked colony cells");
+            case "submitted" -> Set.copyOf(submitted);
+            case "submit" -> { submitted.add(idOf((Grown) args[2])); yield null; }
+            case "withdraw" -> { withdrawals.incrementAndGet(); submitted.remove(args[1]); yield null; }
+            case "rule" -> null;
+            case "id" -> colonyId;
+            default -> throw new AssertionError(method.getName());
+        });
         OrdersPresence presence = new OrdersPresence(colony);
-        var field = OrdersPresence.class.getDeclaredField("orders");
-        field.setAccessible(true);
         @SuppressWarnings("unchecked")
-        Map<Order.Key, Order> orders = (Map<Order.Key, Order>) field.get(presence);
+        Map<Order.Key, Order> orders = (Map<Order.Key, Order>) field(presence, "orders");
         orders.put(order.key(), order);
         target.setItem(0, new ItemStack(Items.IRON_INGOT, 32));
         presence.refresh(level.getServer());
@@ -253,23 +241,19 @@ public final class OrdersPlanningGameTests {
         ItemSpec bread = ItemSpec.of(ResourceLocation.withDefaultNamespace("bread"));
         ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
         AtomicReference<List<StoreRule>> ruled = new AtomicReference<>(List.of());
-        AtomicReference<CompoundTag> kept = new AtomicReference<>(new CompoundTag());
         Colony observations = Colonies.mint(level.getServer());
-        Colony colony = (Colony) Proxy.newProxyInstance(Colony.class.getClassLoader(),
-            new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "inventory" -> observations.inventory();
-                case "kept" -> kept.get().copy();
-                case "keep" -> { kept.set(((CompoundTag) args[1]).copy()); yield null; }
-                case "rule" -> {
-                    helper.assertTrue(args[1].equals(level.dimension()), "rules are published per dimension");
-                    ruled.set(List.copyOf((Collection<StoreRule>) args[2]));
-                    yield null;
-                }
-                case "submitted" -> Set.of();
-                case "submit", "withdraw" -> null;
-                case "id" -> UUID.randomUUID();
-                default -> throw new AssertionError(method.getName());
-            });
+        Colony colony = colony((proxy, method, args) -> switch (method.getName()) {
+            case "inventory" -> observations.inventory();
+            case "rule" -> {
+                helper.assertTrue(args[1].equals(level.dimension()), "rules are published per dimension");
+                ruled.set(List.copyOf((Collection<StoreRule>) args[2]));
+                yield null;
+            }
+            case "submitted" -> Set.of();
+            case "submit", "withdraw" -> null;
+            case "id" -> UUID.randomUUID();
+            default -> throw new AssertionError(method.getName());
+        });
         OrdersPresence presence = new OrdersPresence(colony);
         @SuppressWarnings("unchecked")
         Map<Order.Key, Order> orders = (Map<Order.Key, Order>) field(presence, "orders");
@@ -307,40 +291,26 @@ public final class OrdersPlanningGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 20)
-    public static void containerFiltersPersistAndOldSlotLimitsAreDiscarded(GameTestHelper helper) {
+    public static void containerFiltersAndAccessSurviveReload(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(1, 1, 1)));
         ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
         ItemSpec bread = ItemSpec.of(ResourceLocation.withDefaultNamespace("bread"));
         ItemSpec gold = ItemSpec.of(ResourceLocation.withDefaultNamespace("gold_ingot"));
-        ItemSpec selected = ItemSpec.anyOf(List.of(iron, bread));
-        Shelf whitelist = new Shelf(at, Optional.of(new Shelf.Admitting(true, selected)), false, false);
-        helper.assertTrue(whitelist.admits(iron) && whitelist.admits(bread) && !whitelist.admits(gold),
+        ItemSpec chosen = ItemSpec.anyOf(List.of(iron, bread));
+        Shelf allowing = new Shelf(at, Optional.of(new Shelf.Admitting(true, chosen)), false, false);
+        helper.assertTrue(allowing.admits(iron) && allowing.admits(bread) && !allowing.admits(gold),
             "a whitelist admits all selected items and rejects other goods");
-        Shelf blacklist = whitelist.taking(Optional.of(new Shelf.Admitting(false, selected)));
-        helper.assertTrue(!blacklist.admits(iron) && !blacklist.admits(bread) && blacklist.admits(gold),
+        Shelf barring = allowing.taking(Optional.of(new Shelf.Admitting(false, chosen)));
+        helper.assertTrue(!barring.admits(iron) && !barring.admits(bread) && barring.admits(gold),
             "a blacklist excludes all selected items");
-        helper.assertTrue(Shelf.load(io.github.izakyl.folkways.base.persist.Reader.of(blacklist.save()))
-            .orElseThrow().equals(blacklist), "filter and independent access choices survive reload");
-        CompoundTag legacy = Shelf.none(at).save();
-        legacy.remove("take");
-        legacy.remove("store");
-        legacy.putInt("first", 1);
-        legacy.putInt("last", 9);
-        helper.assertTrue(Shelf.load(io.github.izakyl.folkways.base.persist.Reader.of(legacy)).isEmpty(),
-            "legacy slot limits are discarded and default full access is restored");
-        helper.succeed();
-    }
+        helper.assertTrue(reload(barring).equals(barring), "filter and independent access choices survive reload");
 
-    @GameTest(template = "empty", timeoutTicks = 20)
-    public static void emptyContainerFilterModesAndRawRulesSurviveReload(GameTestHelper helper) {
-        WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(1, 1, 1)));
-        ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
         Shelf blacklist = Shelf.none(at).taking(Optional.of(new Shelf.Admitting(false, List.of())));
         Shelf whitelist = Shelf.none(at).taking(Optional.of(new Shelf.Admitting(true, List.of())));
         helper.assertTrue(blacklist.admits(iron), "an empty blacklist allows incoming goods");
         helper.assertTrue(!whitelist.admits(iron), "an empty whitelist rejects all incoming goods");
         for (Shelf shelf : List.of(blacklist, whitelist)) {
-            Shelf restored = Shelf.load(io.github.izakyl.folkways.base.persist.Reader.of(shelf.save())).orElseThrow();
+            Shelf restored = reload(shelf);
             helper.assertTrue(restored.equals(shelf), "saving an empty list preserves its explicit mode");
             helper.assertTrue(restored.rules(at).contains(new StoreRule.Admit(at,
                 shelf.admitting().orElseThrow().only(), List.of())),
@@ -352,7 +322,7 @@ public final class OrdersPlanningGameTests {
         Shelf original = Shelf.none(at).taking(Optional.of(new Shelf.Admitting(false, selected)));
         Shelf toggled = original.taking(Optional.of(new Shelf.Admitting(true,
             original.admitting().orElseThrow().filters())));
-        Shelf restored = Shelf.load(io.github.izakyl.folkways.base.persist.Reader.of(toggled.save())).orElseThrow();
+        Shelf restored = reload(toggled);
         helper.assertTrue(restored.admitting().orElseThrow().filters().equals(selected),
             "mode changes and reload preserve selected raw rules, including queries with no matching items");
         helper.assertTrue(restored.admitting().orElseThrow().only(), "the whitelist mode survives reload");
@@ -360,7 +330,7 @@ public final class OrdersPlanningGameTests {
         CompoundTag legacy = Shelf.none(at).save();
         legacy.putBoolean("only", true);
         legacy.put("goods", iron.save());
-        Shelf migrated = Shelf.load(io.github.izakyl.folkways.base.persist.Reader.of(legacy)).orElseThrow();
+        Shelf migrated = Shelf.load(Reader.of(legacy)).orElseThrow();
         helper.assertTrue(migrated.admitting().orElseThrow().filters().equals(List.of(selected.getFirst())),
             "legacy goods filters migrate into editable raw selections");
         helper.succeed();
@@ -374,12 +344,10 @@ public final class OrdersPlanningGameTests {
             ItemFilter.tag(ResourceLocation.withDefaultNamespace("coals")),
             ItemFilter.item(ResourceLocation.withDefaultNamespace("coal")),
             new ItemFilter(ItemFilter.Kind.QUERY, "minecraft:coal"));
-        Colony colony = (Colony) Proxy.newProxyInstance(Colony.class.getClassLoader(),
-            new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "kept" -> new CompoundTag();
-                case "id" -> UUID.randomUUID();
-                default -> throw new AssertionError(method.getName());
-            });
+        Colony colony = colony((proxy, method, args) -> switch (method.getName()) {
+            case "id" -> UUID.randomUUID();
+            default -> throw new AssertionError(method.getName());
+        });
         OrdersPresence presence = new OrdersPresence(colony);
         var rowsMethod = OrdersPresence.class.getDeclaredMethod("shelfRows", Shelf.class);
         rowsMethod.setAccessible(true);
@@ -396,6 +364,23 @@ public final class OrdersPlanningGameTests {
                 "the filter offers one mutually exclusive mode toggle");
         }
         helper.succeed();
+    }
+
+    // A colony that keeps its saved state; everything else it is asked goes to the test's own answers.
+    private static Colony colony(InvocationHandler rest) {
+        AtomicReference<CompoundTag> kept = new AtomicReference<>(new CompoundTag());
+        return Proxies.of(Colony.class, (proxy, method, args) -> switch (method.getName()) {
+            case "kept" -> kept.get().copy();
+            case "keep" -> {
+                kept.set(((CompoundTag) args[1]).copy());
+                yield null;
+            }
+            default -> rest.invoke(proxy, method, args);
+        });
+    }
+
+    private static Shelf reload(Shelf shelf) {
+        return Shelf.load(Reader.of(shelf.save())).orElseThrow();
     }
 
     private static Object field(Object owner, String name) throws ReflectiveOperationException {

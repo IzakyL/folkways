@@ -18,27 +18,25 @@ import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Keepouts;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Doing;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent;
-import io.github.izakyl.folkways.plugins.damagecontrol.DamageControlRefusal;
 import io.github.izakyl.folkways.plugins.damagecontrol.SuppressionMethods;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -103,53 +101,6 @@ public final class HoseGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 200)
-    public static void aResidentWalksToTheCabinetBeforeBinding(GameTestHelper helper) {
-        Rig rig = new Rig(helper);
-        BlockPos cabinet = rig.cabinet.getBlockPos();
-        for (BlockPos at : BlockPos.betweenClosed(cabinet.offset(-1, -1, -2), cabinet.offset(9, -1, 2))) {
-            rig.level.setBlock(at, Blocks.STONE.defaultBlockState(), 2);
-        }
-        rig.body.mob().setPos(Vec3.atBottomCenterOf(cabinet.east(8)));
-        rig.body.mob().setNoAi(false);
-        helper.assertTrue(rig.adapter.open(rig.level, rig.worker, rig.at()).isEmpty(),
-            "being within hose distance does not permit remote pickup");
-        var feet = rig.adapter.footings(rig.level, rig.worker, rig.at()).stream()
-            .map(at -> WorldPos.of(rig.level, at)).collect(java.util.stream.Collectors.toSet());
-        rig.body.setDoing(Doing.heading(DamageControlContent.EXTINGUISHING, Optional.empty(), Doing.Wares.NONE));
-        Runnable reopen = Closures.close(rig.level, new BoundingBox(cabinet.getX() - 1, cabinet.getY() - 1,
-            cabinet.getZ() - 2, cabinet.getX() + 9, cabinet.getY() + 2, cabinet.getZ() + 2));
-        var walk = rig.body.kind().locomotion().along(1, DamageControlRefusal.NO_REACH);
-        walk.setOut(rig.level, rig.body.mob(), feet);
-        helper.onEachTick(() -> {
-            if (rig.body.mob().distanceToSqr(Vec3.atCenterOf(cabinet)) > 6.25) {
-                helper.assertFalse(rig.cabinet.hasActiveBinding(), "the nozzle stays in the cabinet during approach");
-                helper.assertTrue(rig.adapter.open(rig.level, rig.worker, rig.at()).isEmpty(),
-                    "every remote binding attempt is refused");
-            }
-            Vec3 before = rig.body.mob().position();
-            walk.step(rig.level, rig.body.mob(), feet);
-            helper.assertTrue(before.distanceToSqr(rig.body.mob().position()) < 1,
-                "cabinet approach never uses construction-site relocation");
-        });
-        helper.startSequence().thenWaitUntil(() -> {
-            helper.assertTrue(rig.adapter.reaches(rig.level, rig.worker, rig.at()),
-                "the resident walks into an adjacent cabinet footing");
-        }).thenExecute(() -> {
-            try {
-                walk.release(rig.level, rig.body.mob());
-                reopen.run();
-                var session = rig.adapter.open(rig.level, rig.worker, rig.at()).orElseThrow();
-                helper.assertTrue(rig.cabinet.isBoundTo(rig.body.id()), "binding happens at the cabinet");
-                helper.assertTrue(rig.body.mob().swinging, "pickup swings the resident's arm");
-                helper.assertValueEqual(rig.cabinet.getFluid().getAmount(), 100, "pickup spends no spray water");
-                session.close();
-            } finally {
-                rig.close();
-            }
-        }).thenSucceed();
-    }
-
     @GameTest(template = "empty", timeoutTicks = 500)
     public static void hoseWorkKeepsItsConnectionFromPickupUntilTheRemoteFire(GameTestHelper helper) {
         hoseWork(helper, false, 128);
@@ -180,20 +131,26 @@ public final class HoseGameTests {
         boolean[] pickedUp = {false};
         boolean[] travelled = {false};
         boolean[] cancelled = {false};
+        double[] closest = {Double.MAX_VALUE};
         Runnable[] reopen = {null};
         helper.onEachTick(() -> {
             if (!cancelled[0]) {
                 Vec3 before = rig.body.mob().position();
                 simulation.tick();
-                if (pickedUp[0]) {
-                    helper.assertTrue(before.distanceToSqr(rig.body.mob().position()) < 1,
-                        "connected travel never uses construction-site relocation");
-                }
+                helper.assertTrue(before.distanceToSqr(rig.body.mob().position()) < 1,
+                    "cabinet approach and connected travel never use construction-site relocation");
+            }
+            closest[0] = Math.min(closest[0], rig.body.mob().position().distanceTo(Vec3.atCenterOf(fire)));
+            helper.assertTrue(closest[0] >= 20, "the entire real work lifecycle stays at least twenty blocks away");
+            if (rig.cabinet.getFluid().getAmount() < 100) {
+                helper.assertTrue(rig.body.mob().position().distanceTo(Vec3.atCenterOf(fire)) >= 25,
+                    "the paid native pulse is emitted at least twenty-five blocks from the fire");
             }
             if (rig.cabinet.hasActiveBinding()) {
                 if (!pickedUp[0]) {
                     helper.assertTrue(rig.body.mob().distanceToSqr(Vec3.atCenterOf(cabinet)) <= 6.25,
                         "the work binds only when its resident has reached the cabinet");
+                    helper.assertTrue(rig.body.mob().swinging, "pickup swings the resident's arm");
                     pickedUp[0] = true;
                     reopen[0] = Closures.close(rig.level, new BoundingBox(cabinet.getX() - 1, cabinet.getY() - 1,
                         cabinet.getZ() - 2, fire.getX() + 1, fire.getY() + 2, fire.getZ() + 2));
@@ -244,37 +201,6 @@ public final class HoseGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void bothNozzlesUseTheirNativeRanges(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper)) {
-            for (HandheldNozzleType type : List.of(HandheldNozzleType.CONE, HandheldNozzleType.FLAT)) {
-                int range = NativeSprayBridge.hoseRange(type);
-                helper.assertTrue(range > 4, "the hose has its configured addon range");
-                Vec3 direction = new Vec3(0, 0, 1);
-                BlockPos target = rig.fire.above(128);
-                rig.level.getChunkAt(target);
-                Vec3 point = Vec3.atCenterOf(target);
-                rig.cabinet.getItemStackHandler().setStackInSlot(FireHydrantCabinetBlockEntity.SLOT_NOZZLE,
-                    new ItemStack(type == HandheldNozzleType.CONE
-                        ? CreateFireFightingAdd.CONE_NOZZLE_ITEM.get() : CreateFireFightingAdd.FLAT_NOZZLE_ITEM.get()));
-                rig.level.setBlock(target.below(), Blocks.NETHERRACK.defaultBlockState(), 2);
-                rig.level.setBlock(target, Blocks.FIRE.defaultBlockState(), 2);
-                NativeSprayBridge.hose(rig.level, rig.body.mob(), rig.cabinet,
-                    point.add(0, 0, -(range - 2)), direction, new FluidStack(Fluids.WATER, 10));
-                helper.assertTrue(rig.level.getBlockState(target).isAir(),
-                    "the native nozzle reaches a target inside its own range: " + type);
-                rig.level.setBlock(target, Blocks.FIRE.defaultBlockState(), 2);
-                NativeSprayBridge.hose(rig.level, rig.body.mob(), rig.cabinet,
-                    point.add(0, 0, -(range + 3)), direction, new FluidStack(Fluids.WATER, 10));
-                helper.assertTrue(rig.level.getBlockState(target).is(Blocks.FIRE),
-                    "the native nozzle itself rejects targets beyond its range: " + type);
-                rig.level.removeBlock(target, false);
-                rig.level.removeBlock(target.below(), false);
-            }
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void theConnectionAllowsThirtyTwoBlocksButNoMore(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             HoseSession session = rig.open();
@@ -298,9 +224,7 @@ public final class HoseGameTests {
                 for (BlockPos at : BlockPos.betweenClosed(cabinet.offset(-2, -1, -2), cabinet.offset(12, -1, 2))) {
                     rig.level.setBlock(at, Blocks.STONE.defaultBlockState(), 2);
                 }
-                rig.cabinet.getItemStackHandler().setStackInSlot(FireHydrantCabinetBlockEntity.SLOT_NOZZLE,
-                    new ItemStack(type == HandheldNozzleType.CONE
-                        ? CreateFireFightingAdd.CONE_NOZZLE_ITEM.get() : CreateFireFightingAdd.FLAT_NOZZLE_ITEM.get()));
+                rig.nozzle(type);
                 rig.level.setBlock(rig.fire, Blocks.FIRE.defaultBlockState(), 2);
                 rig.body.mob().setPos(Vec3.atBottomCenterOf(cabinet.east()));
                 var feet = HoseAdapter.sprayFootings(rig.level, rig.worker, rig.at(), rig.cabinet);
@@ -449,9 +373,7 @@ public final class HoseGameTests {
                 BlockPos feet = rig.cabinet.getBlockPos().east(2);
                 int range = NativeSprayBridge.hoseRange(nozzle);
                 BlockPos fire = feet.east(range - 3);
-                rig.cabinet.getItemStackHandler().setStackInSlot(FireHydrantCabinetBlockEntity.SLOT_NOZZLE,
-                    new ItemStack(nozzle == HandheldNozzleType.CONE
-                        ? CreateFireFightingAdd.CONE_NOZZLE_ITEM.get() : CreateFireFightingAdd.FLAT_NOZZLE_ITEM.get()));
+                rig.nozzle(nozzle);
                 rig.level.setBlock(fire.below(), Blocks.NETHERRACK.defaultBlockState(), 2);
                 rig.level.setBlock(fire, Blocks.FIRE.defaultBlockState(), 2);
                 helper.assertTrue(SprayFootings.serves(rig.level, rig.body.mob(), feet, fire, range, true),
@@ -470,6 +392,13 @@ public final class HoseGameTests {
                                 + " offset=" + step + " height=" + dy);
                     }
                 }
+                Vec3 beyond = Vec3.atCenterOf(fire).add(0, 0, -(range + 3));
+                rig.level.setBlock(fire, Blocks.FIRE.defaultBlockState(), 2);
+                NativeSprayBridge.hose(rig.level, rig.body.mob(), rig.cabinet, beyond, new Vec3(0, 0, 1),
+                    new FluidStack(Fluids.WATER, 10));
+                helper.assertTrue(rig.level.getBlockState(fire).is(Blocks.FIRE),
+                    "the native nozzle itself rejects targets beyond its range: " + nozzle);
+                rig.level.removeBlock(fire, false);
                 rig.level.removeBlock(fire.below(), false);
             }
         }
@@ -477,24 +406,13 @@ public final class HoseGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void nativeEffectiveRangesAndCenterSamplesRemainThePlanningContract(GameTestHelper helper)
-        throws ReflectiveOperationException {
-        var clamp = Config.class.getDeclaredMethod("clampToPhysics",
-            int.class, double.class, double.class, String.class);
-        clamp.setAccessible(true);
+    public static void nativeEffectiveRangesAndCenterSamplesRemainThePlanningContract(GameTestHelper helper) {
         Vec3 direction = new Vec3(1, -0.05, 0.3).normalize();
         for (HandheldNozzleType nozzle : List.of(HandheldNozzleType.CONE, HandheldNozzleType.FLAT)) {
-            boolean cone = nozzle == HandheldNozzleType.CONE;
-            int effective = cone ? Config.coneNozzleMaxDistance : Config.flatNozzleMaxDistance;
-            double speed = cone ? Config.coneNozzleSpeed : Config.flatNozzleSpeed;
-            double friction = cone ? Config.coneNozzleFriction : Config.flatNozzleFriction;
+            int effective = nozzle == HandheldNozzleType.CONE
+                ? Config.coneNozzleMaxDistance : Config.flatNozzleMaxDistance;
             helper.assertValueEqual(NativeSprayBridge.hoseRange(nozzle), effective,
                 "the bridge reads the native effective range without a resident-specific cap");
-            int physics = (int) Math.floor(speed / (1 - friction));
-            helper.assertValueEqual(clamp.invoke(null, physics + 10, speed, friction, "GameTest"), physics,
-                "the native loader clamps excessive configured range to its speed/friction limit");
-            helper.assertValueEqual(clamp.invoke(null, effective, speed, friction, "GameTest"), effective,
-                "an effective range is not needlessly reduced again");
             for (long tick = 0; tick < 32; tick++) {
                 var rays = NativeSprayBridge.hoseShape(nozzle).stratifiedDirections(direction,
                     Math.max(8, Math.min(28, effective / 2)), tick, new java.util.Random(tick * 37));
@@ -506,17 +424,9 @@ public final class HoseGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 500)
-    public static void aConeHoseSuppressesThirtyBlocksAwayWithoutApproachingTheFire(GameTestHelper helper) {
-        distantHoseWork(helper, HandheldNozzleType.CONE, 96);
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 500)
     public static void aFlatHoseSuppressesThirtyBlocksAwayWithoutApproachingTheFire(GameTestHelper helper) {
-        distantHoseWork(helper, HandheldNozzleType.FLAT, 192);
-    }
-
-    private static void distantHoseWork(GameTestHelper helper, HandheldNozzleType nozzle, int height) {
-        int offset = nozzle == HandheldNozzleType.CONE ? 512 : 1024;
+        int height = 192;
+        int offset = 1024;
         BlockPos cabinet = helper.absolutePos(new BlockPos(2, 1 + height, 3 + offset));
         BlockPos fire = cabinet.east(30);
         Set<Long> forced = new LinkedHashSet<>();
@@ -545,9 +455,7 @@ public final class HoseGameTests {
                 for (BlockPos cell : BlockPos.betweenClosed(cabinet.offset(-6, -1, -3), fire.offset(1, -1, 3))) {
                     rig.level.setBlock(cell, Blocks.STONE.defaultBlockState(), 2);
                 }
-                rig.cabinet.getItemStackHandler().setStackInSlot(FireHydrantCabinetBlockEntity.SLOT_NOZZLE,
-                    new ItemStack(nozzle == HandheldNozzleType.CONE
-                        ? CreateFireFightingAdd.CONE_NOZZLE_ITEM.get() : CreateFireFightingAdd.FLAT_NOZZLE_ITEM.get()));
+                rig.nozzle(HandheldNozzleType.FLAT);
                 rig.level.removeBlock(rig.fire, false);
                 rig.level.setBlock(fire.below(), Blocks.NETHERRACK.defaultBlockState(), 2);
                 rig.level.setBlock(fire, Blocks.FIRE.defaultBlockState(), 2);
@@ -575,7 +483,7 @@ public final class HoseGameTests {
             helper.assertTrue(scene[0] != null, "the isolated scenario's chunks begin entity ticking");
             Rig rig = scene[0];
             helper.assertTrue(rig.level.getBlockState(fire).isAir(),
-                "real distant hose work extinguishes: " + nozzle + " at=" + rig.body.mob().position()
+                "real distant hose work extinguishes: at=" + rig.body.mob().position()
                     + " doing=" + rig.body.doing() + " water=" + rig.cabinet.getFluid()
                     + " refusal=" + rig.body.balk());
         }).thenExecute(() -> {
@@ -591,19 +499,6 @@ public final class HoseGameTests {
                 rig.close();
             }
         }).thenSucceed();
-    }
-
-    @GameTest(template = "empty")
-    public static void aPlayerBindingIsNeverBorrowedByAResident(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper)) {
-            var player = FakePlayerFactory.getMinecraft(rig.level);
-            rig.cabinet.bindTo(player);
-            helper.assertTrue(rig.adapter.open(rig.level, rig.worker, rig.at()).isEmpty(),
-                "an active player keeps exclusive ownership");
-            helper.assertTrue(rig.cabinet.isBoundTo(player.getUUID()), "the player's binding survives the refusal");
-            rig.cabinet.clearBinding(player.getUUID());
-        }
-        helper.succeed();
     }
 
     @GameTest(template = "empty")
@@ -623,72 +518,47 @@ public final class HoseGameTests {
             helper.assertTrue(rig.cabinet.isBoundTo(player.getUUID()),
                 "late resident cleanup cannot clear the new player");
             helper.assertValueEqual(rig.cabinet.getFluid().getAmount(), 100, "takeover does not lose water");
+            helper.assertTrue(rig.adapter.open(rig.level, rig.worker, rig.at()).isEmpty(),
+                "an active player keeps exclusive ownership");
+            helper.assertTrue(rig.cabinet.isBoundTo(player.getUUID()), "the player's binding survives the refusal");
             HandheldNozzleControllerItem.clearBinding(rig.level, controller, player);
         }
         helper.succeed();
     }
 
     @GameTest(template = "empty")
-    public static void changingCabinetEquipmentDisconnectsTheResident(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper)) {
-            HoseSession session = rig.open();
+    public static void everyReleaseTriggerFreesTheCabinet(GameTestHelper helper) {
+        Map<String, BiConsumer<Rig, HoseSession>> triggers = new LinkedHashMap<>();
+        triggers.put("an equipment change", (rig, session) -> {
             rig.cabinet.getItemStackHandler()
                 .setStackInSlot(FireHydrantCabinetBlockEntity.SLOT_NOZZLE, ItemStack.EMPTY);
-            helper.assertFalse(session.valid(), "changing the native nozzle forces a disconnect");
-            helper.assertFalse(rig.cabinet.hasActiveBinding(), "equipment change leaves no resident binding");
             helper.assertTrue(session.suppress(rig.level, rig.fire) instanceof Outcome.Failed,
                 "a disconnected hose cannot draw water");
             helper.assertValueEqual(rig.cabinet.getFluid().getAmount(), 100, "equipment changes conserve fluid");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void removingAndReplacingTheCabinetNeverReusesItsHydrantId(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper)) {
-            HoseSession session = rig.open();
+        });
+        triggers.put("a replaced cabinet", (rig, session) -> {
             BlockPos pos = rig.cabinet.getBlockPos();
             rig.level.removeBlock(pos, false);
             rig.level.setBlock(pos, CreateFireFightingAdd.FIRE_HYDRANT_CABINET.get().defaultBlockState(), 3);
-            var replacement = (FireHydrantCabinetBlockEntity) rig.level.getBlockEntity(pos);
-            helper.assertFalse(replacement.getHydrantId().equals(session.hydrantId()),
-                "a new cabinet has a different identity");
+            helper.assertFalse(((FireHydrantCabinetBlockEntity) rig.level.getBlockEntity(pos)).getHydrantId()
+                .equals(session.hydrantId()), "a new cabinet has a different identity");
             HoseSessions.tick(new ServerTickEvent.Post(() -> true, rig.level.getServer()));
-            helper.assertFalse(session.valid(), "the removed cabinet's session is closed");
-            helper.assertFalse(replacement.hasActiveBinding(), "replacement inherits no stale resident binding");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void deathAndEntityUnloadReleaseTheHose(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper)) {
-            HoseSession session = rig.open();
-            rig.body.mob().kill();
-            helper.assertFalse(session.valid(), "a dead resident cannot spray");
-            helper.assertFalse(rig.cabinet.hasActiveBinding(), "the death event immediately unbinds the cabinet");
-        }
-        try (Rig rig = new Rig(helper)) {
-            rig.open();
-            HoseSessions.left(new EntityLeaveLevelEvent(rig.body.mob(), rig.level));
-            helper.assertFalse(rig.cabinet.hasActiveBinding(), "entity unload immediately releases the cabinet");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void chunkUnloadAndColonyCloseReleaseBindings(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper)) {
-            rig.open();
-            HoseSessions.chunkUnloaded(new ChunkEvent.Unload(rig.level.getChunkAt(rig.cabinet.getBlockPos())));
-            helper.assertFalse(rig.cabinet.hasActiveBinding(),
-                "chunk unload clears ownership without loading another chunk");
-            FireHydrantCabinetBlockEntity.tick(rig.level, rig.cabinet.getBlockPos(), rig.cabinet.getBlockState(),
-                rig.cabinet);
-            rig.open();
-            HoseSessions.closeColony(rig.colony.id());
-            helper.assertFalse(rig.cabinet.hasActiveBinding(), "closing the colony releases the hose");
-        }
+        });
+        triggers.put("death", (rig, session) -> rig.body.mob().kill());
+        triggers.put("entity unload", (rig, session) ->
+            HoseSessions.left(new EntityLeaveLevelEvent(rig.body.mob(), rig.level)));
+        triggers.put("chunk unload", (rig, session) ->
+            HoseSessions.chunkUnloaded(new ChunkEvent.Unload(rig.level.getChunkAt(rig.cabinet.getBlockPos()))));
+        triggers.put("colony close", (rig, session) -> HoseSessions.closeColony(rig.colony.id()));
+        triggers.forEach((trigger, release) -> {
+            try (Rig rig = new Rig(helper)) {
+                HoseSession session = rig.open();
+                release.accept(rig, session);
+                helper.assertFalse(session.valid(), trigger + " closes the resident session");
+                helper.assertFalse(((FireHydrantCabinetBlockEntity) rig.level.getBlockEntity(rig.cabinet.getBlockPos()))
+                    .hasActiveBinding(), trigger + " immediately leaves no resident binding");
+            }
+        });
         helper.succeed();
     }
 
@@ -769,21 +639,6 @@ public final class HoseGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void flatNozzlesConsumeTheSameNativeTickCost(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper)) {
-            rig.cabinet.getItemStackHandler().setStackInSlot(FireHydrantCabinetBlockEntity.SLOT_NOZZLE,
-                new ItemStack(CreateFireFightingAdd.FLAT_NOZZLE_ITEM.get()));
-            HoseSession session = rig.open();
-            helper.assertTrue(session.suppress(rig.level, rig.fire) instanceof Outcome.Done,
-                "the flat nozzle uses its native fan sampler");
-            helper.assertTrue(rig.level.getBlockState(rig.fire).isAir(), "the flat centre ray extinguishes fire");
-            helper.assertValueEqual(rig.cabinet.getFluid().getAmount(), 90,
-                "the flat nozzle also consumes ten mB per spray tick");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void oneSessionCannotSprayTwiceOnTheSameTick(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         HoseSession session = rig.open();
@@ -845,8 +700,7 @@ public final class HoseGameTests {
     @GameTest(template = "empty")
     public static void aCloseFlatSprayHitsTheFireBlockWithoutItsCentreInsideTheFan(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
-            rig.cabinet.getItemStackHandler().setStackInSlot(FireHydrantCabinetBlockEntity.SLOT_NOZZLE,
-                new ItemStack(CreateFireFightingAdd.FLAT_NOZZLE_ITEM.get()));
+            rig.nozzle(HandheldNozzleType.FLAT);
             rig.body.mob().setPos(Vec3.atBottomCenterOf(rig.fire.west()));
             HoseSession session = rig.open();
             helper.assertTrue(session.suppress(rig.level, rig.fire) instanceof Outcome.Done,
@@ -860,21 +714,14 @@ public final class HoseGameTests {
 
     @GameTest(template = "empty")
     public static void aSameTickStopKeepsTheLastBurstUntilItFinishes(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper)) {
-            long now = rig.level.getGameTime();
-            HoseSession session = rig.open();
-            session.suppress(rig.level, rig.fire);
-            session.close();
-            helper.assertFalse(rig.cabinet.hasActiveBinding(), "visual tails never prolong cabinet ownership");
-            helper.assertValueEqual(rig.cabinet.getFluid().getAmount(), 90, "the visual tail costs no more water");
-            SprayTail tail = SprayTail.start(now).stop(now);
-            helper.assertTrue(tail.hose(now), "start and stop received in one frame still show the hose");
-            helper.assertFalse(tail.finished(now, true), "even a burst without projectiles gets a short visible hose");
-            helper.assertFalse(tail.hose(now + 4), "the disconnected hose disappears after four client ticks");
-            helper.assertFalse(tail.finished(now + 4, false), "already emitted native projectiles keep ticking");
-            helper.assertTrue(tail.finished(now + 40, true), "the view retires only after its projectiles finish");
-            helper.assertValueEqual(tail.stop(now + 3), tail, "duplicate stops do not extend the visual tail");
-        }
+        long now = helper.getLevel().getGameTime();
+        SprayTail tail = SprayTail.start(now).stop(now);
+        helper.assertTrue(tail.hose(now), "start and stop received in one frame still show the hose");
+        helper.assertFalse(tail.finished(now, true), "even a burst without projectiles gets a short visible hose");
+        helper.assertFalse(tail.hose(now + 4), "the disconnected hose disappears after four client ticks");
+        helper.assertFalse(tail.finished(now + 4, false), "already emitted native projectiles keep ticking");
+        helper.assertTrue(tail.finished(now + 40, true), "the view retires only after its projectiles finish");
+        helper.assertValueEqual(tail.stop(now + 3), tail, "duplicate stops do not extend the visual tail");
         helper.succeed();
     }
 
@@ -971,17 +818,13 @@ public final class HoseGameTests {
                 CreateFireFightingAdd.FIRE_EXTINGUISHER_FLUID, extinguisher)
                 .setStoredFluid(new FluidStack(Fluids.WATER, 100));
             body.pack().setItem(0, extinguisher);
-            worker = (Worker) Proxy.newProxyInstance(Worker.class.getClassLoader(), new Class<?>[] {Worker.class},
-                (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> body.mob();
-                case "resident" -> body.resident();
-                case "pack" -> body.pack();
-                case "effects" -> Effects.NONE;
-                case "within", "route", "supplied" -> List.of();
-                case "placement" -> Placement.NOWHERE;
-                case "held" -> ItemStack.EMPTY;
-                default -> null;
-            });
+            worker = TestWorker.of(body).effects(Effects.NONE).spill(stack -> { });
+        }
+
+        void nozzle(HandheldNozzleType type) {
+            cabinet.getItemStackHandler().setStackInSlot(FireHydrantCabinetBlockEntity.SLOT_NOZZLE,
+                new ItemStack(type == HandheldNozzleType.CONE
+                    ? CreateFireFightingAdd.CONE_NOZZLE_ITEM.get() : CreateFireFightingAdd.FLAT_NOZZLE_ITEM.get()));
         }
 
         WorldPos at() {

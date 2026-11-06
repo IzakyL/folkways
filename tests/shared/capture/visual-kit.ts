@@ -4,13 +4,12 @@ import { camera as cameras, input, media, screen as screens, tick, world, type M
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { REPO_ROOT, outAbs, outPath } from "../harness/out-paths";
+import { REPO_ROOT, outPath } from "../harness/out-paths";
 import { formatReport, type LayoutProbe, type LintOptions, type LintReport } from "./layout-lint";
 import { frames, safeScreen, screenName } from "../harness/bw-helpers";
 
 export const CONFIG_PATH = "blockwright.toml";
 export const VISUAL_ROOT = outPath("visual", "takes");
-export const VISUAL_DIR = outAbs("visual", "takes");
 export { REPO_ROOT };
 
 export const MIN_CLIP_BYTES = 32 * 1024;

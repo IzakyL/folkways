@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.core.engine.labor;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.Stash;
@@ -16,7 +15,6 @@ import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Refinement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
@@ -28,7 +26,8 @@ import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
 import io.github.izakyl.folkways.core.engine.plan.Solving;
 import io.github.izakyl.folkways.core.engine.plan.Stock;
 import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.Nodes;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +44,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -71,14 +69,10 @@ public final class LaborIncidentGameTests {
         var hand = fixture.crew.hands().getFirst();
         ItemStack cargo = new ItemStack(Items.WHEAT, 64);
         fixture.worker.pack().setItem(0, cargo);
-        ItemStack sword = new ItemStack(Items.IRON_SWORD);
-        BlockPos at = fixture.source.block(level);
-        ItemEntity drop = new ItemEntity(level, at.getX(), at.getY(), at.getZ(), sword);
-        level.addFreshEntity(drop);
-        PickUp node = new PickUp(drop.getUUID(), fixture.source, Goods.specOf(sword), 1, Stances.at(fixture.source));
+        ItemEntity drop = drop(level, fixture.source.block(level));
+        PickUp node = pickUp(drop, fixture.source);
         var world = fixture.situation(new Stock(List.of(), Map.of()), List.of());
-        var full = new Crew.Hand(hand.who(), hand.at(), 0, 1, hand.pace(), hand.licences(), hand.tools(),
-            Optional.empty(), List.of(cargo));
+        var full = full(hand, cargo);
         Solving solver = new Solving();
         try {
             var blocked = solver.handle(new Known(world, List.of(full)),
@@ -95,9 +89,7 @@ public final class LaborIncidentGameTests {
                     "replanning leaves the same item without creating replacement drops");
             }
             fixture.worker.pack().setItem(0, ItemStack.EMPTY);
-            var free = new Crew.Hand(hand.who(), hand.at(), 1, 1, hand.pace(), hand.licences(), hand.tools(),
-                Optional.empty(), List.of());
-            var assigned = solver.handle(new Known(world, List.of(free)), List.of(Message.ANSWERED), 4);
+            var assigned = solver.handle(new Known(world, List.of(free(hand))), List.of(Message.ANSWERED), 4);
             helper.assertTrue(assigned.schedule().tours().values().stream()
                 .anyMatch(tour -> tour.nodes().contains(node.id())), "pickup is assigned after space opens");
             Outcome outcome = Commit.run(level, node, fixture.worker);
@@ -126,13 +118,9 @@ public final class LaborIncidentGameTests {
         Container store = Containers.at(level, barrel).orElseThrow();
         Stash stash = Stash.at(fixture.target);
         var world = fixture.situation(new Stock(List.of(), Map.of(stash, 27)), List.of());
-        var full = new Crew.Hand(hand.who(), hand.at(), 0, 1, hand.pace(), hand.licences(), hand.tools(),
-            Optional.empty(), List.of(cargo));
-        ItemStack sword = new ItemStack(Items.IRON_SWORD);
-        BlockPos at = fixture.source.block(level);
-        ItemEntity drop = new ItemEntity(level, at.getX(), at.getY(), at.getZ(), sword);
-        level.addFreshEntity(drop);
-        PickUp node = new PickUp(drop.getUUID(), fixture.source, Goods.specOf(sword), 1, Stances.at(fixture.source));
+        var full = full(hand, cargo);
+        ItemEntity drop = drop(level, fixture.source.block(level));
+        PickUp node = pickUp(drop, fixture.source);
         Solving solver = new Solving();
         try {
             var blocked = solver.handle(new Known(world, List.of(full)),
@@ -147,9 +135,7 @@ public final class LaborIncidentGameTests {
                 "the planned recovery moves cargo to the store");
             helper.assertTrue(fixture.worker.pack().isEmpty() && store.getItem(0).is(Items.WHEAT),
                 "recovery frees the real pack");
-            var free = new Crew.Hand(hand.who(), hand.at(), 1, 1, hand.pace(), hand.licences(), hand.tools(),
-                Optional.empty(), List.of());
-            var assigned = solver.handle(new Known(world, List.of(free)),
+            var assigned = solver.handle(new Known(world, List.of(free(hand))),
                 List.of(new Message.Finished(transfer.id()), Message.ANSWERED), 2);
             helper.assertTrue(assigned.schedule().tours().values().stream()
                 .anyMatch(tour -> tour.nodes().contains(node.id())), "pickup is assigned after recovery");
@@ -176,13 +162,9 @@ public final class LaborIncidentGameTests {
         var freeHand = second.crew.hands().getFirst();
         ItemStack cargo = new ItemStack(Items.WHEAT, 64);
         first.worker.pack().setItem(0, cargo);
-        var full = new Crew.Hand(fullHand.who(), fullHand.at(), 0, 1, fullHand.pace(), fullHand.licences(),
-            fullHand.tools(), Optional.empty(), List.of(cargo));
-        BlockPos at = first.source.block(level);
-        ItemStack sword = new ItemStack(Items.IRON_SWORD);
-        ItemEntity drop = new ItemEntity(level, at.getX(), at.getY(), at.getZ(), sword);
-        level.addFreshEntity(drop);
-        PickUp node = new PickUp(drop.getUUID(), first.source, Goods.specOf(sword), 1, Stances.at(first.source));
+        var full = full(fullHand, cargo);
+        ItemEntity drop = drop(level, first.source.block(level));
+        PickUp node = pickUp(drop, first.source);
         var world = first.situation(new Stock(List.of(), Map.of()), List.of());
         Solving solver = new Solving();
         try {
@@ -210,24 +192,17 @@ public final class LaborIncidentGameTests {
         var hand = fixture.crew.hands().getFirst();
         ItemStack cargo = new ItemStack(Items.WHEAT, 64);
         fixture.worker.pack().setItem(0, cargo);
-        var full = new Crew.Hand(hand.who(), hand.at(), 0, 1, hand.pace(), hand.licences(), hand.tools(),
-            Optional.empty(), List.of(cargo));
+        var full = full(hand, cargo);
         BlockPos source = fixture.source.block(level);
         level.setBlockAndUpdate(source, Blocks.BARREL.defaultBlockState());
         Container store = Containers.at(level, source).orElseThrow();
-        ItemStack sword = new ItemStack(Items.IRON_SWORD);
-        ItemEntity drop = new ItemEntity(level, source.getX(), source.getY(), source.getZ(), sword);
-        level.addFreshEntity(drop);
-        var goods = Goods.specOf(sword);
-        PickUp pickup = new PickUp(drop.getUUID(), fixture.source, goods, 1, Stances.at(fixture.source));
+        ItemEntity drop = drop(level, source);
+        var goods = Goods.specOf(drop.getItem());
+        PickUp pickup = pickUp(drop, fixture.source);
         ResourceLocation owner = ResourceLocation.fromNamespaceAndPath("folkways_test", "pickup_store");
         NodeSpec spec = NodeSpec.of(UUID.randomUUID(), owner, new WorkSite.AtBlock(fixture.target),
             Stances.at(fixture.target), Workload.Once.of(1)).needs(new Need(goods, 1)).done();
-        Node consumer = new Node() {
-            public NodeSpec spec() { return spec; }
-
-            public Outcome commit(ServerLevel ignored, Worker who) { return Outcome.done(); }
-        };
+        Node consumer = Nodes.done(spec);
         Workshop workshop = new Workshop() {
             public ResourceLocation id() { return owner; }
 
@@ -268,29 +243,34 @@ public final class LaborIncidentGameTests {
         helper.succeed();
     }
 
+    // The fixture's resident working to a plan, with these stores at hand; it never spills.
     private static Worker worker(GameTestHelper helper, PlanningFixture fixture, Placement placement,
                                  List<Worker.Store> stores) {
-        return new Worker() {
-            public Resident resident() { return fixture.worker.resident(); }
+        return TestWorker.of(fixture.worker.body(), fixture.worker.resident(), fixture.worker.pack()).within(stores)
+            .spill(stack -> helper.assertTrue(stack.isEmpty(), "the planned work does not spill"))
+            .placement(placement);
+    }
 
-            public Mob body() { return fixture.worker.body(); }
+    // A hand with its one pack cell taken by `cargo`.
+    private static Crew.Hand full(Crew.Hand hand, ItemStack cargo) {
+        return new Crew.Hand(hand.who(), hand.at(), 0, 1, hand.pace(), hand.licences(), hand.tools(),
+            Optional.empty(), List.of(cargo));
+    }
 
-            public Container pack() { return fixture.worker.pack(); }
+    private static Crew.Hand free(Crew.Hand hand) {
+        return new Crew.Hand(hand.who(), hand.at(), 1, 1, hand.pace(), hand.licences(), hand.tools(),
+            Optional.empty(), List.of());
+    }
 
-            public List<Store> within() { return stores; }
+    // An iron sword lying on the ground.
+    private static ItemEntity drop(ServerLevel level, BlockPos at) {
+        ItemEntity drop = new ItemEntity(level, at.getX(), at.getY(), at.getZ(), new ItemStack(Items.IRON_SWORD));
+        level.addFreshEntity(drop);
+        return drop;
+    }
 
-            public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-
-            public void spill(ItemStack stack) {
-                helper.assertTrue(stack.isEmpty(), "the planned work does not spill");
-            }
-
-            public Effects effects() { return Effects.NONE; }
-
-            public List<Node> route() { return List.of(); }
-
-            public Placement placement() { return placement; }
-        };
+    private static PickUp pickUp(ItemEntity drop, WorldPos at) {
+        return new PickUp(drop.getUUID(), at, Goods.specOf(drop.getItem()), 1, Stances.at(at));
     }
 
     @GameTest(template = "empty")

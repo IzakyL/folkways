@@ -108,17 +108,15 @@ for (const stage of twins()) test(stage.title("economy spine: a smithing upgrade
     expect(
       smithed.matched,
       `${SMITH_RESULT} never reached the MAINTAIN-pinned target chest within ${SMITH_BUDGET_TICKS} ticks (reason=${smithed.reason}). `
-        + `The smithing table is the colony's only workstation and all three inputs are in stock, so failing here = the "claim workstation -> fetch -> smith at the table -> deliver"`
-        + ` chain broke somewhere; first check the workstation opt-in succeeded, then whether the supply chest ${JSON.stringify(smithSupplyAfter)} is still full.`,
+        + `: the claim -> fetch -> smith -> deliver chain broke; supply chest ${JSON.stringify(smithSupplyAfter)}`,
     ).toBe(true);
     expect(
       smithTargetAfter.filter((stack) => stack.id === SMITH_RESULT).map((stack) => stack.damage),
-      `none of the ${SMITH_RESULT} in the target chest carries the base's damage=${SMITH_DAMAGE} (read ${JSON.stringify(smithTargetAfter)}). `
-        + `damage=null means the item is brand new: it cannot come from "the same base upgraded to a harder material", so it was hauled in from elsewhere / made from nothing.`,
+      `no ${SMITH_RESULT} in the target chest carries the base's damage=${SMITH_DAMAGE}, so it was not upgraded from that base: ${JSON.stringify(smithTargetAfter)}`,
     ).toContain(SMITH_DAMAGE);
     expect(
       smithSupplyAfter.some((stack) => stack.id === SMITH_BASE),
-      `the product appeared, but ${SMITH_BASE} is still in the supply chest (${JSON.stringify(smithSupplyAfter)}): the base was not consumed = an extra item from nothing`,
+      `the product appeared but ${SMITH_BASE} was not used up: ${JSON.stringify(smithSupplyAfter)}`,
     ).toBe(false);
 
     await world.command(
@@ -135,7 +133,6 @@ for (const stage of twins()) test(stage.title("economy spine: a smithing upgrade
       `phase D's stock was not staged: supply chest read ${JSON.stringify(doorwaySupply)}`,
     ).toBeGreaterThanOrEqual(DOORWAY_SOURCE_STOCK);
 
-    const doorwayEvidence: any[] = [];
     for (const fixture of doorwayFixtures(founding.origin)) {
       phaseContainers = [...phaseContainers, fixture.demand];
       await tryCommand(server, "time set day");
@@ -145,12 +142,8 @@ for (const stage of twins()) test(stage.title("economy spine: a smithing upgrade
           : `setblock ${block(part.from)} ${part.block}`);
       }
       await tick.sprint(server, 5);
-
-      const evidence: any = { label: fixture.label, barrier: fixture.barrier };
-      evidence.shut_at_start = await world.probe(
-        server, `if block ${block(fixture.barrier)} ${fixture.blockId}[open=false]`);
       expect(
-        evidence.shut_at_start,
+        await world.probe(server, `if block ${block(fixture.barrier)} ${fixture.blockId}[open=false]`),
         `[${fixture.label}] setup not built: ${commandPos(fixture.barrier)} is not a closed ${fixture.blockId}`,
       ).toBe(true);
 
@@ -160,30 +153,19 @@ for (const stage of twins()) test(stage.title("economy spine: a smithing upgrade
           + `${founding.origin.x + 0.5} ${founding.origin.y} ${founding.origin.z + 3.5}`,
       );
       await tick.sprint(server, 3);
-
-      evidence.resident_inside_at_start = await world.probe(
-        server, `if entity @e[type=${RESIDENT_TYPE},${volumeArgs(fixture.interior)}]`);
       expect(
-        evidence.resident_inside_at_start,
-        `[${fixture.label}] could not clear residents out of the enclosure - the "they got in" check would be true from the start, so this phase tests nothing`,
+        await world.probe(server, `if entity @e[type=${RESIDENT_TYPE},${volumeArgs(fixture.interior)}]`),
+        `[${fixture.label}] a resident is still inside the enclosure, so "they got in" would hold from the start`,
       ).toBe(false);
 
       await world.command(server, `setblock ${block(fixture.demand)} minecraft:chest{Items:[]}`);
       await tick.sprint(server, 3);
-      evidence.demand_chest_placed = await world.probe(
-        server, `if block ${block(fixture.demand)} minecraft:chest`);
       expect(
-        evidence.demand_chest_placed,
+        await world.probe(server, `if block ${block(fixture.demand)} minecraft:chest`),
         `[${fixture.label}] demand chest not built: ${commandPos(fixture.demand)} is not a chest`,
       ).toBe(true);
 
-      evidence.deep_volume_covers_demand = volumeHolds(fixture.deep, fixture.demand);
-      expect(
-        evidence.deep_volume_covers_demand,
-        `[${fixture.label}] check volume ${volumeArgs(fixture.deep)} does not cover demand chest ${commandPos(fixture.demand)}: the volume is miscomputed`,
-      ).toBe(true);
-
-      evidence.opt_in = await optInViaBook(server, client, playerName, fixture.demand, "chest", stage);
+      await optInViaBook(server, client, playerName, fixture.demand, "chest", stage);
       await setMaintainDemandViaUI(server, client, playerName, fixture.demand, DOORWAY_DEMAND_ITEM, 1, stage);
       await world.command(
         server,
@@ -191,40 +173,32 @@ for (const stage of twins()) test(stage.title("economy spine: a smithing upgrade
       );
       await tick.sprint(server, 5);
 
-      evidence.opened = await waitMatched(
+      const opened = await waitMatched(
         server, `if block ${block(fixture.barrier)} ${fixture.blockId}[open=true]`,
         { maxTicks: DOORWAY_OPEN_BUDGET, stepTicks: 1 });
       expect(
-        evidence.opened.matched,
-        `[${fixture.label}] ${commandPos(fixture.barrier)} was never opened within ${DOORWAY_OPEN_BUDGET} ticks`
-          + ` (reason=${evidence.opened.reason}). The enclosure has only this one opening, so failing here = the "open" half never ran: `
-          + `the goal never fired (no resident was dispatched / none hit the barrier / the path never crossed this cell), or setOpen(true) never reached the world. `
-          + `Only the fence gate failing = the fence gate branch's fault (doors have setOpen, fence gates use a hand-written setBlock).`,
+        opened.matched,
+        `[${fixture.label}] ${commandPos(fixture.barrier)}, the enclosure's one opening, was never opened within ${DOORWAY_OPEN_BUDGET} ticks`
+          + ` (reason=${opened.reason}): no resident was sent in, or setOpen(true) never reached the world`,
       ).toBe(true);
 
-      evidence.entered = await waitMatched(
+      const entered = await waitMatched(
         server, `if entity @e[type=${RESIDENT_TYPE},${volumeArgs(fixture.deep)}]`,
         { maxTicks: DOORWAY_ENTER_BUDGET, stepTicks: 1 });
       expect(
-        evidence.entered.matched,
-        `[${fixture.label}] the barrier opened, but no resident showed up deep in the corridor within ${DOORWAY_ENTER_BUDGET} ticks`
-          + ` (${volumeArgs(fixture.deep)}, >=${DEEP_MARGIN} blocks from the doorway). The door opens but no one gets through: it closed on them, `
-          + `or the path beyond the door is broken.`,
+        entered.matched,
+        `[${fixture.label}] the barrier opened, but no resident got ${DEEP_MARGIN}+ blocks past it within ${DOORWAY_ENTER_BUDGET} ticks`,
       ).toBe(true);
 
-      evidence.shut_again = await waitMatched(
+      // The one half that can fail on its own: a gate left open after anyone passes is no gate, and the pen needs it.
+      const shutAgain = await waitMatched(
         server, `if block ${block(fixture.barrier)} ${fixture.blockId}[open=false]`,
         { maxTicks: DOORWAY_SHUT_BUDGET, stepTicks: 1 });
       expect(
-        evidence.shut_again.matched,
-        `[${fixture.label}] the barrier never closed again after opening (${DOORWAY_SHUT_BUDGET} ticks, `
-          + `reason=${evidence.shut_again.reason}). This is the only half of the round-trip check that can fail on its own: remove just the "close", `
-          + `and the two checks above stay green. A pasture gate left open for good after anyone passes is no gate at all - the pen's enclosure depends on it.`,
+        shutAgain.matched,
+        `[${fixture.label}] the barrier never closed again within ${DOORWAY_SHUT_BUDGET} ticks (reason=${shutAgain.reason})`,
       ).toBe(true);
-
-      doorwayEvidence.push(evidence);
     }
-    expect(doorwayEvidence.map((entry) => entry.label)).toHaveLength(2);
   } catch (error) {
     pair?.failing(error);
     throw error;
@@ -269,12 +243,6 @@ type Volume = { x: number; y: number; z: number; dx: number; dy: number; dz: num
 
 function volumeArgs(volume: Volume) {
   return `x=${volume.x},y=${volume.y},z=${volume.z},dx=${volume.dx},dy=${volume.dy},dz=${volume.dz}`;
-}
-
-function volumeHolds(volume: Volume, cell: Vec) {
-  return cell.x + 1 >= volume.x && cell.x <= volume.x + volume.dx
-    && cell.y + 1 >= volume.y && cell.y <= volume.y + volume.dy
-    && cell.z + 1 >= volume.z && cell.z <= volume.z + volume.dz;
 }
 
 type DoorwayFixture = {

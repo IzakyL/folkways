@@ -64,9 +64,7 @@ public record ProfileShortages(
                     resident.equipment().containsKey(entry.slot().orElseThrow())
                         && !resident.equipment().get(entry.slot().orElseThrow()).stackCopy().isEmpty()
                         && !entry.matches(resident.equipment().get(entry.slot().orElseThrow()).stackCopy()));
-            if (blocked
-                || deficits.values().stream().anyMatch(count -> count > 0)
-                || profile.entries().isEmpty() && profile.legacy().isPresent()) {
+            if (blocked || deficits.values().stream().anyMatch(count -> count > 0)) {
                 incomplete++;
             }
             ServerLevel level = (ServerLevel) body.level();

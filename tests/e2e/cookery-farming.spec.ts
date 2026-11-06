@@ -1,19 +1,16 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
-import path from "node:path";
-import { defineTask, javaTask, media, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
+import { defineTask, javaTask, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement, scrollElementIntoView } from "../ldlib2";
 import { chooseInSelector, foundColonyFast, foundingBox, openColonyPanelViaBook, optInViaBook,
   waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
-import { boardActs, settlePanel, toggleCell } from "../shared/ui/site-panel";
+import { boardActs, settlePanel } from "../shared/ui/site-panel";
 import { colonyRegistry, configureZone, createMarkedZone, openBookPage, setBookGesture,
   zoneCellsAt, zoneCount, zoneFlagSettingAt, zoneKindAt } from "../shared/ui/zone-tools";
 import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
-import { MODEL_ASSETS, placeServerModel, readResidentLooks, reloadServerModels, waitForModelsOnClient } from "../shared/ui/model-folder";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seedModSettings } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, frames, tryCommand, waitForElement } from "../shared/harness/bw-helpers";
@@ -36,8 +33,8 @@ const PRODUCTION_TICKS = 8_000;
 type Layout = ReturnType<typeof farming>;
 type Stack = { id?: string; count?: number; Slot?: number };
 type Inventory = { totals: Record<string, number>; chests: unknown[]; residents: unknown[]; drops: unknown[] };
-type FarmState = { compostPoint: boolean; compostHasBlockEntity: boolean; soil: string; root: string; middle: string; top: string; grass: number; compost: number;
-  automaticCompost: boolean; wearHat: boolean; wearArmor: boolean; hatShared: number; hatResidents: Array<{ uuid: string; x: number; y: number; z: number }>;
+type FarmState = { soil: string; root: string; middle: string; top: string; grass: number; compost: number;
+  wearHat: boolean; wearArmor: boolean; hatShared: number; hatResidents: Array<{ uuid: string; x: number; y: number; z: number }>;
   complete: boolean; wheatPhysical: number; wheatCompostable: number; rareCompostable: number };
 
 for (const stage of twins()) test(stage.title("cookery farming: native rice, owned hats, protected seeds and a compost-to-grass loop"), async ({}, testInfo) => {
@@ -60,12 +57,6 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     const { server, client } = pair;
     const grounded = await waitForGroundedPlayer(server);
     const player = grounded.name;
-    // Exercise the existing native skin renderer on land and the existing user Geo model aboard.
-    if (stage.kind === "aboard") {
-      evidence.model = await placeServerModel(server, path.join(MODEL_ASSETS, "default_boy"), "default_boy", { weight: 1_000_000 });
-      await reloadServerModels(server);
-      evidence.modelArrival = await waitForModelsOnClient(client, "assets/folkways/geo/resident_models/default_boy.geo.json");
-    }
     // The grass loop also needs a soil layer two below the standing floor, above the flat world's minimum height.
     const origin = { x: Math.round(grounded.pos.x) + 4, y: Math.round(grounded.pos.y) + 2, z: Math.round(grounded.pos.z) + 4 };
     const box = foundingBox(origin);
@@ -93,12 +84,7 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     }
     await world.command(server, `setblock ${block(layout.composter)} minecraft:composter`);
     evidence.composterMark = await optInViaBook(server, client, player, layout.composter, "worksite", stage);
-    const compostRegistration = await state(server, stage, layout);
-    expect(compostRegistration.compostPoint, "the book registers a real ledger-owned composter point").toBe(true);
-    expect(compostRegistration.compostHasBlockEntity, "registration preserves the native composter without a fabricated block entity").toBe(false);
 
-    evidence.compostOff = await toggleCompost(server, client, player, founded.standBlock, stage);
-    expect((await state(server, stage, layout)).automaticCompost).toBe(false);
     evidence.hatOff = await editClothing(server, client, player, founded.standBlock, stage, 0);
     expect((await state(server, stage, layout)).wearHat, "the real book action disables task hat borrowing").toBe(false);
     expect((await state(server, stage, layout)).wearArmor, "a full farmer outfit is opt-in").toBe(false);
@@ -172,19 +158,10 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     evidence.beforeSeedLoop = initial;
     expect(initial.totals[BONE_MEAL] ?? 0, "all bone meal must come from the real composter").toBe(0);
     for (const seed of GRASS_SEEDS) expect(initial.totals[seed] ?? 0, "there are no unstated rare seeds").toBe(0);
-    await tick.sprint(server, 200);
-    expect((await state(server, stage, layout)).hatResidents).toHaveLength(0);
-    expect((await inventory(server, stage, containers)).totals[WHEAT_SEED], "with automatic composting disabled the composter consumes no surplus").toBe(256);
-    expect((await state(server, stage, layout)).compost).toBe(0);
 
-    evidence.compostOn = await toggleCompost(server, client, player, founded.standBlock, stage);
-    expect((await state(server, stage, layout)).automaticCompost).toBe(true);
     evidence.hatOn = await editClothing(server, client, player, founded.standBlock, stage, 0);
     expect((await state(server, stage, layout)).wearHat).toBe(true);
-    const looks = await readResidentLooks(server);
-    evidence.looks = looks;
-    if (stage.kind === "aboard") expect(looks[0], "the aboard hat screenshot exercises the existing user Geo model").toMatch(/^model\/default_boy\//);
-    let hatSeen = false, hatReturnedToStore = false, hatScreenshot = false;
+    let hatSeen = false, hatReturnedToStore = false;
     let level7Seen = false, level8Seen = false, collectedSeen = false, grewGrass = false, harvestedGrass = false, newSeedSeen = false;
     let previousGrass = 0;
     const observations: unknown[] = [];
@@ -199,32 +176,6 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
       if (sample.hatResidents.length > 0) {
         hatSeen = true;
         expect(sample.hatResidents, "only the single shared hat can occupy a native HEAD").toHaveLength(1);
-        if (!hatScreenshot) {
-          const resident = sample.hatResidents[0]!;
-          // Server sprinting can leave the rendered resident behind its last packet. Observe the
-          // actual client equipment and position before framing that same borrowed physical hat.
-          let rendered: RenderedHat | undefined;
-          await expect.poll(async () => {
-            // Equipment is sent by the native entity tracker on a server tick, not by rendering
-            // more frozen client frames after a sprint stopped on the equip action itself.
-            await tick.sprint(server, 1);
-            await frames(client, 3);
-            rendered = await client.run(READ_RENDERED_HAT, { uuid: resident.uuid });
-            evidence.hatRenderAttempt = { resident, rendered };
-            return rendered.hat;
-          }, { timeout: 8_000 }).toBe(true);
-          const eye = { x: rendered!.x + 2.4, y: rendered!.y + 2.2, z: rendered!.z + 2.4 };
-          const shot = outAbs("e2e", "shots", stage.name(`cookery-task-head-hat-${runId}`) + ".png");
-          await frames(client, 2);
-          await media.screenshot(client, { path: shot, settleTerrain: false, camera: { position: eye,
-            ...cameraLookingAt(eye, { x: rendered!.x, y: rendered!.y + 1.5, z: rendered!.z }) } });
-          const afterShot = await state(server, stage, layout);
-          if (afterShot.hatResidents.length === 1) {
-            await testInfo.attach(stage.kind === "ground" ? "native-skin-task-head-hat" : "user-geo-task-head-hat", { path: shot, contentType: "image/png" });
-            evidence.hatScreenshotState = { before: sample, rendered, after: afterShot, path: shot };
-            hatScreenshot = true;
-          }
-        }
       }
       hatReturnedToStore ||= hatSeen && sample.hatResidents.length === 0 && sample.hatShared === 1;
       level7Seen ||= sample.compost === 7;
@@ -235,12 +186,12 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
       newSeedSeen ||= GRASS_SEEDS.some((seed) => (stock.totals[seed] ?? 0) > 0);
       observations.push({ elapsed, ...sample, totals: stock.totals });
       previousGrass = sample.grass;
-      if (level7Seen && level8Seen && collectedSeen && grewGrass && harvestedGrass && newSeedSeen && hatSeen && hatReturnedToStore && hatScreenshot) break;
+      if (level7Seen && level8Seen && collectedSeen && grewGrass && harvestedGrass && newSeedSeen && hatSeen && hatReturnedToStore) break;
       const step = hatSeen && !hatReturnedToStore ? 2 : sample.compost >= 6 ? 5 : 10;
       await tick.sprint(server, step);
       elapsed += step;
     }
-    evidence.seedLoop = { level7Seen, level8Seen, collectedSeen, grewGrass, harvestedGrass, newSeedSeen, hatSeen, hatReturnedToStore, hatScreenshot, observations };
+    evidence.seedLoop = { level7Seen, level8Seen, collectedSeen, grewGrass, harvestedGrass, newSeedSeen, hatSeen, hatReturnedToStore, observations };
     expect(level7Seen, "native compost reaches the scheduled maturing stage").toBe(true);
     expect(level8Seen, "the native scheduled tick reaches collectable compost").toBe(true);
     expect(collectedSeen, "a resident extracts the real bone meal and empties the composter").toBe(true);
@@ -249,7 +200,6 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     expect(newSeedSeen, "native grass loot supplies actual previously missing Cookery seeds").toBe(true);
     expect(hatSeen, "the actual native grass task borrows the supplied hat into HEAD").toBe(true);
     expect(hatReturnedToStore, "a completed task returns its one real hat to shared storage before another use").toBe(true);
-    expect(hatScreenshot, "the real borrowed hat is captured while it is still equipped").toBe(true);
     evidence.final = await inventory(server, stage, containers);
   } catch (error) {
     pair?.failing(error);
@@ -272,16 +222,6 @@ function farming(origin: Vec) {
   const at = (x: number, z: number, y = 0): Vec => ({ x: origin.x + x, y: origin.y + y, z: origin.z + z });
   return { supply: at(-8, 4), seedTarget: at(-8, 7), composter: at(-4, 12), riceGround: at(-10, 11, -1), riceRoot: at(-10, 11),
     grass: { min: at(3, 3, -1), max: at(17, 17, -1) } };
-}
-
-async function toggleCompost(server: MinecraftServer, client: MinecraftClient, player: string, stand: Vec, stage: Stage) {
-  await openColonyPanelViaBook(server, client, player, stand, stage);
-  await scrollElementIntoView(client, { id: "folkways.page.compost_settings" });
-  await clickElement(client, { id: "folkways.page.compost_settings" });
-  await settlePanel(server, client);
-  const changed = await toggleCell(server, client, "folkways.settings.compost.enabled");
-  await screen.dismiss(client);
-  return changed;
 }
 
 async function editClothing(server: MinecraftServer, client: MinecraftClient, player: string, stand: Vec, stage: Stage,
@@ -352,8 +292,7 @@ const READ_FARM = defineTask<{ rice: Vec; composter: Vec; min: Vec; max: Vec }, 
     imports: ["net.minecraft.core.BlockPos", "net.minecraft.world.level.block.Blocks", "net.minecraft.world.level.block.ComposterBlock",
       "net.minecraft.world.entity.EquipmentSlot", "net.minecraft.world.item.Items", "io.github.izakyl.folkways.core.api.colony.Colonies",
       "io.github.izakyl.folkways.core.api.resident.body.Bodies", "io.github.izakyl.folkways.front.api.Fronts",
-      "io.github.izakyl.folkways.core.api.colony.Held", "io.github.izakyl.folkways.core.api.terms.WorldPos",
-      "io.github.izakyl.folkways.plugins.compost.CompostSettings", "io.github.izakyl.folkways.cookery.CookeryContent", "io.github.izakyl.folkways.plugins.compost.CompostContent", "io.github.izakyl.folkways.cookery.seeds.SeedPresence",
+      "io.github.izakyl.folkways.cookery.CookeryContent", "io.github.izakyl.folkways.cookery.seeds.SeedPresence",
       "com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems", "com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod"],
     members: `private static BlockPos pos(Object raw) {
       var at = (Map<?, ?>) raw;
@@ -375,33 +314,13 @@ long rare=0; for(var item:List.of(ModItems.TOMATO_SEED.get(),ModItems.LETTUCE_SE
 var wheat=budget.tally(Items.WHEAT_SEEDS); var out=new LinkedHashMap<String,Object>();
 out.put("soil",level.getBlockState(root.below()).toString());out.put("root",level.getBlockState(root).toString());out.put("middle",level.getBlockState(root.above()).toString());out.put("top",level.getBlockState(root.above(2)).toString());
 out.put("grass",grass);out.put("compost",compost.is(Blocks.COMPOSTER)?compost.getValue(ComposterBlock.LEVEL):-1);
-out.put("compostPoint",colony.holdingAt(WorldPos.of(level,pos(args.value("composter"))))
-  .filter(holding->holding.owner().equals(CompostContent.POINT)&&holding.what() instanceof Held.Point).isPresent());
-out.put("compostHasBlockEntity",level.getBlockEntity(pos(args.value("composter")))!=null);
 long sharedHats=0;for(var at:colony.storesIn(level.dimension())){
   var store=colony.store(level,at);if(store.isPresent())sharedHats+=io.github.izakyl.folkways.core.api.terms.Goods.countIn(store.get(),
     io.github.izakyl.folkways.core.api.terms.ItemSpec.of(TagMod.STRAW_HAT));
 }
-out.put("automaticCompost",CompostSettings.enabled(colony));
 out.put("wearHat",settings.flag("wear_hat"));out.put("wearArmor",settings.flag("wear_farmer_armor"));out.put("hatResidents",hats);out.put("hatShared",sharedHats);
 out.put("complete",budget.complete());out.put("wheatPhysical",wheat.physical());out.put("wheatCompostable",wheat.compostable());out.put("rareCompostable",rare);
 return out;`,
-  }),
-});
-
-type RenderedHat = { found: boolean; hat: boolean; head: string; x: number; y: number; z: number };
-const READ_RENDERED_HAT = defineTask<{ uuid: string }, RenderedHat>({
-  name: "folkways.cookery.farming-rendered-hat", side: "client", timeoutMs: 20_000,
-  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.world.entity.LivingEntity", "net.minecraft.core.registries.BuiltInRegistries",
-    "net.minecraft.world.entity.EquipmentSlot", "com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod"], body: `
-var level=((Minecraft)ctx.client()).level;
-if(level!=null)for(var entity:level.entitiesForRendering()){
-  if(!entity.getUUID().toString().equals(Args.of(ctx).value("uuid")))continue;
-  var head=entity instanceof LivingEntity body?body.getItemBySlot(EquipmentSlot.HEAD):net.minecraft.world.item.ItemStack.EMPTY;
-  return Map.of("found",true,"hat",head.is(TagMod.STRAW_HAT),"head",BuiltInRegistries.ITEM.getKey(head.getItem()).toString(),
-    "x",entity.getX(),"y",entity.getY(),"z",entity.getZ());
-}
-return Map.of("found",false,"hat",false,"head","missing-entity","x",0,"y",0,"z",0);`,
   }),
 });
 

@@ -2,9 +2,9 @@ package io.github.izakyl.folkways.plugins.build;
 
 import com.google.gson.JsonParser;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.work.*;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Modifier;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
@@ -16,7 +16,6 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
@@ -60,12 +59,18 @@ public final class BuildingPerkGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void placedStoneCanBeProspectedRepeatedlyAtTheSamePosition(GameTestHelper helper) {
+    public static void prospectingAddsActualOreLootAndThirdRankCanFindASecondPortion(GameTestHelper helper) {
         var level = helper.getLevel();
         Worker worker = worker(PersonBody.RESIDENT.get().create(level), Effects.of(List.of(
-            new Effects.Part("test", Modifier.add(BuildingPerks.PROSPECTING, 1)))));
-        var pos = helper.absolutePos(new BlockPos(1, 1, 1)).atY(-59);
+            new Effects.Part("test", Modifier.add(BuildingPerks.PROSPECTING, 1)),
+            new Effects.Part("test", Modifier.add(BuildingPerks.SECOND_FIND, 1)))));
+        var pos = helper.absolutePos(new BlockPos(2, 1, 2)).atY(-59);
         var stone = Blocks.DEEPSLATE.defaultBlockState();
+        var found = BuildingPerks.discoveries(level, worker, pos, stone);
+        helper.assertTrue(found.size() == 2, "a successful extra-find roll yields two portions of actual mineral loot");
+        helper.assertTrue(found.get(0).is(found.get(1).getItem()), "both portions come from the same locally selected ore");
+        helper.assertTrue(BuildingPerks.discoveries(level, worker, pos, stone).size() == 2,
+            "the same position can yield another mineral find");
         for (int attempt = 0; attempt < 3; attempt++) {
             level.setBlock(pos, stone, 3);
             level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
@@ -74,19 +79,6 @@ public final class BuildingPerkGameTests {
         }
         helper.assertTrue(BuildingPerks.discoveries(level, worker, pos, Blocks.DIRT.defaultBlockState()).isEmpty(),
             "prospecting still requires eligible stone");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void prospectingAddsActualOreLootAndThirdRankCanFindASecondPortion(GameTestHelper helper) {
-        Worker worker = worker(PersonBody.RESIDENT.get().create(helper.getLevel()), Effects.of(List.of(
-            new Effects.Part("test", Modifier.add(BuildingPerks.PROSPECTING, 1)),
-            new Effects.Part("test", Modifier.add(BuildingPerks.SECOND_FIND, 1)))));
-        var pos = helper.absolutePos(new BlockPos(2, 1, 2)).atY(-59);
-        var found = BuildingPerks.discoveries(helper.getLevel(), worker, pos, Blocks.DEEPSLATE.defaultBlockState());
-        helper.assertTrue(found.size() == 2, "a successful extra-find roll yields two portions of actual mineral loot");
-        helper.assertTrue(found.get(0).is(found.get(1).getItem()), "both portions come from the same locally selected ore");
-        helper.assertTrue(BuildingPerks.discoveries(helper.getLevel(), worker, pos, Blocks.DEEPSLATE.defaultBlockState()).size() == 2, "the same position can yield another mineral find");
         helper.succeed();
     }
 
@@ -166,16 +158,6 @@ public final class BuildingPerkGameTests {
 
     private static Worker worker(Body body, Effects effects) {
         Container pack = new SimpleContainer();
-        return new Worker() {
-            public Resident resident() { return body.resident(); }
-            public Mob body() { return body.mob(); }
-            public Container pack() { return pack; }
-            public List<Store> within() { return List.of(); }
-            public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-            public void spill(ItemStack stack) { throw new AssertionError("unexpected spill"); }
-            public Effects effects() { return effects; }
-            public List<Node> route() { return List.of(); }
-            public Placement placement() { return Placement.NOWHERE; }
-        };
+        return TestWorker.of(body).pack(pack).effects(effects);
     }
 }

@@ -1,12 +1,14 @@
-import { expect, test, type TestInfo } from "@playwright/test";
-import { defineTask, input, javaTask, media, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { expect, test } from "@playwright/test";
+import { defineTask, input, javaTask, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements } from "../ldlib2";
 import { createColonyViaBook, foundColonyFast, openColonyPanelViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
+import { BUDGET } from "../shared/harness/budgets";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { newRunId } from "../shared/harness/run-id";
 import { clickTab } from "../shared/ui/colony-pages";
 import { frames } from "../shared/harness/bw-helpers";
 import { mustCommand } from "../shared/ui/world-ui";
+import { foundBookColony, layFloor, pickRtsTool, tapV } from "../shared/combat/overhead";
 
 type Vec = { x: number; y: number; z: number };
 type CameraReading = {
@@ -27,21 +29,20 @@ type CameraReading = {
   global: boolean;
 };
 
-const KEY_V = 86;
 const SETTINGS_PAGE = "folkways.tab.settings";
 const GLOBAL_SETTING = "folkways.settings.global_tactical_controls";
 const COMBAT_PAGE = "folkways:combat";
 const COMBAT_SUMMARY = "folkways.combat.summary";
+const PERSONAL_TOGGLE = /Use tactical camera controls for all overhead tools|全局战斗视角操作逻辑/i;
 
-test("the combat overhead tool opens its real page and routes middle drags to tactical camera controls", async ({}, testInfo) => {
-  test.setTimeout(420_000);
+test("the native config screen and shortcut set the camera account toggle, and the combat tool opens its page and routes middle drags to tactical controls", async ({}, testInfo) => {
+  test.setTimeout(BUDGET.quick);
+  const run = newRunId();
   let pair: E2EPair | undefined;
-  let colonyId = "";
-  let residents: string[] = [];
-  const evidence: Record<string, unknown> = { expectedDefault: false };
+  let testOtherUuid = "";
+  let testOtherBefore = false;
 
   try {
-    const run = newRunId();
     pair = await launchPair({
       config: "blockwright.toml#rts",
       server: { instance: `combat-camera-input-server-${run}` },
@@ -52,263 +53,67 @@ test("the combat overhead tool opens its real page and routes middle drags to ta
     const player = await waitForGroundedPlayer(server);
     const origin: Vec = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };
     await prepareGround(server, origin);
-    const founding = await foundColonyFast(server, client, player.name, { origin, residentCount: 2 });
-    colonyId = String(founding.evidence.colonyId);
-    residents = await residentIds(server, colonyId);
+    const { colony: colonyId } = await foundBookColony(server, client, player.name, origin, 2);
+    const residents = await residentIds(server, colonyId);
     expect(residents).toHaveLength(2);
-    await openColonyPanelViaBook(server, client, player.name, founding.standBlock);
-    await screen.dismiss(client);
-    await tapV(client);
-    await frames(client, 4);
 
-    const initial = await camera(client);
-    evidence.initial = initial;
-    expect(initial.active).toBe(true);
-    expect(initial.account).not.toBe("");
-    expect(initial.global, "a fresh client profile must default to the per-tool camera policy").toBe(false);
-    expect(initial.tactical, "the ordinary V view stays in its legacy camera mode by default").toBe(false);
-    expect(initial.tool).toBe("");
-
-    const viewport = await screen.waitFor(client, "OverheadScreen", { timeoutMs: 5_000 });
-    const center = { x: Math.floor(viewport.width / 2), y: Math.floor(viewport.height / 2) };
-    const legacyDrag = await input.drag(client, {
-      from: { x: center.x - 35, y: center.y - 18 },
-      to: { x: center.x + 35, y: center.y + 18 },
-      steps: 8,
-      button: "middle",
-    });
-    await frames(client, 3);
-    const legacyAfter = await camera(client);
-    evidence.legacy = { drag: legacyDrag, after: legacyAfter };
-    expect(legacyDrag.pressArmed).toBe(true);
-    expect(legacyAfter.tactical).toBe(false);
-    expect(Math.hypot(legacyAfter.x - initial.x, legacyAfter.y - initial.y, legacyAfter.z - initial.z),
-      "MMB on the ordinary V view rotates without panning the camera").toBeLessThan(0.08);
-    expect(Math.abs(angleDelta(legacyAfter.yaw, initial.yaw)) + Math.abs(legacyAfter.pitch - initial.pitch),
-      "the real MMB drag must change the legacy view orientation").toBeGreaterThan(8);
-
-    const widgets = await screen.widgets(client);
-    const combatTool = widgets.find(widget => /^RTS$/.test(widget.label?.trim() ?? ""));
-    expect(combatTool, "the real overhead toolbar must expose the combat tool chip").toBeTruthy();
-    await screen.clickWidget(client, { label: combatTool!.label });
-    await frames(client, 3);
-    const selected = await camera(client);
-    evidence.selectedCombatTool = selected;
-    expect(selected.tool).toBe(COMBAT_PAGE);
-    expect(selected.global).toBe(false);
-    expect(selected.tactical, "the combat tool requests tactical camera controls independently of the personal setting").toBe(true);
-
-    // The page-opening packet still has to prove possession of this colony book and name a registered page.
-    // These two invalid requests are sent through the actual client network path; they must leave the overhead screen intact.
-    await client.run(ATTEMPT_OPEN_PAGE, { colony: colonyId, page: "folkways:missing_page" });
-    await tick.sprint(server, 2);
-    await frames(client, 4);
-    const unknownPageScreen = await screen.current(client);
-    evidence.unknownPageRejected = { screen: unknownPageScreen, camera: await camera(client) };
-    expect(unknownPageScreen?.className).toContain("OverheadScreen");
-    expect((await camera(client)).tool).toBe(COMBAT_PAGE);
-
-    await client.run(ATTEMPT_OPEN_PAGE, { colony: "00000000-0000-0000-0000-000000000001", page: COMBAT_PAGE });
-    await tick.sprint(server, 2);
-    await frames(client, 4);
-    const wrongColonyScreen = await screen.current(client);
-    evidence.wrongColonyRejected = { screen: wrongColonyScreen, camera: await camera(client) };
-    expect(wrongColonyScreen?.className).toContain("OverheadScreen");
-    expect((await camera(client)).tool).toBe(COMBAT_PAGE);
-
-    // The RTS tool's explicit page button opens its registered commands page.
-    const pageClick = await screen.clickWidget(client, { label: "Squads and commands" });
-    await waitForCombatPanel(client);
-    const combatUi = await panelElements(client);
-    evidence.combatPage = { click: pageClick, tokens: combatUi.filter(element => element.id?.startsWith("folkways.combat")) };
-    expect(combatUi.some(element => element.id === COMBAT_SUMMARY),
-      "the combat chip action must open the registered combat page").toBe(true);
-    await capture(client, testInfo, "combat-camera-combat-page.png");
-    await screen.dismiss(client);
-    await frames(client, 5);
-    const returned = await camera(client);
-    evidence.returnedToOverhead = returned;
-    expect(returned.active, "closing the combat page returns to the same overhead camera").toBe(true);
-    expect(returned.tool).toBe(COMBAT_PAGE);
-    expect(distance3(returned, selected)).toBeLessThan(0.08);
-
-    const beforePan = await camera(client);
-    const pan = await dragMiddle(client, center, false);
-    await frames(client, 3);
-    const afterPan = await camera(client);
-    evidence.pan = { drag: pan, before: beforePan, after: afterPan };
-    expect(pan.pressArmed).toBe(true);
-    expect(distance3(afterPan, beforePan), "combat MMB must translate the overhead camera").toBeGreaterThan(0.2);
-    expect(Math.abs(angleDelta(afterPan.yaw, beforePan.yaw)) + Math.abs(afterPan.pitch - beforePan.pitch),
-      "plain combat MMB pan must keep the camera orientation").toBeLessThan(0.25);
-    expect(afterPan.focusPresent, "tactical drag must acquire a real world focus").toBe(true);
-
-    const orbitStart = await camera(client);
-    const orbit = await dragMiddle(client, center, true);
-    await frames(client, 3);
-    const orbitEnd = await camera(client);
-    evidence.orbit = { drag: orbit, before: orbitStart, after: orbitEnd };
-    expect(orbit.pressArmed).toBe(true);
-    expect(Math.abs(angleDelta(orbitEnd.yaw, orbitStart.yaw)) + Math.abs(orbitEnd.pitch - orbitStart.pitch),
-      "Alt+MMB must orbit the camera around its acquired focus").toBeGreaterThan(8);
-    expect(distance3(orbitEnd, orbitStart), "orbiting changes the camera position").toBeGreaterThan(0.2);
-    expect(focusDistance(orbitEnd, orbitStart), "the actual world focus stays fixed while orbiting").toBeLessThan(0.35);
-    expect(Math.abs(focusRadius(orbitEnd) - focusRadius(orbitStart)),
-      "orbiting preserves the camera's radius around its real focus").toBeLessThan(0.35);
-
-    // No overhead camera gesture may become a colony click: the same two real resident IDs remain registered.
-    const membershipAfter = await residentIds(server, colonyId);
-    evidence.membersAfterDrags = membershipAfter;
-    expect(membershipAfter).toEqual(residents);
-
-    await mustCommand(server, `item replace entity ${player.name} weapon.mainhand with minecraft:air`);
-    await tick.sprint(server, 2);
-    await expect.poll(async () => (await camera(client)).active, {
-      timeout: 10_000,
-      message: "losing the held colony book must end the overhead camera",
-    }).toBe(false);
-    await frames(client, 3);
-    evidence.afterAuthorityLoss = { camera: await camera(client), screen: await screen.current(client), residents: await residentIds(server, colonyId) };
-    expect((evidence.afterAuthorityLoss as any).screen).toBeNull();
-    expect((evidence.afterAuthorityLoss as any).residents).toEqual(residents);
-  } catch (error) {
-    await captureFailure(pair?.client, testInfo, "combat-camera-input-failure.png");
-    pair?.failing(error);
-    throw error;
-  } finally {
-    await testInfo.attach("combat-camera-input-evidence.json", {
-      body: JSON.stringify(evidence, null, 2),
-      contentType: "application/json",
-    });
-    await pair?.teardown(testInfo);
-  }
-});
-
-test("the registered native config screen saves the account toggle and its real shortcut respects text focus", async ({}, testInfo) => {
-  test.setTimeout(360_000);
-  const run = newRunId();
-  let pair: E2EPair | undefined;
-  let initialPreference = false;
-  let testOtherUuid = "";
-  let testOtherBefore = false;
-  const evidence: Record<string, unknown> = { otherUuidEvidence: "configuration API isolation only; no second profile login was launched" };
-
-  try {
-    pair = await launchPair({
-      config: "blockwright.toml#rts",
-      server: { instance: `combat-camera-config-server-${run}` },
-      client: { instance: `combat-camera-config-client-${run}` },
-    });
-    const { server, client } = pair;
-    const player = await waitForGroundedPlayer(server);
-    const origin: Vec = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };
-    await prepareGround(server, origin);
-    const founding = await foundColonyFast(server, client, player.name, { origin, residentCount: 1 });
-    await openColonyPanelViaBook(server, client, player.name, founding.standBlock);
-    await screen.dismiss(client);
-
+    // The registered native config screen edits the current account's toggle only.
     const prepared = await client.run(PREPARE_NATIVE_CONFIG_TEST);
-    initialPreference = prepared.initialPreference;
     testOtherUuid = prepared.otherUuid;
     testOtherBefore = prepared.otherBefore;
-    evidence.configIdentity = prepared;
     expect(prepared.account).not.toBe("");
     expect(prepared.otherUuid).not.toBe(prepared.account);
     expect(prepared.otherEnabled).toBe(true);
-    expect(initialPreference, "a fresh client fixture starts with the personal control disabled").toBe(false);
+    expect(prepared.initialPreference, "a fresh client fixture starts with the personal control disabled").toBe(false);
 
     const opened = await client.run(OPEN_REGISTERED_CONFIG_FACTORY);
-    evidence.factory = opened;
     expect(opened.factoryRegistered).toBe(true);
     expect(opened.screen).toContain("ConfigurationScreen");
     expect(opened.keyUnbound, "the newly registered shortcut must start unbound").toBe(true);
-
-    await clickNativeLabel(client, /\bClient\b/i);
-    await frames(client, 3);
-    evidence.clientConfigWidgets = await nativeWidgets(client);
-    await clickNativeLabel(client, /Personal settings|个人设置/i);
-    await frames(client, 3);
-    const personalWidgets = await nativeWidgets(client);
-    evidence.personalConfigWidgets = personalWidgets;
-    expect(personalWidgets.some(widget => /Use tactical camera controls for all overhead tools|全局战斗视角操作逻辑/i.test(widget.label ?? "")),
+    await openPersonalSettings(client);
+    expect((await nativeWidgets(client)).some(widget => PERSONAL_TOGGLE.test(widget.label ?? "")),
       "the registered Client config screen must expose the real current-account toggle").toBe(true);
-    await input.move(client, { x: 0, y: 0 });
-    await frames(client, 2);
-    await capture(client, testInfo, "combat-camera-native-config.png");
 
-    await clickNativeLabel(client, /Use tactical camera controls for all overhead tools|全局战斗视角操作逻辑/i);
-    await expect.poll(async () => (await camera(client)).global, { timeout: 10_000 }).toBe(!initialPreference);
-    evidence.stagedToggle = { camera: await camera(client), widgets: await nativeWidgets(client) };
+    await clickNativeLabel(client, PERSONAL_TOGGLE);
+    await expect.poll(async () => (await camera(client)).global, { timeout: 10_000 }).toBe(true);
     await clickNativeLabel(client, /\bReset\b|重置/i);
     const resetState = await client.run(READ_CONFIG_TEST_ACCOUNTS, { otherUuid: testOtherUuid });
-    evidence.afterReset = { state: resetState, widgets: await nativeWidgets(client) };
     expect(resetState.currentPreference).toBe(false);
     expect(resetState.otherPreference, "Reset must not clear another profile's setting").toBe(true);
 
     await clickNativeLabel(client, /\bUndo\b|撤销/i);
     const undoState = await client.run(READ_CONFIG_TEST_ACCOUNTS, { otherUuid: testOtherUuid });
-    evidence.afterUndo = { state: undoState, widgets: await nativeWidgets(client) };
-    expect(undoState.currentPreference).toBe(!initialPreference);
+    expect(undoState.currentPreference).toBe(true);
     expect(undoState.otherPreference).toBe(true);
-    await clickNativeLabel(client, /\bDone\b|完成/i);
-    await frames(client, 4);
-    // The section's Done returns to the config-type screen; its Done returns to the parent.
-    for (let depth = 0; depth < 2; depth++) {
-      const current = await screen.current(client);
-      if (!/(?:ConfigurationScreen|PersonalCameraConfigScreen)/.test(current?.className ?? "")) break;
-      const widgets = await nativeWidgets(client);
-      if (!widgets.some(widget => /\bDone\b|完成/i.test(widget.label ?? ""))) break;
-      await clickNativeLabel(client, /\bDone\b|完成/i);
-      await frames(client, 3);
-    }
-    evidence.afterDone = { screen: await screen.current(client), accounts: await client.run(READ_CONFIG_TEST_ACCOUNTS, { otherUuid: testOtherUuid }) };
-    expect((evidence.afterDone as any).accounts.currentPreference).toBe(!initialPreference);
-    expect((evidence.afterDone as any).accounts.otherPreference).toBe(true);
+    await leaveConfig(client);
+    const afterDone = await client.run(READ_CONFIG_TEST_ACCOUNTS, { otherUuid: testOtherUuid });
+    expect(afterDone.currentPreference).toBe(true);
+    expect(afterDone.otherPreference).toBe(true);
 
     const reopen = await client.run(OPEN_REGISTERED_CONFIG_FACTORY);
-    evidence.reopenedFactory = reopen;
-    expect(reopen.currentPreference).toBe(!initialPreference);
-    await clickNativeLabel(client, /\bClient\b/i);
-    await frames(client, 3);
-    await clickNativeLabel(client, /Personal settings|个人设置/i);
-    await frames(client, 3);
-    const reopenedWidgets = await nativeWidgets(client);
-    evidence.reopenedPersonalWidgets = reopenedWidgets;
-    const reopenedControl = nativeControl(reopenedWidgets, /Use tactical camera controls for all overhead tools|全局战斗视角操作逻辑/i);
-    expect(reopenedControl?.value, "reopening the native config page must show the saved current-account value").toBe("true");
-    await input.move(client, { x: 0, y: 0 });
-    await frames(client, 2);
-    await capture(client, testInfo, "combat-camera-native-config-on.png");
-    await clickNativeLabel(client, /\bDone\b|完成/i);
-    await frames(client, 3);
-    for (let depth = 0; depth < 2; depth++) {
-      const current = await screen.current(client);
-      if (!/(?:ConfigurationScreen|PersonalCameraConfigScreen)/.test(current?.className ?? "")) break;
-      const widgets = await nativeWidgets(client);
-      if (!widgets.some(widget => /\bDone\b|完成/i.test(widget.label ?? ""))) break;
-      await clickNativeLabel(client, /\bDone\b|完成/i);
-      await frames(client, 3);
-    }
+    expect(reopen.currentPreference).toBe(true);
+    await openPersonalSettings(client);
+    expect(nativeControl(await nativeWidgets(client), PERSONAL_TOGGLE)?.value,
+      "reopening the native config page must show the saved current-account value").toBe("true");
+    await leaveConfig(client);
 
     await client.run(BIND_CAMERA_SHORTCUT, { keyCode: KEY_TAB });
     await tapV(client);
     const overhead = await screen.waitFor(client, "OverheadScreen", { timeoutMs: 8_000 });
     const beforeShortcut = await camera(client);
-    const shortcutPress = await input.key(client, { keyCode: KEY_TAB, action: "press" });
+    await input.key(client, { keyCode: KEY_TAB, action: "press" });
     await frames(client, 3);
     const afterShortcutPress = await camera(client);
-    const shortcutRepeat = await input.key(client, { keyCode: KEY_TAB, action: "repeat" });
+    await input.key(client, { keyCode: KEY_TAB, action: "repeat" });
     await frames(client, 2);
     const afterShortcutRepeat = await camera(client);
-    const shortcutRelease = await input.key(client, { keyCode: KEY_TAB, action: "release" });
+    await input.key(client, { keyCode: KEY_TAB, action: "release" });
     await frames(client, 2);
     const afterShortcut = await camera(client);
-    evidence.shortcut = { overhead, shortcutPress, shortcutRepeat, shortcutRelease, before: beforeShortcut,
-      afterPress: afterShortcutPress, afterRepeat: afterShortcutRepeat, afterRelease: afterShortcut };
-    expect(beforeShortcut.global).toBe(!initialPreference);
-    expect(afterShortcutPress.global).toBe(initialPreference);
-    expect(afterShortcutRepeat.global, "a held-key repeat must not toggle a second time").toBe(initialPreference);
-    expect(afterShortcut.global).toBe(initialPreference);
+    expect(beforeShortcut.global).toBe(true);
+    expect(afterShortcutPress.global).toBe(false);
+    expect(afterShortcutRepeat.global, "a held-key repeat must not toggle a second time").toBe(false);
+    expect(afterShortcut.global).toBe(false);
     expect(afterShortcut.tool).toBe(beforeShortcut.tool);
     expect(afterShortcut.gesture, "a bound Tab shortcut must not also cycle the old book gesture").toBe(beforeShortcut.gesture);
     expect((await screen.current(client))?.className).toContain("OverheadScreen");
@@ -331,7 +136,6 @@ test("the registered native config screen saves the account toggle and its real 
       await input.move(client, { x: center.x + 40, y: center.y + 15 });
       await frames(client, 3);
       const continued = await camera(client);
-      evidence.profileChangedDuringOrbit = { started, toggledDuringDrag, continued };
       expect(distance3(continued, started), "the orbit must continue after toggling the global setting off").toBeGreaterThan(0.2);
       expect(focusDistance(continued, started)).toBeLessThan(0.35);
     } finally {
@@ -344,36 +148,119 @@ test("the registered native config screen saves the account toggle and its real 
     await client.run(BIND_CAMERA_SHORTCUT, { keyCode: KEY_K });
     await screen.dismiss(client);
     await input.key(client, { keybind: "key.chat" });
-    const chat = await screen.waitFor(client, "ChatScreen", { timeoutMs: 8_000 });
+    await screen.waitFor(client, "ChatScreen", { timeoutMs: 8_000 });
     const chatBefore = await camera(client);
-    const chatKeyPress = await input.key(client, { keyCode: KEY_K, action: "press" });
-    const chatKeyRelease = await input.key(client, { keyCode: KEY_K, action: "release" });
-    const chatCharacter = await input.key(client, { text: "k" });
+    await input.key(client, { keyCode: KEY_K, action: "press" });
+    await input.key(client, { keyCode: KEY_K, action: "release" });
+    await input.key(client, { text: "k" });
     await frames(client, 2);
     const chatWidgets = await nativeWidgets(client);
-    const chatAfter = await camera(client);
-    evidence.chatFocus = { chat, press: chatKeyPress, release: chatKeyRelease, character: chatCharacter,
-      widgets: chatWidgets, before: chatBefore, after: chatAfter };
-    expect(chatAfter.global, "a shortcut key typed into chat must not toggle the account setting").toBe(chatBefore.global);
+    expect((await camera(client)).global, "a shortcut key typed into chat must not toggle the account setting").toBe(chatBefore.global);
     expect(chatWidgets.some(widget => /EditBox/.test(widget.className + " " + ("superClassName" in widget ? widget.superClassName : ""))
       && (widget.value ?? "").toLowerCase().includes("k")),
       "the same real key press should remain ordinary chat text while chat has focus").toBe(true);
+    await screen.dismiss(client);
+
+    // With the personal setting off again, the ordinary V view keeps its legacy camera.
+    await tapV(client);
+    await frames(client, 4);
+    const initial = await camera(client);
+    expect(initial.active).toBe(true);
+    expect(initial.account).not.toBe("");
+    expect(initial.global).toBe(false);
+    expect(initial.tactical, "the ordinary V view stays in its legacy camera mode by default").toBe(false);
+    expect(initial.tool).toBe("");
+
+    const viewport = await screen.waitFor(client, "OverheadScreen", { timeoutMs: 5_000 });
+    const middle = { x: Math.floor(viewport.width / 2), y: Math.floor(viewport.height / 2) };
+    const legacyDrag = await input.drag(client, {
+      from: { x: middle.x - 35, y: middle.y - 18 },
+      to: { x: middle.x + 35, y: middle.y + 18 },
+      steps: 8,
+      button: "middle",
+    });
+    await frames(client, 3);
+    const legacyAfter = await camera(client);
+    expect(legacyDrag.pressArmed).toBe(true);
+    expect(legacyAfter.tactical).toBe(false);
+    expect(Math.hypot(legacyAfter.x - initial.x, legacyAfter.y - initial.y, legacyAfter.z - initial.z),
+      "MMB on the ordinary V view rotates without panning the camera").toBeLessThan(0.08);
+    expect(Math.abs(angleDelta(legacyAfter.yaw, initial.yaw)) + Math.abs(legacyAfter.pitch - initial.pitch),
+      "the real MMB drag must change the legacy view orientation").toBeGreaterThan(8);
+
+    await pickRtsTool(client);
+    await frames(client, 3);
+    const selected = await camera(client);
+    expect(selected.tool).toBe(COMBAT_PAGE);
+    expect(selected.global).toBe(false);
+    expect(selected.tactical, "the combat tool requests tactical camera controls independently of the personal setting").toBe(true);
+
+    // The page-opening packet still has to prove possession of this colony book and name a registered page.
+    // These two invalid requests are sent through the actual client network path; they must leave the overhead screen intact.
+    for (const request of [{ colony: colonyId, page: "folkways:missing_page" },
+      { colony: "00000000-0000-0000-0000-000000000001", page: COMBAT_PAGE }]) {
+      await client.run(ATTEMPT_OPEN_PAGE, request);
+      await tick.sprint(server, 2);
+      await frames(client, 4);
+      expect((await screen.current(client))?.className, `${JSON.stringify(request)} must be refused`).toContain("OverheadScreen");
+      expect((await camera(client)).tool).toBe(COMBAT_PAGE);
+    }
+
+    // The RTS tool's explicit page button opens its registered commands page.
+    await screen.clickWidget(client, { label: "Squads and commands" });
+    await waitForCombatPanel(client);
+    await screen.dismiss(client);
+    await frames(client, 5);
+    const returned = await camera(client);
+    expect(returned.active, "closing the combat page returns to the same overhead camera").toBe(true);
+    expect(returned.tool).toBe(COMBAT_PAGE);
+    expect(distance3(returned, selected)).toBeLessThan(0.08);
+
+    const beforePan = await camera(client);
+    const pan = await dragMiddle(client, middle, false);
+    await frames(client, 3);
+    const afterPan = await camera(client);
+    expect(pan.pressArmed).toBe(true);
+    expect(distance3(afterPan, beforePan), "combat MMB must translate the overhead camera").toBeGreaterThan(0.2);
+    expect(Math.abs(angleDelta(afterPan.yaw, beforePan.yaw)) + Math.abs(afterPan.pitch - beforePan.pitch),
+      "plain combat MMB pan must keep the camera orientation").toBeLessThan(0.25);
+    expect(afterPan.focusPresent, "tactical drag must acquire a real world focus").toBe(true);
+
+    const orbitStart = await camera(client);
+    const orbit = await dragMiddle(client, middle, true);
+    await frames(client, 3);
+    const orbitEnd = await camera(client);
+    expect(orbit.pressArmed).toBe(true);
+    expect(Math.abs(angleDelta(orbitEnd.yaw, orbitStart.yaw)) + Math.abs(orbitEnd.pitch - orbitStart.pitch),
+      "Alt+MMB must orbit the camera around its acquired focus").toBeGreaterThan(8);
+    expect(distance3(orbitEnd, orbitStart), "orbiting changes the camera position").toBeGreaterThan(0.2);
+    expect(focusDistance(orbitEnd, orbitStart), "the actual world focus stays fixed while orbiting").toBeLessThan(0.35);
+    expect(Math.abs(focusRadius(orbitEnd) - focusRadius(orbitStart)),
+      "orbiting preserves the camera's radius around its real focus").toBeLessThan(0.35);
+
+    // No overhead camera gesture may become a colony click: the same two real resident IDs remain registered.
+    expect(await residentIds(server, colonyId)).toEqual(residents);
+
+    await mustCommand(server, `item replace entity ${player.name} weapon.mainhand with minecraft:air`);
+    await tick.sprint(server, 2);
+    await expect.poll(async () => (await camera(client)).active, {
+      timeout: 10_000,
+      message: "losing the held colony book must end the overhead camera",
+    }).toBe(false);
+    await frames(client, 3);
+    expect(await screen.current(client)).toBeNull();
+    expect(await residentIds(server, colonyId)).toEqual(residents);
   } catch (error) {
-    await captureFailure(pair?.client, testInfo, "combat-camera-native-config-failure.png");
     pair?.failing(error);
     throw error;
   } finally {
     if (pair) {
       try { await pair.client.run(RESTORE_CAMERA_SHORTCUT); } catch { /* Preserve primary failure evidence. */ }
-      try { await pair.client.run(SET_PERSONAL_PREFERENCE, { on: initialPreference }); } catch { /* Preserve primary failure evidence. */ }
+      try { await pair.client.run(SET_PERSONAL_PREFERENCE, { on: false }); } catch { /* Preserve primary failure evidence. */ }
       if (testOtherUuid) {
         try { await pair.client.run(RESTORE_CONFIG_TEST_UUID, { otherUuid: testOtherUuid, on: testOtherBefore }); } catch { /* Preserve primary failure evidence. */ }
       }
     }
-    await testInfo.attach("combat-camera-native-config-evidence.json", {
-      body: JSON.stringify(evidence, null, 2),
-      contentType: "application/json",
-    });
     await pair?.teardown(testInfo);
   }
 });
@@ -385,7 +272,6 @@ test("the personal tactical camera preference follows the account across colonie
   const clientOptions = { instance: `combat-camera-persistence-client-${run}`, keepInstanceDir: true };
   let pair: E2EPair | undefined;
   let initialPreference = false;
-  const evidence: Record<string, unknown> = { isolationEvidence: "configuration API only; no second Minecraft login was launched" };
 
   try {
     pair = await launchPair({
@@ -400,54 +286,37 @@ test("the personal tactical camera preference follows the account across colonie
     const firstId = String(first.evidence.colonyId);
     const initial = await camera(client);
     initialPreference = initial.global;
-    evidence.firstColony = { colony: firstId, account: initial.account, initialPreference: initialPreference };
     expect(initial.account).not.toBe("");
     expect(initialPreference, "fresh client instances should have global tactical controls off").toBe(false);
 
     // Use the actual colony-book Settings page toggle and wait for its client-local state to change.
     await openColonyPanelViaBook(server, client, player.name, first.standBlock);
     await clickTab(client, SETTINGS_PAGE);
-    const settingsBefore = await panelElements(client);
-    const settingBefore = settingsBefore.find(element => element.id === GLOBAL_SETTING);
+    const settingBefore = (await panelElements(client)).find(element => element.id === GLOBAL_SETTING);
     expect(settingBefore?.displayed && settingBefore.active,
       "the Settings page must expose an actionable personal switch").toBe(true);
-    await capture(client, testInfo, "combat-camera-settings-off.png");
     await clickElement(client, { id: GLOBAL_SETTING });
     await expect.poll(async () => (await camera(client)).global, {
       timeout: 10_000,
       message: "clicking the real book setting must update the personal camera flag immediately",
     }).toBe(true);
-    const settingsAfter = await panelElements(client);
-    evidence.settings = { before: settingsBefore.find(element => element.id === GLOBAL_SETTING), after: settingsAfter.find(element => element.id === GLOBAL_SETTING) };
-    await capture(client, testInfo, "combat-camera-settings-on.png");
-
-    const configIsolation = await client.run(CONFIG_ISOLATION);
-    evidence.otherUuidIsolation = configIsolation;
-    expect(configIsolation.currentAccount).toBeTruthy();
-    expect(configIsolation.differentAccount).not.toBe(configIsolation.currentAccount);
-    expect(configIsolation.enabledForOther).toBe(true);
-    expect(configIsolation.currentStayedEnabled).toBe(true);
-    expect(configIsolation.restoredOther).toBe(configIsolation.otherBefore);
 
     await screen.dismiss(client);
     await createColonyViaBook(server, client, player.name, first.standBlock);
     const secondId = await currentColonyId(server, player.name);
-    evidence.secondColony = { colony: secondId, createdThroughBook: true };
     expect(secondId).not.toBe(firstId);
     await openColonyPanelViaBook(server, client, player.name, first.standBlock);
     await screen.dismiss(client);
     await tapV(client);
     await frames(client, 4);
     const secondColonyCamera = await camera(client);
-    evidence.secondColonyCamera = secondColonyCamera;
     expect(secondColonyCamera.global).toBe(true);
     expect(secondColonyCamera.tactical, "the personal setting applies to the ordinary V tool while acting for another colony").toBe(true);
     const viewport = await screen.waitFor(client, "OverheadScreen", { timeoutMs: 5_000 });
     const center = { x: Math.floor(viewport.width / 2), y: Math.floor(viewport.height / 2) };
-    const globalDrag = await dragMiddle(client, center, false);
+    await dragMiddle(client, center, false);
     await frames(client, 3);
     const globalAfterDrag = await camera(client);
-    evidence.globalTacticalDrag = { drag: globalDrag, after: globalAfterDrag };
     expect(distance3(globalAfterDrag, secondColonyCamera), "the global account preference makes ordinary-tool MMB pan").toBeGreaterThan(0.2);
     expect(Math.abs(angleDelta(globalAfterDrag.yaw, secondColonyCamera.yaw)) + Math.abs(globalAfterDrag.pitch - secondColonyCamera.pitch)).toBeLessThan(0.25);
     await tapV(client);
@@ -465,34 +334,25 @@ test("the personal tactical camera preference follows the account across colonie
     server = pair.server;
     client = pair.client;
     const restarted = await camera(client);
-    evidence.afterRestart = restarted;
     expect(restarted.account, "the same client instance must load the same Minecraft profile").toBe(initial.account);
     expect(restarted.global, "the saved per-profile preference must survive a real client restart").toBe(true);
     await tapV(client);
     await frames(client, 4);
     const restartedCamera = await camera(client);
-    evidence.reopenedAfterRestart = restartedCamera;
     expect(restartedCamera.active).toBe(true);
     expect(restartedCamera.tactical).toBe(true);
     expect(restartedCamera.tool).toBe("");
 
     // Restore the fresh-instance default before leaving the preserved fixture behind.
     await client.run(SET_PERSONAL_PREFERENCE, { on: initialPreference });
-    const restored = await camera(client);
-    evidence.cleanupPreference = restored.global;
-    expect(restored.global).toBe(initialPreference);
+    expect((await camera(client)).global).toBe(initialPreference);
   } catch (error) {
-    await captureFailure(pair?.client, testInfo, "combat-camera-persistence-failure.png");
     pair?.failing(error);
     throw error;
   } finally {
     if (pair) {
       try { await pair.client.run(SET_PERSONAL_PREFERENCE, { on: initialPreference }); } catch { /* Keep primary test evidence. */ }
     }
-    await testInfo.attach("combat-camera-persistence-evidence.json", {
-      body: JSON.stringify(evidence, null, 2),
-      contentType: "application/json",
-    });
     await pair?.teardown(testInfo);
   }
 });
@@ -500,17 +360,8 @@ test("the personal tactical camera preference follows the account across colonie
 async function prepareGround(server: MinecraftServer, origin: Vec) {
   await mustCommand(server, "difficulty peaceful");
   await mustCommand(server, "gamerule doMobSpawning false");
-  await world.command(server,
-    `fill ${origin.x - 12} ${origin.y - 1} ${origin.z - 8} ${origin.x + 14} ${origin.y - 1} ${origin.z + 18} minecraft:smooth_stone`,
-    { allowFailure: true });
-  await world.command(server,
-    `fill ${origin.x - 12} ${origin.y} ${origin.z - 8} ${origin.x + 14} ${origin.y + 5} ${origin.z + 18} minecraft:air`,
-    { allowFailure: true });
-}
-
-async function tapV(client: MinecraftClient) {
-  await input.key(client, { keyCode: KEY_V, action: "press" });
-  await input.key(client, { keyCode: KEY_V, action: "release" });
+  await layFloor(server, { x: origin.x - 12, z: origin.z - 8 }, { x: origin.x + 14, z: origin.z + 18 }, origin.y,
+    "minecraft:smooth_stone");
 }
 
 async function camera(client: MinecraftClient): Promise<CameraReading> {
@@ -530,7 +381,7 @@ async function dragMiddle(client: MinecraftClient, center: { x: number; y: numbe
 async function waitForCombatPanel(client: MinecraftClient) {
   for (let attempt = 0; attempt < 60; attempt++) {
     try {
-      if ((await panelElements(client)).some(element => element.id === "folkways.combat.summary")) return;
+      if ((await panelElements(client)).some(element => element.id === COMBAT_SUMMARY)) return;
     } catch { /* The tool may still be opening its page. */ }
     await frames(client, 2);
   }
@@ -545,15 +396,23 @@ async function currentColonyId(server: MinecraftServer, player: string): Promise
   return server.run(CURRENT_COLONY, { player });
 }
 
-async function capture(client: MinecraftClient, testInfo: TestInfo, name: string) {
-  const path = testInfo.outputPath(name);
-  await media.screenshot(client, { path });
-  await testInfo.attach(name, { path, contentType: "image/png" });
+// From the config-type screen the factory opens: its Client section, then the Personal settings page.
+async function openPersonalSettings(client: MinecraftClient) {
+  await clickNativeLabel(client, /\bClient\b/i);
+  await frames(client, 3);
+  await clickNativeLabel(client, /Personal settings|个人设置/i);
+  await frames(client, 3);
 }
 
-async function captureFailure(client: MinecraftClient | undefined, testInfo: TestInfo, name: string) {
-  if (!client) return;
-  try { await capture(client, testInfo, name); } catch { /* Preserve the original failure. */ }
+// A section's Done returns to the config-type screen and its Done to the parent: leave every config screen.
+async function leaveConfig(client: MinecraftClient) {
+  for (let depth = 0; depth < 3; depth++) {
+    const current = await screen.current(client);
+    if (!/(?:ConfigurationScreen|PersonalCameraConfigScreen)/.test(current?.className ?? "")) return;
+    if (!(await nativeWidgets(client)).some(widget => /\bDone\b|完成/i.test(widget.label ?? ""))) return;
+    await clickNativeLabel(client, /\bDone\b|完成/i);
+    await frames(client, 3);
+  }
 }
 
 function distance3(a: Pick<CameraReading, "x" | "y" | "z">, b: Pick<CameraReading, "x" | "y" | "z">) {
@@ -660,29 +519,6 @@ const ATTEMPT_OPEN_PAGE = defineTask<{ colony: string; page: string }, { sent: t
       "io.github.izakyl.folkways.front.engine.net.OpenBookPagePacket",
     ],
     body: `var a=Args.of(ctx);PacketDistributor.sendToServer(new OpenBookPagePacket(UUID.fromString(a.string("colony")),ResourceLocation.parse(a.string("page"))));return Map.of("sent",true);`,
-  }),
-});
-
-const CONFIG_ISOLATION = defineTask<void, { currentAccount: string; differentAccount: string; otherBefore: boolean; enabledForOther: boolean; currentStayedEnabled: boolean; restoredOther: boolean }>({
-  name: "folkways.combat-camera.configuration-uuid-isolation",
-  side: "client",
-  source: javaTask({
-    imports: [
-      "java.util.UUID",
-      "java.util.Map",
-      "io.github.izakyl.folkways.FolkwaysClientConfig",
-      "io.github.izakyl.folkways.front.client.PersonalCameraControls",
-    ],
-    body: `
-var current=PersonalCameraControls.currentUserUUID();if(current==null)throw new IllegalStateException("Minecraft account UUID is unavailable");
-UUID other=UUID.randomUUID();while(other.equals(current))other=UUID.randomUUID();
-boolean otherBefore=FolkwaysClientConfig.globalTacticalControls(other);boolean currentBefore=FolkwaysClientConfig.globalTacticalControls(current);
-try{FolkwaysClientConfig.globalTacticalControls(other,true);boolean enabled=FolkwaysClientConfig.globalTacticalControls(other);
-boolean currentStayed=FolkwaysClientConfig.globalTacticalControls(current)==currentBefore;
-FolkwaysClientConfig.globalTacticalControls(other,otherBefore);
-return Map.of("currentAccount",current.toString(),"differentAccount",other.toString(),"otherBefore",otherBefore,
-"enabledForOther",enabled,"currentStayedEnabled",currentStayed,"restoredOther",FolkwaysClientConfig.globalTacticalControls(other));
-}finally{FolkwaysClientConfig.globalTacticalControls(other,otherBefore);}`,
   }),
 });
 

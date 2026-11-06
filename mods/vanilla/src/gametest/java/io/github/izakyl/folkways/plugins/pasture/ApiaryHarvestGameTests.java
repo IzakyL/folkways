@@ -7,11 +7,11 @@ import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.api.PastDay;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import java.lang.reflect.Proxy;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -134,8 +134,7 @@ public final class ApiaryHarvestGameTests {
     }
 
     private static <T> T proxy(Class<T> type, java.util.function.BiFunction<String, Object[], Object> invoke) {
-        return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type},
-            (ignored, method, args) -> invoke.apply(method.getName(), args)));
+        return Proxies.of(type, (ignored, method, args) -> invoke.apply(method.getName(), args));
     }
 
     private static BlockPos pos(GameTestHelper helper) { return helper.absolutePos(new BlockPos(2, 3, 2)); }
@@ -151,16 +150,15 @@ public final class ApiaryHarvestGameTests {
     }
     private static Worker worker(GameTestHelper helper, SimpleContainer pack) {
         var resident = PersonBody.RESIDENT.get().create(helper.getLevel());
-        return (Worker) Proxy.newProxyInstance(Worker.class.getClassLoader(), new Class<?>[] {Worker.class},
-            (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> resident;
-                case "resident" -> resident.resident();
-                case "pack" -> pack;
-                case "within", "route", "supplied" -> List.of();
-                case "placement" -> Placement.NOWHERE;
-                case "held" -> new ItemStack(Items.SHEARS);
-                case "effects" -> Effects.NONE;
-                default -> throw new AssertionError(method.getName());
-            });
+        return Proxies.of(Worker.class, (proxy, method, args) -> switch (method.getName()) {
+            case "body" -> resident;
+            case "resident" -> resident.resident();
+            case "pack" -> pack;
+            case "within", "route", "supplied" -> List.of();
+            case "placement" -> Placement.NOWHERE;
+            case "held" -> new ItemStack(Items.SHEARS);
+            case "effects" -> Effects.NONE;
+            default -> throw new AssertionError(method.getName());
+        });
     }
 }

@@ -9,19 +9,17 @@ import { tryCommand } from "../shared/harness/bw-helpers";
 type Weapon = "bow" | "crossbow";
 type Scene = { colony: string; resident: string; monster: string; weapon: Weapon; x: string; y: string; z: string };
 type Reading = {
-  time: number; residentHealth: number; residentWasAttacked: boolean; targetHealth: number;
+  residentHealth: number; residentWasAttacked: boolean; targetHealth: number;
   targetMaxHealth: number; targetHasAi: boolean; arrowHit: boolean; damageSource: string;
-  ammunition: number; weaponCount: number; weaponDamage: number; charged: boolean;
-  session: boolean; using: boolean; useTicks: number; mainItem: string;
-  orderMode: string; orderStatus: string; engaged: boolean; distance: number;
-  x: number; z: number; arrows: string[]; doing: string; debug: string;
+  ammunition: number; weaponCount: number; weaponDamage: number;
+  session: boolean; using: boolean; useTicks: number;
+  orderMode: string; engaged: boolean; arrows: string[];
 };
 
 test("GUARD uses real bow and crossbow sessions, and retreat stops pending fire", async ({}, testInfo) => {
   test.setTimeout(360_000);
   let pair: E2EPair | undefined;
   let active: Scene | undefined;
-  const readings: Array<{ weapon: Weapon; step: string; elapsed: number; reading: Reading }> = [];
   try {
     const run = newRunId();
     pair = await launchPair({
@@ -41,30 +39,28 @@ test("GUARD uses real bow and crossbow sessions, and retreat stops pending fire"
     await mustCommand(server, `fill ${x - 14} ${y - 1} ${z - 10} ${x + 25} ${y - 1} ${z + 16} minecraft:stone`);
     await tryCommand(server, `fill ${x - 14} ${y} ${z - 10} ${x + 25} ${y + 7} ${z + 16} minecraft:air`);
 
-    const selected = process.env.FOLKWAYS_WEAPON_CASE;
-    const weapons: Weapon[] = selected === "bow" || selected === "crossbow" ? [selected] : ["bow", "crossbow"];
-    for (const weapon of weapons) {
+    for (const weapon of ["bow", "crossbow"] as const) {
       const scene = await server.run(SETUP, { weapon, x: String(x), y: String(y), z: String(z) });
       active = scene;
       const initial = await server.run(READ, scene);
-      readings.push({ weapon, step: "guard issued without provoking target", elapsed: 0, reading: initial });
       expect(initial.ammunition).toBe(8);
       expect(initial.weaponCount).toBe(1);
       expect(initial.weaponDamage).toBe(5);
       expect(initial.residentWasAttacked).toBe(false);
       expect(initial.targetHasAi).toBe(false);
 
+      const readings: Reading[] = [];
       async function waitFor(step: string, predicate: (reading: Reading) => boolean, budget = 320) {
         for (let elapsed = 0; elapsed < budget; elapsed += 2) {
           await tick.sprint(server, 2);
           const reading = await server.run(READ, scene);
-          readings.push({ weapon, step, elapsed, reading });
+          readings.push(reading);
           expect(reading.residentHealth, `${weapon}: NoAI target must never harm the guard`).toBe(20);
           expect(reading.residentWasAttacked, `${weapon}: this must be proactive GUARD combat`).toBe(false);
           expect(reading.weaponCount, `${weapon}: actual weapon ownership must stay unique`).toBe(1);
           if (predicate(reading)) return reading;
         }
-        throw new Error(`${weapon} ${step} timed out: ${JSON.stringify(readings.at(-1)?.reading)}`);
+        throw new Error(`${weapon} ${step} timed out: ${JSON.stringify(readings.at(-1))}`);
       }
 
       const hit = await waitFor("native projectile hit", reading => reading.arrowHit
@@ -73,9 +69,9 @@ test("GUARD uses real bow and crossbow sessions, and retreat stops pending fire"
       expect(hit.damageSource).toBe("arrow");
       expect(hit.ammunition).toBeLessThan(8);
       expect(hit.weaponDamage).toBeGreaterThan(5);
-      expect(readings.some(row => row.weapon === weapon && row.reading.engaged && row.reading.orderMode === "GUARD"),
+      expect(readings.some(reading => reading.engaged && reading.orderMode === "GUARD"),
         `${weapon}: patrol must engage through the actual GUARD order`).toBe(true);
-      expect(readings.some(row => row.weapon === weapon && row.reading.session && row.reading.using),
+      expect(readings.some(reading => reading.session && reading.using),
         `${weapon}: the actual runner must sustain the native draw or reload`).toBe(true);
 
       // The world is frozen between sprint calls. Replace GUARD while the next native draw/reload is incomplete.
@@ -94,7 +90,6 @@ test("GUARD uses real bow and crossbow sessions, and retreat stops pending fire"
       for (let elapsed = 0; elapsed < 80; elapsed += 4) {
         await tick.sprint(server, 4);
         const reading = await server.run(READ, scene);
-        readings.push({ weapon, step: "retreat prevents new discharges", elapsed, reading });
         expect(reading.orderMode).toBe("RETREAT");
         expect(reading.session).toBe(false);
         expect(reading.using).toBe(false);
@@ -115,9 +110,6 @@ test("GUARD uses real bow and crossbow sessions, and retreat stops pending fire"
     if (pair && active) {
       try { await pair.server.run(CLEANUP, active); } catch { /* Preserve the original failure and capture pair evidence. */ }
     }
-    await testInfo.attach("weapon-session-readings.json", {
-      body: JSON.stringify(readings, null, 2), contentType: "application/json",
-    });
     await pair?.teardown(testInfo);
   }
 });
@@ -126,14 +118,13 @@ const IMPORTS = [
   "net.minecraft.server.MinecraftServer", "net.minecraft.core.BlockPos", "net.minecraft.world.phys.Vec3",
   "net.minecraft.world.entity.EntityType", "net.minecraft.world.entity.Mob", "net.minecraft.world.entity.EquipmentSlot",
   "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.entity.projectile.AbstractArrow",
-  "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items", "net.minecraft.world.item.CrossbowItem",
-  "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.core.component.DataComponents",
+  "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items", "net.minecraft.core.component.DataComponents",
   "net.minecraft.network.chat.Component", "io.github.izakyl.folkways.core.api.colony.Colonies",
   "io.github.izakyl.folkways.core.api.colony.Held", "io.github.izakyl.folkways.core.api.terms.WorldPos",
   "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry",
+  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
+  "io.github.izakyl.folkways.core.api.terms.ItemSpec",
   "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
 ];
 
@@ -154,7 +145,9 @@ body.pack().insert(new ItemStack(Items.ARROW, 8));
 level.addFreshEntity(body);
 colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
 body.joinColony(colony.id());
-PatrolSupplies.of(colony).loadout(body, args.string("weapon").equals("bow") ? LoadoutRegistry.BOW : LoadoutRegistry.CROSSBOW);
+var profiles = LoadoutProfiles.of(colony);
+var armed = profiles.add(profiles.create("Guard").id(), LoadoutProfile.Entry.weapon(ItemSpec.of(weapon.getItem())));
+profiles.assign(List.of(body.id()), Optional.of(armed.id()));
 var monster = EntityType.ZOMBIE.create(level);
 monster.setNoAi(true); monster.setPersistenceRequired();
 monster.moveTo(x + 8.5, y, z + 2.5);
@@ -185,7 +178,7 @@ var actual = session ? body.getMainHandItem() : body.pack().contents().stream()
 var order = ResidentCommands.of(colony).current(body.id());
 var damage = target.getLastDamageSource();
 var result = new LinkedHashMap<String, Object>();
-result.put("time", level.getGameTime()); result.put("residentHealth", body.getHealth());
+result.put("residentHealth", body.getHealth());
 result.put("residentWasAttacked", body.getLastHurtByMob() != null);
 result.put("targetHealth", target.getHealth()); result.put("targetMaxHealth", target.getMaxHealth());
 result.put("targetHasAi", !target.isNoAi());
@@ -194,19 +187,13 @@ result.put("damageSource", damage == null ? "NONE" : damage.getMsgId());
 result.put("ammunition", body.pack().count(Items.ARROW));
 result.put("weaponCount", body.pack().count(expected) + (session && body.getMainHandItem().is(expected)
   ? body.getMainHandItem().getCount() : 0));
-result.put("weaponDamage", actual.getDamageValue()); result.put("charged", CrossbowItem.isCharged(actual));
+result.put("weaponDamage", actual.getDamageValue());
 result.put("session", session); result.put("using", body.isUsingItem()); result.put("useTicks", body.getTicksUsingItem());
-result.put("mainItem", BuiltInRegistries.ITEM.getKey(body.getMainHandItem().getItem()).toString());
 result.put("orderMode", order.map(value -> value.mode().name()).orElse("NONE"));
-result.put("orderStatus", order.map(value -> value.status().name()).orElse("NONE"));
 result.put("engaged", order.map(ResidentCommands.Order::engaged).orElse(false));
-result.put("distance", body.distanceTo(target)); result.put("x", body.getX()); result.put("z", body.getZ());
 result.put("arrows", level.getEntitiesOfClass(AbstractArrow.class, body.getBoundingBox().inflate(64),
   arrow -> body.getUUID().equals(arrow.getOwner() == null ? null : arrow.getOwner().getUUID()))
   .stream().map(arrow -> arrow.getUUID().toString()).toList());
-result.put("doing", body.doing().toString());
-result.put("debug", "position=" + body.position() + " doing=" + body.doing() + " balk=" + body.balk()
-  + " navDone=" + body.getNavigation().isDone() + " targetPosition=" + target.position());
 return result;
 ` }),
 });

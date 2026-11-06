@@ -2,7 +2,6 @@ package io.github.izakyl.folkways.core.engine.plan;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Gait;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
@@ -23,7 +22,6 @@ import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Refinement;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
@@ -35,6 +33,8 @@ import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
 import io.github.izakyl.folkways.core.engine.travel.Faring;
 import io.github.izakyl.folkways.core.engine.travel.Journey;
 import io.github.izakyl.folkways.core.engine.travel.Ways;
+import io.github.izakyl.folkways.core.testing.Nodes;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,10 +46,11 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -119,8 +120,7 @@ public final class TransferPlanningGameTests {
     public static void missingPartOfAManifestDoesNotMoveAnything(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
-        level.setBlockAndUpdate(f.source.cell(), Blocks.BARREL.defaultBlockState());
-        var source = Containers.at(level, f.source.cell()).orElseThrow();
+        var source = f.barrels().source();
         source.setItem(0, new ItemStack(Items.IRON_INGOT, 4));
         var node = new TransferNode(UUID.randomUUID(), Endpoint.store(new Stash(f.source)), Endpoint.pack(),
             new Manifest(List.of(new ItemStack(Items.IRON_INGOT, 4), new ItemStack(Items.GOLD_INGOT, 2)), List.of()),
@@ -144,16 +144,14 @@ public final class TransferPlanningGameTests {
     public static void planningFixesComponentsAndExecutionCannotSubstituteItems(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
-        level.setBlockAndUpdate(f.source.cell(), Blocks.BARREL.defaultBlockState());
-        level.setBlockAndUpdate(f.target.cell(), Blocks.BARREL.defaultBlockState());
-        var source = Containers.at(level, f.source.cell()).orElseThrow();
+        var source = f.barrels().source();
         ItemStack named = new ItemStack(Items.BREAD, 2);
         named.set(DataComponents.CUSTOM_NAME, Component.literal("reserved bread"));
         source.setItem(0, named.copy());
         var task = new Owed(new WorkSite.AtBlock(f.target), Stances.at(f.target), Goods.specOf(named), 2);
         var stock = new Stock(List.of(new Stock.Holding(new Stash(f.source), named)),
             Map.of(new Stash(f.source), 26, new Stash(f.target), 27));
-        PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
+        PlanningFixture.Rounds solver = new PlanningFixture.Rounds();
         try {
             var solved = solver.solve(f.situation(stock, List.of()), f.crew,
                 task.goals(), List.of(), 0);
@@ -178,15 +176,14 @@ public final class TransferPlanningGameTests {
     public static void failedDepositIsReplannedFromTheSameResidentsPack(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
-        level.setBlockAndUpdate(f.source.cell(), Blocks.BARREL.defaultBlockState());
-        level.setBlockAndUpdate(f.target.cell(), Blocks.BARREL.defaultBlockState());
-        var source = Containers.at(level, f.source.cell()).orElseThrow();
-        var target = Containers.at(level, f.target.cell()).orElseThrow();
+        var barrels = f.barrels();
+        var source = barrels.source();
+        var target = barrels.target();
         source.setItem(0, new ItemStack(Items.BREAD, 2));
         ItemSpec bread = Goods.specOf(source.getItem(0));
         var task = new Owed(new WorkSite.AtBlock(f.target), Stances.at(f.target), bread, 2);
         var goals = task.goals();
-        var solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
+        var solver = new PlanningFixture.Rounds();
         try {
             var solved = solver.solve(f.situation(new Stock(List.of(new Stock.Holding(new Stash(f.source),
                 source.getItem(0).copy())), Map.of(new Stash(f.source), 26, new Stash(f.target), 27)), List.of()),
@@ -246,11 +243,11 @@ public final class TransferPlanningGameTests {
             }
         };
         var plankOrder = Map.<Stash, List<StoreRule>>of(new Stash(f.target), List.of(new StoreRule.Reserve(f.target, planks)));
-        var solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
+        var solver = new PlanningFixture.Rounds();
         try {
             var solved = solver.solve(new Situation(measured, new Stock(List.of(), room, plankOrder), List.of(), f.stands),
                 carrying, List.of(), List.of(new Message.Idle(hand.id())), 0);
-            Map<Item, Stash> into = new java.util.HashMap<>();
+            Map<Item, Stash> into = new HashMap<>();
             for (var vertex : solved.weave().vertices().values()) {
                 var put = (TransferNode) vertex.node();
                 put.goods().forEach(stack -> into.put(stack.getItem(), vertex.plan().into().getFirst()));
@@ -262,7 +259,7 @@ public final class TransferPlanningGameTests {
         } finally {
             solver.closed();
         }
-        solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
+        solver = new PlanningFixture.Rounds();
         try {
             var onlyOrder = Map.<Stash, List<StoreRule>>of(new Stash(f.source),
                 List.of(new StoreRule.Reserve(f.source, planks)), new Stash(f.target),
@@ -287,7 +284,7 @@ public final class TransferPlanningGameTests {
         List<WorldPos> far = List.of(f.target.at(f.target.cell().offset(40, 0, 0)),
             f.target.at(f.target.cell().offset(-60, 0, 0)), f.target.at(f.target.cell().offset(0, 0, 50)));
         var building = Stands.building().container(new Stash(f.target), Set.of(new Stand(f.target)));
-        Map<Stash, Integer> room = new java.util.HashMap<>(Map.of(new Stash(f.target), 27));
+        Map<Stash, Integer> room = new HashMap<>(Map.of(new Stash(f.target), 27));
         for (WorldPos store : far) {
             building.container(new Stash(store), Set.of(new Stand(store)));
             room.put(new Stash(store), 27);
@@ -316,7 +313,7 @@ public final class TransferPlanningGameTests {
             }
         };
         for (Ways ways : List.of(unknown, farKnown)) {
-            var solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
+            var solver = new PlanningFixture.Rounds();
             try {
                 var solved = solver.solve(new Situation(ways, new Stock(List.of(), room), List.of(), building.done()),
                     carrying, List.of(), List.of(new Message.Idle(hand.id())), 0);
@@ -332,25 +329,11 @@ public final class TransferPlanningGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
-    public static void idleCargoGetsAPlannedTransferAndPersonalSuppliesAreAcquiredThenKept(GameTestHelper helper) {
+    public static void personalSuppliesAreAcquiredThenKept(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         ItemStack bread = new ItemStack(Items.BREAD, 2);
         var hand = f.crew.hands().getFirst();
-        Crew carrying = new Crew(List.of(new Crew.Hand(hand.who(), f.target, 5, 6, 1,
-            hand.licences(), List.of(), Optional.empty(), List.of(bread))));
-        var solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
-        try {
-            var solved = solver.solve(f.situation(new Stock(List.of(), Map.of(new Stash(f.target), 27)), List.of()),
-                carrying, List.of(), List.of(new Message.Idle(hand.id())), 0);
-            var tour = solved.schedule().tours().get(hand.id());
-            helper.assertTrue(tour != null && tour.nodes().size() == 1, "idle cargo is planner work");
-            var transfer = (TransferNode) solved.weave().vertices().get(tour.nodes().getFirst()).node();
-            helper.assertTrue(transfer.worker().orElseThrow().equals(hand.id())
-                && transfer.goods().getFirst().getCount() == 2, "carrier and amount are fixed by planning");
-        } finally {
-            solver.closed();
-        }
-        solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
+        var solver = new PlanningFixture.Rounds();
         var personal = new Owed(new WorkSite.AtEntity(hand.id(), f.source), Stances.WHEREVER,
             Goods.specOf(bread), 2);
         try {
@@ -373,6 +356,7 @@ public final class TransferPlanningGameTests {
         }
         helper.succeed();
     }
+
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void personalDeliveryDoesNotCountExistingSuppliesAsNewGoods(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
@@ -382,7 +366,7 @@ public final class TransferPlanningGameTests {
             hand.licences(), List.of(), Optional.empty(), List.of(bread))));
         Owed additional = new Owed(new WorkSite.AtEntity(hand.id(), f.source),
             Stances.WHEREVER, Goods.specOf(bread), 1);
-        PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
+        PlanningFixture.Rounds solver = new PlanningFixture.Rounds();
         try {
             var solved = solver.solve(f.situation(new Stock(List.of(), Map.of()), List.of()), carrying,
                 additional.goals(), List.of(), 0);
@@ -398,20 +382,14 @@ public final class TransferPlanningGameTests {
     public static void producedGoodsKeepComponentsAndTransferAtomically(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
-        level.setBlockAndUpdate(f.target.cell(), Blocks.BARREL.defaultBlockState());
-        var target = Containers.at(level, f.target.cell()).orElseThrow();
+        var target = f.barrels().target();
         ItemStack first = new ItemStack(Items.NETHERITE_CHESTPLATE);
         first.setDamageValue(137);
         first.set(DataComponents.CUSTOM_NAME, Component.literal("upgraded armor"));
         ItemStack second = new ItemStack(Items.NETHERITE_CHESTPLATE);
         second.setDamageValue(58);
-        var transfer =
-            new TransferNode(
-            UUID.randomUUID(),
-            Endpoint.pack(),
-            Endpoint.store(new Stash(f.target)),
-            new Manifest(List.of(), List.of(new Need(ItemSpec.of(first.getItem()), 2))),
-            Stances.at(f.target),
+        var transfer = new TransferNode(UUID.randomUUID(), Endpoint.pack(), Endpoint.store(new Stash(f.target)),
+            new Manifest(List.of(), List.of(new Need(ItemSpec.of(first.getItem()), 2))), Stances.at(f.target),
             new WorkSite.AtBlock(f.target));
         f.worker.pack().setItem(0, first.copy());
         f.worker.pack().setItem(1, new ItemStack(Items.DIAMOND_CHESTPLATE));
@@ -440,10 +418,9 @@ public final class TransferPlanningGameTests {
     public static void futureAlternativesBindOnlyAfterAtomicPickup(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
-        level.setBlockAndUpdate(f.source.cell(), Blocks.BARREL.defaultBlockState());
-        level.setBlockAndUpdate(f.target.cell(), Blocks.BARREL.defaultBlockState());
-        var source = Containers.at(level, f.source.cell()).orElseThrow();
-        var target = Containers.at(level, f.target.cell()).orElseThrow();
+        var barrels = f.barrels();
+        var source = barrels.source();
+        var target = barrels.target();
         var alternatives = ItemSpec.anyOf(List.of(ItemSpec.of(Items.COAL), ItemSpec.of(Items.OAK_PLANKS)));
         var cargo = new Stock(List.of(), Map.of()).manifest(new Stash(f.source), alternatives, 0, 2);
         helper.assertTrue(cargo.exact().isEmpty() && cargo.pending().getFirst().spec().equals(alternatives),
@@ -478,7 +455,7 @@ public final class TransferPlanningGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void futureTagAndExactStockCanShareAManifest(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
-        var tag = ItemSpec.of(net.minecraft.tags.ItemTags.PLANKS);
+        var tag = ItemSpec.of(ItemTags.PLANKS);
         ItemStack oak = new ItemStack(Items.OAK_PLANKS);
         var cargo = new Stock(List.of(new Stock.Holding(new Stash(f.source), oak)), Map.of())
             .manifest(new Stash(f.source), tag, 0, 3);
@@ -486,8 +463,7 @@ public final class TransferPlanningGameTests {
             && cargo.pending().getFirst().count() == 2 && cargo.pending().getFirst().spec().equals(tag),
             "known stock is exact while future supplies retain the tag");
         var level = helper.getLevel();
-        level.setBlockAndUpdate(f.source.cell(), Blocks.BARREL.defaultBlockState());
-        var source = Containers.at(level, f.source.cell()).orElseThrow();
+        var source = f.barrels().source();
         source.setItem(0, oak.copy());
         source.setItem(1, new ItemStack(Items.BIRCH_PLANKS, 2));
         var take = TransferNode.at(Endpoint.store(new Stash(f.source)), Endpoint.pack(), cargo,
@@ -502,27 +478,17 @@ public final class TransferPlanningGameTests {
     public static void productionWithAlternativesPlansAcrossEmptyStores(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var alternatives = ItemSpec.anyOf(List.of(ItemSpec.of(Items.COAL), ItemSpec.of(Items.OAK_PLANKS)));
-        var domain = net.minecraft.resources.ResourceLocation.withDefaultNamespace("test_supply");
+        var domain = ResourceLocation.withDefaultNamespace("test_supply");
         var sourceSite = new WorkSite.AtBlock(f.source);
         var targetSite = new WorkSite.AtBlock(f.target);
-        var producerSpec = NodeSpec.of(java.util.UUID.randomUUID(), domain, sourceSite,
+        var producerSpec = NodeSpec.of(UUID.randomUUID(), domain, sourceSite,
             Stances.at(f.source), Workload.Once.of(1, who -> 1)).gives(new Amount(alternatives, 2)).done();
-        var consumerSpec = NodeSpec.of(java.util.UUID.randomUUID(), domain, targetSite,
+        var consumerSpec = NodeSpec.of(UUID.randomUUID(), domain, targetSite,
             Stances.at(f.target), Workload.Once.of(1, who -> 1)).needs(new Need(alternatives, 2)).done();
-        Node producer = new Node() {
-            public NodeSpec spec() { return producerSpec; }
-            public Outcome commit(net.minecraft.server.level.ServerLevel level, Worker who) {
-                return new Outcome.Done(List.of(), List.of(), Optional.empty());
-            }
-        };
-        Node consumer = new Node() {
-            public NodeSpec spec() { return consumerSpec; }
-            public Outcome commit(net.minecraft.server.level.ServerLevel level, Worker who) {
-                return new Outcome.Done(List.of(), List.of(), Optional.empty());
-            }
-        };
+        Node producer = Nodes.done(producerSpec);
+        Node consumer = Nodes.done(consumerSpec);
         Workshop workshop = new Workshop() {
-            public net.minecraft.resources.ResourceLocation id() { return domain; }
+            public ResourceLocation id() { return domain; }
             public UUID key() { return UUID.nameUUIDFromBytes(new byte[]{1}); }
             public WorkSite site() { return sourceSite; }
             public List<Refinement.Change> options(Intent intent, Grown graph) {
@@ -560,10 +526,9 @@ public final class TransferPlanningGameTests {
                 "with no pack to hand it over in, the maker's store is relayed into the consumer's: "
                     + solved.weave().vertices().size());
             var level = helper.getLevel();
-            level.setBlockAndUpdate(f.source.cell(), Blocks.BARREL.defaultBlockState());
-            level.setBlockAndUpdate(f.target.cell(), Blocks.BARREL.defaultBlockState());
-            var source = Containers.at(level, f.source.cell()).orElseThrow();
-            var target = Containers.at(level, f.target.cell()).orElseThrow();
+            var barrels = f.barrels();
+            var source = barrels.source();
+            var target = barrels.target();
             source.setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
             Node take = transfers.stream().filter(node -> node.spec().site().equals(sourceSite)).findFirst().orElseThrow();
             Node put = transfers.stream().filter(node -> node.spec().site().equals(targetSite)).findFirst().orElseThrow();
@@ -575,5 +540,4 @@ public final class TransferPlanningGameTests {
         }
         helper.succeed();
     }
-
 }

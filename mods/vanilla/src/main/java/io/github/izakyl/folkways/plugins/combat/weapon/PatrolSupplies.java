@@ -105,16 +105,6 @@ public final class PatrolSupplies {
         return profiles;
     }
 
-    /** Compatibility entry point for old server callers; the persisted assignment is always a profile. */
-    public Optional<LoadoutRegistry.Selection> preference(UUID resident) {
-        return profiles.assigned(resident).flatMap(LoadoutProfile::legacy);
-    }
-
-    public void loadout(Body body, LoadoutRegistry.Selection loadout) {
-        validate(body);
-        profiles.assign(List.of(body.id()), Optional.of(profiles.migrate(loadout).id()));
-    }
-
     public void clear(Body body) {
         validate(body);
         profiles.assign(List.of(body.id()), Optional.empty());
@@ -292,10 +282,6 @@ public final class PatrolSupplies {
                 return List.of(current.urge());
             }
             pending.remove(body.id());
-        }
-        if (profile.entries().isEmpty() && profile.legacy().isPresent()) {
-            report(body.id(), State.UNAVAILABLE, "loadout provider unavailable", 0, null, 0);
-            return List.of();
         }
         for (LoadoutProfile.Entry entry : profile.entries()) {
             if (!entry.available()) {

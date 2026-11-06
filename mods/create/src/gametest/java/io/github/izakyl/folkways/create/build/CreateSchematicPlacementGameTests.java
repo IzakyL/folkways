@@ -58,21 +58,10 @@ public final class CreateSchematicPlacementGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void deployedSchematicSiteMatchesCreateForEveryRotationAndMirror(GameTestHelper helper)
             throws IOException {
-        compare(helper, new Vec3i(5, 3, 4));
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void deployedSchematicWithDifferentParityKeepsItsPosition(GameTestHelper helper)
-            throws IOException {
-        compare(helper, new Vec3i(4, 2, 7));
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void deployedSingleBlockWideSchematicKeepsItsPosition(GameTestHelper helper)
-            throws IOException {
-        compare(helper, new Vec3i(1, 2, 4));
+        // Odd and even sizes, and a single block wide, keep their position under every placement.
+        for (Vec3i size : List.of(new Vec3i(5, 3, 4), new Vec3i(4, 2, 7), new Vec3i(1, 2, 4))) {
+            compare(helper, size);
+        }
         helper.succeed();
     }
 

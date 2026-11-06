@@ -54,16 +54,11 @@ public final class CandBTestData {
 
     public static void sameVoxels(net.minecraft.gametest.framework.GameTestHelper helper,
             StateEntryStorage first, StateEntryStorage second) {
-        sameVoxels(helper, first, second, "voxel");
-    }
-
-    public static void sameVoxels(net.minecraft.gametest.framework.GameTestHelper helper,
-            StateEntryStorage first, StateEntryStorage second, String stage) {
         for (int x = 0; x < 16; x++) {
             for (int y = 0; y < 16; y++) {
                 for (int z = 0; z < 16; z++) {
                     helper.assertValueEqual(first.getBlockInformation(x, y, z), second.getBlockInformation(x, y, z),
-                        stage + " " + new BlockPos(x, y, z));
+                        "voxel " + new BlockPos(x, y, z));
                 }
             }
         }

@@ -6,28 +6,20 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.ToolUse;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
-import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
+import io.github.izakyl.folkways.rts.combat.command.CommandJob;
 import io.github.izakyl.folkways.rts.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.rts.combat.group.Deployment;
 import io.github.izakyl.folkways.rts.combat.group.UnitGroup;
@@ -43,13 +35,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -59,6 +46,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.common.util.FakePlayerFactory;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -68,9 +56,6 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(FolkwaysMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class CombatSelectionOwnershipGameTests {
-    private static final ResourceLocation WORK =
-        ResourceLocation.fromNamespaceAndPath("folkways_test", "selection_work");
-
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(CombatSelectionOwnershipGameTests.class);
@@ -138,8 +123,7 @@ public final class CombatSelectionOwnershipGameTests {
         helper.assertTrue(
             ResidentCommands.of(f.colony).current(a.id()).isEmpty()
             && UnitGroups.of(f.colony).ofResident(a.id()).isEmpty(),
-            "the actual command entry registered its generation so the last reference releases its hold and"
-            + " membership");
+            "the actual command entry registered its generation so the last reference releases its hold and membership");
         helper.succeed();
     }
 
@@ -193,8 +177,7 @@ public final class CombatSelectionOwnershipGameTests {
         var snapshot = f.ownership.snapshot(f.second);
         helper.assertTrue(
             snapshot.selection().isEmpty() && snapshot.groups().get(2).isEmpty(),
-            "unloading removes the UUID from selection and every shortcut, rather than reclaiming a reloaded"
-            + " entity");
+            "unloading removes the UUID from selection and every shortcut, rather than reclaiming a reloaded entity");
         helper.succeed();
     }
 
@@ -261,21 +244,18 @@ public final class CombatSelectionOwnershipGameTests {
                     UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow() == group
                     && group.commandId().filter(generation::equals).isPresent()
                     && ResidentCommands.of(f.colony).current(body.id()).isPresent(),
-                    "the same actual squad and accepted command continue without a book, shortcut or"
-                    + " heartbeat");
+                    "the same actual squad and accepted command continue without a book, shortcut or heartbeat");
                 var state = f.ownership.snapshot(f.first);
                 helper.assertTrue(
                     state.selection().equals(List.of(body.id()))
                     && state.groups().stream().allMatch(List::isEmpty),
-                    "suspension preserves the task's original selection and discards only the uncommanded"
-                    + " temporary resident");
+                    "suspension preserves the task's original selection and discards only the uncommanded temporary resident");
                 helper.assertTrue(
                     f.ownership.owns(f.first, body)
                     && !f.ownership.owns(f.first, temporary)
                     && !f.ownership.canSelect(f.second, body)
                     && f.ownership.canSelect(f.second, temporary),
-                    "background tasks retain exclusive ownership while discarded temporary selection is"
-                    + " claimable");
+                    "background tasks retain exclusive ownership while discarded temporary selection is claimable");
                 helper.assertTrue(
                     body.mob().getX() > f.at(2).block(f.level).getX() + 1.5,
                     "the ordinary runner actually keeps moving after interaction was suspended");
@@ -284,8 +264,7 @@ public final class CombatSelectionOwnershipGameTests {
                 helper.assertTrue(
                     !f.ownership.owns(f.first, body)
                     && ResidentCommands.of(f.colony).current(body.id()).isEmpty(),
-                    "real charter loss still cancels the former keeper's accepted task and releases its"
-                    + " handle");
+                    "real charter loss still cancels the former keeper's accepted task and releases its handle");
                 helper.succeed();
             });
     }
@@ -310,8 +289,7 @@ public final class CombatSelectionOwnershipGameTests {
                     && f.ownership.owns(f.first, body)
                     && !f.ownership.owns(f.first, temporary)
                     && group.commandId().filter(generation::equals).isPresent(),
-                    "expiry performs the same pruning as suspension without creating a permanent mission"
-                    + " reference");
+                    "expiry performs the same pruning as suspension without creating a permanent mission reference");
                 helper.assertTrue(
                     f.ownership.heartbeat(f.first),
                     "a continuing keeper can acknowledge its background task without a book");
@@ -347,8 +325,7 @@ public final class CombatSelectionOwnershipGameTests {
                     f.ownership.recallGroup(f.first, 0)
                     && f.ownership.releaseSelected(f.first, List.of(body.id()))
                     && !f.ownership.owns(f.first, body),
-                    "a fresh explicit release with the book removes all resumed selection and shortcut"
-                    + " references");
+                    "a fresh explicit release with the book removes all resumed selection and shortcut references");
                 helper.succeed();
             });
     }
@@ -387,53 +364,6 @@ public final class CombatSelectionOwnershipGameTests {
             && ResidentCommands.of(f.colony).current(b.id()).isEmpty(),
             "ordinary explicit deselection keeps the original last-reference release rule");
         helper.succeed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 600)
-    public static void completedRtsPointHoldReturnsToWorkOnlyAfterSelectionAndShortcutRelease(GameTestHelper helper) {
-        Fixture f = new Fixture(helper);
-        Body body = f.resident(2);
-        body.pack().insert(new ItemStack(Items.IRON_AXE));
-        Job job = new Job(f.at(2), body);
-        f.colony.submit(WORK, f.level.dimension(), Grown.of(job), (id, how) -> {});
-        AtomicReference<UnitGroup> group = new AtomicReference<>();
-        helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(job.working, "ordinary work actually began before RTS takeover"))
-            .thenExecute(
-            () -> {
-                f.ownership.select(f.first, List.of(body.id()));
-                f.ownership.bindGroup(f.first, 0);
-                UnitGroups.of(f.colony).appendSelectionPoint(List.of(body), f.at(8));
-                group.set(UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow());
-                f.ownership.trackGroup(f.first, group.get());
-            })
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    group.get().phase() == UnitGroup.Phase.HOLDING
-                    && group.get().captain().filter(f.at(8)::equals).isPresent(),
-                    "the real RTS open queue reaches and holds its endpoint"))
-            .thenExecute(() -> f.ownership.select(f.first, List.of()))
-            .thenIdle(15)
-            .thenExecute(
-            () -> {
-                helper.assertTrue(
-                    ResidentCommands.of(f.colony).current(body.id()).isPresent() && !job.working,
-                    "the shortcut retains both labour reservation and its tracked endpoint hold");
-                f.ownership.recallGroup(f.first, 0);
-                f.ownership.bindGroup(f.first, 0);
-                f.ownership.select(f.first, List.of());
-                helper.assertTrue(
-                    ResidentCommands.of(f.colony).current(body.id()).isEmpty()
-                    && UnitGroups.of(f.colony).ofResident(body.id()).isEmpty(),
-                    "full release removes the RTS membership and actual hold handle");
-            })
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    job.working,
-                    "the same Core runner returns to ordinary work after the RTS hold is released"))
-            .thenSucceed();
     }
 
     @GameTest(template = "empty_large")
@@ -497,15 +427,14 @@ public final class CombatSelectionOwnershipGameTests {
         helper.assertTrue(
             commands.current(body.id()).orElseThrow() == pageReplacement
             && groups.ofResident(body.id()).orElseThrow() == reused,
-            "a book-page deployment on the same group replaces the RTS generation and survives old-session"
-            + " suspension");
+            "a book-page deployment on the same group replaces the RTS generation and survives old-session suspension");
         helper.assertFalse(
             f.ownership.owns(f.first, body),
             "a stale RTS generation cannot keep the replacement page command selected");
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 600)
+    @GameTest(template = "empty_large", timeoutTicks = 900)
     public static void reservationInterruptsRealLabourKeepsGoodsAndAllowsCommandThenResumesAfterFullRelease(
         GameTestHelper helper) {
         Fixture f = new Fixture(helper);
@@ -514,26 +443,26 @@ public final class CombatSelectionOwnershipGameTests {
         ItemStack axe = new ItemStack(Items.IRON_AXE);
         axe.setDamageValue(7);
         body.pack().insert(axe);
-        Job job = new Job(f.at(2), body);
-        f.colony.submit(WORK, f.level.dimension(), Grown.of(job), (id, how) -> {});
+        CommandJob job = new CommandJob(f.at(2), body).submit(f.colony, f.level);
         AtomicReference<ResidentCommands.Order> command = new AtomicReference<>();
+        AtomicReference<UnitGroup> group = new AtomicReference<>();
         helper.startSequence()
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
-                    job.working, "the actual labour runner has begun the ordinary tool-using job"))
+                    job.working.get(), "the actual labour runner has begun the ordinary tool-using job"))
             .thenExecute(
             () -> {
                 f.ownership.select(f.first, List.of(body.id()));
                 f.ownership.bindGroup(f.first, 0);
             })
             .thenWaitUntil(
-            () -> helper.assertValueEqual(job.releases, 1, "reservation releases active work exactly once"))
+            () -> helper.assertValueEqual(job.released.get(), 1, "reservation releases active work exactly once"))
             .thenIdle(15)
             .thenExecute(
             () -> {
-                helper.assertFalse(job.working, "the reserved body cannot retake ordinary planned work");
-                f.assertGoods(body);
+                helper.assertFalse(job.working.get(), "the reserved body cannot retake ordinary planned work");
+                CommandJob.assertCarried(helper, body);
                 command.set(ResidentCommands.of(f.colony).move(body, f.at(8)));
             })
             .thenWaitUntil(
@@ -541,73 +470,52 @@ public final class CombatSelectionOwnershipGameTests {
                 helper.assertValueEqual(
                     command.get().status(),
                     ResidentCommands.Status.ARRIVED,
-                    "an explicit command executes through the same runner while selection is"
-                    + " reserved"))
+                    "an explicit command executes through the same runner while selection is reserved"))
+            .thenExecute(
+            () -> {
+                UnitGroups.of(f.colony).appendSelectionPoint(List.of(body), f.at(12));
+                group.set(UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow());
+                f.ownership.trackGroup(f.first, group.get());
+            })
+            .thenWaitUntil(
+            () ->
+                helper.assertTrue(
+                    group.get().phase() == UnitGroup.Phase.HOLDING
+                    && group.get().captain().filter(f.at(12)::equals).isPresent(),
+                    "the real RTS open queue reaches and holds its endpoint"))
             .thenExecute(() -> f.ownership.select(f.first, List.of()))
             .thenIdle(15)
             .thenExecute(
             () -> {
-                helper.assertFalse(
-                    job.working, "clearing visible selection does not release a shortcut member");
+                helper.assertTrue(
+                    ResidentCommands.of(f.colony).current(body.id()).isPresent() && !job.working.get(),
+                    "clearing visible selection leaves the shortcut's labour reservation and tracked endpoint hold");
                 f.ownership.recallGroup(f.first, 0);
                 f.ownership.bindGroup(f.first, 0);
                 helper.assertFalse(
                     f.ownership.snapshot(f.first).selection().isEmpty(),
                     "shortcut toggle preserves selection");
                 f.ownership.select(f.first, List.of());
+                helper.assertTrue(
+                    ResidentCommands.of(f.colony).current(body.id()).isEmpty()
+                    && UnitGroups.of(f.colony).ofResident(body.id()).isEmpty(),
+                    "full release removes the RTS membership and actual hold handle");
             })
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
-                    job.working,
+                    job.working.get(),
                     "ordinary work resumes only after selection and shortcuts are both clear"))
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
-                    job.releases, 1, "ordinary work was released once through all reservation ticks");
-                f.assertGoods(body);
+                    job.released.get(), 1, "ordinary work was released once through all reservation ticks");
+                CommandJob.assertCarried(helper, body);
             })
             .thenSucceed();
     }
 
-    private static final class Job implements Node {
-        final NodeSpec spec;
-        final UUID worker;
-        boolean working;
-        int releases;
-
-        Job(WorldPos at, Body body) {
-            worker = body.id();
-            Workload.Continuous load =
-                (level, who) -> {
-                    working = true;
-                    return true;
-                };
-            spec =
-                NodeSpec.of(UUID.randomUUID(), WORK, new WorkSite.AtBlock(at), Stances.at(at), load)
-                .tools(new ToolUse(new ToolNeed.Tagged(ItemTags.AXES), 0))
-                .done();
-        }
-
-        public NodeSpec spec() {
-            return spec;
-        }
-
-        public Optional<UUID> worker() {
-            return Optional.of(worker);
-        }
-
-        public Outcome commit(ServerLevel level, Worker who) {
-            return Outcome.done();
-        }
-
-        public void released(ServerLevel level, Worker who, Ending how) {
-            releases++;
-            working = false;
-        }
-    }
-
-    private static final class Fixture implements GameTestListener {
+    private static final class Fixture {
         final GameTestHelper helper;
         final ServerLevel level;
         final Colony colony;
@@ -632,7 +540,7 @@ public final class CombatSelectionOwnershipGameTests {
                     helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
                 }
             }
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
             helper.onEachTick(
                 () -> {
                     if (renew) {
@@ -663,20 +571,9 @@ public final class CombatSelectionOwnershipGameTests {
             level.addFreshEntity(body.mob());
             colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
             body.joinColony(colony.id());
-            PatrolSupplies.of(colony).loadout(body, LoadoutRegistry.MELEE);
+            arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
             people.add(body);
             return body;
-        }
-
-        void assertGoods(Body body) {
-            helper.assertValueEqual(body.pack().count(Items.IRON_INGOT), 8, "reservation preserves carried materials");
-            helper.assertValueEqual(
-                body.pack().count(Items.IRON_AXE), 1, "the actual borrowed tool has exactly one owner");
-            helper.assertTrue(
-                body.pack().contents().stream()
-                .filter(stack -> stack.is(Items.IRON_AXE))
-                .allMatch(stack -> stack.getDamageValue() == 7),
-                "the borrowed tool retains its component state");
         }
 
         void close() {
@@ -687,19 +584,15 @@ public final class CombatSelectionOwnershipGameTests {
             first.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
             second.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         }
+    }
 
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
-        }
+    private static void arm(Colony colony, Body body, String name, ItemSpec weapon) {
+        LoadoutProfiles profiles = LoadoutProfiles.of(colony);
+        LoadoutProfile profile =
+            profiles.all().stream()
+            .filter(one -> one.name().equals(name))
+            .findFirst()
+            .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

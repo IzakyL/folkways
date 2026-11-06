@@ -95,10 +95,8 @@ public final class TripGameTests {
         WorldPos goal = from.at(from.cell().offset(20, 0, 0));
         BOARDED.set(0);
         RELEASED.set(0);
-        Resident who = new Resident(mob.getUUID(), ResourceLocation.parse("folkways:resident"));
         AtomicReference<Ways> published = new AtomicReference<>(answer(Faring.LATER));
-        Trip trip = Trip.to(published::get, who, Walking.INSTANCE, mob, Set.of(goal), 1, LOST).orElseThrow();
-        trip.setOut(helper.getLevel(), mob, Set.of(goal));
+        Trip trip = pending(helper, mob, goal, published);
         for (int tick = 0; tick < 3; tick++) {
             helper.assertTrue(trip.step(helper.getLevel(), mob, Set.of(goal)) instanceof Going.Underway,
                 "unknown travel must wait, not fail");
@@ -117,33 +115,27 @@ public final class TripGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void pendingTripCanBeDeniedWithoutWalking(GameTestHelper helper) {
-        Mob mob = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new BlockPos(1, 2, 1));
-        WorldPos goal = WorldSpaces.at(mob).at(helper.absolutePos(new BlockPos(7, 2, 1)));
-        Resident who = new Resident(mob.getUUID(), ResourceLocation.parse("folkways:resident"));
-        AtomicReference<Ways> published = new AtomicReference<>(answer(Faring.LATER));
-        Trip trip = Trip.to(published::get, who, Walking.INSTANCE, mob, Set.of(goal), 1, LOST).orElseThrow();
-        trip.setOut(helper.getLevel(), mob, Set.of(goal));
-        published.set(answer(Faring.NO));
-        helper.assertTrue(trip.step(helper.getLevel(), mob, Set.of(goal)) instanceof Going.Failed failed
-            && failed.why() == LOST, "a resolved denial must fail with the original refusal");
-        helper.assertTrue(mob.getNavigation().isDone(), "denied travel must not fall back to walking");
-        helper.assertTrue(Trip.to(published::get, who, Walking.INSTANCE, mob, Set.of(goal), 1, LOST).isEmpty(),
-            "an already known denial must not start a trip");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void pendingTripCanResolveToWalking(GameTestHelper helper) {
-        Mob mob = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new BlockPos(1, 2, 1));
-        WorldPos goal = WorldSpaces.at(mob);
-        Resident who = new Resident(mob.getUUID(), ResourceLocation.parse("folkways:resident"));
-        AtomicReference<Ways> published = new AtomicReference<>(answer(Faring.LATER));
-        Trip trip = Trip.to(published::get, who, Walking.INSTANCE, mob, Set.of(goal), 1, LOST).orElseThrow();
-        trip.setOut(helper.getLevel(), mob, Set.of(goal));
-        published.set(answer(Faring.yes(Journey.afoot(0, Set.of(goal)))));
-        helper.assertTrue(trip.step(helper.getLevel(), mob, Set.of(goal)) instanceof Going.Arrived,
-            "a confirmed walking route must still complete normally");
+    public static void pendingTripIsDeniedWithoutWalkingOrResolvesToWalking(GameTestHelper helper) {
+        for (boolean denied : new boolean[] {true, false}) {
+            Mob mob = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new BlockPos(1, 2, 1));
+            WorldPos goal = denied ? WorldSpaces.at(mob).at(helper.absolutePos(new BlockPos(7, 2, 1)))
+                : WorldSpaces.at(mob);
+            AtomicReference<Ways> published = new AtomicReference<>(answer(Faring.LATER));
+            Trip trip = pending(helper, mob, goal, published);
+            if (denied) {
+                published.set(answer(Faring.NO));
+                helper.assertTrue(trip.step(helper.getLevel(), mob, Set.of(goal)) instanceof Going.Failed failed
+                    && failed.why() == LOST, "a resolved denial must fail with the original refusal");
+                helper.assertTrue(mob.getNavigation().isDone(), "denied travel must not fall back to walking");
+                helper.assertTrue(Trip.to(published::get, resident(mob), Walking.INSTANCE, mob, Set.of(goal), 1, LOST)
+                    .isEmpty(), "an already known denial must not start a trip");
+            } else {
+                published.set(answer(Faring.yes(Journey.afoot(0, Set.of(goal)))));
+                helper.assertTrue(trip.step(helper.getLevel(), mob, Set.of(goal)) instanceof Going.Arrived,
+                    "a confirmed walking route must still complete normally");
+            }
+            mob.discard();
+        }
         helper.succeed();
     }
 
@@ -171,8 +163,7 @@ public final class TripGameTests {
                 }
             };
             Journey route = new Journey(40, 0, List.of(Leg.afoot(Set.of(outside)), Leg.afoot(Set.of(goal))));
-            Resident who = new Resident(mob.getUUID(), ResourceLocation.parse("folkways:resident"));
-            Trip trip = Trip.to(() -> answer(Faring.yes(route)), who, failingWalk, mob, Set.of(goal), 1, LOST)
+            Trip trip = Trip.to(() -> answer(Faring.yes(route)), resident(mob), failingWalk, mob, Set.of(goal), 1, LOST)
                 .orElseThrow();
             trip.setOut(level, mob, Set.of(goal));
             helper.assertTrue(trip.step(level, mob, Set.of(goal)) instanceof Going.Failed failed && failed.why() == LOST,
@@ -184,6 +175,17 @@ public final class TripGameTests {
             reopen.run();
         }
         helper.succeed();
+    }
+
+    // A walking trip set out while its ways cannot say yet.
+    private static Trip pending(GameTestHelper helper, Mob mob, WorldPos goal, AtomicReference<Ways> published) {
+        Trip trip = Trip.to(published::get, resident(mob), Walking.INSTANCE, mob, Set.of(goal), 1, LOST).orElseThrow();
+        trip.setOut(helper.getLevel(), mob, Set.of(goal));
+        return trip;
+    }
+
+    private static Resident resident(Mob mob) {
+        return new Resident(mob.getUUID(), ResourceLocation.parse("folkways:resident"));
     }
 
     private static Ways answer(Faring result) {

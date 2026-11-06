@@ -1,10 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { defineTask, javaTask, media, screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
+import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { foundColonyFast, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { seededServer } from "../shared/harness/mod-settings";
-import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { frames } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { BUDGET } from "../shared/harness/budgets";
@@ -169,10 +168,6 @@ test("chiseled payloads preview, haul, build and survive a full restart", async 
       evidence.preview = await pair!.client.run(MESH);
       return evidence.preview.meshes;
     }, { timeout: 20_000, message: "the real client meshes the voxel preview" }).toBeGreaterThan(0);
-    const [x, y, z] = evidence.preview.corner;
-    const eye = { x: x + 1.5, y: y + 1.5, z: z + 2.5 };
-    await media.screenshot(pair.client, { path: outAbs("e2e", "shots", "chiselsandbits-preview.png"),
-      camera: { position: eye, ...cameraLookingAt(eye, { x: x + 0.5, y: y + 0.1, z: z + 0.5 }) } });
     await pair.server.run(STATE, { ...args, mode: "start" });
     await tick.sprint(pair.server, 300);
     evidence.missing = await read();

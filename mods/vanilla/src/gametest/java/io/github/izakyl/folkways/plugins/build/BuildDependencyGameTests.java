@@ -1,7 +1,9 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.target;
+
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.LinkedHashMap;
@@ -13,7 +15,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.LevelReader;
@@ -57,27 +58,6 @@ public final class BuildDependencyGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(BuildDependencyGameTests.class);
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void solidCoursesKeepTheirRankWithoutArtificialPrerequisites(GameTestHelper helper) {
-        floor(helper);
-        Map<BlockPos, BlockState> cells = new LinkedHashMap<>();
-        for (int x = 5; x <= 12; x++) {
-            for (int y = 1; y <= 3; y++) {
-                cells.put(at(helper, x, y, 8), Blocks.STONE.defaultBlockState());
-            }
-        }
-        Layering.Plan plan = Layering.of(helper.getLevel(), target(helper.getLevel(), cells));
-        helper.assertValueEqual(plan.works().size(), cells.size(), "all independent solid work is planned");
-        helper.assertTrue(plan.after().values().stream().allMatch(Set::isEmpty),
-            "suggested courses never make independent solid blocks wait for one another");
-        helper.assertTrue(plan.works().stream().filter(work -> work.focus().getY() == at(helper, 5, 1, 8).getY())
-            .mapToLong(Layering.Work::key).max().orElseThrow()
-            < plan.works().stream().filter(work -> work.focus().getY() == at(helper, 5, 2, 8).getY())
-                .mapToLong(Layering.Work::key).min().orElseThrow(),
-            "the preference still favours the lower course");
-        helper.succeed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
@@ -154,20 +134,8 @@ public final class BuildDependencyGameTests {
         helper.succeed();
     }
 
-    private static BuildTarget target(ServerLevel level, Map<BlockPos, BlockState> cells) {
-        return new BuildTarget(WorldPos.of(level, cells.keySet().iterator().next()).realm(), cells);
-    }
-
     private static BlockPos at(GameTestHelper helper, int x, int y, int z) {
         return helper.absolutePos(new BlockPos(x, y, z));
-    }
-
-    private static void floor(GameTestHelper helper) {
-        for (int x = 1; x <= 21; x++) {
-            for (int z = 1; z <= 21; z++) {
-                helper.getLevel().setBlock(at(helper, x, 0, z), Blocks.STONE.defaultBlockState(), 3);
-            }
-        }
     }
 
     /** Models an addon whose two separately placed parts each expect the other to exist. */

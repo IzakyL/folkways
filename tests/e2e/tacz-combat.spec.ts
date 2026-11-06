@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { defineTask, javaTask, media, world } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, world } from "@izakyl/blockwright-minecraft";
 import { waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { newRunId } from "../shared/harness/run-id";
@@ -32,10 +32,6 @@ test("TACZ colony gunfire reaches a real target and skins, Geo and maid resident
     const poses = await pair.client.run(READ_POSES, scene);
     expect(poses.map(pose => pose.appearance).sort()).toEqual(["maid", "model", "skin"]);
     expect(poses.every(pose => pose.armed && pose.aiming)).toBe(true);
-    const screenshot = testInfo.outputPath("tacz-resident-poses.png");
-    await media.screenshot(pair.client, { path: screenshot });
-    await testInfo.attach("tacz-resident-poses", { path: screenshot, contentType: "image/png" });
-    await testInfo.attach("tacz-poses.json", { body: JSON.stringify(poses, null, 2), contentType: "application/json" });
   } catch (error) { pair?.failing(error); throw error; }
   finally {
     if (pair && scene) { await pair.server.run(CLEANUP, scene).catch(() => undefined); }

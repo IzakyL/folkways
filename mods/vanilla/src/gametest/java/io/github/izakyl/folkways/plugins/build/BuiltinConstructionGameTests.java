@@ -7,10 +7,9 @@ import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
@@ -22,7 +21,6 @@ import io.github.izakyl.folkways.plugins.build.draft.Pattern;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.build.draft.World;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -131,17 +129,8 @@ public final class BuiltinConstructionGameTests {
         SimpleContainer pack = new SimpleContainer(128);
         Mob body = PersonBody.RESIDENT.get().create(level);
         body.setPos(Vec3.atBottomCenterOf(at(helper, 1, 7, 1)));
-        Worker worker = (Worker) Proxy.newProxyInstance(BuiltinConstructionGameTests.class.getClassLoader(),
-            new Class<?>[] {Worker.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> body;
-                case "pack" -> pack;
-                case "resident" -> new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig"));
-                case "effects" -> Effects.NONE;
-                case "placement" -> Placement.NOWHERE;
-                case "held" -> new ItemStack(Items.DIAMOND_PICKAXE);
-                case "within", "route", "supplied" -> List.of();
-                default -> null;
-            });
+        Worker worker = TestWorker.of(body, new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig")), pack)
+            .held(need -> new ItemStack(Items.DIAMOND_PICKAXE)).spill(stack -> { });
         int[] commits = {0};
         Map<BlockPos, Outcome> failures = new HashMap<>();
         helper.onEachTick(() -> {

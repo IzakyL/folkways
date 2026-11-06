@@ -1,21 +1,18 @@
 import { expect, test } from "@playwright/test";
 import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { writeFileSync } from "node:fs";
-import path from "node:path";
 import { foundColonyFast, setBookGesture, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import { deliverOrderViaSitePanel, optInContainerViaUI } from "../shared/colony/membership-optin";
 import { buildRailLine } from "../shared/rail/rail-fixture";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { GROUND } from "../shared/harness/stage";
-import { REPO_ROOT, ensureOut, reportPath, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
-const REPORT_PATH = reportPath("e2e", "dispatch-mail-report");
 
 // Far enough down the line that the parcel plainly goes by train, near enough that a round trip is quick.
 const RAIL_LINE = 64;
@@ -34,7 +31,6 @@ test("a parcel the colony sends by train waits in its postbox for the train book
 
   const runId = newRunId();
   let pair: E2EPair | undefined;
-  const report: any = { scope: "a network that mails by train: real parcel in the postbox, gated onto the booked train" };
   let server: any;
   let client: any;
   let target: Vec | undefined;
@@ -56,7 +52,6 @@ test("a parcel the colony sends by train waits in its postbox for the train book
     const origin: Vec = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };
     const founding = await foundColonyFast(server, client, player.name, { origin, residentCount: RESIDENTS });
     const colonyId: string = founding.evidence.colonyId;
-    report.founding = { residents: founding.residents, colonyId };
     expect(founding.residents, "residents must settle: a conductor, a keeper and someone to collect")
       .toBeGreaterThanOrEqual(3);
     const backup = await tryCommand(server, `item replace entity ${player.name} inventory.0 from entity ${player.name} weapon.mainhand`);
@@ -72,7 +67,6 @@ test("a parcel the colony sends by train waits in its postbox for the train book
         await tryCommand(srv, `setblock ${commandPos(frame.at(1, 3, 2))} minecraft:chest`);
       },
     });
-    report.rail = { ok: rail.ok, carriage: rail.carriageUuid, stationA: rail.stationA, stationB: rail.stationB, error: rail.error };
     expect(rail.ok, `the line should run under the colony: ${rail.error} ${JSON.stringify(rail.steps).slice(0, 400)}`).toBe(true);
 
     const gy = railOrigin.y;
@@ -112,7 +106,6 @@ test("a parcel the colony sends by train waits in its postbox for the train book
       posts: [{ post: sender, station: a, address: "", accepts: false },
         { post: receiver, station: b, address: BETA_ADDRESS, accepts: true }],
     });
-    report.wired = wired;
     expect(wired.attached, `both postboxes should attach to their stations: ${JSON.stringify(wired)}`).toEqual([true, true]);
     await tick.sprint(server, 40);
 
@@ -121,7 +114,7 @@ test("a parcel the colony sends by train waits in its postbox for the train book
     // The rail hand-over left the book in the offhand: it goes back to the main hand.
     await tryCommand(server, `item replace entity ${player.name} weapon.mainhand from entity ${player.name} inventory.0`);
     await tryCommand(server, `item replace entity ${player.name} weapon.offhand with minecraft:air`);
-    report.pointing = await setBookGesture(server, client, player.name, "point");
+    await setBookGesture(server, client, player.name, "point");
     const state = () => runColonyTask(server, HANDED_OVER, { colony_id: colonyId, network: wired.network, posts: [sender, receiver] });
     const point = async (at: Vec) => {
       await screen.dismiss(client);
@@ -130,33 +123,33 @@ test("a parcel the colony sends by train waits in its postbox for the train book
       return state();
     };
     // The stock link hugs the packager inside the stone; the ticker, the network's other handle, stands in the open.
-    report.atTicker = await point(ticker);
-    expect(report.atTicker.held, "a left-click on the stock ticker should take the network on").toBe(true);
-    expect(report.atTicker.flaw, "the network orders nothing while its postboxes are not the colony's")
+    const atTicker = await point(ticker);
+    expect(atTicker.held, "a left-click on the stock ticker should take the network on").toBe(true);
+    expect(atTicker.flaw, "the network orders nothing while its postboxes are not the colony's")
       .toBe("folkways.dispatch.flaw.not_carried");
-    report.atSender = await point(sender);
-    expect(report.atSender.posted, "a left-click on Alpha's postbox should give it to the colony").toEqual([true, false]);
-    report.atReceiver = await point(receiver);
-    expect(report.atReceiver.posted, "a left-click on Beta's postbox should give it to the colony").toEqual([true, true]);
-    expect(report.atReceiver.flaw, "with both postboxes given, the network ships by the colony's own train").toBe("");
-    expect(report.atReceiver.held, "the network is still the colony's").toBe(true);
+    const atSender = await point(sender);
+    expect(atSender.posted, "a left-click on Alpha's postbox should give it to the colony").toEqual([true, false]);
+    const atReceiver = await point(receiver);
+    expect(atReceiver.posted, "a left-click on Beta's postbox should give it to the colony").toEqual([true, true]);
+    expect(atReceiver.flaw, "with both postboxes given, the network ships by the colony's own train").toBe("");
+    expect(atReceiver.held, "the network is still the colony's").toBe(true);
 
     const args = { colony_id: colonyId, sender, receiver, target, item: ITEM, network: wired.network };
-    report.before = await runColonyTask(server, MAIL_STATE, args);
-    expect(report.before.stock, "the network's barrel should hold its stock before anything is ordered").toBe(STOCK);
+    const before = await runColonyTask(server, MAIL_STATE, args);
+    expect(before.stock, "the network's barrel should hold its stock before anything is ordered").toBe(STOCK);
 
     await optInContainerViaUI(server, client, player.name, target);
     // The order goes in just after the train has left Alpha, so its parcel has to wait in the postbox for the train
     // to come back for it.
     let seenAlpha = false;
-    report.departure = undefined;
-    for (let ticks = 0; ticks < DEPARTURE_TICKS && report.departure === undefined; ticks += 5) {
+    let departure: number | undefined;
+    for (let ticks = 0; ticks < DEPARTURE_TICKS && departure === undefined; ticks += 5) {
       await tick.sprint(server, 5);
       const standing = (await runColonyTask(server, MAIL_STATE, args)).standing;
       if (standing === "Alpha") seenAlpha = true;
-      else if (seenAlpha) report.departure = ticks;
+      else if (seenAlpha) departure = ticks;
     }
-    expect(report.departure, "the train should leave Alpha on its timetable").not.toBeUndefined();
+    expect(departure, "the train should leave Alpha on its timetable").not.toBeUndefined();
     await deliverOrderViaSitePanel(server, client, player.name, target, ITEM, ORDERED);
     await tryCommand(server, `tp ${player.name} ${a.x + 6.5} ${gy} ${a.z + 6.5}`);
 
@@ -170,11 +163,8 @@ test("a parcel the colony sends by train waits in its postbox for the train book
       if (sample.delivered >= ORDERED) break;
     }
     const last = samples[samples.length - 1];
-    report.waited = waited;
-    report.last = last;
-    report.samples = samples.filter((_, i) => i % 10 === 0 || i === samples.length - 1);
 
-    expect(waited, `the parcel should lie in Alpha's postbox, booked, at some point: ${JSON.stringify(report.samples.slice(-5))}`)
+    expect(waited, `the parcel should lie in Alpha's postbox, booked, at some point: ${JSON.stringify(samples.slice(-5))}`)
       .toBeTruthy();
     expect(waited.bookedTrain, "the parcel waits for the line's own train").toBe(waited.train);
     expect(waited.gate, "only the booked train may take it from Alpha; any other train leaves it in the postbox")
@@ -186,9 +176,6 @@ test("a parcel the colony sends by train waits in its postbox for the train book
     pair?.failing(error);
     throw error;
   } finally {
-    const body = JSON.stringify(report, null, 2);
-    writeFileSync(path.join(REPO_ROOT, REPORT_PATH), body);
-    testInfo.attach("dispatch-mail-report", { body, contentType: "application/json" });
     await pair?.teardown(testInfo);
   }
 });
@@ -359,36 +346,7 @@ for (int i = 0; i < chest.getContainerSize(); i++) if (chest.getItem(i).is(item)
 int stock = 0;
 var barrel = level.getCapability(Capabilities.ItemHandler.BLOCK, pos(args.value("sender")).below(2), null);
 for (int i = 0; barrel != null && i < barrel.getSlots(); i++) if (barrel.getStackInSlot(i).is(item)) stock += barrel.getStackInSlot(i).getCount();
-var probe = new LinkedHashMap<String, Object>();
-var packagerBe = level.getBlockEntity(pos(args.value("sender")).below());
-if (packagerBe instanceof com.simibubi.create.content.logistics.packager.PackagerBlockEntity pk) {
-  probe.put("held", pk.heldBox.isEmpty() ? "" : PackageItem.getAddress(pk.heldBox) + "#" + (PackageItem.hasOrderData(pk.heldBox) ? PackageItem.getOrderId(pk.heldBox) : "-"));
-  probe.put("queued", pk.queuedExitingPackages.size());
-}
-var inSender = new ArrayList<Object>();
-for (int slot = 0; slot < sender.inventory.getSlots(); slot++) {
-  var stack = sender.inventory.getStackInSlot(slot);
-  if (!stack.isEmpty()) inSender.add(BuiltInRegistries.ITEM.getKey(stack.getItem()) + "@" + PackageItem.getAddress(stack) + "#" + (PackageItem.hasOrderData(stack) ? PackageItem.getOrderId(stack) : "-"));
-}
-probe.put("sender", inSender);
-var cargo = new ArrayList<Object>();
-for (var t : Create.RAILWAYS.sided(level).trains.values()) for (var carriage : t.carriages) {
-  var inv = carriage.storage.getAllItems();
-  for (int i = 0; inv != null && i < inv.getSlots(); i++) if (PackageItem.isPackage(inv.getStackInSlot(i))) cargo.add(PackageItem.getAddress(inv.getStackInSlot(i)) + "#" + PackageItem.getOrderId(inv.getStackInSlot(i)));
-}
-probe.put("cargo", cargo);
-var cf = presence.getClass().getDeclaredField("collecting"); cf.setAccessible(true);
-var nodes = new ArrayList<Object>();
-for (var node : ((Map<?, ?>) cf.get(presence)).values()) {
-  var parts = new LinkedHashMap<String, Object>();
-  for (var name : List.of("at", "order", "placedAt", "arrived", "refused", "address")) {
-    var f = node.getClass().getDeclaredField(name); f.setAccessible(true); parts.put(name, String.valueOf(f.get(node)));
-  }
-  nodes.add(parts);
-}
-probe.put("collecting", nodes);
 var answer = new LinkedHashMap<String, Object>();
-answer.put("probe", probe);
 answer.put("ok", true); answer.put("train", train); answer.put("standing", standing);
 answer.put("bookings", bookings); answer.put("waiting", !waiting.isEmpty()); answer.put("bookedTrain", bookedTrain);
 answer.put("gate", gate == null ? Map.of() : gate); answer.put("atBeta", atBeta);

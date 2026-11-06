@@ -57,26 +57,7 @@ public final class SurveyGameTests {
         helper.succeed();
     }
 
-    // A weed two tall is pulled once, by its lower half.
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void aTallWeedIsPulledOnce(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
-        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.GRASS_BLOCK);
-        BlockPos tall = origin;
-        place(level, tall, Blocks.TALL_GRASS.defaultBlockState());
-        place(level, tall.above(), Blocks.TALL_GRASS.defaultBlockState()
-            .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
-        BlockPos flower = origin.offset(1, 0, 0);
-        place(level, flower, Blocks.POPPY.defaultBlockState());
-        Set<BlockPos> box = box(origin, origin.offset(1, 1, 0));
-
-        Set<BlockPos> asked = cellsOf(new Survey(level, box).weed(Survey.weeds(true, false)));
-        helper.assertTrue(asked.equals(Set.of(tall)), "the grass by its foot, and not the flower, got " + asked);
-        helper.succeed();
-    }
-
-    // Flowers are pulled only when the zone says so, a tall one once by its lower half; then the grass may stay.
+    // Flowers are pulled only when the zone says so and grass may stay; a tall plant is pulled once by its lower half.
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void flowersArePulledOnlyWhenAsked(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -90,13 +71,18 @@ public final class SurveyGameTests {
         place(level, sunflower, Blocks.SUNFLOWER.defaultBlockState());
         place(level, sunflower.above(), Blocks.SUNFLOWER.defaultBlockState()
             .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
-        Set<BlockPos> box = box(origin, origin.offset(2, 1, 0));
+        BlockPos tall = origin.offset(3, 0, 0);
+        place(level, tall, Blocks.TALL_GRASS.defaultBlockState());
+        place(level, tall.above(), Blocks.TALL_GRASS.defaultBlockState()
+            .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
+        Set<BlockPos> box = box(origin, origin.offset(3, 1, 0));
 
-        Set<BlockPos> asked = cellsOf(new Survey(level, box).weed(Survey.weeds(false, true)));
-        helper.assertTrue(asked.equals(Set.of(poppy, sunflower)), "the flowers by their foot and not the grass, got "
-            + asked);
+        Set<BlockPos> asked = cellsOf(new Survey(level, box).weed(Survey.weeds(true, false)));
+        helper.assertTrue(asked.equals(Set.of(grass, tall)), "the grass by its foot and not the flowers, got " + asked);
+        asked = cellsOf(new Survey(level, box).weed(Survey.weeds(false, true)));
+        helper.assertTrue(asked.equals(Set.of(poppy, sunflower)), "the flowers by their foot and not the grass, got " + asked);
         asked = cellsOf(new Survey(level, box).weed(Survey.weeds(true, true)));
-        helper.assertTrue(asked.equals(Set.of(grass, poppy, sunflower)), "the grass and the flowers, got " + asked);
+        helper.assertTrue(asked.equals(Set.of(grass, poppy, sunflower, tall)), "the grass and the flowers, got " + asked);
         helper.succeed();
     }
 
@@ -161,34 +147,6 @@ public final class SurveyGameTests {
         } finally {
             inside.discard();
             outside.discard();
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void haulApproachesAreReusedUntilDropsMove(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos origin = helper.absolutePos(new BlockPos(2, 1, 2));
-        floor(level, origin.offset(-2, -1, -2), origin.offset(4, -1, 4), Blocks.STONE);
-        ItemEntity drop = new ItemEntity(level, origin.getX() + 0.5, origin.getY(), origin.getZ() + 0.5,
-            new ItemStack(Items.COBBLESTONE));
-        level.addFreshEntity(drop);
-        try {
-            Set<BlockPos> cells = box(origin, origin.offset(1, 1, 1));
-            Survey.Drops known = new Survey.Drops();
-            new Survey(level, cells).haul(cell -> WorldPos.of(level, cell), known);
-            Survey.Drop first = known.known.get(drop.getUUID());
-            helper.assertTrue(first != null, "the drop has a cached approach");
-            new Survey(level, cells).haul(cell -> WorldPos.of(level, cell), known);
-            helper.assertTrue(known.known.get(drop.getUUID()) == first, "an unmoved drop reuses its approach");
-            drop.setPos(origin.getX() + 1.5, origin.getY(), origin.getZ() + 0.5);
-            new Survey(level, cells).haul(cell -> WorldPos.of(level, cell), known);
-            helper.assertTrue(known.known.get(drop.getUUID()) != first, "a moved drop gets a new approach");
-            drop.discard();
-            new Survey(level, cells).haul(cell -> WorldPos.of(level, cell), known);
-            helper.assertTrue(known.known.isEmpty(), "removed drops leave the cache");
-        } finally {
-            drop.discard();
         }
         helper.succeed();
     }

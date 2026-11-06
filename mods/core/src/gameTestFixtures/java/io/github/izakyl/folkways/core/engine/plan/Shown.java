@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.core.engine.plan;
 
 import io.github.izakyl.folkways.core.api.work.Before;
+import io.github.izakyl.folkways.core.api.work.Node;
+import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.engine.travel.Ways;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,6 +46,23 @@ public record Shown(Map<UUID, Vertex> vertices, List<Before> orders, List<Set<UU
     // without growing it first.
     public static WeaveDelta delta(Map<UUID, Vertex> vertices, List<Before> links, List<Set<UUID>> groups) {
         return delta(vertices, links, groups, Map.of(), Set.of(), List.of(), Set.of());
+    }
+
+    // Work laid out nowhere in particular, with nothing before anything.
+    public static WeaveDelta delta(Node... nodes) {
+        return delta(vertices(nodes), List.of(), List.of());
+    }
+
+    public static Map<UUID, Vertex> vertices(Node... nodes) {
+        Map<UUID, Vertex> vertices = new LinkedHashMap<>();
+        for (Node node : nodes) {
+            vertices.put(node.id(), vertex(node));
+        }
+        return vertices;
+    }
+
+    public static Vertex vertex(Node node) {
+        return new Vertex(node.id(), node, Placement.NOWHERE);
     }
 
     public static WeaveDelta delta(Map<UUID, Vertex> vertices, List<Before> links, List<Set<UUID>> groups,

@@ -34,7 +34,7 @@ return result;
 });
 
 test("vocation tool editors isolate lists and persist empty", async ({}, testInfo) => {
-  test.setTimeout(BUDGET.heavy);
+  test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
   const run = newRunId();
   let pair: E2EPair | undefined;

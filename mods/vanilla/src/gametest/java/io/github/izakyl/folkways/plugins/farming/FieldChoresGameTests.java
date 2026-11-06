@@ -3,25 +3,30 @@ package io.github.izakyl.folkways.plugins.farming;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Asking;
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
+import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.api.PastDay;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -76,12 +81,11 @@ public final class FieldChoresGameTests {
 
         Set<UUID> live = new LinkedHashSet<>();
         Set<UUID> withdrawn = new HashSet<>();
-        Colony colony = (Colony) Proxy.newProxyInstance(Colony.class.getClassLoader(),
-            new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "submit" -> { live.add(idOf((Grown) args[2])); yield null; }
-                case "withdraw" -> { withdrawn.add((UUID) args[1]); yield null; }
-                default -> throw new AssertionError(method.getName());
-            });
+        Colony colony = Proxies.of(Colony.class, (proxy, method, args) -> switch (method.getName()) {
+            case "submit" -> { live.add(idOf((Grown) args[2])); yield null; }
+            case "withdraw" -> { withdrawn.add((UUID) args[1]); yield null; }
+            default -> throw new AssertionError(method.getName());
+        });
         Asking asking = new Asking(colony, FarmingContent.ID, () -> { });
 
         List<Grown> wheat = sweep(level, zone, cells, "wheat", 1);
@@ -102,83 +106,61 @@ public final class FieldChoresGameTests {
         helper.succeed();
     }
 
+    // Grass and ferns, and snow of every depth over dirt, grass and path, are planned as tilling, and planning leaves
+    // each in place. Snow is cleared for tilling even where a plot keeps its grass and flowers.
     @GameTest(template = "empty", timeoutTicks = 100)
-    public static void aGrassyFieldIsPlannedWithoutChangingTheWorld(GameTestHelper helper) {
+    public static void coveredSoilIsPlannedWithoutChangingTheWorld(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos origin = helper.absolutePos(new BlockPos(1, 1, 1));
-        for (BlockPos floor : BlockPos.betweenClosed(origin, origin.offset(5, 0, 2))) {
-            place(level, floor, Blocks.DIRT.defaultBlockState());
-            place(level, floor.above(), Blocks.AIR.defaultBlockState());
-            place(level, floor.above(2), Blocks.AIR.defaultBlockState());
+        record Cover(String name, Tillage.Clearing clearing, List<BlockState> soils, List<BlockState> covers) {
         }
-        List<Block> grass = List.of(Blocks.SHORT_GRASS, Blocks.TALL_GRASS, Blocks.FERN, Blocks.LARGE_FERN);
-        Set<BlockPos> cells = new LinkedHashSet<>();
-        for (int i = 0; i < grass.size(); i++) {
-            BlockPos ground = origin.offset(i + 1, 0, 1);
-            Block block = grass.get(i);
-            place(level, ground.above(), block.defaultBlockState());
-            if (block instanceof DoublePlantBlock) {
-                place(level, ground.above(2), block.defaultBlockState()
-                    .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
-            }
-            cells.add(ground);
-        }
-        List<Grown> goals = sweep(level, zone(level, cells), cells, "wheat", 1);
-        Set<BlockPos> tilled = new LinkedHashSet<>();
-        goals.forEach(goal -> goal.nodes().forEach(node -> {
-            helper.assertTrue(node instanceof TillNode, "grass-covered dirt needs tilling before sowing");
-            tilled.add(node.spec().focus().orElseThrow());
-        }));
-        helper.assertTrue(tilled.equals(cells), "every grass-covered cell needs a tilling job: " + tilled);
-        int i = 0;
-        for (BlockPos ground : cells) {
-            helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "planning does not turn the soil");
-            helper.assertTrue(level.getBlockState(ground.above()).is(grass.get(i++)),
-                "planning does not remove the grass");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void aSnowyFieldIsPlannedWithoutChangingTheWorld(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos origin = helper.absolutePos(new BlockPos(1, 1, 1));
-        for (BlockPos floor : BlockPos.betweenClosed(origin, origin.offset(5, 0, 3))) {
-            place(level, floor, Blocks.DIRT.defaultBlockState());
-            place(level, floor.above(), Blocks.AIR.defaultBlockState());
-            place(level, floor.above(2), Blocks.AIR.defaultBlockState());
-        }
-        Set<BlockPos> cells = new LinkedHashSet<>();
+        List<BlockState> grass = Stream.of(Blocks.SHORT_GRASS, Blocks.TALL_GRASS, Blocks.FERN, Blocks.LARGE_FERN)
+            .map(Block::defaultBlockState).toList();
+        List<BlockState> snow = IntStream.rangeClosed(1, 8)
+            .mapToObj(layers -> Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, layers)).toList();
         List<BlockState> soils = List.of(Blocks.DIRT.defaultBlockState(),
             Blocks.GRASS_BLOCK.defaultBlockState().setValue(SnowyDirtBlock.SNOWY, true),
             Blocks.DIRT_PATH.defaultBlockState());
-        for (int layers = 1; layers <= 8; layers++) {
-            BlockPos ground = origin.offset(1 + (layers - 1) % 4, 0, 1 + (layers - 1) / 4);
-            place(level, ground, soils.get((layers - 1) % soils.size()));
-            place(level, ground.above(), Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, layers));
-            cells.add(ground);
-        }
-        Crop crop = Crop.of(level, origin, ResourceLocation.withDefaultNamespace("wheat")).orElseThrow();
-        Field field = new Field(crop, new Tillage.Clearing(false, false), WorldPos.of(level, origin),
-            () -> { }, new PastDay());
-        Field.Tally tally = field.scan(level, zone(level, cells), crop, 1);
-        helper.assertTrue(tally.till() == cells.size() && tally.sow() == 0,
-            "every snow-covered cell needs tilling before sowing: " + tally);
-        field.settle(1);
-        List<Grown> goals = new ArrayList<>();
-        field.chores().forEach(chores -> chores.goals(level, goals));
-        Set<BlockPos> tilled = new LinkedHashSet<>();
-        goals.forEach(goal -> goal.nodes().forEach(node -> {
-            helper.assertTrue(node instanceof TillNode, "snow-covered soil needs tilling work");
-            tilled.add(node.spec().focus().orElseThrow());
-        }));
-        helper.assertTrue(tilled.equals(cells), "every snow-covered cell has a tilling job: " + tilled);
-        int layers = 1;
-        for (BlockPos ground : cells) {
-            helper.assertTrue(level.getBlockState(ground).equals(soils.get((layers - 1) % soils.size())),
-                "planning does not turn the soil");
-            helper.assertTrue(level.getBlockState(ground.above()).equals(Blocks.SNOW.defaultBlockState()
-                .setValue(SnowLayerBlock.LAYERS, layers++)), "planning leaves every snow layer in place");
+        for (Cover cover : List.of(
+                new Cover("grass", Tillage.Clearing.ALL, List.of(Blocks.DIRT.defaultBlockState()), grass),
+                new Cover("snow", new Tillage.Clearing(false, false), soils, snow))) {
+            for (BlockPos floor : BlockPos.betweenClosed(origin, origin.offset(5, 0, 3))) {
+                place(level, floor, Blocks.DIRT.defaultBlockState());
+                place(level, floor.above(), Blocks.AIR.defaultBlockState());
+                place(level, floor.above(2), Blocks.AIR.defaultBlockState());
+            }
+            Map<BlockPos, List<BlockState>> cells = new LinkedHashMap<>();
+            for (int i = 0; i < cover.covers().size(); i++) {
+                BlockPos ground = origin.offset(1 + i % 4, 0, 1 + i / 4);
+                BlockState soil = cover.soils().get(i % cover.soils().size());
+                BlockState above = cover.covers().get(i);
+                place(level, ground, soil);
+                place(level, ground.above(), above);
+                if (above.getBlock() instanceof DoublePlantBlock) {
+                    place(level, ground.above(2), above.setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
+                }
+                cells.put(ground, List.of(soil, above));
+            }
+            Crop crop = Crop.of(level, origin, ResourceLocation.withDefaultNamespace("wheat")).orElseThrow();
+            Field field = new Field(crop, cover.clearing(), WorldPos.of(level, origin), () -> { }, new PastDay());
+            Field.Tally tally = field.scan(level, zone(level, cells.keySet()), crop, 1);
+            helper.assertTrue(tally.till() == cells.size() && tally.sow() == 0,
+                "every " + cover.name() + "-covered cell needs tilling before sowing: " + tally);
+            field.settle(1);
+            List<Grown> goals = new ArrayList<>();
+            field.chores().forEach(chores -> chores.goals(level, goals));
+            Set<BlockPos> tilled = new LinkedHashSet<>();
+            goals.forEach(goal -> goal.nodes().forEach(node -> {
+                helper.assertTrue(node instanceof TillNode, cover.name() + "-covered soil needs tilling work");
+                tilled.add(node.spec().focus().orElseThrow());
+            }));
+            helper.assertTrue(tilled.equals(cells.keySet()),
+                "every " + cover.name() + "-covered cell has a tilling job: " + tilled);
+            cells.forEach((ground, was) -> {
+                helper.assertTrue(level.getBlockState(ground).equals(was.get(0)), "planning does not turn the soil");
+                helper.assertTrue(level.getBlockState(ground.above()).equals(was.get(1)),
+                    "planning leaves the " + cover.name() + " in place");
+            });
         }
         helper.succeed();
     }
@@ -301,13 +283,7 @@ public final class FieldChoresGameTests {
         }
         var body = PersonBody.RESIDENT.get().create(level);
         try {
-            Worker worker = (Worker) Proxy.newProxyInstance(Worker.class.getClassLoader(),
-                new Class<?>[] {Worker.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "body" -> body.mob();
-                    case "effects" -> Effects.NONE;
-                    default -> throw new AssertionError(method.getName());
-                });
-            Outcome outcome = node.work(level, worker, job);
+            Outcome outcome = node.work(level, worker(body), job);
             helper.assertTrue(outcome instanceof Outcome.Done, "the stalk is harvested");
             Outcome.Done done = (Outcome.Done) outcome;
             int bamboo = done.made().stream().filter(stack -> stack.is(Items.BAMBOO))
@@ -358,6 +334,29 @@ public final class FieldChoresGameTests {
         helper.assertTrue(canopy.equals(own), "the canopy is the tree's own leaves, got " + canopy);
         helper.assertFalse(canopy.contains(placed), "a placed leaf belongs to no tree");
         helper.assertFalse(canopy.contains(neighbours), "a leaf nearer another tree's log is that tree's");
+        helper.succeed();
+    }
+
+    // Felling takes the trunk and the canopy it was planned with.
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void fellingTakesTheLogsAndTheirLeaves(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos base = helper.absolutePos(new BlockPos(1, 1, 1));
+        List<BlockPos> logs = List.of(base, base.above(), base.above(2));
+        List<BlockPos> leaves = List.of(base.above(3), base.above(3).east());
+        logs.forEach(at -> level.setBlock(at, Blocks.OAK_LOG.defaultBlockState(), Block.UPDATE_CLIENTS));
+        leaves.forEach(at -> level.setBlock(at, Blocks.OAK_LEAVES.defaultBlockState(), Block.UPDATE_CLIENTS));
+        Crop crop = Crop.of(level, base, ResourceLocation.withDefaultNamespace("oak_sapling")).orElseThrow();
+        Job job = new Job(WorldPos.of(level, base), logs, leaves, Stances.WHEREVER, base);
+        FellNode node = new FellNode(new FarmNode.Chore(UUID.randomUUID(), crop, job, null));
+        Body body = PersonBody.RESIDENT.get().create(level);
+        try {
+            node.work(level, worker(body), job);
+        } finally {
+            body.mob().discard();
+        }
+        logs.forEach(at -> helper.assertTrue(level.getBlockState(at).isAir(), "the logs were removed"));
+        leaves.forEach(at -> helper.assertTrue(level.getBlockState(at).isAir(), "the leaves were removed"));
         helper.succeed();
     }
 
@@ -484,6 +483,15 @@ public final class FieldChoresGameTests {
         helper.assertTrue(great > small && great < 3 * small,
             "twenty times the tree is not three times the work: " + small + " then " + great);
         helper.succeed();
+    }
+
+    // A worker who is only a body to swing from.
+    private static Worker worker(Body body) {
+        return Proxies.of(Worker.class, (proxy, method, args) -> switch (method.getName()) {
+            case "body" -> body.mob();
+            case "effects" -> Effects.NONE;
+            default -> throw new AssertionError(method.getName());
+        });
     }
 
     private static void place(ServerLevel level, BlockPos at, BlockState state) {

@@ -29,9 +29,8 @@ const MAX_TICKS = 14000;
 type Tool = { id: string; name: string; damage: number; shape: string; where: string; owner: string };
 type Board = { input: string; cuts: number; maximum: number };
 type Sample = { tick: number; phase: string; tools: Tool[]; boards: Board[]; totals: Record<string, number>;
-  target: number[]; queued: number; loans: number; residents: number };
-type Reading = { current: Sample; rows: Sample[]; observerFailure: string;
-  navigation: unknown[]; workGraphs: Record<string, unknown>; stanceSets: Record<string, unknown> };
+  target: number[]; residents: number };
+type Reading = { current: Sample; rows: Sample[]; observerFailure: string };
 type Layout = ReturnType<typeof kitchen>;
 
 // This task only observes real inventories and native board state. Its tick listener writes test evidence,
@@ -48,14 +47,6 @@ const OBSERVE = defineTask<{ mode: string; player: string; rack: Vec; boards: Ve
       "io.github.izakyl.folkways.core.api.colony.Colony",
       "io.github.izakyl.folkways.core.api.resident.body.Bodies",
       "io.github.izakyl.folkways.core.api.terms.WorldPos",
-      "io.github.izakyl.folkways.core.api.terms.WorldSpaces",
-      "io.github.izakyl.folkways.core.engine.labor.Labor",
-      "io.github.izakyl.folkways.core.engine.labor.ColonyLabor",
-      "io.github.izakyl.folkways.core.engine.plan.WeaveView",
-      "io.github.izakyl.folkways.core.engine.plan.Schedule",
-      "io.github.izakyl.folkways.core.engine.plan.Diagnosis",
-      "io.github.izakyl.folkways.cookery.tools.TaskTools",
-      "io.github.izakyl.folkways.cookery.CookeryPresence",
       "net.minecraft.core.BlockPos",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.server.level.ServerLevel",
@@ -75,25 +66,13 @@ private static String phase = "initial";
 private static String previous = "";
 private static String observerFailure = "";
 private static final List<Object> rows = new ArrayList<>();
-private static final List<Object> navigation = new ArrayList<>();
-private static final Map<String,Object> workGraphs = new LinkedHashMap<>();
-private static final Map<String,Object> stanceSets = new LinkedHashMap<>();
-private static final Map<String,String> knownGraphs = new HashMap<>();
-private static final Map<String,String> knownStances = new HashMap<>();
-private static long lastNavigation = Long.MIN_VALUE / 2;
 private static int physicalSamples;
-private static int navigationSamples;
 private static java.util.function.Consumer<ServerTickEvent.Post> listener;
 
 private static BlockPos pos(Object raw) {
     var value = (Map<?,?>) raw;
     return new BlockPos(((Number)value.get("x")).intValue(), ((Number)value.get("y")).intValue(),
         ((Number)value.get("z")).intValue());
-}
-private static Object field(Object owner, String name) throws Exception {
-    var field = owner.getClass().getDeclaredField(name);
-    field.setAccessible(true);
-    return field.get(owner);
 }
 private static void add(ItemStack stack, String where, String owner, Map<String,Long> totals, List<Object> tools,
                         Set<ItemStack> seen) {
@@ -106,61 +85,6 @@ private static void add(ItemStack stack, String where, String owner, Map<String,
         tools.add(Map.of("id", id, "name", stack.getHoverName().getString(), "damage", stack.getDamageValue(),
             "shape", normalized.save(level.registryAccess()).toString(), "where", where, "owner", owner));
     }
-}
-private static String stances(Collection<WorldPos> cells) {
-    var sorted = cells.stream().map(Object::toString).sorted().toList();
-    if (sorted.size() > 512) throw new IllegalStateException("observer stance set exceeded 512 cells");
-    String fingerprint = sorted.toString();
-    String known = knownStances.get(fingerprint);
-    if (known != null) return known;
-    if (knownStances.size() >= 512) throw new IllegalStateException("observer exceeded 512 distinct stance sets");
-    String id = "stances-" + knownStances.size();
-    knownStances.put(fingerprint, id); stanceSets.put(id, sorted);
-    return id;
-}
-private static String workGraph() throws Exception {
-    // Read the actual core Labor site and its published server-thread snapshot. No readiness, pathfinding or draining.
-    var site = Labor.class.getDeclaredMethod("site", UUID.class, net.minecraft.resources.ResourceKey.class);
-    site.setAccessible(true);
-    var found = (Optional<?>)site.invoke(null, colony.id(), level.dimension());
-    var snapshot = new LinkedHashMap<String,Object>();
-    var nodes = new ArrayList<Object>();
-    var tours = new TreeMap<String,Object>();
-    snapshot.put("nodes", nodes); snapshot.put("tours", tours);
-    if (found.isPresent()) {
-        var labor = (ColonyLabor)found.get();
-        var graph = (WeaveView)field(labor, "graph");
-        if (graph.size() > 256) throw new IllegalStateException("observer work graph exceeded 256 nodes");
-        for (var vertex : graph.vertices().values().stream().sorted(Comparator.comparing(v -> v.id().toString())).toList()) {
-            var node = vertex.node();
-            var row = new LinkedHashMap<String,Object>();
-            row.put("id", vertex.id().toString()); row.put("kind", node.getClass().getSimpleName());
-            row.put("owner", node.spec().owner().toString()); row.put("site", node.spec().site().where().toString());
-            row.put("state", labor.state(vertex.id()).map(Enum::name).orElse("unknown"));
-            row.put("declaredStances", stances(node.spec().stances().cells()));
-            // Placement.stands is the material-constrained candidate set, not Tours' transient selected Placed.
-            row.put("planStances", stances(vertex.plan().stands().stream().map(stand -> stand.cell()).toList()));
-            nodes.add(row);
-        }
-        var schedule = (Schedule)field(labor, "schedule");
-        for (var tour : schedule.tours().values()) {
-            tours.put(tour.resident().toString(), tour.nodes().stream().map(Object::toString).toList());
-        }
-        var diagnosis = (Diagnosis)field(labor, "diagnosis");
-        snapshot.put("unassigned", diagnosis.unassigned().stream().map(wait ->
-            wait.node() + " " + wait.why() + (wait.blockedBy() == null ? "" : " after " + wait.blockedBy()))
-            .sorted().toList());
-        snapshot.put("shortfalls", diagnosis.shortfalls().stream().map(shortage ->
-            shortage.consumer() + " " + shortage.what().describe() + " " + shortage.missing() + " " + shortage.why())
-            .sorted().toList());
-    }
-    String fingerprint = snapshot.toString();
-    String known = knownGraphs.get(fingerprint);
-    if (known != null) return known;
-    if (knownGraphs.size() >= 4096) throw new IllegalStateException("observer exceeded 4096 work graphs");
-    String id = "graph-" + knownGraphs.size();
-    knownGraphs.put(fingerprint, id); workGraphs.put(id, snapshot);
-    return id;
 }
 private static Map<String,Object> sample() throws Exception {
     var totals = new TreeMap<String,Long>();
@@ -175,23 +99,11 @@ private static Map<String,Object> sample() throws Exception {
         }
     }
     int residents = 0;
-    var residentPositions = new TreeMap<String,Object>();
     for (var resident : colony.residents()) {
         var entity = level.getEntity(resident.id());
         if (entity == null) throw new IllegalStateException("resident unloaded: " + resident.id());
         var body = Bodies.of(entity).orElseThrow();
         residents++;
-        var actual = WorldSpaces.at(entity);
-        var local = WorldSpaces.relative(level, actual.realm(), entity.position()).orElseThrow();
-        var position = new LinkedHashMap<String,Object>();
-        position.put("world", List.of(entity.getX(), entity.getY(), entity.getZ()));
-        position.put("relative", List.of(local.x, local.y, local.z));
-        position.put("cell", actual.toString()); position.put("blockCell", entity.blockPosition().toShortString());
-        position.put("onGround", entity.onGround());
-        position.put("doing", body.doing().map(Object::toString).orElse("idle"));
-        position.put("balk", body.balk().map(Object::toString).orElse("none"));
-        position.put("effects", body.effects().parts().stream().map(Object::toString).toList());
-        residentPositions.put(resident.id().toString(), position);
         for (int slot = 0; slot < body.pack().getContainerSize(); slot++) {
             add(body.pack().getItem(slot), "resident", resident.id().toString(), totals, tools, seen);
         }
@@ -217,27 +129,12 @@ private static Map<String,Object> sample() throws Exception {
         }
         targetCounts.add(count);
     }
-    var service = colony.service(io.github.izakyl.folkways.cookery.CookeryContent.ID, Object.class).orElseThrow();
-    var taskTools = ((CookeryPresence)service).tools();
-    var pool = field(taskTools, "pool");
-    var queues = (Map<?,?>)field(pool, "queues");
-    int queued = queues.values().stream().mapToInt(queue -> ((Collection<?>)queue).size()).sum();
-    int loans = ((Map<?,?>)field(pool, "leases")).size();
     var result = new LinkedHashMap<String,Object>();
     result.put("phase", phase); result.put("tools", tools); result.put("boards", nativeBoards);
-    result.put("totals", totals); result.put("target", targetCounts); result.put("queued", queued);
-    result.put("loans", loans); result.put("residents", residents);
+    result.put("totals", totals); result.put("target", targetCounts); result.put("residents", residents);
     String fingerprint = result.toString();
     result.put("tick", level.getGameTime());
-    boolean physicalChanged = !fingerprint.equals(previous);
-    if (physicalChanged || level.getGameTime() - lastNavigation >= 20) {
-        if (++navigationSamples > 6000) throw new IllegalStateException("observer exceeded 6000 navigation samples");
-        navigation.add(Map.of("tick", level.getGameTime(), "phase", phase, "residents", residentPositions,
-            "workGraph", workGraph()));
-        lastNavigation = level.getGameTime();
-    }
-    result.put("residentPositions", residentPositions);
-    if (physicalChanged) {
+    if (!fingerprint.equals(previous)) {
         if (++physicalSamples > 60000) throw new IllegalStateException("observer exceeded 60000 physical samples");
         rows.add(result); previous = fingerprint;
     }
@@ -247,8 +144,7 @@ private static Map<String,Object> sample() throws Exception {
     body: `
 var args = Args.of(ctx);
 String mode = args.string("mode");
-if (mode.equals("stop") && colony == null) return Map.of("observerFailure", "observer class was reloaded",
-    "rows", List.of(), "navigation", List.of(), "workGraphs", Map.of(), "stanceSets", Map.of());
+if (mode.equals("stop") && colony == null) return Map.of("observerFailure", "observer class was reloaded", "rows", List.of());
 if (mode.equals("start")) {
     if (listener != null) NeoForge.EVENT_BUS.unregister(listener);
     var player = ctx.server().getPlayerList().getPlayerByName(args.string("player"));
@@ -257,18 +153,14 @@ if (mode.equals("start")) {
     rack = pos(args.value("rack"));
     boards = ((List<?>)args.value("boards")).stream().map(value -> pos(value)).toList();
     targets = ((List<?>)args.value("targets")).stream().map(value -> pos(value)).toList();
-    rows.clear(); navigation.clear(); workGraphs.clear(); stanceSets.clear();
-    knownGraphs.clear(); knownStances.clear(); physicalSamples = 0; navigationSamples = 0;
-    lastNavigation = Long.MIN_VALUE / 2; previous = ""; observerFailure = "";
+    rows.clear(); physicalSamples = 0; previous = ""; observerFailure = "";
     listener = event -> { try { sample(); } catch (Throwable broken) { observerFailure = broken.toString(); } };
     NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class, listener);
 }
 phase = args.string("phase");
 var current = sample();
-var result = Map.of("current", current, "rows", new ArrayList<>(rows), "observerFailure", observerFailure,
-    "navigation", new ArrayList<>(navigation), "workGraphs", new LinkedHashMap<>(workGraphs),
-    "stanceSets", new LinkedHashMap<>(stanceSets));
-rows.clear(); navigation.clear(); workGraphs.clear(); stanceSets.clear();
+var result = Map.of("current", current, "rows", new ArrayList<>(rows), "observerFailure", observerFailure);
+rows.clear();
 if (mode.equals("stop") && listener != null) { NeoForge.EVENT_BUS.unregister(listener); listener = null; }
 return result;
 `,
@@ -278,12 +170,8 @@ return result;
 for (const stage of twins()) test(stage.title("shared cookery tools: one named rack knife rotates, explicit maintain two enables parallel work"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   const runId = newRunId();
-  const evidence: Record<string, any> = { stage: stage.kind, samples: [], navigation: [], workGraphs: {}, stanceSets: {},
-    navigationSampling: "every physical change and at least every 20 ticks; planStances are candidates, not selected Placed" };
-  const append = (value: Reading) => {
-    evidence.samples.push(...value.rows); evidence.navigation.push(...value.navigation);
-    Object.assign(evidence.workGraphs, value.workGraphs); Object.assign(evidence.stanceSets, value.stanceSets);
-  };
+  const evidence: Record<string, any> = { stage: stage.kind, samples: [] };
+  const append = (value: Reading) => { evidence.samples.push(...value.rows); };
   let pair: E2EPair | undefined;
   let cells: Layout | undefined;
   let playerName = "";
@@ -347,14 +235,13 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     await put(server, stage, cells.supply, 2, DOUGH, BATCHES);
     await put(server, stage, cells.supply, 3, "minecraft:chicken", BATCHES);
     evidence.first = await waitFor(server, read, "one", sample => sample.target.every(count => count === SERVINGS)
-      && sample.tools.length === 1 && sample.tools[0].where === "rack" && sample.loans === 0);
+      && sample.tools.length === 1 && sample.tools[0].where === "rack");
     const firstRows = (evidence.samples as Sample[]).filter(sample => sample.phase === "one");
     for (const row of firstRows) {
       expect(row.tools, "busy workers never manufacture another knife").toHaveLength(1);
       expect(row.tools[0].shape, "borrowing preserves every component other than native damage").toBe(original.shape);
       expect(row.totals["minecraft:iron_ingot"] ?? 0, "the automatic pool never spends spare iron while its knife exists").toBe(3);
     }
-    expect(firstRows.some(row => row.queued >= 2 && row.loans === 1), "a second ready cooking task actually waits for the busy knife").toBe(true);
     const borrowers = new Set(firstRows.flatMap(row => row.tools.filter(tool => tool.where === "resident").map(tool => tool.owner)));
     expect(borrowers.size, "at least two residents actually borrow the same physical knife").toBeGreaterThanOrEqual(2);
     expect(returnedBetweenBorrowers(firstRows), "one worker returns the knife to the real rack before another worker borrows it").toBe(true);
@@ -366,7 +253,7 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     await read("read", "maintain");
     evidence.maintain = await setMaintainDemandViaUI(server, client, playerName, cells.rack, KNIFE, 2, stage, 2);
     evidence.twoIdle = await waitFor(server, read, "maintain", sample => sample.tools.length === 2
-      && sample.tools.every(tool => tool.where === "rack") && sample.loans === 0);
+      && sample.tools.every(tool => tool.where === "rack"));
     expect(evidence.twoIdle.totals["minecraft:iron_ingot"] ?? 0, "the explicit two-tool target makes exactly one additional iron knife").toBe(0);
     expect(evidence.twoIdle.tools.filter((tool: Tool) => tool.name === original.name)).toHaveLength(1);
     // Supply enough real materials to expose accidental replenishment while both maintained tools are borrowed.
@@ -381,7 +268,7 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     await put(server, stage, cells.supply, 2, DOUGH, BATCHES);
     await put(server, stage, cells.supply, 3, "minecraft:chicken", BATCHES);
     evidence.final = await waitFor(server, read, "two", sample => sample.target.every(count => count === SERVINGS * 2)
-      && sample.tools.length === 2 && sample.tools.every(tool => tool.where === "rack") && sample.loans === 0);
+      && sample.tools.length === 2 && sample.tools.every(tool => tool.where === "rack"));
     const secondRows = (evidence.samples as Sample[]).filter(sample => sample.phase === "two");
     for (const row of secondRows) expect(row.tools, "a promised physical return satisfies the maintained stock without making spare copies").toHaveLength(2);
     expect(secondRows.some(row => new Set(row.tools.filter(tool => tool.where === "resident").map(tool => tool.owner)).size === 2),

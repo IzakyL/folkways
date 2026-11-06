@@ -75,22 +75,17 @@ public final class ItemIdentityGameTests {
         first.set(DataComponents.CUSTOM_DATA, CustomData.of(extra));
         first.set(DataComponents.CUSTOM_NAME, Component.literal("Ammunition"));
         ItemSpec wanted = subset("tacz:45acp");
-        helper.assertTrue(
-            Goods.matches(first, wanted) && !Goods.matches(ammo("tacz:9mm", 7), wanted),
+        helper.assertTrue(Goods.matches(first, wanted) && !Goods.matches(ammo("tacz:9mm", 7), wanted),
             "custom_data permits extra fields but distinguishes ammo ids");
-        helper.assertTrue(
-            Goods.matches(first, ItemSpec.of(Items.PAPER))
-            && Goods.matches(first, ItemSpec.anyOf(List.of(ItemSpec.of(Items.STONE), wanted))),
+        helper.assertTrue(Goods.matches(first, ItemSpec.of(Items.PAPER))
+                && Goods.matches(first, ItemSpec.anyOf(List.of(ItemSpec.of(Items.STONE), wanted))),
             "ordinary requirements and alternatives retain their meaning");
-        ItemSpec sized =
-            ItemSpec.of(Items.PAPER)
+        ItemSpec sized = ItemSpec.of(Items.PAPER)
             .withComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 16).build());
         first.set(DataComponents.MAX_STACK_SIZE, 16);
-        helper.assertTrue(
-            Goods.matches(first, sized) && !Goods.matches(ammo("tacz:45acp", 7), sized),
+        helper.assertTrue(Goods.matches(first, sized) && !Goods.matches(ammo("tacz:45acp", 7), sized),
             "ordinary component constraints compare whole values");
-        helper.assertTrue(
-            Goods.stackSize(sized) == 16 && Goods.stackSize(ItemSpec.of(Items.PAPER)) == 64,
+        helper.assertTrue(Goods.stackSize(sized) == 16 && Goods.stackSize(ItemSpec.of(Items.PAPER)) == 64,
             "component-aware sizes use separate cache entries");
         helper.succeed();
     }
@@ -100,27 +95,19 @@ public final class ItemIdentityGameTests {
         CompoundTag expected = TagParser.parseTag("{ammo:{id:'tacz:45acp'},lots:[{maker:'test'}]}");
         CompoundTag actual =
             TagParser.parseTag("{ammo:{id:'tacz:45acp',quality:2},lots:[{maker:'other'},{maker:'test',batch:1}]}");
-        ItemSpec wanted =
-            ItemSpec.of(Items.PAPER)
-            .withComponents(
-            DataComponentMap.builder()
-            .set(DataComponents.CUSTOM_DATA, CustomData.of(expected))
-            .build());
+        ItemSpec wanted = ItemSpec.of(Items.PAPER).withComponents(DataComponentMap.builder()
+            .set(DataComponents.CUSTOM_DATA, CustomData.of(expected)).build());
         ItemStack stack = new ItemStack(Items.PAPER);
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(actual));
-        helper.assertTrue(
-            Goods.matches(stack, wanted), "nested compounds and unordered NBT subset lists"
-            + " permit extra values");
+        helper.assertTrue(Goods.matches(stack, wanted),
+            "nested compounds and unordered NBT subset lists permit extra values");
         actual.getCompound("ammo").putString("id", "tacz:9mm");
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(actual));
-        helper.assertTrue(
-            !Goods.matches(stack, wanted) && !Goods.overlap(wanted, Goods.specOf(stack)),
+        helper.assertTrue(!Goods.matches(stack, wanted) && !Goods.overlap(wanted, Goods.specOf(stack)),
             "a conflicting nested identity fails both matching and overlap");
         ItemStack potion = new ItemStack(Items.POTION);
-        helper.assertTrue(
-            Goods.matches(potion, Goods.specOf(potion)),
-            "an item's customized getDefaultInstance cannot replace an actual stack's default"
-            + " map");
+        helper.assertTrue(Goods.matches(potion, Goods.specOf(potion)),
+            "an item's customized getDefaultInstance cannot replace an actual stack's default map");
         helper.succeed();
     }
 
@@ -131,19 +118,16 @@ public final class ItemIdentityGameTests {
         ItemSpec identity = Goods.specOf(first);
         int hash = identity.hashCode();
         ItemStack same = first.copyWithCount(20);
-        helper.assertTrue(
-            identity.equals(Goods.specOf(same)) && Goods.matches(same, identity),
+        helper.assertTrue(identity.equals(Goods.specOf(same)) && Goods.matches(same, identity),
             "stack count is not part of identity");
         first.set(DataComponents.CUSTOM_DATA, ammo("tacz:9mm", 1).get(DataComponents.CUSTOM_DATA));
-        helper.assertTrue(
-            identity.hashCode() == hash && Goods.matches(same, identity) && !Goods.matches(first, identity),
+        helper.assertTrue(identity.hashCode() == hash && Goods.matches(same, identity)
+                && !Goods.matches(first, identity),
             "changing the source stack cannot change an identity used as a map key");
         same.set(DataComponents.RARITY, Rarity.COMMON);
-        helper.assertTrue(!Goods.matches(same, identity), "removed defaults are part of the exact"
-            + " map");
+        helper.assertTrue(!Goods.matches(same, identity), "removed defaults are part of the exact map");
         ItemStack shown = Goods.display(identity);
-        helper.assertTrue(
-            !shown.has(DataComponents.RARITY) && Goods.matches(shown, identity),
+        helper.assertTrue(!shown.has(DataComponents.RARITY) && Goods.matches(shown, identity),
             "display stacks retain removed and custom components");
         helper.succeed();
     }
@@ -154,35 +138,24 @@ public final class ItemIdentityGameTests {
         stack.remove(DataComponents.RARITY);
         ItemSpec both = ItemSpec.anyOf(List.of(Goods.specOf(stack), subset("tacz:9mm")));
         ItemSpec loaded = ItemSpec.load(Reader.of(both.save())).orElseThrow();
-        helper.assertTrue(
-            loaded.equals(both) && loaded.hashCode() == both.hashCode(), "NBT round trip"
-            + " preserves map"
-            + " keys");
-        var ops = helper.getLevel().registryAccess().createSerializationContext(NbtOps.INSTANCE);
+        helper.assertTrue(loaded.equals(both) && loaded.hashCode() == both.hashCode(),
+            "NBT round trip preserves map keys");
+        var registries = helper.getLevel().registryAccess();
+        var ops = registries.createSerializationContext(NbtOps.INSTANCE);
         ItemSpec decoded = ItemSpec.CODEC.parse(ops, ItemSpec.CODEC.encodeStart(ops, both).getOrThrow()).getOrThrow();
-        helper.assertTrue(
-            decoded.equals(both) && Goods.matches(stack, decoded),
+        helper.assertTrue(decoded.equals(both) && Goods.matches(stack, decoded),
             "registry codec round trip preserves alternatives");
-        stack.enchant(
-            helper.getLevel()
-            .registryAccess()
-            .lookupOrThrow(Registries.ENCHANTMENT)
-            .getOrThrow(Enchantments.UNBREAKING),
-            1);
+        stack.enchant(registries.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.UNBREAKING), 1);
         ItemSpec enchanted = Goods.specOf(stack);
-        helper.assertTrue(
-            ItemSpec.load(
-            Reader.of(enchanted.save(helper.getLevel().registryAccess())),
-            helper.getLevel().registryAccess())
-            .orElseThrow()
-            .equals(enchanted),
+        helper.assertTrue(ItemSpec.load(Reader.of(enchanted.save(registries)), registries).orElseThrow()
+                .equals(enchanted),
             "registry-backed components round trip");
         helper.succeed();
     }
 
     @GameTest(template = "empty", timeoutTicks = 10)
     public static void oldSavesMigrateToUnconstrainedRequirementsAndInvalidConstraintsDoNotBroaden(
-        GameTestHelper helper) {
+            GameTestHelper helper) {
         CompoundTag item = new CompoundTag();
         item.putString("item", "minecraft:paper");
         CompoundTag tag = new CompoundTag();
@@ -192,16 +165,13 @@ public final class ItemIdentityGameTests {
         children.add(item);
         children.add(tag);
         union.put("anyOf", children);
-        helper.assertTrue(
-            ItemSpec.load(Reader.of(item)).orElseThrow().equals(ItemSpec.of(Items.PAPER))
-            && ItemSpec.load(Reader.of(tag)).orElseThrow().equals(ItemSpec.of(ItemTags.LOGS))
-            && ItemSpec.load(Reader.of(union))
-            .orElseThrow()
-            .equals(ItemSpec.anyOf(List.of(ItemSpec.of(Items.PAPER), ItemSpec.of(ItemTags.LOGS)))),
+        helper.assertTrue(ItemSpec.load(Reader.of(item)).orElseThrow().equals(ItemSpec.of(Items.PAPER))
+                && ItemSpec.load(Reader.of(tag)).orElseThrow().equals(ItemSpec.of(ItemTags.LOGS))
+                && ItemSpec.load(Reader.of(union)).orElseThrow()
+                    .equals(ItemSpec.anyOf(List.of(ItemSpec.of(Items.PAPER), ItemSpec.of(ItemTags.LOGS)))),
             "all three old forms explicitly default to no constraint");
         item.putString("components", "broken");
-        helper.assertTrue(
-            ItemSpec.load(Reader.of(item)).isEmpty(),
+        helper.assertTrue(ItemSpec.load(Reader.of(item)).isEmpty(),
             "a corrupt constraint never becomes an item-only requirement");
         helper.succeed();
     }
@@ -211,26 +181,17 @@ public final class ItemIdentityGameTests {
         ItemSpec first = subset("tacz:45acp");
         ItemSpec second = subset("tacz:9mm");
         ItemStack exact = ammo("tacz:45acp", 1);
-        helper.assertTrue(
-            !Goods.overlap(first, second)
-            && Goods.overlap(first, Goods.specOf(exact))
-            && !Goods.overlap(second, Goods.specOf(exact)),
+        helper.assertTrue(!Goods.overlap(first, second) && Goods.overlap(first, Goods.specOf(exact))
+                && !Goods.overlap(second, Goods.specOf(exact)),
             "overlap checks component constraints");
         CompoundTag independent = new CompoundTag();
         independent.putString("maker", "test");
-        ItemSpec other =
-            ItemSpec.of(Items.PAPER)
-            .withComponents(
-            DataComponentMap.builder()
-            .set(DataComponents.CUSTOM_DATA, CustomData.of(independent))
-            .build());
-        helper.assertTrue(
-            Goods.overlap(first, other)
-            && Goods.overlap(other, first)
-            && !Goods.overlap(other, Goods.specOf(exact)),
+        ItemSpec other = ItemSpec.of(Items.PAPER).withComponents(DataComponentMap.builder()
+            .set(DataComponents.CUSTOM_DATA, CustomData.of(independent)).build());
+        helper.assertTrue(Goods.overlap(first, other) && Goods.overlap(other, first)
+                && !Goods.overlap(other, Goods.specOf(exact)),
             "subsets can share a larger map, but an exact map must already match");
-        helper.assertTrue(
-            !Goods.overlap(ItemSpec.anyOf(List.of(first, ItemSpec.of(Items.STONE))), second),
+        helper.assertTrue(!Goods.overlap(ItemSpec.anyOf(List.of(first, ItemSpec.of(Items.STONE))), second),
             "alternatives cannot hide incompatible constraints");
         helper.succeed();
     }
@@ -241,39 +202,24 @@ public final class ItemIdentityGameTests {
         Stash source = new Stash(f.source);
         ItemStack first = ammo("tacz:45acp", 5);
         ItemStack second = ammo("tacz:9mm", 9);
-        Stock stock =
-            new Stock(
-            List.of(new Stock.Holding(source, first), new Stock.Holding(source, second)),
+        Stock stock = new Stock(List.of(new Stock.Holding(source, first), new Stock.Holding(source, second)),
             Map.of(source, 0));
         ItemSpec broad = ItemSpec.of(Items.PAPER);
-        helper.assertTrue(
-            stock.lotsOf(broad).size() == 2
-            && stock.available(broad) == 14
-            && stock.available(subset("tacz:45acp")) == 5
-            && stock.available(subset("tacz:9mm")) == 9,
+        helper.assertTrue(stock.lotsOf(broad).size() == 2 && stock.available(broad) == 14
+                && stock.available(subset("tacz:45acp")) == 5 && stock.available(subset("tacz:9mm")) == 9,
             "lots and count caches distinguish component identities");
-        helper.assertTrue(
-            stock.manifest(source, Goods.specOf(first), 2, 3).exact().getFirst().getCount() == 3
-            && stock.roomAt(source, Goods.specOf(first)) == 59,
+        helper.assertTrue(stock.manifest(source, Goods.specOf(first), 2, 3).exact().getFirst().getCount() == 3
+                && stock.roomAt(source, Goods.specOf(first)) == 59,
             "manifests and partial stack room use the matching lot alone");
         Claims claims = new Claims();
         claims.take(new Claim(new Resource.Lot(source, Goods.specOf(first)), UUID.randomUUID(), 5));
-        helper.assertTrue(
-            claims.taken(new Resource.Lot(source, Goods.specOf(second))) == 0,
+        helper.assertTrue(claims.taken(new Resource.Lot(source, Goods.specOf(second))) == 0,
             "reserving one identity leaves the other untouched");
-        helper.assertTrue(
-            Leaves.cells(Leaves.ofStacks(List.of(first, second))) == 2
-            && !PackLoad.fits(
-            0,
-            1,
-            List.of(
-            List.of(
-            new Amount(Goods.specOf(first), 5),
-            new Amount(Goods.specOf(second), 9)))),
+        helper.assertTrue(Leaves.cells(Leaves.ofStacks(List.of(first, second))) == 2 && !PackLoad.fits(0, 1,
+                List.of(List.of(new Amount(Goods.specOf(first), 5), new Amount(Goods.specOf(second), 9)))),
             "different variants cannot share a pack cell");
         first.setCount(50);
-        helper.assertTrue(
-            stock.available(broad) == 14 && stock.heldAt(source, broad) == 14,
+        helper.assertTrue(stock.available(broad) == 14 && stock.heldAt(source, broad) == 14,
             "the stock snapshot and its caches stay consistent after inventory changes");
         helper.succeed();
     }
@@ -282,86 +228,50 @@ public final class ItemIdentityGameTests {
     public static void plannerHaulsAndCommitConsumesEachAmmoIdentitySeparately(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
-        level.setBlockAndUpdate(f.source.cell(), Blocks.BARREL.defaultBlockState());
-        var source = Containers.at(level, f.source.cell()).orElseThrow();
+        var source = f.barrels().source();
         ItemStack first = ammo("tacz:45acp", 2);
         ItemStack second = ammo("tacz:9mm", 3);
         source.setItem(0, first.copy());
         source.setItem(1, second.copy());
-        NodeSpec spec =
-            NodeSpec.of(
-            UUID.randomUUID(),
-            PlanningFixture.Rounds.OWNER,
-            new WorkSite.AtBlock(f.target),
-            Stances.at(f.target),
-            Workload.Once.of(1))
+        NodeSpec spec = NodeSpec.of(UUID.randomUUID(), PlanningFixture.Rounds.OWNER, new WorkSite.AtBlock(f.target),
+                Stances.at(f.target), Workload.Once.of(1))
             .needs(List.of(new Need(subset("tacz:45acp"), 2, true), new Need(subset("tacz:9mm"), 3, true)))
             .done();
-        Node consume =
-            new Node() {
-                public NodeSpec spec() {
-                    return spec;
-                }
+        Node consume = new Node() {
+            public NodeSpec spec() {
+                return spec;
+            }
 
-                public Outcome commit(ServerLevel at, Worker who) {
-                    helper.assertTrue(
-                        who.supplied().size() == 2
-                        && who.supplied().stream()
-                        .filter(stack -> Goods.matches(stack, subset("tacz:45acp")))
-                        .mapToInt(ItemStack::getCount)
-                        .sum()
-                        == 2
-                        && who.supplied().stream()
-                        .filter(stack -> Goods.matches(stack, subset("tacz:9mm")))
-                        .mapToInt(ItemStack::getCount)
-                        .sum()
-                        == 3,
-                        "commit receives both ammo types with their original counts and"
-                        + " components");
-                    return Outcome.done();
-                }
-            };
+            public Outcome commit(ServerLevel at, Worker who) {
+                helper.assertTrue(who.supplied().size() == 2 && supplied(who, "tacz:45acp") == 2
+                        && supplied(who, "tacz:9mm") == 3,
+                    "commit receives both ammo types with their original counts and components");
+                return Outcome.done();
+            }
+        };
         var solver = new PlanningFixture.Rounds();
         try {
-            var solved =
-                solver.solve(
-                f.situation(
-                new Stock(
-                List.of(
-                new Stock.Holding(new Stash(f.source), first),
-                new Stock.Holding(new Stash(f.source), second)),
-                Map.of(new Stash(f.source), 25)),
-                List.of()),
-                f.crew,
-                List.of(Grown.of(consume)),
-                List.of(),
-                0);
+            var stock = new Stock(List.of(new Stock.Holding(new Stash(f.source), first),
+                new Stock.Holding(new Stash(f.source), second)), Map.of(new Stash(f.source), 25));
+            var solved = solver.solve(f.situation(stock, List.of()), f.crew, List.of(Grown.of(consume)), List.of(), 0);
             var tour = solved.schedule().tours().get(f.worker.resident().id());
-            helper.assertTrue(
-                tour != null && tour.nodes().size() == 3, "each variant has its own fetch"
-                + " before consumption");
+            helper.assertTrue(tour != null && tour.nodes().size() == 3,
+                "each variant has its own fetch before consumption");
             for (UUID id : tour.nodes()) {
                 var vertex = solved.weave().vertices().get(id);
                 if (vertex.node() instanceof TransferNode fetch) {
-                    helper.assertTrue(fetch.goods().size() == 1, "a fetch manifest carries one"
-                        + " concrete identity");
+                    helper.assertTrue(fetch.goods().size() == 1, "a fetch manifest carries one concrete identity");
                 } else {
-                    helper.assertTrue(
-                        vertex.plan().draws().size() == 2
-                        && !vertex.plan()
-                        .draws()
-                        .getFirst()
-                        .spec()
-                        .equals(vertex.plan().draws().getLast().spec()),
+                    var draws = vertex.plan().draws();
+                    helper.assertTrue(draws.size() == 2 && !draws.getFirst().spec().equals(draws.getLast().spec()),
                         "the consumer holds two distinct component identities");
                 }
                 helper.assertTrue(
                     Commit.run(level, vertex.node(), new Placed(f.worker, vertex.plan())) instanceof Outcome.Done,
                     "every planned step commits");
             }
-            helper.assertTrue(
-                source.isEmpty() && f.worker.pack().isEmpty(), "all five rounds are consumed"
-                + " exactly once");
+            helper.assertTrue(source.isEmpty() && f.worker.pack().isEmpty(),
+                "all five rounds are consumed exactly once");
         } finally {
             solver.closed();
         }
@@ -373,34 +283,24 @@ public final class ItemIdentityGameTests {
         var f = new PlanningFixture(helper);
         f.worker.pack().setItem(0, ammo("tacz:9mm", 4));
         f.worker.pack().setItem(1, ammo("tacz:45acp", 2));
-        NodeSpec spec =
-            NodeSpec.of(
-            UUID.randomUUID(),
-            PlanningFixture.Rounds.OWNER,
-            new WorkSite.AtBlock(f.target),
-            Stances.at(f.target),
-            Workload.Once.of(1))
-            .needs(new Need(subset("tacz:45acp"), 2, true))
-            .done();
-        Node failing =
-            new Node() {
-                public NodeSpec spec() {
-                    return spec;
-                }
+        NodeSpec spec = NodeSpec.of(UUID.randomUUID(), PlanningFixture.Rounds.OWNER, new WorkSite.AtBlock(f.target),
+            Stances.at(f.target), Workload.Once.of(1)).needs(new Need(subset("tacz:45acp"), 2, true)).done();
+        Node failing = new Node() {
+            public NodeSpec spec() {
+                return spec;
+            }
 
-                public Outcome commit(ServerLevel at, Worker who) {
-                    return Outcome.failed(LaborRefusal.GOODS_GONE);
-                }
-            };
-        helper.assertTrue(
-            Commit.run(helper.getLevel(), failing, f.worker) instanceof Outcome.Failed
-            && Goods.countIn(f.worker.pack(), subset("tacz:45acp")) == 2
-            && Goods.countIn(f.worker.pack(), subset("tacz:9mm")) == 4,
+            public Outcome commit(ServerLevel at, Worker who) {
+                return Outcome.failed(LaborRefusal.GOODS_GONE);
+            }
+        };
+        helper.assertTrue(Commit.run(helper.getLevel(), failing, f.worker) instanceof Outcome.Failed
+                && Goods.countIn(f.worker.pack(), subset("tacz:45acp")) == 2
+                && Goods.countIn(f.worker.pack(), subset("tacz:9mm")) == 4,
             "rollback preserves both component identities");
         ItemStack extracted =
             Containers.extract(f.worker.pack(), stack -> Goods.matches(stack, ItemSpec.of(Items.PAPER)), 6);
-        helper.assertTrue(
-            extracted.getCount() == 4 && Goods.matches(extracted, subset("tacz:9mm")),
+        helper.assertTrue(extracted.getCount() == 4 && Goods.matches(extracted, subset("tacz:9mm")),
             "a broad extraction cannot grow one variant with another's count");
         helper.succeed();
     }
@@ -420,15 +320,10 @@ public final class ItemIdentityGameTests {
             var data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
             data.inventory().advance(level, data, Map.of());
             var reading = ColonyMetrics.of(level.getServer(), colony);
-            helper.assertTrue(
-                reading.stock().size() == 2 && reading.goods() == 5,
+            helper.assertTrue(reading.stock().size() == 2 && reading.goods() == 5,
                 "stock lists count two component identities rather than one item id");
-            helper.assertTrue(
-                reading.stock().stream()
-                .allMatch(
-                row ->
-                    row.count() == Goods.countIn(container, row.spec())
-                        && Goods.matches(row.stack(), row.spec())),
+            helper.assertTrue(reading.stock().stream().allMatch(row ->
+                    row.count() == Goods.countIn(container, row.spec()) && Goods.matches(row.stack(), row.spec())),
                 "each stock icon preserves its components and its own count");
         } finally {
             colony.raze();
@@ -438,7 +333,7 @@ public final class ItemIdentityGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 10)
     public static void transientComponentConstraintsRefuseSerializationWithoutChangingTheirMeaning(
-        GameTestHelper helper) {
+            GameTestHelper helper) {
         var values = DataComponentMap.builder().set(DataComponents.CREATIVE_SLOT_LOCK, Unit.INSTANCE).build();
         ItemSpec subset = ItemSpec.of(Items.PAPER).withComponents(values);
         ItemStack locked = new ItemStack(Items.PAPER);
@@ -446,8 +341,7 @@ public final class ItemIdentityGameTests {
         ItemSpec exact = ItemSpec.exact(locked);
         var ops = helper.getLevel().registryAccess().createSerializationContext(NbtOps.INSTANCE);
         for (ItemSpec spec : List.of(subset, exact, ItemSpec.anyOf(List.of(subset, ItemSpec.of(Items.STONE))))) {
-            helper.assertTrue(
-                ItemSpec.CODEC.encodeStart(ops, spec).error().isPresent(),
+            helper.assertTrue(ItemSpec.CODEC.encodeStart(ops, spec).error().isPresent(),
                 "a transient constraint must produce a codec error even with world registries");
             boolean refused = false;
             try {
@@ -455,12 +349,10 @@ public final class ItemIdentityGameTests {
             } catch (IllegalStateException expected) {
                 refused = true;
             }
-            helper.assertTrue(
-                refused, "NBT save refuses transient constraints instead of writing a broader"
-                + " specification");
+            helper.assertTrue(refused,
+                "NBT save refuses transient constraints instead of writing a broader specification");
         }
-        helper.assertTrue(
-            Goods.matches(locked, subset) && !Goods.matches(new ItemStack(Items.PAPER), subset),
+        helper.assertTrue(Goods.matches(locked, subset) && !Goods.matches(new ItemStack(Items.PAPER), subset),
             "failed persistence leaves the original runtime constraint intact");
         helper.succeed();
     }
@@ -505,6 +397,11 @@ public final class ItemIdentityGameTests {
             DataComponentMap.builder()
             .set(DataComponents.CUSTOM_DATA, ammo(id, 1).get(DataComponents.CUSTOM_DATA))
             .build());
+    }
+
+    private static int supplied(Worker who, String id) {
+        return who.supplied().stream().filter(stack -> Goods.matches(stack, subset(id)))
+            .mapToInt(ItemStack::getCount).sum();
     }
 
     private static ItemStack ammo(String id, int count) {

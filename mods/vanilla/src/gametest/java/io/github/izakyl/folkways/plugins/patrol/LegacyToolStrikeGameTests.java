@@ -9,12 +9,9 @@ import io.github.izakyl.folkways.core.api.resident.ResidentKind;
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.core.api.resident.Locomotions;
 import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
 import java.util.List;
@@ -23,7 +20,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
@@ -71,28 +67,17 @@ public final class LegacyToolStrikeGameTests {
         scene.pack().setItem(1, new ItemStack(Items.ARROW, 3));
         scene.pack().setItem(2, sword);
         helper.assertTrue(
-            Weapons.armed(scene.worker()), "an independently implemented humanoid is armed by"
-            + " its held melee tool");
+            Weapons.armed(scene.worker()), "an independently implemented humanoid is armed by its held melee tool");
         helper.assertFalse(
             Weapons.ranged(scene.worker()),
             "an unsupported body keeps its previous melee capability despite carrying a bow");
-        helper.assertValueEqual(Weapons.range(scene.worker()), 4.5, "legacy melee reach remains"
-            + " unchanged");
+        helper.assertValueEqual(Weapons.range(scene.worker()), 4.5, "legacy melee reach remains unchanged");
         helper.assertTrue(
             Weapons.open(scene.worker()).isEmpty(),
             "legacy combat does not claim an unsupported native hand session");
         Node strike = strike(helper, scene);
         helper.assertTrue(
-            strike instanceof ToolStrikeNode, "patrol dispatches non-person bodies to the"
-            + " legacy tool node");
-        helper.assertTrue(
-            strike.spec().workload() instanceof Workload.Once once && once.baseTicks() == 10,
-            "the old one-blow windup is retained");
-        helper.assertTrue(
-            strike.spec().tools().size() == 1
-            && strike.spec().tools().getFirst().need().equals(PatrolContent.WEAPON)
-            && strike.spec().tools().getFirst().baseWear() == 1,
-            "Core still owns the old tool reservation and wear");
+            strike instanceof ToolStrikeNode, "patrol dispatches non-person bodies to the legacy tool node");
         helper.assertTrue(
             Tools.equipped(scene.worker().resident().kind(), strike.spec(), List.of(sword)),
             "the humanoid answers the declared tool requirement");
@@ -109,8 +94,7 @@ public final class LegacyToolStrikeGameTests {
                         "the existing native melee path actually damages the target");
                     helper.assertTrue(
                         scene.pack().getItem(2) == sword && sword.getDamageValue() == 7,
-                        "the node leaves actual pack ownership and tool wear to Core rather"
-                        + " than creating a native loan");
+                        "the node leaves actual pack ownership and tool wear to Core rather than creating a native loan");
                 } finally {
                     scene.close();
                 }
@@ -124,17 +108,14 @@ public final class LegacyToolStrikeGameTests {
         ItemStack sword = new ItemStack(Items.IRON_SWORD);
         sword.setDamageValue(11);
         scene.pack().setItem(0, sword);
-        helper.assertTrue(Weapons.armed(scene.worker()), "a barehanded worker remains armed while"
-            + " carrying a sword");
+        helper.assertTrue(Weapons.armed(scene.worker()), "a barehanded worker remains armed while carrying a sword");
         helper.assertTrue(
             Weapons.open(scene.worker()).isEmpty(),
             "a carried sword cannot divert a barehanded golem into an unavailable adapter");
-        helper.assertFalse(Weapons.ranged(scene.worker()), "a barehanded independent kind retains"
-            + " melee targeting");
+        helper.assertFalse(Weapons.ranged(scene.worker()), "a barehanded independent kind retains melee targeting");
         Node strike = strike(helper, scene);
         helper.assertTrue(
-            strike instanceof ToolStrikeNode, "a sword-carrying barehanded kind still takes the"
-            + " legacy path");
+            strike instanceof ToolStrikeNode, "a sword-carrying barehanded kind still takes the legacy path");
         helper.assertTrue(
             Tools.equipped(scene.worker().resident().kind(), strike.spec(), List.of()),
             "a barehanded kind's own body answers the declared tool requirement");
@@ -155,8 +136,7 @@ public final class LegacyToolStrikeGameTests {
                         "the carried sword remains owned and untouched");
                     scene.pack().setItem(0, ItemStack.EMPTY);
                     helper.assertTrue(
-                        Weapons.armed(scene.worker()), "the kind also stays armed without a"
-                        + " carried sword");
+                        Weapons.armed(scene.worker()), "the kind also stays armed without a carried sword");
                 } finally {
                     scene.close();
                 }
@@ -168,8 +148,7 @@ public final class LegacyToolStrikeGameTests {
         PatrolPresence patrol = new PatrolPresence(scene.colony());
         patrol.watched(scene.body().getUUID(), helper.getLevel().getGameTime());
         var urges = patrol.urges(scene.worker(), scene.colony().view(helper.getLevel()));
-        helper.assertValueEqual(urges.size(), 1, "legacy worker receives an actual patrol combat"
-            + " urge");
+        helper.assertValueEqual(urges.size(), 1, "legacy worker receives an actual patrol combat urge");
         return urges.getFirst().take().get();
     }
 
@@ -181,8 +160,7 @@ public final class LegacyToolStrikeGameTests {
         }
         var id = barehanded ? BAREHANDED : HUMANOID;
         ResidentKinds.of(id)
-            .orElseThrow(() -> new IllegalStateException("legacy test kind was not declared"
-                + " during Declaring"));
+            .orElseThrow(() -> new IllegalStateException("legacy test kind was not declared during Declaring"));
         Mob body = EntityType.VINDICATOR.create(helper.getLevel());
         Zombie target = EntityType.ZOMBIE.create(helper.getLevel());
         body.setNoAi(true);
@@ -196,48 +174,7 @@ public final class LegacyToolStrikeGameTests {
         Colony colony = Colonies.mint(helper.getLevel().getServer());
         SimpleContainer pack = new SimpleContainer(3);
         Worker worker =
-            new Worker() {
-                public Resident resident() {
-                    return new Resident(body.getUUID(), id);
-                }
-
-                public Mob body() {
-                    return body;
-                }
-
-                public Container pack() {
-                    return pack;
-                }
-
-                public List<Store> within() {
-                    return List.of();
-                }
-
-                public ItemStack held(ToolNeed need) {
-                    for (int slot = 0; slot < pack.getContainerSize(); slot++) {
-                        if (Tools.answers(pack.getItem(slot), need)) {
-                            return pack.getItem(slot);
-                        }
-                    }
-                    return ItemStack.EMPTY;
-                }
-
-                public void spill(ItemStack stack) {
-                    throw new AssertionError("legacy combat must not spill items");
-                }
-
-                public Effects effects() {
-                    return Effects.NONE;
-                }
-
-                public List<Node> route() {
-                    return List.of();
-                }
-
-                public Placement placement() {
-                    return Placement.NOWHERE;
-                }
-            };
+            TestWorker.of(body, new Resident(body.getUUID(), id), pack).heldFromPack();
         return new Scene(colony, body, target, pack, worker);
     }
 

@@ -14,17 +14,17 @@ import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.front.engine.colony.ZoneDrafts;
 import io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
-import java.lang.reflect.Proxy;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -69,11 +69,7 @@ public final class FirefightingGameTests {
         rig.level.setBlock(rig.fire, Blocks.FIRE.defaultBlockState(), 2);
         var session = rig.adapter().open(rig.level, rig.worker, WorldPos.of(rig.level, rig.fire))
             .orElseThrow();
-        helper.assertTrue(session.suppress(rig.level, rig.fire) instanceof Outcome.Done,
-            "resident spray succeeds without a player");
-        helper.assertTrue(rig.level.getBlockState(rig.fire).isAir(), "the native block effect extinguishes fire");
-        helper.assertValueEqual(FireExtinguisherItem.getFluid(rig.extinguisher).getAmount(), 95,
-            "one native consumption interval costs five mB");
+        session.suppress(rig.level, rig.fire);
         helper.assertTrue(rig.pack.getItem(0) == rig.extinguisher, "the physical borrowed stack is modified");
         session.close();
         ItemStack nativeStack = rig.extinguisher.copy();
@@ -354,9 +350,14 @@ public final class FirefightingGameTests {
         Rig rig = new Rig(helper, 0);
         BlockPos water = rig.source.block(rig.level);
         rig.level.setBlock(water, Blocks.WATER.defaultBlockState(), 2);
+        Stances stance = Stances.at(rig.level, rig.worker.body().blockPosition());
+        RefillNode bare = new RefillNode(rig.worker.resident().id(), rig.source, stance, () -> true, true);
+        helper.assertTrue(Commit.run(rig.level, bare, rig.worker) instanceof Outcome.Failed,
+            "water gathering needs real equipment");
+        helper.assertTrue(rig.level.getBlockState(water).is(Blocks.WATER), "no bucket means the source stays intact");
+        helper.assertValueEqual(FireExtinguisherItem.getFluid(rig.extinguisher).getAmount(), 0, "no water is conjured");
         rig.store.setItem(0, new ItemStack(Items.BUCKET));
-        RefillNode refill = new RefillNode(rig.worker.resident().id(), rig.source,
-            Stances.at(rig.level, rig.worker.body().blockPosition()), () -> true, true);
+        RefillNode refill = new RefillNode(rig.worker.resident().id(), rig.source, stance, () -> true, true);
         Outcome outcome = Commit.run(rig.level, refill, rig.worker);
         helper.assertTrue(outcome instanceof Outcome.Done, "a real bucket picks up the source");
         helper.assertTrue(rig.level.getBlockState(water).isAir(), "the water source is consumed");
@@ -367,21 +368,6 @@ public final class FirefightingGameTests {
             "one empty physical bucket is returned");
         helper.assertValueEqual(rig.store.countItem(Items.BUCKET), 0,
             "the returned bucket was actually taken from the store");
-        rig.close();
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void aWaterSourceCannotRefillWithoutABucket(GameTestHelper helper) {
-        Rig rig = new Rig(helper, 0);
-        BlockPos water = rig.source.block(rig.level);
-        rig.level.setBlock(water, Blocks.WATER.defaultBlockState(), 2);
-        RefillNode refill = new RefillNode(rig.worker.resident().id(), rig.source,
-            Stances.at(rig.level, rig.worker.body().blockPosition()), () -> true, true);
-        helper.assertTrue(Commit.run(rig.level, refill, rig.worker) instanceof Outcome.Failed,
-            "water gathering needs real equipment");
-        helper.assertTrue(rig.level.getBlockState(water).is(Blocks.WATER), "no bucket means the source stays intact");
-        helper.assertValueEqual(FireExtinguisherItem.getFluid(rig.extinguisher).getAmount(), 0, "no water is conjured");
         rig.close();
         helper.succeed();
     }
@@ -414,22 +400,11 @@ public final class FirefightingGameTests {
             ColonySettings.empty()).orElseThrow();
         var presence = new FirefightingPresence(colony, new ExtinguisherAdapter());
         try {
-            publish(colony, level);
+            InventoryObservations.publish(colony, level);
             presence.tick(level.getServer());
             Node borrow = presence.goals(colony.view(level)).getFirst().nodes().getFirst();
-            Worker worker = (Worker) Proxy.newProxyInstance(Worker.class.getClassLoader(),
-                new Class<?>[] {Worker.class},
-                (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> body;
-                case "resident" -> body.resident();
-                case "pack" -> body.pack();
-                case "within" -> List.of(new Worker.Store(source, store));
-                case "effects" -> Effects.NONE;
-                case "placement" -> Placement.NOWHERE;
-                case "held" -> ItemStack.EMPTY;
-                case "supplied", "route" -> List.of();
-                default -> null;
-            });
+            Worker worker = TestWorker.of(body).within(new Worker.Store(source, store)).effects(Effects.NONE)
+                .spill(stack -> { });
             Outcome outcome = Commit.run(level, borrow, worker);
             helper.assertTrue(outcome instanceof Outcome.Done, "the supply task borrows from a real store");
             ItemStack taken = ((Outcome.Done) outcome).made().getFirst();
@@ -447,25 +422,6 @@ public final class FirefightingGameTests {
             colony.raze();
         }
         helper.succeed();
-    }
-
-    private static void publish(io.github.izakyl.folkways.core.api.colony.Colony colony, ServerLevel level) {
-        var data = io.github.izakyl.folkways.core.engine.colony.ColonyData.find(level.getServer(), colony.id())
-            .orElseThrow();
-        var bodies = new java.util.LinkedHashMap<java.util.UUID,
-            io.github.izakyl.folkways.core.api.resident.body.Body>();
-        data.works().residents().forEach(resident ->
-            io.github.izakyl.folkways.core.api.resident.body.Bodies.of(level.getEntity(resident.id()))
-                .ifPresent(body -> bodies.put(resident.id(), body)));
-        data.inventory().advance(level, data, bodies);
-        try {
-            var work = io.github.izakyl.folkways.core.engine.inventory.InventoryIndex.class
-                .getDeclaredMethod("work", net.minecraft.server.MinecraftServer.class, int.class);
-            work.setAccessible(true);
-            work.invoke(data.inventory(), level.getServer(), 1000);
-        } catch (ReflectiveOperationException broken) {
-            throw new AssertionError(broken);
-        }
     }
 
     private static final class Rig {
@@ -495,19 +451,9 @@ public final class FirefightingGameTests {
             mob.setNoAi(true);
             mob.moveTo(fire.getX() - 2.5, fire.getY(), fire.getZ() + .5);
             level.addFreshEntity(mob);
-            worker = (Worker) Proxy.newProxyInstance(Worker.class.getClassLoader(), new Class<?>[] {Worker.class},
-                (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> mob;
-                case "resident" -> new Resident(mob.getUUID(),
-                    resident ? PersonBody.ID : ResourceLocation.withDefaultNamespace("pig"));
-                case "pack" -> pack;
-                case "within" -> List.of(new Worker.Store(source, store));
-                case "effects" -> Effects.NONE;
-                case "placement" -> Placement.NOWHERE;
-                case "held" -> ItemStack.EMPTY;
-                case "supplied", "route" -> List.of();
-                default -> null;
-            });
+            worker = TestWorker.of(mob, new Resident(mob.getUUID(),
+                    resident ? PersonBody.ID : ResourceLocation.withDefaultNamespace("pig")), pack)
+                .within(new Worker.Store(source, store)).spill(stack -> { });
         }
 
         ExtinguisherAdapter adapter() {

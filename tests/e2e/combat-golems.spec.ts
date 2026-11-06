@@ -92,7 +92,6 @@ test("real Modular Golems retain humanoid and barehanded combat, and recover nat
     pair?.failing(error);
     throw error;
   } finally {
-    await testInfo.attach("combat-golems-readings.json", { body: JSON.stringify(readings, null, 2), contentType: "application/json" });
     if (pair && active) { try { await pair.server.run(CLEANUP, active); } catch {} }
     await pair?.teardown(testInfo);
   }

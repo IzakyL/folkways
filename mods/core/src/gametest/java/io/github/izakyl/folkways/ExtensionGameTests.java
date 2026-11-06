@@ -18,6 +18,7 @@ import io.github.izakyl.folkways.core.api.vocation.VocationSpec;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Facing;
@@ -231,15 +232,13 @@ public final class ExtensionGameTests {
             List<io.github.izakyl.folkways.core.api.work.Ending> ended = new java.util.ArrayList<>();
             colony.submit(SOURCES, level.dimension(), work, (any, how) -> ended.add(how));
             helper.assertTrue(ended.isEmpty(), "submitted work must stand without a state hierarchy");
-            var worker = (io.github.izakyl.folkways.core.api.work.Worker) java.lang.reflect.Proxy.newProxyInstance(
-                ExtensionGameTests.class.getClassLoader(), new Class<?>[] {io.github.izakyl.folkways.core.api.work.Worker.class},
-                (proxy, method, args) -> switch (method.getName()) {
-                    case "resident" -> body.resident();
-                    case "body" -> body;
-                    case "pack" -> body.pack();
-                    case "route" -> List.of(node);
-                    default -> throw new AssertionError(method.getName());
-                });
+            var worker = Proxies.of(io.github.izakyl.folkways.core.api.work.Worker.class, (proxy, method, args) -> switch (method.getName()) {
+                case "resident" -> body.resident();
+                case "body" -> body;
+                case "pack" -> body.pack();
+                case "route" -> List.of(node);
+                default -> throw new AssertionError(method.getName());
+            });
             helper.assertTrue(data.works().urges(worker, colony.view(level)).stream()
                 .anyMatch(felt -> felt.owner().equals(SOURCES) && felt.urge() == urge),
                 "direct urge source must run without shared state");

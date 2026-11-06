@@ -6,7 +6,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -14,15 +13,11 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class MineOneShotGameTests {
-    private static final Logger LOGGER = LoggerFactory.getLogger("mine-measurement");
-
     private MineOneShotGameTests() {
     }
 
@@ -33,8 +28,7 @@ public final class MineOneShotGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 24000)
     public static void maximalMine(GameTestHelper helper) {
-        Pattern pattern = Patterns.find(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "mine"))
-            .orElseThrow();
+        Pattern pattern = DraftKit.shipped("mine");
         Hint hint = new Hint.Zone(new BlockPos(0, 65, 0), new BlockPos(2, 65, 2));
         DraftKit.Filled settings = DraftKit.Filled.defaulting(pattern.knobs()).count("y", -64).count("spacing", 2);
         for (String direction : new String[] {"east", "south", "west", "north"}) {
@@ -51,9 +45,7 @@ public final class MineOneShotGameTests {
                 helper.getLevel().setBlock(origin.offset(x, -1, z), Blocks.STONE.defaultBlockState(), 2);
             }
         }
-        long start = System.nanoTime();
         World snapshot = World.capture(helper.getLevel(), area);
-        long captured = System.nanoTime();
         var drawing = Drafting.draw(pattern, new Commission(hint, settings, new DraftKit.Ground(64).floorAt(-64),
             Direction.NORTH, 7L));
         var capturedDrawing = Drafting.draw(pattern, new Commission(captureHint, settings, snapshot,
@@ -62,13 +54,7 @@ public final class MineOneShotGameTests {
                 "the mines finish drawing"))
             .thenExecute(() -> {
                 Drawn drawn = drawing.join();
-                long finished = System.nanoTime();
-                LOGGER.info("maximal mine capture={}ms draw={}ms result={}", (captured - start) / 1_000_000,
-                    (finished - captured) / 1_000_000,
-                    drawn instanceof Drawn.Ready ready ? ready.draft().cells().size() : drawn);
                 Drawn capturedDrawn = capturedDrawing.join();
-                LOGGER.info("captured maximal mine total={}ms result={}", (finished - start) / 1_000_000,
-                    capturedDrawn instanceof Drawn.Ready ready ? ready.draft().cells().size() : capturedDrawn);
                 helper.assertTrue(drawn instanceof Drawn.Ready, "maximum mine draws: " + drawn);
                 helper.assertTrue(capturedDrawn instanceof Drawn.Ready, "captured mine draws: " + capturedDrawn);
             }).thenSucceed();

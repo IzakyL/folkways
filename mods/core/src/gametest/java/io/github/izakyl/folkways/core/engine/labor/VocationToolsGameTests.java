@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.engine.labor;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
@@ -96,6 +97,8 @@ public final class VocationToolsGameTests {
         helper.assertValueEqual(stone.getDamageValue(), 1, "wear reaches the pack stack");
         front.setSetting(BUILDING, "tool", rules());
         helper.assertFalse(Kit.of(colony, body).holds(stone), "a tool removed from every kit becomes cargo");
+        helper.assertTrue(Kit.of(colony, body).specs().stream().noneMatch(want -> Goods.matches(stone, want)),
+            "stocking cannot request a tool off every list");
         helper.assertTrue(Commit.run(helper.getLevel(), node, hands) instanceof Outcome.Done,
             "a list edit cannot reject a tool already in the pack");
         ItemStack iron = new ItemStack(Items.IRON_AXE);
@@ -124,14 +127,25 @@ public final class VocationToolsGameTests {
         helper.succeed();
     }
 
+    // An explicitly empty legacy list migrates as forbidden, like any other list.
     @GameTest(template = "empty")
     public static void legacyGlobalRulesMigrateOnceWithoutOverwritingVocations(GameTestHelper helper) {
-        migrate(helper, rules("stone_axe"));
+        for (var legacy : List.of(rules("stone_axe"), rules())) {
+            migrate(helper, legacy);
+        }
+        helper.succeed();
     }
 
-    @GameTest(template = "empty")
-    public static void legacyExplicitEmptyMigratesAsForbidden(GameTestHelper helper) {
-        migrate(helper, rules());
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void durableProductsAreCargoButVocationToolsStayEquipped(GameTestHelper helper) {
+        var body = PersonBody.RESIDENT.get().create(helper.getLevel());
+        var kit = Kit.of(new ColonyData().works(), body);
+        var armor = new ItemStack(Items.NETHERITE_CHESTPLATE);
+        armor.setDamageValue(137);
+        helper.assertTrue(!kit.holds(armor), "durability alone does not make production into personal equipment");
+        helper.assertTrue(kit.holds(new ItemStack(Items.IRON_AXE)), "declared vocation tools remain equipped");
+        body.discard();
+        helper.succeed();
     }
 
     @GameTest(template = "empty")
@@ -182,7 +196,6 @@ public final class VocationToolsGameTests {
         front = ColonyFront.of(colony);
         helper.assertTrue(front.settings(FARMING).valueOf("tool").isEmpty(), "the old seed is never applied a second time");
         ColonyFront.forget(colony.id());
-        helper.succeed();
     }
 
     @GameTest(template = "empty")

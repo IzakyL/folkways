@@ -12,7 +12,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Equipable;
 import net.minecraft.world.item.ItemStack;
 
-public record LoadoutProfile(UUID id, String name, List<Entry> entries, Optional<LoadoutRegistry.Selection> legacy) {
+public record LoadoutProfile(UUID id, String name, List<Entry> entries) {
     public enum Kind {
         WEAPON,
         ARMOR,
@@ -65,7 +65,6 @@ public record LoadoutProfile(UUID id, String name, List<Entry> entries, Optional
     public LoadoutProfile {
         Objects.requireNonNull(id);
         Objects.requireNonNull(name);
-        Objects.requireNonNull(legacy);
         name = name.strip();
         entries = List.copyOf(entries);
         if (name.isEmpty()

@@ -87,6 +87,8 @@ public final class CookeryPaddyGameTests {
                     helper.assertValueEqual(Goods.countIn(rig.pack, rig.crop.seedSpec()), 0L, "the three-part plant spends exactly one actual wild seed");
                     rig.grow();
                     parts(helper, rig, 7);
+                    helper.assertValueEqual(rig.crop.canopyOf(rig.level(), List.of(rig.ground.above())).size(), 2,
+                        "the root also claims its two attached parts against duplicate harvest jobs");
                     List<Node> harvesting = scan(rig, field, 3);
                     helper.assertTrue(harvesting.size() == 1 && harvesting.getFirst() instanceof HarvestNode,
                         "only the native mature root owns harvesting of the full three-part plant");

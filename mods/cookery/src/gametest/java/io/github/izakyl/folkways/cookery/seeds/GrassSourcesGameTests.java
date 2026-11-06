@@ -3,6 +3,8 @@ package io.github.izakyl.folkways.cookery.seeds;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.compost.SeedBudget;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.core.api.colony.Closing;
@@ -10,7 +12,6 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -18,9 +19,7 @@ import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
@@ -42,9 +41,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
@@ -68,7 +65,7 @@ public final class GrassSourcesGameTests {
         try (Fixture rig = new Fixture(helper)) {
             rig.body.pack().setItem(0, new ItemStack(ModItems.STRAW_HAT.get()));
             rig.level.setBlock(rig.center.above(), Blocks.SHORT_GRASS.defaultBlockState(), Block.UPDATE_ALL);
-            helper.assertTrue(GrassSources.gather(rig.level, rig, rig.center.above(), rig.allowed) instanceof Outcome.Failed,
+            helper.assertTrue(GrassSources.gather(rig.level, rig.worker, rig.center.above(), rig.allowed) instanceof Outcome.Failed,
                 "a pack-only hat does not satisfy the native HEAD condition");
             helper.assertTrue(rig.level.getBlockState(rig.center.above()).is(Blocks.SHORT_GRASS), "refused work leaves grass intact");
             rig.wearHat();
@@ -76,7 +73,7 @@ public final class GrassSourcesGameTests {
             int harvested = 0;
             for (BlockPos ground : rig.allowed) {
                 rig.level.setBlock(ground.above(), Blocks.SHORT_GRASS.defaultBlockState(), Block.UPDATE_ALL);
-                Outcome.Done done = (Outcome.Done) GrassSources.gather(rig.level, rig, ground.above(), rig.allowed);
+                Outcome.Done done = (Outcome.Done) GrassSources.gather(rig.level, rig.worker, ground.above(), rig.allowed);
                 modSeeds += done.made().stream().filter(stack -> stack.is(TagMod.COOKERY_MOD_SEEDS)).mapToInt(ItemStack::getCount).sum();
                 if (++harvested >= 128) break;
             }
@@ -93,7 +90,7 @@ public final class GrassSourcesGameTests {
         try (Fixture rig = new Fixture(helper)) {
             helper.assertTrue(GrassSources.safeRestore(rig.level, rig.center, rig.allowed), "the native random-walk footprint is fully authorized");
             rig.body.pack().setItem(0, new ItemStack(Items.BONE_MEAL));
-            helper.assertTrue(Commit.run(rig.level, rig.restore(), rig) instanceof Outcome.Done, "real BoneMealItem API completes");
+            helper.assertTrue(Commit.run(rig.level, rig.restore(), rig.worker) instanceof Outcome.Done, "real BoneMealItem API completes");
             helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 0L,
                 "native growth spends exactly one supplied bone meal");
             helper.assertTrue(rig.allowed.stream().anyMatch(cell -> rig.level.getBlockState(cell.above()).is(Blocks.SHORT_GRASS)),
@@ -113,7 +110,7 @@ public final class GrassSourcesGameTests {
         try (Fixture rig = new Fixture(helper)) {
             rig.body.pack().setItem(0, new ItemStack(Items.BONE_MEAL));
             rig.allowed.remove(rig.center.offset(7, 0, 7));
-            helper.assertTrue(Commit.run(rig.level, rig.restore(), rig) instanceof Outcome.Failed, "one unregistered cell makes native growth unsafe");
+            helper.assertTrue(Commit.run(rig.level, rig.restore(), rig.worker) instanceof Outcome.Failed, "one unregistered cell makes native growth unsafe");
             helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 1L,
                 "refusal returns exactly the original bone meal");
             rig.allowed.add(rig.center.offset(7, 0, 7));
@@ -132,14 +129,14 @@ public final class GrassSourcesGameTests {
             rig.presence.refresh(rig.level.getServer());
             Node waiting = rig.source();
             helper.assertTrue(waiting.planned(rig.level).isEmpty(), "a real grass task can request its first shared hat before one is worn");
-            helper.assertTrue(Commit.run(rig.level, waiting, rig) instanceof Outcome.Failed,
+            helper.assertTrue(Commit.run(rig.level, waiting, rig.worker) instanceof Outcome.Failed,
                 "publishing demand does not bypass the native HEAD requirement at execution");
             waiting.ended(rig.level, Ending.REVOKED);
             rig.wearHat();
             Node gather = rig.source();
             helper.assertTrue(gather.worker().orElseThrow().equals(rig.body.id()), "only the real hat-wearing farmer is assigned");
             helper.assertTrue(gather.planned(rig.level).isEmpty(), "the registered zone takes its exclusive turn");
-            helper.assertTrue(Commit.run(rig.level, gather, rig) instanceof Outcome.Done, "published source executes native collection");
+            helper.assertTrue(Commit.run(rig.level, gather, rig.worker) instanceof Outcome.Done, "published source executes native collection");
             helper.assertTrue(rig.level.getBlockState(rig.center.above()).isAir(), "collection consumes the actual grass block");
             gather.ended(rig.level, Ending.DONE);
         }
@@ -158,12 +155,12 @@ public final class GrassSourcesGameTests {
             rig.colony.release(zone, Release.LET_GO);
             rig.mark(false);
             rig.presence.refresh(rig.level.getServer());
-            helper.assertTrue(Commit.run(rig.level, old, rig) instanceof Outcome.Failed, "real unmarking rejects the old action after remarking");
+            helper.assertTrue(Commit.run(rig.level, old, rig.worker) instanceof Outcome.Failed, "real unmarking rejects the old action after remarking");
             helper.assertTrue(rig.level.getBlockState(rig.center.above()).is(Blocks.SHORT_GRASS), "stale work leaves terrain untouched");
             old.ended(rig.level, Ending.REVOKED);
             Node next = rig.source();
             helper.assertTrue(next.planned(rig.level).isEmpty(), "the new generation has no permanent old lock");
-            helper.assertTrue(Commit.run(rig.level, next, rig) instanceof Outcome.Done, "newly registered work can collect");
+            helper.assertTrue(Commit.run(rig.level, next, rig.worker) instanceof Outcome.Done, "newly registered work can collect");
             next.ended(rig.level, Ending.DONE);
         }
         helper.succeed();
@@ -179,7 +176,7 @@ public final class GrassSourcesGameTests {
             Node restore = rig.source();
             helper.assertTrue(restore.planned(rig.level).isEmpty(), "a real restoration turn is planned");
             rig.body.pack().setItem(2, new ItemStack(ModItems.TOMATO_SEED.get(), 64));
-            helper.assertTrue(Commit.run(rig.level, restore, rig) instanceof Outcome.Done, "obsolete work settles without consuming input");
+            helper.assertTrue(Commit.run(rig.level, restore, rig.worker) instanceof Outcome.Done, "obsolete work settles without consuming input");
             helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 1L,
                 "the actual unspent bone meal is returned exactly once");
             helper.assertTrue(rig.allowed.stream().noneMatch(cell -> rig.level.getBlockState(cell.above()).is(Blocks.SHORT_GRASS)),
@@ -211,7 +208,7 @@ public final class GrassSourcesGameTests {
             for (boolean restore : List.of(false, true)) {
                 try (Fixture rig = new Fixture(helper)) {
                     rig.mark(restore); rig.wearHat();
-                    io.github.izakyl.folkways.cookery.InventoryObservations.publish(rig.colony, rig.level);
+                    InventoryObservations.publish(rig.colony, rig.level);
                     if (restore) rig.body.pack().setItem(1, new ItemStack(Items.BONE_MEAL));
                     else rig.level.setBlock(rig.center.above(), Blocks.SHORT_GRASS.defaultBlockState(), Block.UPDATE_ALL);
                     rig.presence.refresh(rig.level.getServer());
@@ -275,7 +272,7 @@ public final class GrassSourcesGameTests {
             rig.presence.refresh(rig.level.getServer());
             helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty() && old.refusal(rig.level).isPresent(),
                 "the changed setting withdraws the active restore root instead of retaining unwanted work");
-            helper.assertTrue(Commit.run(rig.level, old, rig) instanceof Outcome.Failed, "old restoration cannot spend input after the setting changes");
+            helper.assertTrue(Commit.run(rig.level, old, rig.worker) instanceof Outcome.Failed, "old restoration cannot spend input after the setting changes");
             helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 1L,
                 "the rejected native action returns its one actual bone meal");
             old.ended(rig.level, Ending.REVOKED);
@@ -299,7 +296,7 @@ public final class GrassSourcesGameTests {
                 }
                 // The global supplier stays true: execution must still recheck its own task permission.
                 helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(), "the ineligible worker's root is no longer wanted");
-                helper.assertTrue(Commit.run(rig.level, old, rig) instanceof Outcome.Failed, "the already adopted action rechecks its own actual worker");
+                helper.assertTrue(Commit.run(rig.level, old, rig.worker) instanceof Outcome.Failed, "the already adopted action rechecks its own actual worker");
                 helper.assertValueEqual(Goods.countIn(rig.body.pack(), Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 1L,
                     "cancelling the worker leaves its one real bone meal unspent");
                 helper.assertTrue(rig.allowed.stream().noneMatch(cell -> rig.level.getBlockState(cell.above()).is(Blocks.SHORT_GRASS)),
@@ -310,7 +307,8 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
-    private static final class Fixture implements Worker, AutoCloseable {
+    private static final class Fixture implements AutoCloseable {
+        final Worker worker;
         final ServerLevel level;
         final BlockPos center;
         final Set<BlockPos> allowed = new LinkedHashSet<>();
@@ -340,6 +338,7 @@ public final class GrassSourcesGameTests {
                 SeedBudget.Location.pack(body.id()), IntStream.range(0, body.pack().getContainerSize()).mapToObj(body.pack()::getItem).toList())),
                 List.of(), List.of(), Map.of()), () -> Set.of(ModItems.TOMATO_SEED.get()));
             presence = new SeedPresence(colony, ignored -> budget, () -> true);
+            worker = TestWorker.of(body).effects(Effects.NONE);
         }
         UUID mark(boolean restore) {
             return ColonyFront.of(colony).addZone(level, SeedPresence.GRASS, allowed,
@@ -366,8 +365,8 @@ public final class GrassSourcesGameTests {
             if (node.spec().workload() instanceof Workload.Within within) {
                 boolean complete = false;
                 for (int step = 0; step < 16; step++) {
-                    io.github.izakyl.folkways.cookery.InventoryObservations.publish(colony, level);
-                    var turn = within.next(level, this);
+                    InventoryObservations.publish(colony, level);
+                    var turn = within.next(level, worker);
                     if (turn instanceof Workload.Within.Turn.Leave) {
                         complete = true;
                         break;
@@ -379,23 +378,14 @@ public final class GrassSourcesGameTests {
                 }
                 if (!complete) throw new AssertionError("the retained decorated source must finish its native action and returns");
             }
-            Outcome result = Commit.run(level, node, this);
+            Outcome result = Commit.run(level, node, worker);
             if (!(result instanceof Outcome.Done done)) throw new AssertionError("the original adopted source commits after arrival: " + result);
             for (ItemStack made : done.made()) {
                 if (!io.github.izakyl.folkways.core.api.terms.Containers.insert(body.pack(), made).isEmpty()) throw new AssertionError("native seed output fits real cargo");
             }
-            node.released(level, this, Ending.DONE);
+            node.released(level, worker, Ending.DONE);
             node.ended(level, Ending.DONE);
         }
-        public Resident resident() { return body.resident(); }
-        public Mob body() { return body; }
-        public Container pack() { return body.pack(); }
-        public List<Store> within() { return List.of(); }
-        public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-        public void spill(ItemStack stack) { if (!stack.isEmpty()) throw new AssertionError("test pack has room"); }
-        public Effects effects() { return Effects.NONE; }
-        public List<Node> route() { return List.of(); }
-        public Placement placement() { return Placement.NOWHERE; }
         public void close() { presence.closed(Closing.SHUTDOWN); body.discard(); colony.raze(); }
     }
 }

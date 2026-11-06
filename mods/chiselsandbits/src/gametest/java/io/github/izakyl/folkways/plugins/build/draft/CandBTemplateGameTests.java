@@ -2,7 +2,6 @@ package io.github.izakyl.folkways.plugins.build.draft;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.chiselsandbits.CandBConfig;
-import io.github.izakyl.folkways.chiselsandbits.CandBMaterials;
 import io.github.izakyl.folkways.chiselsandbits.CandBSchematicBridge;
 import io.github.izakyl.folkways.chiselsandbits.CandBStructureCodec;
 import io.github.izakyl.folkways.chiselsandbits.FolkwaysChiselsAndBitsMod;
@@ -10,30 +9,26 @@ import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import io.github.izakyl.folkways.core.api.structure.StructurePayload;
 import io.github.izakyl.folkways.core.api.structure.Voxelizer;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.front.api.Ghost;
-import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.plugins.build.CandBGameTests;
 import io.github.izakyl.folkways.plugins.build.CandBTestData;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import mod.chiselsandbits.api.block.storage.StateEntryStorage;
 import mod.chiselsandbits.api.blockinformation.BlockInformation;
@@ -47,7 +42,6 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
@@ -59,7 +53,6 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import org.slf4j.LoggerFactory;
 
 @EventBusSubscriber(modid = FolkwaysChiselsAndBitsMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -70,67 +63,73 @@ public final class CandBTemplateGameTests {
         event.register(CandBTemplateGameTests.class);
     }
 
+    private interface Geometry {
+        void check(GameTestHelper helper, Pattern pattern, CompoundTag defaults, Map<Direction, Drawn.Ready> drawn);
+    }
+
+    private record Shown(String name, int seed, boolean whole, Function<Direction, Hint> hint, Geometry geometry) {
+    }
+
     @GameTest(template = "empty", timeoutTicks = 200)
-    public static void pavilionDrawsContinuousRoofInBothFrames(GameTestHelper helper) throws Exception {
-        var id = ResourceLocation.parse("folkways_chiselsandbits:pavilion");
-        Pattern pattern = Patterns.find(id).orElseThrow();
-        helper.assertValueEqual(pattern.detail(), "bits", "integration pattern uses bits");
-        for (String language : List.of("en_us", "zh_cn", "zh_hk", "zh_tw")) {
-            var words = pattern.face().words().get(language);
-            helper.assertTrue(words != null && words.containsKey("title"), "pavilion has a title in " + language);
-            for (var setting : pattern.knobs().settings()) {
-                helper.assertTrue(words.containsKey(setting.key()), "translated knob " + setting.key());
-            }
-        }
-        CompoundTag defaults = new CompoundTag();
-        for (var setting : pattern.knobs().settings()) {
-            if (setting instanceof Schema.Setting.Items items) {
-                defaults.put(items.key(), ItemSpec.anyOf(items.byDefault().stream()
-                    .map(filter -> ItemSpec.of(filter.id())).toList()).save());
-            }
-        }
-        for (Direction facing : List.of(Direction.NORTH, Direction.EAST)) {
-            var commission = new Commission(new Hint.Zone(BlockPos.ZERO, new BlockPos(8, 0, 8)),
-                Chosen.load(pattern.knobs(), defaults), World.NONE, facing, 73);
-            long began = System.nanoTime();
-            Drawn drawn = Drafting.draw(pattern, commission).join();
-            long millis = (System.nanoTime() - began) / 1_000_000;
-            helper.assertTrue(drawn instanceof Drawn.Ready, "pavilion draws facing " + facing + ": " + drawn);
-            var cells = ((Drawn.Ready) drawn).draft().cells();
-            helper.assertTrue(cells.stream().anyMatch(cell -> cell.payload().present()), "curves have partial cells");
-            helper.assertTrue(cells.stream().anyMatch(cell -> !cell.payload().present()), "platform has whole cells");
-            if (facing == Direction.NORTH) {
-                var ready = (Drawn.Ready) drawn;
-                BlockPos formerlyFloating = new BlockPos(2, 3, 7).subtract(ready.corner());
-                var fragment = cells.stream().filter(cell -> cell.offset().equals(formerlyFloating)).findFirst();
-                try (var processing = Voxelizer.installed().orElseThrow().drawing()) {
-                    helper.assertTrue(fragment.isEmpty() || fragment.get().payload().present()
-                        && CandBStructureCodec.decode(fragment.get().payload().tag())
-                            .getBlockInformation(15, 0, 8).isAir(), "bracket cut leaves no floating lower tip");
+    public static void bundledBitsPatternsDrawInBothFrames(GameTestHelper helper) {
+        Hint cube = new Hint.Zone(BlockPos.ZERO, new BlockPos(15, 15, 15));
+        Geometry plain = (at, pattern, defaults, drawn) -> { };
+        for (Shown shown : List.of(
+                new Shown("pavilion", 73, true, facing -> new Hint.Zone(BlockPos.ZERO, new BlockPos(8, 0, 8)),
+                    CandBTemplateGameTests::pavilion),
+                new Shown("torii", 7, false, facing -> cube, plain),
+                new Shown("rotunda", 7, false, facing -> cube, plain),
+                new Shown("gothic_cloister", 0, true,
+                    facing -> new Hint.Path(List.of(BlockPos.ZERO, BlockPos.ZERO.relative(facing, 16))),
+                    CandBTemplateGameTests::gothicCloister),
+                new Shown("stone_arch_bridge", 73, true, facing -> facing == Direction.NORTH
+                    ? new Hint.Zone(BlockPos.ZERO, new BlockPos(2, 0, 19))
+                    : new Hint.Path(List.of(BlockPos.ZERO, new BlockPos(19, 0, 0))), plain),
+                new Shown("rampart", 73, true, facing -> new Hint.Path(List.of(BlockPos.ZERO,
+                    facing == Direction.NORTH ? new BlockPos(0, 0, 24) : new BlockPos(24, 0, 0))),
+                    CandBTemplateGameTests::rampart),
+                new Shown("curved_gallery", 73, true, facing -> new Hint.Zone(BlockPos.ZERO, new BlockPos(2, 0, 12)),
+                    CandBTemplateGameTests::curvedGallery))) {
+            String name = shown.name();
+            Pattern pattern = Patterns.find(ResourceLocation.fromNamespaceAndPath("folkways_chiselsandbits", name))
+                .orElseThrow();
+            helper.assertValueEqual(pattern.detail(), "bits", name + " uses bit detail");
+            PatternChecks.localised(helper, pattern);
+            CompoundTag defaults = PatternChecks.defaults(pattern);
+            Map<Direction, Drawn.Ready> drawn = new EnumMap<>(Direction.class);
+            for (Direction facing : List.of(Direction.NORTH, Direction.EAST)) {
+                var commission = new Commission(shown.hint().apply(facing), Chosen.load(pattern.knobs(), defaults),
+                    World.NONE, facing, shown.seed());
+                Drawn one = Drafting.draw(pattern, commission).join();
+                helper.assertTrue(one instanceof Drawn.Ready, name + " draws facing " + facing + ": " + one);
+                var ready = (Drawn.Ready) one;
+                helper.assertTrue(ready.draft().cells().stream().anyMatch(cell -> cell.payload().present()),
+                    name + " curves have partial cells");
+                helper.assertTrue(!shown.whole() || ready.draft().cells().stream()
+                    .anyMatch(cell -> !cell.payload().present()), name + " has whole cells");
+                drawn.put(facing, ready);
+                if (facing == Direction.NORTH) {
+                    Drawn repeated = Drafting.draw(pattern, commission).join();
+                    helper.assertTrue(repeated instanceof Drawn.Ready, name + " repeated drawing finishes: " + repeated);
+                    helper.assertTrue(Arrays.equals(exported(ready), exported((Drawn.Ready) repeated)),
+                        name + " exports identical bytes");
                 }
-                var partial = cells.stream().filter(cell -> cell.payload().present()).toList();
-                var unique = new HashSet<CompoundTag>();
-                int resolution = Voxelizer.installed().orElseThrow().resolution();
-                int perBlock = resolution * resolution * resolution;
-                long voxels = (long) (cells.size() - partial.size()) * perBlock;
-                try (var processing = Voxelizer.installed().orElseThrow().drawing()) {
-                    for (var cell : partial) {
-                        unique.add(cell.payload().tag());
-                        voxels += CandBStructureCodec.validated(cell.payload().tag()).counts().values().stream()
-                            .mapToLong(Integer::longValue).sum();
-                    }
-                }
-                var bytes = new ByteArrayOutputStream();
-                var draft = ((Drawn.Ready) drawn).draft();
-                NbtIo.writeCompressed(DraftTemplate.of(draft, 3955), bytes);
-                LoggerFactory.getLogger("folkways-patterns").info(
-                    "pavilion metrics extent={} partial={} whole={} voxels={} equivalent={} millis={}"
-                        + " payloadBytes={} gzipBytes={} unique={} ratio={}",
-                    draft.extent(), partial.size(), cells.size() - partial.size(), voxels, (double) voxels / perBlock,
-                    millis, partial.stream().mapToLong(cell -> cell.payload().bytes()).sum(), bytes.size(),
-                    unique.size(), (double) unique.size() / partial.size());
-                CandBGameTests.reportPatternBudgets(helper, DraftTemplate.of(draft, 3955));
             }
+            CandBGameTests.checkPatternBudgets(helper, DraftTemplate.of(drawn.get(Direction.NORTH).draft(), 3955), false);
+            shown.geometry().check(helper, pattern, defaults, drawn);
+        }
+        helper.succeed();
+    }
+
+    private static void pavilion(GameTestHelper helper, Pattern pattern, CompoundTag defaults,
+            Map<Direction, Drawn.Ready> drawn) {
+        var ready = drawn.get(Direction.NORTH);
+        BlockPos formerlyFloating = new BlockPos(2, 3, 7).subtract(ready.corner());
+        var fragment = ready.draft().cells().stream().filter(cell -> cell.offset().equals(formerlyFloating)).findFirst();
+        try (var processing = Voxelizer.installed().orElseThrow().drawing()) {
+            helper.assertTrue(fragment.isEmpty() || fragment.get().payload().present()
+                && CandBStructureCodec.decode(fragment.get().payload().tag())
+                    .getBlockInformation(15, 0, 8).isAir(), "bracket cut leaves no floating lower tip");
         }
         var frame = Frame.over(new BoundingBox(0, 0, 0, 10, 4, 10), Direction.NORTH, false);
         var roof = new Solid.CurvedHip(frame, new Vec3i(11, 5, 11), 2.6, 1.15, 0.25);
@@ -142,17 +141,113 @@ public final class CandBTemplateGameTests {
         helper.assertTrue(!roof.holds(point.x, point.y, point.z), "low part of a subcell curve");
         point = frame.at(0.9, 0.28, 5.5);
         helper.assertTrue(roof.holds(point.x, point.y, point.z), "curve changes inside the same block");
-        helper.succeed();
+    }
+
+    private static void gothicCloister(GameTestHelper helper, Pattern pattern, CompoundTag defaults,
+            Map<Direction, Drawn.Ready> drawn) {
+        var arcFrame = Frame.over(new BoundingBox(0, 0, 0, 0, 3, 3), Direction.SOUTH, false);
+        var grown = new Solid.PointedVault(arcFrame, new Vec3i(1, 4, 4), 4, 2);
+        var tip = arcFrame.at(0.5, 6.3, 2);
+        helper.assertTrue(grown.holds(tip.x, tip.y, tip.z)
+            && grown.bounds().maxY() + 1 > tip.y, "grown pointed tip remains inside its bounds");
+        Drawn.Ready north = drawn.get(Direction.NORTH);
+        assertRotatedVoxels(helper, north, drawn.get(Direction.EAST), Direction.EAST);
+        for (Direction facing : List.of(Direction.SOUTH, Direction.WEST)) {
+            Drawn turned = Drafting.draw(pattern, new Commission(
+                new Hint.Path(List.of(BlockPos.ZERO, BlockPos.ZERO.relative(facing, 16))),
+                Chosen.load(pattern.knobs(), defaults), World.NONE, facing, 0)).join();
+            helper.assertTrue(turned instanceof Drawn.Ready, "gothic cloister draws: " + turned);
+            var ready = (Drawn.Ready) turned;
+            assertRotatedVoxels(helper, north, ready, facing);
+            helper.assertTrue(ready.draft().cells().stream().anyMatch(cell -> cell.payload().present())
+                && ready.draft().cells().stream().anyMatch(cell -> !cell.payload().present()),
+                "curved bits and whole plinths");
+        }
+        // Two adjacent coarse cells across each satellite remain stone at grain eight.
+        for (int x : List.of(5, 7)) {
+            for (int z : List.of(7, 9)) {
+                helper.assertTrue(!gothicVoxel(north, new BlockPos(-2, 1, 0), x, 1, z).isAir(),
+                    "attached shaft is at least two grain-eight cells across");
+            }
+        }
+        helper.assertTrue(gothicVoxel(north, new BlockPos(0, 2, 0), 8, 8, 8).isAir(), "open end portal");
+        for (var points : List.of(
+                List.of(BlockPos.ZERO, new BlockPos(0, 0, -12), new BlockPos(12, 0, -12)),
+                List.of(BlockPos.ZERO, new BlockPos(12, 0, 12), new BlockPos(24, 0, 0)),
+                List.of(BlockPos.ZERO, new BlockPos(0, 3, 12), new BlockPos(0, 1, 24)))) {
+            var joined = Drafting.draw(pattern, new Commission(new Hint.Path(points),
+                Chosen.load(pattern.knobs(), defaults), World.NONE, Direction.NORTH, 0)).join();
+            helper.assertTrue(joined instanceof Drawn.Ready, "joined or stepped cloister draws: " + joined);
+            var ready = (Drawn.Ready) joined;
+            assertSingleRoofSurface(helper, ready);
+            for (var point : points) {
+                helper.assertTrue(gothicVoxel(ready, point.above(2), 8, 8, 8).isAir(),
+                    "path centre stays open at " + point);
+            }
+        }
+    }
+
+    private static void rampart(GameTestHelper helper, Pattern pattern, CompoundTag defaults,
+            Map<Direction, Drawn.Ready> drawn) {
+        try (var processing = Voxelizer.installed().orElseThrow().drawing()) {
+            drawn.forEach((facing, ready) -> {
+                for (int along : List.of(0, 12, 24)) {
+                    for (int y : List.of(5, 6)) {
+                        BlockPos pos = facing == Direction.NORTH ? new BlockPos(0, y, along) : new BlockPos(along, y, 0);
+                        BlockPos offset = pos.subtract(ready.corner());
+                        var cell = ready.draft().cells().stream().filter(one -> one.offset().equals(offset)).findFirst();
+                        helper.assertTrue(cell.isEmpty() || cell.get().state().isAir() || cell.get().payload().present()
+                            && CandBStructureCodec.decode(cell.get().payload().tag())
+                                .getBlockInformation(8, 8, 8).isAir(), "wall walk headroom at " + pos);
+                    }
+                }
+            });
+        }
+        defaults.putInt("spacing", 12);
+        Drawn closeTowers = Drafting.draw(pattern, new Commission(
+            new Hint.Path(List.of(BlockPos.ZERO, new BlockPos(0, 0, 24))),
+            Chosen.load(pattern.knobs(), defaults), World.NONE, Direction.NORTH, 73)).join();
+        helper.assertTrue(closeTowers instanceof Drawn.Ready, "minimum tower spacing draws");
+        var closeReady = (Drawn.Ready) closeTowers;
+        BlockPos gate = new BlockPos(0, 1, 12).subtract(closeReady.corner());
+        helper.assertTrue(closeReady.draft().cells().stream().noneMatch(cell -> cell.offset().equals(gate)
+            && !cell.state().isAir()), "the gate reserves its bay when tower spacing is reduced");
+        var frame = Frame.over(new BoundingBox(0, 0, 0, 4, 4, 4), Direction.NORTH, false);
+        var batter = new Solid.TaperedBox(frame, new Vec3i(5, 5, 5), 1, 0);
+        var low = frame.at(0.5, 0.25, 2.5);
+        var high = frame.at(0.5, 4.75, 2.5);
+        helper.assertTrue(batter.holds(low.x, low.y, low.z), "batter retains its broad foot");
+        helper.assertTrue(!batter.holds(high.x, high.y, high.z), "batter continuously retreats at the crown");
+    }
+
+    private static void curvedGallery(GameTestHelper helper, Pattern pattern, CompoundTag defaults,
+            Map<Direction, Drawn.Ready> drawn) {
+        var path = new Hint.Path(List.of(BlockPos.ZERO, new BlockPos(0, 0, 6), new BlockPos(6, 1, 6)));
+        var rising = Drafting.draw(pattern, new Commission(path, Chosen.load(pattern.knobs(), defaults),
+            World.NONE, Direction.NORTH, 73)).join();
+        helper.assertTrue(rising instanceof Drawn.Ready, "rising turning path draws: " + rising);
+        var frame = Frame.over(new BoundingBox(0, 0, 0, 5, 5, 8), Direction.SOUTH, false);
+        var skin = new Solid.ProfiledSweep(frame, List.of(new Vec3(3, 0, 1), new Vec3(3, 1, 7)),
+            4, 3, 1, 0.25, 0.2);
+        var point = frame.at(3, 4.55, 4);
+        helper.assertTrue(skin.holds(point.x, point.y, point.z), "rounded ridge follows ramp elevation");
+        point = frame.at(3.9, 4.55, 4);
+        helper.assertTrue(!skin.holds(point.x, point.y, point.z), "roof changes within a block");
+    }
+
+    private static byte[] exported(Drawn.Ready ready) {
+        var output = new ByteArrayOutputStream();
+        try {
+            NbtIo.writeCompressed(DraftTemplate.of(ready.draft(), 3955), output);
+        } catch (IOException failed) {
+            throw new AssertionError(failed);
+        }
+        return output.toByteArray();
     }
 
     @GameTest(template = "empty", timeoutTicks = 40)
-    public static void templateImportStampFitAndExportKeepVoxelCoordinates(GameTestHelper helper) {
-        Piece piece = piece();
-        Scope scope = Scope.over(new BoundingBox(0, 0, 0, 0, 0, 0));
-        Draft draft = fitted(helper, piece, scope);
-        helper.assertValueEqual(draft.cells().size(), 1, "one template cell");
-        CandBTestData.sameVoxels(helper, CandBTestData.sculpture(),
-            CandBStructureCodec.decode(draft.cells().getFirst().payload().tag()));
+    public static void templateExportKeepsVoxelsAndAbsentModsWait(GameTestHelper helper) {
+        Draft draft = fitted(helper, piece(), Scope.over(new BoundingBox(0, 0, 0, 0, 0, 0)));
         CompoundTag exported = DraftTemplate.of(draft, 3955);
         var written = exported.getList("blocks", CompoundTag.TAG_COMPOUND).getCompound(0).getCompound("nbt");
         CandBTestData.sameVoxels(helper, CandBTestData.sculpture(), CandBStructureCodec.decode(written));
@@ -330,7 +425,6 @@ public final class CandBTemplateGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void bitsComposeMaterialsAcrossFramesAndMirrors(GameTestHelper helper) {
-        verifyIntervalSampling(helper);
         var encoder = Voxelizer.installed().orElseThrow();
         for (Direction facing : Direction.Plane.HORIZONTAL) {
             for (boolean mirrored : List.of(false, true)) {
@@ -393,7 +487,7 @@ public final class CandBTemplateGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
-    public static void representativeBitsDomeReportsItsBudget(GameTestHelper helper) throws Exception {
+    public static void representativeBitsDomeStaysWithinItsBudget(GameTestHelper helper) {
         Pattern pattern = Pattern.parse(ResourceLocation.parse("folkways:bits_benchmark"), """
             detail = "bits"
             def draw(site):
@@ -412,10 +506,8 @@ public final class CandBTemplateGameTests {
             .filter(layers -> layers.getFirst().mask().cardinality() < perBlock).count();
         long expectedBits = sample.cells().values().stream().mapToLong(layers -> layers.getFirst().mask().cardinality())
             .filter(count -> count < perBlock).sum();
-        long started = System.nanoTime();
         Drawn drawn = Drafting.draw(pattern, new Commission(new Hint.Zone(BlockPos.ZERO, new BlockPos(11, 5, 11)),
             Chosen.load(pattern.knobs(), new CompoundTag()), World.NONE, Direction.NORTH, 0)).join();
-        long millis = (System.nanoTime() - started) / 1_000_000;
         helper.assertTrue(drawn instanceof Drawn.Ready, "the representative bits dome must draw: " + drawn);
         var ready = (Drawn.Ready) drawn;
         long partial = ready.draft().cells().stream().filter(cell -> cell.payload().present()).count();
@@ -436,185 +528,14 @@ public final class CandBTemplateGameTests {
         helper.assertValueEqual(preview.getFirst().pos(), ghosts.stream()
             .min(Comparator.comparingDouble(ghost -> ghost.pos().distSqr(ready.corner())))
             .orElseThrow().pos(), "the nearest cell is retained first");
-        CompoundTag file = DraftTemplate.of(ready.draft(), 3955);
-        int uploadBytes;
-        try (var output = new ByteArrayOutputStream()) {
-            NbtIo.writeCompressed(file, output);
-            uploadBytes = output.size();
-        } catch (IOException failed) {
-            throw new AssertionError(failed);
-        }
-        LoggerFactory.getLogger("folkways-patterns").info(
-            "BITS_BENCH width=12 height=6 depth=12 partial={} bits={} whole={} drawMillis={}"
-                + " payloadBytes={} uploadBytes={} previewCells={} previewBytes={}",
-            partial, bits, ready.draft().cells().size() - partial, millis, payloadBytes, uploadBytes,
-            preview.size(), preview.stream().mapToLong(ghost -> ghost.payload().bytes()).sum());
-        CandBGameTests.reportPatternBudgets(helper, file);
-        started = System.nanoTime();
+        CandBGameTests.checkPatternBudgets(helper, DraftTemplate.of(ready.draft(), 3955), true);
         Drawn larger = Drafting.draw(pattern, new Commission(new Hint.Zone(BlockPos.ZERO, new BlockPos(29, 14, 29)),
             Chosen.load(pattern.knobs(), new CompoundTag()), World.NONE, Direction.NORTH, 0)).join();
         helper.assertTrue(larger instanceof Drawn.Ready, "the larger curved shape draws");
         var large = (Drawn.Ready) larger;
         long largePartial = large.draft().cells().stream().filter(cell -> cell.payload().present()).count();
-        LoggerFactory.getLogger("folkways-patterns").info("BITS_LARGE partial={} cells={} drawMillis={}",
-            largePartial, large.draft().cells().size(), (System.nanoTime() - started) / 1_000_000);
         helper.assertTrue(largePartial >= 1500 && largePartial <= 3000, "a roughly two-thousand-partial-cell shape");
-        CandBGameTests.reportPatternBudgets(helper, DraftTemplate.of(large.draft(), 3955));
-        galleryBitsDrawingTimings(helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void toriiDrawsBitsAndTurns(GameTestHelper helper) throws Exception {
-        architecturalBits(helper, "torii");
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void rotundaDrawsBitsAndTurns(GameTestHelper helper) throws Exception {
-        architecturalBits(helper, "rotunda");
-    }
-
-    private static void architecturalBits(GameTestHelper helper, String name) throws Exception {
-        var id = ResourceLocation.fromNamespaceAndPath("folkways_chiselsandbits", name);
-        Pattern pattern = Patterns.find(id).orElseThrow();
-        helper.assertTrue(pattern.detail().equals("bits"), "integration resource loaded with bit detail");
-        for (String language : List.of("en_us", "zh_cn", "zh_hk", "zh_tw")) {
-            var words = pattern.face().words().get(language);
-            helper.assertTrue(words != null && words.containsKey("title"), "localized display name: " + language);
-            for (var knob : pattern.knobs().settings()) {
-                helper.assertTrue(words.containsKey(knob.key()), "localized knob: " + language + "/" + knob.key());
-            }
-        }
-        var defaults = new CompoundTag();
-        for (var setting : pattern.knobs().settings()) {
-            if (setting instanceof Schema.Setting.Items items) {
-                defaults.put(items.key(), ItemSpec.of(items.byDefault().getFirst().id()).save());
-            }
-        }
-        for (Direction facing : List.of(Direction.NORTH, Direction.EAST)) {
-            long start = System.nanoTime();
-            Drawn drawn = Drafting.draw(pattern, new Commission(
-                new Hint.Zone(BlockPos.ZERO, new BlockPos(15, 15, 15)),
-                Chosen.load(pattern.knobs(), defaults), World.NONE, facing, 7)).join();
-            helper.assertTrue(drawn instanceof Drawn.Ready, name + " draws facing " + facing + ": " + drawn);
-            var ready = (Drawn.Ready) drawn;
-            long drawMillis = (System.nanoTime() - start) / 1_000_000;
-            long partial = ready.draft().cells().stream().filter(cell -> cell.payload().present()).count();
-            helper.assertTrue(partial > 0, "curves contain partial cells");
-            if (facing == Direction.NORTH) {
-                long whole = ready.draft().cells().size() - partial;
-                long bits = whole * 4096 + ready.draft().cells().stream().filter(cell -> cell.payload().present())
-                    .mapToLong(cell -> CandBStructureCodec.validated(cell.payload().tag()).counts().values().stream()
-                        .mapToLong(Integer::longValue).sum()).sum();
-                long bytes = ready.draft().cells().stream().mapToLong(cell -> cell.payload().bytes()).sum();
-                long unique = ready.draft().cells().stream().filter(cell -> cell.payload().present())
-                    .map(Draft.Cell::payload).distinct().count();
-                var file = DraftTemplate.of(ready.draft(), 3955);
-                try (var output = new ByteArrayOutputStream()) {
-                    NbtIo.writeCompressed(file, output);
-                    LoggerFactory.getLogger("folkways-patterns").info(
-                        "ARCH_BITS {} extent={} partial={} whole={} voxels={} equivalents={} millis={}"
-                            + " payloadBytes={} gzipBytes={} unique={} uniqueRatio={}",
-                        name, ready.draft().extent().size(), partial, whole, bits, bits / 4096.0,
-                        drawMillis, bytes, output.size(), unique,
-                        (double) unique / partial);
-                }
-                CandBGameTests.reportPatternBudgets(helper, file);
-            }
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 200)
-    public static void gothicCloisterDrawsBitsAcrossFrames(GameTestHelper helper) throws Exception {
-        var arcFrame = Frame.over(new BoundingBox(0, 0, 0, 0, 3, 3), Direction.SOUTH, false);
-        var grown = new Solid.PointedVault(arcFrame, new Vec3i(1, 4, 4), 4, 2);
-        var tip = arcFrame.at(0.5, 6.3, 2);
-        helper.assertTrue(grown.holds(tip.x, tip.y, tip.z)
-            && grown.bounds().maxY() + 1 > tip.y, "grown pointed tip remains inside its bounds");
-        var id = ResourceLocation.parse("folkways_chiselsandbits:gothic_cloister");
-        Pattern pattern = Patterns.find(id).orElseThrow();
-        helper.assertValueEqual(pattern.detail(), "bits", "integration pattern has bit detail");
-        for (String language : List.of("en_us", "zh_cn", "zh_hk", "zh_tw")) {
-            var words = pattern.face().words().get(language);
-            helper.assertTrue(words != null && words.containsKey("title"), "localized title " + language);
-            for (var setting : pattern.knobs().settings()) {
-                helper.assertTrue(words.containsKey(setting.key()), "localized knob " + setting.key());
-            }
-        }
-        var defaults = new CompoundTag();
-        for (var setting : pattern.knobs().settings()) {
-            if (setting instanceof io.github.izakyl.folkways.front.api.Schema.Setting.Items items) {
-                defaults.put(items.key(), io.github.izakyl.folkways.core.api.terms.ItemSpec.of(
-                    items.byDefault().getFirst().id()).save());
-            }
-        }
-        Drawn.Ready north = null;
-        for (Direction facing : List.of(Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST)) {
-            long started = System.nanoTime();
-            Drawn drawn = Drafting.draw(pattern, new Commission(
-                new Hint.Path(List.of(BlockPos.ZERO, BlockPos.ZERO.relative(facing, 16))),
-                Chosen.load(pattern.knobs(), defaults), World.NONE, facing, 0)).join();
-            long millis = (System.nanoTime() - started) / 1_000_000;
-            helper.assertTrue(drawn instanceof Drawn.Ready, "gothic cloister draws: " + drawn);
-            var ready = (Drawn.Ready) drawn;
-            if (north == null) {
-                north = ready;
-            } else {
-                assertRotatedVoxels(helper, north, ready, facing);
-            }
-            long partial = ready.draft().cells().stream().filter(cell -> cell.payload().present()).count();
-            long whole = ready.draft().cells().size() - partial;
-            helper.assertTrue(partial > 0 && whole > 0, "curved bits and whole plinths");
-            long bits = whole * 4096;
-            try (var processing = Voxelizer.installed().orElseThrow().drawing()) {
-                for (var cell : ready.draft().cells()) {
-                    if (cell.payload().present()) {
-                        bits += CandBStructureCodec.validated(cell.payload().tag()).counts().values().stream()
-                            .mapToLong(Integer::longValue).sum();
-                    }
-                }
-            }
-            long unique = ready.draft().cells().stream().filter(cell -> cell.payload().present())
-                .map(Draft.Cell::payload).distinct().count();
-            long payloadBytes = ready.draft().cells().stream().mapToLong(cell -> cell.payload().bytes()).sum();
-            CompoundTag file = DraftTemplate.of(ready.draft(), 3955);
-            int gzip;
-            try (var output = new ByteArrayOutputStream()) {
-                NbtIo.writeCompressed(file, output);
-                gzip = output.size();
-            }
-            LoggerFactory.getLogger("folkways-patterns").info(
-                "GOTHIC facing={} size={} partial={} whole={} bits={} equivalent={} drawMillis={}"
-                    + " payloadBytes={} gzipBytes={} unique={} uniqueRatio={}",
-                facing, ready.draft().extent().size(), partial, whole, bits, bits / 4096.0,
-                millis, payloadBytes, gzip, unique, (double) unique / partial);
-            if (facing == Direction.NORTH) {
-                CandBGameTests.reportPatternBudgets(helper, file);
-            }
-        }
-        // Two adjacent coarse cells across each satellite remain stone at grain eight.
-        for (int x : List.of(5, 7)) {
-            for (int z : List.of(7, 9)) {
-                helper.assertTrue(!gothicVoxel(north, new BlockPos(-2, 1, 0), x, 1, z).isAir(),
-                    "attached shaft is at least two grain-eight cells across");
-            }
-        }
-        helper.assertTrue(gothicVoxel(north, new BlockPos(0, 2, 0), 8, 8, 8).isAir(), "open end portal");
-        for (var points : List.of(
-                List.of(BlockPos.ZERO, new BlockPos(0, 0, -12), new BlockPos(12, 0, -12)),
-                List.of(BlockPos.ZERO, new BlockPos(12, 0, 12), new BlockPos(24, 0, 0)),
-                List.of(BlockPos.ZERO, new BlockPos(0, 3, 12), new BlockPos(0, 1, 24)))) {
-            var drawn = Drafting.draw(pattern, new Commission(new Hint.Path(points),
-                Chosen.load(pattern.knobs(), defaults), World.NONE, Direction.NORTH, 0)).join();
-            helper.assertTrue(drawn instanceof Drawn.Ready, "joined or stepped cloister draws: " + drawn);
-            var ready = (Drawn.Ready) drawn;
-            assertSingleRoofSurface(helper, ready);
-            for (var point : points) {
-                helper.assertTrue(gothicVoxel(ready, point.above(2), 8, 8, 8).isAir(),
-                    "path centre stays open at " + point);
-            }
-        }
+        CandBGameTests.checkPatternBudgets(helper, DraftTemplate.of(large.draft(), 3955), false);
         helper.succeed();
     }
 
@@ -709,64 +630,8 @@ public final class CandBTemplateGameTests {
         }
     }
 
-    private static void galleryBitsDrawingTimings(GameTestHelper helper) throws Exception {
-        for (String name : List.of("torii", "rotunda", "gothic_cloister", "pavilion",
-                "stone_arch_bridge", "rampart", "curved_gallery")) {
-            Pattern pattern = Patterns.find(ResourceLocation.parse("folkways_chiselsandbits:" + name))
-                .orElseThrow();
-            Hint hint = switch (name) {
-                case "stone_arch_bridge" -> new Hint.Zone(BlockPos.ZERO, new BlockPos(2, 8, 21));
-                case "rampart" -> new Hint.Zone(BlockPos.ZERO, new BlockPos(4, 10, 24));
-                case "curved_gallery" -> new Hint.Zone(BlockPos.ZERO, new BlockPos(2, 8, 12));
-                case "gothic_cloister" -> new Hint.Zone(BlockPos.ZERO, new BlockPos(5, 1, 15));
-                default -> new Hint.Zone(BlockPos.ZERO, new BlockPos(8, 16, 8));
-            };
-            var commission = new Commission(hint, defaultSettings(pattern), World.NONE, Direction.NORTH, 73);
-            long started = System.nanoTime();
-            Drawn drawn = Drafting.draw(pattern, commission).join();
-            long millis = (System.nanoTime() - started) / 1_000_000;
-            long partial = drawn instanceof Drawn.Ready ready
-                ? ready.draft().cells().stream().filter(cell -> cell.payload().present()).count() : -1;
-            long whole = drawn instanceof Drawn.Ready ready ? ready.draft().cells().stream()
-                .filter(cell -> !cell.payload().present() && !cell.state().isAir()).count() : -1;
-            long units = (long) Math.pow(Voxelizer.installed().orElseThrow().resolution(), 3);
-            Map<ItemSpec, Long> materials = new HashMap<>();
-            if (drawn instanceof Drawn.Ready ready) {
-                try (var processing = Voxelizer.installed().orElseThrow().drawing()) {
-                    for (var cell : ready.draft().cells()) {
-                        if (cell.payload().present()) {
-                            CandBStructureCodec.validated(cell.payload().tag()).volume().counts()
-                                .forEach((material, count) -> materials.merge(material, (long) count, Long::sum));
-                        } else if (!cell.state().isAir()) {
-                            materials.merge(ItemSpec.exact(new ItemStack(cell.state().getBlock().asItem())),
-                                units, Long::sum);
-                        }
-                    }
-                }
-            }
-            long blocks = materials.values().stream().mapToLong(count -> (count + units - 1) / units).sum();
-            double equivalent = materials.values().stream().mapToLong(Long::longValue).sum() / (double) units;
-            String digest = "refused";
-            byte[] written = new byte[0];
-            if (drawn instanceof Drawn.Ready ready) {
-                var output = new ByteArrayOutputStream();
-                NbtIo.writeCompressed(DraftTemplate.of(ready.draft(), 3955), output);
-                written = output.toByteArray();
-                digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(written));
-            }
-            LoggerFactory.getLogger("folkways-patterns").info(
-                "GALLERY_BITS {} millis={} partial={} whole={} blocks={} equivalent={} ready={} sha256={}",
-                name, millis, partial, whole, blocks, equivalent, drawn instanceof Drawn.Ready, digest);
-            helper.assertTrue(drawn instanceof Drawn.Ready, name + " finishes within the default deadline: " + drawn);
-            Drawn repeated = Drafting.draw(pattern, commission).join();
-            helper.assertTrue(repeated instanceof Drawn.Ready, name + " repeated drawing finishes: " + repeated);
-            var output = new ByteArrayOutputStream();
-            NbtIo.writeCompressed(DraftTemplate.of(((Drawn.Ready) repeated).draft(), 3955), output);
-            helper.assertTrue(Arrays.equals(written, output.toByteArray()), name + " exports identical bytes");
-        }
-    }
-
-    private static void verifyIntervalSampling(GameTestHelper helper) {
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void intervalSamplingMatchesBruteForce(GameTestHelper helper) {
         var encoder = Voxelizer.installed().orElseThrow();
         var random = new Random(731);
         int size = encoder.resolution();
@@ -808,9 +673,7 @@ public final class CandBTemplateGameTests {
                     var parts = List.of(new Massing.Part("interval", shape, new Skin.Fitted(List.of(
                         ItemFilter.item(ResourceLocation.parse("minecraft:stone"))), Fit.SOLID)));
                     helper.assertTrue(fit.paint(parts), "small sampled shapes fit the cell limit");
-                    long began = System.nanoTime();
                     helper.assertTrue(repeated.paint(parts), "repeated shapes fit the cell limit");
-                    long optimizedNanos = System.nanoTime() - began;
                     long sampled = fit.cells().values().stream()
                         .mapToLong(layers -> layers.getFirst().mask().cardinality()).sum();
                     int shapeIndex = shapes.indexOf(shape);
@@ -822,7 +685,6 @@ public final class CandBTemplateGameTests {
                     }
                     if (turn == 0 || turn < 4 && (shape instanceof Solid.Tube
                             || shape instanceof Solid.PointedVault || shape instanceof Solid.PitchedRoof)) {
-                        began = System.nanoTime();
                         long expectedCount = 0;
                         for (int cx = bounds.minX(); cx <= bounds.maxX(); cx++) {
                             for (int cy = bounds.minY(); cy <= bounds.maxY(); cy++) {
@@ -835,15 +697,12 @@ public final class CandBTemplateGameTests {
                                 }
                             }
                         }
-                        long bruteNanos = System.nanoTime() - began;
                         long actualCount = fit.cells().values().stream()
                             .mapToLong(layers -> layers.getFirst().mask().cardinality()).sum();
                         helper.assertTrue(expectedCount == actualCount, "full sampled voxel count");
-                        LoggerFactory.getLogger("folkways-patterns").info(
-                            "COVERAGE {} grain={} optimizedMicros={} bruteMicros={}",
-                            shape.getClass().getSimpleName(), grain,
-                            optimizedNanos / 1000, bruteNanos / 1000);
+                        continue;
                     }
+                    // Turns not brute-forced above are probed at random cells, with the repeat compared bytewise.
                     for (int cell = 0; cell < 32; cell++) {
                         int cx = bounds.minX() - 1 + random.nextInt(bounds.getXSpan() + 2);
                         int cy = bounds.minY() - 1 + random.nextInt(bounds.getYSpan() + 2);
@@ -904,6 +763,7 @@ public final class CandBTemplateGameTests {
                 }
             }
         }
+        helper.succeed();
     }
 
     private static BitSet bruteMask(Solid shape, int cx, int cy, int cz, int size, int grain) {
@@ -924,17 +784,6 @@ public final class CandBTemplateGameTests {
             }
         }
         return mask;
-    }
-
-    private static Chosen defaultSettings(Pattern pattern) {
-        var saved = new CompoundTag();
-        for (var setting : pattern.knobs().settings()) {
-            if (setting instanceof Schema.Setting.Items items) {
-                saved.put(items.key(), ItemSpec.anyOf(items.byDefault().stream()
-                    .map(filter -> ItemSpec.of(filter.id())).toList()).save());
-            }
-        }
-        return Chosen.load(pattern.knobs(), saved);
     }
 
     private static void verifySamples(GameTestHelper helper, Drawn.Ready ready, List<Solid> shapes, boolean mixed) {

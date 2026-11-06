@@ -9,12 +9,11 @@ import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
+import io.github.izakyl.folkways.core.testing.Nodes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,7 +21,6 @@ import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -38,9 +36,6 @@ public final class RouteOrderGameTests {
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "route_order");
     private static final ItemSpec BREAD = ItemSpec.of(ResourceLocation.withDefaultNamespace("bread"));
 
-    private record Action(NodeSpec spec) implements Node {
-        public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
-    }
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(RouteOrderGameTests.class); }
@@ -77,7 +72,7 @@ public final class RouteOrderGameTests {
         helper.assertTrue(takeAgain.joins(take), "a second take from the same store is the same reach");
         helper.assertTrue(!putBack.joins(take), "putting back is not taking");
         helper.assertTrue(!takeElsewhere.joins(take), "another store is another reach");
-        helper.assertTrue(!new Action(take.spec()).joins(take), "work joins nothing unless it says so");
+        helper.assertTrue(!Nodes.done(take.spec()).joins(take), "work joins nothing unless it says so");
         helper.succeed();
     }
 
@@ -92,7 +87,7 @@ public final class RouteOrderGameTests {
         List<Node> nodes = new ArrayList<>();
         List<Before> order = new ArrayList<>();
         for (int i = 0; i < steps; i++) {
-            Node node = new Action(NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(at),
+            Node node = Nodes.done(NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(at),
                 Stances.at(at), Workload.Once.of(1)).needs(new Need(BREAD, 1)).done());
             if (!nodes.isEmpty()) {
                 order.add(new Before(nodes.getLast().id(), node.id()));

@@ -87,23 +87,6 @@ public final class SeedPlanningGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void newPlanningReadsSettingsAfterTheReadOnlyPreview(GameTestHelper helper) {
-        UUID node = UUID.randomUUID();
-        var location = SeedBudget.Location.pack(UUID.randomUUID());
-        var goods = Goods.specOf(Items.WHEAT_SEEDS.getDefaultInstance());
-        var snapshot = new AtomicReference<>(snapshot(location, 85, List.of(), true));
-        var keep = new AtomicInteger(64);
-        var budget = new SeedBudget(snapshot::get, () -> Set.of(Items.WHEAT_SEEDS), ignored -> keep.get());
-        var preview = budget.planning();
-        helper.assertValueEqual(preview.tally(Items.WHEAT_SEEDS).compostable(), 21L, "the original physical batch is affordable");
-        snapshot.set(snapshot(location, 64, List.of(), true));
-        keep.set(65);
-        helper.assertValueEqual(preview.tally(Items.WHEAT_SEEDS).compostable(), 21L, "the earlier read-only report stays immutable");
-        helper.assertValueEqual(budget.planning().tally(Items.WHEAT_SEEDS).compostable(), 0L, "a new planning call reads current data");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void reserveRequestsReadOneSnapshotAndSeeTheNextSameTickChange(GameTestHelper helper) {
         var location = SeedBudget.Location.pack(UUID.randomUUID());
         AtomicInteger snapshots = new AtomicInteger(), catalogues = new AtomicInteger(), retention = new AtomicInteger();

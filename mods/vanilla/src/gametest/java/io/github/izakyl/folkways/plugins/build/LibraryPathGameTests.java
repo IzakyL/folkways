@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
+import java.util.Collections;
 import java.util.List;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -42,25 +43,14 @@ public final class LibraryPathGameTests {
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 40)
-    public static void aPlainNameParses(GameTestHelper helper) {
+    public static void onlyAPlainNameWithinTheLibraryParses(GameTestHelper helper) {
         LibraryPath path = LibraryPath.of("houses/oak cottage.nbt").orElseThrow();
         helper.assertValueEqual(path.segments().size(), 2, "segments");
         helper.assertTrue(path.name().equals("oak cottage.nbt"), "leaf is the file's own name");
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 40)
-    public static void nothingEscapesTheLibraryFolder(GameTestHelper helper) {
         for (String escape : ESCAPES) {
-            helper.assertTrue(LibraryPath.of(escape).isEmpty(),
-                "a name that must not parse did: " + escape);
+            helper.assertTrue(LibraryPath.of(escape).isEmpty(), "a name that must not parse did: " + escape);
         }
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 40)
-    public static void depthIsBounded(GameTestHelper helper) {
-        String deep = String.join("/", java.util.Collections.nCopies(LibraryPath.MAX_DEPTH + 1, "a"));
+        String deep = String.join("/", Collections.nCopies(LibraryPath.MAX_DEPTH + 1, "a"));
         helper.assertTrue(LibraryPath.of(deep).isEmpty(), "a path past MAX_DEPTH must not parse");
         helper.succeed();
     }

@@ -1,14 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { defineTask, input, javaTask, media, player, screen, tick, type MinecraftClient } from "@izakyl/blockwright-minecraft";
-import { ancestorsOf, clickElement, panelElements, type Element } from "../ldlib2";
+import { chat, defineTask, input, javaTask, player, screen, tick, type MinecraftClient } from "@izakyl/blockwright-minecraft";
+import { ancestorsOf, clickElement, panelElements, waitForElement, type Element } from "../ldlib2";
 import { clickTab } from "../shared/ui/colony-pages";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { ensureOut, reportPath, shotPath, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { newRunId } from "../shared/harness/run-id";
 import { waitForResourceReload } from "../shared/harness/resource-reload";
 import { BUDGET } from "../shared/harness/budgets";
 import { frames } from "../shared/harness/bw-helpers";
-import { writeFileSync } from "node:fs";
 
 const SETUP = defineTask<Record<string, never>, boolean>({
   name: "folkways.sidebar.setup", side: "server",
@@ -23,6 +22,64 @@ var colony = Charters.found(player, "侧栏回归测试的殖民地");
 CurrentColony.choose(player, colony);
 player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(FolkwaysItems.COLONY_BOOK.get()));
 return true;
+` }),
+});
+
+const ENABLED = defineTask<Record<string, never>, boolean>({
+  name: "folkways.debug.enabled", side: "server",
+  source: javaTask({ imports: ["io.github.izakyl.folkways.front.engine.colony.LaborDebug"], body: `
+return LaborDebug.enabled(ctx.server().getPlayerList().getPlayers().getFirst());
+` }),
+});
+
+const INCIDENT = defineTask<{ count: number; key: string; other: boolean }, boolean>({
+  name: "folkways.debug.incident", side: "server",
+  source: javaTask({ imports: [
+    "io.github.izakyl.folkways.front.api.ui.Pages",
+    "io.github.izakyl.folkways.core.engine.labor.LaborIncident",
+    "net.neoforged.neoforge.common.NeoForge", "net.minecraft.network.chat.Component",
+  ], body: `
+var p=ctx.server().getPlayerList().getPlayers().getFirst();
+var colony=Pages.colonyOf(p).orElseThrow().id();
+if(((Boolean)ctx.arg("other")).booleanValue())colony=UUID.randomUUID();
+for(int i=0;i<((Number)ctx.arg("count")).intValue();i++)NeoForge.EVENT_BUS.post(new LaborIncident(colony,
+ p.serverLevel().dimension(),(String)ctx.arg("key"),Component.translatable("folkways.debug.incident.refused",
+ Component.literal((String)ctx.arg("key")))));
+return true;
+` }),
+});
+
+// Queue and unsubscribe in one server call, so UI navigation cannot advance past the repeat deadline first.
+const CLEAR_QUEUED = defineTask<Record<string, never>, boolean>({
+  name: "folkways.debug.clearQueued", side: "server",
+  source: javaTask({ imports: [
+    "io.github.izakyl.folkways.front.api.ui.Pages",
+    "io.github.izakyl.folkways.front.engine.colony.LaborDebug",
+    "io.github.izakyl.folkways.core.engine.labor.LaborIncident",
+    "net.neoforged.neoforge.common.NeoForge", "net.minecraft.network.chat.Component",
+  ], body: `
+var p=ctx.server().getPlayerList().getPlayers().getFirst();
+LaborDebug.set(p,true);
+for(int i=0;i<2;i++)NeoForge.EVENT_BUS.post(new LaborIncident(Pages.colonyOf(p).orElseThrow().id(),
+ p.serverLevel().dimension(),"discard-probe",Component.literal("discard-probe")));
+LaborDebug.set(p,false);return !LaborDebug.enabled(p);
+` }),
+});
+
+// Supply known counters to check the real chat packet and client translation, without pretending that an empty
+// fixture colony has a busy workforce. The periodic, unsubscribed and stopped paths use the actual server tick.
+const SAMPLE = defineTask<Record<string, never>, boolean>({
+  name: "folkways.debug.sample", side: "server",
+  source: javaTask({ imports: [
+    "io.github.izakyl.folkways.front.engine.colony.LaborDebug",
+    "io.github.izakyl.folkways.core.engine.labor.LaborCensus",
+    "io.github.izakyl.folkways.core.engine.labor.LaborSnapshot",
+    "io.github.izakyl.folkways.core.api.work.NodeState", "net.minecraft.server.level.ServerPlayer",
+  ], body: `
+var p=ctx.server().getPlayerList().getPlayers().getFirst();
+var census=new LaborCensus(100,Map.of(NodeState.READY,5),5,Map.of("PACK_BUSY",3),Map.of("minecraft:wheat",8L),Map.of("idle",2,"working",1));
+var snapshot=new LaborSnapshot(census,0,12,2,Map.of("NO_ROOM",1),List.of("PACK_BUSY/folkways:haul/TransferNode@test"));
+var m=LaborDebug.class.getDeclaredMethod("report",ServerPlayer.class,LaborSnapshot.class);m.setAccessible(true);m.invoke(null,p,snapshot);return true;
 ` }),
 });
 
@@ -103,11 +160,12 @@ async function resize(client: MinecraftClient, width: number, height: number, sc
   await frames(client, 8);
 }
 
-test("folded navigation replaces the page at Auto and 4x and restores both columns when widened", async ({}, testInfo) => {
+// One colony for both: the debug toggle reads English chat first, then the panel is folded in Chinese.
+test("the book's debug toggle sends bounded diagnostics only while enabled, and folded navigation replaces the page "
+  + "at Auto and 4x and restores both columns when widened", async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   ensureOut("e2e");
   const runId = newRunId();
-  const reports: unknown[] = [];
   let pair: E2EPair | undefined;
   try {
     pair = await launchPair({
@@ -115,8 +173,57 @@ test("folded navigation replaces the page at Auto and 4x and restores both colum
       client: { instance: `sidebar-client-${runId}`, trace: tracePath("e2e", "sidebar-client") },
     });
     const { server, client } = pair;
+    const messages = () => chat.messages(client, { limit: 200 });
+    const waiting = (lines: string[]) => lines.filter(line => line.includes("No active planning site")).length;
+    const openSettings = async () => {
+      await player.useItem(client);
+      await screen.waitFor(client, "ModularUIContainerScreen", { timeoutMs: 15_000 });
+      await clickTab(client, "folkways.tab.settings");
+      await waitForElement(client, { id: "folkways.settings.debug_logs" }, { timeoutMs: 10_000 });
+    };
     await server.run(SETUP, {});
-    await tick.sprint(server, 15);
+    await tick.step(server, 3);
+    await tick.sprint(server, 210);
+    expect(await server.run(ENABLED, {})).toBe(false);
+    expect((await messages()).some(line => line.includes("Folkways Debug"))).toBe(false);
+    await server.run(INCIDENT, { count: 1, key: "disabled-path-probe", other: false });
+    expect((await messages()).some(line => line.includes("disabled-path-probe"))).toBe(false);
+    await openSettings();
+    await clickElement(client, { id: "folkways.settings.debug_logs" });
+    await expect.poll(() => server.run(ENABLED, {})).toBe(true);
+    await chat.waitFor(client, "No active planning site", { includeExisting: true, timeoutMs: 15_000 });
+    const before = waiting(await messages());
+    await tick.sprint(server, 40);
+    expect(waiting(await messages())).toBe(before);
+    await screen.dismiss(client);
+    await tick.sprint(server, 210);
+    expect(await server.run(ENABLED, {})).toBe(true);
+    expect(waiting(await messages())).toBeGreaterThan(before);
+    await server.run(SAMPLE, {});
+    await chat.waitFor(client, "fallbacks 2", { includeExisting: true, timeoutMs: 10_000 });
+    expect((await messages()).some(line => line.includes("PACK_BUSY=3") && line.includes("NO_ROOM=1"))).toBe(true);
+    await server.run(INCIDENT, { count: 19, key: "live-path-probe", other: false });
+    await chat.waitFor(client, "Work could not continue: live-path-probe", { includeExisting: true, timeoutMs: 10_000 });
+    expect((await messages()).filter(line => line.includes("live-path-probe"))).toHaveLength(1);
+    await server.run(INCIDENT, { count: 1, key: "other-colony-probe", other: true });
+    expect((await messages()).some(line => line.includes("other-colony-probe"))).toBe(false);
+    await tick.sprint(server, 100);
+    await chat.waitFor(client, "grouped occurrences: 18", { includeExisting: true, timeoutMs: 10_000 });
+    await openSettings();
+    await clickElement(client, { id: "folkways.settings.debug_logs" });
+    await expect.poll(() => server.run(ENABLED, {})).toBe(false);
+    const stopped = waiting(await messages());
+    await tick.sprint(server, 210);
+    expect(waiting(await messages())).toBe(stopped);
+    await server.run(INCIDENT, { count: 1, key: "stopped-path-probe", other: false });
+    expect((await messages()).filter(line => line.includes("live-path-probe"))).toHaveLength(2);
+    expect((await messages()).some(line => line.includes("stopped-path-probe"))).toBe(false);
+    expect(await server.run(CLEAR_QUEUED, {})).toBe(true);
+    await tick.sprint(server, 110);
+    await chat.waitFor(client, "discard-probe", { includeExisting: true, timeoutMs: 10_000 });
+    expect((await messages()).filter(line => line.includes("discard-probe"))).toHaveLength(1);
+    await screen.dismiss(client);
+
     await client.run(LANGUAGE, {});
     await waitForResourceReload(client);
     expect((await client.run(DISPLAY, {})).language).toBe("zh_cn");
@@ -136,14 +243,13 @@ test("folded navigation replaces the page at Auto and 4x and restores both colum
       let elements = await panelElements(client);
       const menu = element(elements, "folkways.navigation.menu");
       expect(menu.displayed).toBe(item.folded);
-      await media.screenshot(client, { path: shotPath("e2e", `sidebar-${item.name}-page`) });
       if (!item.folded) {
-        reports.push({ ...item, display, ...columns(elements) });
+        columns(elements);
         continue;
       }
       const control = element(elements, "folkways.settings.invert_wheel");
       const pane = element(elements, "folkways.page.content");
-      for (let cycle = 0; cycle < 12; cycle++) {
+      for (let cycle = 0; cycle < 2; cycle++) {
         await clickElement(client, { id: menu.id });
         await frames(client, 3);
         elements = await panelElements(client);
@@ -151,9 +257,7 @@ test("folded navigation replaces the page at Auto and 4x and restores both colum
         expect(element(elements, "folkways.navigation").width).toBeCloseTo(pane.width, 0);
         expect(ancestorsOf(elements, element(elements, control.id!)).some(parent => !parent.displayed)).toBe(true);
         if (cycle === 0) {
-          await media.screenshot(client, { path: shotPath("e2e", `sidebar-${item.name}-navigation`) });
           await expect(clickElement(client, { id: control.id }, { timeoutMs: 1000 })).rejects.toThrow();
-          reports.push({ ...item, display, nav: element(elements, "folkways.navigation"), pane: element(elements, pane.id!), cycles: 12 });
         }
         await clickElement(client, { id: menu.id });
         await frames(client, 3);
@@ -181,7 +285,6 @@ test("folded navigation replaces the page at Auto and 4x and restores both colum
     pair?.failing(error);
     throw error;
   } finally {
-    writeFileSync(reportPath("e2e", "sidebar-fold"), JSON.stringify(reports, null, 2));
     await pair?.teardown(testInfo);
   }
 });

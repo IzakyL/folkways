@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.plugins.fishing;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.*;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Modifier;
 import io.github.izakyl.folkways.front.api.PastDay;
@@ -38,13 +39,12 @@ public final class FishingPerkGameTests {
             new Effects.Part("school", Modifier.add(FishingContent.EXTRA_FISH, 1)),
             new Effects.Part("size", Modifier.add(FishingContent.SCHOOL_SIZE, 2)),
             new Effects.Part("treasure", Modifier.add(FishingContent.TREASURE_CHANCE, 1))));
-        Worker worker = (Worker) java.lang.reflect.Proxy.newProxyInstance(Worker.class.getClassLoader(),
-            new Class<?>[] {Worker.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> body.mob();
-                case "held" -> new ItemStack(Items.FISHING_ROD);
-                case "effects" -> effects;
-                default -> throw new AssertionError(method.getName());
-            });
+        Worker worker = Proxies.of(Worker.class, (proxy, method, args) -> switch (method.getName()) {
+            case "body" -> body.mob();
+            case "held" -> new ItemStack(Items.FISHING_ROD);
+            case "effects" -> effects;
+            default -> throw new AssertionError(method.getName());
+        });
         var node = new CastNode(UUID.randomUUID(), new Spot(WorldPos.of(level, at), Stances.WHEREVER, 20),
             () -> { }, new PastDay());
         boolean fishFound = false;

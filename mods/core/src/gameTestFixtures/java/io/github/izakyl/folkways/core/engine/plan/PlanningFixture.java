@@ -1,7 +1,8 @@
 package io.github.izakyl.folkways.core.engine.plan;
 
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
@@ -10,10 +11,7 @@ import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Delivery;
 import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workshop;
@@ -38,8 +36,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 
 public final class PlanningFixture {
     public final WorldPos source;
@@ -48,12 +45,14 @@ public final class PlanningFixture {
     public final Crew crew;
     public final Worker worker;
     public final Ways ways;
+    private final ServerLevel level;
 
     public PlanningFixture(GameTestHelper helper) {
         this(helper, 6);
     }
 
     public PlanningFixture(GameTestHelper helper, int packCells) {
+        level = helper.getLevel();
         source = WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(1, 1, 1)));
         target = source.at(source.cell().offset(6, 0, 0));
         stands = Stands.building()
@@ -63,26 +62,32 @@ public final class PlanningFixture {
         var licence = body.licences().of(Vocations.required(Vocations.HAULING)).orElseThrow();
         crew = new Crew(List.of(new Crew.Hand(body.resident(), source, packCells, packCells, 1,
             List.of(licence), List.of(), Optional.empty())));
-        worker = new Worker() {
-            final Container pack = new SimpleContainer(packCells);
-            public Resident resident() { return body.resident(); }
-            public Mob body() { return body; }
-            public Container pack() { return pack; }
-            public List<Store> within() { return List.of(); }
-            public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-            public void spill(ItemStack stack) { throw new AssertionError("unexpected spill: " + stack); }
-            public Effects effects() { return Effects.NONE; }
-            public List<Node> route() { return List.of(); }
-            public Placement placement() { return Placement.NOWHERE; }
-        };
-        ways = new Ways() {
+        worker = TestWorker.of(body, body.resident(), new SimpleContainer(packCells));
+        ways = afoot(1);
+    }
+
+    // Ways that reach every goal from anywhere on foot, in the same number of ticks.
+    public static Ways afoot(int ticks) {
+        return new Ways() {
             public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
-                return Faring.yes(Journey.afoot(1, goals));
+                return Faring.yes(Journey.afoot(ticks, goals));
             }
+
             public Faring anyoneReaches(Set<WorldPos> goals) {
-                return Faring.yes(Journey.afoot(1, goals));
+                return Faring.yes(Journey.afoot(ticks, goals));
             }
         };
+    }
+
+    public record Barrels(Container source, Container target) {
+    }
+
+    // Barrels stood at the source and the target, for stock the plan really takes from and puts into.
+    public Barrels barrels() {
+        level.setBlockAndUpdate(source.cell(), Blocks.BARREL.defaultBlockState());
+        level.setBlockAndUpdate(target.cell(), Blocks.BARREL.defaultBlockState());
+        return new Barrels(Containers.at(level, source.cell()).orElseThrow(),
+            Containers.at(level, target.cell()).orElseThrow());
     }
 
     public Situation situation(Stock stock, List<Workshop> workshops) {

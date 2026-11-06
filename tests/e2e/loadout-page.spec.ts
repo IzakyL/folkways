@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { seedInstance } from "@izakyl/blockwright-client";
-import { defineTask, input, javaTask, media, screen, type MinecraftClient } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, screen, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements, typeIntoElement, type Element } from "../ldlib2";
 import { foundColonyFast, openColonyPanelViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -80,6 +80,7 @@ test("loadout panes and immediate assignment work in Chinese and English", async
     await typeIntoElement(client, { id: KEY + "name" }, PROFILE);
     await clickElement(client, { id: KEY + "create" });
     await expect.poll(async () => (await server.run(READ)).profiles.length).toBe(1);
+    await expect.poll(async () => element(await panelElements(client), KEY + "add").text).toContain("添加");
     await clickElement(client, { id: KEY + "add" });
     const menu = await panelElements(client);
     for (const action of ["weapon", "weapon_variants", "supply", "observation_gear", "head", "chest", "legs", "feet"]) {
@@ -88,9 +89,6 @@ test("loadout panes and immediate assignment work in Chinese and English", async
     for (const removed of ["exact.0", "enchantments.0", "held_weapon"]) {
       expect(menu.some(row => row.id === KEY + removed)).toBe(false);
     }
-    await input.move(client, { x: 0, y: 0 });
-    await frames(client, 5);
-    await media.screenshot(client, { path: testInfo.outputPath("loadout-zh-add.png") });
     await clickElement(client, { id: KEY + "weapon" });
     await pickItem(client, "minecraft:bow");
     await expect.poll(async () => (await server.run(READ)).target).toBeGreaterThan(0);
@@ -117,9 +115,6 @@ test("loadout panes and immediate assignment work in Chinese and English", async
       expect(Math.abs(control.y + control.height / 2 - target.y - target.height / 2)).toBeLessThan(2);
       expect(control.x + control.width).toBeLessThanOrEqual(right.x + right.width);
     }
-    await input.move(client, { x: 0, y: 0 });
-    await frames(client, 5);
-    await media.screenshot(client, { path: testInfo.outputPath("loadout-zh-wide.png") });
     await clickElement(client, { id: KEY + "assign_residents" });
     const profiles = (await server.run(READ)).profiles;
     for (const slot of [0, 1]) {
@@ -129,9 +124,6 @@ test("loadout panes and immediate assignment work in Chinese and English", async
         .toContain(PROFILE);
     }
     await expect.poll(async () => (await server.run(READ)).assignments).toEqual([PROFILE, PROFILE]);
-    await input.move(client, { x: 0, y: 0 });
-    await frames(client, 5);
-    await media.screenshot(client, { path: testInfo.outputPath("loadout-zh-residents.png") });
     await clickElement(client, { id: KEY + "resident.0" });
     await clickElement(client, { id: KEY + "choose.none" });
     await expect.poll(async () => (await server.run(READ)).assignments.filter(name => name === "NONE").length).toBe(1);
@@ -142,18 +134,12 @@ test("loadout panes and immediate assignment work in Chinese and English", async
     await clickTab(client, KEY + "title");
     await clickElement(client, { id: KEY + "profile.0" });
     await expect.poll(async () => element(await panelElements(client), KEY + "add").text).toContain("Add");
-    await input.move(client, { x: 0, y: 0 });
-    await frames(client, 5);
-    await media.screenshot(client, { path: testInfo.outputPath("loadout-en-wide.png") });
     await resizeWindow(client, 480, 720);
     const narrow = await panelElements(client);
     expect(element(narrow, KEY + "details").y).toBeGreaterThan(element(narrow, KEY + "profiles").y);
     await scrollCellIntoView(server, client, KEY + "entry.0", KEY + "edit.0");
     await clickElement(client, { id: KEY + "edit.0" });
     await clickElement(client, { id: "folkways.selector.close" });
-    await input.move(client, { x: 0, y: 0 });
-    await frames(client, 5);
-    await media.screenshot(client, { path: testInfo.outputPath("loadout-en-narrow.png") });
     await clickElement(client, { id: KEY + "delete" }, { scrollIntoView: true });
     await expect.poll(async () => (await server.run(READ)).assignments).toEqual(["NONE", "NONE"]);
     for (let index = 0; index < 5; index++) {

@@ -7,7 +7,6 @@ import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProvider;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -83,11 +82,5 @@ final class TaczLoadouts implements LoadoutProvider {
     @Override
     public ItemSpec profileWeapon(ItemStack stack) {
         return TaczGuns.weapon(((IGun) stack.getItem()).getGunId(stack));
-    }
-
-    @Override
-    public Optional<ItemSpec> legacyWeapon(CompoundTag options) {
-        ResourceLocation id = ResourceLocation.tryParse(options.getString("gun"));
-        return id == null || TaczGuns.index(id).isEmpty() ? Optional.empty() : Optional.of(TaczGuns.weapon(id));
     }
 }

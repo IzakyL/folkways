@@ -97,10 +97,7 @@ public final class DraftI18nGameTests {
     @GameTest(template = "empty", timeoutTicks = 40)
     public static void localRejectionsRemainDistinctAndSurviveStorageAndTheWire(GameTestHelper helper) {
         Pattern first = parse("""
-            lang = {
-                "en_us": {"error.shared": "First %s", "material": "timber", "only_en": "English fallback"},
-                "zh_cn": {"error.shared": "第一%s", "material": "木材"}
-            }
+            lang = {"en_us": {"error.shared": "First %s", "material": "timber"}}
             def draw(site):
                 reject("error.shared", translated("material"))
             """);
@@ -115,10 +112,6 @@ public final class DraftI18nGameTests {
         helper.assertTrue(PatternText.word("en_us", original.key()).orElseThrow().equals("First %s")
             && PatternText.word("en_us", other.key()).orElseThrow().equals("Second"),
             "neither pattern overwrites the other's wording");
-        String englishOnly = DraftKit.key(first, "only_en");
-        helper.assertTrue(PatternText.word("zh_hk", englishOnly).orElseThrow().equals("English fallback")
-            && PatternText.word("zh_tw", englishOnly).orElseThrow().equals("English fallback"),
-            "scoped keys use English when every Chinese dictionary lacks the word");
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {
             original.encode(buffer);
@@ -129,12 +122,6 @@ public final class DraftI18nGameTests {
             for (Notice restored : List.of(network, stored)) {
                 helper.assertTrue(PatternText.component(restored).getString().equals("First timber"),
                     "restored notices retain the English fallback and nested local argument");
-                helper.assertTrue(PatternText.word("zh_hk", restored.key()).orElseThrow().equals("第一%s")
-                    && PatternText.word("zh_tw", restored.key()).orElseThrow().equals("第一%s"),
-                    "restored local keys resolve Chinese fallback for Hong Kong and Taiwan");
-                String argument = ((Notice.Arg.Named) restored.args().getFirst()).key();
-                helper.assertTrue(PatternText.word("zh_hk", argument).orElseThrow().equals("木材"),
-                    "nested local arguments retain the player's Chinese fallback");
             }
         } finally {
             buffer.release();

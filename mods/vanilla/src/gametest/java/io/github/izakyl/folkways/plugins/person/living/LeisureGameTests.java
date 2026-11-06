@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Holding;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.work.*;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
@@ -23,12 +24,9 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.animal.Wolf;
 import net.minecraft.world.entity.animal.Parrot;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -61,7 +59,7 @@ public final class LeisureGameTests {
         level.addFreshEntity(pet);
         try {
             seedChoice(level, 1);
-            TestWorker who = new TestWorker(actor);
+            TestWorker who = TestWorker.of(actor).effects(Effects.NONE);
             Node action = leisure.urge(who, colony.view(level)).orElseThrow().take().get();
             helper.assertTrue(action.spec().doing().getPath().equals("petting"), "untamed colony parrot can be enjoyed");
             double before = living.mood(actor.getUUID()).leisure;
@@ -100,7 +98,7 @@ public final class LeisureGameTests {
         pet.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 1.5); level.addFreshEntity(pet);
         try {
             seedChoice(level, 1);
-            TestWorker who = new TestWorker(actor);
+            TestWorker who = TestWorker.of(actor).effects(Effects.NONE);
             Node action = leisure.urge(who, colony.view(level)).orElseThrow().take().get();
             helper.assertTrue(action.spec().doing().getPath().equals("petting"), "member's wolf is chosen");
             action.spec().gesture().perform(actor, 0, actor.blockPosition());
@@ -113,7 +111,7 @@ public final class LeisureGameTests {
             helper.assertTrue(living.mood(actor.getUUID()).leisure > before + 4.9, "partial interaction restores entertainment");
             helper.assertTrue(pet.isOrderedToSit(), "owner's sit order is preserved");
             seedChoice(level, 1);
-            Node blocked = leisure.urge(new TestWorker(other), colony.view(level)).orElseThrow().take().get();
+            Node blocked = leisure.urge(TestWorker.of(other).effects(Effects.NONE), colony.view(level)).orElseThrow().take().get();
             helper.assertFalse(blocked.spec().doing().getPath().equals("petting"), "one resident per pet");
             blocked.ended(level, Ending.DROPPED);
             action.spec().gesture().release(actor); action.released(level, who, Ending.DROPPED);
@@ -123,7 +121,7 @@ public final class LeisureGameTests {
             ResidentEntity third = person(level, at.west(2));
             try {
                 seedChoice(level, 1);
-                Node next = leisure.urge(new TestWorker(third), colony.view(level)).orElseThrow().take().get();
+                Node next = leisure.urge(TestWorker.of(third).effects(Effects.NONE), colony.view(level)).orElseThrow().take().get();
                 helper.assertTrue(next.spec().doing().getPath().equals("petting"), "reservation released");
                 next.ended(level, Ending.DROPPED);
             } finally { third.discard(); }
@@ -139,13 +137,13 @@ public final class LeisureGameTests {
         Leisure leisure = new Leisure(colony, living);
         ResidentEntity actor = person(level, helper.absolutePos(new BlockPos(3, 2, 3)));
         try {
-            TestWorker who = new TestWorker(actor);
+            TestWorker who = TestWorker.of(actor).effects(Effects.NONE);
             Node queued = new Node() {
                 final NodeSpec spec = NodeSpec.of(UUID.randomUUID(), LivingContent.ID, WorkSite.on(actor), Stances.WHEREVER, Workload.Once.of(20)).done();
                 public NodeSpec spec() { return spec; }
                 public Outcome commit(ServerLevel level, Worker worker) { return Outcome.done(); }
             };
-            who.route = List.of(queued);
+            who.route(List.of(queued));
             helper.assertTrue(leisure.urge(who, colony.view(level)).isEmpty(), "normal leisure cannot take queued work's place");
             living.mood(actor.getUUID()).leisure = 10;
             living.mood(actor.getUUID()).nextBreak = level.getGameTime();
@@ -176,7 +174,7 @@ public final class LeisureGameTests {
             public Effects effectsOf(Resident resident) { return Effects.NONE; }
         };
         try {
-            TestWorker one = new TestWorker(first), two = new TestWorker(second);
+            TestWorker one = TestWorker.of(first).effects(Effects.NONE), two = TestWorker.of(second).effects(Effects.NONE);
             seedChoice(level, 0);
             Node initiating = leisure.urge(one, view).orElseThrow().take().get();
             Node invited = leisure.urge(two, view).orElseThrow().take().get();
@@ -213,18 +211,4 @@ public final class LeisureGameTests {
         person.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5); level.addFreshEntity(person); return person;
     }
 
-    private static final class TestWorker implements Worker {
-        final ResidentEntity person;
-        List<Node> route = List.of();
-        TestWorker(ResidentEntity person) { this.person = person; }
-        public Resident resident() { return person.resident(); }
-        public Mob body() { return person; }
-        public Container pack() { return person.pack(); }
-        public List<Store> within() { return List.of(); }
-        public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-        public void spill(ItemStack stack) { throw new AssertionError("leisure cannot spill goods"); }
-        public Effects effects() { return Effects.NONE; }
-        public List<Node> route() { return route; }
-        public Placement placement() { return Placement.NOWHERE; }
-    }
 }

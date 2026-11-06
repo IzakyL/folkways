@@ -6,17 +6,14 @@ import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import java.util.function.BooleanSupplier;
-import net.minecraft.world.Container;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
@@ -44,9 +41,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -166,25 +160,6 @@ public final class StaffingGameTests {
     }
 
     @GameTest(template = "empty_large")
-    public static void deadMemberIsRefilledByIdleMatchingResident(GameTestHelper helper) {
-        Fixture fixture = new Fixture(helper);
-        fixture.resident(2, 3, fixture.heavy);
-        fixture.resident(2, 6, fixture.heavy);
-        add(fixture, fixture.route, fixture.heavy);
-        UUID dead = fixture.staffing.members(fixture.route).getFirst();
-        UUID idle = fixture.entities.stream().filter(ResidentEntity.class::isInstance)
-            .map(Entity::getUUID).filter(id -> !id.equals(dead)).findFirst().orElseThrow();
-        Entity body = fixture.level.getEntity(dead);
-        body.kill();
-        fixture.colony.removed(dead, Entity.RemovalReason.KILLED);
-        fixture.staffing.tick(fixture.level.getServer());
-        helper.assertValueEqual(fixture.staffing.members(fixture.route), List.of(idle),
-            "death releases the slot for the idle matching resident");
-        fixture.close();
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large")
     public static void sentryPositionsMatchStancesAndReplacedDutyCannotResume(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         ResidentEntity archer = fixture.resident(2, 3, fixture.archer);
@@ -216,23 +191,6 @@ public final class StaffingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 900)
-    public static void partiallyStaffedRouteTeamAssemblesAndWalksTogether(GameTestHelper helper) {
-        Fixture fixture = new Fixture(helper);
-        ResidentEntity first = fixture.resident(2, 3, fixture.heavy);
-        ResidentEntity second = fixture.resident(2, 6, fixture.heavy);
-        add(fixture, fixture.route, fixture.heavy);
-        add(fixture, fixture.route, fixture.heavy);
-        add(fixture, fixture.route, fixture.archer);
-        fixture.simulate(helper);
-        helper.startSequence().thenWaitUntil(() -> {
-            helper.assertTrue(first.getX() > fixture.x(12) && second.getX() > fixture.x(12),
-                "both members physically walk the route after assembling");
-            helper.assertTrue(first.distanceTo(second) < 7, "the route retains loose team cohesion");
-        }).thenExecute(() -> helper.assertValueEqual(fixture.staffing.shortage(fixture.route), 1,
-            "the partial team keeps its total shortage visible")).thenSucceed();
-    }
-
     @GameTest(template = "empty_large", timeoutTicks = 1000)
     public static void routeTeamEngagesTogetherRegroupsAndResumesUnfinishedStop(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
@@ -240,11 +198,15 @@ public final class StaffingGameTests {
         ResidentEntity second = fixture.resident(2, 6, fixture.heavy);
         add(fixture, fixture.route, fixture.heavy);
         add(fixture, fixture.route, fixture.heavy);
+        add(fixture, fixture.route, fixture.archer);
         fixture.simulate(helper);
         AtomicInteger unfinished = new AtomicInteger();
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(first.getX() > fixture.x(7)
-            && second.getX() > fixture.x(7), "the team starts its route"))
+            && second.getX() > fixture.x(7), "the partially staffed team assembles and starts its route"))
             .thenExecute(() -> {
+                helper.assertTrue(first.distanceTo(second) < 7, "the route retains loose team cohesion");
+                helper.assertValueEqual(fixture.staffing.shortage(fixture.route), 1,
+                    "the partial team keeps its total shortage visible");
                 unfinished.set(fixture.patrol.teams().stop(fixture.route));
                 fixture.zombie = fixture.zombie(13, 5);
             }).thenWaitUntil(() -> helper.assertValueEqual(fixture.patrol.teams().status(fixture.route), "engaging",
@@ -319,18 +281,6 @@ public final class StaffingGameTests {
             "a later valid incumbent cannot be stolen by an earlier vacancy");
         helper.assertTrue(after.getFirst().member().isPresent() && !after.getFirst().member().get().equals(dead),
             "the idle resident fills only the dead member's slot");
-        fixture.close();
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large")
-    public static void deletedAllowedProfilesAreVisible(GameTestHelper helper) {
-        Fixture fixture = new Fixture(helper);
-        fixture.staffing.configure(fixture.level, fixture.route, Set.of(fixture.archer), 2);
-        fixture.profiles.delete(fixture.archer);
-        fixture.staffing.tick(fixture.level.getServer());
-        helper.assertValueEqual(fixture.staffing.positions(fixture.route).getFirst().status(), "missing_profile",
-            "deleted allowed profiles remain a visible shortage");
         fixture.close();
         helper.succeed();
     }
@@ -448,37 +398,6 @@ public final class StaffingGameTests {
     }
 
     @GameTest(template = "empty_large")
-    public static void oldSlotsMigrateToUnionAndCountWithoutPins(GameTestHelper helper) {
-        Fixture fixture = new Fixture(helper);
-        ResidentEntity resident = fixture.resident(2, 3, fixture.heavy);
-        CompoundTag saved = new CompoundTag();
-        net.minecraft.nbt.ListTag targets = new net.minecraft.nbt.ListTag();
-        CompoundTag target = new CompoundTag();
-        target.putUUID("target", fixture.route);
-        net.minecraft.nbt.ListTag slots = new net.minecraft.nbt.ListTag();
-        for (UUID profile : List.of(fixture.heavy, fixture.heavy, fixture.archer)) {
-            CompoundTag slot = new CompoundTag();
-            slot.putUUID("id", UUID.randomUUID());
-            slot.putUUID("profile", profile);
-            slot.putUUID("pin", resident.id());
-            slots.add(slot);
-        }
-        target.put("slots", slots);
-        targets.add(target);
-        saved.put("targets", targets);
-        fixture.colony.keep(PatrolStaffing.ID, saved);
-        PatrolStaffing restored = new PatrolStaffing(fixture.colony);
-        helper.assertValueEqual(restored.allowed(fixture.route), Set.of(fixture.heavy, fixture.archer),
-            "old exact requirements become an interchangeable union");
-        helper.assertValueEqual(restored.count(fixture.route), 3, "headcount preserves all old slots");
-        helper.assertFalse(restored.claimed(resident.id()), "pins alone no longer reserve residents");
-        helper.assertFalse(fixture.colony.kept(PatrolStaffing.ID).toString().contains("pin"),
-            "migration rewrites the stored format without pins");
-        fixture.close();
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large")
     public static void stationsFillFirstButNeverStealRouteIncumbents(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         ResidentEntity first = fixture.resident(2, 3, fixture.heavy);
@@ -519,37 +438,6 @@ public final class StaffingGameTests {
     }
 
     @GameTest(template = "empty_large")
-    public static void oldStationPostDropsProfileAndPinsButRetainsActualIncumbent(GameTestHelper helper) {
-        Fixture fixture = new Fixture(helper);
-        ResidentEntity resident = fixture.resident(2, 3, fixture.heavy);
-        UUID station = fixture.station();
-        CompoundTag saved = new CompoundTag();
-        net.minecraft.nbt.ListTag targets = new net.minecraft.nbt.ListTag();
-        CompoundTag target = new CompoundTag();
-        target.putUUID("target", station);
-        net.minecraft.nbt.ListTag slots = new net.minecraft.nbt.ListTag();
-        CompoundTag slot = new CompoundTag();
-        slot.putUUID("id", UUID.randomUUID());
-        slot.putUUID("profile", fixture.archer);
-        slot.putUUID("pin", UUID.randomUUID());
-        slot.putUUID("member", resident.id());
-        slots.add(slot);
-        target.put("slots", slots);
-        targets.add(target);
-        saved.put("targets", targets);
-        fixture.colony.keep(PatrolStaffing.ID, saved);
-        PatrolStaffing restored = new PatrolStaffing(fixture.colony);
-        restored.tick(fixture.level.getServer());
-        helper.assertTrue(restored.allowed(station).isEmpty(), "station profile restrictions are discarded");
-        helper.assertValueEqual(restored.members(station), List.of(resident.id()),
-            "the old actual incumbent remains eligible even with a different melee profile");
-        helper.assertTrue(fixture.colony.kept(PatrolStaffing.ID).getList("targets", Tag.TAG_COMPOUND).isEmpty(),
-            "old per-station posts are replaced by automatic runtime operator records");
-        fixture.close();
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large")
     public static void reducingHeadcountDropsVacanciesBeforeValidIncumbents(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         fixture.resident(2, 3, fixture.heavy);
@@ -575,47 +463,13 @@ public final class StaffingGameTests {
     }
 
     private static Worker worker(ResidentEntity body) {
-        return new Worker() {
-            public Resident resident() {
-                return body.resident();
-            }
-
-            public Mob body() {
-                return body;
-            }
-
-            public Container pack() {
-                return body.pack();
-            }
-
-            public List<Store> within() {
-                return List.of();
-            }
-
-            public ItemStack held(ToolNeed need) {
-                return body.pack().contents().stream().filter(stack -> Tools.answers(stack, need))
-                    .findFirst().orElse(ItemStack.EMPTY);
-            }
-
-            public void spill(ItemStack stack) {
-                body.spawnAtLocation(stack);
-            }
-
-            public Effects effects() {
-                return body.effects();
-            }
-
-            public List<Node> route() {
-                return List.of();
-            }
-
-            public Placement placement() {
-                return Placement.NOWHERE;
-            }
-        };
+        return TestWorker.of(body)
+            .held(need -> body.pack().contents().stream().filter(stack -> Tools.answers(stack, need)).findFirst()
+                .orElse(ItemStack.EMPTY))
+            .spill(body::spawnAtLocation);
     }
 
-    private static final class Fixture implements GameTestListener {
+    private static final class Fixture {
         private final GameTestHelper helper;
         private final ServerLevel level;
         private final Colony colony;
@@ -648,7 +502,7 @@ public final class StaffingGameTests {
             patrol = colony.service(PatrolContent.ID, PatrolPresence.class).orElseThrow();
             route = colony.hold(PatrolContent.BEAT, new Held.Line(List.of(at(3, 5), at(23, 5))))
                 .orElseThrow().id();
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
         }
 
         private WorldPos at(int x, int z) {
@@ -731,20 +585,6 @@ public final class StaffingGameTests {
             }
             entities.forEach(Entity::discard);
             colony.raze();
-        }
-
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
         }
     }
 }

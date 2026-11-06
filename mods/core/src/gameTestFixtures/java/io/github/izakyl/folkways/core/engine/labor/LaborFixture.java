@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.core.engine.labor;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
+import io.github.izakyl.folkways.core.engine.plan.Diagnosis;
 import net.minecraft.server.level.ServerLevel;
 
 /** Explicit simulation for integration tests: the normal server hook skips labour in GameTestServer. */
@@ -20,6 +21,15 @@ public final class LaborFixture implements AutoCloseable {
     public void tick() {
         ColonyWays.advance(colony, level);
         labor.run(level, Lanes.INLINE);
+    }
+
+    // Why the last plan left work unassigned or short.
+    public Diagnosis diagnosis() {
+        return labor.diagnosis();
+    }
+
+    public LaborCensus census() {
+        return labor.census(level);
     }
 
     public void close() {

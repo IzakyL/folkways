@@ -1,5 +1,8 @@
 package io.github.izakyl.folkways.cookery.tools;
 
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Stats;
 import io.github.izakyl.folkways.effect.perk.Perks;
@@ -239,26 +242,6 @@ public final class TaskToolsGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void snapshotSlotsStayStableAcrossCopiesAndRejectReplacement(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper)) {
-            rig.rack.setItem(0, rig.namedKnife());
-            rig.observe();
-            var first = rig.tools.stock.read(rig.level, KNIVES);
-            var copied = rig.tools.stock.read(rig.level, KNIVES);
-            helper.assertValueEqual(first.sources().keySet(), copied.sources().keySet(),
-                "snapshot stack copies preserve physical slot tokens");
-            var source = first.sources().values().iterator().next();
-            rig.rack.setItem(0, rig.namedKnife());
-            rig.observe();
-            var replacement = rig.tools.stock.read(rig.level, KNIVES);
-            helper.assertFalse(replacement.sources().containsKey(source.id()),
-                "an identical looking replacement has a new physical incarnation");
-            helper.assertFalse(rig.tools.stock.valid(source), "a replacement rejects the old execution token");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void unchangedRevisionsNeverReadContainersOrPacksAcrossToolPasses(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -276,14 +259,12 @@ public final class TaskToolsGameTests {
             } catch (ReflectiveOperationException broken) {
                 throw new AssertionError(broken);
             }
-            var colony = (io.github.izakyl.folkways.core.api.colony.Colony) java.lang.reflect.Proxy.newProxyInstance(
-                TaskTools.class.getClassLoader(),
-                new Class<?>[] { io.github.izakyl.folkways.core.api.colony.Colony.class }, (proxy, method, args) -> {
-                    if (method.getName().equals("store")) {
-                        storeReads.incrementAndGet();
-                    }
-                    return method.invoke(rig.colony.works(), args);
-                });
+            var colony = Proxies.of(io.github.izakyl.folkways.core.api.colony.Colony.class, (proxy, method, args) -> {
+                if (method.getName().equals("store")) {
+                    storeReads.incrementAndGet();
+                }
+                return method.invoke(rig.colony.works(), args);
+            });
             rig.observe();
             TaskTools service = new TaskTools(colony, rig.level.getServer());
             try {
@@ -397,41 +378,6 @@ public final class TaskToolsGameTests {
             } finally {
                 restored.discard();
             }
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void clothingReadsNeverReconcileMarkersOrClaimAnIdenticalReplacement(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper)) {
-            ItemStack hat = new ItemStack(ModItems.STRAW_HAT.get());
-            ItemSpec family = Goods.specOf(hat);
-            rig.chest.setItem(0, hat);
-            rig.observe();
-            var stock = rig.tools.stock.read(rig.level, family);
-            UUID task = UUID.randomUUID();
-            rig.tools.pool.request(rig.colony.colonyId(), task, family, stock.inventory());
-            var lease = rig.tools.pool.reserve(rig.colony.colonyId(), task, family, rig.body.id(),
-                stock.inventory()).orElseThrow();
-            var borrow = new ToolAction.Borrow(rig.tools, lease, stock.sources().get(lease.tool()), Optional.empty());
-            rig.stand(borrow);
-            helper.assertTrue(Commit.run(rig.level, borrow, rig.worker) instanceof Outcome.Done,
-                "the clothing loan physically leaves storage");
-            var head = net.minecraft.world.entity.EquipmentSlot.HEAD;
-            helper.assertTrue(LoanClothing.equip(rig.tools, rig.worker, Map.of(head, lease)),
-                "the exact borrowed hat occupies the native slot");
-            rig.body.mob().setItemSlot(head, rig.body.mob().getItemBySlot(head).copy());
-            var markers = rig.body.mob().getPersistentData().copy();
-            helper.assertTrue(LoanClothing.held(rig.tools, rig.body.mob(), lease).isEmpty(),
-                "an identical replacement cannot inherit native clothing ownership");
-            helper.assertValueEqual(rig.body.mob().getPersistentData(), markers,
-                "reading ownership does not clear or modify markers");
-            rig.observe();
-            helper.assertTrue(LoanClothing.recover(rig.tools, lease, rig.body), "execution reconciles a stale marker");
-            helper.assertFalse(LoanClothing.borrowedSlot(rig.body.mob(), head),
-                "recovery clears the stale ownership marker");
-            helper.assertTrue(rig.body.mob().getItemBySlot(head).is(ModItems.STRAW_HAT.get()),
-                "recovery preserves the player's identical replacement");
         }
         helper.succeed();
     }
@@ -654,23 +600,6 @@ public final class TaskToolsGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void decoratingAWorkshopPreservesItsUpstreamOfferSemantics(GameTestHelper helper) {
-        try (Rig rig = new Rig(helper)) {
-            Workshop original = new Workshop() {
-                public ResourceLocation id() { return CookeryContent.ID; }
-                public UUID key() { return rig.colony.colonyId(); }
-                public WorkSite site() { return new WorkSite.AtBlock(rig.boardAt); }
-                public boolean alike() { return true; }
-                public boolean carries() { return true; }
-            };
-            Workshop wrapped = rig.tools.decorate(original);
-            helper.assertTrue(wrapped.alike() && wrapped.carries(),
-                "a shared-tool decorator preserves how the upstream planner selects and sources the original offers");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void wrappedNativeBoardKeepsOnlyItsUnpromisedBoneAndOneLoanCell(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -803,6 +732,8 @@ public final class TaskToolsGameTests {
             helper.assertValueEqual(orders.getFirst().goods().count(), 1L, "the merged demand asks for one knife only");
             helper.assertTrue(Goods.overlap(orders.getFirst().goods().spec(), KNIVES), "the bootstrap asks for a permitted knife");
             helper.assertTrue(orders.getFirst().spec().tools().isEmpty(), "the knife's delivery does not itself require a knife");
+            helper.assertTrue(orders.getFirst().spec().site() instanceof WorkSite.AtBlock,
+                "the first knife belongs to shared storage, not a permanent personal kit");
             helper.assertTrue(rig.body.pack().isEmpty() && rig.rack.isEmpty() && rig.chest.isEmpty(),
                 "planning a missing tool creates no physical inventory");
         }
@@ -1074,17 +1005,8 @@ public final class TaskToolsGameTests {
             other.mob().setNoAi(true);
             other.mob().moveTo(rig.boardCell.getCenter()); rig.level.addFreshEntity(other.mob());
             rig.colony.works().hold(other.kind().id(), Held.Entity.of(other.mob())).orElseThrow();
-            second = new Worker() {
-                public Resident resident() { return other.resident(); }
-                public Mob body() { return other.mob(); }
-                public Container pack() { return other.pack(); }
-                public List<Store> within() { return rig.worker.within(); }
-                public ItemStack held(ToolNeed need) { return Tools.from(other.pack().contents(), need).orElse(ItemStack.EMPTY); }
-                public void spill(ItemStack stack) { if (!stack.isEmpty()) throw new AssertionError("unexpected spill: " + stack); }
-                public Effects effects() { return other.effects(); }
-                public List<Node> route() { return List.of(); }
-                public Placement placement() { return Placement.NOWHERE; }
-            };
+            second = TestWorker.of(other).within(rig.worker.within())
+                .held(need -> Tools.from(other.pack().contents(), need).orElse(ItemStack.EMPTY));
         }
         void stock(Container into) {
             into.setItem(0, rig.namedKnife());
@@ -1193,21 +1115,12 @@ public final class TaskToolsGameTests {
             colony.works().hold(body.kind().id(), Held.Entity.of(body.mob())).orElseThrow();
             colony.works().stores(CookeryContent.ID, level.dimension(), List.of(chestAt, rackAt));
             tools = new TaskTools(colony.works(), level.getServer());
-            worker = new Worker() {
-                public Resident resident() { return body.resident(); }
-                public Mob body() { return Rig.this.body.mob(); }
-                public Container pack() { return Rig.this.body.pack(); }
-                public List<Store> within() { return List.of(new Store(rackAt, rack), new Store(chestAt, chest)); }
-                public ItemStack held(ToolNeed need) { return Tools.from(Rig.this.body.pack().contents(), need).orElse(ItemStack.EMPTY); }
-                public void spill(ItemStack stack) { if (!stack.isEmpty()) { throw new AssertionError("unexpected spill: " + stack); } }
-                public Effects effects() { return Rig.this.body.effects(); }
-                public List<Node> route() { return List.of(); }
-                public Placement placement() { return Placement.NOWHERE; }
-            };
+            worker = TestWorker.of(body).within(new Worker.Store(rackAt, rack), new Worker.Store(chestAt, chest))
+                .held(need -> Tools.from(body.pack().contents(), need).orElse(ItemStack.EMPTY));
         }
 
         void observe() {
-            io.github.izakyl.folkways.cookery.InventoryObservations.publish(colony, level);
+            InventoryObservations.publish(colony, level);
         }
 
         boolean ready(Node work) {

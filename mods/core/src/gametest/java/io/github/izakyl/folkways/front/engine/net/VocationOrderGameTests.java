@@ -2,8 +2,8 @@ package io.github.izakyl.folkways.front.engine.net;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.netty.buffer.Unpooled;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.gametest.framework.GameTest;
@@ -70,16 +70,15 @@ public final class VocationOrderGameTests {
     }
 
     private static IPayloadContext context(PacketFlow flow, List<String> calls) {
-        return (IPayloadContext) Proxy.newProxyInstance(IPayloadContext.class.getClassLoader(),
-            new Class<?>[] {IPayloadContext.class}, (proxy, method, args) -> {
-                if (method.getName().equals("flow")) {
-                    return flow;
-                }
-                if (!List.of("reply", "finishCurrentTask", "disconnect").contains(method.getName())) {
-                    throw new AssertionError("Unexpected network operation: " + method.getName());
-                }
-                calls.add(method.getName());
-                return null;
-            });
+        return Proxies.of(IPayloadContext.class, (proxy, method, args) -> {
+            if (method.getName().equals("flow")) {
+                return flow;
+            }
+            if (!List.of("reply", "finishCurrentTask", "disconnect").contains(method.getName())) {
+                throw new AssertionError("Unexpected network operation: " + method.getName());
+            }
+            calls.add(method.getName());
+            return null;
+        });
     }
 }

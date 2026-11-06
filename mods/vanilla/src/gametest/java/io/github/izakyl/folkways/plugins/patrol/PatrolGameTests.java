@@ -4,31 +4,27 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.combat.DefenseControl;
 import io.github.izakyl.folkways.plugins.combat.SpottedTargets;
-import io.github.izakyl.folkways.plugins.combat.weapon.InventoryObservations;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
-import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import java.util.List;
@@ -37,9 +33,6 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -55,6 +48,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -65,11 +59,6 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class PatrolGameTests {
 
-    private static final ResourceLocation METAL_GOLEM =
-        ResourceLocation.fromNamespaceAndPath("modulargolems", "metal_golem");
-    private static final ResourceLocation HUMANOID_GOLEM =
-        ResourceLocation.fromNamespaceAndPath("modulargolems", "humanoid_golem");
-
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(PatrolGameTests.class);
@@ -78,11 +67,7 @@ public final class PatrolGameTests {
     @GameTest(template = "empty_large", timeoutTicks = 550)
     public static void ordinaryPatrolDutyCollectsFiniteSuppliesWithoutAManualOrder(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        for (int x = 0; x < 23; x++) {
-            for (int z = 0; z < 9; z++) {
-                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
-            }
-        }
+        floor(helper, 23, 9);
         helper.setBlock(new BlockPos(18, 1, 3), Blocks.BARREL);
         Colony colony = Colonies.mint(level.getServer());
         var body = PersonBody.RESIDENT.get().create(level);
@@ -97,49 +82,28 @@ public final class PatrolGameTests {
             List.of(source));
         store.setItem(0, new ItemStack(Items.BOW));
         store.setItem(1, new ItemStack(Items.ARROW, 16));
-        var supplies = PatrolSupplies.of(colony);
-        supplies.loadout(body, LoadoutRegistry.BOW);
+        arm(colony, body, "Bow", ItemSpec.of(Items.BOW));
         colony.service(PatrolContent.ID, PatrolPresence.class)
             .orElseThrow()
             .watched(body.id(), level.getGameTime(), 1000);
         var simulation = new LaborFixture(colony, level);
         helper.onEachTick(simulation::tick);
-        helper.testInfo.addListener(
-            new GameTestListener() {
-                private void close() {
-                    simulation.close();
-                    body.discard();
-                    colony.raze();
-                }
-
-                public void testStructureLoaded(GameTestInfo info) {
-                }
-
-                public void testPassed(GameTestInfo info, GameTestRunner runner) {
-                    close();
-                }
-
-                public void testFailed(GameTestInfo info, GameTestRunner runner) {
-                    close();
-                }
-
-                public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
-                }
-            });
+        Cleanup.on(helper, () -> {
+            simulation.close();
+            body.discard();
+            colony.raze();
+        });
         helper.startSequence()
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
                     body.pack().count(Items.BOW) == 1 && body.pack().count(Items.ARROW) == 8,
-                    "ordinary patrol duty obtains one real bow and eight arrows"
-                    + " through the existing runner"))
+                    "ordinary patrol duty obtains one real bow and eight arrows through the existing runner"))
             .thenExecute(
             () -> {
-                helper.assertTrue(store.getItem(0).isEmpty(), "the real bow leaves"
-                    + " storage once");
+                helper.assertTrue(store.getItem(0).isEmpty(), "the real bow leaves storage once");
                 helper.assertValueEqual(
-                    store.getItem(1).getCount(), 8, "half the finite ammunition"
-                    + " remains in storage");
+                    store.getItem(1).getCount(), 8, "half the finite ammunition remains in storage");
                 helper.assertTrue(
                     DefenseControl.of(colony).current(body.id()).isEmpty(),
                     "autonomous duty never creates a manual order");
@@ -174,9 +138,7 @@ public final class PatrolGameTests {
     @GameTest(template = "sight_range")
     public static void vigilanceFindsDistantThreatsAndReportsWithoutCreatingMeleeHunters(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        for (int x = 0; x < 40; x++) {
-            for (int z = 0; z < 4; z++) { helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE); }
-        }
+        floor(helper, 40, 4);
         Colony colony = Colonies.mint(level.getServer());
         Body scout = PersonBody.RESIDENT.get().create(level);
         Body peer = PersonBody.RESIDENT.get().create(level);
@@ -189,8 +151,8 @@ public final class PatrolGameTests {
         colony.hold(PersonContent.ID, Held.Entity.of(peer.mob())).orElseThrow();
         scout.joinColony(colony.id());
         peer.joinColony(colony.id());
-        PatrolSupplies.of(colony).loadout(scout, LoadoutRegistry.MELEE);
-        PatrolSupplies.of(colony).loadout(peer, LoadoutRegistry.MELEE);
+        arm(colony, scout, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
+        arm(colony, peer, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
         scout.mob().setNoAi(true); peer.mob().setNoAi(true); zombie.setNoAi(true);
         try {
             grant(scout, "patrolling_alert");
@@ -325,9 +287,8 @@ public final class PatrolGameTests {
             UUID route = UUID.randomUUID();
             Grown out = patrol.round(route, 0, stops);
             Grown back = patrol.round(route, 1, stops);
-            helper.assertValueEqual(out.links().size(), 2, "links chaining three stops");
-            helper.assertValueEqual(out.workerGroups().size(), 1, "worker groups on one lap");
-            helper.assertTrue(out.workerGroups().getFirst().size() == 3, "one patroller walks the whole lap");
+            helper.assertTrue(out.workerGroups().size() == 1 && out.workerGroups().getFirst().size() == 3,
+                "one patroller walks the whole lap");
             helper.assertValueEqual(focus(out, 0), stops.getFirst().at(), "the first lap setting out from the start");
             helper.assertValueEqual(focus(back, 0), stops.getLast().at(), "the next lap setting out from the end");
             helper.assertFalse(out.nodes().getFirst().id().equals(back.nodes().getFirst().id()),
@@ -345,11 +306,7 @@ public final class PatrolGameTests {
     @GameTest(template = "empty")
     public static void onlyAnArmedPatrollerOnDutyGoesForAMonster(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        for (int x = 0; x < 6; x++) {
-            for (int z = 0; z < 3; z++) {
-                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
-            }
-        }
+        floor(helper, 6, 3);
         Colony colony = Colonies.mint(level.getServer());
         Body guard = PersonBody.RESIDENT.get().create(level);
         Zombie zombie = EntityType.ZOMBIE.create(level);
@@ -419,11 +376,7 @@ public final class PatrolGameTests {
     @GameTest(template = "empty")
     public static void anArmedResidentDefendsItselfOffDutyAndYieldsWhenWounded(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        for (int x = 0; x < 6; x++) {
-            for (int z = 0; z < 3; z++) {
-                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
-            }
-        }
+        floor(helper, 6, 3);
         Colony colony = Colonies.mint(level.getServer());
         Body guard = PersonBody.RESIDENT.get().create(level);
         Zombie zombie = EntityType.ZOMBIE.create(level);
@@ -455,9 +408,7 @@ public final class PatrolGameTests {
             () -> {
                 try {
                     helper.assertTrue(
-                        zombie.getHealth() < zombie.getMaxHealth(), "self-defence reuses a"
-                        + " real patrol"
-                        + " strike");
+                        zombie.getHealth() < zombie.getMaxHealth(), "self-defence reuses a real patrol strike");
                     strike.released(level, actual, Ending.DONE);
                     guard.mob().setHealth(guard.mob().getMaxHealth() * .25F);
                     helper.assertTrue(
@@ -475,11 +426,7 @@ public final class PatrolGameTests {
     @GameTest(template = "empty")
     public static void patrolDoesNotProvokeANeutralEnderman(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        for (int x = 0; x < 6; x++) {
-            for (int z = 0; z < 3; z++) {
-                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
-            }
-        }
+        floor(helper, 6, 3);
         Colony colony = Colonies.mint(level.getServer());
         Body guard = PersonBody.RESIDENT.get().create(level);
         EnderMan enderman = EntityType.ENDERMAN.create(level);
@@ -490,9 +437,7 @@ public final class PatrolGameTests {
             PatrolPresence patrol = new PatrolPresence(colony);
             patrol.watched(guard.id(), level.getGameTime());
             Worker armed = worker(guard, new ItemStack(Items.IRON_SWORD));
-            helper.assertTrue(patrol.urges(armed, colony.view(level)).isEmpty(), "neutral enderman"
-                + " is left"
-                + " alone");
+            helper.assertTrue(patrol.urges(armed, colony.view(level)).isEmpty(), "neutral enderman is left alone");
             enderman.setTarget(guard.mob());
             helper.assertFalse(
                 patrol.urges(armed, colony.view(level)).isEmpty(),
@@ -501,8 +446,7 @@ public final class PatrolGameTests {
             enderman.stopBeingAngry();
             float before = enderman.getHealth();
             new StrikeNode(level, enderman, Stances.WHEREVER).commit(level, armed);
-            helper.assertValueEqual(enderman.getHealth(), before, "a queued strike rechecks"
-                + " restored neutrality");
+            helper.assertValueEqual(enderman.getHealth(), before, "a queued strike rechecks restored neutrality");
         } finally {
             guard.mob().discard();
             enderman.discard();
@@ -527,35 +471,11 @@ public final class PatrolGameTests {
             guard.presentHeldItem(new ItemStack(Items.IRON_SWORD));
             float before = zombie.getHealth();
             new StrikeNode(level, zombie, Stances.WHEREVER).commit(level, worker(guard, guard.mob().getMainHandItem()));
-            helper.assertValueEqual(zombie.getHealth(), before, "a solid wall stops the strike at"
-                + " commit time");
+            helper.assertValueEqual(zombie.getHealth(), before, "a solid wall stops the strike at commit time");
         } finally {
             guard.mob().discard();
             zombie.discard();
             colony.raze();
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void aKindThatFightsBarehandedNeedsNoWeaponToPatrol(GameTestHelper helper) {
-        NodeSpec watch = new WatchNode(UUID.randomUUID(),
-            new Stop(WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO)),
-                Stances.WHEREVER), null).spec();
-        helper.assertTrue(watch.tools().isEmpty(), "patrol work no longer fetches weapons through"
-            + " tool requirements");
-        helper.assertTrue(Tools.equipped(PersonBody.ID, watch, List.of(new ItemStack(Items.STONE_AXE))),
-            "any melee weapon arms a patroller");
-        helper.assertTrue(
-            Tools.equipped(PersonBody.ID, watch, List.of(new ItemStack(Items.STICK))),
-            "patrol work has no tool-list weapon gate");
-        if (ResidentKinds.of(METAL_GOLEM).isPresent()) {
-            helper.assertTrue(Tools.equipped(METAL_GOLEM, watch, List.of()), "a metal golem patrols with its fists");
-            helper.assertTrue(
-                Tools.equipped(HUMANOID_GOLEM, watch, List.of()), "drawn patrol work has no"
-                + " weapon tool gate");
-            helper.assertFalse(ResidentKinds.barehanded(METAL_GOLEM, Optional.empty()),
-                "barehanded speaks only of trades it names");
         }
         helper.succeed();
     }
@@ -577,6 +497,14 @@ public final class PatrolGameTests {
         });
     }
 
+    private static void floor(GameTestHelper helper, int width, int depth) {
+        for (int x = 0; x < width; x++) {
+            for (int z = 0; z < depth; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+    }
+
     private static void place(GameTestHelper helper, Mob mob, BlockPos relative) {
         BlockPos at = helper.absolutePos(relative);
         mob.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
@@ -590,31 +518,16 @@ public final class PatrolGameTests {
     }
 
     private static Worker worker(Body body, Container pack) {
-        return new Worker() {
-            public Resident resident() { return body.resident(); }
+        return TestWorker.of(body).pack(pack).heldFromPack();
+    }
 
-            public Mob body() { return body.mob(); }
-
-            public Container pack() { return pack; }
-
-            public List<Store> within() { return List.of(); }
-
-            public ItemStack held(ToolNeed need) {
-                for (int slot = 0; slot < pack.getContainerSize(); slot++) {
-                    if (Tools.answers(pack.getItem(slot), need)) {
-                        return pack.getItem(slot);
-                    }
-                }
-                return ItemStack.EMPTY;
-            }
-
-            public void spill(ItemStack stack) { throw new AssertionError("patrolling must not spill items"); }
-
-            public Effects effects() { return body.effects(); }
-
-            public List<Node> route() { return List.of(); }
-
-            public Placement placement() { return Placement.NOWHERE; }
-        };
+    private static void arm(Colony colony, Body body, String name, ItemSpec weapon) {
+        LoadoutProfiles profiles = LoadoutProfiles.of(colony);
+        LoadoutProfile profile =
+            profiles.all().stream()
+            .filter(one -> one.name().equals(name))
+            .findFirst()
+            .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

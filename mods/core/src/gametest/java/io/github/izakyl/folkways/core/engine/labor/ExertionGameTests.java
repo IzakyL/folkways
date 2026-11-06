@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
@@ -28,6 +29,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -178,6 +180,36 @@ public final class ExertionGameTests {
             h.runner.drop(h.labor);
             h.assertTotals(helper, 0, 0, 0);
         }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void walkingRetriesAfterLandingAndReleasesItsNavigation(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos from = helper.absolutePos(new BlockPos(1, 1, 1));
+        for (int x = 0; x < 5; x++) {
+            for (int z = 0; z < 3; z++) {
+                BlockPos floor = from.offset(x - 1, -1, z - 1);
+                level.setBlockAndUpdate(floor, Blocks.STONE.defaultBlockState());
+                level.setBlockAndUpdate(floor.above(), Blocks.AIR.defaultBlockState());
+                level.setBlockAndUpdate(floor.above(2), Blocks.AIR.defaultBlockState());
+            }
+        }
+        var body = PersonBody.RESIDENT.get().create(level);
+        body.setPos(from.getX() + 0.5, from.getY(), from.getZ() + 0.5);
+        body.setOnGround(false);
+        var goals = Set.of(WorldPos.of(level, from.offset(2, 0, 0)));
+        OnFoot walking = new OnFoot(1.0, LaborRefusal.NO_WAY_THERE);
+        walking.setOut(level, body, goals);
+        walking.step(level, body, goals);
+        helper.assertTrue(body.getNavigation().getPath() == null, "airborne navigation should not have a path yet");
+        body.setOnGround(true);
+        for (int tick = 0; tick < 5; tick++) {
+            walking.step(level, body, goals);
+        }
+        helper.assertTrue(!body.getNavigation().isDone(), "landing must retry navigation before timing out");
+        walking.release(level, body);
+        helper.assertTrue(body.getNavigation().isDone(), "cancelled walking must release its old path");
         helper.succeed();
     }
 

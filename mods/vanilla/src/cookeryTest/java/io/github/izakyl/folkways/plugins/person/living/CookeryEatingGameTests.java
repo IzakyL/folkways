@@ -164,27 +164,6 @@ public final class CookeryEatingGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void chiliIsRefusedBeforeItsSpecialEatingBehaviorCanKillAResident(GameTestHelper helper) {
-        for (var item : List.of(ModItems.RED_CHILI.get(), ModItems.GREEN_CHILI.get())) {
-            try (EatingFixture meal = new EatingFixture(helper, new ItemStack(item, 3), 0)) {
-                helper.assertTrue(meal.pack.getItem(0).getFoodProperties(meal.body.mob()).effects().isEmpty(),
-                    "chili damage is not declared as a food effect");
-                meal.body.mob().setHealth(1.0F);
-                helper.assertFalse(meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
-                    .anyMatch(urge -> urge.id().equals(LivingPresence.EAT)), "chili creates no eating urge");
-                helper.assertTrue(meal.action().commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
-                    "chili is refused before its damage callback");
-                helper.assertTrue(meal.body.mob().isAlive() && meal.body.mob().getHealth() == 1.0F,
-                    "refusing chili protects a resident at one health point");
-                helper.assertValueEqual(meal.pack.getItem(0).getCount(), 3, "chili stays untouched");
-                helper.assertValueEqual(meal.living.foodLevelOf(meal.body.id()).orElseThrow(), 0,
-                    "refusal grants no nutrition");
-            }
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void chiliesAreNotReservedAsRationsWithSafeRice(GameTestHelper helper) {
         try (EatingFixture meal = new EatingFixture(helper, new ItemStack(ModItems.RED_CHILI.get()), 0)) {
             meal.menu(ModItems.RED_CHILI.get(), ModItems.GREEN_CHILI.get(), ModItems.COOKED_RICE.get());
@@ -197,7 +176,9 @@ public final class CookeryEatingGameTests {
 
     @GameTest(template = "empty")
     public static void harmfulCookeryDishesAreRefusedIncludingQualityMeals(GameTestHelper helper) {
-        List<ItemStack> dishes = new ArrayList<>();
+        // Chili hurts through its own eating callback rather than a food effect, so it must be refused before it.
+        List<ItemStack> dishes = new ArrayList<>(List.of(new ItemStack(ModItems.RED_CHILI.get(), 3),
+            new ItemStack(ModItems.GREEN_CHILI.get(), 3)));
         for (String id : List.of("dark_cuisine", "suspicious_stir_fry", "stargazy_pie")) {
             var item = BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", id));
             helper.assertFalse(item == Items.AIR, "the harmful Cookery dish is installed: " + id);
@@ -215,6 +196,11 @@ public final class CookeryEatingGameTests {
             Quality quality = QualityUtils.getQuality(dish);
             String description = dish.getItem() + " (" + quality + ")";
             try (EatingFixture meal = new EatingFixture(helper, dish, 0)) {
+                if (dish.is(ModItems.RED_CHILI.get()) || dish.is(ModItems.GREEN_CHILI.get())) {
+                    helper.assertTrue(dish.getFoodProperties(meal.body.mob()).effects().isEmpty(),
+                        "chili damage is not declared as a food effect");
+                }
+                meal.body.mob().setHealth(1.0F);
                 helper.assertFalse(meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
                     .anyMatch(urge -> urge.id().equals(LivingPresence.EAT)), "no eating urge for " + description);
                 helper.assertTrue(meal.action().commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
@@ -223,6 +209,8 @@ public final class CookeryEatingGameTests {
                 helper.assertTrue(QualityUtils.getQuality(meal.pack.getItem(0)) == quality,
                     "refusal preserves the dish's quality");
                 helper.assertTrue(meal.body.mob().getActiveEffects().isEmpty(), "no harmful effects apply");
+                helper.assertTrue(meal.body.mob().isAlive() && meal.body.mob().getHealth() == 1.0F,
+                    "refusal protects a resident at one health point: " + description);
                 helper.assertValueEqual(meal.living.foodLevelOf(meal.body.id()).orElseThrow(), 0,
                     "refusal grants no nutrition");
             }

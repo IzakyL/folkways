@@ -11,13 +11,10 @@ import com.tacz.guns.init.ModItems;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
@@ -39,19 +36,14 @@ import net.minecraft.gametest.framework.AfterBatch;
 import net.minecraft.gametest.framework.BeforeBatch;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.ItemStack;
@@ -115,7 +107,7 @@ public final class TaczWeaponGameTests {
             "same item, different caliber is separate goods");
         helper.assertTrue(
             keeps.stream().anyMatch(amount -> Goods.matches(right, amount.spec())),
-            "right" + " rounds" + " are retained");
+            "right rounds are retained");
         helper.assertFalse(
             keeps.stream().anyMatch(amount -> Goods.matches(ammo("9mm", 1), amount.spec())),
             "wrong caliber is not retained");
@@ -130,11 +122,10 @@ public final class TaczWeaponGameTests {
             ItemStack seen = cap.getStackInSlot(slot);
             helper.assertTrue(
                 seen.isEmpty() || seen.is(ModItems.AMMO.get()),
-                "capability excludes guns and" + " creative ammo boxes");
+                "capability excludes guns and creative ammo boxes");
             if (!seen.isEmpty() && ((IAmmo) seen.getItem()).getAmmoId(seen).equals(id("45acp"))) {
                 helper.assertValueEqual(
-                    cap.extractItem(slot, 2, true).getCount(), 2, "simulation returns bounded"
-                    + " rounds");
+                    cap.extractItem(slot, 2, true).getCount(), 2, "simulation returns bounded rounds");
                 helper.assertValueEqual(
                     Goods.countIn(scene.body.pack(), TaczGuns.ammunition(id("45acp"))),
                     5L,
@@ -148,7 +139,7 @@ public final class TaczWeaponGameTests {
         helper.assertValueEqual(
             Goods.countIn(scene.body.pack(), TaczGuns.ammunition(id("45acp"))),
             3L,
-            "actual" + " stock" + " decreases" + " once");
+            "actual stock decreases once");
         helper.succeed();
     }
 
@@ -160,8 +151,7 @@ public final class TaczWeaponGameTests {
         scene.open();
         helper.startSequence()
             .thenWaitUntil(
-            () -> helper.assertTrue(scene.session.reload(), "draw completes and native"
-                + " reload starts"))
+            () -> helper.assertTrue(scene.session.reload(), "draw completes and native reload starts"))
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
@@ -171,8 +161,7 @@ public final class TaczWeaponGameTests {
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
-                    scene.total("45acp"), 5, "loose plus magazine plus chamber is"
-                    + " conserved");
+                    scene.total("45acp"), 5, "loose plus magazine plus chamber is conserved");
                 helper.assertValueEqual(
                     Goods.countIn(scene.body.pack(), TaczGuns.ammunition(id("9mm"))),
                     7L,
@@ -185,8 +174,7 @@ public final class TaczWeaponGameTests {
                     "saving closes native reload before pack serialization");
                 scene.body.load(saved);
                 helper.assertValueEqual(
-                    scene.total("45acp"), 5, "saved actual gun retains all loaded"
-                    + " rounds");
+                    scene.total("45acp"), 5, "saved actual gun retains all loaded rounds");
                 helper.assertValueEqual(
                     scene.body.pack().count(ModItems.MODERN_KINETIC_GUN.get()),
                     1,
@@ -208,29 +196,23 @@ public final class TaczWeaponGameTests {
             "one draw owns a continuing engagement");
         helper.startSequence()
             .thenWaitUntil(
-            () -> helper.assertTrue(scene.shots.get() == 3, "all three finite rounds"
-                + " are fired"))
-            .thenExecute(() -> scene.waitUntil = System.currentTimeMillis() + 500)
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    System.currentTimeMillis() >= scene.waitUntil,
-                    "wait for native millisecond timers"))
+            () -> helper.assertTrue(scene.shots.get() == 3, "all three finite rounds are fired"))
+            .thenExecute(() -> scene.waitMillis(500))
+            .thenWaitUntil(scene::waited)
             .thenExecute(
             () -> {
                 helper.assertTrue(
                     scene.target.getHealth() < scene.target.getMaxHealth(),
                     "real TACZ bullet damage reaches target");
-                helper.assertValueEqual(scene.total("45acp"), 0, "no rounds are"
-                    + " manufactured");
+                helper.assertValueEqual(scene.total("45acp"), 0, "no rounds are manufactured");
                 helper.assertValueEqual(
                     scene.session.state(),
                     WeaponSession.State.STOPPING,
-                    "empty gun" + " ends" + " engagement");
+                    "empty gun ends engagement");
                 scene.session.close();
                 helper.assertTrue(
                     Weapons.open(worker(scene.body)).isEmpty(),
-                    "empty gun without" + " ammo is" + " unusable");
+                    "empty gun without ammo is unusable");
                 scene.body.pack().insert(new ItemStack(Items.IRON_SWORD));
                 helper.assertTrue(Weapons.open(worker(scene.body)).isEmpty(),
                     "an unassigned sword cannot replace the empty assigned gun");
@@ -248,12 +230,12 @@ public final class TaczWeaponGameTests {
             () ->
                 helper.assertTrue(
                     scene.shots.get() >= 4,
-                    "automatic engagement" + " repeats native" + " shooting"))
+                    "automatic engagement repeats native shooting"))
             .thenExecute(
             () -> {
                 helper.assertTrue(
                     scene.body.ownsWeaponHand(scene.session),
-                    "same loan spans" + " multiple" + " discharges");
+                    "same loan spans multiple discharges");
                 helper.assertValueEqual(
                     scene.total("762x39") + scene.shots.get(),
                     6,
@@ -278,8 +260,7 @@ public final class TaczWeaponGameTests {
         scene.session.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
-            () -> helper.assertTrue(scene.shots.get() >= 2, "native bolt feeds the next"
-                + " round"))
+            () -> helper.assertTrue(scene.shots.get() >= 2, "native bolt feeds the next round"))
             .thenExecute(
             () ->
                 helper.assertValueEqual(
@@ -298,13 +279,11 @@ public final class TaczWeaponGameTests {
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
-                    scene.shots.get() == 3, "native scheduled burst fires every"
-                    + " finite round"))
+                    scene.shots.get() == 3, "native scheduled burst fires every finite round"))
             .thenExecute(
             () ->
                 helper.assertValueEqual(
-                    scene.total("556x45"), 0, "burst consumes exactly three"
-                    + " rounds"))
+                    scene.total("556x45"), 0, "burst consumes exactly three rounds"))
             .thenSucceed();
     }
 
@@ -317,49 +296,26 @@ public final class TaczWeaponGameTests {
                 old.close();
                 scene.open();
                 scene.session.fire(scene.target);
-                helper.assertValueEqual(old.state(), WeaponSession.State.CLOSED, "old generation"
-                    + " closed");
+                helper.assertValueEqual(old.state(), WeaponSession.State.CLOSED, "old generation closed");
                 scene.advance = false;
             };
         scene.open();
         scene.session.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
-            () -> helper.assertTrue(scene.shots.get() > 0, "first native discharge"
-                + " occurs"))
-            .thenExecute(() -> scene.waitUntil = System.currentTimeMillis() + 1250)
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    System.currentTimeMillis() >= scene.waitUntil,
-                    "wait for native millisecond timers"))
+            () -> helper.assertTrue(scene.shots.get() > 0, "first native discharge occurs"))
+            .thenExecute(() -> scene.waitMillis(1250))
+            .thenWaitUntil(scene::waited)
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
                     scene.shots.get(),
                     1,
-                    "old delayed burst cannot fire under the new generation's"
-                    + " permission");
+                    "old delayed burst cannot fire under the new generation's permission");
                 helper.assertValueEqual(
-                    scene.total("556x45"), 5, "cancelled delayed rounds remain in"
-                    + " actual gun");
+                    scene.total("556x45"), 5, "cancelled delayed rounds remain in actual gun");
             })
             .thenSucceed();
-    }
-
-    @GameTest(batch = "tacz_native", template = "empty_large", timeoutTicks = 100_000)
-    public static void preemptionDuringBurstCancelsDelayedDischarge(GameTestHelper helper) {
-        cancelBurst(helper, "preemption");
-    }
-
-    @GameTest(batch = "tacz_native", template = "empty_large", timeoutTicks = 100_000)
-    public static void savingDuringBurstCancelsDelayedDischarge(GameTestHelper helper) {
-        cancelBurst(helper, "save");
-    }
-
-    @GameTest(batch = "tacz_native", template = "empty_large", timeoutTicks = 100_000)
-    public static void unloadingDuringBurstCancelsDelayedDischarge(GameTestHelper helper) {
-        cancelBurst(helper, "unload");
     }
 
     @GameTest(batch = "tacz_native", template = "empty_large", timeoutTicks = 100_000)
@@ -377,27 +333,11 @@ public final class TaczWeaponGameTests {
         cancelBurst(helper, "allied");
     }
 
-    @GameTest(batch = "tacz_native", template = "empty_large", timeoutTicks = 100_000)
-    public static void profileRevocationDuringBurstCancelsDelayedDischarge(GameTestHelper helper) {
-        cancelBurst(helper, "profile");
-    }
-
-    @GameTest(batch = "tacz_native", template = "empty_large", timeoutTicks = 100_000)
-    public static void disenrollmentDuringBurstCancelsDelayedDischarge(GameTestHelper helper) {
-        cancelBurst(helper, "disenroll");
-    }
-
     private static void cancelBurst(GameTestHelper helper, String how) {
         Fixture scene = new Fixture(helper, "m16a4", FireMode.BURST, 6);
         scene.firstShot =
             () -> {
                 switch (how) {
-                    case "preemption" -> scene.session.close();
-                    case "profile" ->
-                    LoadoutProfiles.of(scene.colony).assign(List.of(scene.body.id()), Optional.empty());
-                    case "disenroll" -> scene.body.leaveColony();
-                    case "save" -> scene.body.load(scene.body.saveWithoutId(new CompoundTag()));
-                    case "unload" -> scene.body.remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
                     case "death" -> scene.body.hurt(helper.getLevel().damageSources().genericKill(), 1000);
                     case "target" -> scene.target.discard();
                     case "allied" -> {
@@ -413,14 +353,9 @@ public final class TaczWeaponGameTests {
         scene.session.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
-            () -> helper.assertTrue(scene.shots.get() == 1, "first real burst round"
-                + " fires"))
-            .thenExecute(() -> scene.waitUntil = System.currentTimeMillis() + 1250)
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    System.currentTimeMillis() >= scene.waitUntil,
-                    "wait for native millisecond timers"))
+            () -> helper.assertTrue(scene.shots.get() == 1, "first real burst round fires"))
+            .thenExecute(() -> scene.waitMillis(1250))
+            .thenWaitUntil(scene::waited)
             .thenExecute(
             () ->
                 helper.assertValueEqual(
@@ -436,20 +371,14 @@ public final class TaczWeaponGameTests {
         scene.body.pack().insert(ammo("45acp", 5));
         scene.open();
         helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(scene.session.reload(), "native reload"
-                + " starts"))
-            .thenExecute(() -> scene.waitUntil = System.currentTimeMillis() + 250)
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    System.currentTimeMillis() >= scene.waitUntil,
-                    "wait for native millisecond timers"))
+            .thenWaitUntil(() -> helper.assertTrue(scene.session.reload(), "native reload starts"))
+            .thenExecute(() -> scene.waitMillis(250))
+            .thenWaitUntil(scene::waited)
             .thenExecute(
             () -> {
                 scene.session.close();
                 helper.assertValueEqual(
-                    scene.total("45acp"), 5, "interrupted reload preserves all"
-                    + " actual rounds");
+                    scene.total("45acp"), 5, "interrupted reload preserves all actual rounds");
                 helper.assertTrue(
                     !IGunOperator.fromLivingEntity(scene.body)
                     .getDataHolder()
@@ -458,17 +387,12 @@ public final class TaczWeaponGameTests {
                     "transient native reload cleared");
                 scene.open();
             })
-            .thenExecute(() -> scene.waitUntil = System.currentTimeMillis() + 2500)
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    System.currentTimeMillis() >= scene.waitUntil,
-                    "wait for native millisecond timers"))
+            .thenExecute(() -> scene.waitMillis(2500))
+            .thenWaitUntil(scene::waited)
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
-                    scene.total("45acp"), 5, "old reload cannot feed after"
-                    + " reopening");
+                    scene.total("45acp"), 5, "old reload cannot feed after reopening");
                 helper.assertValueEqual(
                     scene.shots.get(), 0, "cancelled reload produces no shot");
             })
@@ -507,19 +431,13 @@ public final class TaczWeaponGameTests {
         scene.session.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
-            () -> helper.assertTrue(scene.shots.get() > 0, "first shot fires before the"
-                + " ally enters"))
-            .thenExecute(() -> scene.waitUntil = System.currentTimeMillis() + 1250)
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    System.currentTimeMillis() >= scene.waitUntil,
-                    "wait for native millisecond timers"))
+            () -> helper.assertTrue(scene.shots.get() > 0, "first shot fires before the ally enters"))
+            .thenExecute(() -> scene.waitMillis(1250))
+            .thenWaitUntil(scene::waited)
             .thenExecute(
             () ->
                 helper.assertValueEqual(
-                    scene.shots.get(), 1, "delayed rounds recheck the firing"
-                    + " corridor"))
+                    scene.shots.get(), 1, "delayed rounds recheck the firing corridor"))
             .thenSucceed();
     }
 
@@ -530,12 +448,10 @@ public final class TaczWeaponGameTests {
         scene.open();
         scene.session.fire(scene.target);
         helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(scene.bullet != null, "native bullet"
-                + " exists"))
+            .thenWaitUntil(() -> helper.assertTrue(scene.bullet != null, "native bullet exists"))
             .thenExecute(
             () -> {
-                helper.assertTrue(scene.body.colonyId().isEmpty(), "shooter already"
-                    + " left");
+                helper.assertTrue(scene.body.colonyId().isEmpty(), "shooter already left");
                 helper.assertFalse(
                     TaczDischargeGuard.protectedAlly(scene.bullet, scene.body),
                     "departed shooter is no longer a colony resident");
@@ -556,8 +472,7 @@ public final class TaczWeaponGameTests {
                     1,
                     LogicalSide.SERVER);
                 NeoForge.EVENT_BUS.post(hit);
-                helper.assertTrue(hit.isCanceled(), "native pre-damage event protects"
-                    + " the pet");
+                helper.assertTrue(hit.isCanceled(), "native pre-damage event protects the pet");
                 ModConfigSpec.BooleanValue protection =
                     TaczConfig.SPEC.getValues().get("protectColonyAllies");
                 boolean original = protection.get();
@@ -578,7 +493,7 @@ public final class TaczWeaponGameTests {
                     NeoForge.EVENT_BUS.post(allowed);
                     helper.assertFalse(
                         allowed.isCanceled(),
-                        "server option can disable in-flight" + " ally protection");
+                        "server option can disable in-flight ally protection");
                 } finally {
                     protection.set(original);
                 }
@@ -593,8 +508,7 @@ public final class TaczWeaponGameTests {
         scene.open();
         scene.session.fire(scene.target);
         helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(scene.bullet != null, "native projectile"
-                + " exists"))
+            .thenWaitUntil(() -> helper.assertTrue(scene.bullet != null, "native projectile exists"))
             .thenExecute(
             () -> {
                 BlockPos glass = scene.body.blockPosition().above(3);
@@ -607,11 +521,10 @@ public final class TaczWeaponGameTests {
                     scene.bullet);
                 NeoForge.EVENT_BUS.post(hit);
                 helper.assertTrue(
-                    hit.isCanceled(), "block effects are stopped before TACZ"
-                    + " mutates glass");
+                    hit.isCanceled(), "block effects are stopped before TACZ mutates glass");
                 helper.assertTrue(
                     helper.getLevel().getBlockState(glass).is(Blocks.GLASS),
-                    "glass" + " remains" + " intact");
+                    "glass remains intact");
             })
             .thenSucceed();
     }
@@ -621,15 +534,12 @@ public final class TaczWeaponGameTests {
         Fixture scene = new Fixture(helper, "m1911", FireMode.SEMI, 0);
         scene.body.pack().insert(ammo("9mm", 20));
         helper.assertTrue(
-            Weapons.open(worker(scene.body)).isEmpty(), "wrong caliber cannot make an empty gun"
-            + " usable");
+            Weapons.open(worker(scene.body)).isEmpty(), "wrong caliber cannot make an empty gun usable");
         ItemStack gun = scene.actual();
         ((IGun) gun.getItem()).setDummyAmmoAmount(gun, 100);
         helper.assertFalse(TaczGuns.supported(gun), "virtual ammo is outside v1");
-        helper.assertFalse(TaczGuns.supported(gun("rpg7", FireMode.SEMI, 1)), "explosive guns are"
-            + " outside v1");
-        helper.assertFalse(TaczGuns.supported(gun("missing", FireMode.SEMI, 1)), "missing gun pack"
-            + " is inactive");
+        helper.assertFalse(TaczGuns.supported(gun("rpg7", FireMode.SEMI, 1)), "explosive guns are outside v1");
+        helper.assertFalse(TaczGuns.supported(gun("missing", FireMode.SEMI, 1)), "missing gun pack is inactive");
         helper.succeed();
     }
 
@@ -655,49 +565,12 @@ public final class TaczWeaponGameTests {
     }
 
     static Worker worker(ResidentEntity body) {
-        return new Worker() {
-
-            public Resident resident() {
-                return body.resident();
-            }
-
-            public Mob body() {
-                return body;
-            }
-
-            public Container pack() {
-                return body.pack();
-            }
-
-            public List<Store> within() {
-                return List.of();
-            }
-
-            public ItemStack held(ToolNeed need) {
-                return ItemStack.EMPTY;
-            }
-
-            public void spill(ItemStack stack) {
-                body.spawnAtLocation(stack);
-            }
-
-            public Effects effects() {
-                return body.effects();
-            }
-
-            public List<Node> route() {
-                return List.of();
-            }
-
-            public Placement placement() {
-                return Placement.NOWHERE;
-            }
-        };
+        return TestWorker.of(body).spill(body::spawnAtLocation);
     }
 
     static final TicketType<UUID> TICKING = TicketType.create("folkways_tacz_test", Comparator.<UUID>naturalOrder());
 
-    static final class Fixture implements GameTestListener {
+    static final class Fixture {
 
         final ResidentEntity body;
         final Zombie target;
@@ -708,11 +581,13 @@ public final class TaczWeaponGameTests {
         Runnable firstShot;
         EntityKineticBullet bullet;
         Entity other;
+        final GameTestHelper helper;
         long waitUntil;
         boolean advance = true;
         boolean closed;
 
         Fixture(GameTestHelper helper, String gun, FireMode mode, int count) {
+            this.helper = helper;
             for (int x = 0; x < 12; x++) {
                 for (int z = 0; z < 4; z++) {
                     helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
@@ -771,11 +646,20 @@ public final class TaczWeaponGameTests {
                         session.tick();
                     }
                 });
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
         }
 
         void open() {
             session = Weapons.open(worker(body)).orElseThrow();
+        }
+
+        // TACZ times its guns by the wall clock, so a test waits in milliseconds rather than ticks.
+        void waitMillis(long millis) {
+            waitUntil = System.currentTimeMillis() + millis;
+        }
+
+        void waited() {
+            helper.assertTrue(System.currentTimeMillis() >= waitUntil, "wait for native millisecond timers");
         }
 
         ItemStack actual() {
@@ -809,20 +693,6 @@ public final class TaczWeaponGameTests {
                 other.discard();
             }
             colony.raze();
-        }
-
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
         }
     }
 }

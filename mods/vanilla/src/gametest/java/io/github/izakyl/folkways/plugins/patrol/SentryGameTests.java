@@ -4,19 +4,18 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.combat.FireSafety;
@@ -26,7 +25,6 @@ import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProvider;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
-import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.combat.weapon.ProfileShortages;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
@@ -46,14 +44,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -66,8 +59,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
-import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -155,7 +148,7 @@ public final class SentryGameTests {
     @GameTest(template = "empty_large")
     public static void nonRangedProfileIsRefusedAndAssignmentSurvivesReload(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
-        PatrolSupplies.of(fixture.colony).loadout(fixture.sentry, LoadoutRegistry.MELEE);
+        arm(fixture.colony, fixture.sentry, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
         PatrolStaffing.of(fixture.colony).configure(fixture.level, fixture.zone,
             Set.of(LoadoutProfiles.of(fixture.colony).assigned(fixture.sentry.id()).orElseThrow().id()), 1);
         helper.assertFalse(fixture.posts.assigned(fixture.sentry.id()), "melee residents cannot operate sentries");
@@ -291,7 +284,7 @@ public final class SentryGameTests {
     @GameTest(template = "empty_large", timeoutTicks = 700)
     public static void outOfRangeSentryCallsPatrolWhichResumesItsUnfinishedRoute(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
-        PatrolSupplies.of(fixture.colony).loadout(fixture.sentry, LoadoutRegistry.CROSSBOW);
+        arm(fixture.colony, fixture.sentry, "Crossbow", ItemSpec.of(Items.CROSSBOW));
         fixture.sentry.pack().setItem(0, new ItemStack(Items.CROSSBOW));
         fixture.assign(false);
         for (int x = 6; x <= 11; x++) {
@@ -301,7 +294,7 @@ public final class SentryGameTests {
         }
         ResidentEntity patroller = fixture.resident(new BlockPos(3, 1, 14));
         patroller.pack().setItem(0, new ItemStack(Items.IRON_SWORD));
-        PatrolSupplies.of(fixture.colony).loadout(patroller, LoadoutRegistry.MELEE);
+        arm(fixture.colony, patroller, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
         BlockPos from = helper.absolutePos(new BlockPos(3, 0, 14));
         BlockPos to = helper.absolutePos(new BlockPos(20, 0, 14));
         UUID route = fixture.colony.hold(PatrolContent.BEAT,
@@ -361,7 +354,7 @@ public final class SentryGameTests {
         helper.assertValueEqual(station.releases, 1, "displacement releases the station while the runner returns");
         fixture.move(fixture.sentry, new BlockPos(1, 1, 2));
         fixture.tick(node);
-        PatrolSupplies.of(fixture.colony).loadout(fixture.sentry, LoadoutRegistry.MELEE);
+        arm(fixture.colony, fixture.sentry, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
         fixture.posts.tick(fixture.level.getServer());
         helper.assertValueEqual(station.releases, 1, "a melee profile remains eligible for station operation");
         LoadoutProfiles.of(fixture.colony).assign(List.of(fixture.sentry.id()), Optional.empty());
@@ -413,7 +406,7 @@ public final class SentryGameTests {
         var profiles = LoadoutProfiles.of(fixture.colony);
         UUID assigned = profiles.assigned(fixture.sentry.id()).orElseThrow().id();
         profiles.replace(new LoadoutProfile(assigned, "Long range", List.of(
-            LoadoutProfile.Entry.weapon(ItemSpec.exact(fixture.sentry.pack().getItem(0)))), Optional.empty()));
+            LoadoutProfile.Entry.weapon(ItemSpec.exact(fixture.sentry.pack().getItem(0))))));
         ResidentEntity scout = fixture.resident(new BlockPos(35, 1, 5));
         scout.setNoAi(true);
         scout.setNoGravity(true);
@@ -527,7 +520,7 @@ public final class SentryGameTests {
     }
 
     @GameTest(template = "empty_large")
-    public static void stationSeatReleasePreservesUnrelatedRidingAndCleansOldSaveMarkers(GameTestHelper helper) {
+    public static void stationSeatReleasePreservesUnrelatedRiding(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         TestStation station = fixture.station();
         Entity seat = EntityType.BOAT.create(fixture.level);
@@ -545,13 +538,6 @@ public final class SentryGameTests {
             helper.assertTrue(
                 fixture.sentry.getVehicle() == other, "closing a stale loan preserves unrelated"
                 + " riding");
-            CompoundTag old = new CompoundTag();
-            old.putUUID("vehicle", other.getUUID());
-            fixture.sentry.getPersistentData().put("folkways:command_mount", old);
-            WeaponStations.restored(new EntityTickEvent.Post(fixture.sentry));
-            helper.assertFalse(
-                fixture.sentry.isPassenger(), "Vanilla also cleans old PR command-owned seat"
-                + " markers");
         } finally {
             seat.discard();
             other.discard();
@@ -645,7 +631,7 @@ public final class SentryGameTests {
         }
     }
 
-    private static final class Fixture implements GameTestListener {
+    private static final class Fixture {
         private final GameTestHelper helper;
         private final ServerLevel level;
         private final Colony colony;
@@ -670,7 +656,7 @@ public final class SentryGameTests {
             sentry = resident(new BlockPos(2, 1, 2));
             sentry.pack().setItem(0, new ItemStack(Items.BOW));
             sentry.pack().setItem(1, new ItemStack(Items.ARROW, 32));
-            PatrolSupplies.of(colony).loadout(sentry, LoadoutRegistry.BOW);
+            arm(colony, sentry, "Bow", ItemSpec.of(Items.BOW));
             Set<WorldPos> cells = new LinkedHashSet<>();
             for (int x = 2; x <= 3; x++) {
                 for (int z = 2; z <= 3; z++) {
@@ -679,7 +665,7 @@ public final class SentryGameTests {
             }
             zone = colony.hold(SentryPosts.ZONE, new Held.Area(cells)).orElseThrow().id();
             posts = SentryPosts.of(colony);
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
         }
 
         private ResidentEntity resident(BlockPos at) {
@@ -715,7 +701,7 @@ public final class SentryGameTests {
 
         private void assign(boolean bow) {
             if (bow) {
-                PatrolSupplies.of(colony).loadout(sentry, LoadoutRegistry.BOW);
+                arm(colony, sentry, "Bow", ItemSpec.of(Items.BOW));
             }
             if (stationEntity != null) {
                 if (colony.holding(zone).isEmpty()) {
@@ -801,60 +787,22 @@ public final class SentryGameTests {
             entities.forEach(Entity::discard);
             colony.raze();
         }
-
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
-        }
     }
 
     private static Worker worker(ResidentEntity body, List<Node> route) {
-        return new Worker() {
-            public Resident resident() {
-                return body.resident();
-            }
+        return TestWorker.of(body)
+            .held(need -> body.pack().contents().stream().filter(stack -> Tools.answers(stack, need)).findFirst()
+                .orElse(ItemStack.EMPTY))
+            .spill(body::spawnAtLocation).route(route);
+    }
 
-            public Mob body() {
-                return body;
-            }
-
-            public Container pack() {
-                return body.pack();
-            }
-
-            public List<Store> within() {
-                return List.of();
-            }
-
-            public ItemStack held(ToolNeed need) {
-                return body.pack().contents().stream().filter(stack -> Tools.answers(stack, need))
-                    .findFirst().orElse(ItemStack.EMPTY);
-            }
-
-            public void spill(ItemStack stack) {
-                body.spawnAtLocation(stack);
-            }
-
-            public Effects effects() {
-                return body.effects();
-            }
-
-            public List<Node> route() {
-                return route;
-            }
-
-            public Placement placement() {
-                return Placement.NOWHERE;
-            }
-        };
+    private static void arm(Colony colony, Body body, String name, ItemSpec weapon) {
+        LoadoutProfiles profiles = LoadoutProfiles.of(colony);
+        LoadoutProfile profile =
+            profiles.all().stream()
+            .filter(one -> one.name().equals(name))
+            .findFirst()
+            .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

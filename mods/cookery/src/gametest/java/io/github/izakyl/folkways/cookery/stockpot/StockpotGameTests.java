@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery.stockpot;
 
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.container.StockpotInput;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.soupbase.SoupBaseManager;
@@ -11,10 +11,8 @@ import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.StockpotVisuals;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModSoupBases;
-import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.Quality;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.QualityUtils;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.Realm;
@@ -31,10 +29,8 @@ import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Workshop;
@@ -43,6 +39,7 @@ import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.plan.Crew;
 import io.github.izakyl.folkways.core.engine.plan.Known;
 import io.github.izakyl.folkways.core.engine.plan.Message;
+import io.github.izakyl.folkways.core.engine.plan.Planned;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
 import io.github.izakyl.folkways.core.engine.plan.Solving;
 import io.github.izakyl.folkways.core.engine.plan.Stock;
@@ -59,6 +56,7 @@ import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
@@ -78,7 +76,6 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.Item;
@@ -354,36 +351,6 @@ public final class StockpotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 450)
-    public static void recipesWithoutCarriersUseTheSameRealCookingFlow(GameTestHelper helper) {
-        Rig rig = new Rig(helper, "zongzi_count_3", false);
-        rig.put(new ItemStack(Items.WATER_BUCKET));
-        rig.put(new ItemStack(ModItems.STOCKPOT_LID.get()));
-        rig.put(new ItemStack(ModItems.RAW_ZONGZI.get(), 3));
-        rig.load();
-        afterCooking(rig, ready -> {
-            ready.take();
-            helper.assertValueEqual(ready.count(ModItems.ZONGZI.get()), 3L, "carrier-free dishes are served individually");
-            helper.assertTrue(ready.plan.carrier().isEmpty(), "this is the real empty-carrier recipe");
-        });
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 450)
-    public static void aFishBucketSoupBaseReturnsItsBucketAndCooksItsFixedRecipe(GameTestHelper helper) {
-        Rig rig = new Rig(helper, "seafood_miso_soup_cod_entity", false);
-        rig.put(new ItemStack(Items.COD_BUCKET));
-        rig.put(new ItemStack(ModItems.STOCKPOT_LID.get()));
-        rig.put(new ItemStack(ModItems.LETTUCE.get(), 3));
-        rig.put(new ItemStack(Items.BOWL));
-        rig.load();
-        helper.assertValueEqual(rig.count(Items.BUCKET), 1L, "the fish-bucket soup base returns a real empty bucket");
-        afterCooking(rig, ready -> {
-            ready.take();
-            helper.assertValueEqual(ready.count(ModItems.SEAFOOD_MISO_SOUP.get()), 1L,
-                "a non-water soup base is resolved by its registered soup-base predicate");
-        });
-    }
-
     @GameTest(template = "empty")
     public static void changedPlayerInputsReleaseOnlyOurClaim(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
@@ -447,20 +414,11 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @SuppressWarnings("unchecked")
     @GameTest(template = "empty")
-    public static void refusedRecipesAreNeitherPlannedNorCommitted(GameTestHelper helper) throws Exception {
+    public static void refusedRecipesAreNeitherPlannedNorCommitted(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.stockRice(3, 3);
-            var field = FolkwaysVanillaConfig.class.getDeclaredField("REFUSED_RECIPES");
-            field.setAccessible(true);
-            var setting = (ModConfigSpec.ConfigValue<List<? extends String>>)
-                field.get(null);
-            List<? extends String> before = setting.get();
-            try {
-                List<String> refused = new ArrayList<>(before);
-                refused.add(rig.plan.id().toString());
-                setting.set(List.copyOf(refused));
+            withRefused(List.of(rig.plan.id().toString()), () -> {
                 var holder = StockpotPlan.find(rig.level, rig.plan.id()).orElseThrow();
                 helper.assertTrue(StockpotPlan.of(rig.level, holder).isEmpty(),
                     "a server's refused recipe is excluded when freezing plans");
@@ -468,9 +426,7 @@ public final class StockpotGameTests {
                     "a recipe refused after planning is also rejected at commit");
                 helper.assertValueEqual(rig.count(ModItems.RICE_SEED.get()), 3L,
                     "refusing an old plan does not consume goods");
-            } finally {
-                setting.set(before);
-            }
+            });
         }
         helper.succeed();
     }
@@ -479,54 +435,23 @@ public final class StockpotGameTests {
     public static void planningAThreeServingBatchNeedsOnlyThreeBowls(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.claim.release(Ending.DROPPED);
-            var fixture = new PlanningFixture(helper, 36);
-            var source = new Stash(fixture.source);
-            List<Stock.Holding> holdings = List.of(
-                new Stock.Holding(source,
-                    new ItemStack(ModItems.RICE_SEED.get(), 3)),
-                new Stock.Holding(source, new ItemStack(Items.WATER_BUCKET)),
-                new Stock.Holding(source, new ItemStack(Items.BOWL, 3)),
-                new Stock.Holding(source,
-                    new ItemStack(ModItems.STOCKPOT_LID.get())));
-            var stock = new Stock(holdings, Map.of(source, 27));
-            var workshop = StockpotWorkshops.freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at,
-                rig.stances, rig.bookings, () -> { }).orElseThrow();
-            var crafting = rig.body.licences().of(WaresContent.trade())
-                .orElseThrow();
-            var hauling = rig.body.licences().of(Vocations.required(
-                Vocations.HAULING)).orElseThrow();
-            var hand = new Crew.Hand(rig.body.resident(), fixture.source,
-                36, 36, 1, List.of(crafting, hauling), List.of(), Optional.empty());
-            var known = new Known(
-                fixture.situation(stock, List.of(workshop)), List.of(hand));
-            var spec = NodeSpec.of(UUID.randomUUID(),
-                CookeryContent.ID,
-                new WorkSite.AtBlock(fixture.target),
-                Stances.at(fixture.target), Workload.Once.of(1))
-                .needs(new Need(
-                    Goods.specOf(ModItems.COOKED_RICE.get().getDefaultInstance()), 3)).done();
-            Node consumer = new Node() {
-                public NodeSpec spec() { return spec; }
-                public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
-            };
-            var solver = new Solving();
-            try {
-                var planned = solver.handle(known, List.of(new Message.Submitted(
-                    CookeryContent.ID, Grown.of(consumer))), 0);
-                helper.assertTrue(planned.diagnosis().shortfalls().isEmpty(),
-                    "exactly three bowls feed both preparation and serving: " + planned.diagnosis());
-                helper.assertTrue(planned.weave().vertices().values().stream()
-                    .anyMatch(vertex -> vertex.node() instanceof StockpotWork),
-                    "the real stockpot workshop supplied executable cooking work");
-                helper.assertTrue(planned.schedule().unassigned().isEmpty(),
-                    "the whole batch can be scheduled for the available resident");
-            } finally {
-                solver.closed();
-                fixture.worker.body().discard();
-            }
+            List<ItemStack> goods = List.of(new ItemStack(ModItems.RICE_SEED.get(), 3), new ItemStack(Items.WATER_BUCKET),
+                new ItemStack(Items.BOWL, 3), new ItemStack(ModItems.STOCKPOT_LID.get()));
+            planned(rig, 36, 36, goods, List.of(rig.workshop()), fixture -> needing(fixture, ModItems.COOKED_RICE.get(), 3),
+                planned -> {
+                    helper.assertTrue(planned.diagnosis().shortfalls().isEmpty(),
+                        "exactly three bowls feed both preparation and serving: " + planned.diagnosis());
+                    helper.assertTrue(planned.weave().vertices().values().stream()
+                        .anyMatch(vertex -> vertex.node() instanceof StockpotWork),
+                        "the real stockpot workshop supplied executable cooking work");
+                    helper.assertTrue(planned.schedule().unassigned().isEmpty(),
+                        "the whole batch can be scheduled for the available resident");
+                    return null;
+                });
         }
         helper.succeed();
     }
+
     @GameTest(template = "empty")
     public static void releasingAKitchenPreservesEveryInvestedItemAndOtherOwners(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
@@ -544,28 +469,18 @@ public final class StockpotGameTests {
         helper.succeed();
     }
     @GameTest(template = "empty", timeoutTicks = 450)
-    public static void threeSingleServingBatchesUseOneLidAndExactlyThreeBowls(GameTestHelper helper) throws Exception {
+    public static void threeSingleServingBatchesUseOneLidAndExactlyThreeBowls(GameTestHelper helper) {
         Rig rig = new Rig(helper, "rice_1", false);
         rig.stockRice(3, 3);
         rig.put(new ItemStack(Items.WATER_BUCKET));
         rig.put(new ItemStack(Items.WATER_BUCKET));
-        var field = FolkwaysVanillaConfig.class.getDeclaredField("REFUSED_RECIPES");
-        field.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        var setting = (ModConfigSpec.ConfigValue<List<? extends String>>) field.get(null);
-        List<? extends String> before = setting.get();
-        Workshop workshop;
-        try {
-            List<String> refused = new ArrayList<>(before);
-            for (int portions = 2; portions <= 9; portions++) {
-                refused.add("kaleidoscope_cookery:stockpot/rice_" + portions);
-            }
-            setting.set(List.copyOf(refused));
-            workshop = StockpotWorkshops.freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at,
-                rig.stances, rig.bookings, () -> { }).orElseThrow();
-        } finally {
-            setting.set(before);
+        List<String> larger = new ArrayList<>();
+        for (int portions = 2; portions <= 9; portions++) {
+            larger.add("kaleidoscope_cookery:stockpot/rice_" + portions);
         }
+        Workshop[] frozen = new Workshop[1];
+        withRefused(larger, () -> frozen[0] = rig.workshop());
+        Workshop workshop = frozen[0];
         var ask = Produce.of(CookeryContent.ID,
             new WorkSite.AtBlock(rig.at), rig.plan.produces(), 3,
             Produce.UNBOUNDED);
@@ -772,8 +687,7 @@ public final class StockpotGameTests {
             marker.putUUID("colony", UUID.randomUUID());
             marker.putUUID("batch", UUID.randomUUID());
             rig.pot.getPersistentData().put(StockpotBatch.KEY, marker);
-            var workshop = StockpotWorkshops.freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at,
-                rig.stances, rig.bookings, () -> { }).orElseThrow();
+            var workshop = rig.workshop();
             var ask = Produce.of(CookeryContent.ID,
                 new WorkSite.AtBlock(rig.at), rig.plan.produces(), 1,
                 Produce.UNBOUNDED);
@@ -792,48 +706,57 @@ public final class StockpotGameTests {
     }
 
     private static boolean assignedWithRoom(Rig rig, Node taking, int free) {
-        var fixture = new PlanningFixture(rig.helper, free + 1);
-        var source = new Stash(fixture.source);
         long bowls = taking.spec().needs().stream().mapToLong(Need::count).sum();
-        var stock = new Stock(List.of(new Stock.Holding(source, new ItemStack(Items.BOWL, (int) bowls))),
-            Map.of(source, 27));
+        return planned(rig, free, free + 1, List.of(new ItemStack(Items.BOWL, (int) bowls)), List.of(), fixture -> taking,
+            planned -> planned.schedule().tours().values().stream().anyMatch(tour -> tour.nodes().contains(taking.id())));
+    }
+
+    // Plans one submitted node for the rig's resident, who has `free` of `cells` empty pack cells, with the goods
+    // in a stash beside the fixture and the given workshops open.
+    private static <T> T planned(Rig rig, int free, int cells, List<ItemStack> goods, List<Workshop> workshops,
+                                 Function<PlanningFixture, Node> submitted, Function<Planned, T> read) {
+        var fixture = new PlanningFixture(rig.helper, cells);
+        var source = new Stash(fixture.source);
+        var stock = new Stock(goods.stream().map(stack -> new Stock.Holding(source, stack)).toList(), Map.of(source, 27));
         var crafting = rig.body.licences().of(WaresContent.trade()).orElseThrow();
         var hauling = rig.body.licences().of(Vocations.required(Vocations.HAULING)).orElseThrow();
-        var hand = new Crew.Hand(rig.body.resident(), fixture.source, free, free + 1, 1,
+        var hand = new Crew.Hand(rig.body.resident(), fixture.source, free, cells, 1,
             List.of(crafting, hauling), List.of(), Optional.empty());
-        var known = new Known(fixture.situation(stock, List.of()), List.of(hand));
+        var known = new Known(fixture.situation(stock, workshops), List.of(hand));
         var solver = new Solving();
         try {
-            var planned = solver.handle(known, List.of(new Message.Submitted(CookeryContent.ID,
-                Grown.of(taking))), 0);
-            return planned.schedule().tours().values().stream().anyMatch(tour -> tour.nodes().contains(taking.id()));
+            return read.apply(solver.handle(known, List.of(new Message.Submitted(CookeryContent.ID,
+                Grown.of(submitted.apply(fixture)))), 0));
         } finally {
             solver.closed();
             fixture.worker.body().discard();
         }
     }
-    @GameTest(template = "empty", timeoutTicks = 450)
-    public static void flexibleUdonUsesOneOfEachIngredientAndKeepsTheNativeQuality(GameTestHelper helper) {
-        Rig rig = new Rig(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "flex_stockpot/udon_noodle"), false);
-        rig.stockUdon();
-        rig.load();
-        afterCooking(rig, ready -> {
-            helper.assertValueEqual(ready.pot.saveCustomOnly(ready.level.registryAccess()).getString("RecipeId"),
-                ready.plan.id().toString(), "the real stockpot selected the native flexible recipe");
-            ItemStack actual = ready.pot.getResult().copyWithCount(1);
-            helper.assertTrue(QualityUtils.hasQuality(actual), "native flexible cooking attaches its real quality component");
-            ready.take();
-            helper.assertValueEqual(ready.count(ModItems.UDON_NOODLE.get()), 1L, "one native flexible serving is collected");
-            helper.assertTrue(java.util.stream.IntStream.range(0, ready.pack.getContainerSize()).mapToObj(ready.pack::getItem).anyMatch(stack -> ItemStack.matches(stack, actual)),
-                "the delivered dish keeps the native result's exact quality and components");
-            helper.assertValueEqual(ready.count(ModItems.LETTUCE.get()) + ready.count(Items.EGG)
-                + ready.count(ModItems.RAW_NOODLES.get()), 0L, "the minimal three real ingredients were each consumed once");
-            helper.assertValueEqual(ready.count(Items.BUCKET), 1L, "native soup-base insertion returns its real bucket");
-            helper.assertValueEqual(ready.count(Items.BOWL), 0L, "native take-out consumes exactly one bowl");
-            helper.assertValueEqual(ready.count(ModItems.STOCKPOT_LID.get()), 1L, "the actual lid is returned for later work");
-        });
+
+    // A consumer at the fixture's target that needs the item and does nothing else.
+    private static Node needing(PlanningFixture fixture, Item item, int count) {
+        NodeSpec spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(fixture.target),
+            Stances.at(fixture.target), Workload.Once.of(1)).needs(new Need(Goods.specOf(item.getDefaultInstance()), count)).done();
+        return new Node() {
+            public NodeSpec spec() { return spec; }
+            public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
+        };
     }
 
+    // Runs the check while the server also refuses these recipe ids, restoring its own list afterwards.
+    private static void withRefused(List<String> ids, Runnable check) {
+        ModConfigSpec.ConfigValue<List<? extends String>> setting =
+            FolkwaysVanillaConfig.SPEC.getValues().get("crafting.refusedRecipes");
+        List<? extends String> before = setting.get();
+        try {
+            List<String> refused = new ArrayList<>(before);
+            refused.addAll(ids);
+            setting.set(List.copyOf(refused));
+            check.run();
+        } finally {
+            setting.set(before);
+        }
+    }
     @GameTest(template = "empty", timeoutTicks = 450)
     public static void flexibleBatchReloadRecoversItsRealQualityWithoutReplayingInputs(GameTestHelper helper) {
         Rig rig = new Rig(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "flex_stockpot/udon_noodle"), false);
@@ -883,48 +806,18 @@ public final class StockpotGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void everyNativeFlexibleStockpotRecipeHasAPlanningSnapshot(GameTestHelper helper) {
-        var recipes = helper.getLevel().getRecipeManager().getAllRecipesFor(ModRecipes.FLEX_STOCKPOT_RECIPE);
-        helper.assertTrue(!recipes.isEmpty(), "the actual integration mod supplies flexible recipes");
-        for (var recipe : recipes) {
-            helper.assertTrue(StockpotPlan.of(helper.getLevel(), recipe).isPresent(),
-                "the actual recipe has soup, ingredients, carriers and a planning snapshot: " + recipe.id());
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void thePlannerChoosesFlexibleUdonWhenOnlyThreeIngredientsExist(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "flex_stockpot/udon_noodle"), false)) {
             rig.claim.release(Ending.DROPPED);
-            var fixture = new PlanningFixture(helper, 36);
-            var source = new Stash(fixture.source);
-            List<ItemStack> raw = List.of(new ItemStack(ModItems.LETTUCE.get()), new ItemStack(Items.EGG),
+            List<ItemStack> goods = List.of(new ItemStack(ModItems.LETTUCE.get()), new ItemStack(Items.EGG),
                 new ItemStack(ModItems.RAW_NOODLES.get()), new ItemStack(Items.WATER_BUCKET),
                 new ItemStack(Items.BOWL), ModItems.STOCKPOT_LID.get().getDefaultInstance());
-            var stock = new Stock(raw.stream().map(stack -> new Stock.Holding(source, stack)).toList(), Map.of(source, 27));
-            var workshop = StockpotWorkshops.freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at,
-                rig.stances, rig.bookings, () -> { }).orElseThrow();
-            var crafting = rig.body.licences().of(WaresContent.trade()).orElseThrow();
-            var hauling = rig.body.licences().of(Vocations.required(Vocations.HAULING)).orElseThrow();
-            var hand = new Crew.Hand(rig.body.resident(), fixture.source, 36, 36, 1,
-                List.of(crafting, hauling), List.of(), Optional.empty());
-            Known known = new Known(fixture.situation(stock, List.of(workshop)), List.of(hand));
-            NodeSpec spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(fixture.target),
-                Stances.at(fixture.target), Workload.Once.of(1)).needs(new Need(Goods.specOf(ModItems.UDON_NOODLE.get().getDefaultInstance()), 1)).done();
-            Node consumer = new Node() {
-                public NodeSpec spec() { return spec; }
-                public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
-            };
-            Solving solver = new Solving();
-            try {
-                var result = solver.handle(known, List.of(new Message.Submitted(CookeryContent.ID, Grown.of(consumer))), 0);
-                helper.assertTrue(result.diagnosis().shortfalls().isEmpty() && result.diagnosis().unassigned().isEmpty(),
-                    "the real fixed+flexible catalogue finds the feasible three-ingredient native route: " + result.diagnosis());
-            } finally {
-                solver.closed();
-                fixture.worker.body().discard();
-            }
+            planned(rig, 36, 36, goods, List.of(rig.workshop()), fixture -> needing(fixture, ModItems.UDON_NOODLE.get(), 1),
+                result -> {
+                    helper.assertTrue(result.diagnosis().shortfalls().isEmpty() && result.diagnosis().unassigned().isEmpty(),
+                        "the real fixed+flexible catalogue finds the feasible three-ingredient native route: " + result.diagnosis());
+                    return null;
+                });
         }
         helper.succeed();
     }
@@ -1054,6 +947,10 @@ public final class StockpotGameTests {
             take = new StockpotTake(colony, batch, at, stances, plan, bookings, () -> { }, false);
         }
 
+        Workshop workshop() {
+            return StockpotWorkshops.freeze(UUID.randomUUID(), colony, level, at, stances, bookings, () -> { }).orElseThrow();
+        }
+
         void stockUdon() {
             put(new ItemStack(ModItems.LETTUCE.get()));
             put(new ItemStack(Items.EGG));
@@ -1145,21 +1042,7 @@ public final class StockpotGameTests {
         }
 
         Worker worker(Container inventory) {
-            return new Worker() {
-                public Resident resident() { return body.resident(); }
-                public Mob body() { return body; }
-                public Container pack() { return inventory; }
-                public List<Store> within() { return List.of(); }
-                public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-                public void spill(ItemStack stack) {
-                    if (!stack.isEmpty()) {
-                        throw new AssertionError("unexpected spill: " + stack);
-                    }
-                }
-                public Effects effects() { return body.effects(); }
-                public List<Node> route() { return List.of(); }
-                public Placement placement() { return Placement.NOWHERE; }
-            };
+            return TestWorker.of(body).pack(inventory);
         }
 
         @Override

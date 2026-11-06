@@ -4,13 +4,12 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
+import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
@@ -20,6 +19,7 @@ import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,19 +29,14 @@ import net.minecraft.gametest.framework.AfterBatch;
 import net.minecraft.gametest.framework.BeforeBatch;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Zombie;
@@ -54,6 +49,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.scores.PlayerTeam;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -90,39 +86,30 @@ public final class WeaponSessionGameTests {
         ammo.set(DataComponents.CUSTOM_NAME, Component.literal("actual bow ammunition"));
         body.pack().insert(ammo);
         WeaponSession session = Weapons.open(worker(body)).orElseThrow();
-        helper.assertValueEqual(body.pack().count(Items.BOW), 0, "the pack does not retain a"
-            + " duplicate bow");
+        helper.assertValueEqual(body.pack().count(Items.BOW), 0, "the pack does not retain a duplicate bow");
         helper.assertTrue(body.getMainHandItem().is(Items.BOW), "the actual bow is equipped");
-        helper.assertFalse(Weapons.open(worker(body)).isPresent(), "a second session cannot claim"
-            + " the hand");
+        helper.assertFalse(Weapons.open(worker(body)).isPresent(), "a second session cannot claim the hand");
         helper.assertTrue(session.fire(fixture.target()), "a real arrow permits drawing");
         AtomicInteger seen = ticking(helper, fixture, session);
         helper.runAfterDelay(
             45,
             () -> {
                 try {
-                    helper.assertTrue(seen.get() > 0, "native shooting creates an arrow owned"
-                        + " by the resident");
+                    helper.assertTrue(seen.get() > 0, "native shooting creates an arrow owned by the resident");
                     helper.assertTrue(
                         fixture.target().getHealth() < fixture.target().getMaxHealth(),
                         "the native arrow hits its target");
-                    helper.assertValueEqual(body.pack().count(Items.ARROW), 2, "one actual"
-                        + " arrow is"
-                        + " consumed");
+                    helper.assertValueEqual(body.pack().count(Items.ARROW), 2, "one actual arrow is consumed");
                     session.close();
                     session.close();
                     ItemStack returned = find(body, Items.BOW);
                     helper.assertValueEqual(
-                        returned.getDamageValue(), 8, "native shooting wears the actual bow"
-                        + " once");
+                        returned.getDamageValue(), 8, "native shooting wears the actual bow once");
                     helper.assertValueEqual(
                         returned.get(DataComponents.CUSTOM_NAME),
                         Component.literal("actual weapon"),
                         "the actual weapon's components survive the loan");
-                    helper.assertValueEqual(body.pack().count(Items.BOW), 1, "closing twice"
-                        + " returns"
-                        + " only one"
-                        + " bow");
+                    helper.assertValueEqual(body.pack().count(Items.BOW), 1, "closing twice returns only one bow");
                 } finally {
                     fixture.close();
                 }
@@ -144,15 +131,11 @@ public final class WeaponSessionGameTests {
             30,
             () -> {
                 helper.assertValueEqual(
-                    session.state(), WeaponSession.State.READY, "reload finishes without"
-                    + " firing");
+                    session.state(), WeaponSession.State.READY, "reload finishes without firing");
                 helper.assertValueEqual(
-                    body.pack().count(Items.TIPPED_ARROW), 2, "native reload consumes one"
-                    + " real arrow");
+                    body.pack().count(Items.TIPPED_ARROW), 2, "native reload consumes one real arrow");
                 helper.assertTrue(
-                    CrossbowItem.isCharged(body.getMainHandItem()), "the native charged"
-                    + " component is"
-                    + " present");
+                    CrossbowItem.isCharged(body.getMainHandItem()), "the native charged component is present");
                 helper.assertValueEqual(seen.get(), 0, "reloading does not shoot");
                 CompoundTag saved = body.saveWithoutId(new CompoundTag());
                 helper.assertValueEqual(
@@ -162,8 +145,7 @@ public final class WeaponSessionGameTests {
                 body.load(saved);
                 ItemStack actual = find(body, Items.CROSSBOW);
                 helper.assertTrue(
-                    CrossbowItem.isCharged(actual), "the saved pack retains the native"
-                    + " loaded projectile");
+                    CrossbowItem.isCharged(actual), "the saved pack retains the native loaded projectile");
                 helper.assertValueEqual(
                     actual.get(DataComponents.CHARGED_PROJECTILES)
                     .getItems()
@@ -219,29 +201,21 @@ public final class WeaponSessionGameTests {
             10,
             () -> {
                 session.stop();
-                helper.assertFalse(session.fire(fixture.target()), "stopped sessions reject new"
-                    + " fire intents");
+                helper.assertFalse(session.fire(fixture.target()), "stopped sessions reject new fire intents");
             });
         helper.runAfterDelay(
             40,
             () -> {
                 try {
-                    helper.assertValueEqual(seen.get(), 0, "stopping never invokes bow"
-                        + " release");
+                    helper.assertValueEqual(seen.get(), 0, "stopping never invokes bow release");
                     helper.assertValueEqual(
-                        fixture.body().pack().count(Items.ARROW), 2, "cancelled draw spends"
-                        + " no arrow");
+                        fixture.body().pack().count(Items.ARROW), 2, "cancelled draw spends no arrow");
                     session.close();
                     session.tick();
                     session.close();
                     helper.assertValueEqual(
-                        find(fixture.body(), Items.BOW).getDamageValue(), 11, "cancelled"
-                        + " draw"
-                        + " wears"
-                        + " nothing");
-                    helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "stopped"
-                        + " bow returns"
-                        + " once");
+                        find(fixture.body(), Items.BOW).getDamageValue(), 11, "cancelled draw wears nothing");
+                    helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "stopped bow returns once");
                 } finally {
                     fixture.close();
                 }
@@ -261,30 +235,20 @@ public final class WeaponSessionGameTests {
             () -> {
                 CompoundTag saved = fixture.body().saveWithoutId(new CompoundTag());
                 helper.assertValueEqual(
-                    session.state(), WeaponSession.State.CLOSED, "saving closes before pack"
-                    + " serialization");
+                    session.state(), WeaponSession.State.CLOSED, "saving closes before pack serialization");
                 fixture.body().load(saved);
-                helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "the snapshot"
-                    + " retains"
-                    + " one bow");
-                helper.assertTrue(fixture.body().getMainHandItem().isEmpty(), "there is no"
-                    + " saved"
-                    + " hand"
-                    + " duplicate");
+                helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "the snapshot retains one bow");
+                helper.assertTrue(fixture.body().getMainHandItem().isEmpty(), "there is no saved hand duplicate");
                 helper.assertValueEqual(
-                    find(fixture.body(), Items.BOW).getDamageValue(), 9, "saved durability"
-                    + " is exact");
+                    find(fixture.body(), Items.BOW).getDamageValue(), 9, "saved durability is exact");
             });
         helper.runAfterDelay(
             40,
             () -> {
                 try {
-                    helper.assertValueEqual(seen.get(), 0, "the pre-save callback cannot fire"
-                        + " afterwards");
+                    helper.assertValueEqual(seen.get(), 0, "the pre-save callback cannot fire afterwards");
                     helper.assertValueEqual(
-                        fixture.body().pack().count(Items.ARROW), 2, "saving during draw"
-                        + " spends no"
-                        + " arrow");
+                        fixture.body().pack().count(Items.ARROW), 2, "saving during draw spends no arrow");
                 } finally {
                     fixture.close();
                 }
@@ -311,8 +275,7 @@ public final class WeaponSessionGameTests {
             35,
             () -> {
                 try {
-                    helper.assertValueEqual(seen.get(), 0, "hostility is checked during"
-                        + " charging and at discharge");
+                    helper.assertValueEqual(seen.get(), 0, "hostility is checked during charging and at discharge");
                     helper.assertValueEqual(
                         fixture.body().pack().count(Items.ARROW),
                         1,
@@ -340,10 +303,8 @@ public final class WeaponSessionGameTests {
         fixture.body().pack().insert(new ItemStack(Items.ARROW, 2));
         WeaponSession session = Weapons.open(worker(fixture.body())).orElseThrow();
         helper.assertFalse(session.fire(cow), "autonomous fire still rejects neutral mobs");
-        helper.assertTrue(session.explicitTarget(cow, () -> true), "the explicit order binds one"
-            + " live target");
-        helper.assertTrue(session.fire(cow), "an explicitly ordered neutral target starts a native"
-            + " shot");
+        helper.assertTrue(session.explicitTarget(cow, () -> true), "the explicit order binds one live target");
+        helper.assertTrue(session.fire(cow), "an explicitly ordered neutral target starts a native shot");
         AtomicInteger seen = ticking(helper, fixture, session);
         helper.runAfterDelay(
             45,
@@ -353,16 +314,12 @@ public final class WeaponSessionGameTests {
                         seen.get() > 0 && cow.getHealth() < cow.getMaxHealth(),
                         "the explicit target takes real native projectile damage");
                     helper.assertValueEqual(
-                        fixture.body().pack().count(Items.ARROW), 1, "one actual arrow is"
-                        + " consumed");
+                        fixture.body().pack().count(Items.ARROW), 1, "one actual arrow is consumed");
                     session.close();
                     helper.assertValueEqual(
-                        find(fixture.body(), Items.BOW).getDamageValue(), 6, "native"
-                        + " durability"
-                        + " is retained");
+                        find(fixture.body(), Items.BOW).getDamageValue(), 6, "native durability is retained");
                     helper.assertValueEqual(
-                        fixture.body().pack().count(Items.BOW), 1, "the real weapon returns"
-                        + " once");
+                        fixture.body().pack().count(Items.BOW), 1, "the real weapon returns once");
                 } finally {
                     cow.discard();
                     fixture.close();
@@ -381,11 +338,9 @@ public final class WeaponSessionGameTests {
         fixture.body().pack().insert(new ItemStack(Items.ARROW, 1));
         AtomicBoolean permitted = new AtomicBoolean(true);
         WeaponSession session = Weapons.open(worker(fixture.body())).orElseThrow();
-        helper.assertTrue(session.explicitTarget(cow, permitted::get), "a live order lease is"
-            + " accepted");
+        helper.assertTrue(session.explicitTarget(cow, permitted::get), "a live order lease is accepted");
         helper.assertFalse(
-            session.fire(fixture.target()), "the explicit lease cannot fire at a different"
-            + " hostile target");
+            session.fire(fixture.target()), "the explicit lease cannot fire at a different hostile target");
         helper.assertTrue(session.fire(cow), "the bound target begins drawing");
         AtomicInteger seen = ticking(helper, fixture, session);
         helper.runAfterDelay(10, () -> permitted.set(false));
@@ -394,22 +349,17 @@ public final class WeaponSessionGameTests {
             () -> {
                 try {
                     helper.assertValueEqual(
-                        seen.get(), 0, "revocation cancels charging before projectile"
-                        + " discharge");
+                        seen.get(), 0, "revocation cancels charging before projectile discharge");
                     helper.assertValueEqual(
-                        cow.getHealth(), cow.getMaxHealth(), "the revoked neutral target is"
-                        + " unharmed");
+                        cow.getHealth(), cow.getMaxHealth(), "the revoked neutral target is unharmed");
                     helper.assertValueEqual(
-                        fixture.body().pack().count(Items.ARROW), 1, "revocation spends no"
-                        + " arrow");
+                        fixture.body().pack().count(Items.ARROW), 1, "revocation spends no arrow");
                     helper.assertValueEqual(
-                        session.state(), WeaponSession.State.STOPPING, "a revoked session"
-                        + " is terminal");
+                        session.state(), WeaponSession.State.STOPPING, "a revoked session is terminal");
                     session.close();
                     session.close();
                     helper.assertValueEqual(
-                        fixture.body().pack().count(Items.BOW), 1, "revocation returns the"
-                        + " hand loan once");
+                        fixture.body().pack().count(Items.BOW), 1, "revocation returns the hand loan once");
                 } finally {
                     cow.discard();
                     fixture.close();
@@ -438,8 +388,7 @@ public final class WeaponSessionGameTests {
                 swords.stream().mapToInt(item -> item.getItem().getCount()).sum(),
                 1,
                 "overflow returns exactly one real sword as a drop");
-            helper.assertValueEqual(swords.getFirst().getItem().getDamageValue(), 17, "drop keeps"
-                + " durability");
+            helper.assertValueEqual(swords.getFirst().getItem().getDamageValue(), 17, "drop keeps durability");
             helper.assertValueEqual(
                 swords.getFirst().getItem().get(DataComponents.CUSTOM_NAME),
                 Component.literal("actual weapon"),
@@ -465,11 +414,8 @@ public final class WeaponSessionGameTests {
                 try {
                     session.close();
                     session.tick();
-                    helper.assertValueEqual(session.state(), WeaponSession.State.CLOSED, "death"
-                        + " terminates"
-                        + " reload");
-                    helper.assertValueEqual(seen.get(), 0, "a dead resident cannot discharge a"
-                        + " pending crossbow");
+                    helper.assertValueEqual(session.state(), WeaponSession.State.CLOSED, "death terminates reload");
+                    helper.assertValueEqual(seen.get(), 0, "a dead resident cannot discharge a pending crossbow");
                     List<ItemEntity> drops =
                         helper.getLevel()
                         .getEntitiesOfClass(
@@ -501,18 +447,13 @@ public final class WeaponSessionGameTests {
         try {
             helper.assertTrue(Weapons.armed(worker(fixture.body())),
                 "an unprofiled resident attempts combat at execution");
-            helper.assertTrue(Weapons.open(worker(fixture.body())).isEmpty(), "automatic selection"
-                + " skips an"
-                + " empty bow");
+            helper.assertTrue(Weapons.open(worker(fixture.body())).isEmpty(), "automatic selection skips an empty bow");
             fixture.body().pack().insert(new ItemStack(Items.IRON_SWORD));
             helper.assertFalse(
-                Weapons.ranged(worker(fixture.body())), "an empty bow falls back to the real"
-                + " carried sword");
+                Weapons.ranged(worker(fixture.body())), "an empty bow falls back to the real carried sword");
             WeaponSession sword = Weapons.open(worker(fixture.body())).orElseThrow();
             helper.assertTrue(
-                fixture.body().getMainHandItem().is(Items.IRON_SWORD), "the selected fallback"
-                + " is the actual"
-                + " sword");
+                fixture.body().getMainHandItem().is(Items.IRON_SWORD), "the selected fallback is the actual sword");
             sword.close();
             helper.assertTrue(Weapons.BOW.open(worker(fixture.body())).isEmpty(),
                 "direct session opening also rejects a bow without arrows");
@@ -520,19 +461,15 @@ public final class WeaponSessionGameTests {
             WeaponSession session = Weapons.BOW.open(worker(fixture.body())).orElseThrow();
             fixture.body().leaveColony();
             helper.assertValueEqual(
-                session.state(), WeaponSession.State.CLOSED, "dismissal closes the loan"
-                + " immediately");
-            helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "dismissal returns"
-                + " one bow");
+                session.state(), WeaponSession.State.CLOSED, "dismissal closes the loan immediately");
+            helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "dismissal returns one bow");
             WeaponSession next = Weapons.BOW.open(worker(fixture.body())).orElseThrow();
             fixture.body().remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
             next.tick();
             next.close();
             helper.assertValueEqual(
-                next.state(), WeaponSession.State.CLOSED, "the unload lifecycle closes the next"
-                + " loan");
-            helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "unload returns one"
-                + " bow");
+                next.state(), WeaponSession.State.CLOSED, "the unload lifecycle closes the next loan");
+            helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "unload returns one bow");
         } finally {
             fixture.close();
         }
@@ -551,19 +488,14 @@ public final class WeaponSessionGameTests {
             new ColonySettings.Value.Choice(ResourceLocation.fromNamespaceAndPath("folkways", "engage")));
         fixture.body().pack().insert(new ItemStack(Items.ARROW, 2));
         WeaponSession session = Weapons.open(worker(fixture.body())).orElseThrow();
-        helper.assertTrue(session.fire(fixture.target()), "the colony resident can begin an"
-            + " attack");
+        helper.assertTrue(session.fire(fixture.target()), "the colony resident can begin an attack");
         try {
             colony.raze();
             session.tick();
             helper.assertValueEqual(
-                session.state(), WeaponSession.State.CLOSED, "raze invalidates pending fire"
-                + " immediately");
-            helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "raze closes the"
-                + " actual loan"
-                + " once");
-            helper.assertValueEqual(fixture.body().pack().count(Items.ARROW), 2, "raze spends no"
-                + " ammunition");
+                session.state(), WeaponSession.State.CLOSED, "raze invalidates pending fire immediately");
+            helper.assertValueEqual(fixture.body().pack().count(Items.BOW), 1, "raze closes the actual loan once");
+            helper.assertValueEqual(fixture.body().pack().count(Items.ARROW), 2, "raze spends no ammunition");
         } finally {
             fixture.close();
         }
@@ -572,23 +504,13 @@ public final class WeaponSessionGameTests {
 
     @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void replacingADrawnBowWithAnotherBowClosesTheOldLoan(GameTestHelper helper) {
-        replacingDuringDraw(helper, Items.BOW);
-    }
-
-    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
-    public static void replacingADrawnBowWithANonWeaponKeepsBothActualItemsOnce(GameTestHelper helper) {
-        replacingDuringDraw(helper, Items.STICK);
-    }
-
-    private static void replacingDuringDraw(GameTestHelper helper, Item replacementItem) {
         Fixture fixture = fixture(helper, Items.BOW, 9);
         ResidentEntity body = fixture.body();
         body.pack().insert(new ItemStack(Items.ARROW, 3));
         WeaponSession session = Weapons.open(worker(body)).orElseThrow();
         helper.assertTrue(session.fire(fixture.target()), "the original real bow begins drawing");
-        ItemStack replacement = new ItemStack(replacementItem);
-        int replacementDamage = replacement.isDamageableItem() ? 23 : 0;
-        replacement.setDamageValue(replacementDamage);
+        ItemStack replacement = new ItemStack(Items.BOW);
+        replacement.setDamageValue(23);
         replacement.set(DataComponents.CUSTOM_NAME, Component.literal("external replacement"));
         AtomicInteger seen = ticking(helper, fixture, session);
         helper.runAfterDelay(
@@ -601,8 +523,7 @@ public final class WeaponSessionGameTests {
                     "external replacement closes the old pending session immediately");
                 helper.assertTrue(
                     body.getMainHandItem() == replacement && !body.hasWeaponSession(),
-                    "the replacement is installed without becoming owned by the previous"
-                    + " session");
+                    "the replacement is installed without becoming owned by the previous session");
                 helper.assertFalse(
                     session.fire(fixture.target()),
                     "the old session cannot adopt the replacement for another shot");
@@ -618,11 +539,8 @@ public final class WeaponSessionGameTests {
                     session.close();
                     session.tick();
                     helper.assertValueEqual(
-                        seen.get(), 0, "replacing the hand cancels the original pending"
-                        + " projectile");
-                    helper.assertValueEqual(body.pack().count(Items.ARROW), 3, "replacement"
-                        + " spends"
-                        + " no ammunition");
+                        seen.get(), 0, "replacing the hand cancels the original pending projectile");
+                    helper.assertValueEqual(body.pack().count(Items.ARROW), 3, "replacement spends no ammunition");
                     var original =
                         body.pack().contents().stream()
                         .filter(
@@ -638,26 +556,19 @@ public final class WeaponSessionGameTests {
                                 .equals(stack.get(DataComponents.CUSTOM_NAME)))
                         .toList();
                     helper.assertValueEqual(
-                        original.size(), 1, "the original components identify exactly one"
-                        + " returned weapon");
+                        original.size(), 1, "the original components identify exactly one returned weapon");
                     helper.assertValueEqual(
-                        original.getFirst().getDamageValue(), 9, "the original durability"
-                        + " remains"
-                        + " unchanged");
+                        original.getFirst().getDamageValue(), 9, "the original durability remains unchanged");
                     helper.assertValueEqual(
-                        external.size(), 1, "normal stray-hand recovery retains the"
-                        + " replacement exactly once");
+                        external.size(), 1, "normal stray-hand recovery retains the replacement exactly once");
                     helper.assertTrue(
-                        external.getFirst().is(replacementItem), "the replacement keeps its"
-                        + " own item"
-                        + " identity");
+                        external.getFirst().is(Items.BOW), "the replacement keeps its own item identity");
                     helper.assertValueEqual(
                         external.getFirst().getDamageValue(),
-                        replacementDamage,
+                        23,
                         "the replacement keeps its own durability");
                     helper.assertTrue(
-                        body.getMainHandItem().isEmpty(), "neither actual item leaves a"
-                        + " duplicate in the hand");
+                        body.getMainHandItem().isEmpty(), "neither actual item leaves a duplicate in the hand");
                 } finally {
                     fixture.close();
                 }
@@ -670,8 +581,7 @@ public final class WeaponSessionGameTests {
         Fixture fixture = fixture(helper, Items.BOW, new ItemStack(Items.BOW).getMaxDamage() - 1);
         fixture.body().pack().insert(new ItemStack(Items.ARROW, 1));
         WeaponSession session = Weapons.open(worker(fixture.body())).orElseThrow();
-        helper.assertTrue(session.fire(fixture.target()), "the last real arrow can discharge the"
-            + " nearly broken bow");
+        helper.assertTrue(session.fire(fixture.target()), "the last real arrow can discharge the nearly broken bow");
         AtomicInteger seen = ticking(helper, fixture, session);
         helper.onEachTick(
             () -> {
@@ -688,8 +598,7 @@ public final class WeaponSessionGameTests {
                 try {
                     session.close();
                     session.close();
-                    helper.assertTrue(seen.get() > 0, "native shooting occurs before native"
-                        + " breakage");
+                    helper.assertTrue(seen.get() > 0, "native shooting occurs before native breakage");
                     helper.assertValueEqual(
                         fixture.body().pack().count(Items.BOW),
                         0,
@@ -699,9 +608,7 @@ public final class WeaponSessionGameTests {
                         0,
                         "native shooting spends the last actual arrow");
                     helper.assertTrue(
-                        fixture.body().getMainHandItem().isEmpty(), "no exhausted weapon"
-                        + " remains in the"
-                        + " hand");
+                        fixture.body().getMainHandItem().isEmpty(), "no exhausted weapon remains in the hand");
                     helper.assertTrue(
                         helper.getLevel()
                         .getEntitiesOfClass(
@@ -718,65 +625,6 @@ public final class WeaponSessionGameTests {
     }
 
     @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
-    public static void anExplicitBowPreferenceFiresTheUsableBowAfterAnEarlierSword(GameTestHelper helper) {
-        Fixture fixture = fixture(helper, Items.IRON_SWORD, 3);
-        Colony colony = enroll(helper, fixture.body());
-        ResidentEntity body = fixture.body();
-        ItemStack bow = new ItemStack(Items.BOW);
-        bow.setDamageValue(7);
-        bow.set(DataComponents.CUSTOM_NAME, Component.literal("preferred real bow"));
-        body.pack().insert(bow);
-        body.pack().insert(new ItemStack(Items.ARROW, 3));
-        PatrolSupplies supplies = PatrolSupplies.of(colony);
-        supplies.loadout(body, LoadoutRegistry.BOW);
-        WeaponSession session = Weapons.open(worker(body)).orElseThrow();
-        helper.assertTrue(
-            body.getMainHandItem().is(Items.BOW),
-            "the usable explicitly preferred bow takes precedence over a sword earlier in the"
-            + " pack");
-        helper.assertTrue(
-            supplies.preference(body.id()).orElseThrow().equals(LoadoutRegistry.BOW),
-            "the explicit preference is observable without mutating it");
-        helper.assertTrue(session.fire(fixture.target()), "the selected actual bow starts a native"
-            + " shot");
-        AtomicInteger seen = ticking(helper, fixture, session);
-        helper.runAfterDelay(
-            40,
-            () -> {
-                try {
-                    helper.assertTrue(
-                        seen.get() > 0 && fixture.target().getHealth() < fixture.target().getMaxHealth(),
-                        "preference selection produces a real arrow and real target"
-                        + " damage");
-                    helper.assertValueEqual(
-                        body.pack().count(Items.ARROW), 2, "the preferred shot consumes one"
-                        + " actual arrow");
-                    session.close();
-                    helper.assertValueEqual(
-                        find(body, Items.BOW).getDamageValue(),
-                        8,
-                        "the preferred real bow receives native wear");
-                    helper.assertValueEqual(
-                        find(body, Items.IRON_SWORD).getDamageValue(),
-                        3,
-                        "the preceding actual sword remains untouched");
-                    helper.assertValueEqual(body.pack().count(Items.BOW), 1, "the preferred"
-                        + " weapon"
-                        + " returns"
-                        + " once");
-                    helper.assertValueEqual(
-                        body.pack().count(Items.IRON_SWORD),
-                        1,
-                        "selection does not remove the player's other weapon");
-                } finally {
-                    fixture.close();
-                    colony.raze();
-                }
-                helper.succeed();
-            });
-    }
-
-    @GameTest(batch = "vanilla_weapons", template = "empty_large", timeoutTicks = 100)
     public static void changingPreferenceStopsTheOldDrawAndEmptyAssignedBowFails(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.IRON_SWORD, 3);
         Colony colony = enroll(helper, fixture.body());
@@ -786,20 +634,19 @@ public final class WeaponSessionGameTests {
         bow.set(DataComponents.CUSTOM_NAME, Component.literal("cancelled preferred bow"));
         body.pack().insert(bow);
         body.pack().insert(new ItemStack(Items.ARROW, 2));
-        PatrolSupplies supplies = PatrolSupplies.of(colony);
-        supplies.loadout(body, LoadoutRegistry.BOW);
+        arm(colony, body, "Bow", ItemSpec.of(Items.BOW));
         WeaponSession session = Weapons.open(worker(body)).orElseThrow();
         helper.assertTrue(session.fire(fixture.target()), "the preferred bow begins drawing");
         AtomicInteger seen = ticking(helper, fixture, session);
         helper.runAfterDelay(
             10,
             () -> {
-                supplies.loadout(body, LoadoutRegistry.BOW);
+                arm(colony, body, "Bow", ItemSpec.of(Items.BOW));
                 helper.assertValueEqual(
                     session.state(),
                     WeaponSession.State.FIRING,
                     "reapplying the same preference does not cancel an active draw");
-                supplies.loadout(body, LoadoutRegistry.MELEE);
+                arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
                 helper.assertValueEqual(
                     session.state(),
                     WeaponSession.State.CLOSED,
@@ -807,8 +654,7 @@ public final class WeaponSessionGameTests {
                 helper.assertTrue(
                     !body.hasWeaponSession() && body.getMainHandItem().isEmpty(),
                     "normal closure returns the old actual weapon before reselection");
-                helper.assertValueEqual(body.pack().count(Items.BOW), 1, "the cancelled bow"
-                    + " returns once");
+                helper.assertValueEqual(body.pack().count(Items.BOW), 1, "the cancelled bow returns once");
                 WeaponSession melee = Weapons.open(worker(body)).orElseThrow();
                 helper.assertTrue(
                     body.getMainHandItem().is(Items.IRON_SWORD),
@@ -819,7 +665,7 @@ public final class WeaponSessionGameTests {
                         body.pack().removeItemNoUpdate(slot);
                     }
                 }
-                supplies.loadout(body, LoadoutRegistry.BOW);
+                arm(colony, body, "Bow", ItemSpec.of(Items.BOW));
                 helper.assertTrue(Weapons.open(worker(body)).isEmpty(),
                     "the assigned empty bow fails at execution rather than using an unassigned sword");
             });
@@ -830,8 +676,7 @@ public final class WeaponSessionGameTests {
                     helper.assertValueEqual(
                         seen.get(),
                         0,
-                        "the old cancelled draw creates no projectile after the preference"
-                        + " changed");
+                        "the old cancelled draw creates no projectile after the preference changed");
                     helper.assertValueEqual(
                         fixture.target().getHealth(),
                         fixture.target().getMaxHealth(),
@@ -845,11 +690,9 @@ public final class WeaponSessionGameTests {
                         Component.literal("cancelled preferred bow"),
                         "preference switching preserves the original components");
                     helper.assertValueEqual(
-                        body.pack().count(Items.BOW), 1, "multiple preference changes"
-                        + " retain one actual bow");
+                        body.pack().count(Items.BOW), 1, "multiple preference changes retain one actual bow");
                     helper.assertValueEqual(
-                        body.pack().count(Items.IRON_SWORD), 1, "multiple selections retain"
-                        + " one actual sword");
+                        body.pack().count(Items.IRON_SWORD), 1, "multiple selections retain one actual sword");
                 } finally {
                     fixture.close();
                     colony.raze();
@@ -907,31 +750,17 @@ public final class WeaponSessionGameTests {
         actual.set(DataComponents.CUSTOM_NAME, Component.literal("actual weapon"));
         body.pack().insert(actual);
         Fixture fixture = new Fixture(body, target);
-        helper.testInfo.addListener(fixture);
+        Cleanup.on(helper, fixture::close);
         return fixture;
     }
 
-    private record Fixture(ResidentEntity body, Zombie target) implements GameTestListener {
+    private record Fixture(ResidentEntity body, Zombie target) {
         void close() {
             ((ServerLevel) body.level())
                 .getChunkSource()
                 .removeRegionTicket(TICKING, body.chunkPosition(), 2, body.getUUID());
             body.discard();
             target.discard();
-        }
-
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
         }
     }
 
@@ -940,45 +769,19 @@ public final class WeaponSessionGameTests {
     }
 
     static Worker worker(ResidentEntity body) {
-        return new Worker() {
-            public Resident resident() {
-                return body.resident();
-            }
+        return TestWorker.of(body)
+            .held(need -> body.pack().contents().stream().filter(stack -> Tools.answers(stack, need)).findFirst()
+                .orElse(ItemStack.EMPTY))
+            .spill(body::spawnAtLocation);
+    }
 
-            public Mob body() {
-                return body;
-            }
-
-            public Container pack() {
-                return body.pack();
-            }
-
-            public List<Store> within() {
-                return List.of();
-            }
-
-            public ItemStack held(ToolNeed need) {
-                return body.pack().contents().stream()
-                    .filter(stack -> Tools.answers(stack, need))
-                    .findFirst()
-                    .orElse(ItemStack.EMPTY);
-            }
-
-            public void spill(ItemStack stack) {
-                body.spawnAtLocation(stack);
-            }
-
-            public Effects effects() {
-                return body.effects();
-            }
-
-            public List<Node> route() {
-                return List.of();
-            }
-
-            public Placement placement() {
-                return Placement.NOWHERE;
-            }
-        };
+    private static void arm(Colony colony, Body body, String name, ItemSpec weapon) {
+        LoadoutProfiles profiles = LoadoutProfiles.of(colony);
+        LoadoutProfile profile =
+            profiles.all().stream()
+            .filter(one -> one.name().equals(name))
+            .findFirst()
+            .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

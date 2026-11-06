@@ -1,11 +1,14 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,9 +20,15 @@ import java.util.function.BiConsumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.Level;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 
 /** A build site asking a colony that only writes down what it is asked, for the game tests to answer by hand. */
 final class SiteRig implements BuildSite.Asks {
@@ -52,6 +61,25 @@ final class SiteRig implements BuildSite.Asks {
         SiteRig rig = new SiteRig(UUID.randomUUID(), target, temporary);
         rig.site.start(level, met, joined);
         return rig;
+    }
+
+    // The stone ground the site tests build on.
+    static void floor(GameTestHelper helper) {
+        for (BlockPos cell : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(1, 0, 1)),
+                helper.absolutePos(new BlockPos(21, 0, 21)))) {
+            helper.getLevel().setBlock(cell, Blocks.STONE.defaultBlockState(), 3);
+        }
+    }
+
+    static BuildTarget target(ServerLevel level, Map<BlockPos, BlockState> cells) {
+        return new BuildTarget(WorldPos.of(level, cells.keySet().iterator().next()).realm(), cells);
+    }
+
+    // A body carrying stone and scaffolding enough for any one site.
+    static Worker worker(Mob body) {
+        SimpleContainer pack = new SimpleContainer(new ItemStack(Items.STONE, 64), new ItemStack(Items.SCAFFOLDING, 64));
+        return TestWorker.of(body, new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig")), pack)
+            .spill(stack -> { });
     }
 
     @Override

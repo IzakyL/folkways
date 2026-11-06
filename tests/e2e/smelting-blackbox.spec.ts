@@ -1,9 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {
-  errorSummary,
-} from "@izakyl/blockwright-client";
 import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { writeFileSync } from "node:fs";
 import { clickElement } from "../ldlib2";
 import {
   commandPos,
@@ -12,20 +8,18 @@ import {
   openColonyPanelViaBook,
   optInViaBook,
   pickViaSelector,
-  safeAction,
   waitForGroundedPlayer,
   type Vec,
 } from "../shared/colony/colony-founding";
 import { boardAct, boardRows } from "../shared/ui/site-panel";
-import { readDoing } from "../shared/colony/resident-probe";
 import { runColonyTask } from "../shared/colony/colony-tasks";
-import { countInResidentPacks, mustCommand } from "../shared/ui/world-ui";
+import { mustCommand } from "../shared/ui/world-ui";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { sampleWhileSprinting, settledAll, unwrapSettled } from "../shared/harness/tick-tools";
-import { frames, waitForElement, softly } from "../shared/harness/bw-helpers";
+import { waitForElement, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { twins, type Stage } from "../shared/harness/stage";
 
@@ -103,17 +97,6 @@ for (const stage of twins()) test(stage.title("smelting end-to-end: the fuel pol
     const policy = await allowFuelViaPanel(server, client, playerName, founding.standBlock, stage,
       String(founding.evidence.colonyId));
     const smelted = await pollForOutput(server, watched, SMELT_PHASE_TICKS);
-    writeFileSync(outAbs("e2e", "reports", `${stage.name("smelting-evidence")}.json`), JSON.stringify({
-      policy,
-      blocked,
-      smelted,
-      source_chest: await readContainer(server, stage.at(chest)),
-      output_chest: await readContainer(server, stage.at(outputChest)),
-      furnace: await readContainer(server, stage.at(furnace)),
-      packs: await countInResidentPacks(server),
-      stations: await tabRows(server, client, playerName, founding.standBlock, CRAFT_TAB, CRAFT_PAGE, stage),
-      doing: await residentsDoing(server),
-    }, null, 2) + "\n");
 
     expect(
       policy.entry_visible,
@@ -121,11 +104,8 @@ for (const stage of twins()) test(stage.title("smelting end-to-end: the fuel pol
     ).toBe(true);
     expect(
       smelted.found,
-      `${SMELT_OUTPUT} never appeared anywhere after oak_planks was ticked in the fuel picker: nobody`
-        + " carried a plank to the loaded, cold furnace. The same furnace lights within ~520 ticks when a"
-        + " coal is dropped into the member chest while the fuel list is left untouched, so the chore and"
-        + " the dispatch both work — what did not arrive is the edit: the picker confirmed oak_planks,"
-        + " and the colony still burns by the untouched default.",
+      `${SMELT_OUTPUT} never appeared after oak_planks was ticked in the fuel picker: nobody carried a plank`
+        + " to the loaded, cold furnace, so the colony still burns by the untouched default",
     ).toBe(true);
   } catch (error) {
     pair?.failing(error);
@@ -162,40 +142,6 @@ async function fuelEditToken(client: any): Promise<string> {
     throw new Error("smelting: the Craft page has no rows");
   }
   return (await boardAct(client, "edit", CRAFT_PAGE, rows[0].row, 0)).id;
-}
-
-async function tabRows(
-  server: any, client: any, playerName: string, standBlock: Vec, tab: string, page: string, stage: Stage,
-) {
-  await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
-  await softly(() => clickElement(client, { id: tab }));
-  await tick.sprint(server, 30);
-  await safeAction(() => frames(client, 5));
-  const rows = (await boardRows(client)).filter((row) => row.page === page);
-  await screen.dismiss(client);
-  return rows;
-}
-
-async function residentsDoing(server: any) {
-  const listed = await world
-    .entities(server, { dimension: "minecraft:overworld", types: ["folkways:resident"], limit: 100 })
-    .catch(() => ({ entities: [] as world.EntityJson[] }));
-  const out: any[] = [];
-  for (const resident of listed.entities) {
-    try {
-      out.push({ uuid: resident.uuid, doing: await readDoing(server, resident.uuid) });
-    } catch (error) {
-      out.push({ uuid: resident.uuid, doing_error: errorSummary(error) });
-    }
-  }
-  return out;
-}
-
-async function readContainer(server: any, at: Vec) {
-  const result = await world
-    .container(server, at, { dimension: "minecraft:overworld" })
-    .catch((error: any) => ({ error: String(error) }));
-  return { at, slots: (result as any).slots ?? [], raw: (result as any).error };
 }
 
 async function pollForOutput(server: any, watched: Vec[], maxTicks: number) {

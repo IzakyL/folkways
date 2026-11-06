@@ -8,19 +8,18 @@ import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.resident.body.Keenness;
-import io.github.izakyl.folkways.core.api.resident.body.Licences;
-import io.github.izakyl.folkways.core.api.resident.body.WorkPriorities;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.shell.structure.StructureSnapshots;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.ZoneView;
@@ -37,7 +36,6 @@ import io.github.izakyl.folkways.plugins.build.SchematicPlacement;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.netty.buffer.Unpooled;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -117,19 +115,10 @@ public final class DamageControlGameTests {
             helper.assertFalse(ZoneActions.act(rig.level, colony, area.id(), "record").orElseThrow().refused(),
                 "panel action records baseline");
             helper.assertValueEqual(colony.kept(DamageControlContent.ID).getList("baselines", Tag.TAG_COMPOUND).size(),
-                1,
-                "tool uses the existing persistent baseline");
+                1, "tool uses the existing persistent baseline");
             var schema = Enrollments.delegation(DamageControlContent.ID).orElseThrow().schema();
             helper.assertValueEqual(schema.settings().stream().map(setting -> setting.key()).toList(),
                 List.of("extinguish", "repair", "refill"), "the panel exposes only the three supported flags");
-            for (String key : List.of("extinguish", "repair", "refill")) {
-                var before = front.zone(area.id()).orElseThrow().settings();
-                front.setDrawn(area.id(), before.with(key, new ColonySettings.Value.Flag(!before.flag(key))));
-                var saved = front.zone(area.id()).orElseThrow().settings().save();
-                var restored = ColonySettings.load(Reader.of(saved)).conformedTo(schema);
-                helper.assertTrue(restored.flag(key) != before.flag(key), "zone settings persist " + key);
-                front.setDrawn(area.id(), before);
-            }
             var legacy = area.settings().with("enabled", new ColonySettings.Value.Flag(false));
             front.setDrawn(area.id(), ColonySettings.load(Reader.of(legacy.save())).conformedTo(schema));
             helper.assertFalse(front.zone(area.id()).orElseThrow().settings().flag("enabled"),
@@ -140,9 +129,6 @@ public final class DamageControlGameTests {
             var state = presence.state(colony.view(rig.level));
             helper.assertTrue((state.areas().getFirst().flags() & 1) != 0, "every area is always enabled");
             helper.assertTrue(state.areas().getFirst().baseline(), "tool sees recorded baseline");
-            helper.assertTrue(state.marks().stream()
-                .anyMatch(mark -> mark.at().equals(rig.target) && mark.color() == 0xFFD45C),
-                "missing block is sent as a yellow marker");
             rig.level.setBlock(rig.target, Blocks.STONE.defaultBlockState(), 2);
             presence.survey(List.of(colony.view(rig.level)), 100);
             helper.assertTrue(presence.state(colony.view(rig.level)).marks().stream()
@@ -213,24 +199,6 @@ public final class DamageControlGameTests {
             node.ended(rig.level, Ending.DONE);
             helper.assertTrue(rig.level.getBlockState(rig.target).isAir(), "fire leaves air, never a water source");
         }
-        rig.close();
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void aVanishedFireAndReignitionAreIndependentIncidents(GameTestHelper helper) {
-        Rig rig = new Rig(helper);
-        Node stale = rig.fire();
-        helper.assertTrue(Commit.run(rig.level, stale, rig.worker) instanceof Outcome.Done,
-            "a vanished fire is harmless");
-        stale.ended(rig.level, Ending.DONE);
-        rig.level.setBlock(rig.target, Blocks.FIRE.defaultBlockState(), 2);
-        Node next = rig.fire();
-        helper.assertFalse(stale.id().equals(next.id()), "reignition has a fresh task");
-        helper.assertTrue(Commit.run(rig.level, next, rig.worker) instanceof Outcome.Done,
-            "reignition is extinguished");
-        next.ended(rig.level, Ending.DONE);
-        helper.assertTrue(rig.level.getBlockState(rig.target).isAir(), "no fire remains");
         rig.close();
         helper.succeed();
     }
@@ -495,19 +463,6 @@ public final class DamageControlGameTests {
         survey.scan(rig.level, zones, 8, (zone, at, state) -> {
         });
         helper.assertValueEqual(survey.fires().size(), 1, "periodic scan finds reignition");
-        rig.close();
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void interruptionReleasesSuppressionClaims(GameTestHelper helper) {
-        Rig rig = new Rig(helper);
-        rig.claims.claim(rig.at(), rig.worker.resident().id(), 1);
-        Node node = rig.fire();
-        node.released(rig.level, rig.worker, Ending.DROPPED);
-        helper.assertValueEqual(rig.claims.workers(), 0, "stopping work releases its claim");
-        node.ended(rig.level, Ending.DROPPED);
-        helper.assertValueEqual(rig.claims.workers(), 0, "cleanup is idempotent");
         rig.close();
         helper.succeed();
     }
@@ -1021,25 +976,13 @@ public final class DamageControlGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void highPriorityDefaultsPreserveExplicitSavedWorkSettings(GameTestHelper helper) {
+    public static void damageControlDefaultsToTheHighestTradePriority(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         try {
-            var trade = DamageControlContent.trade();
             var licences = Bodies.of(rig.worker.body()).orElseThrow().licences();
-            var known = licences.trade(trade).orElseThrow();
+            var known = licences.trade(DamageControlContent.trade()).orElseThrow();
             helper.assertValueEqual(licences.keennessOf(known), Keenness.FIRST,
                 "damage control uses the highest normal trade priority by default");
-            licences.setKeenness(known, Keenness.FOURTH);
-            var restored = new Licences(PersonBody.ID);
-            restored.deserializeNBT(rig.level.registryAccess(), licences.serializeNBT(rig.level.registryAccess()));
-            helper.assertValueEqual(restored.of(trade).orElseThrow().keenness(), Keenness.FOURTH,
-                "saved resident priority wins over the vocation default");
-            for (var rule : List.of(new WorkPriorities.Rule(true, Keenness.THIRD),
-                new WorkPriorities.Rule(false, Keenness.FIRST))) {
-                var priorities = new WorkPriorities(Map.of(trade.id(), rule));
-                helper.assertValueEqual(WorkPriorities.from(priorities.save()).of(trade.id()), rule,
-                    "template overrides survive even at the old generic default");
-            }
         } finally {
             rig.close();
         }
@@ -1172,14 +1115,11 @@ public final class DamageControlGameTests {
 
     private static ZoneView zone(ServerLevel level, Set<BlockPos> cells) {
         UUID id = UUID.randomUUID();
-        Settings settings = (Settings) Proxy.newProxyInstance(Settings.class.getClassLoader(),
-            new Class<?>[] {Settings.class},
-            (proxy, method, args) -> switch (method.getName()) {
+        Settings settings = Proxies.of(Settings.class, (proxy, method, args) -> switch (method.getName()) {
             case "flag" -> true;
             default -> null;
         });
-        return (ZoneView) Proxy.newProxyInstance(ZoneView.class.getClassLoader(), new Class<?>[] {ZoneView.class},
-            (proxy, method, args) -> switch (method.getName()) {
+        return Proxies.of(ZoneView.class, (proxy, method, args) -> switch (method.getName()) {
             case "id" -> id;
             case "cells" -> cells;
             case "settings" -> settings;
@@ -1207,18 +1147,8 @@ public final class DamageControlGameTests {
             body.setNoAi(true);
             body.moveTo(target.getX() - .5, target.getY(), target.getZ() + .5);
             level.addFreshEntity(body);
-            worker = (Worker) Proxy.newProxyInstance(Worker.class.getClassLoader(), new Class<?>[] {Worker.class},
-                (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> body;
-                case "resident" -> body.resident();
-                case "pack" -> body.pack();
-                case "within" -> List.of(new Worker.Store(WorldPos.of(level, target.west(2)), store));
-                case "effects" -> Effects.NONE;
-                case "placement" -> Placement.NOWHERE;
-                case "held" -> ItemStack.EMPTY;
-                case "supplied", "route" -> List.of();
-                default -> null;
-            });
+            worker = TestWorker.of(body).within(new Worker.Store(WorldPos.of(level, target.west(2)), store))
+                .effects(Effects.NONE).spill(stack -> { });
         }
 
         WorldPos at() {

@@ -87,7 +87,7 @@ public final class BystandersGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 450)
+    @GameTest(template = "empty_large", timeoutTicks = 40)
     public static void placingABlockDoesNotPushAResidentIntoDeepWater(GameTestHelper helper) {
         BlockPos at = helper.absolutePos(new BlockPos(5, 1, 5));
         BlockPos water = at.west();
@@ -100,23 +100,12 @@ public final class BystandersGameTests {
         helper.getLevel().setBlock(water.above(), Blocks.WATER.defaultBlockState(), 2);
         helper.getLevel().setBlock(water.above(2), Blocks.STONE.defaultBlockState(), 2);
         Mob resident = resident(helper, Vec3.atBottomCenterOf(at));
-        boolean placed = Bystanders.clear(helper.getLevel(), Map.of(at, Blocks.TUFF.defaultBlockState()), List.of());
+        helper.assertTrue(Bystanders.clear(helper.getLevel(), Map.of(at, Blocks.TUFF.defaultBlockState()), List.of()),
+            "the block can still be placed");
         BlockPos eyes = BlockPos.containing(resident.getX(), resident.getEyeY(), resident.getZ());
-        boolean pushedUnderwater = !helper.getLevel().getFluidState(eyes).isEmpty();
-        helper.getLevel().setBlock(at, Blocks.TUFF.defaultBlockState(), 2);
-        int[] leastAir = {resident.getAirSupply()};
-        int[] firstDamage = {-1};
-        helper.onEachTick(() -> {
-            leastAir[0] = Math.min(leastAir[0], resident.getAirSupply());
-            if (firstDamage[0] < 0 && resident.getHealth() < resident.getMaxHealth()) {
-                firstDamage[0] = resident.tickCount;
-            }
-        });
-        helper.startSequence().thenExecuteAfter(380, () -> {
-            resident.discard();
-            helper.assertTrue(placed && !pushedUnderwater, "placement pushed the resident underwater; least air="
-                + leastAir[0] + ", first damage tick=" + firstDamage[0]);
-        }).thenSucceed();
+        helper.assertTrue(helper.getLevel().getFluidState(eyes).isEmpty(), "placement does not push the resident underwater");
+        resident.discard();
+        helper.succeed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 40)

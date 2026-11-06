@@ -28,7 +28,7 @@ public final class DoingsGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 20)
-    public static void aRideToWorkReadsAsTheRideAndThenTheJob(GameTestHelper helper) {
+    public static void aRideToWorkReadsAsTheRideAndThenTheJobAndAWalkAsHeading(GameTestHelper helper) {
         Doing riding = Doing.along(RIDING, 0.4F).headingFor(STOWING, Optional.of(PUMPKIN), Doing.Wares.NONE);
         TranslatableContents name = translated(Doings.name(riding));
         helper.assertTrue(name.getKey().equals("folkways.doing.onward"), "a ride to work reads as onward, got " + name.getKey());
@@ -38,13 +38,8 @@ public final class DoingsGameTests {
         TranslatableContents then = translated((Component) name.getArgs()[1]);
         helper.assertTrue(then.getKey().equals("folkways.doing.folkways.stowing.about"), "then the job, with what it carries");
         helper.assertTrue(translated((Component) then.getArgs()[0]).getKey().equals(PUMPKIN), "the job names the goods");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 20)
-    public static void aWalkToWorkStillReadsAsTheJob(GameTestHelper helper) {
-        TranslatableContents name = translated(Doings.name(Doing.heading(STOWING, Optional.empty(), Doing.Wares.NONE)));
-        helper.assertTrue(name.getKey().equals("folkways.doing.heading"), "a walk reads as heading, got " + name.getKey());
+        TranslatableContents walk = translated(Doings.name(Doing.heading(STOWING, Optional.empty(), Doing.Wares.NONE)));
+        helper.assertTrue(walk.getKey().equals("folkways.doing.heading"), "a walk reads as heading, got " + walk.getKey());
         helper.succeed();
     }
 

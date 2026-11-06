@@ -59,36 +59,19 @@ public final class PatrolStaffing {
                 continue;
             }
             Composition composition = new Composition();
-            if (station(row.getUUID("target"))) {
-                Optional<UUID> member = row.getList("slots", Tag.TAG_COMPOUND).stream()
-                    .map(CompoundTag.class::cast).flatMap(slot -> uuid(slot, "member").stream()).findFirst();
-                composition.positions.add(new Position(UUID.randomUUID(), member, "unfilled"));
-                compositions.put(row.getUUID("target"), composition);
-                continue;
+            for (Tag entry : row.getList("allowed", Tag.TAG_COMPOUND)) {
+                CompoundTag profile = (CompoundTag) entry;
+                if (profile.hasUUID("id")) {
+                    composition.allowed.add(profile.getUUID("id"));
+                }
             }
-            if (row.contains("count")) {
-                for (Tag entry : row.getList("allowed", Tag.TAG_COMPOUND)) {
-                    CompoundTag profile = (CompoundTag) entry;
-                    if (profile.hasUUID("id")) {
-                        composition.allowed.add(profile.getUUID("id"));
-                    }
-                }
-                resize(composition, Math.clamp(row.getInt("count"), 0, MAX_COUNT));
-                ListTag members = row.getList("positions", Tag.TAG_COMPOUND);
-                for (int index = 0; index < Math.min(members.size(), composition.positions.size()); index++) {
-                    CompoundTag member = members.getCompound(index);
-                    if (member.hasUUID("id")) {
-                        composition.positions.set(index, new Position(member.getUUID("id"),
-                            uuid(member, "member"), "unfilled"));
-                    }
-                }
-            } else {
-                for (Tag entry : row.getList("slots", Tag.TAG_COMPOUND)) {
-                    CompoundTag slot = (CompoundTag) entry;
-                    if (slot.hasUUID("profile") && composition.positions.size() < MAX_COUNT) {
-                        composition.allowed.add(slot.getUUID("profile"));
-                        composition.positions.add(new Position(UUID.randomUUID(), uuid(slot, "member"), "unfilled"));
-                    }
+            resize(composition, Math.clamp(row.getInt("count"), 0, MAX_COUNT));
+            ListTag members = row.getList("positions", Tag.TAG_COMPOUND);
+            for (int index = 0; index < Math.min(members.size(), composition.positions.size()); index++) {
+                CompoundTag member = members.getCompound(index);
+                if (member.hasUUID("id")) {
+                    composition.positions.set(index, new Position(member.getUUID("id"),
+                        uuid(member, "member"), "unfilled"));
                 }
             }
             compositions.put(row.getUUID("target"), composition);
@@ -101,28 +84,6 @@ public final class PatrolStaffing {
                 compositions.put(row.getUUID("target"), composition);
             }
         }
-        // Before compositions existed, sentries stored individual assignments. Keep their aggregate intent only.
-        for (Tag value : colony.kept(SentryPosts.ID).getList("assignments", Tag.TAG_COMPOUND)) {
-            CompoundTag row = (CompoundTag) value;
-            if (row.hasUUID("zone") && row.hasUUID("resident") && !compositions.containsKey(row.getUUID("zone"))
-                && !station(row.getUUID("zone"))) {
-                Composition composition = new Composition();
-                for (Tag other : colony.kept(SentryPosts.ID).getList("assignments", Tag.TAG_COMPOUND)) {
-                    CompoundTag assignment = (CompoundTag) other;
-                    if (assignment.hasUUID("zone") && assignment.hasUUID("resident")
-                        && assignment.getUUID("zone").equals(row.getUUID("zone"))) {
-                        LoadoutProfiles.of(colony).assigned(assignment.getUUID("resident"))
-                            .ifPresent(profile -> composition.allowed.add(profile.id()));
-                        if (composition.positions.size() < MAX_COUNT) {
-                            composition.positions.add(new Position(UUID.randomUUID(),
-                                Optional.of(assignment.getUUID("resident")), "unfilled"));
-                        }
-                    }
-                }
-                compositions.put(row.getUUID("zone"), composition);
-            }
-        }
-        colony.keep(SentryPosts.ID, new CompoundTag());
         save();
     }
 

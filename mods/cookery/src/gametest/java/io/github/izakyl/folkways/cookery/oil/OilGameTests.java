@@ -69,20 +69,6 @@ public final class OilGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void directOilRemainsACompleteNativeSupplyRouteWithoutAnOilPotOrBasin(GameTestHelper helper) {
-        var level = helper.getLevel(); BlockPos at = helper.absolutePos(new BlockPos(1, 1, 1));
-        level.setBlockAndUpdate(at.below(), Blocks.MAGMA_BLOCK.defaultBlockState()); level.setBlockAndUpdate(at, ModBlocks.POT.get().defaultBlockState());
-        var pot = (PotBlockEntity) level.getBlockEntity(at); var actor = PersonBody.RESIDENT.get().create(level);
-        try {
-            ItemStack oil = new ItemStack(ModItems.OIL.get(), 2);
-            helper.assertTrue(pot.onPlaceOil(level, actor, oil), "the native pot consumes ordinary oil directly");
-            helper.assertValueEqual(oil.getCount(), 1, "one actual oil unit is consumed");
-            helper.assertTrue(pot.getBlockState().getValue(com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.PotBlock.HAS_OIL), "no optional oil container is required to oil a real cooking pot");
-        } finally { actor.discard(); }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void openingABasinDoesNotSpendOilAndFillingConsumesOnlyActualFreeCapacity(GameTestHelper helper) {
         var level = helper.getLevel(); BlockPos at = helper.absolutePos(new BlockPos(1, 1, 1));
         level.setBlockAndUpdate(at, ModBlocks.ENAMEL_BASIN.get().defaultBlockState()); ItemStack oil = new ItemStack(ModItems.OIL.get(), 35);

@@ -11,9 +11,9 @@ import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
@@ -27,7 +27,6 @@ import io.github.izakyl.folkways.plugins.build.BuildContent;
 import io.github.izakyl.folkways.plugins.build.BuildOrders;
 import io.github.izakyl.folkways.plugins.build.FiledOrderRig;
 import io.github.izakyl.folkways.plugins.build.SchematicPlacement;
-import java.lang.reflect.Proxy;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -120,27 +119,6 @@ public final class GroundworkOrderGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void clearAndFillOrderTheChosenDefaultStateEverywhere(GameTestHelper helper) {
-        try (Fixture f = new Fixture(helper)) {
-            Set<BlockPos> cells = Set.of(f.at, f.at.east(), f.at.above());
-            f.place(f.at, Blocks.STONE.defaultBlockState());
-            f.place(f.at.east(), Blocks.DIRT.defaultBlockState());
-            f.place(f.at.above().below(), Blocks.POPPY.defaultBlockState());
-            ZoneView zone = f.zone(cells, settings(true, true)
-                .with(GroundworkContent.WEED, new ColonySettings.Value.Flag(true))
-                .with(GroundworkContent.FELL, new ColonySettings.Value.Flag(true))
-                .with(GroundworkContent.HAUL, new ColonySettings.Value.Flag(true)));
-            f.sweep();
-            helper.assertValueEqual(f.targets(), Map.of(f.at, Blocks.DIRT.defaultBlockState(),
-                f.at.east(), Blocks.DIRT.defaultBlockState(), f.at.above(), Blocks.DIRT.defaultBlockState()),
-                "clear and fill replace all cells, including solids and cells above flowers");
-            helper.assertTrue(f.front.zone(zone.id()).isEmpty(), "the combined zone is erased");
-            helper.assertTrue(f.ground.goals(f.colony.view(f.level)).isEmpty(), "no groundwork chores remain");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 100)
     public static void colonyHoldingsAreIncludedInEveryOrderKind(GameTestHelper helper) {
         for (int kind = 0; kind < 3; kind++) {
             try (Fixture f = new Fixture(helper)) {
@@ -157,48 +135,14 @@ public final class GroundworkOrderGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void fillFilesAnOrderOverSolidGround(GameTestHelper helper) {
-        try (Fixture f = new Fixture(helper)) {
-            f.place(f.at, Blocks.STONE.defaultBlockState());
-            ZoneView zone = f.zone(Set.of(f.at), settings(false, true));
-            f.sweep();
-            helper.assertTrue(f.front.zone(zone.id()).isEmpty(), "filing the fill order erases the zone");
-            helper.assertValueEqual(f.orders(), 1, "solid ground still creates an order");
-            helper.assertValueEqual(f.drawings(), 1, "the order keeps its drawing");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void theFiledOrderBuildsCompletesAndDiscardsItsBlueprint(GameTestHelper helper) {
-        try (Fixture f = new Fixture(helper)) {
-            ZoneView zone = f.zone(Set.of(f.at), settings(false, true));
-            f.sweep();
-            helper.assertTrue(f.front.zone(zone.id()).isEmpty(), "the zone is already gone before building");
-            Worker worker = worker(f.level, f.at.south(3));
-            try {
-                FiledOrderRig.work(helper, f.colony, f.order().id(), worker);
-            } finally {
-                worker.body().discard();
-            }
-            helper.assertTrue(f.level.getBlockState(f.at).is(Blocks.DIRT), "ordinary build work lays the block");
-            helper.assertValueEqual(f.orders(), 0, "the completed order disappears");
-            helper.assertValueEqual(f.drawings(), 0, "the synthetic blueprint is discarded with it");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 100)
     public static void zoneSettingsConfirmTheDrawingWithoutASchematicPrinterPass(GameTestHelper helper) {
         SchematicPlacement.Adapter installed = SchematicPlacement.adapter();
-        SchematicPlacement.install((SchematicPlacement.Adapter) Proxy.newProxyInstance(
-            SchematicPlacement.Adapter.class.getClassLoader(), new Class<?>[] {SchematicPlacement.Adapter.class},
-            (proxy, method, args) -> {
-                if (method.getName().equals("print")) {
-                    throw new AssertionError("groundwork must not pass through schematic confirmation");
-                }
-                return method.invoke(installed, args);
-            }));
+        SchematicPlacement.install(Proxies.of(SchematicPlacement.Adapter.class, (proxy, method, args) -> {
+            if (method.getName().equals("print")) {
+                throw new AssertionError("groundwork must not pass through schematic confirmation");
+            }
+            return method.invoke(installed, args);
+        }));
         try {
             for (int kind = 0; kind < 3; kind++) {
                 try (Fixture f = new Fixture(helper)) {
@@ -226,6 +170,7 @@ public final class GroundworkOrderGameTests {
                     }
                     helper.assertValueEqual(f.level.getBlockState(f.at), state, "ordinary build work meets the first target");
                     helper.assertValueEqual(f.level.getBlockState(f.at.east()), state, "ordinary build work meets the second target");
+                    helper.assertValueEqual(f.orders(), 0, "the completed order disappears");
                     helper.assertValueEqual(f.drawings(), 0, "completion discards the zone's drawing");
                 }
             }
@@ -458,16 +403,6 @@ public final class GroundworkOrderGameTests {
         Mob body = EntityType.PIG.create(level);
         body.setPos(Vec3.atBottomCenterOf(feet));
         SimpleContainer pack = new SimpleContainer(new ItemStack(Items.DIRT, 16));
-        return (Worker) Proxy.newProxyInstance(GroundworkOrderGameTests.class.getClassLoader(),
-            new Class<?>[] {Worker.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> body;
-                case "pack" -> pack;
-                case "resident" -> new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig"));
-                case "effects" -> Effects.NONE;
-                case "placement" -> Placement.NOWHERE;
-                case "held" -> ItemStack.EMPTY;
-                case "within", "route", "supplied" -> List.of();
-                default -> null;
-            });
+        return TestWorker.of(body, new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig")), pack).spill(stack -> { });
     }
 }

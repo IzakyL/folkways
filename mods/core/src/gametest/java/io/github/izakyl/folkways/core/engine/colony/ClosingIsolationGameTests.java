@@ -11,12 +11,11 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Workshop;
+import io.github.izakyl.folkways.core.testing.Nodes;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -336,10 +335,7 @@ public final class ClosingIsolationGameTests {
         NodeSpec spec = NodeSpec.of(UUID.randomUUID(), owner,
             WorkSite.at(helper.getLevel(), helper.absolutePos(BlockPos.ZERO)),
             Stances.WHEREVER, Workload.Once.of(1)).done();
-        return new Node() {
-            public NodeSpec spec() { return spec; }
-            public Outcome commit(ServerLevel level, Worker worker) { return Outcome.done(); }
-        };
+        return Nodes.done(spec);
     }
 
     private static boolean detached(Stretch stretch) {

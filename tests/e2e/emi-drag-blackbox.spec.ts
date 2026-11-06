@@ -3,14 +3,13 @@ import { openOrderDraft } from "../shared/colony/membership-optin";
 import { input, media, screen, tick } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements } from "../ldlib2";
 import { boardActs } from "../shared/ui/site-panel";
-import { writeFileSync } from "node:fs";
 import { createColonyViaBook, optInViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import { drawTexts, sleepMs, type DrawCaptureResult } from "../shared/capture/draw-capture";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { ensureOut, outAbs, shotPath, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
-import { frames, safeAction, safeScreen, screenOpen, commandPos, tryCommand } from "../shared/harness/bw-helpers";
+import { frames, safeScreen, screenOpen, commandPos, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
@@ -64,8 +63,6 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     await screen.dismiss(client);
     evidence.enter = await openOrderDraft(server, client, chest);
     expect(screenOpen(await safeScreen(client)), "this site's panel should be open").toBe(true);
-    evidence.panel_elements = (await panelElements(client).catch(() => []))
-      .map((element) => element.id ?? element.className);
     const elements = await panelElements(client);
     const button = elements.find((element) => element.id === evidence.enter.edit_item);
     expect(button, "the order draft should have an item button").toBeTruthy();
@@ -92,8 +89,6 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     evidence.dragged_id = draggedId;
     expect(evidence.row_text_before, "the draft should not name the item yet").not.toContain(draggedName);
 
-    evidence.shot_before_drag = await shoot(client, shotPath("e2e", "emi-drag-before"));
-
     const dragReach = await input.drag(client, { from: dragSource, to: dropTarget, steps: 12 });
     evidence.drag_reach = dragReach;
     expect(dragReach.pressArmed, "the press must set MouseHandler's drag state").toBe(true);
@@ -103,7 +98,6 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     const named = await waitForDraftText(server, client, evidence.enter.edit_item, draggedName);
     evidence.row_text_after = named;
     expect(named, "after the EMI drop the order draft should name the dragged item").toContain(draggedName);
-    evidence.shot_after_drag = await shoot(client, shotPath("e2e", "emi-drag-after"));
 
     const submit = (await boardActs(client, "do", "folkways.orders"))
       .find((act) => act.row > evidence.enter.row && act.act === 0);
@@ -122,20 +116,10 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     pair?.failing(error);
     throw error;
   } finally {
-    const body = JSON.stringify(evidence, null, 2);
-    writeFileSync(outAbs("e2e", "reports", "emi-drag-evidence.json"), body);
-    testInfo.attach("emi-drag-evidence", { body, contentType: "application/json" });
+    testInfo.attach("emi-drag-evidence", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
     await pair?.teardown(testInfo);
   }
 });
-
-async function shoot(client: any, rel: string) {
-  const shot = await safeAction(async () => {
-    await media.screenshot(client, { path: rel });
-    return { status: "captured" };
-  }).catch((error: any) => ({ status: "error", reason: String(error?.message ?? error) }));
-  return { path: rel, status: (shot as any)?.status };
-}
 
 async function captureHud(client: any): Promise<DrawCaptureResult> {
   const recording = await media.startDraws(client, { channel: "hud", maxFrames: 4 });

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { tick, world } from "@izakyl/blockwright-minecraft";
+import { tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import {
   commandPos,
   stockToolsForResidents,
@@ -31,13 +31,21 @@ import { BUDGET } from "../shared/harness/budgets";
 import { newRunId } from "../shared/harness/run-id";
 import { twins } from "../shared/harness/stage";
 
-const RESIDENT_COUNT = 3;
+const RESIDENT_COUNT = 4;
 
 const DEFAULT_PASTURE_TARGET = 4;
 const WOOL_ITEM = "minecraft:white_wool";
+const HEN_TARGET = 6;
+const EGG_ITEM = "minecraft:egg";
 
-for (const stage of twins()) test(stage.title("pasture end-to-end: player carves a sheep pasture through the real panel, residents shear + breed"), async ({}, testInfo) => {
-  test.setTimeout(BUDGET.standard);
+// Sheep must be sheared, their wool gathered and a lamb bred within this window.
+const HERDING_TICKS = 3_000;
+// Vanilla hens lay on their own eggTime; once an egg shows, residents get this long to collect it.
+const MAX_LAY_TICKS = 16_000;
+const COLLECT_TICKS = 2_400;
+
+for (const stage of twins()) test(stage.title("pasture end-to-end: player carves a sheep pasture and a hen run through the real panel, residents shear, breed and collect eggs"), async ({}, testInfo) => {
+  test.setTimeout(BUDGET.heavy);
   ensureOut("e2e");
   const runId = newRunId();
 
@@ -56,7 +64,8 @@ for (const stage of twins()) test(stage.title("pasture end-to-end: player carves
       config: stage.config,
       server: { trace: serverTrace, instance: seededServer(stage.name(`pasture-server-${runId}`)) },
       client: { trace: clientTrace, instance: clientInstance },
-      snapshot: () => ({ containers: [pen?.supplyChest, founding?.foodChest].map((chest) => chest && stage.at(chest)), entityTypes: ["folkways:resident", "minecraft:sheep"] }),
+      snapshot: () => ({ containers: [pen?.supplyChest, founding?.foodChest].map((chest) => chest && stage.at(chest)),
+        entityTypes: ["folkways:resident", "minecraft:sheep", "minecraft:chicken", "minecraft:item"] }),
     });
     ({ server, client } = pair);
 
@@ -77,7 +86,9 @@ for (const stage of twins()) test(stage.title("pasture end-to-end: player carves
     ).toBeGreaterThanOrEqual(RESIDENT_COUNT);
 
     pen = { ...penLayout(origin, 8, 2), supplyChest: { x: origin.x + 5, y: origin.y, z: origin.z + 8 } };
+    const henRun = penLayout(origin, 14, 3);
     await buildPen(server, pen, stage);
+    await buildPen(server, henRun, stage);
     await mustCommand(server, `setblock ${commandPos(stage.at(pen.supplyChest))} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 3);
     await optInViaBook(server, client, playerName, pen.supplyChest, "chest", stage);
@@ -89,6 +100,17 @@ for (const stage of twins()) test(stage.title("pasture end-to-end: player carves
       target: DEFAULT_PASTURE_TARGET,
     }, stage);
     expect(zone.created, pastureZoneFailure(zone, "sheep", DEFAULT_PASTURE_TARGET)).toBe(true);
+    const henZone = await createPastureZoneViaPanel(server, client, playerName, founding.standBlock, henRun, {
+      animal: "chicken",
+      target: HEN_TARGET,
+      index: 1,
+    }, stage);
+    expect(henZone.created, pastureZoneFailure(henZone, "chicken", HEN_TARGET)).toBe(true);
+
+    const stores = [pen.supplyChest, founding.foodChest].map((chest) => stage.at(chest));
+    const baseline = await observeEggs(server, henRun, stores);
+    expect(baseline.stored + baseline.dropped,
+      "before the hens lay, neither the site nor colony stock should already hold eggs").toBe(0);
 
     const sheepPositions = [
       { x: pen.min.x + 0.5, y: origin.y, z: pen.min.z + 0.5 },
@@ -97,13 +119,24 @@ for (const stage of twins()) test(stage.title("pasture end-to-end: player carves
     for (const spot of sheepPositions) {
       await mustCommand(server, `summon minecraft:sheep ${spot.x} ${spot.y} ${spot.z} {Color:0b,Age:0,PersistenceRequired:1b}`);
     }
+    const henSpots = [
+      { x: henRun.min.x + 0.5, z: henRun.min.z + 0.5 },
+      { x: henRun.min.x + 1.5, z: henRun.min.z + 0.5 },
+      { x: henRun.max.x + 0.5, z: henRun.min.z + 0.5 },
+      { x: henRun.min.x + 0.5, z: henRun.max.z + 0.5 },
+      { x: henRun.min.x + 1.5, z: henRun.max.z + 0.5 },
+      { x: henRun.max.x + 0.5, z: henRun.max.z + 0.5 },
+    ];
+    for (const spot of henSpots) {
+      await mustCommand(server, `summon minecraft:chicken ${spot.x} ${origin.y} ${spot.z} {Age:0,PersistenceRequired:1b}`);
+    }
     await tryCommand(server, `tp ${playerName} ${founding.standBlock.x + 0.5} ${stage.stand(founding.standBlock).y} ${founding.standBlock.z + 1.5} 180 30`);
     await tick.sprint(server, 20);
 
     await stockToolsForResidents(
       server, stage.at(pen.supplyChest), TRADE_TOOLS.herding, RESIDENT_COUNT, 1);
 
-    const herding = await observeHerding(server, pen, [pen.supplyChest, founding.foodChest].map((chest) => stage.at(chest)));
+    const { herding, eggs } = await observePasture(server, pen, henRun, stores);
     const reasons: string[] = [];
     if (!herding.sheared_observed) {
       reasons.push(
@@ -113,14 +146,15 @@ for (const stage of twins()) test(stage.title("pasture end-to-end: player carves
       );
     }
     if (!herding.wool_gathered) {
-      reasons.push(
-        `${WOOL_ITEM} is neither in any resident's pack nor in a colony chest: the sheared wool was never collected. `
-        + `The destination is decided on the spot (into a chest if one is in reach, otherwise into the pack), so both being empty has only one reading: `
-        + `the wool was never handed over, or it was dropped on the ground after being handed over`,
-      );
+      reasons.push(`${WOOL_ITEM} is neither in any resident's pack nor in a colony chest: the sheared wool was never collected`);
     }
     if (!herding.bred_observed) {
       reasons.push(`no breeding observed: the pasture stayed at ${herding.max_sheep} sheep (target ${DEFAULT_PASTURE_TARGET}, expected >= 3)`);
+    }
+    if (!eggs.collected) {
+      reasons.push(eggs.firstEggTick === undefined
+        ? "no eggs laid in the hen run and no new eggs in stock"
+        : `eggs seen in the hen run at ${eggs.firstEggTick} ticks, but no new eggs in packs or chests within ${COLLECT_TICKS} ticks`);
     }
     expect(reasons, reasons.join(" | ")).toEqual([]);
   } catch (error) {
@@ -133,44 +167,74 @@ for (const stage of twins()) test(stage.title("pasture end-to-end: player carves
 
 type PastureFixture = Pen & { supplyChest: Vec };
 
-async function observeHerding(server: any, pen: PastureFixture, stores: Vec[]) {
-  const samples: any[] = [];
+// The sheep and the hens in one loop: the hens' egg wait overlaps shearing and breeding.
+async function observePasture(server: any, pen: PastureFixture, henRun: Pen, stores: Vec[]) {
   let shearedObserved = false;
   let woolGathered = false;
   let shearsEquipped = false;
   let maxSheep = 0;
+  let firstEggTick: number | undefined;
+  let collected = false;
 
-  for (let iteration = 0; iteration <= 150; iteration++) {
-    if (iteration > 0) await tick.sprint(server, 20);
-    const sheep = await countAnimalsInPen(server, pen, /sheep/);
-    const sheared = await anySheepSheared(server);
-    const shearsHeld = await packHasItem(server, "minecraft:shears");
-    const wool = await colonyHasItem(server, WOOL_ITEM, stores);
-    maxSheep = Math.max(maxSheep, sheep);
-    shearedObserved = shearedObserved || sheared;
-    woolGathered = woolGathered || wool;
-    shearsEquipped = shearsEquipped || shearsHeld;
-    samples.push({
-      order: iteration,
-      ticks: iteration * 20,
-      sheep,
-      sheared,
-      shears_in_a_pack: shearsHeld,
-      wool_gathered: wool,
-    });
-    if (shearedObserved && woolGathered && maxSheep >= 3) break;
+  for (let ticks = 0; ; ticks += 20) {
+    if (ticks > 0) await tick.sprint(server, 20);
+    const herding = ticks <= HERDING_TICKS;
+    if (herding) {
+      const sheep = await countAnimalsInPen(server, pen, /sheep/);
+      maxSheep = Math.max(maxSheep, sheep);
+      shearedObserved ||= await anySheepSheared(server);
+      woolGathered ||= await colonyHasItem(server, WOOL_ITEM, stores);
+      shearsEquipped ||= await packHasItem(server, "minecraft:shears");
+    }
+    const sheepDone = !herding || (shearedObserved && woolGathered && maxSheep >= 3);
+    if (!collected) {
+      const sample = await observeEggs(server, henRun, stores);
+      if (firstEggTick === undefined && (sample.inPen > 0 || sample.stored > 0)) firstEggTick = ticks;
+      collected = sample.stored > 0;
+    }
+    const eggsDone = collected
+      || (firstEggTick === undefined ? ticks >= MAX_LAY_TICKS : ticks - firstEggTick >= COLLECT_TICKS);
+    if (sheepDone && eggsDone) break;
   }
 
   return {
-    sheared_observed: shearedObserved,
-    wool_gathered: woolGathered,
-    shears_equipped: shearsEquipped,
-    bred_observed: maxSheep >= 3,
-    max_sheep: maxSheep,
-    samples,
+    herding: {
+      sheared_observed: shearedObserved,
+      wool_gathered: woolGathered,
+      shears_equipped: shearsEquipped,
+      bred_observed: maxSheep >= 3,
+      max_sheep: maxSheep,
+    },
+    eggs: { firstEggTick, collected },
   };
 }
 
 async function anySheepSheared(server: any) {
   return world.probe(server, `if entity @e[type=minecraft:sheep,nbt={Sheared:1b}]`);
+}
+
+async function observeEggs(server: MinecraftServer, pen: Pen, stores: Vec[]) {
+  const result = await world.entities(server, { nbt: true, limit: 1000 });
+  expect(result.limited, "drop sampling should not be truncated").toBe(false);
+  const entities: any[] = result.entities;
+  const drops = entities.filter((e: any) => e.type === "minecraft:item" && e.nbt?.Item?.id === EGG_ITEM)
+    .map((e: any) => ({ count: e.nbt.Item.count as number,
+      inPen: Math.floor(e.position.x) >= pen.min.x && Math.floor(e.position.x) <= pen.max.x
+        && Math.floor(e.position.z) >= pen.min.z && Math.floor(e.position.z) <= pen.max.z
+        && Math.floor(e.position.y) >= pen.min.y && Math.floor(e.position.y) <= pen.max.y + 4 }));
+  const packed = entities.filter((e: any) => e.type === "folkways:resident")
+    .flatMap((e: any) => e.nbt?.["neoforge:attachments"]?.["folkways:body_state"]?.Pack?.Items ?? [])
+    .reduce((n: number, item: any) => n + (item.Stack?.id === EGG_ITEM ? item.Stack.count : 0), 0);
+  let chested = 0;
+  for (const store of stores) {
+    const container: any = await world.container(server, store, { nbt: true });
+    expect(container.found, `sampling the colony chest must succeed: ${container.reason ?? ""}`).toBe(true);
+    expect(container.nbt?.Items, "chest inventory NBT must be readable").toBeDefined();
+    chested += container.nbt.Items.reduce((n: number, item: any) => n + (item.id === EGG_ITEM ? item.count : 0), 0);
+  }
+  return {
+    stored: chested + packed,
+    dropped: drops.reduce((n, d) => n + d.count, 0),
+    inPen: drops.filter((d) => d.inPen).reduce((n, d) => n + d.count, 0),
+  };
 }

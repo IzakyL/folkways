@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import { media, player, tick } from "@izakyl/blockwright-minecraft";
-import { writeFileSync } from "node:fs";
 import {
   createColonyViaBook,
   optInViaBook,
@@ -11,18 +10,15 @@ import { createMarkedZone, setBookGesture } from "../shared/ui/zone-tools";
 import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
 import {
   boxIsAt,
-  drawEntries,
   filledBoxes,
   hueScale,
   lineBoxes,
   sleepMs,
-  summarizeBox,
-  worldItems,
   worldTexts,
   type DrawCaptureResult,
 } from "../shared/capture/draw-capture";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, frames, tryCommand } from "../shared/harness/bw-helpers";
@@ -125,7 +121,6 @@ for (const stage of twins()) test(stage.title("held-book lens: the outline reach
 
     const near = { x: zoneCenter.x, y: origin.y, z: zoneCenter.z - 12 };
     const nearCapture = await standAndCapture(server, client, playerName, near, groundY);
-    evidence.near = describe(nearCapture, near, zoneCenter, chestCenter, cardAnchor);
 
     expect(nearCapture.droppedEntries, "capture is incomplete (hit maxEntriesPerFrame), so none of the counts below mean anything").toBe(0);
     expect(nearCapture.frameCount, "the capture window should hold at least one frame").toBeGreaterThan(0);
@@ -162,7 +157,6 @@ for (const stage of twins()) test(stage.title("held-book lens: the outline reach
 
     const beyondMember = { x: zoneCenter.x, y: origin.y, z: zoneCenter.z - 60 };
     const beyondMemberCapture = await standAndCapture(server, client, playerName, beyondMember, groundY);
-    evidence.beyond_member = describe(beyondMemberCapture, beyondMember, zoneCenter, chestCenter, cardAnchor);
 
     expect(beyondMemberCapture.droppedEntries).toBe(0);
     const beyondMemberZoneDistance = distance(eyeOf(beyondMember), zoneCenter);
@@ -180,7 +174,6 @@ for (const stage of twins()) test(stage.title("held-book lens: the outline reach
 
     const beyondFill = { x: zoneCenter.x, y: origin.y, z: zoneCenter.z - 140 };
     const beyondFillCapture = await standAndCapture(server, client, playerName, beyondFill, groundY);
-    evidence.beyond_fill = describe(beyondFillCapture, beyondFill, zoneCenter, chestCenter, cardAnchor);
 
     expect(beyondFillCapture.droppedEntries).toBe(0);
     const beyondFillZoneDistance = distance(eyeOf(beyondFill), zoneCenter);
@@ -197,7 +190,6 @@ for (const stage of twins()) test(stage.title("held-book lens: the outline reach
 
     const far = { x: zoneCenter.x, y: origin.y, z: zoneCenter.z - 170 };
     const farCapture = await standAndCapture(server, client, playerName, far, groundY);
-    evidence.far = describe(farCapture, far, zoneCenter, chestCenter, cardAnchor);
 
     expect(farCapture.droppedEntries).toBe(0);
     expect(distance(eyeOf(far), zoneCenter), "phase 4 must sit outside the outline band").toBeGreaterThan(OUTLINE_RANGE);
@@ -210,9 +202,7 @@ for (const stage of twins()) test(stage.title("held-book lens: the outline reach
     pair?.failing(error);
     throw error;
   } finally {
-    const body = JSON.stringify(evidence, null, 2);
-    writeFileSync(outAbs("e2e", "reports", `${stage.name("lens-evidence")}.json`), body);
-    testInfo.attach(stage.name("lens-evidence"), { body, contentType: "application/json" });
+    testInfo.attach(stage.name("lens-evidence"), { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
     await pair?.teardown(testInfo);
   }
 });
@@ -323,30 +313,6 @@ function dedupe<T extends { min: any; max: any; color: any }>(boxes: T[]): T[] {
     }
   }
   return [...seen.values()];
-}
-
-function describe(capture: DrawCaptureResult, at: any, zoneCenter: any, chestCenter: any, cardAnchor: any) {
-  return {
-    stand: at,
-    distance_to_zone: distance(eyeOf(at), zoneCenter),
-    distance_to_chest: distance(eyeOf(at), chestCenter),
-    distance_to_card: distance(eyeOf(at), cardAnchor),
-    frameCount: capture.frameCount,
-    entryCount: capture.entryCount,
-    droppedEntries: capture.droppedEntries,
-    kinds: countKinds(capture),
-    boxes: dedupe([...lineBoxes(capture), ...filledBoxes(capture)] as any).map(summarizeBox),
-    world_texts: worldTexts(capture).map((entry) => ({ text: entry.text, position: entry.position })),
-    world_items: worldItems(capture).map((entry) => ({ id: entry.id, position: entry.position })),
-  };
-}
-
-function countKinds(capture: DrawCaptureResult) {
-  const counts: Record<string, number> = {};
-  for (const entry of drawEntries(capture)) {
-    counts[entry.kind] = (counts[entry.kind] ?? 0) + 1;
-  }
-  return counts;
 }
 
 async function flattenPlot(server: any, origin: Vec, stage: Stage) {

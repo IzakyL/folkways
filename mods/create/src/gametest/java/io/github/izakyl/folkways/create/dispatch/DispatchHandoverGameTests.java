@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.create.dispatch;
 
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonySnapshot;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
-import java.lang.reflect.Proxy;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -49,26 +49,24 @@ public final class DispatchHandoverGameTests {
         BlockPos onChain = helper.absolutePos(new BlockPos(1, 1, 2));
         BlockPos offChain = helper.absolutePos(new BlockPos(2, 1, 2));
         BlockPos postbox = helper.absolutePos(new BlockPos(3, 1, 0));
-        PackageNetworks.install((PackageNetwork) Proxy.newProxyInstance(PackageNetwork.class.getClassLoader(),
-            new Class<?>[] {PackageNetwork.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "linkerAt" -> args[1].equals(link) ? Optional.of(network) : Optional.empty();
-                case "chainAt" -> args[1].equals(chainA) || args[1].equals(chainB) ? Optional.of(args[1])
-                    : args[1].equals(onChain) ? Optional.of(chainA) : Optional.empty();
-                case "frogport" -> args[1].equals(onChain) || args[1].equals(offChain);
-                case "chainNet" -> Set.of(chainA, chainB);
-                case "mayAdministrate" -> true;
-                default -> throw new AssertionError("unexpected network call: " + method.getName());
-            }));
+        PackageNetworks.install(Proxies.of(PackageNetwork.class, (proxy, method, args) -> switch (method.getName()) {
+            case "linkerAt" -> args[1].equals(link) ? Optional.of(network) : Optional.empty();
+            case "chainAt" -> args[1].equals(chainA) || args[1].equals(chainB) ? Optional.of(args[1])
+                : args[1].equals(onChain) ? Optional.of(chainA) : Optional.empty();
+            case "frogport" -> args[1].equals(onChain) || args[1].equals(offChain);
+            case "chainNet" -> Set.of(chainA, chainB);
+            case "mayAdministrate" -> true;
+            default -> throw new AssertionError("unexpected network call: " + method.getName());
+        }));
         try {
             AtomicReference<CompoundTag> kept = new AtomicReference<>(new CompoundTag());
             UUID colonyId = UUID.randomUUID();
-            Colony colony = (Colony) Proxy.newProxyInstance(Colony.class.getClassLoader(),
-                new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "kept" -> kept.get().copy();
-                    case "keep" -> { kept.set(((CompoundTag) args[1]).copy()); yield null; }
-                    case "id" -> colonyId;
-                    default -> throw new AssertionError(method.getName());
-                });
+            Colony colony = Proxies.of(Colony.class, (proxy, method, args) -> switch (method.getName()) {
+                case "kept" -> kept.get().copy();
+                case "keep" -> { kept.set(((CompoundTag) args[1]).copy()); yield null; }
+                case "id" -> colonyId;
+                default -> throw new AssertionError(method.getName());
+            });
             DispatchPresence dispatch = new DispatchPresence(colony);
             var view = ColonySnapshot.of(new ColonyData(), level);
             ServerPlayer player = FakePlayerFactory.getMinecraft(level);

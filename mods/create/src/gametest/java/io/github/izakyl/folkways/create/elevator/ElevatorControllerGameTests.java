@@ -88,10 +88,19 @@ public final class ElevatorControllerGameTests {
         fixture.tick(60);
         helper.assertTrue(fixture.network.targets.getLast() == 10,
             "the next pickup cannot start while an arriving passenger remains aboard");
+        fixture.network.exitComplete = false;
         fixture.controller.alight(helper.getLevel().getServer(), rider, body);
         fixture.tick(61);
-        helper.assertTrue(fixture.network.targets.getLast() == 20,
-            "the next pickup starts once all passengers have alighted");
+        helper.assertTrue(fixture.controller.status(rider) == ElevatorController.Status.ALIGHTING
+                && fixture.network.occupants.containsValue(rider)
+                && fixture.network.targets.getLast() == 10,
+            "a partial walk out cannot finish the trip or send the cabin to its next pickup");
+        fixture.network.exitComplete = true;
+        fixture.controller.alight(helper.getLevel().getServer(), rider, body);
+        fixture.tick(62);
+        helper.assertTrue(fixture.controller.status(rider) == ElevatorController.Status.FINISHED
+                && fixture.network.targets.getLast() == 20,
+            "the next pickup starts only once every passenger has walked clear");
         helper.succeed();
     }
 
@@ -181,36 +190,6 @@ public final class ElevatorControllerGameTests {
                 "the same reserved place boards once walking is actually complete");
             fixture.tick(60);
             helper.assertTrue(fixture.network.targets.getLast() == 10, "the boarded rider can now depart");
-        } finally { body.discard(); }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void incompleteWalkOutBlocksNextPickupUntilTheCabinIsActuallyFree(GameTestHelper helper) {
-        Fixture fixture = new Fixture(helper);
-        Mob body = mob(helper);
-        try {
-            UUID rider = body.getUUID();
-            fixture.controller.request(rider, 0, 10, 0);
-            fixture.tick(1);
-            fixture.controller.board(helper.getLevel().getServer(), rider, body);
-            fixture.tick(40);
-            fixture.controller.request(UUID.randomUUID(), 20, 0, 40);
-            fixture.network.floor = 10;
-            fixture.tick(41);
-            fixture.network.exitComplete = false;
-            fixture.controller.alight(helper.getLevel().getServer(), rider, body);
-            fixture.tick(60);
-            helper.assertTrue(fixture.controller.status(rider) == ElevatorController.Status.ALIGHTING
-                    && fixture.network.occupants.containsValue(rider)
-                    && fixture.network.targets.getLast() == 10,
-                "a partial walk out cannot finish the trip or send the cabin to its next pickup");
-            fixture.network.exitComplete = true;
-            fixture.controller.alight(helper.getLevel().getServer(), rider, body);
-            fixture.tick(61);
-            helper.assertTrue(fixture.controller.status(rider) == ElevatorController.Status.FINISHED
-                    && fixture.network.targets.getLast() == 20,
-                "the next pickup starts only after walking clear is confirmed");
         } finally { body.discard(); }
         helper.succeed();
     }
@@ -412,14 +391,10 @@ public final class ElevatorControllerGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
-    public static void externallyMovingABoardingPassengerCannotHoldItsAboardCompanion(GameTestHelper helper) {
-        abandonedWalkInReleasesTheCabin(helper, false);
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void aDeadBoardingPassengerCannotHoldItsAboardCompanion(GameTestHelper helper) {
-        abandonedWalkInReleasesTheCabin(helper, true);
+    public static void aBoardingPassengerMovedAwayOrDeadCannotHoldItsAboardCompanion(GameTestHelper helper) {
+        for (boolean died : new boolean[] {false, true}) {
+            abandonedWalkInReleasesTheCabin(helper, died);
+        }
         helper.succeed();
     }
 
@@ -495,7 +470,6 @@ public final class ElevatorControllerGameTests {
         boolean boardingComplete = true;
         boolean exitComplete = true;
         boolean doorClear = true;
-        int boardAttempts;
         int exitAttempts;
 
         Network(GameTestHelper helper) {
@@ -527,7 +501,6 @@ public final class ElevatorControllerGameTests {
 
         @Override
         public boolean board(MinecraftServer server, ElevatorRef lift, int place, Mob body) {
-            boardAttempts++;
             if (occupants.containsKey(place)) { return false; }
             entering.put(place, body.getUUID());
             if (!boardingComplete) { return false; }

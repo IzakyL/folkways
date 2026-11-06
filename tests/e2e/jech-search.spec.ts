@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { defineTask, input, javaTask, media, screen, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
+import { defineTask, input, javaTask, screen, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements } from "../ldlib2";
 import { foundColonyFast, foundingBox, openColonyPanelViaBook, optInViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -144,7 +144,6 @@ for (const installed of [false, true]) test(`display search with JEC ${installed
     }
     await search(client, "folkways.selector.search", "#minecraft:logs tieding");
     expect(await shown(client, "folkways.selector.result.minecraft.iron_ingot")).toBe(false);
-    await media.screenshot(client, { path: testInfo.outputPath("item-picker.png") });
     await clickElement(client, { id: "folkways.selector.close" });
     await client.run(FOLDER, undefined);
     for (const query of ["td", "jianzhu", "铁锭", "TEST:BUILD/IRON"]) {
@@ -153,7 +152,6 @@ for (const installed of [false, true]) test(`display search with JEC ${installed
         .toBe(query === "铁锭" || query === "TEST:BUILD/IRON" || installed);
       expect(await shown(client, "folkways.jech.fixture.stone"), query).toBe(query === "jianzhu" && installed);
     }
-    await media.screenshot(client, { path: testInfo.outputPath("folder-picker.png") });
     await clickElement(client, { id: "folkways.jech.fixture.close" });
     await clickTab(client, "folkways.tab.metrics");
     await clickElement(client, { id: "folkways.metrics.refresh" });
@@ -163,7 +161,6 @@ for (const installed of [false, true]) test(`display search with JEC ${installed
     await expect.poll(() => shown(client, stock), { timeout: 10_000 }).toBe(installed);
     await search(client, "folkways.metrics.search", "铁锭");
     await expect.poll(() => shown(client, stock), { timeout: 10_000 }).toBe(true);
-    await media.screenshot(client, { path: testInfo.outputPath("stock.png") });
     evidence.inventory = await world.container(server, barrel, { nbt: true });
     await screen.dismiss(client);
   } catch (error) {

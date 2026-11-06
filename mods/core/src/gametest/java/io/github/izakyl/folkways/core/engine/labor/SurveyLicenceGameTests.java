@@ -5,21 +5,17 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.body.Keenness;
 import io.github.izakyl.folkways.core.engine.colony.WorkDefaults;
+import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.vocation.Vocation;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.plan.Crew;
-import io.github.izakyl.folkways.core.engine.travel.Faring;
-import io.github.izakyl.folkways.core.engine.travel.Journey;
 import io.github.izakyl.folkways.core.engine.travel.Ways;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -38,15 +34,7 @@ public final class SurveyLicenceGameTests {
         event.register(SurveyLicenceGameTests.class);
     }
 
-    private static final Ways NOWHERE = new Ways() {
-        public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
-            return Faring.yes(Journey.afoot(0, goals));
-        }
-
-        public Faring anyoneReaches(Set<WorldPos> goals) {
-            return Faring.yes(Journey.afoot(0, goals));
-        }
-    };
+    private static final Ways NOWHERE = PlanningFixture.afoot(0);
 
     @GameTest(template = "empty")
     public static void aTradeTurnedOffIsNoLongerPlannedFor(GameTestHelper helper) {

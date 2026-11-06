@@ -16,10 +16,10 @@ import { twins, type Stage, type Vec } from "../shared/harness/stage";
 const BONE = "minecraft:bone_meal";
 const SEED = "minecraft:wheat_seeds";
 type Stack = { id: string; count: number };
-type State = { tick: number; fill: number; marked: boolean; activeFeed: boolean; activeId: string; awaitingSeed: boolean; stores: Stack[]; packs: Stack[]; drops: Stack[]; withdrawn: Stack[];
-  residents: Array<{ id: string; walked: number; doing: string; balk: string; hat: boolean }>;
+type State = { tick: number; fill: number; activeFeed: boolean; activeId: string; awaitingSeed: boolean; stores: Stack[]; packs: Stack[]; drops: Stack[]; withdrawn: Stack[];
+  residents: Array<{ id: string; hat: boolean }>;
   automatic: boolean; defaultReserve: number; wheatReserve: number; discovered: string[];
-  seedBudget: { complete: boolean; physical: number; compostable: number }; stalls: string[] };
+  seedBudget: { complete: boolean; physical: number; compostable: number } };
 type Cells = { supply: Vec; compost: Vec; withdrawn: Vec };
 
 for (const stage of twins()) test(stage.title("compost recovery: discover player-filled bone meal without seed stock, then fill and store a resident batch"), async ({}, testInfo) => {
@@ -262,7 +262,7 @@ for(var at:colony.storesIn(level.dimension())){var store=colony.store(level,at).
 for(var resident:colony.residents()){
  var entity=level.getEntity(resident.id());if(entity==null)throw new IllegalStateException("colony resident is not loaded");var body=Bodies.of(entity).orElseThrow();
  for(var stack:body.pack().contents())if(!stack.isEmpty())packs.add(item(stack));
- residents.add(Map.of("id",resident.id().toString(),"walked",entity.walkDist,"doing",body.doing().map(Object::toString).orElse(""),"balk",body.balk().map(Object::toString).orElse(""),"hat",!body.mob().getItemBySlot(EquipmentSlot.HEAD).isEmpty()));
+ residents.add(Map.of("id",resident.id().toString(),"hat",!body.mob().getItemBySlot(EquipmentSlot.HEAD).isEmpty()));
 }
 for(var entity:level.getAllEntities())if(entity instanceof ItemEntity drop&&!drop.getItem().isEmpty())drops.add(item(drop.getItem()));
 var support=colony.service(CompostContent.ID,CompostPresence.class).orElseThrow();var budget=support.budget(level);var wheat=budget.tally(Items.WHEAT_SEEDS);
@@ -272,9 +272,9 @@ for(int slot=0;slot<isolated.getContainerSize();slot++)if(!isolated.getItem(slot
 boolean activeFeed=false;String activeId="";var provider=support.station();
 var activeField=provider.getClass().getDeclaredField("active");activeField.setAccessible(true);
 for(var value:((Map<?,?>)activeField.get(provider)).values())if(value instanceof Node node&&node.spec().site().where().equals(WorldPos.of(level,cell))){activeFeed=!node.spec().needs().isEmpty();activeId=node.id().toString();}
-var out=new LinkedHashMap<String,Object>();out.put("tick",level.getGameTime());out.put("fill",level.getBlockState(cell).getValue(ComposterBlock.LEVEL));out.put("marked",colony.holdingAt(WorldPos.of(level,cell)).isPresent());
+var out=new LinkedHashMap<String,Object>();out.put("tick",level.getGameTime());out.put("fill",level.getBlockState(cell).getValue(ComposterBlock.LEVEL));
 out.put("stores",stores);out.put("packs",packs);out.put("drops",drops);out.put("residents",residents);out.put("withdrawn",withdrawn);out.put("activeFeed",activeFeed);out.put("activeId",activeId);boolean awaitingSeed=false;for(var claim:colony.reservedInputs(level))if(claim.node().toString().equals(activeId))awaitingSeed=true;out.put("awaitingSeed",awaitingSeed);
 out.put("automatic",CompostSettings.enabled(colony));out.put("defaultReserve",CompostSettings.defaultReserve(colony));out.put("wheatReserve",CompostSettings.reserve(colony,Items.WHEAT_SEEDS));out.put("discovered",CompostSettings.discovered(colony,ctx.server()).stream().map(item->BuiltInRegistries.ITEM.getKey(item).toString()).toList());
-out.put("seedBudget",Map.of("complete",budget.complete(),"physical",wheat.physical(),"compostable",wheat.compostable()));out.put("stalls",colony.stallsIn(level.dimension()).stream().map(Object::toString).filter(text->text.contains("compost")||text.contains("wheat_seeds")).toList());return out;
+out.put("seedBudget",Map.of("complete",budget.complete(),"physical",wheat.physical(),"compostable",wheat.compostable()));return out;
 ` }),
 });

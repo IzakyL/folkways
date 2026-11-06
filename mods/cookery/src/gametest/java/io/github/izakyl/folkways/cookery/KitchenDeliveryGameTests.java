@@ -1,14 +1,10 @@
 package io.github.izakyl.folkways.cookery;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.List;
 import java.util.Optional;
@@ -16,10 +12,8 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -85,7 +79,7 @@ public final class KitchenDeliveryGameTests {
                 "the transformed station drop is outside the worker's capture area");
             helper.assertTrue(!new AABB(storage).inflate(1).minmax(person.mob().getBoundingBox().inflate(1)).contains(world),
                 "the old storage-to-worker bounding box misses this transformed station drop");
-            KitchenDelivery.Result result = KitchenDelivery.run(level, storage, new Cook(person), hand, () -> {
+            KitchenDelivery.Result result = KitchenDelivery.run(level, storage, TestWorker.of(person), hand, () -> {
                 helper.assertTrue(person.mob().getMainHandItem() == hand, "the real API receives its supplied hand");
                 level.addFreshEntity(projected);
                 level.addFreshEntity(local);
@@ -111,24 +105,4 @@ public final class KitchenDeliveryGameTests {
         }
     }
 
-    private record Cook(Body person) implements Worker {
-        @Override
-        public Resident resident() { return person.resident(); }
-        @Override
-        public Mob body() { return person.mob(); }
-        @Override
-        public Container pack() { return person.pack(); }
-        @Override
-        public List<Store> within() { return List.of(); }
-        @Override
-        public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-        @Override
-        public void spill(ItemStack stack) { throw new IllegalStateException("unexpected spill"); }
-        @Override
-        public io.github.izakyl.folkways.effect.Effects effects() { return person.effects(); }
-        @Override
-        public List<Node> route() { return List.of(); }
-        @Override
-        public Placement placement() { return Placement.NOWHERE; }
-    }
 }

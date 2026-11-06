@@ -143,7 +143,7 @@ var profile = profiles.create("Promo " + id);
 profiles.replace(new LoadoutProfile(profile.id(), profile.name(), List.of(
     LoadoutProfile.Entry.weapon(provider.profileWeapon(gun)),
     LoadoutProfile.Entry.supply(ItemSpec.exact(ammo), ammo.getCount(), 1),
-    LoadoutProfile.Entry.supply(ItemSpec.of(Items.SPYGLASS), 1, 1)), Optional.empty()));
+    LoadoutProfile.Entry.supply(ItemSpec.of(Items.SPYGLASS), 1, 1))));
 profiles.assign(List.of(body.id()), Optional.of(profile.id()));
 body.pack().insert(gun);
 body.pack().insert(ammo);

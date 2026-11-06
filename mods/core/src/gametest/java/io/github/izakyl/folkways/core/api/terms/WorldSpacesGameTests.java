@@ -4,16 +4,14 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.terms.Structures;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.engine.plan.Stores;
+import io.github.izakyl.folkways.core.testing.TestFrame;
 import io.github.izakyl.folkways.plugins.person.walk.ResidentNodeEvaluator;
 import io.netty.buffer.Unpooled;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -41,37 +39,18 @@ public final class WorldSpacesGameTests {
         var level = helper.getLevel();
         BlockPos storage = helper.absolutePos(new BlockPos(2, 1, 2));
         level.setBlockAndUpdate(storage, Blocks.CHEST.defaultBlockState());
-        UUID id = UUID.randomUUID();
-        Vec3[] origin = {Vec3.atLowerCornerOf(storage.offset(20, 4, 0))};
-        WorldSpaces.Frame frame = new WorldSpaces.Frame() {
-            public UUID id() { return id; }
-            public Level level() { return level; }
-            public BlockPos storageOrigin() { return storage; }
-            public Vec3 toWorld(Vec3 local) { return origin[0].add(-local.z, local.y, local.x); }
-            public Vec3 toLocal(Vec3 world) {
-                Vec3 delta = world.subtract(origin[0]);
-                return new Vec3(delta.z, delta.y, -delta.x);
-            }
-        };
-        Runnable remove = WorldSpaces.install(new WorldSpaces.Source() {
-            public Optional<WorldSpaces.Frame> frame(Level host, UUID key) {
-                return host == level && key.equals(id) ? Optional.of(frame) : Optional.empty();
-            }
-            public Optional<WorldSpaces.Frame> containing(Level host, BlockPos cell) {
-                return host == level && cell.equals(storage) ? Optional.of(frame) : Optional.empty();
-            }
-            public Optional<WorldSpaces.Frame> aboard(Entity entity) { return Optional.empty(); }
-        });
+        TestFrame frame = TestFrame.turned(level, storage, Vec3.atLowerCornerOf(storage.offset(20, 4, 0)));
+        Runnable remove = frame.install(true);
         try {
             WorldPos address = WorldPos.of(level, storage);
-            helper.assertTrue(address.realm().equals(new Realm.Frame(id)) && address.cell().equals(BlockPos.ZERO),
+            helper.assertTrue(address.realm().equals(new Realm.Frame(frame.id())) && address.cell().equals(BlockPos.ZERO),
                 "captured addresses use stable local coordinates");
             helper.assertTrue(Stores.at(level, address).isPresent(), "inventory reads must use storage coordinates");
             var mob = EntityType.VILLAGER.create(level);
             Vec3 at = WorldSpaces.world(level, address).orElseThrow();
             mob.setPos(at);
             helper.assertTrue(Reach.standingIn(mob, Stances.at(address)), "arrival uses inverse rotation");
-            origin[0] = origin[0].add(5, 0, 3);
+            frame.moveBy(new Vec3(5, 0, 3));
             helper.assertTrue(!Reach.standingIn(mob, Stances.at(address)), "moving the target invalidates old arrival");
             mob.setPos(WorldSpaces.world(level, address).orElseThrow());
             helper.assertTrue(Reach.standingIn(mob, Stances.at(address)), "arrival follows the new pose");

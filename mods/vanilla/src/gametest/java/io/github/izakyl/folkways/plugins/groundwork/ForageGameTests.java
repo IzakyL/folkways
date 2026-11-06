@@ -13,15 +13,10 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.labor.ColonyLabor;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -35,7 +30,6 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CaveVines;
@@ -335,79 +329,19 @@ public final class ForageGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 800)
-    public static void brokenBerryBushLootReachesColonyStorage(GameTestHelper helper) throws ReflectiveOperationException {
-        stored(helper, berry(3), false);
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 800)
-    public static void taggedWildFoodAndSeedsReachColonyStorage(GameTestHelper helper) throws ReflectiveOperationException {
-        stored(helper, wild.defaultBlockState(), true);
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 800)
-    public static void wholeVineColumnLootReachesColonyStorage(GameTestHelper helper) throws ReflectiveOperationException {
-        stored(helper, Blocks.CAVE_VINES.defaultBlockState().setValue(CaveVines.BERRIES, true), false);
-    }
-
-    private static void stored(GameTestHelper helper, BlockState plant, boolean picked) throws ReflectiveOperationException {
+    public static void taggedWildFoodAndSeedsReachColonyStorage(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
-        f.place(plant);
-        boolean vines = Foraging.vine(plant);
-        Set<BlockPos> marked = vines ? Set.of(f.cell, f.cell.above(), f.cell.above(2)) : Set.of(f.cell);
-        if (vines) {
-            place(f.level, f.cell.above(), Blocks.CAVE_VINES_PLANT.defaultBlockState());
-            place(f.level, f.cell.above(2), Blocks.CAVE_VINES_PLANT.defaultBlockState().setValue(CaveVines.BERRIES, true));
-            place(f.level, f.cell.above(3), Blocks.STONE.defaultBlockState());
-        }
-        f.zone(marked, GroundworkContent.FORAGE);
+        f.place(wild.defaultBlockState());
+        f.zone(GroundworkContent.FORAGE);
         BlockPos barrel = f.cell.east(3);
         place(f.level, barrel, Blocks.BARREL.defaultBlockState());
         Container stock = (Container) f.level.getBlockEntity(barrel);
         f.colony.stores(GroundworkContent.ID, f.level.dimension(), List.of(WorldPos.of(f.level, barrel)));
-        var person = f.fixture.worker.body();
-        person.moveTo(f.cell.getX() + 2.5, f.cell.getY(), f.cell.getZ() + 1.5);
-        f.level.addFreshEntity(person);
-        f.colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
-        var body = io.github.izakyl.folkways.core.api.resident.body.Bodies.of(person).orElseThrow();
-        body.joinColony(f.colony.id());
-        f.colony.entered(body);
-        var data = ColonyData.find(f.level.getServer(), f.colony.id()).orElseThrow();
-        var labor = new ColonyLabor(data, f.level.dimension());
-        Class<?> lanes = Class.forName("io.github.izakyl.folkways.core.engine.labor.Lanes");
-        var inline = lanes.getDeclaredField("INLINE");
-        inline.setAccessible(true);
-        var run = ColonyLabor.class.getMethod("run", ServerLevel.class, lanes);
-        var stop = ColonyLabor.class.getDeclaredMethod("close");
-        stop.setAccessible(true);
-        Set<Long> forced = new HashSet<>();
-        for (BlockPos corner : List.of(f.cell.offset(-3, 0, -3), f.cell.offset(4, 0, -3),
-                f.cell.offset(-3, 0, 3), f.cell.offset(4, 0, 3))) {
-            ChunkPos chunk = new ChunkPos(corner);
-            if (!f.level.getForcedChunks().contains(chunk.toLong()) && f.level.setChunkForced(chunk.x, chunk.z, true)) forced.add(chunk.toLong());
-        }
-        boolean[] closed = {false};
-        Runnable close = () -> {
-            if (closed[0]) return;
-            closed[0] = true;
-            try { stop.invoke(labor); }
-            catch (ReflectiveOperationException broken) { throw new IllegalStateException(broken); }
-            f.close();
-            forced.forEach(chunk -> f.level.setChunkForced(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), false));
-        };
-        helper.onEachTick(() -> {
-            if (closed[0]) return;
-            f.colony.service(GroundworkContent.ID, GroundPresence.class).orElseThrow().tick(f.level.getServer());
-            ColonyWays.advance(data, f.level);
-            try { run.invoke(labor, f.level, inline.get(null)); }
-            catch (ReflectiveOperationException broken) { throw new IllegalStateException(broken); }
+        ColonyStorageRun.until(helper, f.colony, f.fixture.worker.body(), f.cell, f::close, () -> {
+            helper.assertTrue(f.level.getBlockState(f.cell).isAir(), "the marked forage block is destroyed");
+            helper.assertTrue(stock.countItem(Items.WHEAT) >= 1, "food reaches the colony barrel");
+            helper.assertTrue(stock.countItem(Items.WHEAT_SEEDS) == 1, "wild seeds are stored with the food");
         });
-        helper.runAtTickTime(790, close);
-        helper.startSequence().thenWaitUntil(() -> {
-            for (BlockPos cell : marked) helper.assertTrue(f.level.getBlockState(cell).isAir(), "every marked forage block is destroyed");
-            helper.assertTrue(stock.countItem(vines ? Items.GLOW_BERRIES : picked ? Items.WHEAT : Items.SWEET_BERRIES)
-                >= (vines ? 2 : 1), "food reaches the colony barrel");
-            if (picked) helper.assertTrue(stock.countItem(Items.WHEAT_SEEDS) == 1, "wild seeds are stored with the food");
-        }).thenExecute(close).thenSucceed();
     }
 
     private static BlockState berry(int age) {

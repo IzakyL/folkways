@@ -13,7 +13,9 @@ type Reading = {
   targeted: boolean;
   lastDamage: string;
   explosion: boolean;
+  arrow: boolean;
   fuseStarted: boolean;
+  fleeing: boolean;
   distance: number;
 };
 type TagState = { probe: boolean; silverfish: boolean; spiderIgnored: boolean };
@@ -22,6 +24,10 @@ const IMPORTS = [
   "net.minecraft.server.MinecraftServer",
   "net.minecraft.world.entity.EntityType",
   "net.minecraft.world.entity.Mob",
+  "net.minecraft.world.entity.EquipmentSlot",
+  "net.minecraft.world.entity.projectile.AbstractArrow",
+  "net.minecraft.world.item.ItemStack",
+  "net.minecraft.world.item.Items",
   "net.minecraft.tags.DamageTypeTags",
   "net.minecraft.world.entity.monster.Creeper",
   "io.github.izakyl.folkways.core.api.colony.Colonies",
@@ -32,9 +38,8 @@ const IMPORTS = [
 ];
 
 test("resident hostility follows native behavior and live data-pack policy", async ({}, testInfo) => {
-  test.setTimeout(360_000);
+  test.setTimeout(540_000);
   let pair: E2EPair | undefined;
-  const evidence: Array<{ step: string; reading: Reading }> = [];
   const scenes: Scene[] = [];
   try {
     const run = newRunId();
@@ -42,7 +47,8 @@ test("resident hostility follows native behavior and live data-pack policy", asy
     pair = await launchPair({
       server: { instance: `hostility-policy-server-${run}` },
       client: { instance: `hostility-policy-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident", "minecraft:spider", "minecraft:silverfish", "minecraft:creeper"] },
+      snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie", "minecraft:skeleton", "minecraft:arrow",
+        "minecraft:spider", "minecraft:silverfish", "minecraft:creeper"] },
     });
     const { server } = pair;
     const player = await waitForGroundedPlayer(server);
@@ -54,8 +60,77 @@ test("resident hostility follows native behavior and live data-pack policy", asy
     await world.command(server, "gamerule doMobSpawning false");
     await world.command(server, "gamerule doDaylightCycle false");
     // Iron cannot be infested, so the silverfish remains a live target through the tag reload.
-    await world.command(server, `fill ${x - 15} ${y - 1} ${z - 15} ${x + 25} ${y - 1} ${z + 20} minecraft:iron_block`);
-    await world.command(server, `fill ${x - 15} ${y} ${z - 15} ${x + 25} ${y + 8} ${z + 20} minecraft:air`, { allowFailure: true });
+    await world.command(server, `fill ${x - 15} ${y - 1} ${z - 15} ${x + 30} ${y - 1} ${z + 20} minecraft:iron_block`);
+    await world.command(server, `fill ${x - 15} ${y} ${z - 15} ${x + 30} ${y + 8} ${z + 20} minecraft:air`, { allowFailure: true });
+
+    async function spawn(kind: string): Promise<Scene> {
+      const scene = await server.run(SPAWN, { kind, x: String(x), y: String(y), z: String(z) });
+      scenes.push(scene);
+      return scene;
+    }
+    async function remove(scene: Scene) {
+      await server.run(CLEANUP, scene);
+      scenes.splice(scenes.indexOf(scene), 1);
+    }
+    async function waitForTags(step: string, predicate: (tags: TagState) => boolean) {
+      for (let attempt = 0; attempt < 80; attempt++) {
+        await tick.sprint(server, 4);
+        const tags = await server.run(READ_TAGS, undefined);
+        if (predicate(tags)) return tags;
+      }
+      throw new Error(`${step}: data-pack tags did not reach the expected state`);
+    }
+    async function waitFor(
+      step: string,
+      scene: Scene,
+      predicate: (reading: Reading) => boolean,
+      budget = 320,
+      allowMissingMonster = false,
+    ) {
+      let last: Reading | undefined;
+      for (let elapsed = 0; elapsed < budget; elapsed += 8) {
+        await tick.sprint(server, 8);
+        last = await server.run(READ, scene);
+        if (!last.monsterPresent && !allowMissingMonster) {
+          throw new Error(`${step}: fixture monster disappeared before the expected behavior`);
+        }
+        if (predicate(last)) return last;
+      }
+      throw new Error(`${step} did not occur; last reading: ${JSON.stringify(last)}`);
+    }
+    async function settle(scene: Scene, ticks = 48) {
+      for (let elapsed = 0; elapsed < ticks; elapsed += 8) await tick.sprint(server, 8);
+      return server.run(READ, scene);
+    }
+
+    // Under the default policy native monsters acquire residents and deal real damage, and an unarmed worker flees.
+    for (const kind of ["zombie", "skeleton", "flee"]) {
+      const scene = await spawn(kind);
+      let acquired = false;
+      let hurt = false;
+      let fled = false;
+      let shot = false;
+      let last: Reading | undefined;
+      for (let elapsed = 0; elapsed < 360; elapsed += 4) {
+        await tick.sprint(server, 4);
+        last = await server.run(READ, scene);
+        expect(last.health, `${kind}: the resident must survive`).toBeGreaterThan(0);
+        acquired ||= last.targeted;
+        hurt ||= last.health < 20;
+        fled ||= last.fleeing;
+        shot ||= last.arrow;
+        if (kind === "flee" ? hurt && fled && last.distance > 8 : hurt && (kind !== "skeleton" || last.arrow)) break;
+      }
+      expect(acquired, `${kind}: the native AI must acquire its own target`).toBe(true);
+      expect(hurt, `${kind}: the resident must take actual damage`).toBe(true);
+      if (kind === "skeleton") expect(shot, "the skeleton must hurt the resident with a real arrow").toBe(true);
+      if (kind === "flee") {
+        expect(fled, "the real labour runner must preempt work with fear").toBe(true);
+        expect(last!.distance).toBeGreaterThan(8);
+      }
+      await remove(scene);
+      await tick.sprint(server, 4);
+    }
 
     const pack = await server.run(DATAPACK_DIR, undefined);
     if (typeof pack?.dir !== "string" || typeof pack.format !== "number") {
@@ -79,56 +154,12 @@ test("resident hostility follows native behavior and live data-pack policy", asy
     await world.command(server, "reload");
     await waitForTags("initial data-pack load", tags => tags.probe);
 
-    async function spawn(kind: string): Promise<Scene> {
-      const scene = await server.run(SPAWN, { kind, x: String(x), y: String(y), z: String(z) });
-      scenes.push(scene);
-      return scene;
-    }
-    async function remove(scene: Scene) {
-      await server.run(CLEANUP, scene);
-      scenes.splice(scenes.indexOf(scene), 1);
-    }
-    async function sample(step: string, scene: Scene): Promise<Reading> {
-      const reading = await server.run(READ, scene);
-      evidence.push({ step, reading });
-      return reading;
-    }
-    async function waitForTags(step: string, predicate: (tags: TagState) => boolean) {
-      for (let attempt = 0; attempt < 80; attempt++) {
-        await tick.sprint(server, 4);
-        const tags = await server.run(READ_TAGS, undefined);
-        if (predicate(tags)) return tags;
-      }
-      throw new Error(`${step}: data-pack tags did not reach the expected state`);
-    }
-    async function waitFor(
-      step: string,
-      scene: Scene,
-      predicate: (reading: Reading) => boolean,
-      budget = 320,
-      allowMissingMonster = false,
-    ) {
-      for (let elapsed = 0; elapsed < budget; elapsed += 8) {
-        await tick.sprint(server, 8);
-        const reading = await sample(step, scene);
-        if (!reading.monsterPresent && !allowMissingMonster) {
-          throw new Error(`${step}: fixture monster disappeared before the expected behavior`);
-        }
-        if (predicate(reading)) return reading;
-      }
-      throw new Error(`${step} did not occur; last reading: ${JSON.stringify(evidence.at(-1)?.reading)}`);
-    }
-    async function settle(scene: Scene, ticks = 48) {
-      for (let elapsed = 0; elapsed < ticks; elapsed += 8) await tick.sprint(server, 8);
-      return sample("settled", scene);
-    }
-
     // A covered midnight scene provides real low-light conditions for vanilla spider AI.
     await world.command(server, "time set midnight");
     await world.command(server, `fill ${x - 12} ${y + 6} ${z - 10} ${x + 20} ${y + 6} ${z + 12} minecraft:stone`);
     const silverfish = await spawn("silverfish");
     await tick.sprint(server, 64);
-    const beforeInclude = await sample("silverfish before tag include", silverfish);
+    const beforeInclude = await server.run(READ, silverfish);
     expect(beforeInclude.targeted, "an unlisted Enemy type must not acquire residents").toBe(false);
     expect(beforeInclude.health).toBe(20);
 
@@ -184,9 +215,6 @@ test("resident hostility follows native behavior and live data-pack policy", asy
         // Preserve the original assertion failure; pair teardown also captures the world state.
       }
     }
-    await testInfo.attach("combat-hostility-policy-readings.json", {
-      body: JSON.stringify(evidence, null, 2), contentType: "application/json",
-    });
     await pair?.teardown(testInfo);
   }
 });
@@ -242,14 +270,18 @@ const SPAWN = defineTask<{ kind: string; x: string; y: string; z: string }, Scen
 var args = Args.of(ctx);
 var level = ((MinecraftServer)ctx.server()).overworld();
 int x = Integer.parseInt(args.string("x")), y = Integer.parseInt(args.string("y")), z = Integer.parseInt(args.string("z"));
+String kind = args.string("kind");
+// The default-policy cases stand the resident a little further off, and only the worker that must flee thinks.
+boolean byDefault = List.of("zombie", "skeleton", "flee").contains(kind);
 var colony = Colonies.mint(level.getServer());
 var resident = PersonBody.RESIDENT.get().create(level);
-resident.setNoAi(true);
-resident.moveTo(x + 10.5, y, z + .5);
+resident.setNoAi(!kind.equals("flee"));
+resident.moveTo(x + (byDefault ? 12.5 : 10.5), y, z + .5);
 level.addFreshEntity(resident);
 colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow();
-String kind = args.string("kind");
 Mob monster = switch (kind) {
+  case "zombie", "flee" -> EntityType.ZOMBIE.create(level);
+  case "skeleton" -> EntityType.SKELETON.create(level);
   case "spider" -> EntityType.SPIDER.create(level);
   case "silverfish" -> EntityType.SILVERFISH.create(level);
   case "creeper" -> EntityType.CREEPER.create(level);
@@ -257,6 +289,8 @@ Mob monster = switch (kind) {
 };
 monster.moveTo(x + 2.5, y, z + .5);
 monster.setPersistenceRequired();
+if (byDefault) monster.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.CARVED_PUMPKIN));
+if (kind.equals("skeleton")) monster.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
 level.addFreshEntity(monster);
 return Map.of("resident", resident.getUUID().toString(), "monster", monster.getUUID().toString(), "colony", colony.id().toString());
 ` }),
@@ -270,12 +304,16 @@ var args = Args.of(ctx);
 var level = ((MinecraftServer)ctx.server()).overworld();
 var resident = (Body)level.getEntity(UUID.fromString(args.string("resident")));
 var monster = (Mob)level.getEntity(UUID.fromString(args.string("monster")));
-if (resident == null) return Map.of("monsterPresent", monster != null, "health", 0, "targeted", false, "lastDamage", "missing", "explosion", false, "fuseStarted", false, "distance", 0);
+if (resident == null) return Map.of("monsterPresent", monster != null, "health", 0, "targeted", false, "lastDamage", "missing",
+  "explosion", false, "arrow", false, "fuseStarted", false, "fleeing", false, "distance", 0);
 var damage = resident.mob().getLastDamageSource();
 return Map.of("monsterPresent", monster != null, "health", resident.mob().getHealth(), "targeted", monster != null && monster.getTarget() == resident.mob(),
   "lastDamage", damage == null ? "none" : damage.getMsgId(),
   "explosion", damage != null && damage.is(DamageTypeTags.IS_EXPLOSION),
+  "arrow", damage != null && damage.getDirectEntity() instanceof AbstractArrow,
   "fuseStarted", monster instanceof Creeper creeper && creeper.getSwellDir() > 0,
+  "fleeing", resident.doing().map(doing -> doing.what().getPath().equals("fleeing")
+    || doing.toward().filter(id -> id.getPath().equals("fleeing")).isPresent()).orElse(false),
   "distance", monster == null ? -1 : resident.mob().distanceTo(monster));
 ` }),
 });

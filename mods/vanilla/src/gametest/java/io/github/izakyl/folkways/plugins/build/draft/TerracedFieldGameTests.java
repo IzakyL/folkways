@@ -2,9 +2,6 @@ package io.github.izakyl.folkways.plugins.build.draft;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +12,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.StairBlock;
@@ -31,8 +27,6 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public final class TerracedFieldGameTests {
 
-    private static final String SOURCE = "/data/folkways/folkways/pattern/terraced_field.star";
-
     private TerracedFieldGameTests() {}
 
     @SubscribeEvent
@@ -41,16 +35,7 @@ public final class TerracedFieldGameTests {
     }
 
     private static Pattern pattern() {
-        try (InputStream in = TerracedFieldGameTests.class.getResourceAsStream(SOURCE)) {
-            if (in == null) {
-                throw new AssertionError("the terraced field pattern is not bundled");
-            }
-            return Pattern.parse(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "terraced_field"),
-                new String(in.readAllBytes(), StandardCharsets.UTF_8)).orElseThrow(
-                    () -> new AssertionError("the terraced field pattern did not load"));
-        } catch (IOException unreadable) {
-            throw new AssertionError(unreadable);
-        }
+        return DraftKit.shipped("terraced_field");
     }
 
     private static Drawn draw(Pattern pattern, int width, int depth, IntBinaryOperator height) {
@@ -132,14 +117,6 @@ public final class TerracedFieldGameTests {
         helper.assertValueEqual(gates, 1, "one gate");
     }
 
-    @GameTest(template = "empty", timeoutTicks = 80)
-    public static void terracedFieldParsesAsAZonePattern(GameTestHelper helper) {
-        Pattern pattern = pattern();
-        helper.assertTrue(pattern.accepts().contains("zone"), "a terraced field is drawn on a zone");
-        helper.assertTrue(pattern.knobs().settings().size() >= 10, "materials, rise, spacing and fencing are knobs");
-        helper.succeed();
-    }
-
     @GameTest(template = "empty", timeoutTicks = 200)
     public static void flatZoneBecomesOneLevelFieldWithEverySoilCellHydrated(GameTestHelper helper) {
         var ready = ready(helper, draw(pattern(), 21, 17, (x, z) -> 0));
@@ -151,6 +128,11 @@ public final class TerracedFieldGameTests {
             "the field is lit");
         helper.assertTrue(cells.values().stream().noneMatch(cell -> cell.state().getBlock() instanceof StairBlock),
             "a level field needs no steps");
+        long water = cells.values().stream().filter(cell -> cell.state().is(Blocks.WATER)).count();
+        helper.assertValueEqual(water, 4L, "two strips of 9 by 15 need two holes each");
+        long lamps = cells.values().stream().filter(cell -> cell.state().is(Blocks.LANTERN)).count();
+        assertLitThrough(helper, cells);
+        helper.assertTrue(lamps <= 6, "a 21 by 17 field is lit by a handful of lanterns, not " + lamps);
         helper.succeed();
     }
 
@@ -167,41 +149,6 @@ public final class TerracedFieldGameTests {
             helper.assertTrue(fieldLevels(helper, across).size() >= 3, "a slope along x becomes terraces");
             assertGateInLine(helper, across);
         }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 200)
-    public static void everyStepHasHeadroomToClimbOut(GameTestHelper helper) {
-        IntBinaryOperator slope = (x, z) -> z / 3;
-        var cells = placed(ready(helper, draw(pattern(), 20, 28, slope)));
-        int steps = 0;
-        for (var entry : cells.entrySet()) {
-            if (!(entry.getValue().state().getBlock() instanceof StairBlock)) {
-                continue;
-            }
-            steps++;
-            for (int up = 1; up <= 2; up++) {
-                BlockPos head = entry.getKey().above(up);
-                Draft.Cell over = cells.get(head);
-                boolean open = over == null
-                    ? head.getY() > slope.applyAsInt(head.getX(), head.getZ())
-                    : !over.state().blocksMotion();
-                helper.assertTrue(open, "the step at " + entry.getKey() + " is roofed over at " + head);
-            }
-        }
-        helper.assertTrue(steps > 0, "the terraces are joined by steps");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 200)
-    public static void aFewWaterHolesHydrateTheWholeField(GameTestHelper helper) {
-        var cells = placed(ready(helper, draw(pattern(), 21, 17, (x, z) -> 0)));
-        long water = cells.values().stream().filter(cell -> cell.state().is(Blocks.WATER)).count();
-        fieldLevels(helper, cells);
-        helper.assertValueEqual(water, 4L, "two strips of 9 by 15 need two holes each");
-        long lamps = cells.values().stream().filter(cell -> cell.state().is(Blocks.LANTERN)).count();
-        assertLitThrough(helper, cells);
-        helper.assertTrue(lamps <= 6, "a 21 by 17 field is lit by a handful of lanterns, not " + lamps);
         helper.succeed();
     }
 
@@ -239,7 +186,8 @@ public final class TerracedFieldGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 200)
     public static void aGentleSlopeClimbsInSingleBlockSteps(GameTestHelper helper) {
-        var cells = placed(ready(helper, draw(pattern(), 20, 28, (x, z) -> z / 3)));
+        IntBinaryOperator slope = (x, z) -> z / 3;
+        var cells = placed(ready(helper, draw(pattern(), 20, 28, slope)));
         Set<Integer> levels = fieldLevels(helper, cells);
         helper.assertTrue(levels.size() >= 8, "a nine-block rise is climbed in many small steps, not " + levels);
         helper.assertValueEqual(levels.size(), levels.stream().mapToInt(Integer::intValue).max().orElseThrow()
@@ -250,6 +198,22 @@ public final class TerracedFieldGameTests {
                     || (above != null && above.state().is(Blocks.SPRUCE_FENCE)),
                 "a one-block step needs no bank, yet one stands at " + entry.getKey());
         }
+        int steps = 0;
+        for (var entry : cells.entrySet()) {
+            if (!(entry.getValue().state().getBlock() instanceof StairBlock)) {
+                continue;
+            }
+            steps++;
+            for (int up = 1; up <= 2; up++) {
+                BlockPos head = entry.getKey().above(up);
+                Draft.Cell over = cells.get(head);
+                boolean open = over == null
+                    ? head.getY() > slope.applyAsInt(head.getX(), head.getZ())
+                    : !over.state().blocksMotion();
+                helper.assertTrue(open, "the step at " + entry.getKey() + " is roofed over at " + head);
+            }
+        }
+        helper.assertTrue(steps > 0, "the terraces are joined by steps");
         assertLitThrough(helper, cells);
         helper.succeed();
     }

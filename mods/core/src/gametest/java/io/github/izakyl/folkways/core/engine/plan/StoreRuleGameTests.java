@@ -12,14 +12,13 @@ import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture.Owed;
 import io.github.izakyl.folkways.core.engine.plan.haul.Haul;
 import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
+import io.github.izakyl.folkways.core.testing.Nodes;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,7 +29,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -253,13 +251,8 @@ public final class StoreRuleGameTests {
         PlanningFixture f = new PlanningFixture(helper);
         Stash source = new Stash(f.source);
         Stash nearby = new Stash(f.target);
-        Node consumer = new Node() {
-            private final NodeSpec spec = NodeSpec.of(UUID.randomUUID(), Haul.DOMAIN,
-                new WorkSite.AtBlock(f.target), Stances.at(f.target), Workload.Once.of(1))
-                .needs(new Need(BREAD, 4)).done();
-            public NodeSpec spec() { return spec; }
-            public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
-        };
+        Node consumer = Nodes.done(NodeSpec.of(UUID.randomUUID(), Haul.DOMAIN, new WorkSite.AtBlock(f.target),
+            Stances.at(f.target), Workload.Once.of(1)).needs(new Need(BREAD, 4)).done());
         for (boolean take : new boolean[] {true, false}) {
             Stock stock = new Stock(List.of(new Stock.Holding(source, new ItemStack(Items.BREAD, 4))),
                 Map.of(source, 26, nearby, 27),

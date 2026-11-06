@@ -10,10 +10,10 @@ import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryIndex;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.lang.reflect.Field;
-import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +23,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -66,7 +65,7 @@ public final class FireStockGameTests {
         try {
             data.works().stores(OWNER, level.dimension(), List.of(at));
             data.inventory().advance(level, data, Map.of(body.id(), body));
-            work(data, level.getServer());
+            InventoryObservations.work(data.inventory(), level.getServer(), 1000);
             int[] requests = new int[2];
             var delegate = data.works().inventory();
             var inventory = new ColonyInventory() {
@@ -82,10 +81,8 @@ public final class FireStockGameTests {
                     delegate.ensureObservedResident(target);
                 }
             };
-            var colony = (Colony) Proxy.newProxyInstance(
-                FireStockGameTests.class.getClassLoader(), new Class<?>[]{Colony.class},
-                (proxy, method, args) -> method.getName().equals("inventory") ? inventory
-                    : method.invoke(data.works(), args));
+            var colony = Proxies.of(Colony.class, (proxy, method, args) -> method.getName().equals("inventory") ? inventory
+                : method.invoke(data.works(), args));
             FireStock stock = new FireStock(colony);
             InventorySnapshot snapshot = data.inventory().snapshot();
             InventorySnapshot.Store observed = snapshot.store(at).orElseThrow();
@@ -111,7 +108,7 @@ public final class FireStockGameTests {
                 "a dirty store is unknown until refreshed");
             helper.assertTrue(requests[0] == 1 && requests[1] == 1,
                 "unknown store and resident stock request their respective observations");
-            work(data, level.getServer());
+            InventoryObservations.work(data.inventory(), level.getServer(), 1000);
             snapshot = data.inventory().snapshot();
             observed = snapshot.store(at).orElseThrow();
             helper.assertTrue(stock.resident(body.id()).orElseThrow().isEmpty(),
@@ -133,16 +130,6 @@ public final class FireStockGameTests {
             Field field = Pack.class.getDeclaredField("container");
             field.setAccessible(true);
             field.set(pack, probe);
-        } catch (ReflectiveOperationException broken) {
-            throw new AssertionError(broken);
-        }
-    }
-
-    private static void work(ColonyData data, MinecraftServer server) {
-        try {
-            var method = InventoryIndex.class.getDeclaredMethod("work", MinecraftServer.class, int.class);
-            method.setAccessible(true);
-            method.invoke(data.inventory(), server, 1000);
         } catch (ReflectiveOperationException broken) {
             throw new AssertionError(broken);
         }

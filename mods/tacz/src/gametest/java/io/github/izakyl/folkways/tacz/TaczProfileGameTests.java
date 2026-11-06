@@ -36,11 +36,9 @@ public final class TaczProfileGameTests {
         var provider = new TaczLoadouts();
         ItemStack gun = scene.actual();
         var data = TaczGuns.index(TaczWeaponGameTests.id("m1911")).orElseThrow().getGunData();
-        helper.assertTrue(provider.ranged(gun) && !provider.indirect(gun), "TACZ is direct ranged"
-            + " fire");
+        helper.assertTrue(provider.ranged(gun) && !provider.indirect(gun), "TACZ is direct ranged fire");
         helper.assertValueEqual(
-            provider.magazineSize(gun), data.getAmmoAmount(), "magazine metadata uses gun"
-            + " data");
+            provider.magazineSize(gun), data.getAmmoAmount(), "magazine metadata uses gun data");
         helper.assertValueEqual(
             provider.cycleTicks(gun),
             (int) Math.ceil(1200D / data.getRoundsPerMinute(FireMode.SEMI)),
@@ -65,7 +63,7 @@ public final class TaczProfileGameTests {
         var entries = new ArrayList<>(profile.entries());
         var supply = entries.get(1);
         entries.set(1, new LoadoutProfile.Entry(supply.id(), supply.kind(), supply.items(), supply.slot(), 13, 2));
-        profiles.replace(new LoadoutProfile(profile.id(), profile.name(), entries, Optional.empty()));
+        profiles.replace(new LoadoutProfile(profile.id(), profile.name(), entries));
         profiles.add(profile.id(), LoadoutProfile.Entry.weapon(TaczGuns.weapon(TaczWeaponGameTests.id("m1911"))));
         helper.assertValueEqual(
             profiles.get(profile.id()).orElseThrow().entries().get(1).target(),
@@ -104,14 +102,12 @@ public final class TaczProfileGameTests {
         ((IAttachment) attachment.getItem()).setAttachmentId(attachment, TaczWeaponGameTests.id("scope_acog_ta31"));
         ItemStack actual = scene.body.pack().getItem(0);
         IGun operator = (IGun) actual.getItem();
-        helper.assertTrue(operator.allowAttachment(actual, attachment), "the scope is compatible"
-            + " with this gun");
+        helper.assertTrue(operator.allowAttachment(actual, attachment), "the scope is compatible with this gun");
         operator.installAttachment(helper.getLevel().registryAccess(), actual, attachment);
         var identity = provider.profileWeapon(actual);
         ItemStack reloaded = actual.copy();
         ((IGun) reloaded.getItem()).setCurrentAmmoCount(reloaded, 20);
-        helper.assertTrue(Goods.matches(reloaded, identity), "normal identity survives magazine"
-            + " changes");
+        helper.assertTrue(Goods.matches(reloaded, identity), "normal identity survives magazine changes");
         helper.assertTrue(
             Goods.matches(TaczWeaponGameTests.gun("m16a4", FireMode.BURST, 6), identity),
             "model choices also collect conventional unattached guns");
@@ -129,18 +125,14 @@ public final class TaczProfileGameTests {
         helper.assertTrue(
             scene.session.spottedTarget(scene.target, scene.target.position(), () -> true),
             "a live observation can be bound before range validation");
-        helper.assertFalse(scene.session.fire(scene.target), "shared spotting does not extend the"
-            + " per-gun cap");
+        helper.assertFalse(scene.session.fire(scene.target), "shared spotting does not extend the per-gun cap");
         scene.target.setPos(scene.body.getX() + 6, scene.body.getY(), scene.body.getZ());
         var wall = scene.body.blockPosition().offset(3, 1, 0);
         helper.getLevel().setBlockAndUpdate(wall, Blocks.STONE.defaultBlockState());
-        helper.assertFalse(scene.session.fire(scene.target), "direct guns retain their own"
-            + " line-of-sight check");
+        helper.assertFalse(scene.session.fire(scene.target), "direct guns retain their own line-of-sight check");
         helper.getLevel().setBlockAndUpdate(wall, Blocks.AIR.defaultBlockState());
-        helper.assertTrue(scene.session.fire(scene.target), "clear sight within range permits a"
-            + " real fire intent");
-        helper.assertValueEqual(scene.total("45acp"), 3, "refusals and fire intents do not invent"
-            + " or spend rounds");
+        helper.assertTrue(scene.session.fire(scene.target), "clear sight within range permits a real fire intent");
+        helper.assertValueEqual(scene.total("45acp"), 3, "refusals and fire intents do not invent or spend rounds");
         helper.succeed();
     }
 
@@ -160,21 +152,14 @@ public final class TaczProfileGameTests {
         scene.session.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
-            () -> helper.assertTrue(scene.shots.get() == 1, "first authorized round"
-                + " fires"))
-            .thenExecute(() -> scene.waitUntil = System.currentTimeMillis() + 1250)
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    System.currentTimeMillis() >= scene.waitUntil,
-                    "native" + " burst" + " timer" + " elapses"))
+            () -> helper.assertTrue(scene.shots.get() == 1, "first authorized round fires"))
+            .thenExecute(() -> scene.waitMillis(1250))
+            .thenWaitUntil(scene::waited)
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
-                    scene.shots.get(), 1, "revoked observation blocks every delayed"
-                    + " round");
-                helper.assertValueEqual(scene.total("556x45"), 5, "blocked rounds stay"
-                    + " physical");
+                    scene.shots.get(), 1, "revoked observation blocks every delayed round");
+                helper.assertValueEqual(scene.total("556x45"), 5, "blocked rounds stay physical");
             })
             .thenSucceed();
     }

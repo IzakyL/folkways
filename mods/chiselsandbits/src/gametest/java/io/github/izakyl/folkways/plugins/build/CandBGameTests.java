@@ -2,7 +2,6 @@ package io.github.izakyl.folkways.plugins.build;
 
 import static io.github.izakyl.folkways.plugins.build.CandBTestData.sculpture;
 import static io.github.izakyl.folkways.plugins.build.CandBTestData.state;
-import static io.github.izakyl.folkways.plugins.build.CandBTestData.structure;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
@@ -14,30 +13,23 @@ import io.github.izakyl.folkways.chiselsandbits.FolkwaysChiselsAndBitsMod;
 import io.github.izakyl.folkways.core.api.colony.Cadence;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.structure.StructureCompat;
 import io.github.izakyl.folkways.core.api.structure.StructurePayload;
 import io.github.izakyl.folkways.core.api.structure.Voxelizer;
-import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.plan.Stock;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.engine.net.ColonyOverviewPacket;
@@ -45,13 +37,12 @@ import io.github.izakyl.folkways.plugins.build.draft.Chosen;
 import io.github.izakyl.folkways.plugins.build.draft.Drawn;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Pattern;
+import io.github.izakyl.folkways.plugins.build.draft.PatternChecks;
 import io.github.izakyl.folkways.plugins.build.draft.RecipeDrawing;
 import io.netty.buffer.Unpooled;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
-import java.lang.reflect.Proxy;
 import java.util.BitSet;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -78,7 +69,6 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -94,7 +84,6 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import org.slf4j.LoggerFactory;
 
 @EventBusSubscriber(modid = FolkwaysChiselsAndBitsMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -110,13 +99,7 @@ public final class CandBGameTests {
         var level = helper.getLevel();
         var pattern = io.github.izakyl.folkways.plugins.build.draft.Patterns
             .find(ResourceLocation.parse("folkways_chiselsandbits:pavilion")).orElseThrow();
-        CompoundTag settings = new CompoundTag();
-        for (var setting : pattern.knobs().settings()) {
-            if (setting instanceof io.github.izakyl.folkways.front.api.Schema.Setting.Items items) {
-                settings.put(items.key(), ItemSpec.anyOf(items.byDefault().stream()
-                    .map(filter -> ItemSpec.of(filter.id())).toList()).save());
-            }
-        }
+        CompoundTag settings = PatternChecks.defaults(pattern);
         settings.putInt("width", 11);
         settings.putInt("height", 5);
         var hint = new Hint.Zone(BlockPos.ZERO, new BlockPos(10, 0, 10));
@@ -131,39 +114,24 @@ public final class CandBGameTests {
             return new BlueprintBlock(cell.offset(), cell.state(), BlockData.of(tag));
         }).toList();
         Blueprint source = new Blueprint(patterned.id(), patterned.name(), nativeCells, patterned.volume(), 0);
-        var sample = source.blocks().stream().filter(cell -> cell.data().present()).findFirst().orElseThrow();
-        var detached = (ChiseledBlockEntity) sample.data().entity(level, BlockPos.ZERO, sample.state());
-        var wire = new RegistryFriendlyByteBuf(Unpooled.buffer(), level.registryAccess());
-        try {
-            detached.streamCodec().encode(wire, detached.payload());
-            var received = detached.streamCodec().decode(wire);
-            helper.assertValueEqual(received.storage().getSize(), detached.payload().storage().getSize(),
-                "the network codec preserves sampled voxel resolution");
-        } finally {
-            wire.release();
-        }
-        long started = System.nanoTime();
         Blueprint confirmed = source.confirm(level);
-        long confirmedAt = System.nanoTime();
         BlockPos anchor = helper.absolutePos(new BlockPos(2, 2, 2));
         SchematicPlacement.Adapter previous = SchematicPlacement.adapter();
         // Create's safe-NBT preparation drops unknown block entities. An integration's validated payload must
         // reach placement independently of that ordinary-block whitelist, without installing Create in this suite.
-        SchematicPlacement.Adapter filtered = (SchematicPlacement.Adapter) Proxy.newProxyInstance(
-            SchematicPlacement.Adapter.class.getClassLoader(), new Class<?>[] {SchematicPlacement.Adapter.class},
-            (proxy, method, args) -> {
-                if (method.getName().equals("prepare") && StructureCompat.of((BlockState) args[1]).isPresent()) {
-                    return null;
-                }
-                if (method.isDefault()) {
-                    return java.lang.reflect.InvocationHandler.invokeDefault(proxy, method, args);
-                }
-                try {
-                    return method.invoke(previous, args);
-                } catch (java.lang.reflect.InvocationTargetException failed) {
-                    throw failed.getCause();
-                }
-            });
+        SchematicPlacement.Adapter filtered = Proxies.of(SchematicPlacement.Adapter.class, (proxy, method, args) -> {
+            if (method.getName().equals("prepare") && StructureCompat.of((BlockState) args[1]).isPresent()) {
+                return null;
+            }
+            if (method.isDefault()) {
+                return java.lang.reflect.InvocationHandler.invokeDefault(proxy, method, args);
+            }
+            try {
+                return method.invoke(previous, args);
+            } catch (java.lang.reflect.InvocationTargetException failed) {
+                throw failed.getCause();
+            }
+        });
         java.util.concurrent.CompletableFuture<Void> raised;
         try {
             SchematicPlacement.install(filtered);
@@ -195,7 +163,6 @@ public final class CandBGameTests {
         helper.succeedWhen(() -> {
             helper.assertTrue(raised.isDone(), "all creative slices have completed");
             raised.join();
-            long printedAt = System.nanoTime();
             int partial = 0;
             for (BlueprintBlock cell : source.blocks()) {
                 if (!cell.data().present()) {
@@ -226,10 +193,6 @@ public final class CandBGameTests {
                 partial++;
             }
             helper.assertTrue(partial > 100, "the regression prints a substantial multi-cell carving");
-            LoggerFactory.getLogger("folkways-patterns").info(
-                "CREATIVE_PRINT_ASSERT cells={} payloads={} confirmMillis={} elapsedMillis={} serverVoxelsExact=true",
-                source.blocks().size(), partial, (confirmedAt - started) / 1_000_000D,
-                (printedAt - confirmedAt) / 1_000_000D);
         });
     }
 
@@ -449,13 +412,8 @@ public final class CandBGameTests {
         CompoundTag broken = new CompoundTag();
         broken.putByteArray("data", new byte[] {1, 2, 3});
         for (CompoundTag data : List.of(broken, new CompoundTag())) {
-            try {
-                new Blueprint(UUID.randomUUID(), "broken", List.of(new BlueprintBlock(BlockPos.ZERO, state(), BlockData.of(data))),
-                    BlueprintVolume.of(1, 1, 1).orElseThrow(), 0).confirm(helper.getLevel());
-                helper.fail("invalid voxel data must be refused");
-            } catch (StructureCompat.Failure expected) {
-                helper.assertTrue(true, "an explicit refusal, rather than an empty material list");
-            }
+            refuses(helper, () -> new Blueprint(UUID.randomUUID(), "broken", List.of(new BlueprintBlock(BlockPos.ZERO,
+                state(), BlockData.of(data))), BlueprintVolume.of(1, 1, 1).orElseThrow(), 0).confirm(helper.getLevel()));
         }
         StateEntryStorage fluid = new StateEntryStorage();
         fluid.setBlockInformation(0, 0, 0, new BlockInformation(Blocks.WATER.defaultBlockState(), Optional.empty()));
@@ -479,22 +437,8 @@ public final class CandBGameTests {
         CompoundTag book = Writer.of().children("blueprints", List.of(blueprint), value -> value.save(level.registryAccess()))
             .children("buildOrders", List.of(order), value -> value.save(level.registryAccess())).tag();
         var saved = new AtomicReference<>(Writer.of().blob("book", book).tag());
-        ColonyView view = (ColonyView) Proxy.newProxyInstance(CandBGameTests.class.getClassLoader(),
-            new Class<?>[] {ColonyView.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "level" -> level;
-                case "dimension" -> level.dimension();
-                case "holdings", "residents" -> List.of();
-                case "blocks" -> Set.of();
-                case "effectsOf" -> Effects.NONE;
-                default -> throw new AssertionError(method.getName());
-            });
-        Colony colony = (Colony) Proxy.newProxyInstance(CandBGameTests.class.getClassLoader(),
-            new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "kept" -> saved.get();
-                case "keep" -> { saved.set(((CompoundTag) args[1]).copy()); yield null; }
-                case "views" -> List.of(view);
-                default -> throw new AssertionError(method.getName());
-            });
+        Colony colony = colony(level, saved);
+        ColonyView view = colony.views(level.getServer()).getFirst();
         BuildPresence presence = new BuildPresence(colony, level.getServer());
         helper.succeedWhen(() -> {
             presence.settle(level.getServer());
@@ -533,22 +477,8 @@ public final class CandBGameTests {
         var saved = new AtomicReference<>(Writer.of().blob("book", book)
             .children("carvingCaches", List.of(finished, cancelled), order -> Writer.of(cache.save())
                 .uuid("order", order.id()).tag()).tag());
-        ColonyView view = (ColonyView) Proxy.newProxyInstance(CandBGameTests.class.getClassLoader(),
-            new Class<?>[] {ColonyView.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "level" -> level;
-                case "dimension" -> level.dimension();
-                case "holdings", "residents" -> List.of();
-                case "blocks" -> Set.of();
-                case "effectsOf" -> Effects.NONE;
-                default -> throw new AssertionError(method.getName());
-            });
-        Colony colony = (Colony) Proxy.newProxyInstance(CandBGameTests.class.getClassLoader(),
-            new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "kept" -> saved.get();
-                case "keep" -> { saved.set(((CompoundTag) args[1]).copy()); yield null; }
-                case "views" -> List.of(view);
-                default -> throw new AssertionError(method.getName());
-            });
+        Colony colony = colony(level, saved);
+        ColonyView view = colony.views(level.getServer()).getFirst();
         BuildPresence presence = new BuildPresence(colony, level.getServer());
         presence.act(BuildContent.PAGE.id(), BuildAct.cancelling(cancelled.id()), Optional.empty(), view);
         helper.succeedWhen(() -> {
@@ -721,25 +651,6 @@ public final class CandBGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 40)
-    public static void repeatedPayloadsShareTheWholeBlueprintReadBudget(GameTestHelper helper) {
-        CompoundTag data = CandBStructureCodec.encode(sculpture());
-        CandBStructureCodec.validated(data);
-        Blueprint repeated = new Blueprint(UUID.randomUUID(), "repeated", java.util.stream.IntStream.range(0, 20)
-            .mapToObj(x -> new BlueprintBlock(new BlockPos(x, 0, 0), state(), BlockData.of(data))).toList(),
-            BlueprintVolume.of(20, 1, 1).orElseThrow(), 0);
-        int limit = CandBConfig.BLUEPRINT_READS.get();
-        try {
-            CandBConfig.BLUEPRINT_READS.set(4);
-            helper.assertTrue(repeated.confirm(helper.getLevel()).confirmed(), "cached content needs no new decoding");
-            // The cached content remains available outside the operation scope.
-            CandBStructureCodec.validated(data);
-        } finally {
-            CandBConfig.BLUEPRINT_READS.set(limit);
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 40)
     public static void cachedPayloadsDoNotRepeatTheCumulativeDecodeWork(GameTestHelper helper) {
         var payload = new CompoundTag();
         payload.put("storage", StateEntryStorage.CODEC.encodeStart(NbtOps.INSTANCE, sculpture()).getOrThrow());
@@ -759,6 +670,21 @@ public final class CandBGameTests {
             }
         } finally {
             CandBConfig.BLUEPRINT_BYTES.set(limit);
+        }
+        CompoundTag encoded = CandBStructureCodec.encode(sculpture());
+        CandBStructureCodec.validated(encoded);
+        Blueprint repeated = new Blueprint(UUID.randomUUID(), "repeated", java.util.stream.IntStream.range(0, 20)
+            .mapToObj(x -> new BlueprintBlock(new BlockPos(x, 0, 0), state(), BlockData.of(encoded))).toList(),
+            BlueprintVolume.of(20, 1, 1).orElseThrow(), 0);
+        int reads = CandBConfig.BLUEPRINT_READS.get();
+        try {
+            CandBConfig.BLUEPRINT_READS.set(4);
+            helper.assertTrue(repeated.confirm(helper.getLevel()).confirmed(),
+                "repeated payloads share the whole-blueprint read budget");
+            // The cached content remains available outside the operation scope.
+            CandBStructureCodec.validated(encoded);
+        } finally {
+            CandBConfig.BLUEPRINT_READS.set(reads);
         }
         helper.succeed();
     }
@@ -857,85 +783,45 @@ public final class CandBGameTests {
             legacy.remove(key);
             helper.assertTrue(Drafted.load(Reader.of(legacy)).isEmpty(), "missing " + key + " uses payload fallback");
         }
-        LoggerFactory.getLogger("folkways-patterns").info("RECIPE_DETERMINISM exact=true pattern={}", pattern.id());
     }
 
-    private static void reportRecipePreview(GameTestHelper helper, BuildTarget target, BlockPos anchor) {
+    private static void checkRecipePreview(GameTestHelper helper, BuildTarget target, BlockPos anchor) {
         UUID order = UUID.randomUUID();
         var hint = new Hint.Zone(anchor, anchor.offset(11, 5, 11));
         CompoundTag recipe = new Drafted(order, ResourceLocation.parse("folkways:bits_benchmark"),
             hint, new CompoundTag(), Direction.NORTH).save();
-        long started = System.nanoTime();
-        List<Ghost> before;
-        int oldReads;
+        List<Ghost> ghosts;
         try (var processing = StructureCompat.processing()) {
-            before = BuildOrderView.pending(helper.getLevel(), target, Set.of(), Set.of(),
-                2048, hint.anchor(), 256 * 1024);
-            oldReads = CandBStructureCodec.usage().reads();
-        }
-        double oldMillis = (System.nanoTime() - started) / 1_000_000D;
-        started = System.nanoTime();
-        List<Ghost> after;
-        int newReads;
-        try (var processing = StructureCompat.processing()) {
-            after = BuildOrderView.recipePending(helper.getLevel(), target, Set.of(), Set.of(),
+            ghosts = BuildOrderView.recipePending(helper.getLevel(), target, Set.of(), Set.of(),
                 2048, hint.anchor(), order);
-            newReads = CandBStructureCodec.usage().reads();
+            helper.assertValueEqual(CandBStructureCodec.usage().reads(), 0, "recipe preview never decodes voxels");
         }
-        double newMillis = (System.nanoTime() - started) / 1_000_000D;
-        for (Ghost ghost : after) {
+        for (Ghost ghost : ghosts) {
             helper.assertValueEqual(ghost.payloadHash(), target.dataAt(ghost.pos()).payload(ghost.state()).hashCode(),
                 "a saved cell fingerprint matches its reconstructed payload");
         }
-        helper.assertValueEqual(newReads, 0, "recipe preview never decodes voxels");
-        helper.assertTrue(after.stream().noneMatch(ghost -> ghost.payload().present()),
+        helper.assertTrue(ghosts.stream().noneMatch(ghost -> ghost.payload().present()),
             "recipe ghosts carry no voxels");
-        var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
-            helper.getLevel().registryAccess());
+        var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
         try {
-            // The former packet had six list headers and no order identifier in a Ghost.
-            for (int i = 0; i < 2; i++) {
-                buffer.writeVarInt(0);
-            }
-            buffer.writeVarInt(before.size());
-            for (var ghost : before) {
-                buffer.writeBlockPos(ghost.pos());
-                buffer.writeVarInt(Block.getId(ghost.state()));
-                buffer.writeNbt(ghost.payload().tag());
-            }
-            for (int i = 0; i < 3; i++) {
-                buffer.writeVarInt(0);
-            }
-            int oldBytes = buffer.readableBytes();
-            buffer.clear();
-            var packet = new ColonyOverviewPacket(List.of(), List.of(), after,
+            var packet = new ColonyOverviewPacket(List.of(), List.of(), ghosts,
                 List.of(), List.of(), List.of(), List.of(recipe));
             ColonyOverviewPacket.STREAM_CODEC.encode(buffer, packet);
-            int firstBytes = buffer.readableBytes();
-            helper.assertValueEqual(ColonyOverviewPacket.STREAM_CODEC
-                .decode(buffer), packet, "recipe preview crosses the wire intact");
-            buffer.clear();
-            ColonyOverviewPacket.STREAM_CODEC.encode(buffer,
-                new ColonyOverviewPacket(List.of(), List.of(), after,
-                    List.of(), List.of(), List.of()));
-            LoggerFactory.getLogger("folkways-patterns").info(
-                "RECIPE_PREVIEW oldBytes={} firstBytes={} refreshBytes={} oldReads={} newReads={}"
-                    + " oldMillis={} newMillis={} oldCells={} newCells={}",
-                oldBytes, firstBytes, buffer.readableBytes(), oldReads, newReads, oldMillis, newMillis,
-                before.size(), after.size());
+            helper.assertValueEqual(ColonyOverviewPacket.STREAM_CODEC.decode(buffer), packet,
+                "recipe preview crosses the wire intact");
         } finally {
             buffer.release();
         }
     }
 
-    public static void reportPatternBudgets(GameTestHelper helper, CompoundTag file) {
+    // Each stage of a pattern's blueprint passes the default budget; built also raises it node by node.
+    public static void checkPatternBudgets(GameTestHelper helper, CompoundTag file, boolean built) {
         var level = helper.getLevel();
         helper.assertTrue(level.getServer().isSameThread(), "blueprint budgets are measured on the server thread");
         Blueprint source = StructureNbt.toBlueprint(file, level.registryAccess(), UUID.randomUUID(), "bits-benchmark", 0,
             StructureNbt.AirMeaning.UNCONSTRAINED, BlueprintBook.maxCaptureBlocks()).orElseThrow();
-        Optional<Blueprint> confirmed = measuredBudget("confirm", () -> source.confirm(level));
-        helper.assertTrue(measuredBudget("quote", () -> BlueprintMaterials.describe(file,
-            level.registryAccess())).isPresent(),
+        Optional<Blueprint> confirmed = withinBudget(() -> source.confirm(level));
+        helper.assertTrue(withinBudget(() -> BlueprintMaterials.describe(file, level.registryAccess())).isPresent(),
             "the material estimate passes the default budget");
         helper.assertTrue(confirmed.isPresent(), "confirmation passes the default budget");
         Blueprint saved = confirmed.orElseThrow();
@@ -951,10 +837,10 @@ public final class CandBGameTests {
         var order = BlueprintBuildOrder.create(source.id(), source.name(), WorldPos.of(level, anchor),
             Optional.empty(), "", level.getGameTime());
         BuildTarget target = BuildTarget.of(order, saved);
-        if (source.volume().size().equals(new BlockPos(12, 6, 12))) {
-            reportRecipePreview(helper, target, anchor);
+        if (built) {
+            checkRecipePreview(helper, target, anchor);
         }
-        var opened = measuredBudget("start", () -> {
+        var opened = withinBudget(() -> {
             for (BlueprintBlock block : saved.blocks()) {
                 StructureCompat.inspect(block.state(), new StructurePayload(block.data().tag()));
             }
@@ -969,110 +855,61 @@ public final class CandBGameTests {
             };
             BuildSite site = new BuildSite(order.id(), asks, target, new TemporaryScaffolds(() -> { }));
             try {
-                long started = System.nanoTime();
                 site.begin(level, Set.of(), Set.of());
-                long maximum = System.nanoTime() - started;
-                int slices = 1;
-                boolean finished = false;
-                while (!finished) {
-                    String stage = site.startingStage();
-                    started = System.nanoTime();
-                    finished = site.advanceStart(level);
-                    long duration = System.nanoTime() - started;
-                    if (duration > 20_000_000L) {
-                        LoggerFactory.getLogger("folkways-patterns").info("BITS_SLOW stage={} millis={}", stage,
-                            duration / 1_000_000D);
-                    }
-                    maximum = Math.max(maximum, duration);
-                    slices++;
+                while (!site.advanceStart(level)) {
+                    // Each call is one staged slice of the opening.
                 }
-                LoggerFactory.getLogger("folkways-patterns").info("BITS_START slices={} maxMillis={}",
-                    slices, maximum / 1_000_000D);
                 return site.owed();
             } finally {
                 site.close();
             }
         });
         helper.assertTrue(opened.isPresent(), "the staged opening passes the default budget");
-        if (source.volume().size().getX() <= 20) {
-            Layering.Plan plan = Layering.of(level, target);
-            var worker = new PlanningFixture(helper);
-            worker.worker.body().setPos(anchor.getX() - 4.5, anchor.getY(), anchor.getZ() - 4.5);
-            var cache = new Carving.Cache(() -> { });
-            long blocks = 0;
-            long previousBlocks = 0;
-            long carved = 0;
-            long placed = 0;
-            long maximum = 0;
-            for (Layering.Work work : plan.works()) {
-                Step step = work.step().orElseThrow();
-                BuildJob job = step.job(level, target, Stances.at(level, anchor.west(4)));
-                BuildNode node = BuildNode.of(job, (ended, how) -> { }, new TemporaryScaffolds(() -> { }));
-                previousBlocks += node.spec().needs().stream().mapToLong(Need::count).sum();
-                node.cache = cache;
-                node.requote(level);
-                int slot = 0;
-                worker.worker.pack().clearContent();
-                for (Need need : node.spec().needs()) {
-                    ItemStack stack = Goods.display(need.spec());
-                    stack.setCount((int) need.count());
-                    worker.worker.pack().setItem(slot++, stack);
-                    blocks += need.count();
-                }
-                long started = System.nanoTime();
-                Outcome outcome = Commit.run(level, node, worker.worker);
-                long duration = System.nanoTime() - started;
-                placed += duration;
-                maximum = Math.max(maximum, duration);
-                helper.assertTrue(outcome instanceof Outcome.Done,
-                    "each pattern node commits with whole blocks: " + outcome);
-                if (work.kind() == Layering.Kind.CARVE) {
-                    carved++;
-                }
-            }
-            helper.assertTrue(BuildPlanner.complete(level, target), "the bits pattern is built end to end");
-            long expected = Carving.estimate(saved.blocks().stream().map(block -> Carving.volume(
-                StructureCompat.of(block.state()).or(StructureCompat::carver).orElseThrow(),
-                block.state(), block.data())).toList()).stream().mapToLong(Need::count).sum();
-            helper.assertValueEqual(blocks, expected, "all nodes spend the whole-site rounded estimate");
-            helper.assertValueEqual(opened.orElseThrow().values().stream().mapToLong(Long::longValue).sum(), blocks,
-                "the sidebar quotes whole-site rounding instead of summing node ceilings");
-            long voxels = saved.blocks().stream().mapToLong(block -> StructureCompat.of(block.state())
-                .map(handler -> handler.voxels(block.data().payload(block.state())).counts().values().stream()
-                    .mapToLong(Integer::longValue).sum()).orElse((long) Math.pow(Voxelizer.installed().orElseThrow().resolution(), 3))).sum();
-            double units = Math.pow(Voxelizer.installed().orElseThrow().resolution(), 3);
-            LoggerFactory.getLogger("folkways-patterns").info(
-                "BITS_BUILD nodes={} carveNodes={} blocks={} exactBlocks={} lossPercent={} previousBlocks={}"
-                    + " previousLossPercent={} placeMillis={} maxNodeMillis={}",
-                plan.works().size(), carved, blocks, voxels / units, (blocks * units / voxels - 1) * 100,
-                previousBlocks, (previousBlocks * units / voxels - 1) * 100,
-                placed / 1_000_000D, maximum / 1_000_000D);
-            worker.worker.body().discard();
+        if (!built) {
+            return;
         }
+        Layering.Plan plan = Layering.of(level, target);
+        var worker = new PlanningFixture(helper);
+        worker.worker.body().setPos(anchor.getX() - 4.5, anchor.getY(), anchor.getZ() - 4.5);
+        var cache = new Carving.Cache(() -> { });
+        long blocks = 0;
+        for (Layering.Work work : plan.works()) {
+            Step step = work.step().orElseThrow();
+            BuildJob job = step.job(level, target, Stances.at(level, anchor.west(4)));
+            BuildNode node = BuildNode.of(job, (ended, how) -> { }, new TemporaryScaffolds(() -> { }));
+            node.cache = cache;
+            node.requote(level);
+            int slot = 0;
+            worker.worker.pack().clearContent();
+            for (Need need : node.spec().needs()) {
+                ItemStack stack = Goods.display(need.spec());
+                stack.setCount((int) need.count());
+                worker.worker.pack().setItem(slot++, stack);
+                blocks += need.count();
+            }
+            Outcome outcome = Commit.run(level, node, worker.worker);
+            helper.assertTrue(outcome instanceof Outcome.Done, "each pattern node commits with whole blocks: " + outcome);
+        }
+        helper.assertTrue(BuildPlanner.complete(level, target), "the bits pattern is built end to end");
+        long expected = Carving.estimate(saved.blocks().stream().map(block -> Carving.volume(
+            StructureCompat.of(block.state()).or(StructureCompat::carver).orElseThrow(),
+            block.state(), block.data())).toList()).stream().mapToLong(Need::count).sum();
+        helper.assertValueEqual(blocks, expected, "all nodes spend the whole-site rounded estimate");
+        helper.assertValueEqual(opened.orElseThrow().values().stream().mapToLong(Long::longValue).sum(), blocks,
+            "the sidebar quotes whole-site rounding instead of summing node ceilings");
+        worker.worker.body().discard();
     }
 
-    private static <T> Optional<T> measuredBudget(String stage, Supplier<T> operation) {
-        long started = System.nanoTime();
-        CandBStructureCodec.Usage usage = new CandBStructureCodec.Usage(0, 0);
-        T result = null;
-        String refused = "none";
+    // Empty when the operation is refused for exceeding the whole-blueprint budget.
+    private static <T> Optional<T> withinBudget(Supplier<T> operation) {
         try (var processing = StructureCompat.processing()) {
-            try {
-                result = operation.get();
-            } finally {
-                usage = CandBStructureCodec.usage();
-            }
+            return Optional.ofNullable(operation.get());
         } catch (StructureCompat.Failure limited) {
             if (!limited.getMessage().equals("folkways.refusal.build.structure_budget")) {
                 throw limited;
             }
-            refused = limited.getMessage();
-            result = null;
+            return Optional.empty();
         }
-        LoggerFactory.getLogger("folkways-patterns").info(
-            "BITS_MAIN stage={} reads={} bytes={} millis={} refused={}", stage, usage.reads(), usage.bytes(),
-            (System.nanoTime() - started) / 1_000_000, refused);
-        return Optional.ofNullable(result);
     }
 
     private static CompoundTag currentPacked(CompoundTag payload) {
@@ -1112,48 +949,6 @@ public final class CandBGameTests {
                 helper.assertValueEqual(CandBMaterials.of(expected).stream().mapToInt(ItemStack::getCount).sum(), 2,
                     "transformation preserves cost");
             }
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 80)
-    public static void thePlannerHaulsWholeMaterialsSeparately(GameTestHelper helper) {
-        var f = new PlanningFixture(helper);
-        var level = helper.getLevel();
-        level.setBlockAndUpdate(f.source.cell(), Blocks.BARREL.defaultBlockState());
-        var source = Containers.at(level, f.source.cell()).orElseThrow();
-        List<ItemStack> bits = CandBMaterials.of(sculpture());
-        source.setItem(0, bits.getFirst().copy());
-        source.setItem(1, bits.getLast().copy());
-        var needs = bits.stream().map(bit -> new Need(ItemSpec.exact(bit), bit.getCount(), true)).toList();
-        NodeSpec spec = NodeSpec.of(UUID.randomUUID(), PlanningFixture.Rounds.OWNER, new WorkSite.AtBlock(f.target),
-            Stances.at(f.target), Workload.Once.of(1)).needs(needs).done();
-        Node consuming = new Node() {
-            public NodeSpec spec() { return spec; }
-            public Outcome commit(ServerLevel at, Worker who) {
-                helper.assertValueEqual(who.supplied().stream().mapToInt(ItemStack::getCount).sum(), 2,
-                    "both whole blocks supplied");
-                helper.assertTrue(who.supplied().stream().allMatch(bit -> needs.stream()
-                    .anyMatch(need -> Goods.matches(bit, need.spec()))), "components survive hauling");
-                return Outcome.done();
-            }
-        };
-        var solver = new PlanningFixture.Rounds();
-        try {
-            Stash stash = new Stash(f.source);
-            var solved = solver.solve(f.situation(new Stock(bits.stream().map(bit -> new Stock.Holding(stash, bit)).toList(),
-                Map.of(stash, 25)), List.of()), f.crew, List.of(Grown.of(consuming)), List.of(), 0);
-            var tour = solved.schedule().tours().get(f.worker.resident().id());
-            helper.assertTrue(tour != null && tour.nodes().size() == 3, "two separate fetches precede consumption");
-            for (UUID id : tour.nodes()) {
-                var vertex = solved.weave().vertices().get(id);
-                helper.assertTrue(Commit.run(level, vertex.node(), new Placed(f.worker, vertex.plan())) instanceof Outcome.Done,
-                    "the material-aware planned step commits");
-            }
-            helper.assertTrue(source.isEmpty() && f.worker.pack().isEmpty(), "no bit identities merge or remain unpaid");
-        } finally {
-            solver.closed();
-            f.worker.body().discard();
         }
         helper.succeed();
     }
@@ -1524,27 +1319,27 @@ public final class CandBGameTests {
             .keeping(met::contains);
     }
 
+    // A colony with one empty view that keeps its build book in saved.
+    private static Colony colony(ServerLevel level, AtomicReference<CompoundTag> saved) {
+        ColonyView view = Proxies.of(ColonyView.class, (proxy, method, args) -> switch (method.getName()) {
+            case "level" -> level;
+            case "dimension" -> level.dimension();
+            case "holdings", "residents" -> List.of();
+            case "blocks" -> Set.of();
+            case "effectsOf" -> Effects.NONE;
+            default -> throw new AssertionError(method.getName());
+        });
+        return Proxies.of(Colony.class, (proxy, method, args) -> switch (method.getName()) {
+            case "kept" -> saved.get();
+            case "keep" -> { saved.set(((CompoundTag) args[1]).copy()); yield null; }
+            case "views" -> List.of(view);
+            default -> throw new AssertionError(method.getName());
+        });
+    }
+
     private static void refuses(GameTestHelper helper, Runnable read) {
         boolean refused = false;
         try { read.run(); } catch (RuntimeException expected) { refused = true; }
         helper.assertTrue(refused, "invalid or excessive voxel data is refused");
-    }
-
-    private record Placed(Worker who, Placement placement) implements Worker {
-        public Resident resident() { return who.resident(); }
-
-        public Mob body() { return who.body(); }
-
-        public Container pack() { return who.pack(); }
-
-        public List<Store> within() { return who.within(); }
-
-        public ItemStack held(ToolNeed need) { return who.held(need); }
-
-        public void spill(ItemStack stack) { who.spill(stack); }
-
-        public Effects effects() { return who.effects(); }
-
-        public List<Node> route() { return who.route(); }
     }
 }

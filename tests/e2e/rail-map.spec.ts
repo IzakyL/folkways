@@ -1,24 +1,16 @@
 import { expect, test } from "@playwright/test";
-import {
-  errorSummary,
-  errorToString,
-} from "@izakyl/blockwright-client";
 import { defineTask, input, javaTask, reflect, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { writeFileSync } from "node:fs";
-import path from "node:path";
 import {
   foundColonyFast,
   tryCommand,
-  safeAction,
   safeScreen,
   screenName,
-  screenOpen,
   waitForGroundedPlayer,
   type Vec,
 } from "../shared/colony/colony-founding";
 import { buildRailLine, conductorAboard, seatedAt } from "../shared/rail/rail-fixture";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { REPO_ROOT, ensureOut, reportPath, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { newRunId } from "../shared/harness/run-id";
@@ -26,7 +18,6 @@ import { frames, softly } from "../shared/harness/bw-helpers";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 
 const CONFIG_PATH = "blockwright.toml";
-const REPORT_PATH = reportPath("e2e", "rail-map-report");
 
 const RAIL_LINE = 24;
 const RESIDENT_COUNT = 1;
@@ -47,20 +38,14 @@ test("the train map says who drives a colony's train and how many of its seats a
 
   const runId = newRunId();
   let pair: E2EPair | undefined;
-  const report: any = {
-    scope: "folkways' two lines on Create's train map, read out of Create's own tooltip",
-    traces: { server: tracePath("e2e", "rail-map-server"), client: tracePath("e2e", "rail-map-client") },
-    setup: {},
-    observations: {},
-  };
 
   let server: any;
   let client: any;
   try {
     pair = await launchPair({
       config: CONFIG_PATH,
-      server: { trace: report.traces.server, instance: seededServer(`rail-map-server-${runId}`) },
-      client: { trace: report.traces.client, instance: `rail-map-client-${runId}` },
+      server: { trace: tracePath("e2e", "rail-map-server"), instance: seededServer(`rail-map-server-${runId}`) },
+      client: { trace: tracePath("e2e", "rail-map-client"), instance: `rail-map-client-${runId}` },
     });
     ({ server, client } = pair);
 
@@ -82,7 +67,6 @@ test("the train map says who drives a colony's train and how many of its seats a
       origin,
       residentCount: RESIDENT_COUNT,
     });
-    report.setup.founding = { origin, residents: founding.residents };
     expect(founding.residents, "residents should have settled, or no one can drive").toBeGreaterThanOrEqual(1);
     await tryCommand(server, "time set day");
 
@@ -98,10 +82,6 @@ test("the train map says who drives a colony's train and how many of its seats a
     await tryCommand(server, `tp @e[type=folkways:resident] ${origin.x + 8} ${origin.y} ${origin.z}`);
     expect((await freezeResidents(true))?.success, "residents should freeze, or the 'no driver' moment cannot be caught").toBe(true);
     const rail = await buildRailLine(server, client, player.name, playerUuid, railOrigin, RAIL_LINE, "inventory.0");
-    report.setup.rail = {
-      ok: rail.ok, assembled: rail.assembled, scheduled: rail.scheduled, handedOver: rail.handedOver,
-      carriage: rail.carriageUuid, steps: rail.steps,
-    };
     expect(rail.assembled, `the train should assemble: ${JSON.stringify(rail.steps).slice(0, 400)}`).toBe(true);
     expect(rail.handedOver, "the train should belong to this colony, or its crew belongs to no colony").toBe(true);
     const carriageUuid = rail.carriageUuid!;
@@ -110,60 +90,45 @@ test("the train map says who drives a colony's train and how many of its seats a
     await tick.sprint(server, 20);
 
     const trainId = await readTrainId(server, carriageUuid);
-    report.setup.train = trainId;
     expect(trainId, "could not read the train id, so every later query would miss").toBeTruthy();
 
     await input.key(client, { keyCode: KEY_M, action: "tap" });
     await softly(() => screen.waitFor(client, "GuiMap", { timeoutMs: 10_000 }));
     const mapScreen = screenName(await safeScreen(client));
-    report.observations.map_screen = mapScreen;
     expect(mapScreen, "M should open the Xaero world map, which Create draws its track map on").toMatch(/GuiMap/);
     await tick.sprint(server, 60);
     await frames(client, 2);
 
     const beforeBoarding = await pollFolkwaysLines(client, trainId!, (text) => text.includes("train_map"));
-    report.observations.before_boarding = beforeBoarding;
     const seatEmpty = !(await conductorAboard(server, carriageUuid));
-    report.observations.seat_empty_before_reading = seatEmpty;
     expect(seatEmpty, "the driver seat must really be empty when this line is read, or the read proves nothing").toBe(true);
     expect(JSON.stringify(beforeBoarding.returned), "with no driver it should read 'driver: vacant'")
       .toContain("folkways.train_map.driver_missing");
 
     expect((await freezeResidents(false))?.success, "residents should unfreeze, or no one will take the driver seat").toBe(true);
     const boarded = await sprintUntilAboard(server, carriageUuid, 6_000);
-    report.observations.boarding = boarded;
     expect(boarded.aboard, `a resident should take the driver seat (advanced ${boarded.ticks} ticks)`).toBe(true);
 
     const resident = await seatedResident(server, carriageUuid);
-    report.observations.resident = resident;
     expect(resident?.name, "the seated resident should have a name, which the driver line reports").toBeTruthy();
     await tick.sprint(server, 60);
     await frames(client, 2);
 
-    const lines = await pollFolkwaysLines(client, trainId!, (text) => text.includes(resident!.name));
-    report.observations.folkways_lines = lines;
-    const linesText = JSON.stringify(lines.returned);
-    expect(lines.resolved, "the static call should resolve RailTooltip").toBe(true);
-    expect(linesText, "the driver line should report the resident's name").toContain(resident!.name);
-    expect(linesText, "the riders line should be present").toContain("folkways.train_map.riders");
+    // The client hears of the driver on its own clock: Create's tooltip is read once folkways' lines name them.
+    await pollFolkwaysLines(client, trainId!, (text) => text.includes(resident!.name));
 
     const carriageEntityId = await readCarriageEntityId(server, carriageUuid);
-    report.observations.carriage_entity_id = carriageEntityId;
     expect(carriageEntityId, "could not read the carriage network id, so the client cannot find this train").toBeGreaterThan(0);
     const tooltip = await readCreateTooltip(client, carriageEntityId!);
-    report.observations.create_tooltip = tooltip;
     const tooltipText = JSON.stringify(tooltip.returned);
     expect(tooltip.resolved, `Create's listTrainDetails should be callable: ${JSON.stringify(tooltip.raw).slice(0, 400)}`).toBe(true);
     expect(tooltipText, "the tooltip the map draws should have the driver line").toContain("folkways.train_map.driver");
     expect(tooltipText, "the tooltip the map draws should have the resident's name").toContain(resident!.name);
     expect(tooltipText, "the tooltip the map draws should have the riders line").toContain("folkways.train_map.riders");
   } catch (error) {
-    report.error = errorToString(error);
-    report.error_summary = errorSummary(error);
     pair?.failing(error);
     throw error;
   } finally {
-    writeFileSync(path.join(REPO_ROOT, REPORT_PATH), JSON.stringify(report, null, 2) + "\n");
     await pair?.teardown(testInfo);
   }
 });

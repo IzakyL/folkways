@@ -1,17 +1,18 @@
 import { expect, test } from "@playwright/test";
-import { writeFileSync } from "node:fs";
-import { defineTask, tick } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, screen, tick } from "@izakyl/blockwright-minecraft";
+import { panelElements } from "../ldlib2";
 import {
   foundColonyFast,
   foundColonyWithResidents,
   foundingBox,
+  openColonyPanelViaBook,
   razeFoundingSet,
   waitForGroundedPlayer,
   type Vec,
 } from "../shared/colony/colony-founding";
 import { runColonyTask, type ColonyTaskValue } from "../shared/colony/colony-tasks";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { tryCommand } from "../shared/harness/bw-helpers";
@@ -31,165 +32,106 @@ const DUMP = defineTask<{ player: string; ox: number; oy: number; oz: number }, 
   name: "folkways.colony.dump",
   side: "server",
   timeoutMs: 20_000,
-  source: `
-import blockwright.minecraft.core.Args;
-import blockwright.minecraft.core.Fail;
-import dev.blockwright.api.Context;
-
-public final class Task {
-
-    public static Object run(Context ctx) throws Exception {
-        Object server = ctx.server();
-        loader = server.getClass().getClassLoader();
-        Args args = Args.of(ctx);
-        java.util.Map<String, Object> out = new java.util.LinkedHashMap<String, Object>();
-
-        String who = args.string("player");
-        int ox = (int) args.integer("ox");
-        int oy = (int) args.integer("oy");
-        int oz = (int) args.integer("oz");
-
-        Object player = call(call(server, "getPlayerList"), "getPlayerByName", who);
-        if (player == null) {
-            throw Fail.notFound("no online player named " + who);
-        }
-        Object bound = maybe(callStatic(CURRENT, "id", player)).orElse(null);
-        out.put("acts_for_colony", Boolean.valueOf(bound != null));
-        if (bound == null) {
-            throw Fail.notFound("the player acts for no colony", out);
-        }
-        out.put("colony_id", String.valueOf(bound));
-        out.put("holds_book_for", callStatic(BOOK_ITEM, "holdsBookFor", player, bound));
-
-        Object colony = maybe(callStatic(GROUND, "of", server, bound)).orElse(null);
-        out.put("registry_present", Boolean.valueOf(colony != null));
-        if (colony == null) {
-            throw Fail.notFound("the id on the book is not in the colony registry", out);
-        }
-        Object level = call(player, "serverLevel");
-
-        java.util.List<?> roster = (java.util.List<?>) call(colony, "residents");
-        out.put("roster", Integer.valueOf(roster.size()));
-        java.util.List<String> kinds = new java.util.ArrayList<String>();
-        for (Object resident : roster) {
-            kinds.add(resident.getClass().getName());
-        }
-        java.util.Collections.sort(kinds);
-        out.put("resident_classes", kinds);
-
-        Object view = call(colony, "view", level);
-        out.put("view_class", view.getClass().getName());
-        java.util.Set<Object> members = new java.util.LinkedHashSet<Object>();
-        java.util.Set<Object> claimed = new java.util.LinkedHashSet<Object>();
-        for (Object holding : (java.util.List<?>) call(colony, "holdings")) {
-            Object what = call(holding, "what");
-            if (!what.getClass().getSimpleName().equals("Block")) {
-                continue;
-            }
-            Object at = call(call(what, "cell"), "cell");
-            members.add(at);
-            if (!String.valueOf(call(holding, "owner")).equals(STORE)) {
-                claimed.add(at);
-            }
-        }
-        out.put("members", offsets(members, ox, oy, oz));
-        out.put("claimed", offsets(claimed, ox, oy, oz));
-
-        java.util.List<String> domains = new java.util.ArrayList<String>();
-        for (Object domain : (java.util.Collection<?>) callStatic(DOMAINS, "all")) {
-            Object id = call(domain, "owner");
-            Object presence = maybe(call(colony, "service", id, Object.class)).orElse(null);
-            domains.add(id + " presence="
-                + (presence == null ? "none" : presence.getClass().getName())
-                + " kept=" + tagShape(call(colony, "kept", id)));
-        }
-        java.util.Collections.sort(domains);
-        out.put("domains", domains);
-
-        out.put("ok", Boolean.TRUE);
-        return out;
+  source: javaTask({
+    imports: [
+      "io.github.izakyl.folkways.core.api.colony.Colony",
+      "io.github.izakyl.folkways.core.api.colony.Contributions",
+      "io.github.izakyl.folkways.core.api.colony.Held",
+      "io.github.izakyl.folkways.core.api.colony.Holding",
+      "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
+      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.front.engine.item.ColonyBookItem",
+      "net.minecraft.core.BlockPos",
+      "net.minecraft.nbt.CompoundTag",
+      "net.minecraft.nbt.Tag",
+      "net.minecraft.resources.ResourceLocation",
+      "net.minecraft.server.MinecraftServer",
+      "net.minecraft.server.level.ServerPlayer",
+    ],
+    members: `
+private static List<String> offsets(Set<BlockPos> cells, int ox, int oy, int oz) {
+    List<String> out = new ArrayList<String>();
+    for (BlockPos at : cells) {
+        out.add((at.getX() - ox) + "," + (at.getY() - oy) + "," + (at.getZ() - oz));
     }
+    Collections.sort(out);
+    return out;
+}
 
-    private static java.util.List<String> offsets(java.util.Set<?> cells, int ox, int oy, int oz)
-            throws Exception {
-        java.util.List<String> out = new java.util.ArrayList<String>();
-        for (Object at : cells) {
-            out.add((((Number) call(at, "getX")).intValue() - ox) + ","
-                + (((Number) call(at, "getY")).intValue() - oy) + ","
-                + (((Number) call(at, "getZ")).intValue() - oz));
-        }
-        java.util.Collections.sort(out);
-        return out;
+private static String shape(CompoundTag tag) {
+    if (tag == null) {
+        return "null";
     }
-
-    private static String tagShape(Object tag) throws Exception {
-        if (tag == null) {
-            return "null";
-        }
-        java.util.List<String> keys = new java.util.ArrayList<String>();
-        for (Object key : (java.util.Collection<?>) call(tag, "getAllKeys")) {
-            Object value = call(tag, "get", String.valueOf(key));
-            keys.add(key + ":" + (value == null ? "-" : String.valueOf(call(value, "getId"))));
-        }
-        java.util.Collections.sort(keys);
-        return keys.toString();
+    List<String> keys = new ArrayList<String>();
+    for (String key : tag.getAllKeys()) {
+        Tag value = tag.get(key);
+        keys.add(key + ":" + (value == null ? "-" : String.valueOf(value.getId())));
     }
-
-    private static ClassLoader loader;
-
-    private static Class<?> cls(String name) throws Exception {
-        return Class.forName(name, true, loader);
-    }
-
-    private static java.lang.reflect.Method find(Class<?> owner, String name, int arity) {
-        for (Class<?> here = owner; here != null; here = here.getSuperclass()) {
-            java.lang.reflect.Method found = declared(here, name, arity);
-            if (found != null) {
-                return found;
-            }
-            for (Class<?> face : here.getInterfaces()) {
-                found = declared(face, name, arity);
-                if (found != null) {
-                    return found;
-                }
-            }
-        }
-        throw new IllegalStateException(
-            "no method " + owner.getName() + "." + name + " taking " + arity + " argument(s)");
-    }
-
-    private static java.lang.reflect.Method declared(Class<?> here, String name, int arity) {
-        for (java.lang.reflect.Method method : here.getDeclaredMethods()) {
-            if (method.getName().equals(name) && method.getParameterCount() == arity) {
-                try {
-                    method.setAccessible(true);
-                } catch (RuntimeException blocked) {
-                }
-                return method;
-            }
-        }
-        return null;
-    }
-
-    private static Object call(Object target, String name, Object... a) throws Exception {
-        return find(target.getClass(), name, a.length).invoke(target, a);
-    }
-
-    private static Object callStatic(String className, String name, Object... a) throws Exception {
-        return find(cls(className), name, a.length).invoke(null, a);
-    }
-
-    private static java.util.Optional<?> maybe(Object value) {
-        return (java.util.Optional<?>) value;
-    }
-
-    private static final String BOOK_ITEM = "io.github.izakyl.folkways.front.engine.item.ColonyBookItem";
-    private static final String CURRENT = "io.github.izakyl.folkways.front.engine.charter.CurrentColony";
-    private static final String GROUND = "io.github.izakyl.folkways.front.engine.colony.ColonyGround";
-    private static final String STORE = "folkways:store";
-    private static final String DOMAINS = "io.github.izakyl.folkways.core.api.colony.Contributions";
+    Collections.sort(keys);
+    return keys.toString();
 }
 `,
+    body: `
+MinecraftServer server = ctx.server();
+Args args = Args.of(ctx);
+int ox = (int) args.integer("ox");
+int oy = (int) args.integer("oy");
+int oz = (int) args.integer("oz");
+Map<String, Object> out = new LinkedHashMap<String, Object>();
+ServerPlayer player = server.getPlayerList().getPlayerByName(args.string("player"));
+if (player == null) {
+    throw Fail.notFound("no online player named " + args.string("player"));
+}
+UUID bound = CurrentColony.id(player).orElse(null);
+out.put("acts_for_colony", Boolean.valueOf(bound != null));
+if (bound == null) {
+    throw Fail.notFound("the player acts for no colony", out);
+}
+out.put("colony_id", bound.toString());
+out.put("holds_book_for", Boolean.valueOf(ColonyBookItem.holdsBookFor(player, bound)));
+Colony colony = ColonyGround.of(server, bound).orElse(null);
+out.put("registry_present", Boolean.valueOf(colony != null));
+if (colony == null) {
+    throw Fail.notFound("the id on the book is not in the colony registry", out);
+}
+
+List<String> kinds = new ArrayList<String>();
+for (Object resident : colony.residents()) {
+    kinds.add(resident.getClass().getName());
+}
+Collections.sort(kinds);
+out.put("roster", Integer.valueOf(kinds.size()));
+out.put("resident_classes", kinds);
+out.put("view_class", colony.view(player.serverLevel()).getClass().getName());
+
+Set<BlockPos> members = new LinkedHashSet<BlockPos>();
+Set<BlockPos> claimed = new LinkedHashSet<BlockPos>();
+for (Holding holding : colony.holdings()) {
+    if (!(holding.what() instanceof Held.Block)) {
+        continue;
+    }
+    BlockPos at = ((Held.Block) holding.what()).cell().cell();
+    members.add(at);
+    if (!holding.owner().toString().equals("folkways:store")) {
+        claimed.add(at);
+    }
+}
+out.put("members", offsets(members, ox, oy, oz));
+out.put("claimed", offsets(claimed, ox, oy, oz));
+
+List<String> domains = new ArrayList<String>();
+for (Contributions.Entry domain : Contributions.all()) {
+    ResourceLocation id = domain.owner();
+    Object presence = colony.service(id, Object.class).orElse(null);
+    domains.add(id + " presence=" + (presence == null ? "none" : presence.getClass().getName())
+        + " kept=" + shape(colony.kept(id)));
+}
+Collections.sort(domains);
+out.put("domains", domains);
+out.put("ok", Boolean.TRUE);
+return out;
+`,
+  }),
 });
 
 for (const stage of twins()) test(stage.title("founding fast and founding through the panel leave the same colony state"), async ({}, testInfo) => {
@@ -245,6 +187,15 @@ for (const stage of twins()) test(stage.title("founding fast and founding throug
     const panel = await dump(server, playerName, panelAt);
     evidence.panel = panel;
 
+    // The panel a founded colony opens on: its own pages, and no zones tab.
+    await openColonyPanelViaBook(server, client, playerName, panelFounding.standBlock, stage);
+    const tabs = (await panelElements(client)).map((element) => element.id).filter(Boolean);
+    expect(tabs).toContain("folkways.tab.residents");
+    expect(tabs).toContain("folkways.tab.metrics");
+    expect(tabs).toContain("folkways.tab.settings");
+    expect(tabs).not.toContain("folkways.tab.zones");
+    await screen.dismiss(client);
+
     substantial(fast, "task");
     substantial(panel, "panel");
 
@@ -253,15 +204,15 @@ for (const stage of twins()) test(stage.title("founding fast and founding throug
 
     const diff = compare(fast, panel);
     evidence.diff = diff;
-    expect(diff, verdict(diff)).toEqual({});
+    expect(diff, "fast and panel founding left different colony state: every key named is missing while specs that "
+      + "found with foundColonyFast run - fix that path (colony-founding.ts, colony-tasks.ts), not these assertions")
+      .toEqual({});
   } catch (error) {
     pair?.failing(error);
     throw error;
   } finally {
-    ensureOut("e2e");
-    const body = JSON.stringify(evidence, null, 2);
-    writeFileSync(outAbs("e2e", "reports", `${stage.name("founding-equivalence")}.json`), body);
-    testInfo.attach(stage.name("founding-equivalence"), { body, contentType: "application/json" });
+    testInfo.attach(stage.name("founding-equivalence"),
+      { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
     await pair?.teardown(testInfo);
   }
 });
@@ -288,7 +239,9 @@ function substantial(state: ColonyTaskValue, path: string) {
   const domains = (state.domains ?? []) as string[];
   expect(domains.length, `after ${path} founding Contributions.all() is empty - `
     + `this dump is comparing nothing${seen()}`).toBeGreaterThan(0);
-  const unsettled = domains.filter((line) => !line.startsWith("folkways:fear ")
+  // Fear and breathing only declare urges on each body: neither keeps a presence on the colony.
+  const urgeOnly = ["folkways:fear ", "folkways:breathing "];
+  const unsettled = domains.filter((line) => !urgeOnly.some((prefix) => line.startsWith(prefix))
     && line.includes("presence=none"));
   expect(unsettled, `after ${path} founding some domains left no presence on the colony`).toEqual([]);
   for (const { domain, key } of PERSISTED) {
@@ -313,24 +266,4 @@ function compare(fast: ColonyTaskValue, panel: ColonyTaskValue): Record<string, 
     }
   }
   return off;
-}
-
-function verdict(diff: Record<string, { fast: unknown; panel: unknown }>): string {
-  const named = Object.keys(diff);
-  if (named.length === 0) {
-    return "both paths left the same colony state";
-  }
-  const spelled = named
-    .map((key) => `  ${key}\n`
-      + `    task      = ${JSON.stringify(diff[key].fast)}\n`
-      + `    panel     = ${JSON.stringify(diff[key].panel)}`)
-    .join("\n");
-  return `fast founding and panel founding left different colony state, differing in ${named.length} places:\n${spelled}\n`
-    + `\nfoundColonyFast is the setup founding for most specs in e2e / visual / promo - `
-    + `every difference above is something missing from the world while those specs run, `
-    + `but present in a colony a player founds through the panel; their failures will take other shapes, `
-    + `and may not point back here.\n`
-    + `Fix foundColonyFast (tests/shared/colony/colony-founding.ts) and the tasks it runs `
-    + `(tests/shared/colony/colony-tasks.ts): make the fast path set this state through the mod's own entry points too, `
-    + `do not change this spec's assertions, and do not add a panel click to the fast path.`;
 }

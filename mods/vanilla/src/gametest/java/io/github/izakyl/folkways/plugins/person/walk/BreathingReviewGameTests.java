@@ -6,8 +6,6 @@ import io.github.izakyl.folkways.core.api.participation.Participation;
 import io.github.izakyl.folkways.core.api.participation.Participations;
 import io.github.izakyl.folkways.core.api.participation.Stake;
 import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.terms.Keepouts;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -19,14 +17,11 @@ import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
-import io.github.izakyl.folkways.core.engine.labor.ColonyLabor;
+import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
 import io.github.izakyl.folkways.core.engine.plan.Diagnosis;
 import io.github.izakyl.folkways.core.engine.plan.Unassigned;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -165,42 +160,15 @@ public final class BreathingReviewGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 4000)
-    public static void anUnreachableUnderwaterRouteEndsWithoutRepeatedWork(GameTestHelper helper)
-            throws ReflectiveOperationException {
+    public static void anUnreachableUnderwaterRouteEndsWithoutRepeatedWork(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos base = helper.absolutePos(new BlockPos(1, 1, 4));
-        for (int x = 0; x <= 21; x++) {
-            for (int z = 0; z <= 2; z++) {
-                level.setBlock(base.offset(x, 0, z), Blocks.STONE.defaultBlockState(), 2);
-                for (int y = 1; y <= 3; y++) {
-                    boolean wall = z != 1 || y == 3;
-                    boolean flooded = x >= 2 && x <= 19;
-                    level.setBlock(base.offset(x, y, z), (wall ? Blocks.STONE
-                        : flooded ? Blocks.WATER : Blocks.AIR).defaultBlockState(), 2);
-                }
-            }
-        }
+        WaterLabor.tunnel(level, base, 19);
         ResidentEntity body = resident(helper, base.offset(0, 1, 1), false);
         for (var trade : Vocations.all()) {
             body.licences().trade(trade).ifPresent(licence -> body.licences().allow(licence, false));
         }
         BlockPos goal = base.offset(21, 1, 1);
-        var colony = Colonies.mint(level.getServer());
-        colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
-        body.joinColony(colony.id());
-        colony.entered(body);
-        ColonyData data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
-        ColonyLabor labor = new ColonyLabor(data, level.dimension());
-        Class<?> lanes = Class.forName("io.github.izakyl.folkways.core.engine.labor.Lanes");
-        var inline = lanes.getDeclaredField("INLINE");
-        inline.setAccessible(true);
-        Object executor = inline.get(null);
-        var run = ColonyLabor.class.getMethod("run", ServerLevel.class, lanes);
-        var stop = ColonyLabor.class.getDeclaredMethod("close");
-        stop.setAccessible(true);
-        var readDiagnosis = ColonyLabor.class.getDeclaredMethod("diagnosis");
-        readDiagnosis.setAccessible(true);
-        boolean[] closed = {false};
         boolean[] committed = {false};
         boolean[] observing = {false};
         int[] movementTicks = {0};
@@ -217,87 +185,38 @@ public final class BreathingReviewGameTests {
                 return Outcome.done();
             }
         };
-        colony.submit(owner, level.dimension(), Grown.of(node), (id, how) -> ended.add(how));
         helper.onEachTick(() -> {
-            if (closed[0]) {
-                return;
-            }
-            ColonyWays.advance(data, level);
             if (observing[0] && !body.getNavigation().isDone() && body.doing()
                     .filter(doing -> doing.what().equals(owner) || doing.toward().filter(owner::equals).isPresent())
                     .isPresent()) {
                 movementTicks[0]++;
                 movements.add("doing=" + body.doing() + ", target=" + body.getNavigation().getTargetPos());
             }
-            try {
-                run.invoke(labor, level, executor);
-            } catch (ReflectiveOperationException broken) {
-                throw new IllegalStateException(broken);
-            }
         });
+        var enlisted = WaterLabor.enlist(helper, body);
+        LaborFixture labor = enlisted.labor();
+        enlisted.colony().submit(owner, level.dimension(), Grown.of(node), (id, how) -> ended.add(how));
         helper.startSequence().thenWaitUntil(() -> {
-                try {
-                    Diagnosis diagnosis = (Diagnosis) readDiagnosis.invoke(labor);
-                    helper.assertTrue(diagnosis.unassigned().stream().anyMatch(item -> item.node().equals(spec.id())
-                            && item.why() == Unassigned.Reason.NO_WAY),
-                        "the unreachable job reports no way: " + diagnosis.unassigned() + ", endings=" + ended);
-                } catch (ReflectiveOperationException broken) {
-                    throw new IllegalStateException(broken);
-                }
+                Diagnosis diagnosis = labor.diagnosis();
+                helper.assertTrue(diagnosis.unassigned().stream().anyMatch(item -> item.node().equals(spec.id())
+                        && item.why() == Unassigned.Reason.NO_WAY),
+                    "the unreachable job reports no way: " + diagnosis.unassigned() + ", endings=" + ended);
                 observing[0] = true;
             }).thenExecuteAfter(200, () -> {
                 helper.assertFalse(committed[0], "the unreachable work does not complete: " + ended);
                 helper.assertTrue(movementTicks[0] == 0,
                     "navigation ticks=" + movementTicks[0] + ", routes=" + movements);
                 helper.assertTrue(body.getHealth() == body.getMaxHealth(), "the resident does not drown");
-                closed[0] = true;
-                try {
-                    stop.invoke(labor);
-                } catch (ReflectiveOperationException broken) {
-                    throw new IllegalStateException(broken);
-                }
                 body.discard();
-                colony.raze();
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 500)
-    public static void noExitReturnsControlAndRetriesWhenAirAppears(GameTestHelper helper) {
-        BlockPos base = helper.absolutePos(new BlockPos(4, 1, 4));
-        room(helper, base);
-        ResidentEntity body = resident(helper, base.offset(2, 1, 2));
-        boolean[] released = {false};
-        ResidentEntity[] restored = {null};
-        helper.onEachTick(() -> {
-            if (body.getAirSupply() < 220 && !WaterLabor.escaping(body)) {
-                released[0] = true;
-            }
-        });
-        helper.startSequence().thenExecuteAfter(150, () -> {
-            helper.assertTrue(released[0], "an impossible search returns control between retries");
-            helper.getLevel().setBlock(base.offset(2, 3, 2), Blocks.AIR.defaultBlockState(), 2);
-        }).thenExecuteAfter(220, () -> {
-            helper.assertTrue(body.getHealth() == body.getMaxHealth() && !WaterLabor.escaping(body),
-                "the resident finds the newly opened air and releases control");
-            var saved = body.saveWithoutId(new net.minecraft.nbt.CompoundTag());
-            body.discard();
-            restored[0] = PersonBody.RESIDENT.get().create(helper.getLevel());
-            restored[0].load(saved);
-            helper.getLevel().addFreshEntity(restored[0]);
-            WaterLabor.enroll(helper, restored[0]);
-        }).thenExecuteAfter(20, () -> {
-            helper.assertFalse(WaterLabor.escaping(restored[0]), "a healthy reloaded resident keeps control free");
-            helper.assertTrue(restored[0].getAirSupply() == restored[0].getMaxAirSupply(),
-                "the reloaded resident is still breathing");
-            restored[0].discard();
-        }).thenSucceed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 160)
+    @GameTest(template = "empty_large", timeoutTicks = 240)
     public static void noExitRetriesAfterFortyTicksRatherThanTheRefusalCooldown(GameTestHelper helper) {
         BlockPos base = helper.absolutePos(new BlockPos(4, 1, 4));
         room(helper, base);
         ResidentEntity body = resident(helper, base.offset(2, 1, 2));
+        ResidentEntity[] restored = {null};
         int[] recovered = {-1};
         helper.onEachTick(() -> {
             if (body.tickCount > 15 && !body.isUnderWater() && recovered[0] < 0) {
@@ -313,8 +232,20 @@ public final class BreathingReviewGameTests {
             }).thenExecuteAfter(100, () -> {
                 helper.assertTrue(recovered[0] >= 40 && recovered[0] < 95,
                     "retry waits about 40 ticks, without the 100 tick refusal backoff: " + recovered[0]);
-                helper.assertTrue(body.getHealth() == body.getMaxHealth(), "the retry preserves the resident");
+                helper.assertTrue(body.getHealth() == body.getMaxHealth() && !WaterLabor.escaping(body),
+                    "the retry preserves the resident and releases control");
+            }).thenExecuteAfter(60, () -> {
+                var saved = body.saveWithoutId(new net.minecraft.nbt.CompoundTag());
                 body.discard();
+                restored[0] = PersonBody.RESIDENT.get().create(helper.getLevel());
+                restored[0].load(saved);
+                helper.getLevel().addFreshEntity(restored[0]);
+                WaterLabor.enlist(helper, restored[0]);
+            }).thenExecuteAfter(20, () -> {
+                helper.assertFalse(WaterLabor.escaping(restored[0]), "a healthy reloaded resident keeps control free");
+                helper.assertTrue(restored[0].getAirSupply() == restored[0].getMaxAirSupply(),
+                    "the reloaded resident is still breathing");
+                restored[0].discard();
             }).thenSucceed();
     }
 
@@ -371,7 +302,7 @@ public final class BreathingReviewGameTests {
         body.moveTo(Vec3.atBottomCenterOf(at));
         helper.getLevel().addFreshEntity(body);
         if (enroll) {
-            WaterLabor.enroll(helper, body);
+            WaterLabor.enlist(helper, body);
         }
         return body;
     }

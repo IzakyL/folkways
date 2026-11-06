@@ -106,3 +106,71 @@ private static <T extends AccessibleObject> T open(T member) {
 `,
   }),
 });
+
+/**
+ * Sets every resident's hunger (food, exhaustion, no saturation) and tiredness, in the living presence's own books,
+ * kept by resident and reached no other way. Answers how many residents it set.
+ */
+export async function wearResidents(server: MinecraftServer, colony_id: string,
+  wear: { food: number; exhaustion: number; tired: number }): Promise<{ set: number }> {
+  return runColonyTask(server, WEAR, { colony_id, ...wear }) as Promise<{ set: number }>;
+}
+
+const WEAR = defineTask<Record<string, any>, Record<string, any>>({
+  name: "folkways.shared.wear",
+  side: "server",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: [
+      "io.github.izakyl.folkways.core.api.colony.Colony",
+      "io.github.izakyl.folkways.core.api.resident.Resident",
+      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+      "java.lang.reflect.AccessibleObject",
+      "java.lang.reflect.Constructor",
+      "java.util.Map",
+      "java.util.UUID",
+    ],
+    body: `
+Args args = Args.of(ctx);
+String colonyId = args.string("colony_id");
+Colony colony = ColonyGround.of(ctx.server(), UUID.fromString(colonyId))
+    .orElseThrow(() -> Fail.notFound("no colony " + colonyId));
+Object presence = colony.service(LivingContent.ID, Object.class)
+    .orElseThrow(() -> Fail.unavailable("the colony has no folkways:living presence"));
+@SuppressWarnings("unchecked")
+Map<UUID, Object> bellies = (Map<UUID, Object>) open(presence.getClass().getDeclaredField("bellies")).get(presence);
+@SuppressWarnings("unchecked")
+Map<UUID, Object> wear = (Map<UUID, Object>) open(presence.getClass().getDeclaredField("wear")).get(presence);
+Class<?> hungerType = Class.forName("io.github.izakyl.folkways.plugins.person.living.Hunger");
+Class<?> restType = Class.forName("io.github.izakyl.folkways.plugins.person.living.Rest");
+Constructor<?> newHunger = open(hungerType.getDeclaredConstructor());
+Constructor<?> newRest = open(restType.getDeclaredConstructor());
+int set = 0;
+for (Resident resident : colony.residents()) {
+    Object belly = bellies.computeIfAbsent(resident.id(), key -> make(newHunger));
+    open(hungerType.getDeclaredField("foodLevel")).setInt(belly, (int) args.number("food"));
+    open(hungerType.getDeclaredField("saturationLevel")).setFloat(belly, 0.0F);
+    open(hungerType.getDeclaredField("exhaustionLevel")).setFloat(belly, (float) args.number("exhaustion"));
+    Object rest = wear.computeIfAbsent(resident.id(), key -> make(newRest));
+    open(restType.getDeclaredField("tired")).setDouble(rest, args.number("tired"));
+    set++;
+}
+return Sync.stamp(Map.of("ok", Boolean.TRUE, "set", Integer.valueOf(set)));
+`,
+    members: `
+private static Object make(Constructor<?> constructor) {
+    try {
+        return constructor.newInstance();
+    } catch (ReflectiveOperationException e) {
+        throw new IllegalStateException(e);
+    }
+}
+
+private static <T extends AccessibleObject> T open(T member) {
+    member.setAccessible(true);
+    return member;
+}
+`,
+  }),
+});

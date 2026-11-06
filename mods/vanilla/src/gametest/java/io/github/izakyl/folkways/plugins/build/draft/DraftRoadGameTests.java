@@ -12,7 +12,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.properties.SlabType;
@@ -39,8 +38,7 @@ public final class DraftRoadGameTests {
     }
 
     private static Pattern road() {
-        return Patterns.find(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "road"))
-            .orElseThrow(() -> new AssertionError("the bundled road pattern did not load"));
+        return DraftKit.shipped("road");
     }
 
     private static DraftKit.Filled settings(Pattern pattern) {
@@ -147,17 +145,6 @@ public final class DraftRoadGameTests {
             out.append('\n');
         }
         return out.toString();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 80)
-    public static void theRoadPatternShipsAndTakesAPath(GameTestHelper helper) {
-        Pattern pattern = road();
-        helper.assertTrue(pattern.accepts(new Hint.Path(List.of(BlockPos.ZERO, new BlockPos(9, 0, 0)))),
-            "a road follows a path");
-        helper.assertFalse(pattern.accepts(DraftKit.zone(4, 1, 4)), "a road is not drawn in a zone");
-        helper.assertTrue(pattern.knobs().settings().stream().anyMatch(knob -> knob.key().equals("width")),
-            "the road's width is a knob");
-        helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 200)

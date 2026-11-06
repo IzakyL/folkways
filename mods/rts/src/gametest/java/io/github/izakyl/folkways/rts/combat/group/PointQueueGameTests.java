@@ -5,30 +5,31 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
-import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
 import io.github.izakyl.folkways.rts.combat.command.ResidentCommands;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -66,9 +67,7 @@ public final class PointQueueGameTests {
                                 helper.assertTrue(
                                     slot.cell().distSqr(captain.cell())
                                     <= 3 * 3,
-                                    "every member moves around the"
-                                    + " current logical"
-                                    + " captain"))));
+                                    "every member moves around the current logical captain"))));
         var sequence =
             helper.startSequence()
             .thenWaitUntil(
@@ -115,7 +114,17 @@ public final class PointQueueGameTests {
                         stop,
                         "every complete assembly remains at its point for twenty ticks"));
         }
-        sequence.thenExecute(group::release).thenSucceed();
+        sequence.thenExecute(
+            () -> {
+                helper.assertTrue(
+                    group.pointRoute().equals(route) && group.cycleStart() == 1,
+                    "prefix and cycle remain distinct transient route intent");
+                group.release();
+                helper.assertTrue(
+                    group.captain().isEmpty() && group.pointRoute().isEmpty() && scene.handles().isEmpty(),
+                    "release forgets the captain, cycle and every owned runner handle");
+            })
+            .thenSucceed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 3800)
@@ -125,6 +134,26 @@ public final class PointQueueGameTests {
         WorldPos second = scene.at(16, 10);
         scene.groups.appendSelectionPoint(scene.people, first);
         UnitGroup group = scene.group();
+        var generation = group.pointCommandId();
+        AtomicLong assembledAt = new AtomicLong(Long.MIN_VALUE);
+        AtomicBoolean completed = new AtomicBoolean();
+        helper.onEachTick(
+            () -> {
+                if (group.patrolStop() != 0 || completed.get()) {
+                    return;
+                }
+                if (scene.holding()) {
+                    assembledAt.compareAndSet(Long.MIN_VALUE, scene.level.getGameTime());
+                } else {
+                    assembledAt.set(Long.MIN_VALUE);
+                }
+                if (group.routeComplete()) {
+                    completed.set(true);
+                    helper.assertTrue(
+                        assembledAt.get() != Long.MIN_VALUE && scene.level.getGameTime() - assembledAt.get() >= 20,
+                        "an open terminal point completes only after twenty consecutive physically assembled ticks");
+                }
+            });
         helper.startSequence()
             .thenWaitUntil(
             () ->
@@ -136,12 +165,17 @@ public final class PointQueueGameTests {
             .thenExecute(
             () -> {
                 helper.assertTrue(
-                    group.pointQueueOpen() && group.patrolStop() == 0,
-                    "the open endpoint retains its complete squad and queue while waiting");
+                    group.pointQueueOpen() && group.patrolStop() == 0 && group.routeComplete(),
+                    "the open endpoint finishes its dwell and retains its complete squad and queue while waiting");
                 scene.assertAssembled(group);
                 List<ResidentCommands.Order> handles = scene.handles();
                 scene.groups.appendSelectionPoint(scene.people, second);
                 scene.assertUnchanged(group, handles, first, 0);
+                helper.assertFalse(
+                    group.routeComplete(), "an accepted next point clears terminal completion immediately");
+                helper.assertTrue(
+                    group.pointRoute().equals(List.of(first, second)) && group.pointCommandId().equals(generation),
+                    "appending keeps the authored history and the original command generation");
             })
             .thenIdle(2)
             .thenExecute(
@@ -153,8 +187,8 @@ public final class PointQueueGameTests {
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
-                    group.patrolStop() == 1 && group.phase() == UnitGroup.Phase.HOLDING,
-                    "all members reach the appended point without restarting the prefix"))
+                    group.patrolStop() == 1 && group.routeComplete(),
+                    "all members reach the appended point and complete its dwell without restarting the prefix"))
             .thenExecute(
             () -> {
                 helper.assertTrue(
@@ -210,8 +244,7 @@ public final class PointQueueGameTests {
                     helper.assertTrue(
                         reassembledAt.get() != Long.MIN_VALUE
                         && scene.level.getGameTime() - reassembledAt.get() >= 20,
-                        "leaving the mandatory stop requires twenty physical, combat-free assembly ticks"
-                        + " after return");
+                        "leaving the mandatory stop requires twenty physical, combat-free assembly ticks after return");
                 }
             });
         helper.startSequence()
@@ -236,8 +269,7 @@ public final class PointQueueGameTests {
                 scene.assertUnchanged(group, combatHandles.get(), stops.getFirst(), 0);
                 helper.assertTrue(
                     route.travellingTicks() <= budgetAtContact.get() + 1,
-                    "active combat leases consume no route travel budget, even before nextStop"
-                    + " resets it");
+                    "active combat leases consume no route travel budget, even before nextStop resets it");
                 fighting.set(false);
                 returning.set(true);
                 Body displaced = scene.people.getLast();
@@ -248,15 +280,13 @@ public final class PointQueueGameTests {
             () ->
                 helper.assertTrue(
                     group.patrolStop() == 0 && reassembledAt.get() != Long.MIN_VALUE,
-                    "the combat lease expires and every survivor physically reforms before the"
-                    + " dwell completes"))
+                    "the combat lease expires and every survivor physically reforms before the dwell completes"))
             .thenExecute(() -> scene.assertAssembled(group))
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
                     group.patrolStop() == 1 && group.phase() == UnitGroup.Phase.HOLDING,
-                    "the original route continues after a long battle without a stale travel"
-                    + " timeout"))
+                    "the original route continues after a long battle without a stale travel timeout"))
             .thenExecute(
             () -> {
                 scene.assertAssembled(group);
@@ -341,7 +371,7 @@ public final class PointQueueGameTests {
         helper.succeed();
     }
 
-    private static final class Scene implements GameTestListener {
+    private static final class Scene {
         final GameTestHelper helper;
         final ServerLevel level;
         final Colony colony;
@@ -369,11 +399,11 @@ public final class PointQueueGameTests {
                 level.addFreshEntity(body.mob());
                 colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
-                PatrolSupplies.of(colony).loadout(body, LoadoutRegistry.MELEE);
+                arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
                 people.add(body);
             }
             helper.onEachTick(simulation::tick);
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
         }
 
         WorldPos at(int x, int z) {
@@ -405,6 +435,18 @@ public final class PointQueueGameTests {
             }
         }
 
+        boolean holding() {
+            return people.stream()
+                .allMatch(
+                body ->
+                    commands.current(body.id())
+                        .filter(
+                        order ->
+                            order.status() == ResidentCommands.Status.HOLDING
+                                && Reach.standingAt(body.mob().position(), order.destination().block(level)))
+                        .isPresent());
+        }
+
         void assertAssembled(UnitGroup group) {
             helper.assertTrue(
                 people.stream()
@@ -421,19 +463,15 @@ public final class PointQueueGameTests {
             people.forEach(body -> body.mob().discard());
             colony.raze();
         }
+    }
 
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
-        }
+    private static void arm(Colony colony, Body body, String name, ItemSpec weapon) {
+        LoadoutProfiles profiles = LoadoutProfiles.of(colony);
+        LoadoutProfile profile =
+            profiles.all().stream()
+            .filter(one -> one.name().equals(name))
+            .findFirst()
+            .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

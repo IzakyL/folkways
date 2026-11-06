@@ -20,9 +20,11 @@ import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
 import io.github.izakyl.folkways.plugins.build.BlockData;
+import io.github.izakyl.folkways.plugins.build.Costs;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.core.registries.Registries;
@@ -92,16 +94,35 @@ public final class CreateBuildCostsGameTests {
         event.register(CreateBuildCostsGameTests.class);
     }
 
+    private record Translation(String what, int fixture, BlockEntity entity, Predicate<Costs.Quote> holds) { }
+
     @GameTest(template = "empty", timeoutTicks = 10)
-    public static void addonSchematicRequirementsRetainEveryInputAndCount(GameTestHelper helper) {
-        var needs = SchematicPlacement.adapter().requirement(FIXTURES.get(0).defaultBlockState(), null)
-            .needs().orElseThrow();
-        long iron = needs.stream().filter(need -> need.spec().item().orElseThrow().getPath().equals("iron_ingot"))
-            .mapToLong(Need::count).sum();
-        long redstone = needs.stream().filter(need -> need.spec().item().orElseThrow().getPath().equals("redstone"))
-            .mapToLong(Need::count).sum();
-        helper.assertTrue(iron == 7 && redstone == 2, "addon requirements retain every material and count");
+    public static void addonSchematicRequirementsTranslateAsTheCannonReadsThem(GameTestHelper helper) {
+        BlockEntity configured = new BannerBlockEntity(BlockPos.ZERO, Blocks.WHITE_BANNER.defaultBlockState());
+        configured.getPersistentData().putInt("cost", 6);
+        List<Translation> rows = List.of(
+            new Translation("addon requirements retain every material and count", 0, null,
+                quote -> count(quote, "iron_ingot") == 7 && count(quote, "redstone") == 2),
+            new Translation("a tool worn down cannot be represented, so the placement is refused rather than free",
+                2, null, quote -> quote.needs().isEmpty() && !quote.invalid()),
+            new Translation("an exact item that is a plain item is asked for as it is", 3, null,
+                quote -> quote.needs().orElseThrow().getFirst().spec().item().orElseThrow().getPath()
+                    .equals("white_banner")),
+            new Translation("an invalid requirement is skipped, as the cannon skips it", 4, null, Costs.Quote::invalid),
+            new Translation("without block entity data the schematic requirement takes its default", 5, null,
+                quote -> quote.needs().orElseThrow().getFirst().count() == 1),
+            new Translation("the schematic requirement sees blueprint block entity configuration", 5, configured,
+                quote -> quote.needs().orElseThrow().getFirst().count() == 6));
+        for (Translation row : rows) {
+            helper.assertTrue(row.holds().test(SchematicPlacement.adapter()
+                .requirement(FIXTURES.get(row.fixture()).defaultBlockState(), row.entity())), row.what());
+        }
         helper.succeed();
+    }
+
+    private static long count(Costs.Quote quote, String item) {
+        return quote.needs().orElseThrow().stream()
+            .filter(need -> need.spec().item().orElseThrow().getPath().equals(item)).mapToLong(Need::count).sum();
     }
 
     @GameTest(template = "empty", timeoutTicks = 10)
@@ -113,32 +134,6 @@ public final class CreateBuildCostsGameTests {
             : pos.equals(BlockPos.ZERO.above()) ? upper : Blocks.AIR.defaultBlockState(), BlockPos.ZERO).orElseThrow();
         helper.assertTrue(launch.produces().contains(BlockPos.ZERO.above()) && launch.charged().equals(List.of(BlockPos.ZERO)),
             "the upper half is made by the lower half's shot and charges nothing more");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 10)
-    public static void unrepresentableAddonRequirementsAreNotFree(GameTestHelper helper) {
-        var rules = SchematicPlacement.adapter();
-        var damaging = rules.requirement(FIXTURES.get(2).defaultBlockState(), null);
-        helper.assertTrue(damaging.needs().isEmpty() && !damaging.invalid(),
-            "a tool worn down cannot be represented, so the placement is refused rather than free");
-        helper.assertTrue(rules.requirement(FIXTURES.get(3).defaultBlockState(), null).needs().orElseThrow()
-            .getFirst().spec().item().orElseThrow().getPath().equals("white_banner"),
-            "an exact item that is a plain item is asked for as it is");
-        helper.assertTrue(rules.requirement(FIXTURES.get(4).defaultBlockState(), null).invalid(),
-            "an invalid requirement is skipped, as the cannon skips it");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 10)
-    public static void materialQueriesReceiveBlueprintBlockEntityData(GameTestHelper helper) {
-        BlockState state = FIXTURES.get(5).defaultBlockState();
-        BlockEntity entity = new BannerBlockEntity(BlockPos.ZERO, Blocks.WHITE_BANNER.defaultBlockState());
-        entity.getPersistentData().putInt("cost", 6);
-        var rules = SchematicPlacement.adapter();
-        helper.assertTrue(rules.requirement(state, null).needs().orElseThrow().getFirst().count() == 1
-                && rules.requirement(state, entity).needs().orElseThrow().getFirst().count() == 6,
-            "the schematic requirement sees blueprint block entity configuration");
         helper.succeed();
     }
 

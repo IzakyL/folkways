@@ -8,15 +8,11 @@ import io.github.izakyl.folkways.core.api.colony.PointSites;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.labor.ColonyLabor;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -29,7 +25,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
@@ -55,25 +50,16 @@ public final class FallenLogGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 800)
-    public static void fallenOakAndMossReachColonyStorage(GameTestHelper helper) throws ReflectiveOperationException {
+    public static void fallenOakAndMossReachColonyStorage(GameTestHelper helper) {
         stored(helper, Blocks.OAK_LOG, false, 3);
     }
 
     @GameTest(template = "empty", timeoutTicks = 800)
-    public static void taggedPillarNeedsNoMinecraftLogTag(GameTestHelper helper) throws ReflectiveOperationException {
-        helper.assertFalse(Blocks.HAY_BLOCK.defaultBlockState().is(BlockTags.LOGS), "the hollow-log stand-in is tag-only");
-        stored(helper, Blocks.HAY_BLOCK, false, 1);
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 800)
-    public static void clearingAlsoCollectsDecorationsBeforeTheirSupport(GameTestHelper helper)
-            throws ReflectiveOperationException {
+    public static void clearingAlsoCollectsDecorationsBeforeTheirSupport(GameTestHelper helper) {
         stored(helper, Blocks.OAK_LOG, true, 1);
     }
 
-    // GameTestServer suppresses Labor.work. Drive its usual colony pipeline with inline planning lanes.
-    private static void stored(GameTestHelper helper, Block block, boolean clearing, int length)
-            throws ReflectiveOperationException {
+    private static void stored(GameTestHelper helper, Block block, boolean clearing, int length) {
         ServerLevel level = helper.getLevel();
         BlockPos log = ground(helper);
         Set<BlockPos> marked = new HashSet<>();
@@ -94,47 +80,10 @@ public final class FallenLogGameTests {
         colony.hold(GroundworkContent.ID, new Held.Block(WorldPos.of(level, chest))).orElseThrow();
         colony.stores(GroundworkContent.ID, level.dimension(), List.of(WorldPos.of(level, chest)));
         var person = PersonBody.RESIDENT.get().create(level);
-        person.moveTo(log.getX() + 2.5, log.getY(), log.getZ() + 1.5);
-        level.addFreshEntity(person);
-        colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
-        person.joinColony(colony.id());
-        colony.entered(person);
-        var data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
-        var labor = new ColonyLabor(data, level.dimension());
-        Class<?> lanes = Class.forName("io.github.izakyl.folkways.core.engine.labor.Lanes");
-        var field = lanes.getDeclaredField("INLINE");
-        field.setAccessible(true);
-        Object inline = field.get(null);
-        var run = ColonyLabor.class.getMethod("run", ServerLevel.class, lanes);
-        var stop = ColonyLabor.class.getDeclaredMethod("close");
-        stop.setAccessible(true);
-        Set<Long> forced = new HashSet<>();
-        for (BlockPos corner : List.of(log.offset(-3, 0, -3), log.offset(4, 0, -3),
-                log.offset(-3, 0, 3), log.offset(4, 0, 3))) {
-            ChunkPos chunk = new ChunkPos(corner);
-            if (!level.getForcedChunks().contains(chunk.toLong()) && level.setChunkForced(chunk.x, chunk.z, true)) {
-                forced.add(chunk.toLong());
-            }
-        }
-        boolean[] closed = {false};
-        Runnable close = () -> {
-            if (closed[0]) return;
-            closed[0] = true;
-            try { stop.invoke(labor); }
-            catch (ReflectiveOperationException broken) { throw new IllegalStateException(broken); }
+        ColonyStorageRun.until(helper, colony, person, log, () -> {
             person.discard();
             colony.raze();
-            forced.forEach(chunk -> level.setChunkForced(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), false));
-        };
-        helper.onEachTick(() -> {
-            if (closed[0]) return;
-            colony.service(GroundworkContent.ID, GroundPresence.class).orElseThrow().tick(level.getServer());
-            ColonyWays.advance(data, level);
-            try { run.invoke(labor, level, inline); }
-            catch (ReflectiveOperationException broken) { throw new IllegalStateException(broken); }
-        });
-        helper.runAtTickTime(790, close);
-        helper.startSequence().thenWaitUntil(() -> {
+        }, () -> {
             for (BlockPos cell : marked.stream().filter(at -> at.getY() == log.getY()).toList()) {
                 helper.assertTrue(level.getBlockState(cell).isAir(), "the marked log was cleared");
                 helper.assertTrue(level.getBlockState(cell.above()).isAir(), "its moss was cleared");
@@ -143,7 +92,7 @@ public final class FallenLogGameTests {
                 "the logs are collected");
             helper.assertTrue(stock.countItem(Items.MOSS_CARPET) + (clearing ? person.pack().countItem(Items.MOSS_CARPET) : 0) == length,
                 "moss loot survived the support update");
-        }).thenExecute(close).thenSucceed();
+        });
     }
 
     @GameTest(template = "empty")
@@ -179,6 +128,10 @@ public final class FallenLogGameTests {
         place(level, log.east().above(), Blocks.AIR.defaultBlockState());
         place(level, log.below(), Blocks.AIR.defaultBlockState());
         helper.assertFalse(new FallenLogs(level, cell -> false).at(log), "an elevated beam is not fallen wood");
+        BlockPos pillar = log.south(2);
+        place(level, pillar, horizontal(Blocks.HAY_BLOCK));
+        helper.assertFalse(Blocks.HAY_BLOCK.defaultBlockState().is(BlockTags.LOGS), "the hollow-log stand-in is tag-only");
+        helper.assertTrue(new FallenLogs(level, cell -> false).at(pillar), "a tagged pillar needs no Minecraft log tag");
         helper.succeed();
     }
 

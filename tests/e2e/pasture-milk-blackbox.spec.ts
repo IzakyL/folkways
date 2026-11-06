@@ -1,5 +1,4 @@
 import { expect, test } from "@playwright/test";
-import { errorSummary } from "@izakyl/blockwright-client";
 import { MinecraftTimeoutError, tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import {
   commandPos,
@@ -10,12 +9,11 @@ import {
   type Vec,
 } from "../shared/colony/colony-founding";
 import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
-import { readDoing } from "../shared/colony/resident-probe";
-import { mustCommand, packHasItem } from "../shared/ui/world-ui";
+import { mustCommand } from "../shared/ui/world-ui";
+import { colonyRegistry, configureZone, zoneFlagSettingAt } from "../shared/ui/zone-tools";
 import {
   blockHasItem,
   buildPen,
-  countAnimalsInPen,
   createPastureZoneViaPanel,
   looseItemExists,
   pastureZoneFailure,
@@ -97,6 +95,16 @@ for (const stage of twins()) test(stage.title("pasture milk end-to-end: a standi
     }, stage);
     expect(zone.created, pastureZoneFailure(zone, "cow", TARGET)).toBe(true);
 
+    // The shear tick box on the zone's settings page: a pasture shears by default, and one click clears it.
+    const registry = await colonyRegistry(server);
+    expect(await zoneFlagSettingAt(server, registry, "shear"), "a pasture shears by default").toBe(true);
+    await configureZone(server, client, playerName, founding.standBlock, { min: pen.min, max: pen.max },
+      [{ key: "shear", toggle: true }], stage);
+    await expect.poll(async () => {
+      await tick.sprint(server, 20);
+      return zoneFlagSettingAt(server, registry, "shear");
+    }, { message: "unticking the shear box on the settings page should clear the flag on the zone", timeout: 15_000 }).toBe(false);
+
     for (const spot of [
       { x: pen.min.x + 0.5, z: pen.min.z + 0.5 },
       { x: pen.max.x + 0.5, z: pen.max.z + 0.5 },
@@ -135,16 +143,12 @@ for (const stage of twins()) test(stage.title("pasture milk end-to-end: a standi
       `a ready milk bucket put in the member supply chest did not reach the demand chest within ${ORDER_ALIVE_TICKS} ticks: the order pinned to that chest`
       + ` is not standing at all, so phase B cannot prove anything about milking`,
     ).toBe(true);
-    const beforeClear = await chestItems(server, demandAt);
     await emptyChest(server, demandAt);
     await purgeLooseItem(server, playerName, MILK);
     await tick.sprint(server, 20);
-    const afterTicks = await chestItems(server, demandAt);
     expect(
       await blockHasItem(server, demandAt, MILK),
-      "the milk bucket in the demand chest was not fully cleared, and it would turn phase B's check green. "
-        + `before clearing=${beforeClear}; after clearing and running 25 ticks=${afterTicks}. `
-        + "(if it reappears after clearing, the colony brought it back; check whose pack is still holding a bucket)",
+      "the milk bucket in the demand chest was not fully cleared, and it would turn phase B's check green",
     ).toBe(false);
 
     for (let slot = 0; slot < 4; slot++) {
@@ -152,24 +156,9 @@ for (const stage of twins()) test(stage.title("pasture milk end-to-end: a standi
     }
     await tick.sprint(server, 20);
     const milking = await pollForItem(server, demandAt, MILK, MILK_PHASE_TICKS);
-    const doing: any[] = [];
-    for (let round = 0; round < 5; round++) {
-      await tick.sprint(server, 40);
-      doing.push(await whatEachResidentIsDoing(server));
-    }
-    const diagnosis = {
-      bucket_still_in_supply: await blockHasItem(server, supplyAt, BUCKET),
-      supply_is_member: await world.probe(server, `if data block ${commandPos(supplyAt)} "neoforge:attachments"."folkways:colony_member"`),
-      demand_is_member: await world.probe(server, `if data block ${commandPos(demandAt)} "neoforge:attachments"."folkways:colony_member"`),
-      bucket_in_a_pack: await packHasItem(server, BUCKET),
-      milk_in_a_pack: await packHasItem(server, MILK),
-      cows_in_pen: await countAnimalsInPen(server, pen, /cow/),
-      doing,
-    };
     expect(
       milking.found,
-      `${JSON.stringify(diagnosis)} — `
-      + `${MILK} never reached the member demand chest within ${MILK_PHASE_TICKS} ticks after 4 empty buckets were stocked:`
+      `${MILK} never reached the member demand chest within ${MILK_PHASE_TICKS} ticks after 4 empty buckets were stocked:`
         + ` the order pinned to this chest never drove the bucket x1 -> milk_bucket x1 recipe on MilkHost`,
     ).toBe(true);
   } catch (error) {
@@ -201,25 +190,4 @@ async function emptyChest(server: any, chest: Vec) {
     await tryCommand(server, `item replace block ${commandPos(chest)} container.${slot} with minecraft:air`);
   }
   await tick.sprint(server, 5);
-}
-
-async function chestItems(server: any, at: Vec) {
-  const said = await tryCommand(server, `data get block ${commandPos(at)} Items`)
-    .catch((error: unknown) => ({ output: [errorSummary(error)] }));
-  return (said?.output ?? []).join(" ").slice(0, 400) || "(unreadable)";
-}
-
-async function whatEachResidentIsDoing(server: any) {
-  const listed = await world
-    .entities(server, { dimension: "minecraft:overworld", types: ["folkways:resident"], limit: 100 })
-    .catch(() => ({ entities: [] as world.EntityJson[] }));
-  const out: any[] = [];
-  for (const resident of listed.entities) {
-    try {
-      out.push(await readDoing(server, resident.uuid));
-    } catch (error) {
-      out.push({ uuid: resident.uuid, doing_error: errorSummary(error) });
-    }
-  }
-  return out;
 }

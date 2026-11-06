@@ -11,14 +11,16 @@ import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, distance, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
-import { cover, twins, type Stage } from "../shared/harness/stage";
+import { cover, GROUND, type Stage } from "../shared/harness/stage";
 
 const ITEM_TYPE = "minecraft:item";
 const PROVIDE_ITEM = "minecraft:cobblestone";
 const PROVIDE_COUNT = 8;
 const SOURCE_STOCK = 32;
 
-for (const stage of twins()) test(stage.title("a one-shot order delivers colony stock into the container it was filed on"), async ({}, testInfo) => {
+// On the ground only: an order delivered aboard, with the ship under way, is sable-moving's.
+test("a one-shot order delivers colony stock into the container it was filed on", async ({}, testInfo) => {
+  const stage: Stage = GROUND;
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 

@@ -5,15 +5,12 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.perk.PerkPool;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.WorkExertion;
@@ -24,7 +21,6 @@ import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
-import io.github.izakyl.folkways.test.InventoryObservations;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,8 +28,6 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.world.Container;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -154,17 +148,6 @@ public final class LivingPreemptionGameTests {
     }
 
     private static Worker worker(Body body, int stoic) {
-        Container pack = body.pack();
-        return new Worker() {
-            public Resident resident() { return body.resident(); }
-            public Mob body() { return body.mob(); }
-            public Container pack() { return pack; }
-            public List<Store> within() { return List.of(); }
-            public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-            public void spill(ItemStack stack) { throw new AssertionError("offering an urge must not spill items"); }
-            public Effects effects() { return PerkPool.effects(Map.of(PerkPool.STOIC, stoic)); }
-            public List<Node> route() { return List.of(); }
-            public Placement placement() { return Placement.NOWHERE; }
-        };
+        return TestWorker.of(body).effects(() -> PerkPool.effects(Map.of(PerkPool.STOIC, stoic)));
     }
 }

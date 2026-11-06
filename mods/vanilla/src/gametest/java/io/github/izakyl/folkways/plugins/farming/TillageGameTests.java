@@ -5,9 +5,9 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -266,12 +266,11 @@ public final class TillageGameTests {
 
     private static Outcome till(ServerLevel level, BlockPos ground, ItemStack hoe, Tillage.Clearing clearing) {
         var body = PersonBody.RESIDENT.get().create(level);
-        Worker worker = (Worker) Proxy.newProxyInstance(Worker.class.getClassLoader(),
-            new Class<?>[] {Worker.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "held" -> hoe;
-                case "body" -> body.mob();
-                default -> throw new AssertionError(method.getName());
-            });
+        Worker worker = Proxies.of(Worker.class, (proxy, method, args) -> switch (method.getName()) {
+            case "held" -> hoe;
+            case "body" -> body.mob();
+            default -> throw new AssertionError(method.getName());
+        });
         Crop crop = Crop.of(level, ground, ResourceLocation.withDefaultNamespace("wheat")).orElseThrow();
         Job job = new Job(WorldPos.of(level, ground), List.of(ground), Stances.WHEREVER, ground);
         TillNode node = new TillNode(new FarmNode.Chore(UUID.randomUUID(), crop, job, null), clearing);

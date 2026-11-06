@@ -5,8 +5,8 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.SteamerBlockE
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -16,10 +16,8 @@ import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
@@ -37,11 +35,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -91,7 +87,7 @@ public final class SteamerGameTests {
             helper.assertValueEqual(ready.count(ModItems.RAW_DOUGH.get()), 2L, "extra dough remains real stock");
             helper.assertTrue(ready.actor.getMainHandItem() == old, "temporary empty-hand extraction restores the exact prior hand");
             helper.assertTrue(!ready.steamer().getBlockState().getValue(SteamerBlock.HALF), "the full block remains full");
-            helper.assertTrue(work.commit(ready.level, ready) instanceof Outcome.Done, "the outer batch completes after actual extraction");
+            helper.assertTrue(work.commit(ready.level, ready.worker) instanceof Outcome.Done, "the outer batch completes after actual extraction");
         });
     }
 
@@ -121,7 +117,7 @@ public final class SteamerGameTests {
             rig.level.setBlockAndUpdate(rig.cell.below(), Blocks.STONE.defaultBlockState());
             helper.runAfterDelay(20, () -> {
                 helper.assertValueEqual(rig.steamer().getCookingProgress()[0], 0, "the native cooldown removes progress after the actual heat source disappears");
-                helper.assertTrue(work.next(rig.level, rig) instanceof Workload.Within.Turn.Wait, "cold raw food is not considered a completed product");
+                helper.assertTrue(work.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Wait, "cold raw food is not considered a completed product");
                 rig.level.setBlockAndUpdate(rig.cell.below(), Blocks.MAGMA_BLOCK.defaultBlockState());
                 helper.assertTrue(rig.steamer().getBlockState().getValue(SteamerBlock.HAS_BASE), "restoring magma runs the native support/base update");
                 helper.assertTrue(work.refusal(rig.level).isEmpty(), "a native cosmetic base update does not invalidate accepted food");
@@ -159,9 +155,9 @@ public final class SteamerGameTests {
     public static void withdrawalRejectsAPlannedInteractionBeforeItConsumesDough(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, true, false, 2)) {
             SteamerWork work = rig.plan();
-            Node load = ((Workload.Within.Turn.Piece) work.next(rig.level, rig)).node();
+            Node load = ((Workload.Within.Turn.Piece) work.next(rig.level, rig.worker)).node();
             rig.bookings.withdraw(rig.at);
-            helper.assertTrue(Commit.run(rig.level, load, rig) instanceof Outcome.Failed, "an old generation cannot load after unmarking");
+            helper.assertTrue(Commit.run(rig.level, load, rig.worker) instanceof Outcome.Failed, "an old generation cannot load after unmarking");
             helper.assertValueEqual(rig.count(ModItems.RAW_DOUGH.get()), 2L, "the real dough is returned by the core");
             helper.assertTrue(rig.steamer().getItems().stream().allMatch(ItemStack::isEmpty), "the withdrawn native slots stay empty");
             helper.assertTrue(!rig.steamer().getBlockState().getValue(SteamerBlock.HAS_LID), "a rejected load does not alter the lid");
@@ -187,9 +183,9 @@ public final class SteamerGameTests {
         Rig rig = new Rig(helper, true, false, 2);
         SteamerWork work = rig.load(2);
         afterCooking(rig, ready -> {
-            Node take = ((Workload.Within.Turn.Piece) work.next(ready.level, ready)).node();
+            Node take = ((Workload.Within.Turn.Piece) work.next(ready.level, ready.worker)).node();
             helper.assertTrue(ready.steamer().takeFood(ready.level, ready.actor), "the player-like native interaction empties the real slots");
-            helper.assertTrue(Commit.run(ready.level, take, ready) instanceof Outcome.Failed, "the queued extraction refuses the emptied claim");
+            helper.assertTrue(Commit.run(ready.level, take, ready.worker) instanceof Outcome.Failed, "the queued extraction refuses the emptied claim");
             helper.assertTrue(ready.level.getBlockState(ready.cell).is(ModBlocks.STEAMER.get()), "the stale action never invokes empty-machine dismantling");
             helper.assertValueEqual(ready.count(ModItems.STEAMER.get()), 0L, "no machine part is delivered as a meal");
             helper.assertValueEqual(ready.count(ModItems.RAW_DOUGH.get()), 0L, "externally collected products do not refund inputs");
@@ -354,7 +350,7 @@ public final class SteamerGameTests {
                     helper.assertTrue(rig.step(work) instanceof Outcome.Done, "the actual recovered native output is collected");
                     asking.assertKept(original, provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
                     helper.assertTrue(provider.activeRecovery(rig.colony, rig.level, rig.at, rig.bookings).getFirst() == original, "clearing real native slots does not withdraw the root before outer settlement");
-                    helper.assertTrue(work.commit(rig.level, rig) instanceof Outcome.Done, "the same original outer recovery settles successfully");
+                    helper.assertTrue(work.commit(rig.level, rig.worker) instanceof Outcome.Done, "the same original outer recovery settles successfully");
                     work.ended(rig.level, Ending.DONE); asking.finished(original, Ending.DONE);
                     helper.assertTrue(provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}).isEmpty()
                         && provider.activeRecovery(rig.colony, rig.level, rig.at, rig.bookings).isEmpty(), "completion releases both the physical booking and the exact cached root");
@@ -365,7 +361,8 @@ public final class SteamerGameTests {
             }).thenSucceed();
     }
 
-    private static final class Rig implements Worker, AutoCloseable {
+    private static final class Rig implements AutoCloseable {
+        final Worker worker;
         final GameTestHelper helper;
         final ServerLevel level;
         final UUID colony = UUID.randomUUID();
@@ -400,6 +397,7 @@ public final class SteamerGameTests {
             level.addFreshEntity(actor);
             stances = Stances.at(level, actor.blockPosition());
             pack.setItem(0, input.copyWithCount(requested));
+            worker = TestWorker.of(actor).pack(pack).effects(Effects.NONE);
         }
         SteamerBlockEntity lower() { return (SteamerBlockEntity) level.getBlockEntity(cell); }
         SteamerBlockEntity steamer() { return (SteamerBlockEntity) level.getBlockEntity(part.block(level)); }
@@ -419,7 +417,7 @@ public final class SteamerGameTests {
             return work;
         }
         Outcome step(SteamerWork work) {
-            var turn = work.next(level, this);
+            var turn = work.next(level, worker);
             if (!(turn instanceof Workload.Within.Turn.Piece)) {
                 helper.fail("expected a native steamer action, got " + turn + "; refusal=" + work.refusal(level)
                     + "; state=" + steamer().getBlockState() + "; slots=" + steamer().getItems()
@@ -429,7 +427,7 @@ public final class SteamerGameTests {
                 return Outcome.failed(io.github.izakyl.folkways.cookery.CookeryRefusal.STATION_CHANGED);
             }
             Node piece = ((Workload.Within.Turn.Piece) turn).node();
-            Outcome result = Commit.run(level, piece, this);
+            Outcome result = Commit.run(level, piece, worker);
             if (result instanceof Outcome.Done done) {
                 done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "the native food fits"));
                 work.ended(level, piece, Ending.DONE);
@@ -442,15 +440,6 @@ public final class SteamerGameTests {
             return Goods.countIn(pack, ItemSpec.of(item));
         }
 
-        public Resident resident() { return actor.resident(); }
-        public Mob body() { return actor; }
-        public Container pack() { return pack; }
-        public List<Store> within() { return List.of(); }
-        public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-        public void spill(ItemStack stack) { throw new IllegalStateException("unexpected spill"); }
-        public Effects effects() { return Effects.NONE; }
-        public List<Node> route() { return List.of(); }
-        public Placement placement() { return Placement.NOWHERE; }
         public void close() {
             if (hold != null) { hold.release(Ending.DROPPED); }
             actor.discard();

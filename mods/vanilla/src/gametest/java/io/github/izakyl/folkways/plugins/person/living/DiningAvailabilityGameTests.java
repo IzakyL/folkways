@@ -66,24 +66,6 @@ public final class DiningAvailabilityGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void registeringAnAdapterEnablesDiningWithoutPlacedTables(GameTestHelper helper) throws Exception {
-        try (var fixture = new AvailabilityFixture()) {
-            DiningTables.register(ResourceLocation.fromNamespaceAndPath("folkways", "test_available_table"),
-                new DiningTables.Table() {
-                    public boolean stable() { return true; }
-                    public boolean matches(ServerLevel level, BlockPos at) {
-                        return level.getBlockState(at).is(Blocks.DIAMOND_BLOCK);
-                    }
-                    public Container inventory(ServerLevel level, BlockPos at) { return null; }
-                });
-            assertEnabled(helper);
-            helper.assertTrue(DiningTables.sample().isEmpty(),
-                "an adapter without a sample enables dining but cannot supply its Ponder scene");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void eitherTableTagEnablesDiningAndKeepsTablesOutOfFootings(GameTestHelper helper) throws Exception {
         try (var fixture = new AvailabilityFixture()) {
             for (String path : List.of("dining/tables", "housing/table")) {
@@ -107,8 +89,19 @@ public final class DiningAvailabilityGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void samplesPreferLiveTagsAndFallBackToAdapters(GameTestHelper helper) throws Exception {
+    public static void adaptersEnableDiningAndSamplesPreferLiveTags(GameTestHelper helper) throws Exception {
         try (var fixture = new AvailabilityFixture()) {
+            DiningTables.register(ResourceLocation.fromNamespaceAndPath("folkways", "test_available_table"),
+                new DiningTables.Table() {
+                    public boolean stable() { return true; }
+                    public boolean matches(ServerLevel level, BlockPos at) {
+                        return level.getBlockState(at).is(Blocks.DIAMOND_BLOCK);
+                    }
+                    public Container inventory(ServerLevel level, BlockPos at) { return null; }
+                });
+            assertEnabled(helper);
+            helper.assertTrue(DiningTables.sample().isEmpty(),
+                "an adapter without a sample enables dining but cannot supply its Ponder scene");
             DiningTables.register(ResourceLocation.fromNamespaceAndPath("folkways", "test_table_sample"),
                 new DiningTables.Table() {
                     public boolean stable() { return true; }

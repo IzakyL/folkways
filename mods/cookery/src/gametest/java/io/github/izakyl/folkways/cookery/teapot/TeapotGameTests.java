@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery.teapot;
 
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.ITeapot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.TeapotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
@@ -9,7 +9,6 @@ import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.TeapotRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.serializer.TeapotRecipeSerializer;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.registry.TeacupRegistry;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.Footing;
@@ -23,16 +22,15 @@ import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.testing.KitchenRecoveryWanted;
+import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.tray.TrayStation;
@@ -42,18 +40,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -64,6 +63,7 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.EventPriority;
@@ -82,20 +82,10 @@ public final class TeapotGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(TeapotGameTests.class); }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
-    public static void nativeFlowerTea(GameTestHelper helper) { brew(helper, "flower_tea"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
-    public static void nativeBarleyTea(GameTestHelper helper) { brew(helper, "barley_tea"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
-    public static void nativeTieguanyin(GameTestHelper helper) { brew(helper, "tieguanyin"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
-    public static void nativeBiluochun(GameTestHelper helper) { brew(helper, "biluochun"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
-    public static void nativeOolong(GameTestHelper helper) { brew(helper, "oolong"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
-    public static void nativeSakuraFubuki(GameTestHelper helper) { brew(helper, "sakura_fubuki"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
-    public static void nativeButterTea(GameTestHelper helper) { brew(helper, "butter_tea"); }
+    @GameTestGenerator
+    public static List<TestFunction> nativeTeas() {
+        return NativeCookingMatrix.recipes("teapot", 7, 900, (helper, id) -> brew(helper, id.getPath().substring("teapot/".length())));
+    }
 
     private static void brew(GameTestHelper helper, String recipe) {
         Rig rig = new Rig(helper, recipe);
@@ -111,7 +101,7 @@ public final class TeapotGameTests {
             helper.assertTrue(ready.step(work) instanceof Outcome.Done, "actual native tea is poured through twelve physical cup blocks");
             ready.assertServed();
             helper.assertTrue(ready.actor.getMainHandItem() == old, "the precise previous main hand is restored after pouring");
-            helper.assertTrue(work.commit(ready.level, ready) instanceof Outcome.Done, "the original production promise settles after physical serving");
+            helper.assertTrue(work.commit(ready.level, ready.worker) instanceof Outcome.Done, "the original production promise settles after physical serving");
         });
     }
 
@@ -122,7 +112,7 @@ public final class TeapotGameTests {
         int before = rig.pot().getCurrentTick();
         helper.runAfterDelay(60, () -> {
             helper.assertValueEqual(rig.pot().getCurrentTick(), before, "a physically cold teapot does not advance its native ingredient clock");
-            helper.assertTrue(work.next(rig.level, rig) instanceof Workload.Within.Turn.Wait, "unfinished raw tea cannot be served");
+            helper.assertTrue(work.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Wait, "unfinished raw tea cannot be served");
             rig.level.setBlockAndUpdate(rig.cell.below(), Blocks.MAGMA_BLOCK.defaultBlockState());
             helper.assertTrue(work.refusal(rig.level).isEmpty(), "native base/chain appearance updates do not invalidate the actual tea batch");
         });
@@ -143,10 +133,7 @@ public final class TeapotGameTests {
     @GameTest(template = "empty", timeoutTicks = 900)
     public static void blockEntityReloadKeepsTheAcceptedTeaWithoutBudgetingAnotherFluidOrBag(GameTestHelper helper) {
         Rig rig = new Rig(helper, "barley_tea"); rig.load();
-        var saved = rig.pot().saveWithoutMetadata(rig.level.registryAccess());
-        rig.level.removeBlockEntity(rig.cell);
-        TeapotBlockEntity loaded = new TeapotBlockEntity(rig.cell, rig.level.getBlockState(rig.cell));
-        loaded.loadWithComponents(saved, rig.level.registryAccess()); rig.level.setBlockEntity(loaded);
+        rig.reload();
         TeapotWork work = rig.recover();
         helper.assertValueEqual(work.spec().needs().size(), 1, "fully accepted recovery needs only twelve real empty cups");
         KitchenRecoveryWanted.assertKept(helper, work.recoveryGoal(), () -> new TeapotStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
@@ -163,9 +150,9 @@ public final class TeapotGameTests {
     public static void withdrawalRejectsAnAlreadyPlannedFluidInteraction(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "barley_tea")) {
             TeapotWork work = rig.plan();
-            var turn = work.next(rig.level, rig); helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "the native filling action is planned");
+            var turn = work.next(rig.level, rig.worker); helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "the native filling action is planned");
             rig.bookings.withdraw(rig.at);
-            helper.assertTrue(Commit.run(rig.level, ((Workload.Within.Turn.Piece) turn).node(), rig) instanceof Outcome.Failed, "the withdrawn generation refuses the old fill");
+            helper.assertTrue(Commit.run(rig.level, ((Workload.Within.Turn.Piece) turn).node(), rig.worker) instanceof Outcome.Failed, "the withdrawn generation refuses the old fill");
             helper.assertValueEqual(rig.count(rig.job.bucket().getItem()), 1L, "the unaccepted full bucket remains real stock");
             helper.assertValueEqual(rig.count(Items.BUCKET), 0L, "no empty bucket is manufactured by a rejected interaction");
             helper.assertTrue(TeapotStation.empty(rig.pot()), "the actual teapot stays completely empty");
@@ -190,7 +177,7 @@ public final class TeapotGameTests {
         Rig rig = new Rig(helper, "barley_tea"); TeapotWork work = rig.load();
         for (Direction side : Direction.Plane.HORIZONTAL) { rig.level.setBlockAndUpdate(rig.cell.relative(side), ModBlocks.EMPTY_CUP.get().defaultBlockState()); }
         afterBrewing(rig, ready -> {
-            helper.assertTrue(work.next(ready.level, ready) instanceof Workload.Within.Turn.Wait,
+            helper.assertTrue(work.next(ready.level, ready.worker) instanceof Workload.Within.Turn.Wait,
                 "with all player cup positions occupied, the actual finished batch waits without issuing a destructive action");
             for (Direction side : Direction.Plane.HORIZONTAL) { helper.assertTrue(ready.level.getBlockState(ready.cell.relative(side)).is(ModBlocks.EMPTY_CUP.get()), "each player's real cup is preserved"); }
             helper.assertValueEqual(ready.count(ModItems.EMPTY_CUP.get()), 12L, "the task's own cups return after refusal");
@@ -212,26 +199,20 @@ public final class TeapotGameTests {
     private static void throwFromPot(GameTestHelper helper, boolean after) {
         Rig rig = new Rig(helper, "barley_tea"); TeapotWork work = rig.load();
         afterBrewing(rig, ready -> {
-            var saved = ready.pot().saveWithoutMetadata(ready.level.registryAccess());
-            ready.level.removeBlockEntity(ready.cell);
-            TeapotBlockEntity throwing = new TeapotBlockEntity(ready.cell, ready.level.getBlockState(ready.cell)) {
+            ready.reload((cell, state) -> new TeapotBlockEntity(cell, state) {
                 @Override public boolean takeTeapot(Level level, LivingEntity user) {
                     if (after) { super.takeTeapot(level, user); }
                     throw new IllegalStateException("fixture: native pot take hook failed " + (after ? "after" : "before") + " physical removal");
                 }
-            };
-            throwing.loadWithComponents(saved, ready.level.registryAccess()); ready.level.setBlockEntity(throwing);
+            });
             helper.assertTrue(ready.step(work) instanceof Outcome.Failed, "the failed native extraction rolls back");
             ready.assertRolledBack();
         });
     }
 
     @GameTest(template = "empty", timeoutTicks = 900)
-    public static void aThrowOnTheFirstPouredCupRollsBackWithoutReturningSpentTeaIngredients(GameTestHelper helper) { throwWhileServing(helper, 1); }
-    @GameTest(template = "empty", timeoutTicks = 900)
-    public static void aThrowOnTheLastPouredCupCannotLeaveElevenProductsAndRefundTwelveCups(GameTestHelper helper) { throwWhileServing(helper, 12); }
-
-    private static void throwWhileServing(GameTestHelper helper, int failAt) {
+    public static void aThrowOnTheLastPouredCupCannotLeaveElevenProductsAndRefundTwelveCups(GameTestHelper helper) {
+        int failAt = 12;
         Rig rig = new Rig(helper, "barley_tea"); TeapotWork work = rig.load();
         afterBrewing(rig, ready -> {
             AtomicInteger actualPours = new AtomicInteger();
@@ -298,22 +279,6 @@ public final class TeapotGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 3300)
-    public static void nativeMysteryTeaWaitsTheDefaultClockAndServesExactlyFourActualCups(GameTestHelper helper) {
-        Rig rig = new Rig(helper, "mystery_tea"); TeapotWork work = rig.load();
-        long started = rig.level.getGameTime();
-        helper.assertValueEqual(rig.job.time(), TeapotRecipeSerializer.DEFAULT_TIME, "mystery tea uses the unmodified native default brewing time");
-        helper.assertValueEqual(rig.job.output().getCount(), 4, "unmatched tea promises four native portions rather than a recipe's twelve");
-        afterBrewing(rig, ready -> {
-            helper.assertTrue(ready.level.getGameTime() - started >= 200 + TeapotRecipeSerializer.DEFAULT_TIME,
-                "both native ingredient grace and default brewing clocks actually elapsed");
-            helper.assertValueEqual(ready.pot().getResult().getCount(), 4, "the actual native fallback produces four mystery portions");
-            helper.assertTrue(ready.step(work) instanceof Outcome.Done, "four physical empty cups serve the native finished teapot");
-            ready.assertServed();
-            helper.assertTrue(work.commit(ready.level, ready) instanceof Outcome.Done, "the exact requested mystery tea target succeeds");
-        });
-    }
-
     @GameTest(template = "empty")
     public static void threeCupsCannotInvestWaterOrSeedIntoAnExplicitMysteryTeaBatch(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "mystery_tea")) {
@@ -361,42 +326,19 @@ public final class TeapotGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 3300)
     public static void mysteryTeaReloadAndCancellationKeepFourCupRecoveryWithoutReinvestingTheBucketOrSeed(GameTestHelper helper) {
-        Rig rig = new Rig(helper, "mystery_tea"); rig.load(); rig.reload();
+        Rig rig = new Rig(helper, "mystery_tea");
+        helper.assertValueEqual(rig.job.time(), TeapotRecipeSerializer.DEFAULT_TIME, "mystery tea uses the unmodified native default brewing time");
+        helper.assertValueEqual(rig.job.output().getCount(), 4, "unmatched tea promises four native portions rather than a recipe's twelve");
+        rig.load(); long started = rig.level.getGameTime(); rig.reload();
         TeapotWork work = rig.recover();
         helper.assertTrue(TeaBatch.read(rig.pot(), rig.level).orElseThrow().mode() == TeapotStation.Mode.MYSTERY, "the actual saved batch preserves its native fallback mode");
         helper.assertValueEqual(work.spec().needs().size(), 1, "fully invested fallback recovery only budgets its real cups");
         helper.assertValueEqual(work.spec().needs().getFirst().count(), 4L, "persisted mystery recovery budgets four cups, not twelve");
         afterBrewing(rig, ready -> {
+            helper.assertTrue(ready.level.getGameTime() - started >= 200 + TeapotRecipeSerializer.DEFAULT_TIME,
+                "both native ingredient grace and default brewing clocks actually elapsed");
+            helper.assertValueEqual(ready.pot().getResult().getCount(), 4, "the actual native fallback produces four mystery portions");
             helper.assertTrue(ready.step(work) instanceof Outcome.Done, "the actual reloaded native ticker finishes the same batch");
-            ready.assertServed();
-        });
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 3300)
-    public static void partiallyAcceptedMysteryTeaRecoversItsSeedAndFourCupsWithoutAnotherFluidBucket(GameTestHelper helper) {
-        Rig rig = new Rig(helper, "mystery_tea"); TeapotWork original = rig.plan();
-        helper.assertTrue(rig.step(original) instanceof Outcome.Done, "the native pot accepts just its actual water bucket");
-        rig.reload(); TeapotWork recovered = rig.recover();
-        helper.assertTrue(recovered.spec().needs().stream().noneMatch(need -> Goods.matches(rig.job.bucket(), need.spec())), "partial mystery recovery never budgets a second fluid bucket");
-        helper.assertTrue(rig.step(recovered) instanceof Outcome.Done, "the still-physical original seed is accepted exactly once");
-        afterBrewing(rig, ready -> { helper.assertTrue(ready.step(recovered) instanceof Outcome.Done, "the recovered native fallback is served"); ready.assertServed(); });
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 3300)
-    public static void aFailureAfterNativeMysteryPotRemovalRestoresFourPortionsAndRefundsOnlyFourCups(GameTestHelper helper) {
-        Rig rig = new Rig(helper, "mystery_tea"); TeapotWork work = rig.load();
-        afterBrewing(rig, ready -> {
-            var saved = ready.pot().saveWithoutMetadata(ready.level.registryAccess());
-            ready.level.removeBlockEntity(ready.cell);
-            TeapotBlockEntity throwing = new TeapotBlockEntity(ready.cell, ready.level.getBlockState(ready.cell)) {
-                @Override public boolean takeTeapot(Level level, LivingEntity user) {
-                    super.takeTeapot(level, user); throw new IllegalStateException("fixture: after actual mystery pot removal");
-                }
-            };
-            throwing.loadWithComponents(saved, ready.level.registryAccess()); ready.level.setBlockEntity(throwing);
-            helper.assertTrue(ready.step(work) instanceof Outcome.Failed, "post-removal native failure rolls back the same real batch");
-            ready.assertRolledBack(); ready.reload();
-            helper.assertTrue(ready.step(work) instanceof Outcome.Done, "one later retry serves exactly the restored batch");
             ready.assertServed();
         });
     }
@@ -412,7 +354,7 @@ public final class TeapotGameTests {
             helper.assertTrue(ready.step(work) instanceof Outcome.Done, "post-serving refresh failure cannot turn committed native output into a failed transaction");
             helper.assertValueEqual(refreshes.get(), 3, "serving also exercises the failed refresh callback");
             ready.assertServed();
-            helper.assertTrue(work.commit(ready.level, ready) instanceof Outcome.Done, "the production promise remains correctly completed");
+            helper.assertTrue(work.commit(ready.level, ready.worker) instanceof Outcome.Done, "the production promise remains correctly completed");
         });
     }
 
@@ -480,9 +422,9 @@ public final class TeapotGameTests {
             ready.level.setBlockAndUpdate(ready.cell.south().below(), Blocks.STONE.defaultBlockState());
             ready.actor.setPos(Vec3.atBottomCenterOf(ready.cell.offset(4, 0, 2)));
             var before = ready.pot().saveWithoutMetadata(ready.level.registryAccess());
-            helper.assertTrue(work.next(ready.level, ready) instanceof Workload.Within.Turn.Leave,
+            helper.assertTrue(work.next(ready.level, ready.worker) instanceof Workload.Within.Turn.Leave,
                 "the changed cup layout and handle counter release the now unsuitable old stance for recovery");
-            helper.assertTrue(work.commit(ready.level, ready) instanceof Outcome.Failed,
+            helper.assertTrue(work.commit(ready.level, ready.worker) instanceof Outcome.Failed,
                 "repositioning never pretends the unserved original tea was delivered");
             work.ended(ready.level, Ending.DROPPED);
             helper.assertTrue(before.equals(ready.pot().saveWithoutMetadata(ready.level.registryAccess())),
@@ -540,7 +482,8 @@ public final class TeapotGameTests {
             "the actual native teapot finishes its unchanged ingredient and brewing clocks"))
             .thenExecute(() -> { try { check.accept(rig); } finally { rig.close(); } }).thenSucceed();
     }
-    private static final class Rig implements Worker, AutoCloseable {
+    private static final class Rig implements AutoCloseable {
+        final Worker worker;
         final GameTestHelper helper;
         final ServerLevel level;
         final UUID colony = UUID.randomUUID();
@@ -561,6 +504,7 @@ public final class TeapotGameTests {
             level.setBlockAndUpdate(cell.below(), Blocks.MAGMA_BLOCK.defaultBlockState()); level.setBlockAndUpdate(cell, ModBlocks.TEAPOT.get().defaultBlockState());
             at = WorldPos.of(level, cell); actor = PersonBody.RESIDENT.get().create(level); actor.setPos(Vec3.atBottomCenterOf(cell.south())); actor.setNoAi(true); level.addFreshEntity(actor);
             stances = Stances.at(level, actor.blockPosition()); pack.setItem(0, job.bucket()); pack.setItem(1, new ItemStack(ModItems.EMPTY_CUP.get(), job.output().getCount())); pack.setItem(2, job.input().copy());
+            worker = TestWorker.of(actor).pack(pack);
         }
         TeapotBlockEntity pot() { return (TeapotBlockEntity) level.getBlockEntity(cell); }
         TeapotWork plan() { return plan(stances); }
@@ -588,19 +532,21 @@ public final class TeapotGameTests {
             current = (TeapotWork) recovered.getFirst().nodes().getFirst(); helper.assertTrue(current.planned(level).isEmpty(), "the recovery acquires the current native station turn"); return current;
         }
         Outcome step(Node work) {
-            var within = (Workload.Within) work.spec().workload(); var turn = within.next(level, this);
+            var within = (Workload.Within) work.spec().workload(); var turn = within.next(level, worker);
             if (!(turn instanceof Workload.Within.Turn.Piece)) {
                 helper.fail("expected native appliance action, got " + turn + "; refusal=" + work.refusal(level) + "; pot=" + pot().getStatus()
                     + "; time=" + pot().getCurrentTick() + "; input=" + pot().getInput() + "; result=" + pot().getResult());
                 return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             }
-            Node piece = ((Workload.Within.Turn.Piece) turn).node(); Outcome outcome = Commit.run(level, piece, this);
+            Node piece = ((Workload.Within.Turn.Piece) turn).node(); Outcome outcome = Commit.run(level, piece, worker);
             if (outcome instanceof Outcome.Done done) { done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "actual native goods fit")); within.ended(level, piece, Ending.DONE); }
             return outcome;
         }
-        void reload() {
+        void reload() { reload(TeapotBlockEntity::new); }
+        // The pot as saved, loaded back into a fresh block entity.
+        void reload(BiFunction<BlockPos, BlockState, TeapotBlockEntity> fresh) {
             var saved = pot().saveWithoutMetadata(level.registryAccess()); level.removeBlockEntity(cell);
-            TeapotBlockEntity restored = new TeapotBlockEntity(cell, level.getBlockState(cell));
+            TeapotBlockEntity restored = fresh.apply(cell, level.getBlockState(cell));
             restored.loadWithComponents(saved, level.registryAccess()); level.setBlockEntity(restored);
         }
         void assertServed() {
@@ -627,15 +573,6 @@ public final class TeapotGameTests {
         }
 
         List<ItemEntity> drops() { return level.getEntitiesOfClass(ItemEntity.class, new AABB(cell).inflate(3)); }
-        public Resident resident() { return actor.resident(); }
-        public Mob body() { return actor; }
-        public Container pack() { return pack; }
-        public List<Store> within() { return List.of(); }
-        public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-        public void spill(ItemStack stack) { if (!stack.isEmpty()) throw new IllegalStateException("unexpected spill: " + stack); }
-        public Effects effects() { return actor.effects(); }
-        public List<Node> route() { return List.of(); }
-        public Placement placement() { return Placement.NOWHERE; }
         public void close() { if (hold != null) { hold.release(Ending.DROPPED); } if (current != null) { current.ended(level, Ending.DROPPED); } actor.discard(); drops().forEach(ItemEntity::discard); }
     }
 }

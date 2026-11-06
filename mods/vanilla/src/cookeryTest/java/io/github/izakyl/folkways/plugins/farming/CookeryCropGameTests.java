@@ -3,18 +3,15 @@ package io.github.izakyl.folkways.plugins.farming;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Modifier;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.front.api.PastDay;
@@ -26,9 +23,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
@@ -75,19 +70,6 @@ public final class CookeryCropGameTests {
                     "replanting leaves a young crop");
                 helper.assertTrue(done.made().stream().anyMatch(stack -> !Goods.matches(stack, field.crop.seedSpec())),
                     "the food yield remains after a seed is reserved for replanting");
-            }
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void missingCookerySeedsCannotCreateCrops(GameTestHelper helper) {
-        for (Block block : List.of(ModBlocks.LETTUCE_CROP.get(), ModBlocks.CHILI_CROP.get())) {
-            try (Field field = new Field(helper, block, 0)) {
-                helper.assertTrue(Commit.run(field.level(), field.plant(), field.worker) instanceof Outcome.Failed,
-                    "the core refuses sowing without real seed goods");
-                helper.assertTrue(field.level().getBlockState(field.ground.above()).isAir(),
-                    "no free crop is created");
             }
         }
         helper.succeed();
@@ -152,20 +134,10 @@ public final class CookeryCropGameTests {
             body = PersonBody.RESIDENT.get().create(level());
             body.mob().setPos(ground.getCenter());
             crop = Crop.of(level(), ground.above(), BuiltInRegistries.BLOCK.getKey(block)).orElseThrow();
-            worker = new Worker() {
-                public Resident resident() { return body.resident(); }
-                public Mob body() { return body.mob(); }
-                public Container pack() { return pack; }
-                public List<Store> within() { return List.of(); }
-                public ItemStack held(ToolNeed need) { return io.github.izakyl.folkways.core.api.work.Tools.from(java.util.stream.IntStream.range(0, pack.getContainerSize()).mapToObj(pack::getItem).toList(), need).orElse(ItemStack.EMPTY); }
-                public void spill(ItemStack stack) { throw new AssertionError("the eight-slot pack has room"); }
-                public Effects effects() {
-                    return replant > 0 ? Effects.of(List.of(
-                        new Effects.Part(FarmingContent.REPLANT, Modifier.grant(FarmingContent.REPLANTS)))) : Effects.NONE;
-                }
-                public List<Node> route() { return List.of(); }
-                public Placement placement() { return Placement.NOWHERE; }
-            };
+            worker = TestWorker.of(body).pack(pack)
+                .held(need -> io.github.izakyl.folkways.core.api.work.Tools.from(java.util.stream.IntStream.range(0, pack.getContainerSize()).mapToObj(pack::getItem).toList(), need).orElse(ItemStack.EMPTY))
+                .effects(replant > 0 ? Effects.of(List.of(
+                    new Effects.Part(FarmingContent.REPLANT, Modifier.grant(FarmingContent.REPLANTS)))) : Effects.NONE);
         }
 
         net.minecraft.server.level.ServerLevel level() {

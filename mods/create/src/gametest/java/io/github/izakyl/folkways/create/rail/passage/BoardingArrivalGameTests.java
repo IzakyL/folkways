@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.create.rail.passage;
 
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.resident.Going;
@@ -13,7 +14,6 @@ import io.github.izakyl.folkways.create.rail.domain.RailRefusal;
 import io.github.izakyl.folkways.create.rail.domain.SeatRef;
 import io.github.izakyl.folkways.create.rail.domain.TransitNetwork;
 import io.github.izakyl.folkways.create.rail.domain.TransitNetworks;
-import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -54,17 +54,16 @@ public final class BoardingArrivalGameTests {
         var seat = new SeatRef(UUID.randomUUID(), 0);
         AtomicInteger boarded = new AtomicInteger();
         TransitNetwork before = TransitNetworks.get();
-        TransitNetwork network = (TransitNetwork) Proxy.newProxyInstance(TransitNetwork.class.getClassLoader(),
-            new Class<?>[] {TransitNetwork.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "isAvailable", "isServiceable", "hasConductor" -> true;
-                case "fault" -> Optional.empty();
-                case "scheduledStations" -> List.of("Alpha", "Beta");
-                case "currentStation" -> Optional.of("Alpha");
-                case "passengerSeats" -> List.of(seat);
-                case "occupant" -> Optional.empty();
-                case "board" -> { boarded.incrementAndGet(); yield true; }
-                default -> throw new AssertionError("unexpected transit call: " + method.getName());
-            });
+        TransitNetwork network = Proxies.of(TransitNetwork.class, (proxy, method, args) -> switch (method.getName()) {
+            case "isAvailable", "isServiceable", "hasConductor" -> true;
+            case "fault" -> Optional.empty();
+            case "scheduledStations" -> List.of("Alpha", "Beta");
+            case "currentStation" -> Optional.of("Alpha");
+            case "passengerSeats" -> List.of(seat);
+            case "occupant" -> Optional.empty();
+            case "board" -> { boarded.incrementAndGet(); yield true; }
+            default -> throw new AssertionError("unexpected transit call: " + method.getName());
+        });
         try {
             TransitNetworks.install(network);
             var ride = new RailConveyance(leg);
@@ -96,14 +95,13 @@ public final class BoardingArrivalGameTests {
         body.setPos(cell.getX() + 0.5, cell.getY(), cell.getZ() + 0.5);
         AtomicLong departures = new AtomicLong();
         TransitNetwork before = TransitNetworks.get();
-        TransitNetwork network = (TransitNetwork) Proxy.newProxyInstance(TransitNetwork.class.getClassLoader(),
-            new Class<?>[] {TransitNetwork.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "isAvailable", "isServiceable", "hasConductor" -> true;
-                case "fault", "currentStation" -> Optional.empty();
-                case "scheduledStations" -> List.of("Alpha", "Beta");
-                case "departures" -> departures.get();
-                default -> throw new AssertionError("unexpected transit call: " + method.getName());
-            });
+        TransitNetwork network = Proxies.of(TransitNetwork.class, (proxy, method, args) -> switch (method.getName()) {
+            case "isAvailable", "isServiceable", "hasConductor" -> true;
+            case "fault", "currentStation" -> Optional.empty();
+            case "scheduledStations" -> List.of("Alpha", "Beta");
+            case "departures" -> departures.get();
+            default -> throw new AssertionError("unexpected transit call: " + method.getName());
+        });
         try {
             TransitNetworks.install(network);
             var ride = new RailConveyance(leg);

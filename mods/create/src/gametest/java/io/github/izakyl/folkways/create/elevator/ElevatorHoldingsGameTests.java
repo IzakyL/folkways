@@ -6,8 +6,8 @@ import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.colony.Holding;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -27,30 +27,6 @@ public final class ElevatorHoldingsGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(ElevatorHoldingsGameTests.class);
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void blockHoldingsCreateOneControllerAndWithdrawalRetiresIt(GameTestHelper helper) {
-        Fixture fixture = new Fixture(helper);
-        Elevators service = new Elevators(fixture.colony);
-        try {
-            fixture.hold();
-            service.tick(helper.getLevel().getServer());
-            ElevatorController controller = fixture.controller();
-            service.tick(helper.getLevel().getServer());
-            helper.assertTrue(service.all().equals(List.of(fixture.lift))
-                && fixture.controller() == controller, "repeated holdings synchronization preserves one controller");
-            helper.assertTrue(controller.view().isEmpty(), "ownership does not require a loaded working cabin");
-
-            fixture.holdings.clear();
-            service.tick(helper.getLevel().getServer());
-            helper.assertTrue(service.all().isEmpty() && controller.retired()
-                && ElevatorDispatch.controller(helper.getLevel().getServer(), fixture.id, fixture.lift).isEmpty(),
-                "withdrawing a block holding retires and removes an idle controller");
-            helper.succeed();
-        } finally {
-            service.closed(Closing.SHUTDOWN);
-        }
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
@@ -113,6 +89,10 @@ public final class ElevatorHoldingsGameTests {
         try {
             service.tick(helper.getLevel().getServer());
             ElevatorController controller = fixture.controller();
+            service.tick(helper.getLevel().getServer());
+            helper.assertTrue(service.all().equals(List.of(fixture.lift))
+                && fixture.controller() == controller, "repeated holdings synchronization preserves one controller");
+            helper.assertTrue(controller.view().isEmpty(), "ownership does not require a loaded working cabin");
             fixture.holdings.removeFirst();
             service.tick(helper.getLevel().getServer());
             helper.assertTrue(service.all().equals(List.of(fixture.lift))
@@ -120,8 +100,9 @@ public final class ElevatorHoldingsGameTests {
                 "another ordinary holding keeps the same physical lift and its standing-place reservations alive");
             fixture.holdings.clear();
             service.tick(helper.getLevel().getServer());
-            helper.assertTrue(controller.retired() && service.all().isEmpty(),
-                "only withdrawing the last holding retires the physical lift");
+            helper.assertTrue(controller.retired() && service.all().isEmpty()
+                    && ElevatorDispatch.controller(helper.getLevel().getServer(), fixture.id, fixture.lift).isEmpty(),
+                "only withdrawing the last holding retires and removes the idle controller");
         } finally { service.closed(Closing.SHUTDOWN); }
         helper.succeed();
     }
@@ -136,17 +117,16 @@ public final class ElevatorHoldingsGameTests {
         Fixture(GameTestHelper helper) {
             this.helper = helper;
             lift = new ElevatorRef(helper.getLevel().dimension(), helper.absolutePos(new BlockPos(1, 1, 1)));
-            colony = (Colony) Proxy.newProxyInstance(Colony.class.getClassLoader(), new Class<?>[] {Colony.class},
-                (proxy, method, args) -> switch (method.getName()) {
-                    case "id" -> id;
-                    case "holdings" -> {
-                        if (args == null || args.length != 1 || !ElevatorPlugin.ID.equals(args[0])) {
-                            throw new AssertionError("service must query its own ordinary holdings");
-                        }
-                        yield List.copyOf(holdings);
+            colony = Proxies.of(Colony.class, (proxy, method, args) -> switch (method.getName()) {
+                case "id" -> id;
+                case "holdings" -> {
+                    if (args == null || args.length != 1 || !ElevatorPlugin.ID.equals(args[0])) {
+                        throw new AssertionError("service must query its own ordinary holdings");
                     }
-                    default -> throw new AssertionError("unexpected colony API: " + method.getName());
-                });
+                    yield List.copyOf(holdings);
+                }
+                default -> throw new AssertionError("unexpected colony API: " + method.getName());
+            });
         }
 
         void hold() {

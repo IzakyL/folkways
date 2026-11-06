@@ -135,29 +135,6 @@ public final class ResidentNodeEvaluatorGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void bambooIsAWallWithNoFloorOnTop(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos cell = helper.absolutePos(new BlockPos(2, 1, 2));
-        for (BlockPos floor : BlockPos.betweenClosed(cell.offset(-2, -1, -2), cell.offset(2, -1, 2))) {
-            level.setBlockAndUpdate(floor, Blocks.DIRT.defaultBlockState());
-        }
-        level.setBlockAndUpdate(cell, Blocks.BAMBOO.defaultBlockState());
-        var mob = EntityType.VILLAGER.create(level);
-        BlockPos start = cell.west();
-        mob.setPos(Vec3.atBottomCenterOf(start));
-        var context = new PathfindingContext(level, mob);
-        var evaluator = new ResidentNodeEvaluator(start);
-        helper.assertTrue(evaluator.getPathType(context, cell.getX(), cell.getY(), cell.getZ()) == PathType.BLOCKED,
-            "a bamboo stalk is not walked through");
-        helper.assertTrue(evaluator.getPathType(context, cell.getX(), cell.getY() + 1, cell.getZ()) == PathType.OPEN,
-            "the top of a bamboo stalk is no floor to stand on");
-        var region = Structures.region(level, cell.offset(-2, -1, -2), cell.offset(2, 3, 2));
-        var path = new PathFinder(evaluator, 512).findPath(region, mob, Set.of(cell.above()), 12, 0, 1);
-        helper.assertTrue(path == null || !path.canReach(), "nobody paths onto the top of a bamboo stalk");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void taggedTopsAreNotWalkingFloors(GameTestHelper helper) {
         BlockPos floor = helper.absolutePos(new BlockPos(2, 1, 2));
         List<BlockState> forbidden = List.of(

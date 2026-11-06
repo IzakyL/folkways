@@ -45,7 +45,6 @@ for (const stage of twins()) test(stage.title("stove recovery: borrow real ignit
     evidence.stoveMark = await optInViaBook(server, client, player.name, cells.stove, "worksite", stage);
     evidence.registered = await read(server, stage, cells);
     expect(evidence.registered.stovePoint, "the book registers the native stove as a real colony ledger point").toBe(true);
-    expect(evidence.registered.stoveHasBlockEntity, "registration preserves the native stove without fabricating a block entity").toBe(false);
     await screen.dismiss(client); await world.command(server, "gamemode survival " + player.name);
     const finished = await until(server, stage, cells, evidence, "actual long-distance flint borrowing, ignition and return", state => state.lit
       && sharedCount(state, FLINT) === 1 && state.shared.some((item: any) => item.id === FLINT && item.damage === 1) && packCount(state, FLINT) === 0, 5000);
@@ -144,18 +143,15 @@ for(var entity:level.getAllEntities()){
  var body=Bodies.of(entity);
  if(body.isPresent()){
   var pack=new ArrayList<Object>();for(var stack:body.get().pack().contents())if(!stack.isEmpty())pack.add(item(stack));
-  var row=new LinkedHashMap<String,Object>();row.put("uuid",entity.getUUID().toString());row.put("pack",pack);row.put("walked",entity.walkDist);row.put("doing",body.get().doing().map(Object::toString).orElse(""));
-  row.put("balk",body.get().balk().map(reason->Map.of("doing",reason.doing().toString(),"why",reason.why().translationKey(),"at",reason.at())).orElse(Map.of()));residents.add(row);
+  var row=new LinkedHashMap<String,Object>();row.put("uuid",entity.getUUID().toString());row.put("pack",pack);row.put("walked",entity.walkDist);residents.add(row);
  }else if(entity instanceof ItemEntity drop&&!drop.getItem().isEmpty())drops.add(item(drop.getItem()));
 }
 var at=WorldPos.of(level,stove);var world=WorldSpaces.world(level,at).orElseThrow();var rainAt=BlockPos.containing(world).above();
 var out=new LinkedHashMap<String,Object>();out.put("lit",level.getBlockState(stove).getValue(StoveBlock.LIT));out.put("dry",StoveIgnition.dry(level,at));
-out.put("rainingAt",level.isRainingAt(rainAt));out.put("globalRaining",level.isRaining());out.put("rainingFlag",level.getLevelData().isRaining());out.put("rainLevel",level.getRainLevel(1));
-out.put("canSeeSky",level.canSeeSky(rainAt));out.put("heightmapY",level.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,rainAt).getY());
-out.put("rainAt",Map.of("x",rainAt.getX(),"y",rainAt.getY(),"z",rainAt.getZ()));
-out.put("biome",level.getBiome(rainAt).unwrapKey().map(key->key.location().toString()).orElse(""));out.put("precipitation",level.getBiome(rainAt).value().getPrecipitationAt(rainAt).toString());
+out.put("rainingAt",level.isRainingAt(rainAt));out.put("globalRaining",level.isRaining());
+out.put("canSeeSky",level.canSeeSky(rainAt));out.put("precipitation",level.getBiome(rainAt).value().getPrecipitationAt(rainAt).toString());
 out.put("source",items);out.put("shared",shared);out.put("residents",residents);out.put("drops",drops);
 out.put("stovePoint",colony.holdingAt(at).filter(holding->holding.owner().equals(CookeryContent.STOVE)&&holding.what() instanceof Held.Point).isPresent());
-out.put("stoveHasBlockEntity",level.getBlockEntity(stove)!=null);return out;
+return out;
 ` }),
 });

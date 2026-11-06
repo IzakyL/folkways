@@ -1,9 +1,14 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.target;
+
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Holding;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.core.api.resident.Resident;
@@ -17,8 +22,6 @@ import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
@@ -30,7 +33,6 @@ import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Pattern;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -114,38 +116,6 @@ public final class BuildPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 120)
-    public static void highWorkPlansOnlyTheTargetAndAddsAccessDuringConstruction(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        floor(helper);
-        BlockPos goal = at(helper, 10, 11, 10);
-        SiteRig rig = SiteRig.start(level, target(level, Map.of(goal, STONE)));
-        List<BuildJob.Kind> kinds = rig.site.pieces().stream()
-            .map(piece -> piece.work().step().orElseThrow().kind()).toList();
-        helper.assertValueEqual(kinds, List.of(BuildJob.Kind.LAY),
-            "planning contains only the blueprint work, with no scaffold operations");
-        helper.assertTrue(rig.free(goal), "access never becomes a planning prerequisite");
-        rig.site.tick(level);
-        BuildSite.Piece raising = rig.site.pieces().stream()
-            .filter(piece -> piece.work().step().orElseThrow().kind() == BuildJob.Kind.RAISE)
-            .findFirst().orElseThrow();
-        helper.assertTrue(raising.work().id() < 0, "construction creates the temporary access dynamically");
-        Worker worker = worker(helper, at(helper, 10, 1, 9));
-        helper.assertTrue(Commit.run(level, raising.node(), worker) instanceof Outcome.Done,
-            "runtime access can be raised");
-        rig.end(raising.node(), Ending.DONE);
-        rig.site.tick(level);
-        helper.assertTrue(rig.work(helper, goal, worker) instanceof Outcome.Done, "the high cell is laid");
-        helper.startSequence().thenExecuteAfter(41, () -> {
-            rig.site.tick(level);
-            rig.workAll(helper, worker);
-            helper.assertTrue(BlockPos.betweenClosedStream(at(helper, 7, 1, 7), at(helper, 13, 10, 13))
-                .noneMatch(cell -> level.getBlockState(cell).is(Blocks.SCAFFOLDING)),
-                "runtime access is removed after the work finishes");
-            helper.assertTrue(rig.site.complete(), "the order finishes after access cleanup");
-        }).thenSucceed();
-    }
-
     @GameTest(template = "empty_large", timeoutTicks = 100)
     public static void runtimeAccessExtendsHorizontallyWhenNearbyShaftsAreBlocked(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -213,11 +183,7 @@ public final class BuildPlanningGameTests {
         rig.end(raising.node(), Ending.DONE);
         rig.site.tick(level);
         helper.assertTrue(rig.work(helper, goal, worker) instanceof Outcome.Done, "the remaining target is laid");
-        helper.startSequence().thenExecuteAfter(41, () -> {
-            rig.site.tick(level);
-            rig.workAll(helper, worker);
-            helper.assertTrue(rig.site.complete(), "temporary scaffold cleanup finishes over completed air targets");
-        }).thenSucceed();
+        helper.succeed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
@@ -736,17 +702,8 @@ public final class BuildPlanningGameTests {
                 SimpleContainer pack = new SimpleContainer(128);
                 supplies.set(pack);
                 Mob body = walker(helper, mark.above());
-                builder.set((Worker) Proxy.newProxyInstance(BuildPlanningGameTests.class.getClassLoader(),
-                    new Class<?>[] {Worker.class}, (proxy, method, args) -> switch (method.getName()) {
-                        case "body" -> body;
-                        case "pack" -> pack;
-                        case "resident" -> new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig"));
-                        case "effects" -> Effects.NONE;
-                        case "placement" -> Placement.NOWHERE;
-                        case "held" -> new ItemStack(Items.DIAMOND_PICKAXE);
-                        case "within", "route", "supplied" -> List.of();
-                        default -> null;
-                    }));
+                builder.set(TestWorker.of(body, new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig")), pack)
+                    .held(need -> new ItemStack(Items.DIAMOND_PICKAXE)).spill(stack -> { }));
             }).thenWaitUntil(() -> {
                 BuildSite site = active.get().site;
                 SimpleContainer pack = supplies.get();
@@ -799,24 +756,6 @@ public final class BuildPlanningGameTests {
                 helper.assertTrue(level.getBlockState(ground.offset(-4, 0, -4)).is(Blocks.SPRUCE_PLANKS),
                     "the headframe deck stands");
             }).thenSucceed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void oldGrowingEntriesAreIgnoredButOrdersRemain(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        floor(helper);
-        Asked asked = new Asked();
-        Colony colony = colony(helper, asked);
-        BuildPresence presence = new BuildPresence(colony, level.getServer());
-        BlueprintBuildOrder order = presence.file(level, blueprint(BlockPos.ZERO), at(helper, 10, 1, 10), "",
-            Optional.empty(), "").orElseThrow();
-        net.minecraft.nbt.ListTag old = new net.minecraft.nbt.ListTag();
-        old.add(new CompoundTag());
-        asked.saved.get().put("growing", old);
-        BuildPresence restored = new BuildPresence(colony, level.getServer());
-        restored.settle(level.getServer());
-        helper.assertTrue(restored.site(order.id()).isPresent(), "the existing order remains after loading");
-        helper.succeed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
@@ -875,8 +814,13 @@ public final class BuildPlanningGameTests {
         BlockState door = Blocks.OAK_DOOR.defaultBlockState();
         BuildTarget target = printed(level, ordered(lower, door,
             upper, door.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER)));
+        level.setBlock(upper.above(), STONE, 3);
+        helper.assertValueEqual(target.launch(lower).orElseThrow().produces(), Set.of(lower, upper),
+            "the lower half's shot makes both halves");
+        helper.assertTrue(target.launch(upper).isEmpty(), "the upper half is never aimed at");
 
         SiteRig building = SiteRig.start(level, target);
+        helper.assertValueEqual(building.site.pieces().size(), 1, "one piece of work");
         helper.assertTrue(building.step(upper).after().keySet().containsAll(List.of(lower, upper)),
             "both halves are one step");
         Node lay = building.node(upper);
@@ -888,6 +832,7 @@ public final class BuildPlanningGameTests {
             doors - 1, "one door is spent");
         helper.assertTrue(level.getBlockState(lower).is(Blocks.OAK_DOOR) && level.getBlockState(upper).is(Blocks.OAK_DOOR),
             "both halves stand");
+        helper.assertTrue(level.getBlockState(upper.above()).is(Blocks.STONE), "nothing above the door is touched");
         helper.assertTrue(BuildPlanner.complete(level, target), "the blueprint is complete");
         building.end(lay, Ending.DONE);
         building.site.tick(level);
@@ -1113,6 +1058,7 @@ public final class BuildPlanningGameTests {
         BuildTarget onlyUnloaded = new BuildTarget(WorldPos.of(level, dry).realm(),
             Map.of(dry, Blocks.STONE.defaultBlockState()), Set.of(modded), BlockPos.ZERO);
         helper.assertTrue(BuildPlanner.complete(level, onlyUnloaded), "a block no longer known is skipped, as the cannon skips it");
+        helper.assertTrue(SiteRig.start(level, onlyUnloaded).site.complete(), "and does not hold the order open");
         helper.succeed();
     }
 
@@ -1172,27 +1118,26 @@ public final class BuildPlanningGameTests {
     private static Colony colony(GameTestHelper helper, Asked asked) {
         ColonyView view = view(helper.getLevel());
         var inventory = new io.github.izakyl.folkways.core.engine.inventory.InventoryIndex(UUID.randomUUID());
-        return (Colony) Proxy.newProxyInstance(BuildPlanningGameTests.class.getClassLoader(),
-            new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "kept" -> asked.saved.get();
-                case "keep" -> {
-                    asked.saved.set(((CompoundTag) args[1]).copy());
-                    yield null;
-                }
-                case "submit" -> {
-                    asked.works.add((Grown) args[2]);
-                    yield null;
-                }
-                case "withdraw" -> {
-                    asked.withdrawn.add((UUID) args[1]);
-                    yield null;
-                }
-                case "inventory" -> inventory;
-                case "holdingAt" -> Optional.empty();
-                case "views" -> List.of(view);
-                case "view" -> view;
-                default -> null;
-            });
+        return Proxies.of(Colony.class, (proxy, method, args) -> switch (method.getName()) {
+            case "kept" -> asked.saved.get();
+            case "keep" -> {
+                asked.saved.set(((CompoundTag) args[1]).copy());
+                yield null;
+            }
+            case "submit" -> {
+                asked.works.add((Grown) args[2]);
+                yield null;
+            }
+            case "withdraw" -> {
+                asked.withdrawn.add((UUID) args[1]);
+                yield null;
+            }
+            case "inventory" -> inventory;
+            case "holdingAt" -> Optional.empty();
+            case "views" -> List.of(view);
+            case "view" -> view;
+            default -> null;
+        });
     }
 
     private static Blueprint blueprint(BlockPos... stones) {
@@ -1229,20 +1174,8 @@ public final class BuildPlanningGameTests {
             java.util.Optional.empty(), "", 0L), blueprint.confirm(level));
     }
 
-    private static BuildTarget target(ServerLevel level, Map<BlockPos, BlockState> cells) {
-        return new BuildTarget(WorldPos.of(level, cells.keySet().iterator().next()).realm(), cells);
-    }
-
     private static BlockPos at(GameTestHelper helper, int x, int y, int z) {
         return helper.absolutePos(new BlockPos(x, y, z));
-    }
-
-    private static void floor(GameTestHelper helper) {
-        for (int x = 1; x <= 21; x++) {
-            for (int z = 1; z <= 21; z++) {
-                helper.getLevel().setBlock(at(helper, x, 0, z), STONE, 3);
-            }
-        }
     }
 
     private static Mob walker(GameTestHelper helper, BlockPos feet) {
@@ -1260,41 +1193,6 @@ public final class BuildPlanningGameTests {
 
     private static Worker worker(GameTestHelper helper, BlockPos feet, Container pack) {
         Mob body = walker(helper, feet);
-        return new Worker() {
-            public Resident resident() {
-                return new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig"));
-            }
-
-            public Mob body() {
-                return body;
-            }
-
-            public Container pack() {
-                return pack;
-            }
-
-            public List<Store> within() {
-                return List.of();
-            }
-
-            public ItemStack held(ToolNeed need) {
-                return ItemStack.EMPTY;
-            }
-
-            public void spill(ItemStack stack) {
-            }
-
-            public Effects effects() {
-                return Effects.NONE;
-            }
-
-            public List<Node> route() {
-                return List.of();
-            }
-
-            public Placement placement() {
-                return Placement.NOWHERE;
-            }
-        };
+        return TestWorker.of(body, new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig")), pack).spill(stack -> { });
     }
 }

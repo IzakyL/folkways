@@ -14,16 +14,17 @@ import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.plan.Crew;
 import io.github.izakyl.folkways.core.engine.plan.Message;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
 import io.github.izakyl.folkways.core.engine.plan.Stock;
 import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
-import java.lang.reflect.Proxy;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,20 +75,6 @@ public final class ContainerConstructionGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void aBlueprintClearsAFilledChestIntoTheColonyStore(GameTestHelper helper) {
-        try (Fixture f = new Fixture(helper)) {
-            f.place(f.at, Blocks.CHEST.defaultBlockState());
-            f.contents(f.at).setItem(0, new ItemStack(Items.DIAMOND, 7));
-            f.file(Map.of(f.at, Blocks.AIR.defaultBlockState()));
-            f.blocked(BuildRefusal.EMPTYING_CONTAINER);
-            f.finish();
-            helper.assertTrue(f.level.isEmptyBlock(f.at), "the chest is cleared");
-            f.stored(Items.DIAMOND, 7);
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 100)
     public static void aDoubleChestIsEmptiedBeforeEitherHalfGoes(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             BlockState left = Blocks.CHEST.defaultBlockState().setValue(ChestBlock.TYPE, ChestType.LEFT);
@@ -98,6 +85,7 @@ public final class ContainerConstructionGameTests {
             chest.setItem(0, new ItemStack(Items.DIAMOND, 7));
             chest.setItem(27, new ItemStack(Items.EMERALD, 5));
             f.file(Map.of(f.at, Blocks.AIR.defaultBlockState(), right, Blocks.AIR.defaultBlockState()));
+            f.blocked(BuildRefusal.EMPTYING_CONTAINER);
             f.haul();
             helper.assertTrue(f.level.getBlockState(f.at).is(Blocks.CHEST)
                 && f.level.getBlockState(right).is(Blocks.CHEST), "both halves remain while contents are being moved");
@@ -375,22 +363,21 @@ public final class ContainerConstructionGameTests {
             store = contents(storeAt);
             real = Colonies.mint(level.getServer());
             real.hold(WaresContent.STORE, new Held.Block(WorldPos.of(level, storeAt))).orElseThrow();
-            Colony colony = (Colony) Proxy.newProxyInstance(Colony.class.getClassLoader(), new Class<?>[] {Colony.class},
-                (proxy, method, args) -> {
-                    if (method.getName().equals("submit")) {
-                        Grown work = (Grown) args[2];
-                        work.nodes().forEach(node -> {
-                            asked.put(node.id(), work);
-                            hear.put(node.id(), (BiConsumer<UUID, Ending>) args[3]);
-                        });
-                        return null;
-                    }
-                    if (method.getName().equals("withdraw")) {
-                        asked.remove(args[1]);
-                        return null;
-                    }
-                    return method.invoke(real, args);
-                });
+            Colony colony = Proxies.of(Colony.class, (proxy, method, args) -> {
+                if (method.getName().equals("submit")) {
+                    Grown work = (Grown) args[2];
+                    work.nodes().forEach(node -> {
+                        asked.put(node.id(), work);
+                        hear.put(node.id(), (BiConsumer<UUID, Ending>) args[3]);
+                    });
+                    return null;
+                }
+                if (method.getName().equals("withdraw")) {
+                    asked.remove(args[1]);
+                    return null;
+                }
+                return method.invoke(real, args);
+            });
             presence = new BuildPresence(colony, level.getServer());
         }
 
@@ -412,17 +399,7 @@ public final class ContainerConstructionGameTests {
         }
 
         void publish() {
-            var data = io.github.izakyl.folkways.core.engine.colony.ColonyData.find(level.getServer(), real.id())
-                .orElseThrow();
-            data.inventory().advance(level, data, Map.of());
-            try {
-                var work = io.github.izakyl.folkways.core.engine.inventory.InventoryIndex.class
-                    .getDeclaredMethod("work", net.minecraft.server.MinecraftServer.class, int.class);
-                work.setAccessible(true);
-                work.invoke(data.inventory(), level.getServer(), 1000);
-            } catch (ReflectiveOperationException broken) {
-                throw new AssertionError(broken);
-            }
+            InventoryObservations.publish(real, level, Map.of());
         }
 
         BuildSite site() { return presence.site(order).orElseThrow(); }

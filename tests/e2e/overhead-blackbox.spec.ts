@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { camera, input, media, screen, tick } from "@izakyl/blockwright-minecraft";
+import { camera, input, screen, tick } from "@izakyl/blockwright-minecraft";
 import { commandPos, createColonyViaBook, tryCommand, safeAction, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import {
   createMarkedZone,
@@ -11,7 +11,7 @@ import {
 } from "../shared/ui/zone-tools";
 import { drainActionBar, readActionBar } from "../shared/ui/zone-receipt";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { frames, screenName, safeScreen } from "../shared/harness/bw-helpers";
@@ -85,15 +85,6 @@ for (const stage of twins()) test(stage.title("view from above: the book's box g
     const info: any = (opened as any).screen;
     const centre = { x: Math.round(info.width / 2), y: Math.round(info.height / 2) };
 
-    // The farm under the player's feet: its card follows the mouse over it, and the layer button puts it away.
-    await input.move(client, { x: centre.x, y: centre.y + 32 });
-    await frames(client, 6);
-    await media.screenshot(client, { path: outAbs("e2e", "shots", `${stage.name("overhead-hover")}.png`) });
-    await screen.clickWidget(client, { label: "Zones" });
-    await input.move(client, { x: centre.x, y: centre.y + 32 });
-    await frames(client, 6);
-    await media.screenshot(client, { path: outAbs("e2e", "shots", `${stage.name("overhead-hidden")}.png`) });
-    await screen.clickWidget(client, { label: "Zones" });
     await drainActionBar(client);
     await input.click(client, centre);
     await tick.sprint(server, 3);
@@ -106,14 +97,12 @@ for (const stage of twins()) test(stage.title("view from above: the book's box g
     const marked = MARKED_SIZE.exec(evidence.marked.text ?? "");
     expect(marked, `a click elsewhere marks the box: ${evidence.marked.text}`).not.toBeNull();
     expect(Number(marked![1]) * Number(marked![3]), "the two clicks were on different cells of the floor").toBeGreaterThan(1);
-    await media.screenshot(client, { path: outAbs("e2e", "shots", `${stage.name("overhead-marked")}.png`) });
 
     await input.move(client, { x: centre.x + 30, y: centre.y - 15 });
     evidence.push = await heldScroll(server, client, [KEY_LEFT_CONTROL], -2);
     const pushed = MARKED_SIZE.exec(evidence.push.bar?.text ?? "");
     expect(pushed, `Ctrl+scroll over the box pushes the face under the mouse: ${evidence.push.bar?.text}`).not.toBeNull();
     expect(Number(pushed![2]), "the face under the mouse is the top, drawn two blocks up towards the camera by scrolling down").toBe(Number(marked![2]) + 2);
-    await media.screenshot(client, { path: outAbs("e2e", "shots", `${stage.name("overhead-pushed")}.png`) });
 
     await input.click(client, centre, { button: "right" });
     await tick.sprint(server, 10);
@@ -122,7 +111,6 @@ for (const stage of twins()) test(stage.title("view from above: the book's box g
     evidence.panel = screenName(panel);
     expect(evidence.panel, "a right click opens the book's panel over the view").not.toContain("OverheadScreen");
     expect(evidence.panel).not.toBe("");
-    await media.screenshot(client, { path: outAbs("e2e", "shots", `${stage.name("overhead-panel")}.png`) });
 
     await safeAction(() => screen.dismiss(client));
     await tick.sprint(server, 5);
@@ -144,9 +132,6 @@ for (const stage of twins()) test(stage.title("view from above: the book's box g
     evidence.drawing = (await screen.widgets(client)).map((widget: any) => widget.label);
     expect(evidence.drawing, "a line of two points can be set up, taken back a point, or discarded")
       .toEqual(expect.arrayContaining(["Set it up", "Take back a point", "Discard", "Zones", "Paths", "Works", "Residents"]));
-    await input.move(client, { x: centre.x + 40, y: centre.y + 60 });
-    await frames(client, 4);
-    await media.screenshot(client, { path: outAbs("e2e", "shots", `${stage.name("overhead-line")}.png`) });
 
     await screen.clickWidget(client, { label: "Take back a point" });
     await tick.sprint(server, 3);

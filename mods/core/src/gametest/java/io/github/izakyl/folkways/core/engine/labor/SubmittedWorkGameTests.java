@@ -6,14 +6,13 @@ import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
 import io.github.izakyl.folkways.core.engine.colony.ColonyWorks;
+import io.github.izakyl.folkways.core.testing.Nodes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -21,7 +20,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -66,7 +64,7 @@ public final class SubmittedWorkGameTests {
         var colony = new ColonyData();
         var owner = ResourceLocation.fromNamespaceAndPath("folkways", "submitted_test");
         List<String> heard = new ArrayList<>();
-        Node single = node(spec(helper, owner));
+        Node single = Nodes.done(spec(helper, owner));
         colony.works().submit(owner, dimension, Grown.of(single), (any, how) -> heard.add("single " + how));
         Told told = new Told();
         colony.works().listen(dimension, told);
@@ -75,8 +73,8 @@ public final class SubmittedWorkGameTests {
         helper.assertTrue(refused(() -> colony.works().submit(owner, dimension, Grown.of(single),
                 (any, how) -> heard.add("twice " + how)), IllegalStateException.class) && told.drain().isEmpty(),
             "a node is asked once, not again before it ended");
-        Node first = node(spec(helper, owner));
-        Node second = node(spec(helper, owner));
+        Node first = Nodes.done(spec(helper, owner));
+        Node second = Nodes.done(spec(helper, owner));
         List<String> pair = new ArrayList<>();
         colony.works().submit(owner, dimension,
             new Grown(List.of(first, second), List.of(new Before(first.id(), second.id()))),
@@ -105,14 +103,14 @@ public final class SubmittedWorkGameTests {
         helper.assertTrue(heard.equals(List.of("single " + Ending.REVOKED, "again " + Ending.DONE)),
             "each submission hears its ending exactly once");
 
-        Node elsewhere = node(spec(helper, owner));
+        Node elsewhere = Nodes.done(spec(helper, owner));
         colony.works().unlisten(dimension, told);
         colony.works().submit(owner, dimension, Grown.of(elsewhere), (any, how) -> heard.add("unheard " + how));
         colony.works().withdraw(owner, elsewhere.id());
         helper.assertTrue(heard.getLast().equals("unheard " + Ending.REVOKED),
             "with no planner listening, a withdrawal ends the ask at once");
 
-        Node held = node(spec(helper, owner));
+        Node held = Nodes.done(spec(helper, owner));
         colony.works().listen(dimension, told);
         colony.works().submit(owner, dimension, Grown.of(held), (any, how) -> heard.add("held " + how));
         colony.works().withdraw(owner, held.id());
@@ -132,7 +130,7 @@ public final class SubmittedWorkGameTests {
         var colony = new ColonyData();
         var mine = ResourceLocation.fromNamespaceAndPath("folkways", "submitted_mine");
         var theirs = ResourceLocation.fromNamespaceAndPath("folkways", "submitted_theirs");
-        Grown goal = Grown.of(node(spec(helper, mine)));
+        Grown goal = Grown.of(Nodes.done(spec(helper, mine)));
         colony.works().submit(mine, helper.getLevel().dimension(), goal, (any, how) -> { });
         helper.assertTrue(refused(() -> colony.works().submit(theirs, helper.getLevel().dimension(), goal,
                 (any, how) -> { }), IllegalArgumentException.class),
@@ -153,12 +151,5 @@ public final class SubmittedWorkGameTests {
         return NodeSpec.of(UUID.randomUUID(), owner,
             WorkSite.at(helper.getLevel(), helper.absolutePos(BlockPos.ZERO)), Stances.WHEREVER,
             Workload.Once.of(1)).done();
-    }
-
-    private static Node node(NodeSpec spec) {
-        return new Node() {
-            public NodeSpec spec() { return spec; }
-            public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
-        };
     }
 }

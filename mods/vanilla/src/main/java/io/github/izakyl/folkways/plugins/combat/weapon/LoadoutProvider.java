@@ -5,7 +5,6 @@ import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
@@ -78,20 +77,6 @@ public interface LoadoutProvider {
 
     default int suggestedAmount(ItemStack weapon) {
         return Math.clamp((long) magazineSize(weapon) * Math.max(1, 160 / Math.max(1, cycleTicks(weapon))), 1, 4096);
-    }
-
-    /** Only used when converting an old selection, including after an absent integration returns. */
-    default Optional<ItemSpec> legacyWeapon(CompoundTag options) {
-        return Optional.empty();
-    }
-
-    record LegacySupply(ItemSpec items, int target, int threshold) {
-    }
-
-    default List<LegacySupply> legacySupplies(CompoundTag options, ItemStack weapon) {
-        return ammunition(weapon)
-            .map(ammo -> List.of(new LegacySupply(ammo, suggestedAmount(weapon), suggestedAmount(weapon))))
-            .orElse(List.of());
     }
 
     default Component label() {

@@ -18,9 +18,10 @@ import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryTestWork;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.engine.plan.Asks;
 import io.github.izakyl.folkways.core.engine.travel.graph.WayGraph;
+import io.github.izakyl.folkways.core.testing.TestFrame;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
@@ -84,14 +85,8 @@ public final class RelocationGameTests {
         level.addFreshEntity(drop);
         AtomicBoolean aboard = new AtomicBoolean();
         AtomicBoolean tracking = new AtomicBoolean();
-        UUID structure = UUID.randomUUID();
-        WorldSpaces.Frame frame = new WorldSpaces.Frame() {
-            public UUID id() { return structure; }
-            public Level level() { return level; }
-            public BlockPos storageOrigin() { return cell; }
-            public Vec3 toWorld(Vec3 local) { return local.add(Vec3.atLowerCornerOf(cell)); }
-            public Vec3 toLocal(Vec3 world) { return world.subtract(Vec3.atLowerCornerOf(cell)); }
-        };
+        TestFrame frame = TestFrame.stored(level, cell);
+        UUID structure = frame.id();
         Runnable uninstall = WorldSpaces.install(new WorldSpaces.Source() {
             public Optional<? extends WorldSpaces.Frame> frame(Level in, UUID id) {
                 return in == level && id.equals(structure) ? Optional.of(frame) : Optional.empty();
@@ -194,7 +189,7 @@ public final class RelocationGameTests {
 
     private static boolean answer(Survey survey, ServerLevel level, ColonyData data, Body body) {
         boolean changed = survey.answer(level, data, Map.of(body.id(), body), ignored -> { });
-        InventoryTestWork.finish(data.inventory(), level.getServer());
+        InventoryObservations.work(data.inventory(), level.getServer(), 100);
         return survey.answer(level, data, Map.of(body.id(), body), ignored -> { }) || changed;
     }
 

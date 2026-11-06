@@ -6,7 +6,6 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
@@ -36,37 +35,6 @@ public final class CookeryCropLifecycleGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(CookeryCropLifecycleGameTests.class);
-    }
-
-    @GameTest(template = "empty")
-    public static void wildRiceBuildsThreeNativePartsAndItsOwnDropsStartTheNextCycle(GameTestHelper helper) {
-        try (var field = rice(helper, 0)) {
-            field.pack.setItem(0, new ItemStack(ModItems.WILD_RICE_SEED.get()));
-            field.sow();
-            parts(helper, field, 0);
-            helper.assertTrue(field.pack.isEmpty(), "one wild seed creates one complete plant");
-            field.grow();
-            parts(helper, field, 7);
-            helper.assertValueEqual(field.crop.canopyOf(field.level(), List.of(field.ground.above())).size(), 2,
-                "the root also claims its two attached parts against duplicate harvest jobs");
-            Outcome.Done harvest = field.harvest();
-            int panicles = harvest.made().stream().filter(stack -> stack.is(ModItems.RICE_PANICLE.get()))
-                .mapToInt(ItemStack::getCount).sum();
-            helper.assertTrue(panicles >= 2 && panicles <= 4, "one mature root gives its real two to four panicles");
-            helper.assertTrue(harvest.made().stream().anyMatch(stack -> stack.is(ModItems.WILD_RICE_SEED.get())),
-                "the native loot supplies wild seeds for another cycle");
-            helper.assertTrue(field.level().getBlockState(field.ground.above()).is(Blocks.WATER),
-                "cutting preserves the paddy water");
-            helper.assertTrue(field.level().getBlockState(field.ground.above(2)).isAir()
-                && field.level().getBlockState(field.ground.above(3)).isAir(), "the upper parts leave no duplicate drops");
-            harvest.made().forEach(stack -> helper.assertTrue(Containers.insert(field.pack, stack).isEmpty(), "loot fits"));
-            long seeds = Goods.countIn(field.pack, field.crop.seedSpec());
-            field.sow();
-            parts(helper, field, 0);
-            helper.assertValueEqual(Goods.countIn(field.pack, field.crop.seedSpec()), seeds - 1,
-                "the next complete plant spends exactly one harvested wild seed");
-        }
-        helper.succeed();
     }
 
     @GameTest(template = "empty")

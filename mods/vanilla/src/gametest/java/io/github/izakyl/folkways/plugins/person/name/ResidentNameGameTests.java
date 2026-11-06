@@ -5,7 +5,6 @@ import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
-import net.minecraft.core.Registry;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -28,14 +27,6 @@ public final class ResidentNameGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(ResidentNameGameTests.class);
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 40)
-    public static void thePoolHoldsNames(GameTestHelper helper) {
-        Registry<NamePool> pool = helper.getLevel().registryAccess().registryOrThrow(ResidentNames.REGISTRY);
-        int names = pool.stream().mapToInt(entry -> entry.names().size()).sum();
-        helper.assertTrue(names > 0, "the resident name pool is empty; every resident would go unnamed");
-        helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 40)

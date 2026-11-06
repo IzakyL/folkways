@@ -8,11 +8,9 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import java.util.Optional;
 import java.util.UUID;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -78,18 +76,6 @@ public final class StationApproachGameTests {
             var busy = approach.freeze(() -> provider.freeze(key, colony, level, at, stances, bookings, () -> { }));
             helper.assertTrue(busy.isEmpty(), "a native ingredient change removes the cached idle offer");
         }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void stationStacksCompareCountsAndComponents(GameTestHelper helper) {
-        ItemStack original = new ItemStack(Items.APPLE, 2);
-        StationStack observed = new StationStack(original);
-        helper.assertTrue(observed.equals(new StationStack(original.copy())), "identical components compare equal");
-        original.set(DataComponents.CUSTOM_NAME, Component.literal("changed"));
-        helper.assertFalse(observed.equals(new StationStack(original)), "component changes invalidate the signature");
-        original = new ItemStack(Items.APPLE, 1);
-        helper.assertFalse(observed.equals(new StationStack(original)), "count changes invalidate the signature");
         helper.succeed();
     }
 }

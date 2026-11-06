@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.work.*;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Modifier;
 import io.github.izakyl.folkways.front.api.PastDay;
@@ -17,7 +17,6 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -100,17 +99,7 @@ public final class HusbandryPerkGameTests {
 
     private static Worker worker(Body body, Effects effects) {
         Container pack = new SimpleContainer(new ItemStack(Items.SHEARS));
-        return new Worker() {
-            public Resident resident() { return body.resident(); }
-            public Mob body() { return body.mob(); }
-            public Container pack() { return pack; }
-            public List<ItemStack> supplied() { return List.of(new ItemStack(Items.WHEAT)); }
-            public List<Store> within() { return List.of(); }
-            public ItemStack held(ToolNeed need) { return pack.getItem(0); }
-            public void spill(ItemStack stack) { throw new AssertionError("unexpected spill"); }
-            public Effects effects() { return effects; }
-            public List<Node> route() { return List.of(); }
-            public Placement placement() { return Placement.NOWHERE; }
-        };
+        return TestWorker.of(body).pack(pack).supplied(() -> List.of(new ItemStack(Items.WHEAT)))
+            .held(need -> pack.getItem(0)).effects(effects);
     }
 }

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.wares;
 
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -12,9 +12,7 @@ import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
@@ -39,7 +37,6 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -131,17 +128,8 @@ public final class CraftRemainderPlanningGameTests {
                 helper.assertTrue(craft.node().spec().leaves().size() == 1, "only unpromised containers are leaves; the promised cake is not counted twice");
                 SimpleContainer actualSource = new SimpleContainer(27); inputs.forEach(stack -> Containers.insert(actualSource, stack.copy()));
                 Container actualPack = fixture.worker.pack();
-                Worker actual = new Worker() {
-                    public io.github.izakyl.folkways.core.api.resident.Resident resident() { return body.resident(); }
-                    public Mob body() { return body; }
-                    public Container pack() { return actualPack; }
-                    public List<Store> within() { return List.of(new Store(fixture.source, actualSource)); }
-                    public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-                    public void spill(ItemStack stack) { if (!stack.isEmpty()) { throw new AssertionError("unexpected spill: " + stack); } }
-                    public Effects effects() { return body.effects(); }
-                    public List<Node> route() { return List.of(craft.node()); }
-                    public Placement placement() { return craft.plan(); }
-                };
+                Worker actual = TestWorker.of(body).pack(actualPack).within(new Worker.Store(fixture.source, actualSource))
+                    .route(List.of(craft.node())).placement(craft.plan());
                 Outcome outcome = Commit.run(level, craft.node(), actual);
                 helper.assertTrue(outcome instanceof Outcome.Done, "the real planned cake consumes its exact claimed ingredients from the nearby store: " + outcome);
                 ((Outcome.Done) outcome).made().forEach(stack -> helper.assertTrue(Containers.insert(actualPack, stack).isEmpty(), "the actual output and all three native containers fit the reserved two cells"));

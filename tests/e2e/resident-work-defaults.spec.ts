@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { defineTask, javaTask, media, screen, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, screen, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements, waitForElement } from "../ldlib2";
 import { foundColonyFast, foundingBox, openColonyPanelViaBook, optInViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { ADMIT_SETTLERS, runColonyTask } from "../shared/colony/colony-tasks";
@@ -7,7 +7,7 @@ import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
-import { commandPos, frames } from "../shared/harness/bw-helpers";
+import { commandPos } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { GROUND } from "../shared/harness/stage";
 import { clickTab } from "../shared/ui/colony-pages";
@@ -35,14 +35,6 @@ for(var body:Residents.of(colony,server)) {
 return Map.of("allowed",rule.allowed(),"priority",rule.priority().number(),"residents",rows);
 ` }),
 });
-const NARROW = defineTask<void, number>({
-  name: "folkways.defaults.narrow", side: "client",
-  source: javaTask({ imports: ["net.minecraft.client.Minecraft"], body: `
-var mc=Minecraft.getInstance();mc.options.guiScale().set(3);mc.resizeDisplay();
-return mc.getWindow().getGuiScaledWidth();
-` }),
-});
-
 test("future human work defaults on the person page affect only new arrivals", async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   ensureOut("e2e");
@@ -93,11 +85,6 @@ test("future human work defaults on the person page affect only new arrivals", a
     expect(rows.map(({ allowed, priority }) => ({ allowed, priority }))).toEqual(expect.arrayContaining([
       { allowed: false, priority: 2 }, { allowed: true, priority: 4 },
     ]));
-    await client.run(NARROW, undefined);
-    await openColonyPanelViaBook(server, client, player, founded.standBlock);
-    await openDefaults(client);
-    await frames(client, 5);
-    await media.screenshot(client, { path: testInfo.outputPath("defaults-narrow.png") });
   } catch (error) {
     pair?.failing(error);
     throw error;

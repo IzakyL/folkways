@@ -5,6 +5,8 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlock
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.compost.CompostContent;
 import io.github.izakyl.folkways.plugins.compost.CompostPresence;
 import io.github.izakyl.folkways.core.api.colony.Closing;
@@ -13,7 +15,6 @@ import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.front.api.Shape;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -22,10 +23,8 @@ import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Refinement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.api.work.Workshop;
@@ -39,6 +38,7 @@ import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -50,7 +50,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -123,15 +122,26 @@ public final class CookeryRegistrationGameTests {
 
     @GameTest(template = "empty")
     public static void unmarkingAnInvestedPotPreservesGoodsAndLetsANewColonyReuseIt(GameTestHelper helper) {
+        releasedPotKeepsItsBatchAndCanJoinANewColony(helper, rig -> {
+            rig.mark(rig.potCell);
+            helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(),
+                "the removed kitchen has no recovery task");
+        });
+    }
+
+    @GameTest(template = "empty")
+    public static void razingAColonyReleasesItsLoadedPotWithoutDestroyingTheBatch(GameTestHelper helper) {
+        releasedPotKeepsItsBatchAndCanJoinANewColony(helper, rig -> rig.colony.raze());
+    }
+
+    private static void releasedPotKeepsItsBatchAndCanJoinANewColony(GameTestHelper helper, Consumer<Kitchen> release) {
         try (Kitchen rig = new Kitchen(helper)) {
             rig.mark(rig.potCell);
             rig.prepareRice();
             CompoundTag contents = nativeContents(rig.pot, rig.level);
-            rig.mark(rig.potCell);
+            release.accept(rig);
             helper.assertTrue(contents.equals(nativeContents(rig.pot, rig.level)),
-                "unmarking preserves invested food, soup, lid and progress");
-            helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(),
-                "the removed kitchen has no recovery task");
+                "releasing the pot preserves invested food, soup, lid and progress");
             rig.emptyPot();
             Colony next = Colonies.mint(rig.level.getServer());
             try {
@@ -141,33 +151,7 @@ public final class CookeryRegistrationGameTests {
                 presence.refresh(rig.level.getServer());
                 helper.assertTrue(((ColonyWorks) next).workshopsIn(rig.level.dimension()).stream()
                     .anyMatch(workshop -> !options(workshop, "cooked_rice", 3).isEmpty()),
-                    "the prior owner's persistent claim cannot lock the empty pot forever");
-            } finally {
-                next.raze();
-            }
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void razingAColonyReleasesItsLoadedPotWithoutDestroyingTheBatch(GameTestHelper helper) {
-        try (Kitchen rig = new Kitchen(helper)) {
-            rig.mark(rig.potCell);
-            rig.prepareRice();
-            CompoundTag contents = nativeContents(rig.pot, rig.level);
-            rig.colony.raze();
-            helper.assertTrue(contents.equals(nativeContents(rig.pot, rig.level)),
-                "real colony teardown preserves the native batch");
-            rig.emptyPot();
-            Colony next = Colonies.mint(rig.level.getServer());
-            try {
-                helper.assertTrue(MemberToggle.toggleAt(rig.level, next, rig.potCell, rig.player).refusal().isEmpty(),
-                    "the released block can join a new colony");
-                CookeryPresence presence = next.service(CookeryContent.ID, CookeryPresence.class).orElseThrow();
-                presence.refresh(rig.level.getServer());
-                helper.assertTrue(((ColonyWorks) next).workshopsIn(rig.level.dimension()).stream()
-                    .anyMatch(workshop -> !options(workshop, "cooked_rice", 3).isEmpty()),
-                    "raze cannot leave a stale ownership lock");
+                    "the prior owner's claim cannot lock the empty pot forever");
             } finally {
                 next.raze();
             }
@@ -404,23 +388,7 @@ public final class CookeryRegistrationGameTests {
             body = PersonBody.RESIDENT.get().create(level);
             body.setNoAi(true);
             body.moveTo(potCell.getX() - 0.5, potCell.getY() - 1, potCell.getZ() + 1.5, 0, 0);
-            worker = new Worker() {
-                public Resident resident() { return body.resident(); }
-                public Mob body() { return body; }
-                public Container pack() { return pack; }
-                public List<Store> within() { return List.of(); }
-                public ItemStack held(ToolNeed need) {
-                    for (int slot = 0; slot < pack.getContainerSize(); slot++) {
-                        ItemStack stack = pack.getItem(slot);
-                        if (io.github.izakyl.folkways.core.api.work.Tools.answers(stack, need)) return stack;
-                    }
-                    return ItemStack.EMPTY;
-                }
-                public void spill(ItemStack stack) { if (!stack.isEmpty()) throw new AssertionError("the test pack has room"); }
-                public io.github.izakyl.folkways.effect.Effects effects() { return body.effects(); }
-                public List<Node> route() { return List.of(); }
-                public Placement placement() { return Placement.NOWHERE; }
-            };
+            worker = TestWorker.of(body).pack(pack).heldFromPack();
         }
 
         void mark(BlockPos cell) {

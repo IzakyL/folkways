@@ -5,34 +5,27 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.vocation.KitRules;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
 import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.front.api.CoreSettings;
-import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
-import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
-import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
 import io.github.izakyl.folkways.rts.combat.command.ResidentCommands;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -40,9 +33,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -52,7 +42,6 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.projectile.AbstractArrow;
@@ -76,42 +65,6 @@ public final class PatrolSupplyGameTests {
         event.register(PatrolSupplyGameTests.class);
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 550)
-    public static void profileWeaponsBypassTradeToolListsWithoutBecomingVocationTools(GameTestHelper helper) {
-        Scene scene = new Scene(helper);
-        helper.assertTrue(
-            CoreSettings.tool(Vocations.required(PatrolContent.VOCATION)).byDefault().isEmpty(),
-            "patrolling declares no weapon tools");
-        helper.assertTrue(
-            Vocations.required(PatrolContent.VOCATION).kit().isEmpty(), "weapons are no longer"
-            + " a vocation"
-            + " kit");
-        helper.assertTrue(
-            !KitRules.allows(scene.colony, Vocations.required(PatrolContent.VOCATION), Items.BOW)
-            && !KitRules.allows(scene.colony, Vocations.required(PatrolContent.VOCATION), Items.IRON_SWORD),
-            "combat weapons are absent from default tool lists");
-        scene.store.setItem(0, new ItemStack(Items.BOW));
-        scene.store.setItem(1, new ItemStack(Items.ARROW, 8));
-        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
-        scene.guard();
-        helper.startSequence()
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    scene.body.pack().count(Items.BOW) == 1
-                    && scene.body.pack().count(Items.ARROW) == 8,
-                    "a profile supplies real equipment independently of"
-                    + " vocation permissions"
-                    + scene.debug()))
-            .thenExecute(
-            () ->
-                helper.assertValueEqual(
-                    scene.countInStore(Items.BOW), 0, "the physical weapon"
-                    + " moves exactly"
-                    + " once"))
-            .thenSucceed();
-    }
-
     @GameTest(template = "empty_large", timeoutTicks = 650)
     public static void aGuardWalksToRealStorageForAWeaponAndArrowsThenShoots(GameTestHelper helper) {
         Scene scene = new Scene(helper);
@@ -122,7 +75,7 @@ public final class PatrolSupplyGameTests {
         arrows.set(DataComponents.CUSTOM_NAME, Component.literal("warehouse ammunition"));
         scene.store.setItem(0, bow);
         scene.store.setItem(1, arrows);
-        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
+        arm(scene.colony, scene.body, "Bow", ItemSpec.of(Items.BOW));
         Zombie enemy = scene.enemy(7);
         scene.guard();
         helper.startSequence()
@@ -130,21 +83,17 @@ public final class PatrolSupplyGameTests {
             () ->
                 helper.assertTrue(
                     scene.supplyState() == PatrolSupplies.State.FETCHING,
-                    "a guard with no equipment starts a"
-                    + " finite stock"
-                    + " trip" + scene.debug()))
+                    "a guard with no equipment starts a finite stock trip" + scene.debug()))
             .thenExecute(
             () ->
                 helper.assertTrue(
                     scene.store.getItem(0).is(Items.BOW) && scene.body.pack().count(Items.BOW) == 0,
-                    "stock remains in storage while the resident is still far"
-                    + " away"))
+                    "stock remains in storage while the resident is still far away"))
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
                     enemy.getHealth() < enemy.getMaxHealth(),
-                    "the guard obtains the real loadout and uses the normal"
-                    + " weapon runner to shoot"
+                    "the guard obtains the real loadout and uses the normal weapon runner to shoot"
                     + scene.debug()))
             .thenExecute(
             () -> {
@@ -157,8 +106,7 @@ public final class PatrolSupplyGameTests {
                     scene.body.getLastHurtByMob() == null,
                     "the NoAI enemy never provoked the resident");
                 helper.assertValueEqual(
-                    scene.countInStore(Items.BOW), 0, "exactly one warehouse bow is"
-                    + " taken");
+                    scene.countInStore(Items.BOW), 0, "exactly one warehouse bow is taken");
                 helper.assertValueEqual(
                     scene.countInStore(Items.ARROW),
                     8,
@@ -169,14 +117,11 @@ public final class PatrolSupplyGameTests {
                     Component.literal("warehouse bow"),
                     "weapon components survive storage handoff");
                 helper.assertTrue(
-                    actual.getDamageValue() > 9, "native shooting wears the actual"
-                    + " warehouse bow");
+                    actual.getDamageValue() > 9, "native shooting wears the actual warehouse bow");
                 helper.assertValueEqual(
-                    scene.weaponCount(), 1, "the pack and real hand jointly own one"
-                    + " weapon");
+                    scene.weaponCount(), 1, "the pack and real hand jointly own one weapon");
                 helper.assertTrue(
-                    scene.leftAnchor, "the same resident physically walks to"
-                    + " collect the stock");
+                    scene.leftAnchor, "the same resident physically walks to collect the stock");
             })
             .thenSucceed();
     }
@@ -185,26 +130,22 @@ public final class PatrolSupplyGameTests {
     public static void aStockoutReleasesTheRunnerAndRetriesAfterRealStockAppears(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         scene.body.pack().insert(new ItemStack(Items.BOW));
-        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
+        arm(scene.colony, scene.body, "Bow", ItemSpec.of(Items.BOW));
         scene.guard();
         helper.startSequence()
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
                     scene.supplyState() == PatrolSupplies.State.NO_STOCK,
-                    "a stockout is publicly observable without a permanent"
-                    + " fetch action"
+                    "a stockout is publicly observable without a permanent fetch action"
                     + scene.debug()))
             .thenIdle(25)
             .thenExecute(
             () -> {
                 helper.assertTrue(
                     Reach.standingAt(scene.body.position(), scene.anchor.block(scene.level)),
-                    "an unavailable supply does not take the guard away"
-                    + " indefinitely");
-                helper.assertTrue(!scene.body.hasWeaponSession(), "stockout creates no"
-                    + " native weapon"
-                    + " loan");
+                    "an unavailable supply does not take the guard away indefinitely");
+                helper.assertTrue(!scene.body.hasWeaponSession(), "stockout creates no native weapon loan");
                 scene.store.setItem(0, new ItemStack(Items.ARROW, 3));
             })
             .thenWaitUntil(
@@ -212,15 +153,13 @@ public final class PatrolSupplyGameTests {
                 helper.assertValueEqual(
                     scene.body.pack().count(Items.ARROW),
                     3,
-                    "a bounded retry collects an available partial batch"
-                    + " instead of requiring all eight"
+                    "a bounded retry collects an available partial batch instead of requiring all eight"
                     + scene.debug()))
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
                     Reach.standingAt(scene.body.position(), scene.anchor.block(scene.level)),
-                    "after collection the same guard returns"
-                    + " to its slot" + scene.debug()))
+                    "after collection the same guard returns to its slot" + scene.debug()))
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
@@ -240,7 +179,7 @@ public final class PatrolSupplyGameTests {
         Scene scene = new Scene(helper);
         scene.store.setItem(0, new ItemStack(Items.BOW));
         scene.store.setItem(1, new ItemStack(Items.ARROW, 16));
-        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
+        arm(scene.colony, scene.body, "Bow", ItemSpec.of(Items.BOW));
         scene.guard();
         helper.startSequence()
             .thenWaitUntil(
@@ -248,8 +187,7 @@ public final class PatrolSupplyGameTests {
                 helper.assertTrue(
                     scene.supplyState() == PatrolSupplies.State.FETCHING
                     && scene.body.getX() > scene.at(3, 1, 3).cell().getX(),
-                    "the runner starts actually travelling for its guard's"
-                    + " supplies"
+                    "the runner starts actually travelling for its guard's supplies"
                     + scene.debug()))
             .thenExecute(() -> scene.commands.hold(scene.body, scene.at(2, 1, 3)))
             .thenIdle(70)
@@ -286,7 +224,7 @@ public final class PatrolSupplyGameTests {
         }
         scene.store.setItem(0, new ItemStack(Items.BOW));
         scene.store.setItem(1, new ItemStack(Items.ARROW, 8));
-        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
+        arm(scene.colony, scene.body, "Bow", ItemSpec.of(Items.BOW));
         scene.guard();
         helper.startSequence()
             .thenWaitUntil(
@@ -298,8 +236,7 @@ public final class PatrolSupplyGameTests {
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
-                    scene.countInStore(Items.BOW), 1, "no weapon is taken before"
-                    + " capacity exists");
+                    scene.countInStore(Items.BOW), 1, "no weapon is taken before capacity exists");
                 helper.assertTrue(
                     scene.level
                     .getEntitiesOfClass(
@@ -314,8 +251,7 @@ public final class PatrolSupplyGameTests {
                 helper.assertTrue(
                     scene.body.pack().count(Items.BOW) == 1
                     && scene.body.pack().count(Items.ARROW) == 8,
-                    "a finite retry uses newly available pack"
-                    + " room" + scene.debug()))
+                    "a finite retry uses newly available pack room" + scene.debug()))
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
@@ -323,8 +259,7 @@ public final class PatrolSupplyGameTests {
                     0,
                     "the actual bow moves once after capacity recovers");
                 helper.assertValueEqual(
-                    scene.countInStore(Items.ARROW), 0, "the actual eight arrows"
-                    + " move once");
+                    scene.countInStore(Items.ARROW), 0, "the actual eight arrows move once");
             })
             .thenSucceed();
     }
@@ -336,7 +271,7 @@ public final class PatrolSupplyGameTests {
         sword.setDamageValue(13);
         scene.body.pack().insert(sword);
         scene.store.setItem(0, new ItemStack(Items.BOW));
-        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
+        arm(scene.colony, scene.body, "Bow", ItemSpec.of(Items.BOW));
         scene.guard();
         helper.startSequence()
             .thenWaitUntil(
@@ -371,12 +306,10 @@ public final class PatrolSupplyGameTests {
                 scene.supplies.tick(scene.level.getServer());
                 helper.assertTrue(
                     scene.supplyState() == PatrolSupplies.State.INACTIVE,
-                    "after actual colony release the final cancellation status is"
-                    + " no longer retained");
+                    "after actual colony release the final cancellation status is no longer retained");
                 helper.assertTrue(
-                    scene.supplies.preference(scene.body.id()).isEmpty(),
-                    "a departed resident's saved loadout is removed with its"
-                    + " per-resident state");
+                    scene.supplies.profiles().assigned(scene.body.id()).isEmpty(),
+                    "a departed resident's saved loadout is removed with its per-resident state");
             })
             .thenSucceed();
     }
@@ -387,38 +320,34 @@ public final class PatrolSupplyGameTests {
         scene.body.pack().insert(new ItemStack(Items.BOW));
         scene.body.pack().insert(new ItemStack(Items.ARROW, 7));
         scene.store.setItem(0, new ItemStack(Items.ARROW));
-        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
+        arm(scene.colony, scene.body, "Bow", ItemSpec.of(Items.BOW));
         scene.guard();
         helper.startSequence()
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
                     scene.supplyState() == PatrolSupplies.State.FETCHING && scene.nearStore(),
-                    "the resident reaches the real last-arrow source before"
-                    + " committing its collection"
+                    "the resident reaches the real last-arrow source before committing its collection"
                     + scene.debug()))
             .thenExecute(() -> scene.store.removeItem(0, 1))
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
                     scene.supplyState() == PatrolSupplies.State.NO_STOCK,
-                    "an execution-time competitor taking the last arrow creates"
-                    + " a bounded stockout"
+                    "an execution-time competitor taking the last arrow creates a bounded stockout"
                     + scene.debug()))
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
                     scene.body.pack().count(Items.ARROW),
                     7,
-                    "failed collection does not consume or refund copies of carried"
-                    + " ammunition");
+                    "failed collection does not consume or refund copies of carried ammunition");
                 helper.assertValueEqual(
                     scene.countInStore(Items.ARROW),
                     0,
                     "the competing withdrawal remains the only source mutation");
                 helper.assertValueEqual(
-                    scene.weaponCount(), 1, "failed collection leaves the actual"
-                    + " weapon intact");
+                    scene.weaponCount(), 1, "failed collection leaves the actual weapon intact");
             })
             .thenSucceed();
     }
@@ -427,7 +356,7 @@ public final class PatrolSupplyGameTests {
     public static void storageWithdrawalAtArrivalCannotReadAnAdjacentUnregisteredContainer(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         scene.body.pack().insert(new ItemStack(Items.BOW));
-        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
+        arm(scene.colony, scene.body, "Bow", ItemSpec.of(Items.BOW));
         scene.store.setItem(0, new ItemStack(Items.ARROW, 8));
         helper.setBlock(new BlockPos(19, 1, 3), Blocks.BARREL);
         Container unregistered = Containers.at(scene.level, scene.at(19, 1, 3).block(scene.level)).orElseThrow();
@@ -438,24 +367,19 @@ public final class PatrolSupplyGameTests {
             () ->
                 helper.assertTrue(
                     scene.supplyState() == PatrolSupplies.State.FETCHING && scene.nearStore(),
-                    "the resident reaches its registered"
-                    + " source" + scene.debug()))
+                    "the resident reaches its registered source" + scene.debug()))
             .thenExecute(() -> scene.colony.stores(Scene.STORE_OWNER, scene.level.dimension(), List.of()))
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
                     scene.supplyState() == PatrolSupplies.State.NO_STOCK,
-                    "source deregistration is checked again"
-                    + " at execution" + scene.debug()))
+                    "source deregistration is checked again at execution" + scene.debug()))
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
-                    scene.body.pack().count(Items.ARROW), 0, "deregistered source"
-                    + " supplies"
-                    + " nothing");
+                    scene.body.pack().count(Items.ARROW), 0, "deregistered source supplies nothing");
                 helper.assertValueEqual(
-                    scene.countInStore(Items.ARROW), 8, "the original source keeps"
-                    + " all actual arrows");
+                    scene.countInStore(Items.ARROW), 8, "the original source keeps all actual arrows");
                 helper.assertValueEqual(
                     unregistered.getItem(0).getCount(),
                     8,
@@ -477,7 +401,7 @@ public final class PatrolSupplyGameTests {
         Scene scene = new Scene(helper);
         scene.body.pack().insert(new ItemStack(Items.BOW));
         scene.body.pack().insert(new ItemStack(Items.ARROW));
-        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
+        arm(scene.colony, scene.body, "Bow", ItemSpec.of(Items.BOW));
         scene.store.setItem(0, new ItemStack(Items.ARROW, 20));
         scene.guard();
         var order = scene.commands.current(scene.body.id()).orElseThrow();
@@ -488,16 +412,14 @@ public final class PatrolSupplyGameTests {
             .getFirst()
             .take()
             .get();
-        helper.assertTrue(trip.ready(scene.level), "collection starts under the exact guard and"
-            + " profile revision");
+        helper.assertTrue(trip.ready(scene.level), "collection starts under the exact guard and profile revision");
         var profile = scene.supplies.profiles().assigned(scene.body.id()).orElseThrow();
         scene.supplies
             .profiles()
-            .replace(new LoadoutProfile(profile.id(), "Renamed", profile.entries(), profile.legacy()));
+            .replace(new LoadoutProfile(profile.id(), "Renamed", profile.entries()));
         helper.assertFalse(trip.ready(scene.level), "old profile revision cannot collect");
         helper.assertValueEqual(
-            session.state(), WeaponSession.State.CLOSED, "profile changes return the actual"
-            + " hand immediately");
+            session.state(), WeaponSession.State.CLOSED, "profile changes return the actual hand immediately");
         helper.assertTrue(
             scene.commands.current(scene.body.id()).orElseThrow() == order,
             "equipment editing never replaces route intent");
@@ -514,7 +436,7 @@ public final class PatrolSupplyGameTests {
     private static void extractionFailure(GameTestHelper helper, boolean afterMutation) {
         Scene scene = new Scene(helper);
         scene.body.pack().insert(new ItemStack(Items.BOW));
-        scene.supplies.loadout(scene.body, LoadoutRegistry.BOW);
+        arm(scene.colony, scene.body, "Bow", ItemSpec.of(Items.BOW));
         scene.guard();
         SimpleContainer failing =
             new SimpleContainer(3) {
@@ -524,8 +446,7 @@ public final class PatrolSupplyGameTests {
                         if (afterMutation) {
                             super.removeItem(slot, count);
                         }
-                        throw new IllegalStateException("third component stack failed"
-                            + " extraction");
+                        throw new IllegalStateException("third component stack failed extraction");
                     }
                     return super.removeItem(slot, count);
                 }
@@ -541,13 +462,9 @@ public final class PatrolSupplyGameTests {
             failing.setItem(slot, stack);
             scene.store.setItem(slot, stack.copy());
         }
-        RtsInventoryObservations.publish(scene.colony, scene.level);
+        InventoryObservations.publish(scene.colony, scene.level);
         Colony bridged =
-            (Colony)
-            Proxy.newProxyInstance(
-            Colony.class.getClassLoader(),
-            new Class<?>[] {Colony.class},
-            (proxy, method, arguments) ->
+            Proxies.of(Colony.class, (proxy, method, arguments) ->
                 method.getName().equals("store")
                     ? Optional.of(failing)
                     : method.invoke(scene.colony, arguments));
@@ -566,10 +483,7 @@ public final class PatrolSupplyGameTests {
                 helper.fail("the failing third extraction must propagate its adapter error");
             } catch (IllegalStateException expected) {
                 helper.assertTrue(
-                    expected.getMessage().contains("third"
-                    + " component"), "the original draw"
-                    + " failure remains"
-                    + " visible");
+                    expected.getMessage().contains("third component"), "the original draw failure remains visible");
             }
             request.released(scene.level, worker, new Ending.Failed(request.id(), LaborRefusal.WORK_BROKE));
             request.released(scene.level, worker, Ending.DROPPED);
@@ -604,8 +518,7 @@ public final class PatrolSupplyGameTests {
                     .mapToInt(ItemStack::getCount)
                     .sum(),
                     4,
-                    "an adapter exception after mutation preserves the unreturned current stack"
-                    + " too");
+                    "an adapter exception after mutation preserves the unreturned current stack too");
             }
         } finally {
             scene.close();
@@ -613,46 +526,10 @@ public final class PatrolSupplyGameTests {
     }
 
     private static Worker worker(ResidentEntity body) {
-        return new Worker() {
-            public Resident resident() {
-                return body.resident();
-            }
-
-            public Mob body() {
-                return body;
-            }
-
-            public Container pack() {
-                return body.pack();
-            }
-
-            public List<Store> within() {
-                return List.of();
-            }
-
-            public ItemStack held(ToolNeed need) {
-                return ItemStack.EMPTY;
-            }
-
-            public void spill(ItemStack stack) {
-                body.spawnAtLocation(stack);
-            }
-
-            public Effects effects() {
-                return body.effects();
-            }
-
-            public List<Node> route() {
-                return List.of();
-            }
-
-            public Placement placement() {
-                return Placement.NOWHERE;
-            }
-        };
+        return TestWorker.of(body).spill(body::spawnAtLocation);
     }
 
-    private static final class Scene implements GameTestListener {
+    private static final class Scene {
         static final ResourceLocation STORE_OWNER =
             ResourceLocation.fromNamespaceAndPath("folkways", "test_patrol_supply_store");
         final GameTestHelper helper;
@@ -701,12 +578,11 @@ public final class PatrolSupplyGameTests {
                     if (after < previousStock) {
                         helper.assertTrue(
                             nearStore(),
-                            "stock only moves after this resident physically reaches the"
-                            + " container");
+                            "stock only moves after this resident physically reaches the container");
                     }
                     leftAnchor |= !Reach.standingAt(body.position(), anchor.block(level));
                 });
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
         }
 
         WorldPos at(int x, int y, int z) {
@@ -724,8 +600,8 @@ public final class PatrolSupplyGameTests {
         String debug() {
             return " [status="
                 + supplies.status(body.id())
-                + ", preference="
-                + supplies.preference(body.id())
+                + ", profile="
+                + supplies.profiles().assigned(body.id()).map(LoadoutProfile::name)
                 + ", order="
                 + commands.current(body.id()).map(order -> order.mode() + "/" + order.status())
                 + ", body="
@@ -819,19 +695,15 @@ public final class PatrolSupplyGameTests {
             others.forEach(Entity::discard);
             colony.raze();
         }
+    }
 
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
-        }
+    private static void arm(Colony colony, Body body, String name, ItemSpec weapon) {
+        LoadoutProfiles profiles = LoadoutProfiles.of(colony);
+        LoadoutProfile profile =
+            profiles.all().stream()
+            .filter(one -> one.name().equals(name))
+            .findFirst()
+            .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

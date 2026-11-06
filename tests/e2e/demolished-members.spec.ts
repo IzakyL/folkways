@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
-import { defineTask, javaTask, media, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { createColonyViaBook, foundingBox, optInViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import { commandPos, frames, tryCommand } from "../shared/harness/bw-helpers";
@@ -98,7 +98,6 @@ for (const stage of twins()) test(stage.title("demolished members leave the ledg
     evidence.finalLedger = await ledger();
     expect(evidence.finalLedger).toEqual([false, true, true]);
     await screen.dismiss(client);
-    await media.screenshot(client, { path: testInfo.outputPath("demolished-members.png") });
   } catch (error) { pair?.failing(error); throw error; }
   finally {
     await testInfo.attach("demolished-members-evidence.json", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });

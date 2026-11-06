@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { clickElement, panelElements, waitForElement } from "../ldlib2";
-import { defineTask, input, javaTask, media, screen, tick } from "@izakyl/blockwright-minecraft";
+import { defineTask, input, javaTask, screen, tick } from "@izakyl/blockwright-minecraft";
 import { createColonyViaBook, tryCommand, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { frames } from "../shared/harness/bw-helpers";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { newRunId } from "../shared/harness/run-id";
 import { BUDGET } from "../shared/harness/budgets";
@@ -150,7 +150,7 @@ test("damage control marks open zone settings, persist flags and release through
       await clickElement(client, { id: `folkways.zoneconfig.value.${key}` });
       await expect.poll(async () => { await tick.sprint(server, 3); return (await server.run(SERVER, undefined))[key]; }).toBe(value);
     }
-    // Leave repair off while inspecting the missing cell, so workers cannot race the screenshot.
+    // Leave repair off while inspecting the missing cell, so workers cannot refill it first.
     await clickElement(client, { id: "folkways.zoneconfig.value.repair" });
     await screen.dismiss(client);
     await screen.waitFor(client, "OverheadScreen");
@@ -172,7 +172,6 @@ test("damage control marks open zone settings, persist flags and release through
     const missing = await client.run(PROBE, undefined);
     expect(missing.hovered).toBe(0xFFD45C);
     expect(missing.hoveredText).toContain("Missing: Smooth Stone");
-    await media.screenshot(client, { path: outAbs("e2e", "shots", "damage-control-missing.png") });
     await screen.clickWidget(client, { label: "Build" });
     await frames(client, 6);
     const after = await client.run(PROBE, undefined);

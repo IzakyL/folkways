@@ -143,57 +143,6 @@ public final class CreateElevatorGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 1200)
-    public static void anUnseatedResidentWalksIntoTheCabinAndRidesBothDirectionsWithoutPositionJumps(GameTestHelper helper) {
-        var level = helper.getLevel();
-        var f = fixture(helper);
-        int[] stage = {0};
-        Vec3[] last = {null};
-        boolean[] carried = {false};
-        helper.succeedWhen(() -> {
-            var view = f.adapter.inspect(level.getServer(), f.ref).orElseThrow(() ->
-                new net.minecraft.gametest.framework.GameTestAssertException(assembly(f)));
-            helper.assertValueEqual(view.floors().size(), 2, "two real landings");
-            helper.assertTrue(!view.places().isEmpty(), "standing capacity does not depend on seats");
-            helper.assertValueEqual(f.pulley.getAttachedContraption().getContraption().getSeats().size(), 0, "fixture has no seats");
-            helper.assertFalse(f.body.isPassenger(), "walking and native collision never mount the resident");
-            if (last[0] != null) helper.assertTrue(last[0].distanceToSqr(f.body.position()) < 2.25D,
-                "no one-tick boarding, riding or disembarking position jump");
-            last[0] = f.body.position();
-            if (stage[0] == 0) {
-                helper.assertTrue(view.stoppedAt().orElse(-999) == f.deck.getY() + 3, "waiting at lower floor");
-                helper.assertTrue(f.adapter.board(level.getServer(), f.ref, 0, f.body), "walking to reserved interior standing place");
-                helper.assertTrue(f.body.walkDist > 0.1F, "the resident used its real walking movement");
-                helper.assertTrue(f.adapter.occupant(level.getServer(), f.ref, 0).filter(f.body.getUUID()::equals).isPresent(), "physical standing body occupies its place");
-                helper.assertFalse(f.adapter.inspect(level.getServer(), f.ref).orElseThrow().freePlaces().contains(0), "physical occupant reduces free capacity");
-                helper.assertTrue(f.adapter.target(level.getServer(), f.ref, f.deck.getY() + 8), "call upper floor");
-                stage[0] = 1;
-            }
-            if (stage[0] == 1) {
-                carried[0] |= f.body.getY() > f.deck.getY() + 3;
-                helper.assertTrue(f.adapter.placeOf(level.getServer(), f.ref, f.body).isPresent(), "ordinary resident remains physically supported while ascending");
-                helper.assertTrue(view.stoppedAt().orElse(-999) == f.deck.getY() + 8, "waiting for upper arrival");
-                stage[0] = 2;
-            }
-            if (stage[0] == 2) {
-                helper.assertTrue(f.adapter.disembark(level.getServer(), f.ref, 0, f.body), "walk out onto real upper landing");
-                helper.assertTrue(Footing.withFeetAt(level, f.body.blockPosition()), "upper exit has a real floor");
-                stage[0] = 3;
-            }
-            if (stage[0] == 3) {
-                helper.assertTrue(f.adapter.board(level.getServer(), f.ref, 0, f.body), "walk back into cabin");
-                helper.assertTrue(f.adapter.target(level.getServer(), f.ref, f.deck.getY() + 3), "call lower floor");
-                stage[0] = 4;
-            }
-            helper.assertTrue(stage[0] == 4 && view.stoppedAt().orElse(-999) == f.deck.getY() + 3, "waiting for native descending support");
-            helper.assertTrue(f.adapter.disembark(level.getServer(), f.ref, 0, f.body), "walk out onto real lower landing");
-            helper.assertTrue(carried[0], "native collision carried the ordinary standing resident upstairs");
-            helper.assertTrue(f.adapter.placeOf(level.getServer(), f.ref, f.body).isEmpty(), "walking off releases physical occupancy");
-            helper.assertTrue(Footing.withFeetAt(level, f.body.blockPosition()), "lower exit has a real floor");
-            f.cleanup.run();
-        });
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 1200)
     public static void twoUnreservedMobsShareTheCabinAndRestoreItsPhysicalCapacityAfterWalkingOut(GameTestHelper helper) {
         var level = helper.getLevel();
         var f = fixture(helper);
@@ -205,6 +154,7 @@ public final class CreateElevatorGameTests {
         int[] capacity = {-1};
         boolean[] out = {false, false};
         boolean[] straddled = {false};
+        boolean[] carried = {false};
         Vec3[] previous = {null, null};
         Mob[] bodies = {f.body, other};
         helper.succeedWhen(() -> {
@@ -222,8 +172,11 @@ public final class CreateElevatorGameTests {
             }
             if (stage[0] == 0) {
                 if (capacity[0] < 0) capacity[0] = view.places().size();
+                helper.assertValueEqual(view.floors().size(), 2, "two real landings");
+                helper.assertTrue(view.stoppedAt().orElse(-999) == f.deck.getY() + 3, "waiting at lower floor");
                 helper.assertTrue(f.adapter.board(level.getServer(), f.ref, 0, f.body),
                     "first external Mob walks to standing place 0");
+                helper.assertTrue(f.body.walkDist > 0.1F, "the Mob used its real walking movement");
                 helper.assertValueEqual(f.adapter.inspect(level.getServer(), f.ref).orElseThrow().freePlaces().size(),
                     capacity[0] - 1, "unreserved external Mob consumes physical capacity");
                 helper.assertTrue(f.adapter.occupant(level.getServer(), f.ref, 0).filter(f.body.getUUID()::equals).isPresent(),
@@ -248,6 +201,7 @@ public final class CreateElevatorGameTests {
                 stage[0] = 2;
             }
             if (stage[0] == 2 || stage[0] == 5) {
+                carried[0] |= stage[0] == 2 && f.body.getY() > f.deck.getY() + 3;
                 for (Mob body : bodies) helper.assertTrue(f.adapter.placeOf(level.getServer(), f.ref, body).isPresent(),
                     "both unmounted Mobs remain supported by the moving native cabin");
                 int destination = f.deck.getY() + (stage[0] == 2 ? 8 : 3);
@@ -259,6 +213,7 @@ public final class CreateElevatorGameTests {
                     if (!out[i]) out[i] = f.adapter.disembark(level.getServer(), f.ref, i, bodies[i]);
                 }
                 helper.assertTrue(out[0] && out[1], "both Mobs walk out without blocking each other");
+                helper.assertTrue(carried[0], "native collision carried the ordinary standing Mobs upstairs");
                 for (Mob body : bodies) {
                     helper.assertTrue(f.adapter.placeOf(level.getServer(), f.ref, body).isEmpty()
                         && Footing.withFeetAt(level, body.blockPosition()), "each Mob fully leaves onto the actual landing");

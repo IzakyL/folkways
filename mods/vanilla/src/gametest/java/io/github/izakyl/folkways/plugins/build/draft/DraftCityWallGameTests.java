@@ -1,12 +1,7 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -15,7 +10,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -38,15 +32,7 @@ public final class DraftCityWallGameTests {
     }
 
     private static Pattern wall() {
-        String path = "/data/folkways/" + Patterns.FOLDER + "/city_wall.star";
-        try (InputStream in = DraftCityWallGameTests.class.getResourceAsStream(path)) {
-            if (in == null) {
-                throw new AssertionError("city_wall.star is not bundled");
-            }
-            return DraftKit.bundled("city_wall", new String(in.readAllBytes(), StandardCharsets.UTF_8));
-        } catch (IOException unreadable) {
-            throw new UncheckedIOException(unreadable);
-        }
+        return DraftKit.shipped("city_wall");
     }
 
     private static DraftKit.Filled defaults(Pattern pattern) {
@@ -76,16 +62,6 @@ public final class DraftCityWallGameTests {
     private static boolean filled(Drawn.Ready ready, BlockPos at) {
         return ready.draft().cells().stream().anyMatch(cell -> ready.corner().offset(cell.offset()).equals(at)
             && !cell.state().isAir());
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 80)
-    public static void cityWallParsesWithReplaceableMaterials(GameTestHelper helper) {
-        Pattern pattern = wall();
-        helper.assertTrue(pattern.accepts().equals(Set.of(Hint.PATH)), "a city wall is marked as a path");
-        Set<String> keys = pattern.knobs().settings().stream().map(Schema.Setting::key).collect(Collectors.toSet());
-        helper.assertTrue(keys.containsAll(Set.of("height", "thickness", "spacing", "gate", "wall", "base", "walkway",
-            "trim", "timber", "panel", "roof")), "every material and size is a knob: " + keys);
-        helper.succeed();
     }
 
     @GameTest(template = "empty", timeoutTicks = 200)

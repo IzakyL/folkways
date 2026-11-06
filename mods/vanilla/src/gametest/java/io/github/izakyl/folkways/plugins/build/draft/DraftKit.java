@@ -41,9 +41,9 @@ final class DraftKit {
             .orElseThrow(() -> new AssertionError("the pattern did not load"));
     }
 
-    // A pattern the mod ships, loaded as the game loads it: its load() statements reach the libraries installed beside it.
-    static Pattern bundled(String name, String source) {
-        return Pattern.parse(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, name), source)
+    // A pattern the mod ships, as the game loaded it beside its libraries.
+    static Pattern shipped(String name) {
+        return Patterns.find(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, name))
             .orElseThrow(() -> new AssertionError(name + " did not load"));
     }
 

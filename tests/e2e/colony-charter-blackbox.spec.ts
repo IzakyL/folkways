@@ -184,7 +184,7 @@ async function waitForText(client: any, wanted: RegExp, timeoutMs = 10_000): Pro
   throw new Error(`the panel never showed ${wanted} (last saw ${JSON.stringify(texts)})`);
 }
 
-test("a player founds, names and switches colonies from the panel's title, and only a founder ends one", async ({}, testInfo) => {
+test("a player founds, names and switches colonies from the panel's title, only a founder ends one, and a bound book takes up only a colony no one keeps", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
   const runId = newRunId();
@@ -289,44 +289,18 @@ test("a player founds, names and switches colonies from the panel's title, and o
     expect(state.current).toBeNull();
     await screen.dismiss(client);
 
-    testInfo.attach("charter", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
-  } catch (error) {
-    pair?.failing(error);
-    throw error;
-  } finally {
-    await pair?.teardown(testInfo);
-  }
-});
-
-test("a bound book takes up its colony once, and only if no one keeps it", async ({}, testInfo) => {
-  test.setTimeout(BUDGET.quick);
-  ensureOut("e2e");
-  const runId = newRunId();
-  let pair: E2EPair | undefined;
-  const evidence: any = {};
-
-  try {
-    pair = await launchPair({
-      server: { trace: tracePath("e2e", "legacy-book-server"), instance: seededServer(`legacy-book-server-${runId}`) },
-      client: { trace: tracePath("e2e", "legacy-book-client"), instance: `legacy-book-client-${runId}` },
-    });
-    const { server, client } = pair;
-    const grounded = await waitForGroundedPlayer(server);
-    const playerName = grounded.name;
-    const stand: Vec = { x: Math.round(grounded.pos.x) + 2, y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) + 2 };
-    await GROUND.lay(server, around([stand], 4, 3));
+    // Acting for none, a book bound to a colony takes it up once, and only if no one keeps it.
     const useBook = async () => {
       await openColonyPanelViaBook(server, client, playerName, stand);
       await screen.dismiss(client);
       await tick.sprint(server, 5);
     };
-
     const unclaimed = (await runColonyTask(server, MINT, { stranger: "" })).colony as string;
     await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with `
       + `${BOOK_ITEM}[folkways:colony_id=${snbtUuid(unclaimed)}] 1`);
     await tick.sprint(server, 5);
     // Held, the book is left as it is: nothing watches the hand. Using it is what takes the colony up.
-    let state = await read(server, playerName);
+    state = await read(server, playerName);
     evidence.held = state;
     expect(state.book_names_colony).toBe(true);
     expect(state.current).toBeNull();
@@ -335,8 +309,7 @@ test("a bound book takes up its colony once, and only if no one keeps it", async
     evidence.claimed = state;
     expect(state.book_names_colony).toBe(false);
     expect(state.current).toBe(unclaimed);
-    const taken = state.colonies.find((colony) => colony.id === unclaimed)!;
-    expect(taken.founder).toBe(state.player);
+    expect(state.colonies.find((colony) => colony.id === unclaimed)!.founder).toBe(state.player);
 
     const theirs = (await runColonyTask(server, MINT, { stranger: STRANGER })).colony as string;
     await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with `
@@ -347,10 +320,9 @@ test("a bound book takes up its colony once, and only if no one keeps it", async
     evidence.refused = state;
     expect(state.book_names_colony).toBe(false);
     expect(state.current).toBe(unclaimed);
-    const kept = state.colonies.find((colony) => colony.id === theirs)!;
-    expect(kept.members).toEqual([STRANGER]);
+    expect(state.colonies.find((colony) => colony.id === theirs)!.members).toEqual([STRANGER]);
 
-    testInfo.attach("legacy-book", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
+    testInfo.attach("charter", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
   } catch (error) {
     pair?.failing(error);
     throw error;

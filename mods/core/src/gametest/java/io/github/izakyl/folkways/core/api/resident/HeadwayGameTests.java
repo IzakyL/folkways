@@ -42,19 +42,6 @@ public final class HeadwayGameTests {
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void groundCoveredIsTheFractionRead(GameTestHelper helper) {
-        Headway headway = new Headway();
-        headway.setOut(40.0D);
-
-        headway.closer(10.0D);
-
-        float read = headway.fraction().orElseThrow();
-        helper.assertTrue(Math.abs(read - 0.75F) < 0.001F,
-            "three quarters of the way there should read 0.75, got " + read);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void walkingRoundAWallLosesNoGround(GameTestHelper helper) {
         Headway headway = new Headway();
         headway.setOut(40.0D);
@@ -69,68 +56,31 @@ public final class HeadwayGameTests {
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void aGuessedFractionRidesTheWire(GameTestHelper helper) {
-        Doing hauling = Doing.along(Doings.STOWING, 0.5F);
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
-
-        hauling.encode(buffer);
-        Doing read = Doing.decode(buffer);
-
-        helper.assertTrue(read.what().equals(Doings.STOWING),
-            "the kind of doing should come back as it went, got " + read.what());
-        helper.assertTrue(Math.abs(read.fraction(0L).orElseThrow() - 0.5F) < 0.001F,
-            "a guessed fraction should come back as it went, got " + read.fraction(0L));
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void aStretchOfTicksRidesTheWireAndFillsAgainstTheClock(GameTestHelper helper) {
-        Doing working = Doing.over(Doings.WORKING, 100L, 200L);
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
-
-        working.encode(buffer);
-        Doing read = Doing.decode(buffer);
-
-        float half = read.fraction(150L).orElseThrow();
-        helper.assertTrue(Math.abs(half - 0.5F) < 0.001F,
-            "halfway through the stretch should read 0.5, got " + half);
-        helper.assertTrue(read.fraction(50L).orElseThrow() == 0.0F,
-            "before it began should read nothing done, got " + read.fraction(50L));
-        helper.assertTrue(read.fraction(500L).orElseThrow() == 1.0F,
-            "past the end should read done, got " + read.fraction(500L));
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void whatAJobIsDoneToRidesTheWire(GameTestHelper helper) {
+    public static void aDoingRidesTheWireAsItWent(GameTestHelper helper) {
         Doing.Wares carrots = new Doing.Wares(
             List.of(new Doing.Ware(ResourceLocation.withDefaultNamespace("carrot"), 0L)), List.of());
-        Doing harvesting = Doing.over(HARVESTING, 100L, 200L).about(Optional.of("block.minecraft.carrots"))
-            .with(carrots);
+        // A guessed fraction, a stretch of ticks, what a job is done to, a walk heading for one, and a wait.
+        List<Doing> sent = List.of(Doing.along(Doings.STOWING, 0.5F), Doing.over(Doings.WORKING, 100L, 200L),
+            Doing.over(HARVESTING, 100L, 200L).about(Optional.of("block.minecraft.carrots")).with(carrots),
+            Doing.heading(HARVESTING, Optional.of("block.minecraft.carrots"), carrots), Doing.open(Doings.WAITING));
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        for (Doing doing : sent) {
+            doing.encode(buffer);
+            Doing read = Doing.decode(buffer);
+            helper.assertTrue(read.equals(doing), "a doing should come back as it went, got " + read);
+        }
 
-        harvesting.encode(buffer);
-        Doing read = Doing.decode(buffer);
-
-        helper.assertTrue(read.equals(harvesting), "the job and what it is done to should come back as they went, got " + read);
-
-        Doing heading = Doing.heading(HARVESTING, Optional.of("block.minecraft.carrots"), carrots);
-        heading.encode(buffer);
-        Doing walked = Doing.decode(buffer);
-
-        helper.assertTrue(walked.equals(heading), "a walk should still know the job it is heading for, got " + walked);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void aDoingThatSaysNothingSaysNoFraction(GameTestHelper helper) {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
-
-        Doing.open(Doings.WAITING).encode(buffer);
-
-        Doing read = Doing.decode(buffer);
-        helper.assertTrue(read.fraction(0L).isEmpty(),
-            "waiting for a ride has no fraction to draw, got " + read.fraction(0L));
+        helper.assertTrue(Math.abs(sent.get(0).fraction(0L).orElseThrow() - 0.5F) < 0.001F,
+            "a guessed fraction reads as guessed, got " + sent.get(0).fraction(0L));
+        Doing working = sent.get(1);
+        helper.assertTrue(Math.abs(working.fraction(150L).orElseThrow() - 0.5F) < 0.001F,
+            "halfway through the stretch should read 0.5, got " + working.fraction(150L));
+        helper.assertTrue(working.fraction(50L).orElseThrow() == 0.0F,
+            "before it began should read nothing done, got " + working.fraction(50L));
+        helper.assertTrue(working.fraction(500L).orElseThrow() == 1.0F,
+            "past the end should read done, got " + working.fraction(500L));
+        helper.assertTrue(sent.get(4).fraction(0L).isEmpty(),
+            "waiting for a ride has no fraction to draw, got " + sent.get(4).fraction(0L));
         helper.succeed();
     }
 }

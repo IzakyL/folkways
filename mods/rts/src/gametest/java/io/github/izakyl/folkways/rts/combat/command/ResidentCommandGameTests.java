@@ -4,30 +4,17 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.combat.WeaponStations;
 import io.github.izakyl.folkways.plugins.combat.SpottedTargets;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.ToolUse;
 import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
-import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
@@ -36,26 +23,16 @@ import io.github.izakyl.folkways.plugins.person.fear.FearContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.ItemTags;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.ItemStack;
@@ -67,13 +44,15 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
+import java.util.Optional;
+import net.neoforged.neoforge.common.Tags;
 
 @EventBusSubscriber(modid = FolkwaysRtsMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class ResidentCommandGameTests {
-    private static final ResourceLocation WORK = ResourceLocation.fromNamespaceAndPath("folkways_test", "command_work");
-
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(ResidentCommandGameTests.class);
@@ -87,10 +66,10 @@ public final class ResidentCommandGameTests {
         ItemStack axe = new ItemStack(Items.IRON_AXE);
         axe.setDamageValue(7);
         body.pack().insert(axe);
-        Job original = new Job(f.at(2, 1, 2), body);
-        Job replacement = new Job(f.at(2, 1, 2), body);
+        CommandJob original = new CommandJob(f.at(2, 1, 2), body);
+        CommandJob replacement = new CommandJob(f.at(2, 1, 2), body);
         AtomicReference<ResidentCommands.Order> order = new AtomicReference<>();
-        f.submit(original);
+        original.submit(f.colony, f.level);
         helper.startSequence()
             .thenWaitUntil(
             () ->
@@ -110,9 +89,9 @@ public final class ResidentCommandGameTests {
             () -> {
                 helper.assertValueEqual(
                     original.released.get(), 1, "work is released exactly once on takeover");
-                f.assertCargo(helper, body);
-                f.colony.withdraw(WORK, original.id());
-                f.submit(replacement);
+                CommandJob.assertCarried(helper, body);
+                f.colony.withdraw(CommandJob.WORK, original.id());
+                replacement.submit(f.colony, f.level);
             })
             .thenIdle(15)
             .thenExecute(
@@ -128,7 +107,7 @@ public final class ResidentCommandGameTests {
             () -> {
                 helper.assertValueEqual(
                     original.committed.get(), 0, "the superseded job is never replayed");
-                f.assertCargo(helper, body);
+                CommandJob.assertCarried(helper, body);
                 replacement.finish.set(true);
             })
             .thenWaitUntil(
@@ -222,8 +201,7 @@ public final class ResidentCommandGameTests {
             () -> {
                 helper.assertTrue(
                     f.commands.current(body.id()).orElseThrow() == guard,
-                    "fear temporarily yields the same guard handle rather than deleting its return"
-                    + " slot");
+                    "fear temporarily yields the same guard handle rather than deleting its return slot");
                 retreat.set(f.commands.retreat(body, f.at(4, 1, 5)));
                 helper.assertFalse(guard.engaged(), "a replaced guard cannot retain an engagement lease");
             })
@@ -231,8 +209,7 @@ public final class ResidentCommandGameTests {
             () ->
                 helper.assertTrue(
                     retreat.get().status() == ResidentCommands.Status.HOLDING,
-                    "explicit retreat safely stops combat and fear and walks to its requested"
-                    + " point"))
+                    "explicit retreat safely stops combat and fear and walks to its requested point"))
             .thenExecute(() -> health.set(enemy.getHealth()))
             .thenIdle(30)
             .thenExecute(
@@ -253,7 +230,7 @@ public final class ResidentCommandGameTests {
         Body body = f.resident(new BlockPos(7, 1, 2));
         body.pack().insert(new ItemStack(Items.BOW));
         body.pack().insert(new ItemStack(Items.ARROW, 8));
-        PatrolSupplies.of(f.colony).loadout(body, LoadoutRegistry.BOW);
+        arm(f.colony, body, "Bow", ItemSpec.of(Items.BOW));
         Zombie first = EntityType.ZOMBIE.create(f.level);
         Zombie second = EntityType.ZOMBIE.create(f.level);
         for (Zombie enemy : List.of(first, second)) {
@@ -287,8 +264,7 @@ public final class ResidentCommandGameTests {
             () ->
                 helper.assertTrue(
                     second.getHealth() < second.getMaxHealth(),
-                    "the in-leash enemy receives a real arrow after the original draw is"
-                    + " cancelled"))
+                    "the in-leash enemy receives a real arrow after the original draw is cancelled"))
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
@@ -330,8 +306,7 @@ public final class ResidentCommandGameTests {
                     guard.status() == ResidentCommands.Status.MOVING
                     && body.mob().getX() > f.at(3, 1, 5).block(f.level).getX() + .5
                     && !Reach.standingAt(body.mob().position(), slot.block(f.level)),
-                    "the guard physically starts its long trip and has not arrived when danger"
-                    + " begins"))
+                    "the guard physically starts its long trip and has not arrived when danger begins"))
             .thenExecute(
             () -> {
                 burning.set(true);
@@ -350,8 +325,7 @@ public final class ResidentCommandGameTests {
                     .isPresent()
                     && guard.status() == ResidentCommands.Status.MOVING
                     && !Reach.standingAt(body.mob().position(), slot.block(f.level)),
-                    "actual repeated fire damage makes fear take the runner away from the guard"
-                    + " slot"))
+                    "actual repeated fire damage makes fear take the runner away from the guard slot"))
             .thenIdle(1280)
             .thenExecute(
             () -> {
@@ -403,33 +377,6 @@ public final class ResidentCommandGameTests {
                     next.get().status() == ResidentCommands.Status.HOLDING,
                     "a replacement interrupts the trip and takes effect"))
             .thenSucceed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 160)
-    public static void unloadAndNbtReloadKeepInventoryWithoutRestoringControl(GameTestHelper helper) {
-        Fixture f = new Fixture(helper);
-        Body body = f.resident(new BlockPos(2, 1, 2));
-        body.pack().insert(new ItemStack(Items.IRON_INGOT, 8));
-        ResidentCommands.Order order = f.commands.hold(body, f.at(2, 1, 2));
-        helper.runAfterDelay(
-            10,
-            () -> {
-                CompoundTag tag = new CompoundTag();
-                body.mob().save(tag);
-                body.mob().remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
-                helper.assertTrue(
-                    f.commands.current(body.id()).isEmpty(), "unloading immediately releases control");
-                helper.assertTrue(
-                    order.status() == ResidentCommands.Status.RELEASED, "the handle observes release");
-                Body loaded = (Body) EntityType.loadEntityRecursive(tag, f.level, entity -> entity);
-                f.bodies.add(loaded);
-                f.level.addFreshEntity(loaded.mob());
-                helper.assertValueEqual(
-                    loaded.pack().count(Items.IRON_INGOT), 8, "real cargo survives reload exactly once");
-                helper.assertTrue(
-                    f.commands.current(loaded.id()).isEmpty(), "temporary orders are absent after reload");
-                helper.succeed();
-            });
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 120)
@@ -505,8 +452,7 @@ public final class ResidentCommandGameTests {
                     helper.assertValueEqual(
                         f.commands.priority(guard),
                         Urge.Priority.ORDINARY,
-                        "the actual hand loan prevents lease expiry from repeatedly cancelling a longer"
-                        + " native attack");
+                        "the actual hand loan prevents lease expiry from repeatedly cancelling a longer native attack");
                     session.close();
                     helper.assertValueEqual(
                         f.commands.priority(guard),
@@ -579,8 +525,7 @@ public final class ResidentCommandGameTests {
             () ->
                 helper.assertFalse(
                     hold.yieldingToDanger(),
-                    "after the existing finite fear escape finishes, old fire cannot pause"
-                    + " regrouping indefinitely"))
+                    "after the existing finite fear escape finishes, old fire cannot pause regrouping indefinitely"))
             .thenExecute(
             () ->
                 helper.assertValueEqual(
@@ -591,43 +536,7 @@ public final class ResidentCommandGameTests {
     }
 
     private static Worker commandWorker(Body body) {
-        return new Worker() {
-            public Resident resident() {
-                return body.resident();
-            }
-
-            public Mob body() {
-                return body.mob();
-            }
-
-            public Container pack() {
-                return body.pack();
-            }
-
-            public List<Store> within() {
-                return List.of();
-            }
-
-            public ItemStack held(ToolNeed need) {
-                return ItemStack.EMPTY;
-            }
-
-            public void spill(ItemStack stack) {
-                body.mob().spawnAtLocation(stack);
-            }
-
-            public Effects effects() {
-                return body.effects();
-            }
-
-            public List<Node> route() {
-                return List.of();
-            }
-
-            public Placement placement() {
-                return Placement.NOWHERE;
-            }
-        };
+        return TestWorker.of(body).spill(stack -> body.mob().spawnAtLocation(stack));
     }
 
     @GameTest(template = "empty_large")
@@ -684,60 +593,18 @@ public final class ResidentCommandGameTests {
                 f.commands.retreat(body, f.at(1000, 1, 2));
                 helper.fail("a distant retreat must be refused");
             } catch (IllegalArgumentException expected) {
-                helper.assertTrue(body.mob().getVehicle() == seat, "validation failure preserves"
-                    + " the active seat");
+                helper.assertTrue(body.mob().getVehicle() == seat, "validation failure preserves the active seat");
             }
             f.commands.retreat(body, f.at(3, 1, 2));
-            helper.assertFalse(body.mob().isPassenger(), "a valid retreat immediately releases the"
-                + " station seat");
-            helper.assertTrue(f.commands.current(body.id()).isPresent(), "the retreat owns command"
-                + " authority");
+            helper.assertFalse(body.mob().isPassenger(), "a valid retreat immediately releases the station seat");
+            helper.assertTrue(f.commands.current(body.id()).isPresent(), "the retreat owns command authority");
         } finally {
             seat.discard();
         }
         helper.succeed();
     }
 
-    private static final class Job implements Node {
-        final AtomicBoolean working = new AtomicBoolean();
-        final AtomicBoolean finish = new AtomicBoolean();
-        final AtomicInteger released = new AtomicInteger();
-        final AtomicInteger committed = new AtomicInteger();
-        final NodeSpec spec;
-        final UUID worker;
-
-        Job(WorldPos at, Body body) {
-            worker = body.id();
-            Workload.Continuous load =
-                (level, who) -> {
-                    working.set(true);
-                    return !finish.get();
-                };
-            spec =
-                NodeSpec.of(UUID.randomUUID(), WORK, new WorkSite.AtBlock(at), Stances.at(at), load)
-                .tools(new ToolUse(new ToolNeed.Tagged(ItemTags.AXES), 0))
-                .done();
-        }
-
-        public NodeSpec spec() {
-            return spec;
-        }
-
-        public Optional<UUID> worker() {
-            return Optional.of(worker);
-        }
-
-        public Outcome commit(ServerLevel level, Worker who) {
-            committed.incrementAndGet();
-            return Outcome.done();
-        }
-
-        public void released(ServerLevel level, Worker who, Ending how) {
-            released.incrementAndGet();
-        }
-    }
-
-    private static final class Fixture implements GameTestListener {
+    private static final class Fixture {
         final GameTestHelper helper;
         final ServerLevel level;
         final Colony colony;
@@ -757,7 +624,7 @@ public final class ResidentCommandGameTests {
                     helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
                 }
             }
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
             helper.onEachTick(simulation::tick);
         }
 
@@ -772,23 +639,9 @@ public final class ResidentCommandGameTests {
             level.addFreshEntity(body.mob());
             colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
             body.joinColony(colony.id());
-            PatrolSupplies.of(colony).loadout(body, LoadoutRegistry.MELEE);
+            arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
             bodies.add(body);
             return body;
-        }
-
-        void submit(Node job) {
-            colony.submit(WORK, level.dimension(), new Grown(List.of(job), List.of()), (id, how) -> {});
-        }
-
-        void assertCargo(GameTestHelper helper, Body body) {
-            helper.assertValueEqual(body.pack().count(Items.IRON_INGOT), 8, "cargo is retained through takeover");
-            helper.assertValueEqual(body.pack().count(Items.IRON_AXE), 1, "the borrowed tool has one real owner");
-            helper.assertTrue(
-                body.pack().contents().stream()
-                .filter(stack -> stack.is(Items.IRON_AXE))
-                .allMatch(stack -> stack.getDamageValue() == 7),
-                "the tool keeps its component state");
         }
 
         void close() {
@@ -797,19 +650,15 @@ public final class ResidentCommandGameTests {
             enemies.forEach(Entity::discard);
             colony.raze();
         }
+    }
 
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
-        }
+    private static void arm(Colony colony, Body body, String name, ItemSpec weapon) {
+        LoadoutProfiles profiles = LoadoutProfiles.of(colony);
+        LoadoutProfile profile =
+            profiles.all().stream()
+            .filter(one -> one.name().equals(name))
+            .findFirst()
+            .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

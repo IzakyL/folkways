@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
@@ -18,9 +19,6 @@ import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -246,7 +244,7 @@ public final class SightGameTests {
         helper.succeed();
     }
 
-    private static final class Scene implements GameTestListener {
+    private static final class Scene {
         private final GameTestHelper helper;
         private final ServerLevel level;
         private final Colony colony;
@@ -263,7 +261,7 @@ public final class SightGameTests {
                 }
             }
             observer = resident(2, 1, 2);
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
         }
 
         private void move(Entity entity, int x, int y, int z) {
@@ -291,20 +289,6 @@ public final class SightGameTests {
             level.addFreshEntity(body);
             entities.add(body);
             return body;
-        }
-
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
         }
 
         private void close() {

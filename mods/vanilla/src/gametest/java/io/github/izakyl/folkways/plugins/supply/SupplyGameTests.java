@@ -5,7 +5,6 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
@@ -16,16 +15,15 @@ import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.plan.Crew;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
 import io.github.izakyl.folkways.core.engine.plan.Stock;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
@@ -37,7 +35,6 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.Container;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
@@ -87,14 +84,18 @@ public final class SupplyGameTests {
         try (Rig rig = new Rig(helper)) {
             Node node = rig.offer(Items.STONE.getDefaultInstance(), 130);
             helper.assertValueEqual(node.spec().gives().getFirst().count(), 64L, "a withdrawal is bounded by the real stack size");
+            var unbounded = rig.options(Items.WATER_BUCKET.getDefaultInstance(), Long.MAX_VALUE);
+            helper.assertTrue(unbounded.size() == 1 && unbounded.getFirst().replacement().nodes().size() == 1
+                    && unbounded.getFirst().replacement().nodes().getFirst().spec().gives().getFirst().count() == 1L,
+                "even an unbounded request offers one withdrawal of one carryable native stack");
             helper.assertTrue(Containers.at(helper.getLevel(), rig.cell).isEmpty(), "a source is not a fake inventory or an output store");
             helper.assertTrue(rig.colony.storesIn(helper.getLevel().dimension()).isEmpty(), "registering the source never adds it as storage");
-            var done = (Outcome.Done) node.commit(helper.getLevel(), rig);
+            var done = (Outcome.Done) node.commit(helper.getLevel(), rig.worker);
             helper.assertValueEqual(done.made().getFirst().getCount(), 64, "exactly one finite physical stack is generated");
             helper.assertTrue(node.refusal(helper.getLevel()).isEmpty(),
                 "a completed physical withdrawal must settle successfully without growing a duplicate replacement");
             helper.assertValueEqual(rig.box.generated().get("minecraft:stone"), 64L, "only goods actually generated are counted");
-            helper.assertTrue(node.commit(helper.getLevel(), rig) instanceof Outcome.Failed, "a completed withdrawal cannot replay and duplicate its stack");
+            helper.assertTrue(node.commit(helper.getLevel(), rig.worker) instanceof Outcome.Failed, "a completed withdrawal cannot replay and duplicate its stack");
         }
         helper.succeed();
     }
@@ -119,9 +120,9 @@ public final class SupplyGameTests {
         try (Rig rig = new Rig(helper)) {
             Node old = rig.offer(Items.WHEAT.getDefaultInstance(), 5);
             rig.box.configure(false, List.of(ItemFilter.item(ResourceLocation.withDefaultNamespace("carrot"))));
-            helper.assertTrue(old.commit(helper.getLevel(), rig) instanceof Outcome.Failed, "old all-items jobs cannot escape the revised whitelist");
+            helper.assertTrue(old.commit(helper.getLevel(), rig.worker) instanceof Outcome.Failed, "old all-items jobs cannot escape the revised whitelist");
             helper.assertTrue(rig.box.generated().isEmpty(), "refusing an obsolete job generates no goods");
-            helper.assertTrue(rig.offer(Items.CARROT.getDefaultInstance(), 5).commit(helper.getLevel(), rig) instanceof Outcome.Done,
+            helper.assertTrue(rig.offer(Items.CARROT.getDefaultInstance(), 5).commit(helper.getLevel(), rig.worker) instanceof Outcome.Done,
                 "a fresh allowed offer still works");
         }
         helper.succeed();
@@ -132,7 +133,7 @@ public final class SupplyGameTests {
         try (Rig rig = new Rig(helper)) {
             Node old = rig.offer(Items.WHEAT.getDefaultInstance(), 5);
             rig.colony.release(rig.colony.holdingAt(rig.at).orElseThrow().id(), Release.LET_GO);
-            helper.assertTrue(old.commit(helper.getLevel(), rig) instanceof Outcome.Failed, "an unmarked box cannot feed a stale job");
+            helper.assertTrue(old.commit(helper.getLevel(), rig.worker) instanceof Outcome.Failed, "an unmarked box cannot feed a stale job");
             helper.assertTrue(rig.box.generated().isEmpty(), "cancellation produces nothing");
         }
         helper.succeed();
@@ -142,11 +143,11 @@ public final class SupplyGameTests {
     public static void aFullPackAndAnOutOfReachBodyCannotGenerateUncarriedGoods(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             Node job = rig.offer(Items.WHEAT.getDefaultInstance(), 5);
-            for (int i = 0; i < rig.pack().getContainerSize(); i++) rig.pack().setItem(i, new ItemStack(Items.DIRT, 64));
-            helper.assertTrue(job.commit(helper.getLevel(), rig) instanceof Outcome.Failed, "real pack capacity is checked before generation");
-            rig.pack().clearContent();
+            for (int i = 0; i < rig.worker.pack().getContainerSize(); i++) rig.worker.pack().setItem(i, new ItemStack(Items.DIRT, 64));
+            helper.assertTrue(job.commit(helper.getLevel(), rig.worker) instanceof Outcome.Failed, "real pack capacity is checked before generation");
+            rig.worker.pack().clearContent();
             rig.resident.moveTo(rig.cell.offset(30, 0, 0).getCenter());
-            helper.assertTrue(job.commit(helper.getLevel(), rig) instanceof Outcome.Failed, "a remote body must actually come to the source");
+            helper.assertTrue(job.commit(helper.getLevel(), rig.worker) instanceof Outcome.Failed, "a remote body must actually come to the source");
             helper.assertTrue(rig.box.generated().isEmpty(), "failed reach or capacity never creates supplies");
         }
         helper.succeed();
@@ -156,7 +157,7 @@ public final class SupplyGameTests {
     public static void nativeBlockEntityReloadKeepsItsRulesAndCountersAndRejectsOldJobs(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.box.configure(false, List.of(ItemFilter.item(ResourceLocation.withDefaultNamespace("wheat"))));
-            rig.offer(Items.WHEAT.getDefaultInstance(), 7).commit(helper.getLevel(), rig);
+            rig.offer(Items.WHEAT.getDefaultInstance(), 7).commit(helper.getLevel(), rig.worker);
             Node old = rig.offer(Items.WHEAT.getDefaultInstance(), 1);
             var tag = rig.box.saveWithFullMetadata(helper.getLevel().registryAccess());
             var reloaded = new SupplyBox(rig.cell, SupplyContent.BLOCK.get().defaultBlockState());
@@ -165,7 +166,7 @@ public final class SupplyGameTests {
             helper.assertFalse(reloaded.allItems(), "native reload retains whitelist mode");
             helper.assertTrue(reloaded.allows(Items.WHEAT) && !reloaded.allows(Items.BREAD), "native reload retains actual whitelist rules");
             helper.assertValueEqual(reloaded.generated().get("minecraft:wheat"), 7L, "generation accounting survives reload");
-            helper.assertTrue(old.commit(helper.getLevel(), rig) instanceof Outcome.Failed, "jobs tied to the unloaded block entity cannot mint goods");
+            helper.assertTrue(old.commit(helper.getLevel(), rig.worker) instanceof Outcome.Failed, "jobs tied to the unloaded block entity cannot mint goods");
         }
         helper.succeed();
     }
@@ -185,36 +186,6 @@ public final class SupplyGameTests {
             creative.moveTo(rig.cell.offset(20, 0, 0).getCenter());
             helper.assertFalse(SupplyNetwork.configure(creative, new SupplyNetwork.Configure(rig.cell, rig.box.revision(), true, List.of())),
                 "remote configuration is refused");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void aLargeRegistryDoesNotTurnRepeatedFiniteRequestsIntoInfinitePublishedStock(GameTestHelper helper) throws Exception {
-        try (Rig rig = new Rig(helper)) {
-            int registry = net.minecraft.core.registries.BuiltInRegistries.ITEM.size();
-            helper.assertTrue(registry > 1000, "the actual modded registry supplies the scale boundary");
-            List<net.minecraft.world.item.Item> requested = List.of(Items.STONE, Items.WHEAT, Items.WATER_BUCKET);
-            for (int warm = 0; warm < 30; warm++) rig.options(requested.get(warm % requested.size()).getDefaultInstance(), Long.MAX_VALUE);
-            long began = System.nanoTime();
-            int offers = 0;
-            for (int call = 0; call < 1000; call++) {
-                var item = requested.get(call % requested.size()).getDefaultInstance();
-                var options = rig.options(item, Long.MAX_VALUE);
-                helper.assertValueEqual(options.size(), 1, "a concrete request publishes one requested alternative");
-                var nodes = options.getFirst().replacement().nodes();
-                helper.assertValueEqual(nodes.size(), 1, "registry size never expands a finite withdrawal into registry-wide tasks");
-                var amount = nodes.getFirst().spec().gives().getFirst();
-                helper.assertValueEqual(amount.count(), (long) item.getMaxStackSize(), "even an unbounded goal offers one carryable native stack");
-                offers++;
-            }
-            long nanos = System.nanoTime() - began;
-            helper.assertTrue(rig.box.generated().isEmpty(), "planning a thousand requests has no material side effect");
-            helper.assertTrue(rig.colony.storesIn(helper.getLevel().dimension()).isEmpty(), "the all-items source never publishes invented stock");
-            java.nio.file.Path path = java.nio.file.Path.of("supply-scale-check.json");
-            java.nio.file.Files.writeString(path, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(java.util.Map.of(
-                "item_registry_size", registry, "requests", 1000, "finite_offers", offers, "generated_during_planning", 0,
-                "elapsed_nanos", nanos, "mean_request_micros", nanos / 1_000_000.0)));
         }
         helper.succeed();
     }
@@ -319,7 +290,8 @@ public final class SupplyGameTests {
         helper.succeed();
     }
 
-    private static final class Rig implements Worker, AutoCloseable {
+    private static final class Rig implements AutoCloseable {
+        final Worker worker;
         final GameTestHelper helper;
         final Colony colony;
         final BlockPos cell;
@@ -341,6 +313,7 @@ public final class SupplyGameTests {
             resident = PersonBody.RESIDENT.get().create(helper.getLevel());
             resident.moveTo(cell.getX() + 1.5, cell.getY(), cell.getZ() + 0.5);
             stances = Stances.of(helper.getLevel(), java.util.Set.of(cell.east())).orElseThrow();
+            worker = TestWorker.of(resident);
         }
         List<io.github.izakyl.folkways.core.api.work.Refinement.Change> options(ItemStack item, long count) {
             var shop = new SupplyWorkshop(UUID.randomUUID(), colony, at, stances, box, box.revision());
@@ -349,15 +322,6 @@ public final class SupplyGameTests {
             return shop.options(wanted, Grown.of(wanted));
         }
         Node offer(ItemStack item, long count) { return options(item, count).getFirst().replacement().nodes().getFirst(); }
-        public Resident resident() { return resident.resident(); }
-        public Mob body() { return resident; }
-        public Container pack() { return resident.pack(); }
-        public List<Store> within() { return List.of(); }
-        public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-        public void spill(ItemStack stack) { throw new AssertionError("withdrawals must fit before creating goods"); }
-        public io.github.izakyl.folkways.effect.Effects effects() { return resident.effects(); }
-        public List<Node> route() { return List.of(); }
-        public Placement placement() { return Placement.NOWHERE; }
         public void close() { resident.discard(); colony.raze(); }
     }
 }

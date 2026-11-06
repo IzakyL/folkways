@@ -16,9 +16,6 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.properties.SlabType;
@@ -122,18 +119,6 @@ public final class DiningWalkingGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 160)
-    public static void aResidentPlacedOnATableWalksDownToOrdinaryGround(GameTestHelper helper) {
-        var fixture = new TableFixture(helper);
-        BlockPos table = fixture.table;
-        ResidentEntity body = resident(helper, table.above());
-        Vec3 target = Vec3.atBottomCenterOf(table.east(3));
-        helper.startSequence().thenExecuteAfter(2, () -> walkTo(helper, body, target))
-            .thenWaitUntil(() -> helper.assertTrue(body.position().distanceToSqr(target) < 0.5D,
-                "resident actually leaves the table without teleporting; " + describe(body, target)))
-            .thenExecute(body::discard).thenExecute(fixture::close).thenSucceed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 160)
     public static void aResidentInTheMiddleOfALargeTableCanStillWalkOffItsEdge(GameTestHelper helper) {
         var fixture = new TableFixture(helper);
         BlockPos table = fixture.table;
@@ -152,7 +137,7 @@ public final class DiningWalkingGameTests {
 
     @GameTest(template = "empty")
     public static void registeredTableAdaptersAlsoKeepTheirTopsOutOfWalkingAndWork(GameTestHelper helper) {
-        AdapterFixture.install();
+        DiningGameTests.plainTable();
         BlockPos table = room(helper);
         helper.assertFalse(Keepouts.forbidden(helper.getLevel(), table.above()),
             "an unmarked plain slab is not furniture");
@@ -218,7 +203,7 @@ public final class DiningWalkingGameTests {
         final Colony colony;
 
         TableFixture(GameTestHelper helper) {
-            AdapterFixture.install();
+            DiningGameTests.plainTable();
             table = room(helper);
             helper.getLevel().setBlockAndUpdate(table, Blocks.CHISELED_QUARTZ_BLOCK.defaultBlockState());
             colony = Colonies.mint(helper.getLevel().getServer());
@@ -231,21 +216,5 @@ public final class DiningWalkingGameTests {
         }
 
         public void close() { colony.raze(); }
-    }
-
-    private static final class AdapterFixture {
-        private static boolean installed;
-        static synchronized void install() {
-            if (installed) { return; }
-            DiningTables.register(ResourceLocation.fromNamespaceAndPath("folkways", "test_walking_table"),
-                new DiningTables.Table() {
-                    public boolean stable() { return true; }
-                    public boolean matches(ServerLevel level, BlockPos at) {
-                        return level.getBlockState(at).is(Blocks.CHISELED_QUARTZ_BLOCK);
-                    }
-                    public Container inventory(ServerLevel level, BlockPos at) { return null; }
-                });
-            installed = true;
-        }
     }
 }

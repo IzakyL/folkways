@@ -164,7 +164,7 @@ jobs:
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: ${{ github.workspace }}/tests/out/e2e/playwright/junit.xml
         run: >-
           npm exec -- playwright test --config tests/e2e/playwright.config.ts
-          tests/e2e/founding-smoke.spec.ts
+          tests/e2e/founding-equivalence.spec.ts
           --workers=1 --reporter=line,junit
       - uses: actions/upload-artifact@v6
         if: always()

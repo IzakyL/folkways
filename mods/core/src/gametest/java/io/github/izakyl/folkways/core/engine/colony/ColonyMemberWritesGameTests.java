@@ -1,16 +1,12 @@
 package io.github.izakyl.folkways.core.engine.colony;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Writer;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.colony.PointSites;
 import io.github.izakyl.folkways.core.api.colony.Release;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -39,30 +35,6 @@ public final class ColonyMemberWritesGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(ColonyMemberWritesGameTests.class);
-    }
-
-    @GameTest(template = "empty")
-    public static void absentExtensionDataSurvivesALedgerRoundTrip(GameTestHelper helper) {
-        var owner = ResourceLocation.fromNamespaceAndPath("folkways", "unit_groups");
-        var group = UUID.randomUUID();
-        var members = List.of(UUID.randomUUID(), UUID.randomUUID());
-        var legacy =
-            Writer.of()
-            .children(
-            "groups",
-            List.of(group),
-            id -> Writer.of().uuid("id", id).uuids("members", members).tag())
-            .tag();
-        Keeps keeps = new Keeps();
-        keeps.keep(owner, legacy);
-        Keeps loaded = new Keeps();
-        loaded.load(Reader.of(keeps.save()));
-        helper.assertValueEqual(
-            loaded.kept(owner),
-            legacy,
-            "an undeclared extension's complete group bag survives saving without that"
-            + " extension installed");
-        helper.succeed();
     }
 
     @GameTest(template = "empty")

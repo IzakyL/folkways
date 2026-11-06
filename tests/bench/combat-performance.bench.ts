@@ -29,12 +29,9 @@ type Sample = {
   fullTickSamplesMspt: number[];
 };
 
-const ENABLED = process.env.FOLKWAYS_COMBAT_BENCH === "1";
-
-test.skip(!ENABLED, "set FOLKWAYS_COMBAT_BENCH=1 to run the opt-in live combat benchmark");
-
+// Reports tick cost and AI activity for growing resident/zombie populations; it sets no pass threshold. The
+// expectations only check that each population really loaded and fought.
 test("combat entity populations: live tick cost and AI activity", async ({}, testInfo) => {
-  test.setTimeout(480_000);
   let pair: E2EPair | undefined;
   const samples: Sample[] = [];
   try {
@@ -96,7 +93,6 @@ test("combat entity populations: live tick cost and AI activity", async ({}, tes
   } finally {
     await testInfo.attach("combat-performance-samples.json", {
       body: JSON.stringify({
-        enabledBy: "FOLKWAYS_COMBAT_BENCH=1",
         populations: "16/32/64 total entities; each population is residents/zombies 8/8, 16/16, 32/32",
         warmupTicks: 200,
         measurementTicks: 100,

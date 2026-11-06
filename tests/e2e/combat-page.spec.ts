@@ -1,12 +1,13 @@
-import { expect, test, type TestInfo } from "@playwright/test";
-import { defineTask, javaTask, media, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { ancestorsOf, clickElement, panelElements, scrollElementIntoView, typeIntoElement } from "../ldlib2";
+import { expect, test } from "@playwright/test";
+import { defineTask, javaTask, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { ancestorsOf, clickElement, panelElements, scrollElementIntoView } from "../ldlib2";
 import { foundColonyFast, openColonyPanelViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { newRunId } from "../shared/harness/run-id";
 import { clickTab, discoverPages } from "../shared/ui/colony-pages";
 import { frames } from "../shared/harness/bw-helpers";
 import { mustCommand } from "../shared/ui/world-ui";
+import { layFloor } from "../shared/combat/overhead";
 import { setVisualLanguage } from "../shared/capture/ponder";
 
 type Vec = { x: number; y: number; z: number };
@@ -48,7 +49,6 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
   let pair: E2EPair | undefined;
   let scene: Scene | undefined;
   let panelOpen = false;
-  const evidence: Array<{ step: string; reading?: Reading; ui?: unknown }> = [];
 
   try {
     const run = newRunId();
@@ -69,8 +69,8 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     await mustCommand(server, `gamemode survival ${player.name}`);
     await mustCommand(server, "difficulty peaceful");
     await mustCommand(server, "gamerule doMobSpawning false");
-    await mustCommand(server, `fill ${origin.x - 8} ${origin.y - 1} ${origin.z - 5} ${origin.x + 10} ${origin.y - 1} ${origin.z + 14} minecraft:smooth_stone`);
-    await world.command(server, `fill ${origin.x - 8} ${origin.y} ${origin.z - 5} ${origin.x + 10} ${origin.y + 5} ${origin.z + 14} minecraft:air`, { allowFailure: true });
+    await layFloor(server, { x: origin.x - 8, z: origin.z - 5 }, { x: origin.x + 10, z: origin.z + 14 }, origin.y,
+      "minecraft:smooth_stone");
     const founding = await foundColonyFast(server, client, player.name, { origin, residentCount: 2 });
     const residents = await server.run(RESIDENTS, { colony: String(founding.evidence.colonyId) });
     expect(residents.length, "the fixture must provide two loaded, colony-registered residents").toBe(2);
@@ -79,7 +79,6 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     await openColonyPanelViaBook(server, client, player.name, founding.standBlock);
     panelOpen = true;
     const pages = await discoverPages(server, player.name);
-    evidence.push({ step: "runtime page registry", ui: pages });
     expect(pages.some(page => page.name === COMBAT_PAGE), "the colony must register the dedicated combat page")
       .toBe(true);
     expect(pages.find(page => page.name === COMBAT_PAGE)?.token).toBe("folkways.page.combat");
@@ -89,8 +88,6 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
       message: "the real combat page must render after clicking its discovered navigation tab",
     }).toBe(true);
     const initialUi = await panelElements(client);
-    evidence.push({ step: "combat page opened", ui: initialUi.filter(element => element.id?.startsWith(CONTROL) || element.id === COMBAT_TAB) });
-    await capture(client, testInfo.outputPath("combat-page-open.png"), testInfo, "combat-page-open.png");
     expect(initialUi.find(element => element.id === `${CONTROL}summary`)?.text?.trim().length ?? 0,
       "the page must render its localized state summary").toBeGreaterThan(0);
     expect(descendantsText(initialUi, COMBAT_TAB), "the visible Chinese navigation label must be localized")
@@ -112,14 +109,12 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     }).toBe(true);
     await scrollElementIntoView(client, { id: `${CONTROL}group_row.0` });
     await clickElement(client, { id: `${CONTROL}group.0` });
-    let reading = await sample(server, scene, "group selected");
-    evidence.push({ step: "group selected from UI", reading });
+    let reading = await sample(server, scene);
     expect(reading.group, "both selected residents must now belong to a colony-owned group").not.toBe("");
     expect(reading.groupMembers).toEqual(expect.arrayContaining(residents));
     expect(reading.groupMembers).toHaveLength(2);
 
     const guardPoint = await playerPosition(server, player.name);
-    evidence.push({ step: "player footing before UI-added guard point", ui: guardPoint });
     await clickElement(client, { id: `${CONTROL}add_point` }, { scrollIntoView: true });
     await expect.poll(async () => (await panelElements(client)).find(element => element.id === `${CONTROL}points`)?.text ?? "", {
       timeout: 10_000,
@@ -127,8 +122,6 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     }).toMatch(/1|一/);
     const onePointUi = await panelElements(client);
     expect(onePointUi.find(element => element.id === `${CONTROL}points`)?.text).toContain("站岗点");
-    evidence.push({ step: "one UI-added guard point", ui: onePointUi.filter(element => element.id?.startsWith(CONTROL)) });
-    await capture(client, testInfo.outputPath("combat-page-one-point.png"), testInfo, "combat-page-one-point.png");
 
     await clickElement(client, { id: `${CONTROL}execute` });
     reading = await waitFor(server, scene, "one-point GUARD formation reaches its assigned slots", state =>
@@ -136,7 +129,6 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
         && state.residents.every(resident => resident.present && resident.orderMode === "GUARD"
           && resident.orderStatus === "HOLDING" && resident.destination !== undefined
           && distance(resident, resident.destination) <= 1.25), 500);
-    evidence.push({ step: "server confirms real GUARD and physical return", reading });
     expect(reading.groupPhase).not.toBe("FAILED");
     expect(reading.residents.every(resident => resident.destination !== undefined
       && distance(resident.destination, guardPoint) <= 3.5), "the UI-created slots must remain around its one-point player footing")
@@ -146,7 +138,6 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     await clickElement(client, { id: `${CONTROL}release` });
     reading = await waitFor(server, scene, "UI release removes every actual resident order", state =>
       state.residents.every(resident => resident.order === "NONE") && state.groupPhase === "IDLE", 80, 4);
-    evidence.push({ step: "UI released actual GUARD handles", reading });
     expect(reading.residents.every(resident => resident.orderMode === "NONE")).toBe(true);
 
     // Keep the first point in the player's saved draft. Move the player through the server to a safe floor cell;
@@ -154,8 +145,6 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     const secondPoint: Vec = { x: origin.x + 7, y: origin.y, z: origin.z + 10 };
     await mustCommand(server, `tp ${player.name} ${secondPoint.x + 0.5} ${secondPoint.y} ${secondPoint.z + 0.5} 180 0`);
     await tick.sprint(server, 2);
-    const secondFooting = await playerPosition(server, player.name);
-    evidence.push({ step: "player footing before second UI-added point", ui: secondFooting });
     await clickElement(client, { id: `${CONTROL}add_point` }, { scrollIntoView: true });
     await expect.poll(async () => (await panelElements(client)).find(element => element.id === `${CONTROL}points`)?.text ?? "", {
       timeout: 10_000,
@@ -165,12 +154,10 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     const pointText = twoPointUi.find(element => element.id === `${CONTROL}points`)?.text ?? "";
     const summaryText = twoPointUi.filter(element => element.id?.startsWith(CONTROL))
       .map(element => element.text ?? "").join(" ");
-    evidence.push({ step: "two-point patrol preview", ui: twoPointUi.filter(element => element.id?.startsWith(CONTROL)) });
     expect(pointText, "the page must visibly show two stored route points").toMatch(/2|二/);
     expect(pointText).toContain("循环巡逻");
     expect(summaryText, "the page must identify the two-point mode as patrol in the active locale")
       .toMatch(/patrol|巡逻|巡邏|巡迴|巡回/i);
-    await capture(client, testInfo.outputPath("combat-page-two-point-patrol.png"), testInfo, "combat-page-two-point-patrol.png");
 
     await clickElement(client, { id: `${CONTROL}execute` });
     reading = await waitFor(server, scene, "UI execution creates a real two-stop patrol", state =>
@@ -179,14 +166,11 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
           && resident.orderStatus !== "FAILED"), 160, 4);
     expect(reading.patrolStop).toBeGreaterThanOrEqual(0);
     expect(reading.patrolStop).toBeLessThan(2);
-    const patrolProgress = await waitFor(server, scene, "the real controller advances to its second point", state =>
+    await waitFor(server, scene, "the real controller advances to its second point", state =>
       state.routeStops === 2 && state.patrolStop === 1 && state.groupPhase !== "FAILED", 600, 4);
-    evidence.push({ step: "server confirms real patrol controller advanced stops", reading: patrolProgress });
-    await capture(client, testInfo.outputPath("combat-page-patrol-executing.png"), testInfo, "combat-page-patrol-executing.png");
     await clickElement(client, { id: `${CONTROL}release` });
     reading = await waitFor(server, scene, "UI release stops the patrol controller", state =>
       state.groupPhase === "IDLE" && state.residents.every(resident => resident.order === "NONE"), 80, 4);
-    evidence.push({ step: "UI released actual patrol orders", reading });
 
     const selectedGroup = reading.group;
     await clickElement(client, { id: `${CONTROL}retreat` });
@@ -195,49 +179,28 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
         && state.residents.every(resident => resident.present && resident.orderMode === "RETREAT"
           && resident.orderStatus === "HOLDING" && resident.destination !== undefined
           && distance(resident, resident.destination) <= 1.25), 600, 4);
-    evidence.push({ step: "UI retreat reached its actual two-resident destination", reading });
     expect(reading.group).toBe(selectedGroup);
     await clickElement(client, { id: `${CONTROL}release` });
     reading = await waitFor(server, scene, "UI release clears the retreat handles while preserving the actual group", state =>
       state.group === selectedGroup && state.groupPhase === "IDLE"
         && state.residents.every(resident => resident.order === "NONE"), 80, 4);
-    evidence.push({ step: "UI released actual retreat orders", reading });
     expect(reading.residents.every(resident => resident.orderMode === "NONE")).toBe(true);
 
-    await clickTab(client, "folkways.loadouts.title");
-    await typeIntoElement(client, { id: "folkways.loadouts.name" }, "Bow", { scrollIntoView: true });
-    await clickElement(client, { id: "folkways.loadouts.create" }, { scrollIntoView: true });
-    await expect.poll(async () => (await panelElements(client)).find(element => element.id === "folkways.loadouts.profile.0")?.text ?? "", {
-      timeout: 10_000,
-    }).toContain("Bow");
-    await clickElement(client, { id: "folkways.loadouts.add" }, { scrollIntoView: true });
-    await clickElement(client, { id: "folkways.loadouts.weapon" });
-    await typeIntoElement(client, { id: "folkways.selector.search" }, "minecraft:bow");
-    await clickElement(client, { id: "folkways.selector.result.minecraft.bow" });
-    await clickElement(client, { id: "folkways.selector.confirm" });
-    await clickElement(client, { id: "folkways.loadouts.assign_residents" }, { scrollIntoView: true });
-    for (const slot of [0, 1]) {
-      await clickElement(client, { id: `folkways.loadouts.resident.${slot}` });
-      const choice = (await panelElements(client)).find(element =>
-        element.id?.startsWith("folkways.loadouts.choose.") && element.id !== "folkways.loadouts.choose.none");
-      expect(choice?.id).toBeTruthy();
-      await clickElement(client, { id: choice!.id! });
-      await expect.poll(async () => (await panelElements(client)).find(element =>
-        element.id === `folkways.loadouts.resident.${slot}`)?.text ?? "").toContain("Bow");
-    }
-    await clickElement(client, { id: "folkways.window.close.loadout_residents" });
-    reading = await waitFor(server, scene, "Vanilla profile UI assigns both actual residents", state =>
+    // The Loadouts page owns profile editing; here a fixture assigns the profile and the RTS page only shows it.
+    await server.run(ASSIGN_PROFILE, { ...scene, profile: "Bow" });
+    await waitFor(server, scene, "both residents carry the assigned profile", state =>
       state.group === selectedGroup && state.loadouts.length === 2 && state.loadouts.every(loadout => loadout === "Bow"), 80, 4);
+    // Leave and re-enter the page so it is built from the new assignment.
+    await clickTab(client, "folkways.loadouts.title");
     await clickTab(client, COMBAT_TAB);
     await expect.poll(async () => (await panelElements(client)).find(element => element.id === `${CONTROL}preference`)?.text ?? "", {
       timeout: 10_000,
-      message: "RTS displays the profile assigned in Vanilla",
+      message: "RTS displays the assigned loadout profile",
     }).toContain("Bow");
     const profileUi = await panelElements(client);
     expect(profileUi.some(element => element.id?.startsWith(`${CONTROL}loadout.`)), "RTS has no equipment editor").toBe(false);
-    evidence.push({ step: "Vanilla profile assigned and displayed in RTS", reading, ui: profileUi.filter(element => element.id?.startsWith(CONTROL)) });
 
-    // Capture the same real page in English after the Chinese interaction run, without replaying any action.
+    // Read the same real page in English after the Chinese interaction run, without replaying any action.
     await setVisualLanguage(client, "en_us");
     await waitForLanguageReload(client, "en_us");
     await screen.dismiss(client);
@@ -265,7 +228,7 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
       .toContain("Loadout profile");
     expect(englishUi.find(element => element.id === `${CONTROL}preference`)?.text)
       .toContain("Bow");
-    const englishReading = await sample(server, scene, "English page reopened with persisted bow preference");
+    const englishReading = await sample(server, scene);
     expect(englishReading.loadouts).toEqual(["Bow", "Bow"]);
     for (const [token, label] of [
       [`${CONTROL}execute`, "Start guard / patrol"],
@@ -275,14 +238,7 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
       expect(descendantsText(englishUi, token), `${token} must rebuild with its English action label`)
         .toContain(label);
     }
-    evidence.push({ step: "English page localization and persisted bow preference", reading: englishReading, ui: pageElements });
-    await capture(client, testInfo.outputPath("combat-page-open-en-us.png"), testInfo, "combat-page-open-en-us.png");
   } catch (error) {
-    if (pair) {
-      try {
-        await capture(pair.client, testInfo.outputPath("combat-page-failure.png"), testInfo, "combat-page-failure.png");
-      } catch { /* Preserve the original assertion if the screen is no longer capturable. */ }
-    }
     pair?.failing(error);
     throw error;
   } finally {
@@ -292,24 +248,9 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
     if (pair && scene) {
       try { await pair.server.run(CLEANUP, scene); } catch { /* Preserve primary UI assertion and pair evidence. */ }
     }
-    await testInfo.attach("combat-page-readings.json", {
-      body: JSON.stringify({
-        controls: { page: COMBAT_PAGE, tab: COMBAT_TAB, prefix: CONTROL },
-        locales: ["zh_cn", "en_us"],
-        pointInput: "Both route points were captured only by clicking add_point while the server reports the player at the recorded safe footing.",
-        serverAssertions: "Real UnitGroups membership, resident command modes/statuses/handles, slot destinations, physical resident positions, release, and two-stop patrol state.",
-        observations: evidence,
-      }, null, 2),
-      contentType: "application/json",
-    });
     await pair?.teardown(testInfo);
   }
 });
-
-async function capture(client: MinecraftClient, path: string, testInfo: TestInfo, name: string) {
-  await media.screenshot(client, { path });
-  await testInfo.attach(name, { path, contentType: "image/png" });
-}
 
 async function waitForLanguageReload(client: MinecraftClient, locale: string) {
   for (let attempt = 0; attempt < 120; attempt++) {
@@ -342,7 +283,7 @@ return mc.getOverlay()==null&&mc.getLanguageManager().getSelected().equals(local
   }),
 });
 
-async function sample(server: MinecraftServer, scene: Scene, _step: string): Promise<Reading> {
+async function sample(server: MinecraftServer, scene: Scene): Promise<Reading> {
   return server.run(READ, scene);
 }
 
@@ -357,7 +298,7 @@ async function waitFor(
   let last: Reading | undefined;
   for (let elapsed = 0; elapsed < budget; elapsed += stride) {
     await tick.sprint(server, stride);
-    last = await sample(server, scene, label);
+    last = await sample(server, scene);
     if (predicate(last)) return last;
   }
   throw new Error(`${label} timed out after ${budget} ticks: ${JSON.stringify(last)}`);
@@ -445,6 +386,22 @@ return Map.of("colony",colony.id().toString(),"group",group==null?"":group.id().
   "groupMembers",memberIds,"groupPhase",group==null?"NONE":group.phase().name(),
   "routeStops",group==null?0:group.patrolRoute().size(),"patrolStop",group==null?-1:group.patrolStop(),
   "loadouts",loadouts,"player",Map.of("x",player.getX(),"y",player.getY(),"z",player.getZ()),"residents",readings);`,
+  }),
+});
+
+const ASSIGN_PROFILE = defineTask<Scene & { profile: string }, boolean>({
+  name: "folkways.combat-page.assign-profile",
+  side: "server",
+  source: javaTask({
+    imports: ["java.util.Optional", "java.util.UUID", "net.minecraft.server.MinecraftServer", "net.minecraft.world.item.Items",
+      "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.terms.ItemSpec",
+      "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile"],
+    body: `
+var a=Args.of(ctx);var colony=Colonies.of((MinecraftServer)ctx.server(),UUID.fromString(a.string("colony"))).orElseThrow();
+var profiles=LoadoutProfiles.of(colony);var profile=profiles.create(a.string("profile"));
+profiles.add(profile.id(),LoadoutProfile.Entry.weapon(ItemSpec.of(Items.BOW)));
+profiles.assign(a.strings("residents").stream().map(UUID::fromString).toList(),Optional.of(profile.id()));
+return true;`,
   }),
 });
 

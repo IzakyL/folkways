@@ -1,23 +1,18 @@
 package io.github.izakyl.folkways.core.engine.plan;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Delivery;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import io.github.izakyl.folkways.core.engine.plan.haul.Haul;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import io.github.izakyl.folkways.core.testing.Nodes;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -25,9 +20,6 @@ import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -45,58 +37,21 @@ public final class StandingPlanGameTests {
 
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "standing");
 
-    private static final ItemSpec BREAD = ItemSpec.of(ResourceLocation.withDefaultNamespace("bread"));
-
-    private record Scene(PlanningFixture fixture, List<Stash> stashes, Stands stands, Node delivery) {
-
-        static Scene of(GameTestHelper helper) {
-            PlanningFixture fixture = new PlanningFixture(helper);
-            List<Stash> stashes = new ArrayList<>();
-            Stands.Builder stands = Stands.building();
-            for (int at = 0; at < 3; at++) {
-                WorldPos pos = fixture.source.at(fixture.source.cell().offset(0, 0, 2 * at));
-                stashes.add(new Stash(pos));
-                stands.container(new Stash(pos), Set.of(new Stand(pos)));
-            }
-            stands.container(new Stash(fixture.target), Set.of(new Stand(fixture.target)));
-            Node delivery = Delivery.to(UUID.randomUUID(), Haul.DOMAIN, new WorkSite.AtBlock(fixture.target),
-                Stances.at(fixture.target), BREAD, 8, count -> { });
-            return new Scene(fixture, List.copyOf(stashes), stands.done(), delivery);
-        }
-
-        Known known(boolean stocked) {
-            List<Stock.Holding> holdings = new ArrayList<>();
-            Map<Stash, Integer> room = new LinkedHashMap<>();
-            for (Stash stash : stashes) {
-                if (stocked) {
-                    holdings.add(new Stock.Holding(stash, new ItemStack(Items.BREAD, 4)));
-                }
-                room.put(stash, 26);
-            }
-            room.put(new Stash(fixture.target), 27);
-            return new Known(new Situation(fixture.ways, new Stock(holdings, room), List.of(), stands),
-                fixture.crew.hands());
-        }
-
-        List<UUID> fetches(Planned solved) {
-            return solved.weave().vertices().keySet().stream().filter(id -> !id.equals(delivery.id())).toList();
-        }
-    }
-
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void withdrawingAnAskTakesEverythingGrownForIt(GameTestHelper helper) {
-        Scene scene = Scene.of(helper);
-        Solving planner = new Solving(new Claims(), new Cooldowns());
+        BreadStores scene = new BreadStores(helper);
+        Node delivery = delivery(scene);
+        Solving planner = new Solving();
         try {
             Planned grown = planner.handle(scene.known(true),
-                List.of(new Message.Submitted(OWNER, Grown.of(scene.delivery))), 0);
+                List.of(new Message.Submitted(OWNER, Grown.of(delivery))), 0);
             helper.assertTrue(grown.weave().vertices().size() == 3, "a delivery and two fetches are grown");
             ResourceLocation stranger = ResourceLocation.withDefaultNamespace("stranger");
             Planned notTheirs = planner.handle(scene.known(true),
-                List.of(new Message.Withdrawn(stranger, scene.delivery.id())), 1);
+                List.of(new Message.Withdrawn(stranger, delivery.id())), 1);
             helper.assertTrue(notTheirs.weave().vertices().size() == 3, "only the owner may withdraw its work");
             Planned gone = planner.handle(scene.known(true),
-                List.of(new Message.Withdrawn(OWNER, scene.delivery.id())), 2);
+                List.of(new Message.Withdrawn(OWNER, delivery.id())), 2);
             helper.assertTrue(gone.weave().vertices().isEmpty(), "withdrawing the ask takes its fetches too");
             Planned later = planner.handle(scene.known(true), List.of(Message.ANSWERED), 3);
             helper.assertTrue(later.weave().vertices().isEmpty(), "withdrawn work is not grown again");
@@ -108,13 +63,14 @@ public final class StandingPlanGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void withdrawingASupplyFindsTheConsumerAnother(GameTestHelper helper) {
-        Scene scene = Scene.of(helper);
-        Solving planner = new Solving(new Claims(), new Cooldowns());
+        BreadStores scene = new BreadStores(helper);
+        Node delivery = delivery(scene);
+        Solving planner = new Solving();
         try {
             Planned grown = planner.handle(scene.known(true),
-                List.of(new Message.Submitted(OWNER, Grown.of(scene.delivery))), 0);
-            UUID dropped = scene.fetches(grown).getFirst();
-            UUID kept = scene.fetches(grown).getLast();
+                List.of(new Message.Submitted(OWNER, Grown.of(delivery))), 0);
+            UUID dropped = fetches(grown, delivery).getFirst();
+            UUID kept = fetches(grown, delivery).getLast();
             Planned wrongOwner = planner.handle(scene.known(true),
                 List.of(new Message.Withdrawn(OWNER, dropped)), 1);
             helper.assertTrue(wrongOwner.weave().vertices().containsKey(dropped),
@@ -123,10 +79,10 @@ public final class StandingPlanGameTests {
                 List.of(new Message.Withdrawn(Haul.DOMAIN, dropped)), 2);
             helper.assertTrue(!repaired.weave().vertices().containsKey(dropped)
                     && repaired.weave().vertices().containsKey(kept)
-                    && repaired.weave().vertices().containsKey(scene.delivery.id())
-                    && !repaired.weave().fresh().contains(scene.delivery.id()),
+                    && repaired.weave().vertices().containsKey(delivery.id())
+                    && !repaired.weave().fresh().contains(delivery.id()),
                 "only the withdrawn supply goes; the delivery keeps its lifetime and its other fetch");
-            helper.assertTrue(scene.fetches(repaired).size() == 2 && repaired.diagnosis().shortfalls().isEmpty(),
+            helper.assertTrue(fetches(repaired, delivery).size() == 2 && repaired.diagnosis().shortfalls().isEmpty(),
                 "the delivery is supplied anew for what the withdrawn fetch would have brought");
         } finally {
             planner.closed();
@@ -136,10 +92,11 @@ public final class StandingPlanGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void withdrawingALaterSubmittedNodeLeavesTheRest(GameTestHelper helper) {
-        Scene scene = Scene.of(helper);
-        Node first = node(helper, scene.fixture.source);
-        Node second = node(helper, scene.fixture.target);
-        Solving planner = new Solving(new Claims(), new Cooldowns());
+        BreadStores scene = new BreadStores(helper);
+        Node delivery = delivery(scene);
+        Node first = node(scene.fixture.source);
+        Node second = node(scene.fixture.target);
+        Solving planner = new Solving();
         try {
             Planned grown = planner.handle(scene.known(false),
                 List.of(new Message.Submitted(OWNER, Grown.then(first, second))), 0);
@@ -161,11 +118,12 @@ public final class StandingPlanGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void workThatCannotGrowWaitsForAnAnswer(GameTestHelper helper) {
-        Scene scene = Scene.of(helper);
-        Solving planner = new Solving(new Claims(), new Cooldowns());
+        BreadStores scene = new BreadStores(helper);
+        Node delivery = delivery(scene);
+        Solving planner = new Solving();
         try {
             Planned empty = planner.handle(scene.known(false),
-                List.of(new Message.Submitted(OWNER, Grown.of(scene.delivery))), 0);
+                List.of(new Message.Submitted(OWNER, Grown.of(delivery))), 0);
             helper.assertTrue(empty.weave().vertices().isEmpty() && !empty.diagnosis().shortfalls().isEmpty(),
                 "with no bread known, the delivery cannot grow and says why");
             helper.assertTrue(empty.asks().survey(), "a shortfall asks for the stores to be looked over");
@@ -185,18 +143,19 @@ public final class StandingPlanGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void askingFollowsWhatThePlanNeeds(GameTestHelper helper) {
-        Scene scene = Scene.of(helper);
-        Solving planner = new Solving(new Claims(), new Cooldowns());
+        BreadStores scene = new BreadStores(helper);
+        Node delivery = delivery(scene);
+        Solving planner = new Solving();
         try {
             Known nobody = new Known(scene.known(true).world(), List.of());
             Planned waiting = planner.handle(nobody,
-                List.of(new Message.Submitted(OWNER, Grown.of(scene.delivery))), 0);
+                List.of(new Message.Submitted(OWNER, Grown.of(delivery))), 0);
             helper.assertTrue(waiting.weave().vertices().isEmpty() && waiting.asks().hands(),
                 "nothing is sized before anyone who works is known, and the residents are asked for");
             Planned grown = planner.handle(scene.known(true), List.of(Message.ANSWERED), 1);
             helper.assertTrue(grown.weave().vertices().size() == 3 && !grown.asks().hands(),
                 "once residents are read, the waiting work grows");
-            UUID failing = scene.fetches(grown).getFirst();
+            UUID failing = fetches(grown, delivery).getFirst();
             Stash from = grown.weave().vertices().get(failing).plan().firstFrom().orElseThrow();
             Planned failed = planner.handle(scene.known(true),
                 List.of(new Message.Failed(failing, LaborRefusal.GOODS_GONE)), 2);
@@ -218,13 +177,14 @@ public final class StandingPlanGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void aDeliveryIntoAStoreNotYetReadAsksForTheStores(GameTestHelper helper) {
-        Scene scene = Scene.of(helper);
-        Solving planner = new Solving(new Claims(), new Cooldowns());
+        BreadStores scene = new BreadStores(helper);
+        Node delivery = delivery(scene);
+        Solving planner = new Solving();
         try {
             Known unread = new Known(new Situation(scene.fixture.ways, new Stock(List.of(), Map.of()), List.of(),
                 scene.stands), scene.fixture.crew.hands());
             Planned waiting = planner.handle(unread,
-                List.of(new Message.Submitted(OWNER, Grown.of(scene.delivery))), 0);
+                List.of(new Message.Submitted(OWNER, Grown.of(delivery))), 0);
             helper.assertTrue(waiting.weave().vertices().isEmpty() && waiting.asks().survey(),
                 "a delivery into a store never read cannot land, and the stores are asked for");
             Planned grown = planner.handle(scene.known(true), List.of(Message.ANSWERED), 1);
@@ -236,12 +196,18 @@ public final class StandingPlanGameTests {
         helper.succeed();
     }
 
-    private static Node node(GameTestHelper helper, WorldPos at) {
-        NodeSpec spec = NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(at), Stances.at(at),
-            Workload.Once.of(1)).done();
-        return new Node() {
-            public NodeSpec spec() { return spec; }
-            public Outcome commit(ServerLevel level, Worker who) { return Outcome.done(); }
-        };
+    private static Node node(WorldPos at) {
+        return Nodes.done(NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(at), Stances.at(at),
+            Workload.Once.of(1)).done());
+    }
+
+    private static Node delivery(BreadStores scene) {
+        var target = scene.fixture.target;
+        return Delivery.to(UUID.randomUUID(), Haul.DOMAIN, new WorkSite.AtBlock(target), Stances.at(target),
+            BreadStores.BREAD, 8, count -> { });
+    }
+
+    private static List<UUID> fetches(Planned solved, Node delivery) {
+        return solved.weave().vertices().keySet().stream().filter(id -> !id.equals(delivery.id())).toList();
     }
 }

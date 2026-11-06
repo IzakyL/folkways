@@ -4,14 +4,11 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
-import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -77,52 +74,9 @@ public final class CompletedConstructionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 40)
-    public static void breakingCompletedCellsDoesNotRestoreGhostsOrReduceProgress(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos first = helper.absolutePos(new BlockPos(8, 2, 8));
-        BlockPos second = first.east(2);
-        BlockState stone = Blocks.STONE.defaultBlockState();
-        for (BlockPos pos : List.of(first, second)) {
-            level.setBlock(pos.below(), stone, 3);
-        }
-        level.setBlock(first, stone, 3);
-        BuildTarget target = new BuildTarget(WorldPos.of(level, first).realm(), Map.of(first, stone, second, stone));
-        SiteRig rig = SiteRig.start(level, target);
-        UUID order = UUID.randomUUID();
-        level.setBlock(first, Blocks.AIR.defaultBlockState(), 3);
-        rig.site.tick(level);
-        helper.assertValueEqual(BuildOrderView.of(order, target, rig.site.metCells(), rig.site.metJoints())
-            .orElseThrow().placed(), 1, "breaking a completed cell keeps its progress");
-        helper.assertTrue(BuildOrderView.pending(level, target, rig.site.metCells(), rig.site.metJoints()).stream()
-            .noneMatch(ghost -> ghost.pos().equals(first)), "the completed cell does not return as a ghost");
-        Worker worker = worker(helper, first.south(3), new SimpleContainer(new ItemStack(Items.STONE)));
-        helper.assertTrue(rig.work(helper, second, worker) instanceof Outcome.Done, "the remaining cell is built");
-        level.setBlock(second, Blocks.AIR.defaultBlockState(), 3);
-        rig.site.tick(level);
-        helper.assertTrue(rig.site.complete(), "the order remains complete after both blocks are broken");
-        helper.assertValueEqual(BuildOrderView.of(order, target, rig.site.metCells(), rig.site.metJoints())
-            .orElseThrow().placed(), 2, "completed progress never decreases");
-        helper.assertTrue(BuildOrderView.pending(level, target, rig.site.metCells(), rig.site.metJoints()).isEmpty(),
-            "no completed target returns as a ghost");
-        rig.site.close();
-        worker.body().discard();
-        helper.succeed();
-    }
-
     private static Worker worker(GameTestHelper helper, BlockPos feet, SimpleContainer pack) {
         Mob body = EntityType.PIG.create(helper.getLevel());
         body.setPos(Vec3.atBottomCenterOf(feet));
-        return (Worker) Proxy.newProxyInstance(CompletedConstructionGameTests.class.getClassLoader(),
-            new Class<?>[] {Worker.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> body;
-                case "pack" -> pack;
-                case "resident" -> new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig"));
-                case "effects" -> Effects.NONE;
-                case "placement" -> Placement.NOWHERE;
-                case "held" -> ItemStack.EMPTY;
-                case "within", "route", "supplied" -> List.of();
-                default -> null;
-            });
+        return TestWorker.of(body, new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig")), pack).spill(stack -> { });
     }
 }

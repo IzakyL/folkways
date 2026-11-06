@@ -9,13 +9,16 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import com.google.gson.GsonBuilder;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.front.api.ui.FolderPicker;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalDouble;
@@ -381,6 +384,7 @@ public final class MaidLookGameTests {
     @GameTest(template = TEMPLATE, timeoutTicks = 40)
     public static void aPackFolderIsReadIntoMaids(GameTestHelper helper) throws IOException {
         Path root = Files.createTempDirectory("folkways-maids");
+        Cleanup.on(helper, () -> delete(root));
         Path packs = root.resolve("assets").resolve(MaidLooks.MOD).resolve("tlm_custom_pack");
         Path assets = packs.resolve("pack-1.0.0").resolve("assets");
         write(assets.resolve("touhou/maid_model.json"), """
@@ -496,6 +500,16 @@ public final class MaidLookGameTests {
 
     private static JsonObject json(String text) {
         return JsonParser.parseString(text).getAsJsonObject();
+    }
+
+    private static void delete(Path root) {
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(path);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static void write(Path file, String text) throws IOException {

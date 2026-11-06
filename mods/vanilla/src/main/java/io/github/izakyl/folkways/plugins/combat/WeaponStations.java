@@ -109,7 +109,6 @@ public final class WeaponStations {
     }
 
     private static final String SEAT = "folkways:station_seat";
-    private static final String OLD_SEAT = "folkways:command_mount";
     private static final Map<ResourceLocation, Finder> FINDERS = new LinkedHashMap<>();
     private static final Map<WorldPos, Lease> LEASES = new LinkedHashMap<>();
 
@@ -340,19 +339,17 @@ public final class WeaponStations {
     public static void restored(EntityTickEvent.Post event) {
         Entity body = event.getEntity();
         if (body.level().isClientSide()
-            || !body.getPersistentData().contains(SEAT) && !body.getPersistentData().contains(OLD_SEAT)
+            || !body.getPersistentData().contains(SEAT)
             || body instanceof Mob mob && ownsSeat(mob)) {
             return;
         }
-        CompoundTag loan =
-            body.getPersistentData().getCompound(body.getPersistentData().contains(SEAT) ? SEAT : OLD_SEAT);
+        CompoundTag loan = body.getPersistentData().getCompound(SEAT);
         if (body.getVehicle() != null
             && loan.hasUUID("vehicle")
             && body.getVehicle().getUUID().equals(loan.getUUID("vehicle"))) {
             body.stopRiding();
         }
         body.getPersistentData().remove(SEAT);
-        body.getPersistentData().remove(OLD_SEAT);
     }
 
     @SubscribeEvent

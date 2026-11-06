@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.compost;
 
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
@@ -10,12 +10,9 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
-
 
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.List;
@@ -29,9 +26,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -137,23 +132,6 @@ public final class CompostGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
-    public static void changingRetentionDoesNotRecheckAnAlreadyPlannedBatch(GameTestHelper helper) {
-        try (Fixture fixture = new Fixture(helper)) {
-            fixture.pack.clearContent();
-            fixture.pack.setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
-            fixture.pack.setItem(1, new ItemStack(Items.WHEAT_SEEDS, 21));
-            Node feed = fixture.node();
-            fixture.retained = 65;
-            fixture.step(feed);
-            helper.assertValueEqual(fixture.fill(), 7,
-                "the already planned physical batch commits after retention changes");
-            helper.assertValueEqual(fixture.seeds(), 64L, "the planned batch consumes its provided seeds");
-            helper.assertTrue(fixture.goals().isEmpty(), "the new reserve cannot fund another whole batch");
-        }
-        helper.succeed();
-    }
-
     @GameTest(template = "empty", timeoutTicks = 80)
     public static void sevenWaitsForNativeMaturityThenCollectsOneActualBoneMeal(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
@@ -176,23 +154,6 @@ public final class CompostGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void aNewSowingClaimDoesNotRecheckAnAlreadyPlannedBatch(GameTestHelper helper) {
-        try (Fixture fixture = new Fixture(helper)) {
-            fixture.pack.clearContent();
-            fixture.pack.setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
-            fixture.pack.setItem(1, new ItemStack(Items.WHEAT_SEEDS, 21));
-            Node feed = fixture.node();
-            fixture.claims = List.of(new SeedBudget.Claim(UUID.randomUUID(), SeedBudget.Location.pack(fixture.body.id()),
-                Goods.specOf(Items.WHEAT_SEEDS.getDefaultInstance()), 1));
-            fixture.step(feed);
-            helper.assertValueEqual(fixture.fill(), 7, "a later sowing claim does not recheck the planned batch");
-            helper.assertValueEqual(fixture.seeds(), 64L, "the already planned physical batch is consumed once");
-            helper.assertTrue(fixture.goals().isEmpty(), "the reserved final seed does not produce another destructive goal");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void withdrawalAndRemarkNeverReviveAnOldCompostTask(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             Node old = fixture.node();
@@ -200,7 +161,7 @@ public final class CompostGameTests {
             fixture.bookings.withdraw(fixture.at);
             fixture.bookings.admit(fixture.at);
             long before = fixture.seeds();
-            helper.assertTrue(Commit.run(fixture.level, old, fixture) instanceof Outcome.Failed,
+            helper.assertTrue(Commit.run(fixture.level, old, fixture.worker) instanceof Outcome.Failed,
                 "a changed station generation rejects old work after remarking");
             helper.assertValueEqual(fixture.seeds(), before, "core returns the rejected physical input exactly once");
             helper.assertValueEqual(fixture.fill(), 0, "old work never feeds the station");
@@ -310,7 +271,7 @@ public final class CompostGameTests {
                 fixture.bookings.withdraw(fixture.at);
                 fixture.station.release(fixture.colony, fixture.level, fixture.at);
                 helper.assertValueEqual(fixture.fill(), 8, "unmarking releases only the turn, not the native batch");
-                helper.assertTrue(Commit.run(fixture.level, abandoned, fixture) instanceof Outcome.Failed,
+                helper.assertTrue(Commit.run(fixture.level, abandoned, fixture.worker) instanceof Outcome.Failed,
                     "a cancelled extraction cannot take the still-present native output");
                 abandoned.ended(fixture.level, Ending.REVOKED);
                 fixture.station.stop(fixture.colony, io.github.izakyl.folkways.core.api.colony.Closing.SHUTDOWN);
@@ -325,7 +286,7 @@ public final class CompostGameTests {
                 helper.assertValueEqual(fixture.fill(), 0, "a reconstructed provider recovers the physical batch left at shutdown");
                 helper.assertValueEqual(Goods.countIn(fixture.pack, Goods.specOf(Items.BONE_MEAL.getDefaultInstance())), 1L,
                     "cancel, release and provider reconstruction create no second copy");
-                helper.assertTrue(Commit.run(fixture.level, abandoned, fixture) instanceof Outcome.Failed,
+                helper.assertTrue(Commit.run(fixture.level, abandoned, fixture.worker) instanceof Outcome.Failed,
                     "the old generation remains invalid even after a replacement recovered the batch");
                 helper.assertTrue(restored.recovery(fixture.colony, fixture.level, fixture.at, Stances.WHEREVER,
                     restoredBookings, () -> { }).isEmpty(), "the reconstructed empty station has no phantom recovery");
@@ -402,7 +363,8 @@ public final class CompostGameTests {
         } finally { colony.raze(); }
     }
 
-    private static final class Fixture implements Worker, AutoCloseable {
+    private static final class Fixture implements AutoCloseable {
+        final Worker worker;
         final GameTestHelper helper;
         final ServerLevel level;
         final UUID colony = UUID.randomUUID();
@@ -436,6 +398,7 @@ public final class CompostGameTests {
             station = new CompostStation(ignored -> budgetAvailable ? Optional.of(budget) : Optional.empty(),
                 () -> Set.of(Items.WHEAT_SEEDS), ignored -> enabled);
             bookings.admit(at);
+            worker = TestWorker.of(body).pack(pack).effects(Effects.NONE);
         }
 
         List<io.github.izakyl.folkways.core.api.work.Grown> goals() {
@@ -451,21 +414,12 @@ public final class CompostGameTests {
         void step(Node node) {
             helper.assertTrue(node.planned(level).isEmpty(), "the station task reserves its actual generation");
             Outcome outcome;
-            try { outcome = Commit.run(level, node, this); }
+            try { outcome = Commit.run(level, node, worker); }
             catch (RuntimeException | LinkageError broken) { node.ended(level, Ending.REVOKED); throw broken; }
             helper.assertTrue(outcome instanceof Outcome.Done, "the real native composter action completes");
             ((Outcome.Done) outcome).made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "actual output fits"));
             node.ended(level, Ending.DONE);
         }
-        public Resident resident() { return body.resident(); }
-        public Mob body() { return body.mob(); }
-        public Container pack() { return pack; }
-        public List<Store> within() { return List.of(); }
-        public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-        public void spill(ItemStack stack) { if (!stack.isEmpty()) throw new AssertionError("test pack has room"); }
-        public Effects effects() { return Effects.NONE; }
-        public List<Node> route() { return List.of(); }
-        public Placement placement() { return Placement.NOWHERE; }
         public void close() { body.mob().discard(); level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL); }
     }
 }

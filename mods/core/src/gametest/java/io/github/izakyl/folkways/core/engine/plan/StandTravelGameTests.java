@@ -81,7 +81,7 @@ public final class StandTravelGameTests {
                 helper.assertTrue(schedule.unassigned().isEmpty()
                         && schedule.tours().get(resident.id()).nodes().equals(List.of(first.id(), next.id())),
                     "the complete chain must remain reachable from the reserved " + reachable + ", placed=" + placed);
-                Booked booked = booked(tours, first.id());
+                Booked booked = Booked.in(tours, first.id());
                 helper.assertTrue(booked.at().equals(new Stand(reachable)) && booked.start() == 9
                         && booked.finish() == 10,
                     "the exact reachable stand and its fare must be recorded together: " + booked);
@@ -123,9 +123,9 @@ public final class StandTravelGameTests {
             ways, 0, true);
         helper.assertTrue(schedule.unassigned().isEmpty() && schedule.tours().size() == 2,
             "both workers must be assigned their pinned work: " + schedule);
-        Booked one = booked(tours, occupying.id());
-        Booked two = booked(tours, beside.id());
-        Booked after = booked(tours, next.id());
+        Booked one = Booked.in(tours, occupying.id());
+        Booked two = Booked.in(tours, beside.id());
+        Booked after = Booked.in(tours, next.id());
         helper.assertTrue(one.at().equals(new Stand(left)) && one.start() == 5 && one.finish() == 405,
             "the first worker reserves the nearer floor through its actual work span: " + one);
         helper.assertTrue(two.at().equals(new Stand(right)) && two.start() == 30 && two.finish() == 50,
@@ -165,7 +165,7 @@ public final class StandTravelGameTests {
             "the occupied stand keeps its diagnosis while the precise unknown alternative is asked for: " + asked);
         alternative.set(Faring.yes(Journey.afoot(50, Set.of(upper))));
         Schedule known = Shown.schedule(tours, weave, crew, ways, 2, true);
-        helper.assertTrue(known.unassigned().isEmpty() && booked(tours, beside.id()).at().equals(new Stand(upper)),
+        helper.assertTrue(known.unassigned().isEmpty() && Booked.in(tours, beside.id()).at().equals(new Stand(upper)),
             "the alternative is reserved only after its own route becomes known");
         Schedule none = Shown.schedule(new Tours(1_000), weave, crew, ways((from, goals) -> Faring.NO,
             new ArrayList<>()), 0, true);
@@ -195,8 +195,8 @@ public final class StandTravelGameTests {
             "a collection's cached Yes must not suppress the exact pending path request: " + asked);
         floorRoute.set(Faring.yes(Journey.afoot(11, Set.of(floor))));
         Schedule known = Shown.schedule(tours, weave, crew, ways, 1, true);
-        helper.assertTrue(known.unassigned().isEmpty() && booked(tours, node.id()).at().equals(new Stand(floor))
-                && booked(tours, node.id()).start() == 12,
+        helper.assertTrue(known.unassigned().isEmpty() && Booked.in(tours, node.id()).at().equals(new Stand(floor))
+                && Booked.in(tours, node.id()).start() == 12,
             "a later snapshot must use the now-known individual route and its own cost");
         helper.succeed();
     }
@@ -220,8 +220,8 @@ public final class StandTravelGameTests {
         Schedule schedule = Shown.schedule(tours, weave(Map.of(held.id(), held, next.id(), next),
             List.of(new Before(held.id(), next.id())), Map.of(held.id(), resident.id(), next.id(), resident.id())),
             new Crew(List.of(hand(resident, floor, Optional.of(held.id())))), ways, 0, true);
-        helper.assertTrue(schedule.unassigned().isEmpty() && booked(tours, held.id()).at().equals(new Stand(floor))
-                && booked(tours, held.id()).start() == 0 && booked(tours, next.id()).start() == 23,
+        helper.assertTrue(schedule.unassigned().isEmpty() && Booked.in(tours, held.id()).at().equals(new Stand(floor))
+                && Booked.in(tours, held.id()).start() == 0 && Booked.in(tours, next.id()).start() == 23,
             "holding a task cannot synthesize a zero-cost arrival at an unreachable rack top");
         helper.succeed();
     }
@@ -270,27 +270,6 @@ public final class StandTravelGameTests {
     private record Query(WorldPos from, Set<WorldPos> goals) {
         Query {
             goals = Set.copyOf(goals);
-        }
-    }
-
-    private record Booked(Stand at, int start, int finish) {
-    }
-
-    private static Booked booked(Tours tours, UUID id) {
-        try {
-            var field = Tours.class.getDeclaredField("settled");
-            field.setAccessible(true);
-            Object placed = ((Map<?, ?>) field.get(tours)).get(id);
-            if (placed == null) throw new AssertionError("work was not placed: " + id);
-            var at = placed.getClass().getDeclaredMethod("at");
-            var start = placed.getClass().getDeclaredMethod("start");
-            var finish = placed.getClass().getDeclaredMethod("finish");
-            at.setAccessible(true);
-            start.setAccessible(true);
-            finish.setAccessible(true);
-            return new Booked((Stand) at.invoke(placed), (int) start.invoke(placed), (int) finish.invoke(placed));
-        } catch (ReflectiveOperationException broken) {
-            throw new AssertionError(broken);
         }
     }
 

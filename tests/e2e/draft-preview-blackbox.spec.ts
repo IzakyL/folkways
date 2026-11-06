@@ -1,16 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { defineTask, javaTask, media, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
+import { defineTask, javaTask, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements } from "../ldlib2";
 import { commandPos, createColonyViaBook, tryCommand, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { markBox, openBookPage, setBookGesture } from "../shared/ui/zone-tools";
 import { drainActionBar, readActionBar } from "../shared/ui/zone-receipt";
 import { settlePanel } from "../shared/ui/site-panel";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
-import { clickUnverified, frames, safeScreen, screenOpen, waitForElement } from "../shared/harness/bw-helpers";
+import { clickUnverified, safeScreen, screenOpen, waitForElement } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { around, twins, type Stage } from "../shared/harness/stage";
 
@@ -56,6 +55,77 @@ var book = presence.getClass().getDeclaredField("book"); book.setAccessible(true
 var held = book.get(presence);
 var orders = held.getClass().getDeclaredMethod("allBuildOrders"); orders.setAccessible(true);
 return Map.of("sites", ((List<?>) orders.invoke(held)).size());
+`,
+  }),
+});
+
+// The client's memory of a pattern's drawing settings, worked straight through its own save and load: each pattern
+// keeps its own, saved knobs conform to the schema as it stands now, and turning the memory off neither reads nor
+// writes. Leaves the settings file as it found it.
+const MEMORY = defineTask<void, Record<string, boolean>>({
+  name: "folkways.drawing-memory.persistence",
+  side: "client",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: [
+      "io.github.izakyl.folkways.FolkwaysClientConfig",
+      "io.github.izakyl.folkways.front.ui.screen.RememberedSettings",
+      "io.github.izakyl.folkways.front.api.Schema",
+      "io.github.izakyl.folkways.plugins.build.draft.client.KnobValues",
+      "net.minecraft.resources.ResourceLocation",
+      "net.minecraft.nbt.CompoundTag",
+      "net.neoforged.fml.loading.FMLPaths",
+      "java.nio.file.Files",
+    ],
+    body: `
+var path = FMLPaths.CONFIGDIR.get().resolve("folkways-drawing-settings.properties");
+byte[] before = Files.exists(path) ? Files.readAllBytes(path) : null;
+boolean enabled = FolkwaysClientConfig.rememberDrawingSettings();
+try {
+    FolkwaysClientConfig.rememberDrawingSettings(true);
+    var a = new CompoundTag(); a.putInt("width", 99);
+    var b = new CompoundTag(); b.putInt("width", -9);
+    RememberedSettings.save("pattern/folkways:memory_a", a);
+    RememberedSettings.save("pattern/folkways:memory_b", b);
+    var disk = new java.util.Properties();
+    try (var input = Files.newInputStream(path)) { disk.load(input); }
+    boolean persisted = disk.getProperty("pattern/folkways:memory_a").equals(a.toString())
+        && disk.getProperty("pattern/folkways:memory_b").equals(b.toString());
+    boolean isolated = RememberedSettings.load("pattern/folkways:memory_a").orElseThrow().getInt("width") == 99
+        && RememberedSettings.load("pattern/folkways:memory_b").orElseThrow().getInt("width") == -9
+        && RememberedSettings.load("folkways:memory_a").isEmpty();
+    var stone = ResourceLocation.parse("minecraft:stone");
+    var dirt = ResourceLocation.parse("minecraft:dirt");
+    var schema = new Schema(List.of(
+        new Schema.Setting.Count("width", "", stone, 2, 8, 4),
+        new Schema.Setting.Flag("flag", "", stone, true),
+        new Schema.Setting.Choice("choice", "", stone, List.of(stone, dirt), stone),
+        Schema.Setting.Items.oneBlock("material", "", stone, stone)));
+    var load = KnobValues.class.getDeclaredMethod("load", Schema.class, CompoundTag.class);
+    load.setAccessible(true);
+    var saved = a.copy(); saved.putBoolean("flag", false);
+    saved.putString("choice", "minecraft:dirt"); saved.put("material", new CompoundTag());
+    var restored = (KnobValues) load.invoke(null, schema, saved);
+    boolean restoredValues = restored.count("width") == 8 && !restored.flag("flag")
+        && restored.choice("choice").equals(dirt) && restored.items("material").isEmpty();
+    b.putString("choice", "minecraft:missing_option");
+    var fallback = (KnobValues) load.invoke(null, schema, b);
+    boolean conformed = fallback.count("width") == 2 && fallback.flag("flag")
+        && fallback.choice("choice").equals(stone) && fallback.items("material").isPresent();
+    byte[] written = Files.readAllBytes(path);
+    FolkwaysClientConfig.rememberDrawingSettings(false);
+    boolean disabledRead = RememberedSettings.load("pattern/folkways:memory_a").isEmpty();
+    RememberedSettings.save("pattern/folkways:memory_a", b);
+    boolean disabledWrite = java.util.Arrays.equals(written, Files.readAllBytes(path));
+    FolkwaysClientConfig.rememberDrawingSettings(true);
+    boolean preserved = RememberedSettings.load("pattern/folkways:memory_a").orElseThrow().equals(a);
+    return Map.of("persisted", persisted, "isolated", isolated, "restored", restoredValues,
+        "conformed", conformed, "disabledRead", disabledRead, "disabledWrite", disabledWrite,
+        "preserved", preserved);
+} finally {
+    FolkwaysClientConfig.rememberDrawingSettings(enabled);
+    if (before == null) Files.deleteIfExists(path); else Files.write(path, before);
+}
 `,
   }),
 });
@@ -134,10 +204,6 @@ for (const stage of twins()) test(stage.title("a pattern is previewed out in the
     expect(evidence.told.text, "the player is told to come back to the window").toMatch(/back to the screen to confirm/);
     evidence.shown = await client.run(PREVIEWED, undefined);
     expect(evidence.shown.ghosts, "the pattern's blocks stand in the world").toBeGreaterThan(0);
-    await frames(client, 4);
-    const eye = { x: max.x + 6, y: max.y + 8, z: max.z + 6 };
-    await media.screenshot(client, { path: outAbs("e2e", "shots", `${stage.name("draft-preview")}.png`),
-      camera: { position: eye, ...cameraLookingAt(eye, { x: (min.x + max.x) / 2, y: min.y, z: (min.z + max.z) / 2 }) } });
     evidence.sites_previewed = await sites(server, playerName);
     expect(evidence.sites_previewed.sites, "a preview files no build site")
       .toBe(evidence.sites_before.sites);
@@ -156,6 +222,13 @@ for (const stage of twins()) test(stage.title("a pattern is previewed out in the
     }, { timeout: 8_000, message: "building files a site" }).toBeGreaterThan(evidence.sites_before.sites);
     evidence.built = await client.run(PREVIEWED, undefined);
     expect(evidence.built.ghosts, "once built the preview is gone").toBe(0);
+
+    // The drawing settings' memory lives on the client alone, so it is checked once, on the ground.
+    if (stage.kind === "ground") {
+      expect(await client.run(MEMORY, undefined, { timeoutMs: 20_000 }), "drawing memory keeps each pattern's own settings")
+        .toEqual({ persisted: true, isolated: true, restored: true, conformed: true,
+          disabledRead: true, disabledWrite: true, preserved: true });
+    }
   } catch (error) {
     pair?.failing(error);
     throw error;

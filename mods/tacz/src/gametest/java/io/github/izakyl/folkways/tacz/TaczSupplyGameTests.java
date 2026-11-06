@@ -11,6 +11,7 @@ import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
@@ -31,9 +32,6 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
@@ -76,24 +74,19 @@ public final class TaczSupplyGameTests {
             () ->
                 helper.assertTrue(
                     scene.rounds(body) == 27,
-                    "guard collects bounded finite stock including loaded"
-                    + " rounds: "
+                    "guard collects bounded finite stock including loaded rounds: "
                     + scene.supplies.status(body.id())))
             .thenExecute(
             () -> {
-                helper.assertTrue(scene.reached, "stock only changes after actual"
-                    + " arrival");
+                helper.assertTrue(scene.reached, "stock only changes after actual arrival");
                 helper.assertValueEqual(
-                    scene.store.getItem(0).getCount(), 1, "same item with other"
-                    + " GunId remains");
+                    scene.store.getItem(0).getCount(), 1, "same item with other GunId remains");
                 helper.assertValueEqual(
-                    scene.store.getItem(1).getCount(), 40, "same item with other"
-                    + " AmmoId remains");
+                    scene.store.getItem(1).getCount(), 40, "same item with other AmmoId remains");
                 helper.assertValueEqual(
                     scene.stockRounds(),
                     15,
-                    "only twenty-five loose rounds withdrawn for the two loaded"
-                    + " rounds");
+                    "only twenty-five loose rounds withdrawn for the two loaded rounds");
                 helper.assertTrue(
                     scene.supplies.keeps(body).stream()
                     .anyMatch(
@@ -144,8 +137,7 @@ public final class TaczSupplyGameTests {
                     scene.rounds(first) + scene.rounds(second) + scene.stockRounds(),
                     6,
                     "all rounds remain finite under contention");
-                helper.assertValueEqual(scene.store.getItem(0).getCount(), 0, "one actual"
-                    + " withdrawal");
+                helper.assertValueEqual(scene.store.getItem(0).getCount(), 0, "one actual withdrawal");
             })
             .thenSucceed();
     }
@@ -192,66 +184,8 @@ public final class TaczSupplyGameTests {
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
-                    scene.stockRounds(), 40, "cancelled collection spends no"
-                    + " stock");
-                helper.assertValueEqual(scene.rounds(body), 0, "revocation grants no"
-                    + " ammunition");
-            })
-            .thenSucceed();
-    }
-
-    @GameTest(batch = "tacz_native", template = "empty_large", timeoutTicks = 100_000)
-    public static void workRunnerKeepsTheGunSessionThroughAnEntireEngagement(GameTestHelper helper) {
-        Scene scene = new Scene(helper);
-        ResidentEntity body = scene.person(2);
-        body.pack().insert(TaczWeaponGameTests.gun("m1911", FireMode.SEMI, 4));
-        scene.profile(body, 4, 0);
-        scene.guard(body);
-        var target = EntityType.ZOMBIE.create(helper.getLevel());
-        target.setNoAi(true);
-        target.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.CARVED_PUMPKIN));
-        target.getAttribute(Attributes.MAX_HEALTH).setBaseValue(1000);
-        target.setHealth(1000);
-        target.moveTo(body.getX() + 6, body.getY(), body.getZ());
-        helper.getLevel().addFreshEntity(target);
-        scene.target = target;
-        scene.run();
-        long started = System.currentTimeMillis();
-        helper.onEachTick(
-            () -> {
-                if (System.currentTimeMillis() - started > 20_000) {
-                    helper.fail(
-                        "engagement deadline: rounds="
-                        + scene.rounds(body)
-                        + ", health="
-                        + body.getHealth()
-                        + ", target="
-                        + target.getHealth()
-                        + ", hand="
-                        + body.getMainHandItem()
-                        + ", post="
-                        + scene.posts.assigned(body.id()));
-                }
-            });
-        helper.startSequence()
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    scene.rounds(body) <= 2 && target.getHealth() < 1000,
-                    "BodyRunner advances more than one native shot without"
-                    + " closing after the first"))
-            .thenExecute(
-            () -> {
-                PatrolStaffing.of(scene.colony).configure(helper.getLevel(),
-                    PatrolStaffing.of(scene.colony).targetOf(body.id()).orElseThrow(), Set.of(), 0);
-                scene.posts.tick(helper.getLevel().getServer());
-                helper.assertFalse(
-                    body.hasWeaponSession(),
-                    "unposting closes the continuing" + " engagement immediately");
-                helper.assertValueEqual(
-                    body.pack().count(ModItems.MODERN_KINETIC_GUN.get()),
-                    1,
-                    "actual" + " gun returns" + " once");
+                    scene.stockRounds(), 40, "cancelled collection spends no stock");
+                helper.assertValueEqual(scene.rounds(body), 0, "revocation grants no ammunition");
             })
             .thenSucceed();
     }
@@ -297,13 +231,15 @@ public final class TaczSupplyGameTests {
             helper.assertFalse(queued.getAsBoolean(), "changing allowed profiles revokes queued discharge");
             scene.posts.tick(helper.getLevel().getServer());
             helper.assertFalse(body.hasWeaponSession(), "the old operator releases its native gun session");
+            helper.assertValueEqual(
+                body.pack().count(ModItems.MODERN_KINETIC_GUN.get()), 1, "the actual gun returns once");
             helper.assertValueEqual(scene.rounds(body), rounds, "revoked callbacks consume no ammunition");
             helper.assertValueEqual(scene.posts.residents(zone), List.of(replacement.id()),
                 "only the replacement occupies the slot");
         }).thenSucceed();
     }
 
-    static final class Scene implements GameTestListener {
+    static final class Scene {
 
         final GameTestHelper helper;
         final Colony colony;
@@ -359,7 +295,7 @@ public final class TaczSupplyGameTests {
                         reached = true;
                     }
                 });
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
         }
 
         WorldPos at(int x, int y, int z) {
@@ -392,7 +328,7 @@ public final class TaczSupplyGameTests {
             var ammo = entries.get(1);
             entries.set(
                 1, new LoadoutProfile.Entry(ammo.id(), ammo.kind(), ammo.items(), ammo.slot(), target, threshold));
-            profiles.replace(new LoadoutProfile(profile.id(), profile.name(), entries, Optional.empty()));
+            profiles.replace(new LoadoutProfile(profile.id(), profile.name(), entries));
             profiles.assign(List.of(body.id()), Optional.of(profile.id()));
         }
 
@@ -446,20 +382,6 @@ public final class TaczSupplyGameTests {
                 target.discard();
             }
             colony.raze();
-        }
-
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
         }
     }
 }

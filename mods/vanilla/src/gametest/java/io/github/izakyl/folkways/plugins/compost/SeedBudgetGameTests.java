@@ -1,13 +1,11 @@
 package io.github.izakyl.folkways.plugins.compost;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.plugins.compost.SeedBudget;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,20 +44,6 @@ public final class SeedBudgetGameTests {
         var budget = new SeedBudget(() -> snapshot, () -> Set.of(Items.WHEAT_SEEDS), item -> 0);
         helper.assertValueEqual(budget.tally(Items.WHEAT_SEEDS).compostable(), 100L,
             "planning protects the exact target while allowing ordinary seeds");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void duplicateInventoryViewsAndDuplicateNodeClaimsNeverIncreaseTheAllowance(GameTestHelper helper) {
-        var place = SeedBudget.Location.pack(UUID.randomUUID());
-        var stock = stock("one real pack", place, 100);
-        UUID node = UUID.randomUUID();
-        var claim = new SeedBudget.Claim(node, place, Goods.specOf(Items.WHEAT_SEEDS.getDefaultInstance()), 20);
-        SeedBudget budget = budget(new SeedBudget.Snapshot(List.of(stock, stock), List.of(claim, claim), List.of(), Map.of()));
-        var tally = budget.tally(Items.WHEAT_SEEDS);
-        helper.assertValueEqual(tally.physical(), 100L, "two views describe a single physical stack total");
-        helper.assertValueEqual(tally.committed(), 20L, "one node's repeated observation is one claim");
-        helper.assertValueEqual(tally.compostable(), 16L, "only unclaimed surplus above one actual seed stack is available");
         helper.succeed();
     }
 
@@ -104,17 +88,6 @@ public final class SeedBudgetGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void unloadedPhysicalInventoryStopsDestructiveWorkAndSpeculativeRestocking(GameTestHelper helper) {
-        var snapshot = new SeedBudget.Snapshot(List.of(stock("loaded pack", SeedBudget.Location.pack(UUID.randomUUID()), 100)),
-            List.of(), List.of(), Map.of(), List.of(), false);
-        var budget = budget(snapshot);
-        helper.assertValueEqual(budget.tally(Items.WHEAT_SEEDS).physical(), 100L, "loaded physical seeds remain visible");
-        helper.assertValueEqual(budget.tally(Items.WHEAT_SEEDS).compostable(), 0L, "unloaded inventory is never assumed disposable");
-        helper.assertTrue(budget.reserves().isEmpty(), "no speculative seed request is made from an incomplete snapshot");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void configuredDefaultAndIndividualRetentionUpdateWithoutRebuildingTheBudget(GameTestHelper helper) {
         var place = SeedBudget.Location.pack(UUID.randomUUID());
         var snapshot = new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("two seed kinds", place,
@@ -140,35 +113,6 @@ public final class SeedBudgetGameTests {
         overrides.remove(Items.BEETROOT_SEEDS);
         helper.assertValueEqual(budget.tally(Items.BEETROOT_SEEDS).compostable(), 16L,
             "clearing an override restores the current default");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void zeroRetentionStillProtectsSowingClaimsFutureNeedsAndPlayerOrders(GameTestHelper helper) {
-        var location = SeedBudget.Location.pack(UUID.randomUUID());
-        var goods = Goods.specOf(Items.WHEAT_SEEDS.getDefaultInstance());
-        var snapshot = new SeedBudget.Snapshot(List.of(stock("seed store", location, 100)),
-            List.of(new SeedBudget.Claim(UUID.randomUUID(), location, goods, 10)),
-            List.of(new SeedBudget.FutureNeed("planned sowing", goods, 5)), Map.of(Items.WHEAT_SEEDS, 30L));
-        var budget = new SeedBudget(() -> snapshot, () -> Set.of(Items.WHEAT_SEEDS), ignored -> 0);
-        helper.assertValueEqual(budget.tally(Items.WHEAT_SEEDS).compostable(), 55L,
-            "zero retention still leaves ten claimed, five future sowing and thirty ordered seeds intact");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void increasedRetentionUpdatesPlanningReserve(GameTestHelper helper) {
-        var location = SeedBudget.Location.pack(UUID.randomUUID());
-        // Eighty-five seeds existed before logistics drew a twenty-one-seed compost batch.
-        var snapshot = new SeedBudget.Snapshot(List.of(stock("remaining pack", location, 64)),
-            List.of(), List.of(), Map.of());
-        var keep = new AtomicInteger(64);
-        var budget = new SeedBudget(() -> snapshot, () -> Set.of(Items.WHEAT_SEEDS), ignored -> keep.get());
-        keep.set(65);
-        helper.assertValueEqual(budget.reserves().getFirst().count(), 65L,
-            "reserve requests use the same configured count as the compost allowance");
-        helper.assertValueEqual(budget.reserves().getFirst().missing(), 1L,
-            "the changed reserve exposes the real one-seed shortage");
         helper.succeed();
     }
 

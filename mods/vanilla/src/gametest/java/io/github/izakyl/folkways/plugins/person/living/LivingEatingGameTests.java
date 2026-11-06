@@ -2,7 +2,9 @@ package io.github.izakyl.folkways.plugins.person.living;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
+import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Fronts;
@@ -11,6 +13,7 @@ import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.core.api.work.Delivery;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.List;
+import java.util.Optional;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -64,18 +67,6 @@ public final class LivingEatingGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void safetyDefaultsOnForOldColoniesAndPersistsWhenDisabled(GameTestHelper helper) {
-        var schema = new io.github.izakyl.folkways.front.api.Schema(
-            List.of(LivingContent.FOOD_MODE, LivingContent.FOOD_SAFETY, LivingContent.FOOD));
-        var migrated = ColonySettings.load(Reader.of(Writer.of().tag())).conformedTo(schema);
-        helper.assertTrue(migrated.flag(LivingContent.FOOD_SAFETY.key()), "old colonies default to safe food");
-        var disabled = migrated.with(LivingContent.FOOD_SAFETY.key(), new ColonySettings.Value.Flag(false));
-        helper.assertFalse(ColonySettings.load(Reader.of(disabled.save())).conformedTo(schema)
-            .flag(LivingContent.FOOD_SAFETY.key()), "disabled safety survives save/load");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void disablingSafetyAllowsListedUnsafeFoodButStillHonorsTheList(GameTestHelper helper) {
         try (EatingFixture meal = new EatingFixture(helper, new ItemStack(Items.ROTTEN_FLESH, 3), 0)) {
             helper.assertTrue(Fronts.of(meal.colony).settings(LivingContent.ID)
@@ -97,21 +88,14 @@ public final class LivingEatingGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void enablingSafetyBeforeCommitRefusesAPreviouslySelectedUnsafeMeal(GameTestHelper helper) {
-        try (EatingFixture meal = new EatingFixture(helper, new ItemStack(Items.SPIDER_EYE, 3), 0)) {
-            meal.rejectUnsafe(false);
-            var action = meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
-                .filter(urge -> urge.id().equals(LivingPresence.EAT)).findFirst().orElseThrow().take().get();
-            meal.rejectUnsafe(true);
-            helper.assertTrue(action.commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
-                "safety is rechecked when the action commits");
-            helper.assertValueEqual(meal.pack.getItem(0).getCount(), 3, "unsafe meal stays untouched");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void savedFoodSettingsKeepEmptyListsAndMigrateExistingMenus(GameTestHelper helper) {
+    public static void savedFoodSettingsMigrateAndKeepWhatThePlayerChose(GameTestHelper helper) {
+        var safety = new io.github.izakyl.folkways.front.api.Schema(
+            List.of(LivingContent.FOOD_MODE, LivingContent.FOOD_SAFETY, LivingContent.FOOD));
+        var fresh = ColonySettings.load(Reader.of(Writer.of().tag())).conformedTo(safety);
+        helper.assertTrue(fresh.flag(LivingContent.FOOD_SAFETY.key()), "old colonies default to safe food");
+        var disabled = fresh.with(LivingContent.FOOD_SAFETY.key(), new ColonySettings.Value.Flag(false));
+        helper.assertFalse(ColonySettings.load(Reader.of(disabled.save())).conformedTo(safety)
+            .flag(LivingContent.FOOD_SAFETY.key()), "disabled safety survives save/load");
         var schema = new io.github.izakyl.folkways.front.api.Schema(List.of(LivingContent.FOOD_MODE, LivingContent.FOOD));
         var bread = ItemFilter.item(net.minecraft.resources.ResourceLocation.withDefaultNamespace("bread"));
         var old = ColonySettings.empty().with(LivingContent.FOOD.key(), new ColonySettings.Value.Items(List.of(bread)));
@@ -215,22 +199,6 @@ public final class LivingEatingGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void changingListModeBeforeCommitRechecksTheSameRules(GameTestHelper helper) {
-        try (EatingFixture meal = new EatingFixture(helper, new ItemStack(Items.BREAD, 3), 0)) {
-            var action = meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
-                .filter(urge -> urge.id().equals(LivingPresence.EAT)).findFirst().orElseThrow().take().get();
-            meal.blacklist(true);
-            helper.assertTrue(action.commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
-                "switching to blacklist invalidates a previously selected meal");
-            helper.assertValueEqual(meal.pack.getItem(0).getCount(), 3, "newly forbidden food stays untouched");
-            meal.blacklist(false);
-            meal.eat();
-            helper.assertValueEqual(meal.pack.getItem(0).getCount(), 2, "switching back keeps the same rules");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void breadIsConsumedOnceWithoutChangingTheHeldTool(GameTestHelper helper) {
         try (EatingFixture meal = new EatingFixture(helper, new ItemStack(Items.BREAD, 3), 0)) {
             meal.body.mob().setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
@@ -241,19 +209,6 @@ public final class LivingEatingGameTests {
                 "the resident's own belly receives bread nutrition once");
             helper.assertTrue(done.made().isEmpty(), "bread has no container");
             helper.assertTrue(meal.body.mob().getMainHandItem().is(Items.IRON_AXE), "eating preserves tools");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void vanillaStewReturnsExactlyOneBowl(GameTestHelper helper) {
-        try (EatingFixture meal = new EatingFixture(helper, new ItemStack(Items.MUSHROOM_STEW), 0)) {
-            Outcome.Done done = meal.eat();
-            helper.assertTrue(meal.pack.getItem(0).isEmpty(), "the stew is consumed");
-            helper.assertTrue(done.made().size() == 1 && done.made().getFirst().is(Items.BOWL)
-                && done.made().getFirst().getCount() == 1, "one bowl follows normal output stowing");
-            helper.assertValueEqual(meal.living.foodLevelOf(meal.body.id()).orElseThrow(), 6,
-                "stew still feeds the resident");
         }
         helper.succeed();
     }
@@ -283,10 +238,20 @@ public final class LivingEatingGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void harmfulVanillaFoodsAreRefusedEvenWhenStarving(GameTestHelper helper) {
-        for (var item : List.of(Items.ROTTEN_FLESH, Items.SPIDER_EYE, Items.PUFFERFISH,
-                Items.POISONOUS_POTATO, Items.CHICKEN)) {
-            try (EatingFixture meal = new EatingFixture(helper, new ItemStack(item, 3), 0)) {
+    public static void harmfulFoodsAreRefusedEvenWhenStarving(GameTestHelper helper) {
+        // Any chance of a harmful effect is enough, however good the rest of the meal is.
+        ItemStack bread = new ItemStack(Items.BREAD, 3);
+        bread.set(DataComponents.FOOD, new FoodProperties.Builder().nutrition(5)
+            .effect(() -> new MobEffectInstance(MobEffects.REGENERATION, 100), 1.0F)
+            .effect(() -> new MobEffectInstance(MobEffects.WITHER, 100), 0.01F).build());
+        ItemStack stew = new ItemStack(Items.SUSPICIOUS_STEW, 3);
+        stew.set(DataComponents.SUSPICIOUS_STEW_EFFECTS, new SuspiciousStewEffects(List.of(
+            new SuspiciousStewEffects.Entry(MobEffects.REGENERATION, 100),
+            new SuspiciousStewEffects.Entry(MobEffects.WITHER, 100))));
+        for (var food : List.of(new ItemStack(Items.ROTTEN_FLESH, 3), new ItemStack(Items.SPIDER_EYE, 3),
+                new ItemStack(Items.PUFFERFISH, 3), new ItemStack(Items.POISONOUS_POTATO, 3),
+                new ItemStack(Items.CHICKEN, 3), bread, stew)) {
+            try (EatingFixture meal = new EatingFixture(helper, food, 0)) {
                 assertRefused(helper, meal);
             }
         }
@@ -294,31 +259,15 @@ public final class LivingEatingGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void aMealWithAnyChanceOfAHarmfulEffectIsRefused(GameTestHelper helper) {
-        ItemStack bread = new ItemStack(Items.BREAD, 3);
-        bread.set(DataComponents.FOOD, new FoodProperties.Builder().nutrition(5)
-            .effect(() -> new MobEffectInstance(MobEffects.REGENERATION, 100), 1.0F)
-            .effect(() -> new MobEffectInstance(MobEffects.WITHER, 100), 0.01F).build());
-        try (EatingFixture meal = new EatingFixture(helper, bread, 0)) {
-            assertRefused(helper, meal);
+    public static void stewsFeedAndReturnExactlyOneBowl(GameTestHelper helper) {
+        try (EatingFixture meal = new EatingFixture(helper, new ItemStack(Items.MUSHROOM_STEW), 0)) {
+            Outcome.Done done = meal.eat();
+            helper.assertTrue(meal.pack.getItem(0).isEmpty(), "the stew is consumed");
+            helper.assertTrue(done.made().size() == 1 && done.made().getFirst().is(Items.BOWL)
+                && done.made().getFirst().getCount() == 1, "one bowl follows normal output stowing");
+            helper.assertValueEqual(meal.living.foodLevelOf(meal.body.id()).orElseThrow(), 6,
+                "stew still feeds the resident");
         }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void harmfulSuspiciousStewEffectsAreRefused(GameTestHelper helper) {
-        ItemStack stew = new ItemStack(Items.SUSPICIOUS_STEW, 3);
-        stew.set(DataComponents.SUSPICIOUS_STEW_EFFECTS, new SuspiciousStewEffects(List.of(
-            new SuspiciousStewEffects.Entry(MobEffects.REGENERATION, 100),
-            new SuspiciousStewEffects.Entry(MobEffects.WITHER, 100))));
-        try (EatingFixture meal = new EatingFixture(helper, stew, 0)) {
-            assertRefused(helper, meal);
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void beneficialSuspiciousStewStillFeedsAndReturnsItsBowl(GameTestHelper helper) {
         ItemStack stew = new ItemStack(Items.SUSPICIOUS_STEW);
         stew.set(DataComponents.SUSPICIOUS_STEW_EFFECTS, new SuspiciousStewEffects(List.of(
             new SuspiciousStewEffects.Entry(MobEffects.REGENERATION, 100))));
@@ -337,8 +286,7 @@ public final class LivingEatingGameTests {
     public static void unsafeFoodInTheFirstSlotDoesNotHideASafeMeal(GameTestHelper helper) {
         try (EatingFixture meal = new EatingFixture(helper, 0,
                 new ItemStack(Items.PUFFERFISH, 3), new ItemStack(Items.BREAD, 3))) {
-            helper.assertTrue(meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
-                .anyMatch(urge -> urge.id().equals(LivingPresence.EAT)), "the safe meal creates an eating urge");
+            helper.assertTrue(eating(helper, meal).isPresent(), "the safe meal creates an eating urge");
             meal.eat();
             helper.assertValueEqual(meal.pack.getItem(0).getCount(), 3, "unsafe food stays untouched");
             helper.assertValueEqual(meal.pack.getItem(1).getCount(), 2, "one safe meal is consumed");
@@ -350,10 +298,27 @@ public final class LivingEatingGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void foodSafetyIsRecheckedWhenTheEatingActionCommits(GameTestHelper helper) {
+    public static void aSelectedMealIsRecheckedWhenItCommits(GameTestHelper helper) {
+        try (EatingFixture meal = new EatingFixture(helper, new ItemStack(Items.SPIDER_EYE, 3), 0)) {
+            meal.rejectUnsafe(false);
+            var action = selected(helper, meal);
+            meal.rejectUnsafe(true);
+            helper.assertTrue(action.commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
+                "safety is rechecked when the action commits");
+            helper.assertValueEqual(meal.pack.getItem(0).getCount(), 3, "unsafe meal stays untouched");
+        }
         try (EatingFixture meal = new EatingFixture(helper, new ItemStack(Items.BREAD, 3), 0)) {
-            var action = meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
-                .filter(urge -> urge.id().equals(LivingPresence.EAT)).findFirst().orElseThrow().take().get();
+            var action = selected(helper, meal);
+            meal.blacklist(true);
+            helper.assertTrue(action.commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
+                "switching to blacklist invalidates a previously selected meal");
+            helper.assertValueEqual(meal.pack.getItem(0).getCount(), 3, "newly forbidden food stays untouched");
+            meal.blacklist(false);
+            meal.eat();
+            helper.assertValueEqual(meal.pack.getItem(0).getCount(), 2, "switching back keeps the same rules");
+        }
+        try (EatingFixture meal = new EatingFixture(helper, new ItemStack(Items.BREAD, 3), 0)) {
+            var action = selected(helper, meal);
             meal.pack.getItem(0).set(DataComponents.FOOD, new FoodProperties.Builder().nutrition(5)
                 .effect(() -> new MobEffectInstance(MobEffects.POISON, 100), 1.0F).build());
             helper.assertTrue(action.commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
@@ -366,10 +331,18 @@ public final class LivingEatingGameTests {
         helper.succeed();
     }
 
+    private static Optional<Urge> eating(GameTestHelper helper, EatingFixture meal) {
+        return meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
+            .filter(urge -> urge.id().equals(LivingPresence.EAT)).findFirst();
+    }
+
+    private static Node selected(GameTestHelper helper, EatingFixture meal) {
+        return eating(helper, meal).orElseThrow().take().get();
+    }
+
     private static void assertRefused(GameTestHelper helper, EatingFixture meal) {
         meal.body.mob().setHealth(1.0F);
-        helper.assertFalse(meal.living.urges(meal.worker, meal.colony.view(helper.getLevel())).stream()
-            .anyMatch(urge -> urge.id().equals(LivingPresence.EAT)), "unsafe food creates no eating urge");
+        helper.assertTrue(eating(helper, meal).isEmpty(), "unsafe food creates no eating urge");
         helper.assertTrue(meal.action().commit(helper.getLevel(), meal.worker) instanceof Outcome.Failed,
             "unsafe food is refused at consumption");
         helper.assertValueEqual(meal.pack.getItem(0).getCount(), 3, "unsafe food stays untouched");
@@ -445,35 +418,25 @@ public final class LivingEatingGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void oversizedMealsCanFeedAnEmptyBelly(GameTestHelper helper) {
-        Hunger hunger = new Hunger();
-        hunger.load(io.github.izakyl.folkways.base.persist.Reader.of(
-            Writer.of().integer("FoodLevel", 0).tag()));
-        FoodProperties food = new FoodProperties.Builder().nutrition(24).build();
-        helper.assertTrue(hunger.canEatMeal(food), "quality can raise a meal past twenty points");
-        hunger.eat(food);
-        helper.assertValueEqual(hunger.foodLevel(), Hunger.MAX_FOOD_LEVEL, "fullness is capped at twenty");
-        helper.assertFalse(hunger.canEatMeal(food), "an oversized meal still waits while full");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void largeMealsAllowBoundedWasteButSmallPortionsStillFit(GameTestHelper helper) {
         Hunger hunger = new Hunger();
         for (int nutrition : new int[] {5, 9, 10, 14, 20, 24}) {
             var food = new FoodProperties.Builder().nutrition(nutrition).build();
             int effective = Math.min(20, nutrition);
             int threshold = 20 - effective + (effective >= 10 ? effective * 3 / 10 : 0);
-            hunger.load(io.github.izakyl.folkways.base.persist.Reader.of(
-                Writer.of().integer("FoodLevel", threshold).tag()));
+            hunger.load(Reader.of(Writer.of().integer("FoodLevel", threshold).tag()));
             helper.assertTrue(hunger.canEatMeal(food), "meal fits at its waste allowance: " + nutrition);
-            hunger.load(io.github.izakyl.folkways.base.persist.Reader.of(
-                Writer.of().integer("FoodLevel", threshold + 1).tag()));
+            hunger.load(Reader.of(Writer.of().integer("FoodLevel", threshold + 1).tag()));
             helper.assertFalse(hunger.canEatMeal(food), "meal exceeding its waste allowance waits: " + nutrition);
         }
+        hunger.load(Reader.of(Writer.of().integer("FoodLevel", 0).tag()));
+        FoodProperties oversized = new FoodProperties.Builder().nutrition(24).build();
+        helper.assertTrue(hunger.canEatMeal(oversized), "quality can raise a meal past twenty points");
+        hunger.eat(oversized);
+        helper.assertValueEqual(hunger.foodLevel(), Hunger.MAX_FOOD_LEVEL, "fullness is capped at twenty");
+        helper.assertFalse(hunger.canEatMeal(oversized), "an oversized meal still waits while full");
         var large = new ItemStack(Items.BREAD);
-        large.set(net.minecraft.core.component.DataComponents.FOOD,
-            new FoodProperties.Builder().nutrition(20).build());
+        large.set(DataComponents.FOOD, new FoodProperties.Builder().nutrition(20).build());
         try (EatingFixture meal = new EatingFixture(helper, large, 6)) {
             meal.eat();
             helper.assertTrue(meal.pack.getItem(0).isEmpty(), "the large meal is consumed once");
@@ -482,5 +445,4 @@ public final class LivingEatingGameTests {
         }
         helper.succeed();
     }
-
 }

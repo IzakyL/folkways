@@ -1,32 +1,30 @@
 package io.github.izakyl.folkways.cookery.tray;
 
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.BambooTrayBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.BambooTrayRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Leaves;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.testing.KitchenRecoveryWanted;
+import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.tray.mixin.BambooTrayAccess;
@@ -34,26 +32,25 @@ import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
+import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.PointedDripstoneBlock;
 import net.minecraft.world.level.block.state.properties.DripstoneThickness;
 import net.minecraft.world.phys.AABB;
@@ -72,89 +69,11 @@ public final class TrayGameTests {
     private static final String MUD = "wetting/clay_to_mud";
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(TrayGameTests.class); }
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void drying_fresh_tea_leaves_to_dried_tea_leaves(GameTestHelper helper) { runRecipe(helper, "drying/fresh_tea_leaves_to_dried_tea_leaves"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void drying_kelp_to_dried_kelp(GameTestHelper helper) { runRecipe(helper, "drying/kelp_to_dried_kelp"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void drying_mud_to_clay(GameTestHelper helper) { runRecipe(helper, "drying/mud_to_clay"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void drying_rotten_flesh_to_leather(GameTestHelper helper) { runRecipe(helper, "drying/rotten_flesh_to_leather"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void drying_wet_sponge_to_sponge(GameTestHelper helper) { runRecipe(helper, "drying/wet_sponge_to_sponge"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_black_concrete_powder_to_black_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/black_concrete_powder_to_black_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_blue_concrete_powder_to_blue_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/blue_concrete_powder_to_blue_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_brown_concrete_powder_to_brown_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/brown_concrete_powder_to_brown_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_clay_to_mud(GameTestHelper helper) { runRecipe(helper, "wetting/clay_to_mud"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_copper_block_to_oxidized_copper(GameTestHelper helper) { runRecipe(helper, "wetting/copper_block_to_oxidized_copper"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_cyan_concrete_powder_to_cyan_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/cyan_concrete_powder_to_cyan_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_dirt_to_mud(GameTestHelper helper) { runRecipe(helper, "wetting/dirt_to_mud"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_dried_kelp_to_kelp(GameTestHelper helper) { runRecipe(helper, "wetting/dried_kelp_to_kelp"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_dried_tea_leaves_to_fresh_tea_leaves(GameTestHelper helper) { runRecipe(helper, "wetting/dried_tea_leaves_to_fresh_tea_leaves"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_gray_concrete_powder_to_gray_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/gray_concrete_powder_to_gray_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_green_concrete_powder_to_green_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/green_concrete_powder_to_green_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_leather_to_rotten_flesh(GameTestHelper helper) { runRecipe(helper, "wetting/leather_to_rotten_flesh"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_light_blue_concrete_powder_to_light_blue_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/light_blue_concrete_powder_to_light_blue_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_light_gray_concrete_powder_to_light_gray_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/light_gray_concrete_powder_to_light_gray_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_lime_concrete_powder_to_lime_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/lime_concrete_powder_to_lime_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_magenta_concrete_powder_to_magenta_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/magenta_concrete_powder_to_magenta_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_orange_concrete_powder_to_orange_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/orange_concrete_powder_to_orange_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_pink_concrete_powder_to_pink_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/pink_concrete_powder_to_pink_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_purple_concrete_powder_to_purple_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/purple_concrete_powder_to_purple_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_red_concrete_powder_to_red_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/red_concrete_powder_to_red_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_sponge_to_wet_sponge(GameTestHelper helper) { runRecipe(helper, "wetting/sponge_to_wet_sponge"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_white_concrete_powder_to_white_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/white_concrete_powder_to_white_concrete"); }
-
-    @GameTest(template = "empty", timeoutTicks = 2200)
-    public static void wetting_yellow_concrete_powder_to_yellow_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/yellow_concrete_powder_to_yellow_concrete"); }
+    @GameTestGenerator
+    public static List<TestFunction> nativeRecipes() {
+        return NativeCookingMatrix.recipes("bamboo_tray", 28, 2200,
+            (helper, id) -> runRecipe(helper, id.getPath().substring("bamboo_tray/".length())));
+    }
 
     private static void runRecipe(GameTestHelper helper, String recipe) {
         Rig rig = new Rig(helper, recipe);
@@ -171,7 +90,7 @@ public final class TrayGameTests {
             helper.assertValueEqual(Goods.countIn(ready.pack, Goods.specOf(ready.output)), (long) ready.output.getCount(),
                 "the actual native recipe result enters the pack once");
             helper.assertTrue(ready.tray().getItem(0).isEmpty() && ready.drops().isEmpty(), "no product remains both in the slot and as a loose duplicate");
-            helper.assertTrue(work.commit(ready.level, ready) instanceof Outcome.Done, "the production offer settles after real extraction");
+            helper.assertTrue(work.commit(ready.level, ready.worker) instanceof Outcome.Done, "the production offer settles after real extraction");
         });
     }
 
@@ -193,122 +112,51 @@ public final class TrayGameTests {
         Rig rig = new Rig(helper, LEAVES);
         TrayWork[] recovered = new TrayWork[1];
         boolean[] closed = {false};
-        Consumer<Ending> close =
-            how -> {
-                if (closed[0]) {
-                    return;
-                }
-                closed[0] = true;
-                try {
-                    if (recovered[0] != null) {
-                        recovered[0].ended(rig.level, how);
-                    }
-                } finally {
-                    rig.close();
-                }
-            };
-        helper.testInfo.addListener(
-            new GameTestListener() {
-                public void testStructureLoaded(GameTestInfo info) {
-                }
-
-                public void testPassed(GameTestInfo info, GameTestRunner runner) {
-                    close.accept(Ending.DONE);
-                }
-
-                public void testFailed(GameTestInfo info, GameTestRunner runner) {
-                    close.accept(Ending.DROPPED);
-                }
-
-                public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
-                }
-            });
+        Consumer<Ending> close = how -> {
+            if (closed[0]) return;
+            closed[0] = true;
+            try {
+                if (recovered[0] != null) recovered[0].ended(rig.level, how);
+            } finally {
+                rig.close();
+            }
+        };
+        Cleanup.on(helper, () -> close.accept(Ending.DONE), () -> close.accept(Ending.DROPPED));
         rig.level.setBlockAndUpdate(rig.cell.above(2), Blocks.STONE.defaultBlockState());
-        helper.runAfterDelay(
-            100,
-            () ->
-                helper.assertTrue(
-                    !rig.tray().getItem(0).isEmpty(),
-                    "the native roof exposure settles within 100 ticks before loading"
-                    + " real input"));
+        helper.runAfterDelay(100, () -> helper.assertTrue(!rig.tray().getItem(0).isEmpty(),
+            "the native roof exposure settles within 100 ticks before loading real input"));
         helper.startSequence()
-            // Native exposure first reads asynchronous sky light; do not load during that
-            // update window.
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    !rig.level.canSeeSky(rig.cell.above())
-                    && !BambooTrayAccess.folkways$exposure(rig.level, rig.cell),
-                    "the actual roof blocks native sky exposure"))
-            .thenExecute(
-            () -> {
-            // Automatic work correctly waits for exposure; native player insertion
-            // also works under shelter.
+            // Native exposure first reads asynchronous sky light; do not load during that update window.
+            .thenWaitUntil(() -> helper.assertTrue(!rig.level.canSeeSky(rig.cell.above())
+                && !BambooTrayAccess.folkways$exposure(rig.level, rig.cell), "the actual roof blocks native sky exposure"))
+            .thenExecute(() -> {
+                // Automatic work correctly waits for exposure; native player insertion also works under shelter.
                 ItemStack input = rig.pack.removeItem(0, 2);
-                helper.assertTrue(
-                    rig.tray().onPutItem(rig.level, rig.actor, input, 0) && input.isEmpty(),
-                    "the native slot consumes the two real raw leaves from the"
-                    + " pack");
-                TrayBatch.remember(
-                    rig.tray(),
-                    rig.level,
-                    new TrayBatch.Batch(
-                    rig.colony,
-                    UUID.randomUUID(),
-                    rig.recipe.id(),
-                    0,
-                    rig.recipe.value().getSubtype(),
-                    rig.recipe.value().getDuration(),
-                    rig.input.copyWithCount(2),
-                    rig.output.copy()));
-                var recovery =
-                    new TrayStation()
-                    .recovery(
-                    rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {});
-                helper.assertValueEqual(recovery.size(), 1, "the actual owned native"
-                    + " slot is recovered");
+                helper.assertTrue(rig.tray().onPutItem(rig.level, rig.actor, input, 0) && input.isEmpty(),
+                    "the native slot consumes the two real raw leaves from the pack");
+                TrayBatch.remember(rig.tray(), rig.level, new TrayBatch.Batch(rig.colony, UUID.randomUUID(), rig.recipe.id(), 0,
+                    rig.recipe.value().getSubtype(), rig.recipe.value().getDuration(), rig.input.copyWithCount(2), rig.output.copy()));
+                var recovery = rig.recovery();
+                helper.assertValueEqual(recovery.size(), 1, "the actual owned native slot is recovered");
                 recovered[0] = (TrayWork) recovery.getFirst().nodes().getFirst();
-                helper.assertTrue(
-                    recovered[0].planned(rig.level).isEmpty(),
-                    "the real recovery books its normal turn");
+                helper.assertTrue(recovered[0].planned(rig.level).isEmpty(), "the real recovery books its normal turn");
             })
-            .thenExecuteAfter(
-            60,
-            () -> {
-                helper.assertValueEqual(
-                    rig.progress(),
-                    0,
-                    "the real native exposure check does not dry through an opaque"
-                    + " roof");
-                helper.assertTrue(
-                    ItemStack.matches(rig.tray().getItem(0), rig.input.copyWithCount(2)),
+            .thenExecuteAfter(60, () -> {
+                helper.assertValueEqual(rig.progress(), 0, "the real native exposure check does not dry through an opaque roof");
+                helper.assertTrue(ItemStack.matches(rig.tray().getItem(0), rig.input.copyWithCount(2)),
                     "sheltered raw leaves remain unchanged in the actual slot");
-                helper.assertTrue(
-                    recovered[0].next(rig.level, rig) instanceof Workload.Within.Turn.Wait,
-                    "the actual recovery workload waits for its sheltered native"
-                    + " batch");
+                helper.assertTrue(recovered[0].next(rig.level, rig.worker) instanceof Workload.Within.Turn.Wait,
+                    "the actual recovery workload waits for its sheltered native batch");
                 rig.level.setBlockAndUpdate(rig.cell.above(2), Blocks.AIR.defaultBlockState());
             })
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    TrayBatch.read(rig.tray(), rig.level)
-                    .filter(batch -> TrayBatch.ready(rig.tray(), rig.level, batch))
-                    .isPresent(),
-                    "opening real sky exposure resumes and completes the native"
-                    + " drying recipe"))
-            .thenExecute(
-            () -> {
-                helper.assertTrue(
-                    rig.step(recovered[0]) instanceof Outcome.Done,
-                    "the actual recovery collects the finished native slot");
-                helper.assertValueEqual(
-                    Goods.countIn(rig.pack, Goods.specOf(rig.output)),
-                    (long) rig.output.getCount(),
+            .thenWaitUntil(() -> helper.assertTrue(TrayBatch.read(rig.tray(), rig.level)
+                .filter(batch -> TrayBatch.ready(rig.tray(), rig.level, batch)).isPresent(),
+                "opening real sky exposure resumes and completes the native drying recipe"))
+            .thenExecute(() -> {
+                helper.assertTrue(rig.step(recovered[0]) instanceof Outcome.Done, "the actual recovery collects the finished native slot");
+                helper.assertValueEqual(Goods.countIn(rig.pack, Goods.specOf(rig.output)), (long) rig.output.getCount(),
                     "the real recipe output enters the pack exactly once");
-                helper.assertTrue(
-                    rig.tray().getItem(0).isEmpty() && rig.drops().isEmpty(),
-                    "the real harvest leaves no duplicate output");
+                helper.assertTrue(rig.tray().getItem(0).isEmpty() && rig.drops().isEmpty(), "the real harvest leaves no duplicate output");
             })
             .thenSucceed();
     }
@@ -330,20 +178,17 @@ public final class TrayGameTests {
     public static void cancellationAndBlockEntityReloadRecoverTheSlotWithoutAnotherInputBudget(GameTestHelper helper) {
         Rig rig = new Rig(helper, LEAVES);
         rig.load(); rig.hold.release(Ending.REVOKED);
-        var saved = rig.tray().saveWithoutMetadata(rig.level.registryAccess());
-        rig.level.removeBlockEntity(rig.cell);
-        BambooTrayBlockEntity loaded = new BambooTrayBlockEntity(rig.cell, rig.level.getBlockState(rig.cell));
-        loaded.loadWithComponents(saved, rig.level.registryAccess()); rig.level.setBlockEntity(loaded);
-        var recovered = new TrayStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {});
+        rig.reload(BambooTrayBlockEntity::new);
+        var recovered = rig.recovery();
         helper.assertValueEqual(recovered.size(), 1, "the actual saved native slot is adopted");
         TrayWork work = (TrayWork) recovered.getFirst().nodes().getFirst();
         helper.assertTrue(work.spec().needs().isEmpty() && work.planned(rig.level).isEmpty(), "recovery does not budget another pair of leaves");
-        KitchenRecoveryWanted.assertKept(helper, recovered.getFirst(), () -> new TrayStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
+        KitchenRecoveryWanted.assertKept(helper, recovered.getFirst(), rig::recovery);
         afterProcessing(rig, ready -> {
             helper.assertTrue(ready.step(work) instanceof Outcome.Done, "the saved slot completes through its normal native ticker");
             helper.assertValueEqual(Goods.countIn(ready.pack, Goods.specOf(ready.input)), 0L, "canceling never refunds accepted leaves");
             helper.assertValueEqual(Goods.countIn(ready.pack, Goods.specOf(ready.output)), 2L, "exactly the saved real portions are delivered");
-            KitchenRecoveryWanted.assertKept(helper, recovered.getFirst(), () -> new TrayStation().recovery(ready.colony, ready.level, ready.at, ready.stances, ready.bookings, () -> {}));
+            KitchenRecoveryWanted.assertKept(helper, recovered.getFirst(), ready::recovery);
             work.ended(ready.level, Ending.DONE);
             helper.assertTrue(new TrayStation().activeRecovery(ready.colony, ready.level, ready.at, ready.bookings).isEmpty(), "ended tray recovery is removed from wanted");
         });
@@ -353,11 +198,11 @@ public final class TrayGameTests {
     public static void withdrawingAPlannedTrayReturnsTheOriginalIngredientsWithoutPuttingAny(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, LEAVES)) {
             TrayWork work = rig.plan();
-            var turn = work.next(rig.level, rig);
+            var turn = work.next(rig.level, rig.worker);
             helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "the planned native load is available");
             Node load = ((Workload.Within.Turn.Piece) turn).node();
             rig.bookings.withdraw(rig.at);
-            helper.assertTrue(Commit.run(rig.level, load, rig) instanceof Outcome.Failed, "a withdrawn generation cannot put into the real slot");
+            helper.assertTrue(Commit.run(rig.level, load, rig.worker) instanceof Outcome.Failed, "a withdrawn generation cannot put into the real slot");
             helper.assertValueEqual(Goods.countIn(rig.pack, Goods.specOf(rig.input)), 2L, "the core returns the two unaccepted leaves");
             helper.assertTrue(rig.tray().isEmpty(), "the withdrawn tray remains physically empty");
         }
@@ -381,15 +226,12 @@ public final class TrayGameTests {
         Rig rig = new Rig(helper, LEAVES);
         TrayWork work = rig.load();
         afterProcessing(rig, ready -> {
-            var saved = ready.tray().saveWithoutMetadata(ready.level.registryAccess());
-            ready.level.removeBlockEntity(ready.cell);
-            BambooTrayBlockEntity throwing = new BambooTrayBlockEntity(ready.cell, ready.level.getBlockState(ready.cell)) {
+            ready.reload((cell, state) -> new BambooTrayBlockEntity(cell, state) {
                 @Override public boolean onTakeOut(Level level, LivingEntity user, int slot, boolean takeAll) {
                     super.onTakeOut(level, user, slot, takeAll);
                     throw new IllegalStateException("fixture: native tray extraction hook failed after actual clear");
                 }
-            };
-            throwing.loadWithComponents(saved, ready.level.registryAccess()); ready.level.setBlockEntity(throwing);
+            });
             helper.assertTrue(ready.step(work) instanceof Outcome.Done, "the cleared real slot settles instead of replaying extraction");
             helper.assertValueEqual(Goods.countIn(ready.pack, Goods.specOf(ready.output)), 2L, "the real hand-delivered product survives the hook exception");
             helper.assertTrue(ready.tray().getItem(0).isEmpty() && ready.drops().isEmpty(), "no extra copy is left after settlement");
@@ -401,7 +243,8 @@ public final class TrayGameTests {
             .filter(batch -> TrayBatch.ready(rig.tray(), rig.level, batch)).isPresent(), "the real native slot reaches its requested completion state"))
             .thenExecute(() -> { try { check.accept(rig); } finally { rig.close(); } }).thenSucceed();
     }
-    private static final class Rig implements Worker, AutoCloseable {
+    private static final class Rig implements AutoCloseable {
+        final Worker worker;
         final GameTestHelper helper;
         final ServerLevel level;
         final UUID colony = UUID.randomUUID();
@@ -437,8 +280,18 @@ public final class TrayGameTests {
             at = WorldPos.of(level, cell);
             actor = PersonBody.RESIDENT.get().create(level); actor.setPos(Vec3.atBottomCenterOf(cell.south())); actor.setNoAi(true); level.addFreshEntity(actor);
             stances = Stances.at(level, actor.blockPosition()); pack.setItem(0, input.copyWithCount(2));
+            worker = TestWorker.of(actor).pack(pack);
         }
         BambooTrayBlockEntity tray() { return (BambooTrayBlockEntity) level.getBlockEntity(cell); }
+        // The tray as saved, loaded back into a fresh block entity.
+        void reload(BiFunction<BlockPos, BlockState, BambooTrayBlockEntity> fresh) {
+            var saved = tray().saveWithoutMetadata(level.registryAccess());
+            level.removeBlockEntity(cell);
+            BambooTrayBlockEntity loaded = fresh.apply(cell, level.getBlockState(cell));
+            loaded.loadWithComponents(saved, level.registryAccess());
+            level.setBlockEntity(loaded);
+        }
+        List<Grown> recovery() { return new TrayStation().recovery(colony, level, at, stances, bookings, () -> {}); }
         int progress() { return tray().saveWithoutMetadata(level.registryAccess()).getIntArray("ProcessingProgress")[0]; }
         TrayWork plan() {
             var bench = new TrayStation().freeze(UUID.randomUUID(), colony, level, at, stances, bookings, () -> {}).orElseThrow();
@@ -454,12 +307,12 @@ public final class TrayGameTests {
             return work;
         }
         Outcome step(TrayWork work) {
-            var turn = work.next(level, this);
+            var turn = work.next(level, worker);
             if (!(turn instanceof Workload.Within.Turn.Piece)) {
                 helper.fail("expected a native tray action, got " + turn + "; refusal=" + work.refusal(level) + "; slot=" + tray().getItem(0) + "; progress=" + progress());
                 return Outcome.failed(CookeryRefusal.STATION_CHANGED);
             }
-            Node piece = ((Workload.Within.Turn.Piece) turn).node(); Outcome outcome = Commit.run(level, piece, this);
+            Node piece = ((Workload.Within.Turn.Piece) turn).node(); Outcome outcome = Commit.run(level, piece, worker);
             if (outcome instanceof Outcome.Done done) {
                 done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "the actual native products fit"));
                 work.ended(level, piece, Ending.DONE);
@@ -467,15 +320,6 @@ public final class TrayGameTests {
             return outcome;
         }
         List<ItemEntity> drops() { return level.getEntitiesOfClass(ItemEntity.class, new AABB(cell).inflate(2)); }
-        public Resident resident() { return actor.resident(); }
-        public Mob body() { return actor; }
-        public Container pack() { return pack; }
-        public List<Store> within() { return List.of(); }
-        public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-        public void spill(ItemStack stack) { throw new IllegalStateException("unexpected spill"); }
-        public Effects effects() { return actor.effects(); }
-        public List<Node> route() { return List.of(); }
-        public Placement placement() { return Placement.NOWHERE; }
         public void close() { if (hold != null) { hold.release(Ending.DROPPED); } actor.discard(); drops().forEach(ItemEntity::discard); }
     }
 }

@@ -9,15 +9,14 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.test.InventoryObservations;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -114,30 +113,19 @@ public final class ConstructionNeedsGameTests {
             }
             helper.getLevel().setBlock(cell, Blocks.AIR.defaultBlockState(), 2);
             inventoryColony = Colonies.mint(helper.getLevel().getServer());
-            Colony colony = (Colony) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[] {Colony.class},
-                (proxy, method, args) -> switch (method.getName()) {
-                    case "inventory" -> inventoryColony.inventory();
-                    case "holdingAt" -> Optional.empty();
-                    case "submit" -> { asked.addAll(((Grown) args[2]).nodes()); yield null; }
-                    case "withdraw" -> { withdrawn.add((UUID) args[1]); yield null; }
-                    default -> null;
-                });
+            Colony colony = Proxies.of(Colony.class, (proxy, method, args) -> switch (method.getName()) {
+                case "inventory" -> inventoryColony.inventory();
+                case "holdingAt" -> Optional.empty();
+                case "submit" -> { asked.addAll(((Grown) args[2]).nodes()); yield null; }
+                case "withdraw" -> { withdrawn.add((UUID) args[1]); yield null; }
+                default -> null;
+            });
             needs = new ConstructionNeeds(colony, ResourceLocation.fromNamespaceAndPath("folkways", "apiary"));
             resident = PersonBody.RESIDENT.get().create(helper.getLevel());
             Mob body = resident.mob();
             pack = resident.pack();
             body.setPos(Vec3.atBottomCenterOf(cell.offset(-1, 0, 0)));
-            worker = (Worker) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[] {Worker.class},
-                (proxy, method, args) -> switch (method.getName()) {
-                    case "body" -> body;
-                    case "pack" -> pack;
-                    case "resident" -> new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig"));
-                    case "effects" -> Effects.NONE;
-                    case "placement" -> Placement.NOWHERE;
-                    case "held" -> ItemStack.EMPTY;
-                    case "within", "route", "supplied" -> List.of();
-                    default -> null;
-                });
+            worker = TestWorker.of(body, new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig")), pack).spill(stack -> { });
         }
 
         Node operation() {

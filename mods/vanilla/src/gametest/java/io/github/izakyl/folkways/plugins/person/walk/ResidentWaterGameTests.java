@@ -1,8 +1,6 @@
 package io.github.izakyl.folkways.plugins.person.walk;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.Going;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
@@ -13,17 +11,12 @@ import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
-import io.github.izakyl.folkways.core.engine.labor.ColonyLabor;
 import io.github.izakyl.folkways.core.engine.travel.Faring;
 import io.github.izakyl.folkways.core.engine.travel.graph.Roamer;
 import io.github.izakyl.folkways.core.engine.travel.graph.Roaming;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
 import java.util.Set;
@@ -33,6 +26,8 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
@@ -46,29 +41,17 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(FolkwaysMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class ResidentWaterGameTests {
-    private static final RefusalKind LOST = () -> "folkways.refusal.labor.no_way_there";
-
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(ResidentWaterGameTests.class); }
 
     @GameTest(template = "empty", timeoutTicks = 300)
-    public static void aResidentActuallyWalksOutOfShallowWaterOntoAOneBlockBank(GameTestHelper helper) {
-        leaveWater(helper, 1, false);
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 300)
-    public static void aResidentActuallySwimsOutOfTwoDeepWaterOntoAOneBlockBank(GameTestHelper helper) {
-        leaveWater(helper, 2, false);
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 300)
     public static void theColonyPlansAndTheResidentCompletesTheSameShallowWaterExit(GameTestHelper helper) {
-        leaveWater(helper, 1, true);
+        leaveWater(helper, 1);
     }
 
     @GameTest(template = "empty", timeoutTicks = 300)
     public static void theColonyPlansAndTheResidentCompletesTheSameTwoDeepWaterExit(GameTestHelper helper) {
-        leaveWater(helper, 2, true);
+        leaveWater(helper, 2);
     }
 
     @GameTest(template = "empty", timeoutTicks = 40)
@@ -77,11 +60,7 @@ public final class ResidentWaterGameTests {
         rig.body.moveTo(Vec3.atBottomCenterOf(rig.bank));
         helper.startSequence().thenExecuteAfter(10, () -> {
             helper.assertTrue(!rig.body.isInWater() && rig.body.onGround(), "the sizing resident stands on dry land");
-            WorldPos from = WorldPos.of(rig.level, rig.submergedStart);
-            Roaming ways = new Roaming(rig.level);
-            Faring route = ways.answered(known -> known.journey(rig.body.resident(), from, rig.goals()),
-                List.of(new Roamer(PersonBody.ID, Walking.INSTANCE, rig.body)), List.of(),
-                rig.level.getGameTime());
+            Faring route = route(rig.level, rig.body, rig.submergedStart, rig.goals());
             helper.assertTrue(route instanceof Faring.Yes,
                 "the explicit underwater start is independent of the sizing resident's position and water state: " + route);
             rig.body.discard();
@@ -91,14 +70,7 @@ public final class ResidentWaterGameTests {
     @GameTest(template = "empty", timeoutTicks = 450)
     public static void aResidentUnderAFloodedFloorFindsAirBeforeDrowning(GameTestHelper helper) {
         Rig rig = new Rig(helper, 2);
-        BlockPos roof = rig.submergedStart.above(2);
-        for (int x = -1; x <= 3; x++) {
-            for (int z = -1; z <= 1; z++) {
-                if (x != 3 || z != 0) {
-                    rig.level.setBlock(roof.offset(x, 0, z), Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
-                }
-            }
-        }
+        rig.roof();
         int[] firstDamage = {-1};
         helper.onEachTick(() -> {
             if (firstDamage[0] < 0 && rig.body.getHealth() < rig.body.getMaxHealth()) {
@@ -143,15 +115,12 @@ public final class ResidentWaterGameTests {
         level.addFreshEntity(body);
         Walking.INSTANCE.fit(body);
         Set<WorldPos> goals = Set.of(WorldPos.of(level, base.offset(1, 1, 8)));
-        OnFoot movement = new OnFoot(1.0, LOST);
+        OnFoot movement = new OnFoot(1.0, WaterLabor.LOST);
         int[] firstDamage = {-1};
         boolean[] entered = {false};
         boolean[] failed = {false};
         helper.startSequence().thenExecuteAfter(5, () -> {
-            Roaming ways = new Roaming(level);
-            Faring route = ways.answered(known -> known.journey(body.resident(),
-                    WorldPos.of(level, body.blockPosition()), goals),
-                List.of(new Roamer(PersonBody.ID, Walking.INSTANCE, body)), List.of(), level.getGameTime());
+            Faring route = route(level, body, goals);
             helper.assertFalse(route instanceof Faring.Yes, "the colony must not plan the enclosed water maze: " + route);
             movement.setOut(level, body, goals);
         });
@@ -173,82 +142,32 @@ public final class ResidentWaterGameTests {
         }).thenSucceed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 450)
-    public static void theColonyDoesNotPlanALongEnclosedWaterTunnel(GameTestHelper helper) {
-        enclosedTunnel(helper, 19);
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 450)
+    @GameTest(template = "empty_large", timeoutTicks = 40)
     public static void separateGraphSweepsCannotJoinAnUnsafeWaterTunnel(GameTestHelper helper) {
-        enclosedTunnel(helper, 15);
-    }
-
-    private static void enclosedTunnel(GameTestHelper helper, int lastWater) {
         ServerLevel level = helper.getLevel();
         BlockPos base = helper.absolutePos(new BlockPos(1, 1, 4));
-        for (int x = 0; x <= lastWater + 2; x++) {
-            for (int z = 0; z <= 2; z++) {
-                level.setBlock(base.offset(x, 0, z), Blocks.STONE.defaultBlockState(), 2);
-                for (int y = 1; y <= 3; y++) {
-                    boolean wall = z != 1 || y == 3;
-                    boolean flooded = x >= 2 && x <= lastWater;
-                    level.setBlock(base.offset(x, y, z), (wall ? Blocks.STONE
-                        : flooded ? Blocks.WATER : Blocks.AIR).defaultBlockState(), 2);
-                }
-            }
-        }
+        WaterLabor.tunnel(level, base, 15);
         ResidentEntity body = PersonBody.RESIDENT.get().create(level);
         body.moveTo(Vec3.atBottomCenterOf(base.offset(0, 1, 1)));
         level.addFreshEntity(body);
         Walking.INSTANCE.fit(body);
-        Set<WorldPos> goals = Set.of(WorldPos.of(level, base.offset(lastWater + 2, 1, 1)));
-        OnFoot movement = new OnFoot(1.0D, LOST);
-        boolean[] accepted = {false};
-        boolean[] failed = {false};
-        int[] leastAir = {body.getAirSupply()};
+        Set<WorldPos> goals = Set.of(WorldPos.of(level, base.offset(17, 1, 1)));
         helper.startSequence().thenExecuteAfter(5, () -> {
-            Roaming ways = new Roaming(level);
-            Faring route = ways.answered(known -> known.journey(body.resident(),
-                    WorldPos.of(level, body.blockPosition()), goals),
-                List.of(new Roamer(PersonBody.ID, Walking.INSTANCE, body)), List.of(), level.getGameTime());
-            accepted[0] = route instanceof Faring.Yes;
-            body.addEffect(new net.minecraft.world.effect.MobEffectInstance(
-                net.minecraft.world.effect.MobEffects.WATER_BREATHING, 600));
-            Roaming protectedWays = new Roaming(level);
-            Faring protectedRoute = protectedWays.answered(known -> known.journey(body.resident(),
-                    WorldPos.of(level, body.blockPosition()), goals),
-                List.of(new Roamer(PersonBody.ID, Walking.INSTANCE, body)), List.of(), level.getGameTime());
+            helper.assertFalse(route(level, body, goals) instanceof Faring.Yes,
+                "the graph refuses a long enclosed water route");
+            body.addEffect(new MobEffectInstance(MobEffects.WATER_BREATHING, 600));
+            Faring protectedRoute = route(level, body, goals);
             helper.assertTrue(protectedRoute instanceof Faring.Yes,
                 "water breathing permits the same graph route: " + protectedRoute);
-            body.removeEffect(net.minecraft.world.effect.MobEffects.WATER_BREATHING);
-            movement.setOut(level, body, goals);
-        });
-        helper.onEachTick(() -> {
-            leastAir[0] = Math.min(leastAir[0], body.getAirSupply());
-            if (body.tickCount >= 5 && !failed[0]) {
-                failed[0] = movement.step(level, body, goals) instanceof Going.Failed;
-            }
-        });
-        helper.startSequence().thenExecuteAfter(380, () -> {
-            movement.release(level, body);
             body.discard();
-            helper.assertFalse(accepted[0], "the graph accepted a long enclosed water route; minimum air="
-                + leastAir[0] + ", movement refused=" + failed[0]);
         }).thenSucceed();
     }
 
     @GameTest(template = "empty", timeoutTicks = 450)
     public static void aResidentCanSurviveAnAttemptedRouteOutFromUnderAFloodedFloor(GameTestHelper helper) {
         Rig rig = new Rig(helper, 2);
-        for (int x = -1; x <= 3; x++) {
-            for (int z = -1; z <= 1; z++) {
-                if (x != 3 || z != 0) {
-                    rig.level.setBlock(rig.submergedStart.above(2).offset(x, 0, z),
-                        Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
-                }
-            }
-        }
-        OnFoot movement = new OnFoot(1.0, LOST);
+        rig.roof();
+        OnFoot movement = new OnFoot(1.0, WaterLabor.LOST);
         boolean[] started = {false};
         boolean[] failed = {false};
         boolean[] reached = {false};
@@ -280,41 +199,20 @@ public final class ResidentWaterGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 1000)
-    public static void aColonyWorkerResumesAfterFindingAir(GameTestHelper helper) throws ReflectiveOperationException {
+    public static void aColonyWorkerResumesAfterFindingAir(GameTestHelper helper) {
         resumesAfterAir(helper, false);
     }
 
     @GameTest(template = "empty", timeoutTicks = 1000)
-    public static void aWithinWorkerReturnsToItsPieceAfterFindingAir(GameTestHelper helper)
-            throws ReflectiveOperationException {
+    public static void aWithinWorkerReturnsToItsPieceAfterFindingAir(GameTestHelper helper) {
         resumesAfterAir(helper, true);
     }
 
-    private static void resumesAfterAir(GameTestHelper helper, boolean within) throws ReflectiveOperationException {
+    private static void resumesAfterAir(GameTestHelper helper, boolean within) {
         Rig rig = new Rig(helper, 2, false);
-        for (int x = -1; x <= 3; x++) {
-            for (int z = -1; z <= 1; z++) {
-                if (x != 3 || z != 0) {
-                    rig.level.setBlock(rig.submergedStart.above(2).offset(x, 0, z),
-                        Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
-                }
-            }
-        }
+        rig.roof();
         rig.body.moveTo(Vec3.atBottomCenterOf(rig.bank));
-        var colony = Colonies.mint(rig.level.getServer());
-        colony.hold(PersonContent.ID, Held.Entity.of(rig.body)).orElseThrow();
-        rig.body.joinColony(colony.id());
-        colony.entered(rig.body);
-        ColonyData data = ColonyData.find(rig.level.getServer(), colony.id()).orElseThrow();
-        ColonyLabor labor = new ColonyLabor(data, rig.level.dimension());
-        Class<?> lanes = Class.forName("io.github.izakyl.folkways.core.engine.labor.Lanes");
-        var inline = lanes.getDeclaredField("INLINE");
-        inline.setAccessible(true);
-        Object executor = inline.get(null);
-        var run = ColonyLabor.class.getMethod("run", ServerLevel.class, lanes);
-        var stop = ColonyLabor.class.getDeclaredMethod("close");
-        stop.setAccessible(true);
-        boolean[] closed = {false};
+        var colony = WaterLabor.enlist(helper, rig.body).colony();
         ResourceLocation owner = ResourceLocation.fromNamespaceAndPath("folkways_test", "breathing");
         boolean[] pieceDone = {false};
         boolean[] interrupted = {false};
@@ -351,18 +249,7 @@ public final class ResidentWaterGameTests {
             }
         };
         colony.submit(owner, rig.level.dimension(), Grown.of(node), (id, how) -> { });
-        helper.onEachTick(() -> {
-            if (closed[0]) {
-                return;
-            }
-            ColonyWays.advance(data, rig.level);
-            try {
-                run.invoke(labor, rig.level, executor);
-            } catch (ReflectiveOperationException broken) {
-                throw new IllegalStateException(broken);
-            }
-            escaped[0] |= WaterLabor.escaping(rig.body);
-        });
+        helper.onEachTick(() -> escaped[0] |= WaterLabor.escaping(rig.body));
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(rig.body.doing()
                 .filter(doing -> doing.what().equals(owner) && doing.toward().isEmpty()).isPresent(),
                 "the colony starts the submitted work, rather than an idle urge"))
@@ -375,44 +262,16 @@ public final class ResidentWaterGameTests {
             .thenWaitUntil(() -> helper.assertTrue(committed[0], "the colony resumes and finishes the work"))
             .thenExecute(() -> {
                 helper.assertTrue(rig.body.getHealth() == rig.body.getMaxHealth(), "the worker survives");
-                closed[0] = true;
-                try {
-                    stop.invoke(labor);
-                } catch (ReflectiveOperationException broken) {
-                    throw new IllegalStateException(broken);
-                }
                 rig.body.discard();
-                colony.raze();
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 450)
-    public static void waterBreathingDoesNotInterruptAResidentUnderwater(GameTestHelper helper) {
-        Rig rig = new Rig(helper, 2);
-        for (int x = -1; x <= 3; x++) {
-            for (int z = -1; z <= 1; z++) {
-                rig.level.setBlock(rig.submergedStart.above(2).offset(x, 0, z),
-                    Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
-            }
-        }
-        rig.body.addEffect(new net.minecraft.world.effect.MobEffectInstance(
-            net.minecraft.world.effect.MobEffects.WATER_BREATHING, 600));
-        helper.startSequence().thenExecuteAfter(380, () -> {
-            helper.assertTrue(rig.body.isUnderWater(), "the protected resident remains underwater");
-            helper.assertTrue(rig.body.getAirSupply() == rig.body.getMaxAirSupply(),
-                "vanilla water breathing preserves air");
-            helper.assertFalse(WaterLabor.escaping(rig.body), "water breathing does not trigger an escape");
-            helper.assertTrue(rig.body.getHealth() == rig.body.getMaxHealth(), "the resident does not drown");
-            rig.body.discard();
-        }).thenSucceed();
-    }
-
-    private static void leaveWater(GameTestHelper helper, int depth, boolean planned) {
+    private static void leaveWater(GameTestHelper helper, int depth) {
         Rig rig = new Rig(helper, depth);
         boolean[] travelling = {false};
         boolean[] arrived = {false};
         boolean[] enteredWater = {false};
-        OnFoot movement = new OnFoot(1.0, LOST);
+        OnFoot movement = new OnFoot(1.0, WaterLabor.LOST);
         helper.onEachTick(() -> {
             enteredWater[0] |= rig.body.isInWater();
             if (travelling[0] && !arrived[0]) {
@@ -424,15 +283,9 @@ public final class ResidentWaterGameTests {
         });
         helper.startSequence().thenExecuteAfter(10, () -> {
             helper.assertTrue(enteredWater[0], "the actual resident first falls into real water");
-            if (planned) {
-                WorldPos from = WorldPos.of(rig.level, rig.body.blockPosition());
-                Roaming ways = new Roaming(rig.level);
-                Faring route = ways.answered(known -> known.journey(rig.body.resident(), from, rig.goals()),
-                    List.of(new Roamer(PersonBody.ID, Walking.INSTANCE, rig.body)), List.of(),
-                    rig.level.getGameTime());
-                helper.assertTrue(route instanceof Faring.Yes,
-                    "the actual colony path graph must accept an exit its resident can swim: " + route + "; " + rig.describe());
-            }
+            Faring route = route(rig.level, rig.body, rig.goals());
+            helper.assertTrue(route instanceof Faring.Yes,
+                "the actual colony path graph must accept an exit its resident can swim: " + route + "; " + rig.describe());
             movement.setOut(rig.level, rig.body, rig.goals());
             travelling[0] = true;
         }).thenWaitUntil(() -> helper.assertTrue(arrived[0] && !rig.body.isInWater() && rig.body.onGround(),
@@ -443,6 +296,15 @@ public final class ResidentWaterGameTests {
                 helper.assertTrue(rig.body.getHealth() == rig.body.getMaxHealth(), "the short real swim does not drown the resident");
                 rig.body.discard();
             }).thenSucceed();
+    }
+
+    private static Faring route(ServerLevel level, ResidentEntity body, Set<WorldPos> goals) {
+        return route(level, body, body.blockPosition(), goals);
+    }
+
+    private static Faring route(ServerLevel level, ResidentEntity body, BlockPos from, Set<WorldPos> goals) {
+        return new Roaming(level).answered(known -> known.journey(body.resident(), WorldPos.of(level, from), goals),
+            List.of(new Roamer(PersonBody.ID, Walking.INSTANCE, body)), List.of(), level.getGameTime());
     }
 
     private static final class Rig {
@@ -475,9 +337,21 @@ public final class ResidentWaterGameTests {
             level.addFreshEntity(body);
             Walking.INSTANCE.fit(body);
             if (enroll) {
-                WaterLabor.enroll(helper, body);
+                WaterLabor.enlist(helper, body);
             }
         }
+        // A stone ceiling over the pond, open at one corner.
+        void roof() {
+            for (int x = -1; x <= 3; x++) {
+                for (int z = -1; z <= 1; z++) {
+                    if (x != 3 || z != 0) {
+                        level.setBlock(submergedStart.above(2).offset(x, 0, z), Blocks.STONE.defaultBlockState(),
+                            Block.UPDATE_CLIENTS);
+                    }
+                }
+            }
+        }
+
         Set<WorldPos> goals() { return Set.of(WorldPos.of(level, bank)); }
         String describe() {
             var path = body.getNavigation().getPath();

@@ -9,9 +9,12 @@ import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
@@ -30,9 +33,6 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.Container;
@@ -188,8 +188,7 @@ public final class LoadoutProfileGameTests {
                 helper.assertTrue(SpottedTargets.sight(scene.body(), target)
                     == base * FolkwaysVanillaConfig.observationSightMultiplier(),
                     "physical collection activates observation sight");
-                scene.supplies.profiles().replace(new LoadoutProfile(profile.id(), profile.name(), List.of(),
-                    Optional.empty()));
+                scene.supplies.profiles().replace(new LoadoutProfile(profile.id(), profile.name(), List.of()));
                 helper.assertTrue(scene.body().pack().count(Items.SPYGLASS) == 1
                     && SpottedTargets.sight(scene.body(), target) == base,
                     "removing the profile requirement revokes the bonus while the item is still carried");
@@ -219,8 +218,7 @@ public final class LoadoutProfileGameTests {
                         body.pack().count(Items.IRON_SWORD) == 1
                         && body.getItemBySlot(EquipmentSlot.HEAD).is(Items.IRON_HELMET)
                         && body.pack().count(Items.ARROW) == 6,
-                        "each resident physically collects and wears their own"
-                        + " profile set: "
+                        "each resident physically collects and wears their own profile set: "
                         + scene.supplies.status(body.id()));
                 }
             })
@@ -229,8 +227,7 @@ public final class LoadoutProfileGameTests {
                 helper.assertValueEqual(
                     stock.getItem(4).getCount(),
                     8,
-                    "twelve physical arrows were collected, without shared"
-                    + " ownership");
+                    "twelve physical arrows were collected, without shared ownership");
                 helper.assertTrue(
                     stock.getItem(0).isEmpty() && stock.getItem(1).isEmpty(),
                     "two real weapons leave storage");
@@ -248,8 +245,7 @@ public final class LoadoutProfileGameTests {
             ItemSpec.of(Items.IRON_SWORD)
             .withComponents(
             DataComponentMap.builder()
-            .set(DataComponents.CUSTOM_NAME, Component.literal("family"
-            + " sword"))
+            .set(DataComponents.CUSTOM_NAME, Component.literal("family sword"))
             .build());
         scene.profile(List.of(LoadoutProfile.Entry.weapon(spec)));
         stock.setItem(0, new ItemStack(Items.IRON_SWORD));
@@ -334,8 +330,7 @@ public final class LoadoutProfileGameTests {
                     4,
                     "equal to threshold does not trigger restock");
                 helper.assertValueEqual(
-                    first.getItem(0).getCount(), 2, "no source mutation before"
-                    + " threshold crossing");
+                    first.getItem(0).getCount(), 2, "no source mutation before threshold crossing");
                 Containers.extract(scene.body().pack(), stack -> stack.is(Items.ARROW), 1);
             })
             .thenWaitUntil(
@@ -352,9 +347,7 @@ public final class LoadoutProfileGameTests {
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
-                    scene.body().pack().count(Items.ARROW), 12, "restock stops at"
-                    + " the player"
-                    + " target");
+                    scene.body().pack().count(Items.ARROW), 12, "restock stops at the player target");
                 helper.assertValueEqual(
                     second.getItem(0).getCount(),
                     13,
@@ -385,8 +378,7 @@ public final class LoadoutProfileGameTests {
         Worker worker = WeaponSessionGameTests.worker(body);
         WeaponSession bow = Weapons.select(worker, target, null);
         helper.assertTrue(
-            body.getMainHandItem().is(Items.BOW) && bow.fire(target), "ranged target begins an"
-            + " actual bow draw");
+            body.getMainHandItem().is(Items.BOW) && bow.fire(target), "ranged target begins an actual bow draw");
         target.moveTo(body.getX() + 2, body.getY(), body.getZ());
         WeaponSession sword = Weapons.select(worker, target, bow);
         helper.assertTrue(
@@ -434,8 +426,7 @@ public final class LoadoutProfileGameTests {
             scene.supplies.urges(worker, Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE).isEmpty(),
             "at-hand engagement never requests gear");
         helper.assertTrue(
-            scene.supplies.keeps(body).isEmpty(), "no profile creates no stock target or"
-            + " retention allowance");
+            scene.supplies.keeps(body).isEmpty(), "no profile creates no stock target or retention allowance");
         helper.succeed();
     }
 
@@ -453,8 +444,7 @@ public final class LoadoutProfileGameTests {
             second,
             LoadoutProfile.Entry.armor(EquipmentSlot.HEAD, ItemSpec.of(Items.IRON_HELMET))));
         helper.assertValueEqual(
-            scene.supplies.deficits(body, profile).get(first.id()), 0, "first entry owns the"
-            + " physical sword");
+            scene.supplies.deficits(body, profile).get(first.id()), 0, "first entry owns the physical sword");
         helper.assertValueEqual(
             scene.supplies.deficits(body, profile).get(second.id()),
             1,
@@ -468,10 +458,7 @@ public final class LoadoutProfileGameTests {
             PatrolSupplies.State.BLOCKED,
             "unrelated worn gear blocks collection visibly");
         helper.assertTrue(
-            body.getItemBySlot(EquipmentSlot.HEAD).is(Items.GOLDEN_HELMET), "player armor"
-            + " remains"
-            + " physically"
-            + " worn");
+            body.getItemBySlot(EquipmentSlot.HEAD).is(Items.GOLDEN_HELMET), "player armor remains physically worn");
         helper.succeed();
     }
 
@@ -493,9 +480,11 @@ public final class LoadoutProfileGameTests {
             CoreSettings.tool(Vocations.required(PatrolContent.VOCATION)).byDefault().isEmpty(),
             "patrolling has no weapon tool defaults");
         helper.assertTrue(
-            Vocations.required(PatrolContent.VOCATION).kit().isEmpty(), "patrolling has no"
-            + " weapon kit"
-            + " deliveries");
+            Vocations.required(PatrolContent.VOCATION).kit().isEmpty(), "patrolling has no weapon kit deliveries");
+        helper.assertTrue(
+            !KitRules.allows(scene.colony, Vocations.required(PatrolContent.VOCATION), Items.BOW)
+            && !KitRules.allows(scene.colony, Vocations.required(PatrolContent.VOCATION), Items.IRON_SWORD),
+            "combat weapons are absent from default tool lists");
         LoadoutProfile copy = profiles.duplicate(profile.id());
         profiles.delete(profile.id());
         helper.assertTrue(
@@ -511,12 +500,9 @@ public final class LoadoutProfileGameTests {
         body.pack().insert(new ItemStack(Items.BOW));
         scene.profile(List.of(LoadoutProfile.Entry.armor(EquipmentSlot.HEAD, ItemSpec.of(Items.BOW))));
         scene.supplies.urges(WeaponSessionGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
-        helper.assertTrue(body.getItemBySlot(EquipmentSlot.HEAD).isEmpty(), "a bow can never become"
-            + " a helmet");
+        helper.assertTrue(body.getItemBySlot(EquipmentSlot.HEAD).isEmpty(), "a bow can never become a helmet");
         helper.assertValueEqual(
-            scene.supplies.status(body.id()).state(), PatrolSupplies.State.UNAVAILABLE, "invalid"
-            + " slot"
-            + " is visible");
+            scene.supplies.status(body.id()).state(), PatrolSupplies.State.UNAVAILABLE, "invalid slot is visible");
         scene.profile(List.of(LoadoutProfile.Entry.weapon(ItemSpec.of(Items.STONE))));
         scene.supplies.urges(WeaponSessionGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
         helper.assertValueEqual(
@@ -539,21 +525,18 @@ public final class LoadoutProfileGameTests {
         helper.assertTrue(
             shortage.assigned() == 2 && shortage.incomplete() == 2 && shortage.unloaded() == 0,
             "two residents each need an entire set");
-        helper.assertValueEqual(shortage.missing().get(weapon.id()), 2, "two distinct weapons are"
-            + " missing");
+        helper.assertValueEqual(shortage.missing().get(weapon.id()), 2, "two distinct weapons are missing");
         helper.assertValueEqual(
-            shortage.unavailableStock().get(weapon.id()), 1, "one stored sword cannot cover two"
-            + " sets");
+            shortage.unavailableStock().get(weapon.id()), 1, "one stored sword cannot cover two sets");
         helper.assertValueEqual(
             shortage.unavailableStock().get(arrows.id()),
             2,
             "six stored arrows cover only six of eight needed units");
-        helper.assertValueEqual(stock.getItem(1).getCount(), 6, "shortage preview never mutates"
-            + " real storage");
+        helper.assertValueEqual(stock.getItem(1).getCount(), 6, "shortage preview never mutates real storage");
         helper.succeed();
     }
 
-    private static final class Scene implements GameTestListener {
+    private static final class Scene {
         final GameTestHelper helper;
         final Colony colony;
         final PatrolSupplies supplies;
@@ -580,7 +563,7 @@ public final class LoadoutProfileGameTests {
                 body.joinColony(colony.id());
                 people.add(body);
             }
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
         }
 
         ResidentEntity body() {
@@ -600,7 +583,7 @@ public final class LoadoutProfileGameTests {
 
         LoadoutProfile profile(List<LoadoutProfile.Entry> entries) {
             var profile = supplies.profiles().create("Test profile");
-            profile = new LoadoutProfile(profile.id(), profile.name(), entries, Optional.empty());
+            profile = new LoadoutProfile(profile.id(), profile.name(), entries);
             supplies.profiles().replace(profile);
             supplies.profiles().assign(people.stream().map(ResidentEntity::id).toList(), Optional.of(profile.id()));
             return profile;
@@ -618,20 +601,6 @@ public final class LoadoutProfileGameTests {
             people.forEach(Entity::discard);
             others.forEach(Entity::discard);
             colony.raze();
-        }
-
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
         }
     }
 }

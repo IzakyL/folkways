@@ -4,7 +4,6 @@ import { PERSON_KIND, writeColonyDat, type ColonySpec } from "../shared/colony/c
 import {
   colonyRegistry, zoneCellsAt, zoneChoiceSettingAt, zoneCount, zoneCountSettingAt, zoneKindAt,
 } from "../shared/ui/zone-tools";
-import { doingKind, readDoing } from "../shared/colony/resident-probe";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { REPO_ROOT, ensureOut } from "../shared/harness/out-paths";
 import { BUDGET } from "../shared/harness/budgets";
@@ -89,14 +88,13 @@ test("the mod reads back every section of a colony save the test writes", async 
 
   let pair: E2EPair | undefined;
   let server: any;
-  let client: any;
   try {
     pair = await launchPair({
       config: CONFIG_PATH,
       server: { instance },
       client: { instance: `save-seed-client-${runId}` },
     });
-    ({ server, client } = pair);
+    ({ server } = pair);
     const registry = await colonyRegistry(server);
     const seatedPlayer = (await world.players(server))[0]?.uuid;
     expect(typeof seatedPlayer, "need a player first so reflection has a foothold").toBe("string");
@@ -145,38 +143,6 @@ test("the mod reads back every section of a colony save the test writes", async 
       .toBe(settled);
     const ordersAgain = await serviceOf(server, afterReload, "folkways:orders");
     expect(ordersAgain, "after reload the orders should still belong to this domain").toContain("minecraft:bread");
-
-    const players = await world.players(server).catch(() => []);
-    const stand = players[0]?.position ?? { x: 0, y: 64, z: 0 };
-    const at = { x: Math.round(stand.x) + 2, y: Math.round(stand.y), z: Math.round(stand.z) + 2 };
-    await world.command(server, `summon folkways:resident ${at.x} ${at.y} ${at.z}`);
-    const listed = await world.entities(server, {
-      dimension: "minecraft:overworld", types: ["folkways:resident"], limit: 8,
-    }).catch(() => ({ entities: [] }));
-    const who = (listed.entities ?? [])[0]?.uuid;
-    expect(typeof who, "need a resident first to ask what they are doing").toBe("string");
-    expect(await readDoing(server, who), "a freshly summoned resident has no job").toBeNull();
-
-    const workingId = await reflect.invoke(server, {
-      target: { kind: "static", className: "net.minecraft.resources.ResourceLocation" },
-      method: "parse", args: ["folkways:working"], argTypes: ["java.lang.String"],
-      returnHandle: true, limits: { maxDepth: 1, maxNodes: 8 },
-    });
-    const doing = await reflect.invoke(server, {
-      target: { kind: "static", className: "io.github.izakyl.folkways.core.api.work.Doing" },
-      method: "open", args: [{ $handle: workingId.handle }],
-      argTypes: ["net.minecraft.resources.ResourceLocation"],
-      returnHandle: true, limits: { maxDepth: 1, maxNodes: 8 },
-    });
-    await reflect.invoke(server, {
-      target: { kind: "entity", uuid: who },
-      method: "setDoing", args: [{ $handle: doing.handle }],
-      argTypes: ["io.github.izakyl.folkways.core.api.work.Doing"],
-      limits: { maxDepth: 1, maxNodes: 8 },
-    });
-    const said = await readDoing(server, who);
-    expect(said).toBe("folkways:working");
-    expect(doingKind(said)).toBe("working");
   } catch (error) {
     pair?.failing(error);
     throw error;

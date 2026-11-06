@@ -1,18 +1,15 @@
 import { screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { expect, test } from "@playwright/test";
-import { writeFileSync } from "node:fs";
-import path from "node:path";
 import { foundColonyFast, tryCommand, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import { buildRailLine } from "../shared/rail/rail-fixture";
 import { sampleTrain } from "../shared/rail/rail-probe";
 import { drawRailway, type Point } from "../shared/rail/rail-drawn";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { REPO_ROOT, ensureOut, reportPath, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { newRunId } from "../shared/harness/run-id";
 
-const REPORT_PATH = reportPath("e2e", "rail-drawn-report");
 const RUN_TICKS = Number(process.env.FOLKWAYS_RAIL_DRAWN_TICKS ?? 6000);
 const SAMPLE_TICKS = 100;
 
@@ -24,7 +21,6 @@ test("a colony train runs a loop drawn with the railway pattern", async ({}, tes
   ensureOut("e2e");
   const runId = newRunId();
   let pair: E2EPair | undefined;
-  const report: any = { scope: "an octagonal loop drawn by the railway pattern, stations put on the laid track" };
   try {
     pair = await launchPair({
       config: "blockwright.toml",
@@ -38,8 +34,7 @@ test("a colony train runs a loop drawn with the railway pattern", async ({}, tes
     await tryCommand(server, `gamemode creative ${player.name}`);
     const playerUuid = (await world.players(server)).find((p) => p.name === player.name)!.uuid;
     const p: Vec = { x: Math.round(player.pos.x), y: Math.round(player.pos.y), z: Math.round(player.pos.z) };
-    const founding = await foundColonyFast(server, client, player.name, { origin: { x: p.x - 30, y: p.y, z: p.z - 30 }, residentCount: 1 });
-    report.founding = { residents: founding.residents };
+    await foundColonyFast(server, client, player.name, { origin: { x: p.x - 30, y: p.y, z: p.z - 30 }, residentCount: 1 });
     await tryCommand(server, `item replace entity ${player.name} inventory.0 from entity ${player.name} weapon.mainhand`);
 
     // North up the east side, west along the top, south down the west side, east along the bottom; corners cut at 45°.
@@ -53,8 +48,8 @@ test("a colony train runs a loop drawn with the railway pattern", async ({}, tes
       [at(20, 60), at(40, 40), at(40, 1)],
     ];
     await tryCommand(server, `forceload add ${o.x - 120} ${o.z - 100} ${o.x + 60} ${o.z + 100}`);
-    report.drawn = await drawRailway(server, pieces, "octagon");
-    expect(report.drawn.ok, `the loop should be drawn whole: ${JSON.stringify(report.drawn).slice(0, 800)}`).toBe(true);
+    const drawn = await drawRailway(server, pieces, "octagon");
+    expect(drawn.ok, `the loop should be drawn whole: ${JSON.stringify(drawn).slice(0, 800)}`).toBe(true);
 
     const y = p.y;
     const line = await buildRailLine(server, client, player.name, playerUuid, { x: o.x + 40, y, z: o.z - 24 }, 0, "inventory.0", {
@@ -62,7 +57,6 @@ test("a colony train runs a loop drawn with the railway pattern", async ({}, tes
         { name: "West", position: { x: o.x - 101, y, z: o.z + 10 }, reverse: true, axis: "z", side: -1 },
         { name: "South", position: { x: o.x - 14, y, z: o.z + 81 }, reverse: false, axis: "x", side: 1 },
       ] });
-    report.line = { ok: line.ok, assembled: line.assembled, scheduled: line.scheduled, handed_over: line.handedOver, error: line.error, steps: line.steps };
     expect(line.ok, `the line should be built and handed over: ${JSON.stringify(line.steps).slice(0, 800)}`).toBe(true);
 
     const crew = (await world.entities(server, { types: ["folkways:resident"] })).entities ?? [];
@@ -80,9 +74,6 @@ test("a colony train runs a loop drawn with the railway pattern", async ({}, tes
       samples.push({ t: t + SAMPLE_TICKS, x: Math.round(s.x), z: Math.round(s.z), speed: s.speed, derailed: s.derailed, station: s.station });
       if (s.derailed || calls.length >= 4) break;
     }
-    report.samples = samples;
-    report.visited = [...visited];
-    report.calls = calls;
     expect(samples.some((s) => s.derailed), `the train may not derail: ${JSON.stringify(samples.slice(-3))}`).toBe(false);
     expect(visited.size, `the train should call at all three stations: ${[...visited]}`).toBe(3);
     expect(calls.slice(0, 4), "a whole round, back over the diagonal seam to where it began").toEqual(["East", "West", "South", "East"]);
@@ -90,9 +81,6 @@ test("a colony train runs a loop drawn with the railway pattern", async ({}, tes
     pair?.failing(error);
     throw error;
   } finally {
-    const body = JSON.stringify(report, null, 2);
-    writeFileSync(path.join(REPO_ROOT, REPORT_PATH), body);
-    testInfo.attach("rail-drawn-report", { body, contentType: "application/json" });
     await pair?.teardown(testInfo);
   }
 });

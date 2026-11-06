@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.pasture;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.ColonyView;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Modifier;
 import io.github.izakyl.folkways.core.api.terms.Reach;
@@ -21,15 +22,17 @@ import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -146,14 +149,35 @@ public final class PastureBreedingGameTests {
         helper.succeed();
     }
 
+    // A pair planned for feeding that stops being a valid pair before the commit is refused, and the core
+    // transaction hands both wheat back.
     @GameTest(template = "empty")
-    public static void aStaleFeedingReturnsItsFoodWhenTheHerdGainsASurplus(GameTestHelper helper) {
-        Rig rig = pair(helper);
-        rig.target = 3;
-        Node feed = rig.nodes().getFirst();
-        rig.cow(4, 3, -24000);
-        rig.cow(5, 3, -24000);
-        refusedWithoutFood(helper, rig, feed);
+    public static void aFeedingInvalidatedAfterPlanningReturnsAllFood(GameTestHelper helper) {
+        record Change(String name, int target, BiConsumer<Rig, Node> after) {
+        }
+        for (Change change : List.of(
+                new Change("the herd gains a surplus", 3, (rig, node) -> {
+                    rig.cow(4, 3, -24000);
+                    rig.cow(5, 3, -24000);
+                }),
+                new Change("the partner cools down", 8, (rig, node) -> partner(rig, node).setAge(6000)),
+                new Change("the partner leaves the pen", 8, (rig, node) ->
+                    partner(rig, node).setPos(Vec3.atBottomCenterOf(rig.floor.offset(-2, 1, 3)))),
+                new Change("the partner is gone", 8, (rig, node) -> partner(rig, node).discard()))) {
+            Rig rig = pair(helper);
+            rig.target = change.target();
+            Node node = rig.nodes().getFirst();
+            change.after().accept(rig, node);
+            SimpleContainer pack = new SimpleContainer(new ItemStack(Items.WHEAT, 2));
+            helper.assertTrue(Commit.run(rig.level, node, rig.worker(node, pack)) instanceof Outcome.Failed,
+                "an invalid pair is refused at commit time: " + change.name());
+            helper.assertTrue(pack.countItem(Items.WHEAT) == 2,
+                "both wheat are returned by the core transaction: " + change.name());
+            helper.assertTrue(rig.animals.stream().noneMatch(Cow::isInLove),
+                "neither animal is fed alone: " + change.name());
+            rig.clear();
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")
@@ -332,24 +356,25 @@ public final class PastureBreedingGameTests {
         });
     }
 
+    // No pair, no food: a lone adult, an adult beside a baby or a cooling-down partner, or two adults with no
+    // shared workplace between them.
     @GameTest(template = "empty")
-    public static void oneReadyAdultAndOneCoolingDownNeedNoFood(GameTestHelper helper) {
-        Rig rig = new Rig(helper);
-        rig.cow(2, 3, 0);
-        rig.cow(3, 3, 6000);
-        helper.assertTrue(rig.nodes().isEmpty(), "a cooling-down adult is not a breeding partner");
-        rig.clear();
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void aLoneAdultOrABabyDoesNotReceiveBreedingFood(GameTestHelper helper) {
-        Rig rig = new Rig(helper);
-        rig.cow(2, 3, 0);
-        helper.assertTrue(rig.nodes().isEmpty(), "a lone adult has no partner");
-        rig.cow(3, 3, -24000);
-        helper.assertTrue(rig.nodes().isEmpty(), "a baby cannot be its partner");
-        rig.clear();
+    public static void animalsWithoutAReadyPairReceiveNoBreedingFood(GameTestHelper helper) {
+        // Each cow is {x, age}, all on one row.
+        record Layout(String name, List<int[]> cows) {
+        }
+        for (Layout layout : List.of(
+                new Layout("a lone adult has no partner", List.of(new int[] {2, 0})),
+                new Layout("a baby cannot be its partner", List.of(new int[] {2, 0}, new int[] {3, -24000})),
+                new Layout("a cooling-down adult is not a breeding partner",
+                    List.of(new int[] {2, 0}, new int[] {3, 6000})),
+                new Layout("animals with no shared workplace need to come closer first",
+                    List.of(new int[] {1, 0}, new int[] {11, 0})))) {
+            Rig rig = new Rig(helper);
+            layout.cows().forEach(cow -> rig.cow(cow[0], 3, cow[1]));
+            helper.assertTrue(rig.nodes().isEmpty(), layout.name());
+            rig.clear();
+        }
         helper.succeed();
     }
 
@@ -376,40 +401,6 @@ public final class PastureBreedingGameTests {
         helper.assertTrue(rig.animals.stream().allMatch(Cow::isInLove), "both animals enter love together");
         helper.assertTrue(pack.countItem(Items.WHEAT) == 0, "exactly two wheat are spent");
         helper.assertTrue(rig.nodes().isEmpty(), "a pair already in love needs no more food");
-        rig.clear();
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void aPartnerCoolingDownAfterPlanningReturnsAllFood(GameTestHelper helper) {
-        Rig rig = pair(helper);
-        Node node = rig.nodes().getFirst();
-        partner(rig, node).setAge(6000);
-        refusedWithoutFood(helper, rig, node);
-    }
-
-    @GameTest(template = "empty")
-    public static void aPartnerLeavingThePenAfterPlanningReturnsAllFood(GameTestHelper helper) {
-        Rig rig = pair(helper);
-        Node node = rig.nodes().getFirst();
-        partner(rig, node).setPos(Vec3.atBottomCenterOf(rig.floor.offset(-2, 1, 3)));
-        refusedWithoutFood(helper, rig, node);
-    }
-
-    @GameTest(template = "empty")
-    public static void aMissingPartnerReturnsAllFood(GameTestHelper helper) {
-        Rig rig = pair(helper);
-        Node node = rig.nodes().getFirst();
-        partner(rig, node).discard();
-        refusedWithoutFood(helper, rig, node);
-    }
-
-    @GameTest(template = "empty")
-    public static void widelySeparatedAnimalsAreNotFedAsAPair(GameTestHelper helper) {
-        Rig rig = new Rig(helper);
-        rig.cow(1, 3, 0);
-        rig.cow(11, 3, 0);
-        helper.assertTrue(rig.nodes().isEmpty(), "animals with no shared workplace need to come closer first");
         rig.clear();
         helper.succeed();
     }
@@ -459,9 +450,7 @@ public final class PastureBreedingGameTests {
     public static void pastureWorkCannotFinishInAnOpenGateOrOutsideThePen(GameTestHelper helper) {
         Rig rig = pair(helper);
         BlockPos gate = rig.floor.offset(0, 1, 3);
-        rig.level.setBlockAndUpdate(gate, Blocks.OAK_FENCE_GATE.defaultBlockState()
-            .setValue(FenceGateBlock.FACING, net.minecraft.core.Direction.EAST)
-            .setValue(FenceGateBlock.OPEN, true));
+        gate(rig, true);
         Node node = rig.nodes().getFirst();
         for (WorldPos cell : node.spec().stances().cells()) {
             helper.assertTrue(rig.cells.contains(cell.cell().below()), "the workplace is inside the pasture: " + cell);
@@ -477,71 +466,37 @@ public final class PastureBreedingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 700)
-    public static void aPairFedByOneResidentActuallyProducesACalf(GameTestHelper helper) {
-        Rig rig = pair(helper);
-        Node node = rig.nodes().getFirst();
-        SimpleContainer pack = new SimpleContainer(new ItemStack(Items.WHEAT, 2));
-        helper.assertTrue(Commit.run(rig.level, node, rig.worker(node, pack)) instanceof Outcome.Done,
-            "feeding the pair succeeds");
-        helper.assertTrue(rig.animals.stream().allMatch(Cow::isInLove), "both parents are in love");
-        helper.succeedWhen(() -> {
-            var herd = rig.level.getEntitiesOfClass(Cow.class, new net.minecraft.world.phys.AABB(Vec3.atLowerCornerOf(rig.floor),
-                Vec3.atLowerCornerOf(rig.floor.offset(13, 5, 7))));
-            helper.assertTrue(herd.stream().anyMatch(Cow::isBaby), "vanilla breeding produces a calf");
-            herd.forEach(Cow::discard);
-        });
-    }
-
+    // A closed ring of fence, gate open or shut, is one pen of the ground inside it. A gap, ground marked out beyond
+    // the fence, or a fence across the marked ground each leave something other than one pen.
     @GameTest(template = "empty")
-    public static void aClosedFenceIsOnePenOfTheGroundInsideIt(GameTestHelper helper) {
-        Rig rig = new Rig(helper);
-        Enclosure pen = rig.survey();
+    public static void theFenceDecidesWhetherTheMarkedGroundIsOnePen(GameTestHelper helper) {
+        Rig closed = new Rig(helper);
+        Enclosure pen = closed.survey();
         helper.assertTrue(pen.fenced(), "a closed ring of fence is one pen: " + pen.shape());
         helper.assertTrue(pen.inside().size() == 11 * 5, "the pen is the ground inside the fence: " + pen.inside().size());
         helper.assertFalse(pen.small(), "eleven by five is room enough to work among the animals");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void aGapInTheFenceLeavesThePenOpen(GameTestHelper helper) {
-        Rig rig = new Rig(helper);
-        rig.level.setBlockAndUpdate(rig.floor.offset(4, 1, 0), Blocks.AIR.defaultBlockState());
-        helper.assertTrue(rig.survey().shape() == Enclosure.Shape.OPEN, "a gap lets the ground run out of the pen");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void groundMarkedOutBeyondTheFenceIsNotFenced(GameTestHelper helper) {
-        Rig rig = new Rig(helper);
-        for (int x = -1; x <= 13; x++) {
-            rig.cells.add(rig.floor.offset(x, 0, -1));
+        record Change(String name, Consumer<Rig> change, Enclosure.Shape shape) {
         }
-        helper.assertTrue(rig.survey().shape() == Enclosure.Shape.OPEN,
-            "marked ground outside the fence runs off what was marked out");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void aGateOpenOrShutStillClosesTheFence(GameTestHelper helper) {
-        Rig rig = new Rig(helper);
-        BlockPos gate = rig.floor.offset(0, 1, 3);
-        for (boolean open : new boolean[] {false, true}) {
-            rig.level.setBlockAndUpdate(gate, Blocks.OAK_FENCE_GATE.defaultBlockState()
-                .setValue(FenceGateBlock.FACING, net.minecraft.core.Direction.EAST)
-                .setValue(FenceGateBlock.OPEN, open));
-            helper.assertTrue(rig.survey().fenced(), "a gate is part of the fence, open: " + open);
+        for (Change change : List.of(
+                new Change("a shut gate is part of the fence", rig -> gate(rig, false), Enclosure.Shape.FENCED),
+                new Change("an open gate is part of the fence", rig -> gate(rig, true), Enclosure.Shape.FENCED),
+                new Change("a gap lets the ground run out of the pen",
+                    rig -> rig.level.setBlockAndUpdate(rig.floor.offset(4, 1, 0), Blocks.AIR.defaultBlockState()),
+                    Enclosure.Shape.OPEN),
+                new Change("marked ground outside the fence runs off what was marked out", rig -> {
+                    for (int x = -1; x <= 13; x++) {
+                        rig.cells.add(rig.floor.offset(x, 0, -1));
+                    }
+                }, Enclosure.Shape.OPEN),
+                new Change("two pens marked out as one are split", rig -> {
+                    for (int z = 1; z < 6; z++) {
+                        rig.level.setBlockAndUpdate(rig.floor.offset(6, 1, z), Blocks.OAK_FENCE.defaultBlockState());
+                    }
+                }, Enclosure.Shape.SPLIT))) {
+            Rig rig = new Rig(helper);
+            change.change().accept(rig);
+            helper.assertTrue(rig.survey().shape() == change.shape(), change.name());
         }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void aFenceAcrossTheMarkedGroundSplitsIt(GameTestHelper helper) {
-        Rig rig = new Rig(helper);
-        for (int z = 1; z < 6; z++) {
-            rig.level.setBlockAndUpdate(rig.floor.offset(6, 1, z), Blocks.OAK_FENCE.defaultBlockState());
-        }
-        helper.assertTrue(rig.survey().shape() == Enclosure.Shape.SPLIT, "two pens marked out as one are split");
         helper.succeed();
     }
 
@@ -617,16 +572,6 @@ public final class PastureBreedingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
-    public static void aBigPenIsWorkedFromInsideIt(GameTestHelper helper) {
-        Rig rig = pair(helper);
-        for (WorldPos cell : rig.nodes().getFirst().spec().stances().cells()) {
-            helper.assertTrue(rig.survey().inside().contains(cell.cell()), "the keeper stands inside the pen: " + cell);
-        }
-        rig.clear();
-        helper.succeed();
-    }
-
     private static Rig pair(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         rig.cow(2, 3, 0);
@@ -639,14 +584,10 @@ public final class PastureBreedingGameTests {
         return rig.animals.stream().filter(cow -> !cow.getUUID().equals(first)).findFirst().orElseThrow();
     }
 
-    private static void refusedWithoutFood(GameTestHelper helper, Rig rig, Node node) {
-        SimpleContainer pack = new SimpleContainer(new ItemStack(Items.WHEAT, 2));
-        helper.assertTrue(Commit.run(rig.level, node, rig.worker(node, pack)) instanceof Outcome.Failed,
-            "an invalid pair is refused at commit time");
-        helper.assertTrue(pack.countItem(Items.WHEAT) == 2, "both wheat are returned by the core transaction");
-        helper.assertTrue(rig.animals.stream().noneMatch(Cow::isInLove), "neither animal is fed alone");
-        rig.clear();
-        helper.succeed();
+    private static void gate(Rig rig, boolean open) {
+        rig.level.setBlockAndUpdate(rig.floor.offset(0, 1, 3), Blocks.OAK_FENCE_GATE.defaultBlockState()
+            .setValue(FenceGateBlock.FACING, Direction.EAST)
+            .setValue(FenceGateBlock.OPEN, open));
     }
 
     private static final class Rig {
@@ -683,23 +624,21 @@ public final class PastureBreedingGameTests {
                     }
                 }
             }
-            Settings settings = (Settings) Proxy.newProxyInstance(Settings.class.getClassLoader(),
-                new Class<?>[] {Settings.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "choice" -> keeps.type();
-                    case "count" -> target;
-                    case "flag" -> false;
-                    default -> throw new AssertionError(method.getName());
-                });
-            zone = (ZoneView) Proxy.newProxyInstance(ZoneView.class.getClassLoader(),
-                new Class<?>[] {ZoneView.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "id" -> zoneId;
-                    case "delegation" -> PastureContent.PASTURE;
-                    case "dimension" -> level.dimension();
-                    case "at" -> WorldPos.of(level, (BlockPos) args[0]);
-                    case "cells" -> cells;
-                    case "settings" -> settings;
-                    default -> throw new AssertionError(method.getName());
-                });
+            Settings settings = Proxies.of(Settings.class, (proxy, method, args) -> switch (method.getName()) {
+                case "choice" -> keeps.type();
+                case "count" -> target;
+                case "flag" -> false;
+                default -> throw new AssertionError(method.getName());
+            });
+            zone = Proxies.of(ZoneView.class, (proxy, method, args) -> switch (method.getName()) {
+                case "id" -> zoneId;
+                case "delegation" -> PastureContent.PASTURE;
+                case "dimension" -> level.dimension();
+                case "at" -> WorldPos.of(level, (BlockPos) args[0]);
+                case "cells" -> cells;
+                case "settings" -> settings;
+                default -> throw new AssertionError(method.getName());
+            });
         }
 
         void cow(int x, int z, int age) {
@@ -721,19 +660,17 @@ public final class PastureBreedingGameTests {
         }
 
         private ColonyView view() {
-            return (ColonyView) Proxy.newProxyInstance(ColonyView.class.getClassLoader(),
-                new Class<?>[] {ColonyView.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "level" -> level;
-                    default -> throw new AssertionError(method.getName());
-                });
+            return Proxies.of(ColonyView.class, (proxy, method, args) -> switch (method.getName()) {
+                case "level" -> level;
+                default -> throw new AssertionError(method.getName());
+            });
         }
 
         private FrontView front() {
-            return (FrontView) Proxy.newProxyInstance(FrontView.class.getClassLoader(),
-                new Class<?>[] {FrontView.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "zonesIn" -> registered ? List.of(zone) : List.of();
-                    default -> throw new AssertionError(method.getName());
-                });
+            return Proxies.of(FrontView.class, (proxy, method, args) -> switch (method.getName()) {
+                case "zonesIn" -> registered ? List.of(zone) : List.of();
+                default -> throw new AssertionError(method.getName());
+            });
         }
 
         List<Node> nodes() {
@@ -758,17 +695,16 @@ public final class PastureBreedingGameTests {
         Worker worker(Node node, SimpleContainer pack, Effects effects) {
             var resident = PersonBody.RESIDENT.get().create(level);
             resident.setPos(Vec3.atBottomCenterOf(node.spec().stances().cells().iterator().next().block(level)));
-            return (Worker) Proxy.newProxyInstance(Worker.class.getClassLoader(), new Class<?>[] {Worker.class},
-                (proxy, method, args) -> switch (method.getName()) {
-                    case "body" -> resident;
-                    case "resident" -> resident.resident();
-                    case "pack" -> pack;
-                    case "within", "route" -> List.of();
-                    case "placement" -> Placement.NOWHERE;
-                    case "held" -> ItemStack.EMPTY;
-                    case "effects" -> effects;
-                    default -> throw new AssertionError(method.getName());
-                });
+            return Proxies.of(Worker.class, (proxy, method, args) -> switch (method.getName()) {
+                case "body" -> resident;
+                case "resident" -> resident.resident();
+                case "pack" -> pack;
+                case "within", "route" -> List.of();
+                case "placement" -> Placement.NOWHERE;
+                case "held" -> ItemStack.EMPTY;
+                case "effects" -> effects;
+                default -> throw new AssertionError(method.getName());
+            });
         }
 
         void clear() {

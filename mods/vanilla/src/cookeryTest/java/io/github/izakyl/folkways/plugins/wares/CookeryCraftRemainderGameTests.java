@@ -1,17 +1,13 @@
 package io.github.izakyl.folkways.plugins.wares;
 
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
@@ -20,9 +16,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.CraftingRecipe;
@@ -61,17 +55,7 @@ public final class CookeryCraftRemainderGameTests {
             var body = PersonBody.RESIDENT.get().create(level); body.setPos(Vec3.atBottomCenterOf(cell.south()));
             SimpleContainer pack = new SimpleContainer(12); pack.setItem(0, new ItemStack(ModItems.FLOUR.get(), amount * 2));
             pack.setItem(1, new ItemStack(Items.WATER_BUCKET)); pack.setItem(2, new ItemStack(Items.WATER_BUCKET));
-            Worker worker = new Worker() {
-                public Resident resident() { return body.resident(); }
-                public Mob body() { return body; }
-                public Container pack() { return pack; }
-                public List<Store> within() { return List.of(); }
-                public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-                public void spill(ItemStack stack) { if (!stack.isEmpty()) { throw new IllegalStateException("unexpected spill"); } }
-                public Effects effects() { return body.effects(); }
-                public List<Node> route() { return List.of(); }
-                public Placement placement() { return Placement.NOWHERE; }
-            };
+            Worker worker = TestWorker.of(body).pack(pack);
             try {
                 Outcome outcome = Commit.run(level, node, worker);
                 helper.assertTrue(outcome instanceof Outcome.Done, id + ": the actual native recipe commits both real runs");

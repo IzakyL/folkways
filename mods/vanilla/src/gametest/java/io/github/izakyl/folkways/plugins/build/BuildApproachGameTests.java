@@ -1,22 +1,22 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.target;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.worker;
+
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.Footing;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
-import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import java.lang.reflect.Proxy;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,11 +25,8 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -278,32 +275,6 @@ public final class BuildApproachGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void withinAimsForTheScaffoldWithoutDelayingWork(GameTestHelper helper) {
-        floor(helper);
-        BlockPos goal = helper.absolutePos(new BlockPos(10, 9, 10));
-        SiteRig rig = SiteRig.start(helper.getLevel(), target(helper.getLevel(), Map.of(goal, Blocks.STONE.defaultBlockState())));
-        Mob body = PersonBody.RESIDENT.get().create(helper.getLevel());
-        body.setPos(Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(10, 1, 8))));
-        body.setOnGround(true);
-        Worker worker = worker(body);
-        BlockPos top = raise(helper, rig, worker);
-        Workload.Within shift = shift(rig);
-        Workload.Within.Turn turn = shift.next(helper.getLevel(), worker);
-        helper.assertTrue(turn instanceof Workload.Within.Turn.Piece,
-            "construction starts on its work clock while the worker approaches");
-        helper.assertTrue(top.equals(body.getNavigation().getTargetPos()),
-            "the presentation path ends at the usable scaffold top");
-        body.getNavigation().stop();
-        shift.tick(helper.getLevel(), worker);
-        helper.assertTrue(top.equals(body.getNavigation().getTargetPos()),
-            "presentation resumes while the inner piece is winding up");
-        helper.assertTrue(Commit.run(helper.getLevel(), ((Workload.Within.Turn.Piece) turn).node(), worker)
-                instanceof Outcome.Done,
-            "the operation is allowed before arrival rather than waiting on navigation");
-        helper.succeed();
-    }
-
     @GameTest(template = "empty_large", timeoutTicks = 240)
     public static void aResidentActuallyClimbsWhileItsWorkClockContinues(GameTestHelper helper) {
         floor(helper);
@@ -318,6 +289,12 @@ public final class BuildApproachGameTests {
         Workload.Within shift = shift(rig);
         Workload.Within.Turn turn = shift.next(helper.getLevel(), worker);
         helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "the high operation has no approach wait");
+        helper.assertTrue(top.equals(body.getNavigation().getTargetPos()),
+            "the presentation path ends at the usable scaffold top");
+        body.getNavigation().stop();
+        shift.tick(helper.getLevel(), worker);
+        helper.assertTrue(top.equals(body.getNavigation().getTargetPos()),
+            "presentation resumes while the inner piece is winding up");
         Node node = ((Workload.Within.Turn.Piece) turn).node();
         helper.assertTrue(Commit.run(helper.getLevel(), node, worker) instanceof Outcome.Done,
             "the work can proceed while the worker moves");
@@ -384,30 +361,4 @@ public final class BuildApproachGameTests {
         return (Workload.Within) rig.asked.getFirst().nodes().getFirst().spec().workload();
     }
 
-    private static BuildTarget target(ServerLevel level, Map<BlockPos, BlockState> cells) {
-        return new BuildTarget(WorldPos.of(level, cells.keySet().iterator().next()).realm(), cells);
-    }
-
-    private static Worker worker(Mob body) {
-        SimpleContainer pack = new SimpleContainer(new ItemStack(Items.STONE, 64), new ItemStack(Items.SCAFFOLDING, 64));
-        return (Worker) Proxy.newProxyInstance(BuildApproachGameTests.class.getClassLoader(), new Class<?>[] {Worker.class},
-            (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> body;
-                case "pack" -> pack;
-                case "resident" -> new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig"));
-                case "effects" -> Effects.NONE;
-                case "placement" -> Placement.NOWHERE;
-                case "held" -> ItemStack.EMPTY;
-                case "within", "route", "supplied" -> List.of();
-                default -> null;
-            });
-    }
-
-    private static void floor(GameTestHelper helper) {
-        for (int x = 1; x <= 21; x++) {
-            for (int z = 1; z <= 21; z++) {
-                helper.getLevel().setBlock(helper.absolutePos(new BlockPos(x, 0, z)), Blocks.STONE.defaultBlockState(), 3);
-            }
-        }
-    }
 }

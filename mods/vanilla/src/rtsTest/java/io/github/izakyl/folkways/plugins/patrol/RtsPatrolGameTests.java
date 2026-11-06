@@ -4,19 +4,12 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
-import io.github.izakyl.folkways.plugins.combat.weapon.RtsInventoryObservations;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
-import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
@@ -44,6 +37,10 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
+import java.util.Optional;
+import net.neoforged.neoforge.common.Tags;
 
 @EventBusSubscriber(modid = FolkwaysRtsMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -67,7 +64,7 @@ public final class RtsPatrolGameTests {
         try {
             colony.hold(PersonContent.ID, Held.Entity.of(guard.mob())).orElseThrow();
             guard.joinColony(colony.id());
-            PatrolSupplies.of(colony).loadout(guard, LoadoutRegistry.MELEE);
+            arm(colony, guard, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
             PatrolPresence patrol = new PatrolPresence(colony);
             patrol.watched(guard.id(), level.getGameTime());
             UnitGroups groups = UnitGroups.of(colony);
@@ -89,7 +86,7 @@ public final class RtsPatrolGameTests {
                 }
             }
             guard.pack().insert(new ItemStack(Items.IRON_SWORD));
-            RtsInventoryObservations.publish(colony, level);
+            InventoryObservations.publish(colony, level);
             Worker armed = worker(guard, guard.pack());
             helper.assertTrue(
                 patrol.urges(armed, colony.view(level)).isEmpty(),
@@ -125,7 +122,7 @@ public final class RtsPatrolGameTests {
         try {
             colony.hold(PersonContent.ID, Held.Entity.of(guard.mob())).orElseThrow();
             guard.joinColony(colony.id());
-            PatrolSupplies.of(colony).loadout(guard, LoadoutRegistry.BOW);
+            arm(colony, guard, "Bow", ItemSpec.of(Items.BOW));
             UUID zone = colony.hold(SentryPosts.ZONE,
                 new Held.Area(Set.of(WorldPos.of(level, helper.absolutePos(new BlockPos(5, 0, 5))))))
                 .orElseThrow().id();
@@ -135,7 +132,7 @@ public final class RtsPatrolGameTests {
             var order = ResidentCommands.of(colony).guard(guard,
                 WorldPos.of(level, helper.absolutePos(new BlockPos(5, 1, 5))), new Vec3(1, 0, 0));
             guard.pack().insert(new ItemStack(Items.IRON_SWORD));
-            RtsInventoryObservations.publish(colony, level);
+            InventoryObservations.publish(colony, level);
             Worker armed = worker(guard, guard.pack());
             helper.assertTrue(posts.urges(armed, colony.view(level)).isEmpty(), "direct control suspends post duty");
             helper.assertFalse(colony.service(PatrolContent.ID, PatrolPresence.class).orElseThrow()
@@ -163,47 +160,16 @@ public final class RtsPatrolGameTests {
     }
 
     private static Worker worker(Body body, Container pack) {
-        return new Worker() {
-            public Resident resident() {
-                return body.resident();
-            }
+        return TestWorker.of(body).pack(pack).heldFromPack();
+    }
 
-            public Mob body() {
-                return body.mob();
-            }
-
-            public Container pack() {
-                return pack;
-            }
-
-            public List<Store> within() {
-                return List.of();
-            }
-
-            public ItemStack held(ToolNeed need) {
-                for (int slot = 0; slot < pack.getContainerSize(); slot++) {
-                    if (Tools.answers(pack.getItem(slot), need)) {
-                        return pack.getItem(slot);
-                    }
-                }
-                return ItemStack.EMPTY;
-            }
-
-            public void spill(ItemStack stack) {
-                throw new AssertionError("patrolling must not spill items");
-            }
-
-            public Effects effects() {
-                return body.effects();
-            }
-
-            public List<Node> route() {
-                return List.of();
-            }
-
-            public Placement placement() {
-                return Placement.NOWHERE;
-            }
-        };
+    private static void arm(Colony colony, Body body, String name, ItemSpec weapon) {
+        LoadoutProfiles profiles = LoadoutProfiles.of(colony);
+        LoadoutProfile profile =
+            profiles.all().stream()
+            .filter(one -> one.name().equals(name))
+            .findFirst()
+            .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

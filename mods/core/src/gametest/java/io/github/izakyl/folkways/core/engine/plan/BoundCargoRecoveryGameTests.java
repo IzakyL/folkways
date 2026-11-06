@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.core.engine.plan;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Stash;
@@ -30,7 +29,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -208,10 +206,9 @@ public final class BoundCargoRecoveryGameTests {
             this.helper = helper;
             f = new PlanningFixture(helper, 2);
             hand = f.crew.hands().getFirst();
-            helper.getLevel().setBlockAndUpdate(f.source.cell(), Blocks.BARREL.defaultBlockState());
-            helper.getLevel().setBlockAndUpdate(f.target.cell(), Blocks.BARREL.defaultBlockState());
-            source = Containers.at(helper.getLevel(), f.source.cell()).orElseThrow();
-            target = Containers.at(helper.getLevel(), f.target.cell()).orElseThrow();
+            var barrels = f.barrels();
+            source = barrels.source();
+            target = barrels.target();
             source.setItem(0, new ItemStack(Items.WHEAT_SEEDS, claimed ? 20 : 21));
             f.worker.pack().setItem(0, new ItemStack(claimed ? Items.WHEAT_SEEDS : Items.COBBLESTONE, claimed ? 1 : 64));
             f.worker.pack().setItem(1, new ItemStack(Items.BONE_MEAL, 64));

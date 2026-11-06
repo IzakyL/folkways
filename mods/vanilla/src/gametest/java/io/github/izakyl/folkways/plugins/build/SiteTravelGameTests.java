@@ -104,60 +104,8 @@ public final class SiteTravelGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 450)
-    public static void siteRelocationDoesNotPutAResidentUnderwater(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos start = helper.absolutePos(new BlockPos(1, 2, 2));
-        BlockPos goal = start.offset(4, 0, 0);
-        floor(level, start);
-        floor(level, goal);
-        level.setBlock(goal, Blocks.WATER.defaultBlockState(), 2);
-        level.setBlock(goal.above(), Blocks.WATER.defaultBlockState(), 2);
-        level.setBlock(goal.above(2), Blocks.STONE.defaultBlockState(), 2);
-        ResidentEntity body = body(level, start);
-        level.addFreshEntity(body);
-        Runnable reopen = Closures.close(level, BoundingBox.fromCorners(start.offset(-1, -1, -1), goal.offset(1, 3, 1)));
-        boolean relocated = SiteTravel.place(level, body, goal);
-        int[] firstDamage = {-1};
-        int[] leastAir = {body.getAirSupply()};
-        helper.onEachTick(() -> {
-            leastAir[0] = Math.min(leastAir[0], body.getAirSupply());
-            if (firstDamage[0] < 0 && body.getHealth() < body.getMaxHealth()) {
-                firstDamage[0] = body.tickCount;
-            }
-        });
-        helper.startSequence().thenExecuteAfter(380, () -> {
-            reopen.run();
-            body.discard();
-            helper.assertFalse(relocated, "site relocation put the resident underwater; least air=" + leastAir[0]
-                + ", first damage tick=" + firstDamage[0]);
-        }).thenSucceed();
-    }
-
     @GameTest(template = "empty")
-    public static void aResidentWithWaterBreathingCanBeRelocatedUnderwater(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos start = helper.absolutePos(new BlockPos(1, 2, 2));
-        BlockPos goal = start.offset(4, 0, 0);
-        floor(level, start);
-        floor(level, goal);
-        level.setBlock(goal, Blocks.WATER.defaultBlockState(), 2);
-        level.setBlock(goal.above(), Blocks.WATER.defaultBlockState(), 2);
-        ResidentEntity body = body(level, start);
-        body.addEffect(new net.minecraft.world.effect.MobEffectInstance(
-            net.minecraft.world.effect.MobEffects.WATER_BREATHING, 600));
-        Runnable reopen = Closures.close(level, BoundingBox.fromCorners(start.offset(-1, -1, -1), goal.offset(1, 3, 1)));
-        try {
-            helper.assertTrue(SiteTravel.place(level, body, goal), "water breathing permits the underwater landing");
-        } finally {
-            reopen.run();
-            body.discard();
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void anUnderwaterDestinationIsRefusedWithoutWaterBreathing(GameTestHelper helper) {
+    public static void anUnderwaterLandingWaitsForWaterBreathing(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos start = helper.absolutePos(new BlockPos(1, 2, 2));
         BlockPos goal = start.offset(4, 0, 0);
@@ -172,7 +120,16 @@ public final class SiteTravelGameTests {
         Going result = movement.step(level, body, goals);
         helper.assertTrue(result instanceof Going.Failed, "an unsafe work destination is refused: " + result);
         movement.release(level, body);
-        body.discard();
+        Runnable reopen = Closures.close(level, BoundingBox.fromCorners(start.offset(-1, -1, -1), goal.offset(1, 3, 1)));
+        try {
+            helper.assertFalse(SiteTravel.place(level, body, goal), "site relocation does not put a resident underwater");
+            body.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                net.minecraft.world.effect.MobEffects.WATER_BREATHING, 600));
+            helper.assertTrue(SiteTravel.place(level, body, goal), "water breathing permits the underwater landing");
+        } finally {
+            reopen.run();
+            body.discard();
+        }
         helper.succeed();
     }
 

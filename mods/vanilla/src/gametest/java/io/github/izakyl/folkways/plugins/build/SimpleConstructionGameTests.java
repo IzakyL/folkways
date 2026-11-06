@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
+
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
@@ -12,6 +14,7 @@ import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
@@ -33,9 +36,6 @@ import net.minecraft.gametest.framework.AfterBatch;
 import net.minecraft.gametest.framework.BeforeBatch;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -258,14 +258,8 @@ public final class SimpleConstructionGameTests {
         }
     }
 
-    private static void floor(GameTestHelper helper) {
-        for (BlockPos cell : BlockPos.betweenClosed(at(helper, 1, 0, 1), at(helper, 21, 0, 21))) {
-            helper.getLevel().setBlock(cell, Blocks.STONE.defaultBlockState(), 3);
-        }
-    }
-
     // The production labor loop runs plans and personal urges together, including breathing interruptions.
-    private static final class Scene implements GameTestListener, BuildSite.Asks {
+    private static final class Scene implements BuildSite.Asks {
         private final GameTestHelper helper;
         private final ServerLevel level;
         private final ResidentEntity body;
@@ -309,7 +303,7 @@ public final class SimpleConstructionGameTests {
             BuildTarget target = new BuildTarget(WorldPos.of(level, cells.keySet().iterator().next()).realm(), cells);
             site = new BuildSite(UUID.randomUUID(), this, target, temporary);
             site.start(level, Set.of());
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
         }
 
         @SuppressWarnings("unchecked")
@@ -395,20 +389,6 @@ public final class SimpleConstructionGameTests {
             simulation.close();
             body.discard();
             colony.raze();
-        }
-
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
         }
     }
 }

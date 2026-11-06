@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.engine.plan;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.resident.body.Pack;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
@@ -14,8 +15,12 @@ import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture.Owed;
+import io.github.izakyl.folkways.core.engine.plan.haul.Haul;
 import io.github.izakyl.folkways.core.engine.plan.haul.Receipt;
 import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
+import io.github.izakyl.folkways.effect.Stats;
+import io.github.izakyl.folkways.effect.perk.PerkPool;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,9 +28,10 @@ import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -43,19 +49,49 @@ public final class DeliveryPlanningGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void unstackableDeliverySplitsToFitThePack(GameTestHelper helper) {
-        deliverSaddles(helper, 6);
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void expandedPackCarriesMoreThanTheBaselineInOneTrip(GameTestHelper helper) {
-        deliverSaddles(helper, 18);
+        int capacity = 6;
+        PlanningFixture fixture = new PlanningFixture(helper, capacity);
+        var barrels = fixture.barrels();
+        for (int slot = 0; slot < 24; slot++) {
+            barrels.source().setItem(slot, new ItemStack(Items.SADDLE));
+        }
+        ItemSpec saddles = ItemSpec.of(ResourceLocation.withDefaultNamespace("saddle"));
+        Owed task = new Owed(new WorkSite.AtBlock(fixture.target), Stances.at(fixture.target), saddles, 24);
+        PlanningFixture.Rounds solver = new PlanningFixture.Rounds();
+        List<Message> feedback = List.of();
+        int delivered = 0;
+        for (int cycle = 0; cycle <= 24 / capacity + 1; cycle++) {
+            Stock stock = new Stock(holdings(fixture, barrels.source()),
+                Map.of(new Stash(fixture.source), 3 + delivered, new Stash(fixture.target), 27 - delivered));
+            var solved = solver.solve(fixture.situation(stock, List.of()), fixture.crew,
+                task.goals(), feedback, cycle);
+            if (task.complete()) {
+                helper.assertTrue(delivered == 24 && solved.weave().vertices().isEmpty(),
+                    "the finite task must complete after all batches arrive");
+                solver.closed();
+                helper.succeed();
+                return;
+            }
+            helper.assertTrue(solved.diagnosis().shortfalls().isEmpty(), "each batch must fit available capacity");
+            var tour = solved.schedule().tours().get(fixture.worker.resident().id());
+            helper.assertTrue(tour != null && tour.nodes().size() == 2, "each batch is one fetch and one delivery");
+            int batch = Math.min(capacity, 24 - delivered);
+            long peak = carry(helper, fixture, solved, tour.nodes(), saddles);
+            delivered += batch;
+            helper.assertTrue(peak == batch && Goods.countIn(barrels.target(), saddles) == delivered
+                    && Goods.countIn(barrels.source(), saddles) == 24 - delivered,
+                "one trip must use the available pack capacity without losing goods");
+            feedback = tour.nodes().stream().<Message>map(Message.Finished::new).toList();
+        }
+        solver.closed();
+        throw new AssertionError("delivery did not finish");
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void aBatchIsSizedByTheRoomKnownWhenItIsGrown(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper, 18);
         ItemSpec saddles = ItemSpec.of(ResourceLocation.withDefaultNamespace("saddle"));
-        List<Stock.Holding> holdings = new java.util.ArrayList<>();
+        List<Stock.Holding> holdings = new ArrayList<>();
         for (int i = 0; i < 24; i++) {
             holdings.add(new Stock.Holding(new Stash(fixture.source), new ItemStack(Items.SADDLE)));
         }
@@ -88,91 +124,41 @@ public final class DeliveryPlanningGameTests {
         helper.succeed();
     }
 
-    // Where the schedule last placed the work on its route.
-    private static Object placedAt(PlanningFixture.Rounds solver, UUID node) {
-        try {
-            var scheduler = Solving.class.getDeclaredField("scheduler");
-            scheduler.setAccessible(true);
-            var tours = Scheduler.class.getDeclaredField("tours");
-            tours.setAccessible(true);
-            var settled = Tours.class.getDeclaredField("settled");
-            settled.setAccessible(true);
-            Object placed = ((Map<?, ?>) settled.get(tours.get(scheduler.get(solver.planner())))).get(node);
-            var at = placed.getClass().getDeclaredMethod("at");
-            at.setAccessible(true);
-            return at.invoke(placed);
-        } catch (ReflectiveOperationException broken) {
-            throw new AssertionError(broken);
+    // Commits the tour's work in order with the fixture's worker, as its labor would, and returns the most of
+    // `goods` the pack held at once.
+    private static long carry(GameTestHelper helper, PlanningFixture fixture, Planned solved, List<UUID> nodes,
+                              ItemSpec goods) {
+        var level = helper.getLevel();
+        long peak = 0;
+        for (UUID id : nodes) {
+            var node = solved.weave().vertices().get(id).node();
+            Outcome outcome = Commit.run(level, node, fixture.worker);
+            helper.assertTrue(outcome instanceof Outcome.Done, "the planned load executes in the actual pack");
+            for (ItemStack made : ((Outcome.Done) outcome).made()) {
+                helper.assertTrue(Containers.insert(fixture.worker.pack(), made).isEmpty(), "every returned item fits");
+            }
+            node.ended(level, Ending.DONE);
+            peak = Math.max(peak, Goods.countIn(fixture.worker.pack(), goods));
         }
+        return peak;
     }
 
-    private static void deliverSaddles(GameTestHelper helper, int capacity) {
-        PlanningFixture fixture = new PlanningFixture(helper, capacity);
-        var level = helper.getLevel();
-        level.setBlockAndUpdate(fixture.source.cell(), Blocks.BARREL.defaultBlockState());
-        level.setBlockAndUpdate(fixture.target.cell(), Blocks.BARREL.defaultBlockState());
-        var source = Containers.at(level, fixture.source.cell()).orElseThrow();
-        var target = Containers.at(level, fixture.target.cell()).orElseThrow();
-        for (int slot = 0; slot < 24; slot++) {
-            source.setItem(slot, new ItemStack(Items.SADDLE));
+    private static List<Stock.Holding> holdings(PlanningFixture fixture, Container source) {
+        List<Stock.Holding> holdings = new ArrayList<>();
+        for (int slot = 0; slot < source.getContainerSize(); slot++) {
+            if (!source.getItem(slot).isEmpty()) {
+                holdings.add(new Stock.Holding(new Stash(fixture.source), source.getItem(slot).copy()));
+            }
         }
-        ItemSpec saddles = ItemSpec.of(ResourceLocation.withDefaultNamespace("saddle"));
-        Owed task = new Owed(new WorkSite.AtBlock(fixture.target),
-            Stances.at(fixture.target), saddles, 24);
-        PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
-        List<Message> feedback = List.of();
-        int delivered = 0;
-        for (int cycle = 0; cycle <= 24 / capacity + 1; cycle++) {
-            List<Stock.Holding> holdings = new java.util.ArrayList<>();
-            for (int slot = 0; slot < source.getContainerSize(); slot++) {
-                if (!source.getItem(slot).isEmpty()) {
-                    holdings.add(new Stock.Holding(new Stash(fixture.source), source.getItem(slot).copy()));
-                }
-            }
-            Stock stock = new Stock(holdings,
-                Map.of(new Stash(fixture.source), 3 + delivered, new Stash(fixture.target), 27 - delivered));
-            var solved = solver.solve(fixture.situation(stock, List.of()), fixture.crew,
-                task.goals(), feedback, cycle);
-            if (task.complete()) {
-                helper.assertTrue(delivered == 24 && solved.weave().vertices().isEmpty(),
-                    "the finite task must complete after all batches arrive");
-                solver.closed();
-                helper.succeed();
-                return;
-            }
-            helper.assertTrue(solved.diagnosis().shortfalls().isEmpty(), "each batch must fit available capacity");
-            var tour = solved.schedule().tours().get(fixture.worker.resident().id());
-            helper.assertTrue(tour != null && tour.nodes().size() == 2, "each batch is one fetch and one delivery");
-            int batch = Math.min(capacity, 24 - delivered);
-            long peak = 0;
-            for (UUID nodeId : tour.nodes()) {
-                var node = solved.weave().vertices().get(nodeId).node();
-                Outcome outcome = Commit.run(level, node, fixture.worker);
-                helper.assertTrue(outcome instanceof Outcome.Done, "the complete batch must execute");
-                for (ItemStack made : ((Outcome.Done) outcome).made()) {
-                    helper.assertTrue(Containers.insert(fixture.worker.pack(), made).isEmpty(), "the load must fit");
-                }
-                node.ended(level, Ending.DONE);
-                peak = Math.max(peak, Goods.countIn(fixture.worker.pack(), saddles));
-            }
-            delivered += batch;
-            helper.assertTrue(peak == batch && Goods.countIn(target, saddles) == delivered
-                    && Goods.countIn(source, saddles) == 24 - delivered,
-                "one trip must use the available pack capacity without losing goods");
-            feedback = tour.nodes().stream().<Message>map(Message.Finished::new).toList();
-        }
-        solver.closed();
-        throw new AssertionError("delivery did not finish");
+        return holdings;
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void deliveryExpandsAsAnOrdinaryTaskAndDoesNotUseItsOwnStock(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
-        var level = helper.getLevel();
-        level.setBlockAndUpdate(fixture.source.cell(), Blocks.BARREL.defaultBlockState());
-        level.setBlockAndUpdate(fixture.target.cell(), Blocks.BARREL.defaultBlockState());
-        var source = Containers.at(level, fixture.source.cell()).orElseThrow();
-        var target = Containers.at(level, fixture.target.cell()).orElseThrow();
+        var barrels = fixture.barrels();
+        var source = barrels.source();
+        var target = barrels.target();
         source.setItem(0, new ItemStack(Items.BREAD, 8));
         target.setItem(0, new ItemStack(Items.BREAD, 10));
         ItemSpec bread = ItemSpec.of(ResourceLocation.withDefaultNamespace("bread"));
@@ -193,15 +179,7 @@ public final class DeliveryPlanningGameTests {
         UUID putId = tour.nodes().getLast();
         helper.assertTrue(solved.weave().orders().equals(List.of(new Before(fetchId, putId))),
             "the goods' way orders the fetch before the put, and nothing else");
-        for (UUID nodeId : tour.nodes()) {
-            var node = solved.weave().vertices().get(nodeId).node();
-            Outcome outcome = Commit.run(level, node, fixture.worker);
-            helper.assertTrue(outcome instanceof Outcome.Done, "transfer must succeed");
-            for (ItemStack made : ((Outcome.Done) outcome).made()) {
-                Containers.insert(fixture.worker.pack(), made);
-            }
-            node.ended(level, Ending.DONE);
-        }
+        carry(helper, fixture, solved, tour.nodes(), bread);
         helper.assertTrue(Goods.countIn(source, bread) == 0 && Goods.countIn(target, bread) == 18,
             "eight new items must be delivered without recycling the destination's ten items");
         Planned finished = solver.solve(situation, fixture.crew, delivery.goals(),
@@ -230,6 +208,7 @@ public final class DeliveryPlanningGameTests {
         solver.closed();
         helper.succeed();
     }
+
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void personalSuppliesBindTheFetchToTheRecipient(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
@@ -253,7 +232,8 @@ public final class DeliveryPlanningGameTests {
             "personal supplies require one acquisition by the recipient, who then keeps them");
         helper.assertTrue(!solved.schedule().tours().containsKey(stranger.id()),
             "another resident must not pick up this resident's kit");
-        helper.assertTrue(placedAt(solver, acquired.getLast()).equals(placedAt(solver, acquired.getFirst())),
+        helper.assertTrue(Booked.in(solver.planner(), acquired.getLast()).at()
+                .equals(Booked.in(solver.planner(), acquired.getFirst()).at()),
             "keeping the goods is done where the recipient took them, not where the recipient was last seen");
         solver.closed();
         helper.succeed();
@@ -262,7 +242,7 @@ public final class DeliveryPlanningGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void aToolPutAwayIsFetchedBackIntoItsOwnersPack(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
-        ItemSpec hoes = ItemSpec.of(net.minecraft.tags.ItemTags.HOES);
+        ItemSpec hoes = ItemSpec.of(ItemTags.HOES);
         Stock stock = new Stock(List.of(new Stock.Holding(new Stash(fixture.source),
             new ItemStack(Items.WOODEN_HOE))), Map.of(new Stash(fixture.source), 26));
         var recipient = fixture.crew.hands().getFirst();
@@ -284,7 +264,7 @@ public final class DeliveryPlanningGameTests {
     public static void personalBatchFitsItsRecipientEvenWhenAnotherWorkerHasALargerPack(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
         ItemSpec saddles = ItemSpec.of(ResourceLocation.withDefaultNamespace("saddle"));
-        List<Stock.Holding> holdings = new java.util.ArrayList<>();
+        List<Stock.Holding> holdings = new ArrayList<>();
         for (int i = 0; i < 12; i++) {
             holdings.add(new Stock.Holding(new Stash(fixture.source), new ItemStack(Items.SADDLE)));
         }
@@ -310,11 +290,9 @@ public final class DeliveryPlanningGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void alternativeItemsShareOneCarrierAndCommitTogether(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
-        var level = helper.getLevel();
-        level.setBlockAndUpdate(fixture.source.cell(), Blocks.BARREL.defaultBlockState());
-        level.setBlockAndUpdate(fixture.target.cell(), Blocks.BARREL.defaultBlockState());
-        var source = Containers.at(level, fixture.source.cell()).orElseThrow();
-        var target = Containers.at(level, fixture.target.cell()).orElseThrow();
+        var barrels = fixture.barrels();
+        var source = barrels.source();
+        var target = barrels.target();
         source.setItem(0, new ItemStack(Items.IRON_INGOT, 2));
         source.setItem(1, new ItemStack(Items.GOLD_INGOT, 3));
         ItemSpec goods = ItemSpec.anyOf(List.of(ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot")),
@@ -334,14 +312,7 @@ public final class DeliveryPlanningGameTests {
             "all inputs carried into one action must stay with the same worker");
         var tour = solved.schedule().tours().values().iterator().next();
         helper.assertTrue(tour.nodes().size() == 3, "two distinct items require two fetches and one delivery");
-        for (UUID nodeId : tour.nodes()) {
-            var node = solved.weave().vertices().get(nodeId).node();
-            Outcome outcome = Commit.run(level, node, fixture.worker);
-            helper.assertTrue(outcome instanceof Outcome.Done, "mixed transfer must succeed");
-            for (ItemStack made : ((Outcome.Done) outcome).made()) {
-                Containers.insert(fixture.worker.pack(), made);
-            }
-        }
+        carry(helper, fixture, solved, tour.nodes(), goods);
         helper.assertTrue(Goods.countIn(target, goods) == 5 && Goods.countIn(source, goods) == 0,
             "the full batch must be transferred even when the filter matches different items");
         solver.closed();
@@ -351,23 +322,22 @@ public final class DeliveryPlanningGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void heavyHaulingDeliversMoreThanOneStackButStillFitsItsActualPack(GameTestHelper helper) {
         for (int rank : new int[]{0, 3}) {
-            var effects = io.github.izakyl.folkways.effect.perk.PerkPool.effects(rank == 0 ? Map.of()
-                : Map.of(io.github.izakyl.folkways.core.engine.plan.haul.Haul.HEAVY, rank));
-            var pack = new io.github.izakyl.folkways.core.api.resident.body.Pack(1);
-            pack.applyCapacityMultiplier(effects.value(io.github.izakyl.folkways.effect.Stats.PACK_ROOM));
+            var effects = PerkPool.effects(rank == 0 ? Map.of() : Map.of(Haul.HEAVY, rank));
+            var pack = new Pack(1);
+            pack.applyCapacityMultiplier(effects.value(Stats.PACK_ROOM));
             int cells = pack.getContainerSize();
             helper.assertTrue(cells == (rank == 0 ? 1 : 2), "the real heavy-hauling perk expands this pack's capacity");
             PlanningFixture fixture = new PlanningFixture(helper, cells);
-            var level = helper.getLevel();
-            level.setBlockAndUpdate(fixture.source.cell(), Blocks.BARREL.defaultBlockState());
-            level.setBlockAndUpdate(fixture.target.cell(), Blocks.BARREL.defaultBlockState());
-            var source = Containers.at(level, fixture.source.cell()).orElseThrow();
-            var target = Containers.at(level, fixture.target.cell()).orElseThrow();
-            source.clearContent(); target.clearContent();
-            for (int slot = 0; slot < 5; slot++) source.setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
+            var barrels = fixture.barrels();
+            var source = barrels.source();
+            var target = barrels.target();
+            source.clearContent();
+            target.clearContent();
+            for (int slot = 0; slot < 5; slot++) {
+                source.setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
+            }
             ItemSpec cobblestone = ItemSpec.of(ResourceLocation.withDefaultNamespace("cobblestone"));
-            List<Stock.Holding> holdings = new java.util.ArrayList<>();
-            for (int slot = 0; slot < 5; slot++) holdings.add(new Stock.Holding(new Stash(fixture.source), source.getItem(slot).copy()));
+            List<Stock.Holding> holdings = holdings(fixture, source);
             Owed task = new Owed(new WorkSite.AtBlock(fixture.target), Stances.at(fixture.target), cobblestone, 320);
             PlanningFixture.Rounds solver = new PlanningFixture.Rounds();
             try {
@@ -380,17 +350,7 @@ public final class DeliveryPlanningGameTests {
                 long planned = solved.weave().vertices().get(tour.nodes().getFirst()).plan().carrying()
                     .stream().mapToLong(amount -> amount.count()).sum();
                 helper.assertTrue(planned == cells * 64L, "batch uses every available cell and does not exceed pack capacity");
-                long peak = 0;
-                for (UUID id : tour.nodes()) {
-                    var node = solved.weave().vertices().get(id).node();
-                    Outcome outcome = Commit.run(level, node, fixture.worker);
-                    helper.assertTrue(outcome instanceof Outcome.Done, "the planned load executes in the actual pack");
-                    for (ItemStack made : ((Outcome.Done) outcome).made()) {
-                        helper.assertTrue(Containers.insert(fixture.worker.pack(), made).isEmpty(), "every returned item fits");
-                    }
-                    node.ended(level, Ending.DONE);
-                    peak = Math.max(peak, Goods.countIn(fixture.worker.pack(), cobblestone));
-                }
+                long peak = carry(helper, fixture, solved, tour.nodes(), cobblestone);
                 helper.assertTrue(peak == cells * 64L && Goods.countIn(target, cobblestone) == peak
                     && Goods.countIn(source, cobblestone) == 320 - peak && task.remaining() == 320 - peak,
                     "real transfer commits conserve goods, settle the batch, and leave overflow for later");
@@ -401,6 +361,4 @@ public final class DeliveryPlanningGameTests {
         }
         helper.succeed();
     }
-
-
 }

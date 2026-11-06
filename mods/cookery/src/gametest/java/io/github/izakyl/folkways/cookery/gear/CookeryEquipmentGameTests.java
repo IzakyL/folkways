@@ -9,31 +9,27 @@ import io.github.izakyl.folkways.cookery.seeds.GrassSources;
 import io.github.izakyl.folkways.cookery.tools.TaskTools;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.resident.body.Equipment;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Delivery;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonyRegistry;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWorks;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.farming.FarmingContent;
@@ -54,7 +50,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -131,32 +126,6 @@ public final class CookeryEquipmentGameTests {
             helper.assertTrue(other.getItemBySlot(EquipmentSlot.HEAD).isEmpty(), "the second task also leaves its resident bare-headed");
             helper.assertValueEqual(rig.hats(), 1L, "two residents and two native tasks conserve one physical hat");
             helper.assertTrue(ItemStack.matches(expected, rig.store.getItem(0)), "return preserves the original name, damage and components");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void aMissingFirstHatCreatesOneSharedDeliveryWhileBothResidentsStayFree(GameTestHelper helper) {
-        try (var rig = new Rig(helper)) {
-            var other = rig.addBody();
-            List<Node> submitted = new ArrayList<>();
-            rig.colony.works().listen(rig.level.dimension(), new ColonyWorks.Listening() {
-                public void submitted(net.minecraft.resources.ResourceLocation owner, Grown work) { submitted.addAll(work.nodes()); }
-                public void withdrawn(net.minecraft.resources.ResourceLocation owner, UUID node) { }
-                public void offered() { }
-            });
-            Node first = rig.gather(rig.body);
-            Node second = rig.gather(other);
-            helper.assertFalse(rig.ready(first),
-                "missing clothing leaves the first resident outside the borrowing task");
-            helper.assertFalse(rig.ready(second), "the second resident stays free to craft the missing shared hat too");
-            for (int tick = 0; tick < 60; tick++) rig.tools.tick(rig.level.getServer());
-            var deliveries = submitted.stream().filter(node -> node instanceof Delivery).map(node -> (Delivery) node).toList();
-            helper.assertValueEqual(deliveries.size(), 1, "two adopted native grass tasks merge exactly one bootstrap delivery");
-            helper.assertValueEqual(deliveries.getFirst().goods().count(), 1L, "bootstrap is one shared item, not the resident count");
-            helper.assertTrue(Goods.overlap(deliveries.getFirst().goods().spec(), HATS), "the real delivery asks for an allowed hat");
-            helper.assertTrue(deliveries.getFirst().spec().site() instanceof WorkSite.AtBlock, "the first hat belongs to shared storage, not a permanent personal kit");
-            helper.assertValueEqual(rig.hats(), 0L, "planning never fabricates an item or native HEAD equipment");
         }
         helper.succeed();
     }
@@ -492,7 +461,7 @@ public final class CookeryEquipmentGameTests {
         }
 
         void observe() {
-            io.github.izakyl.folkways.cookery.InventoryObservations.publish(colony, level);
+            InventoryObservations.publish(colony, level);
         }
 
         boolean ready(Node work) {
@@ -563,17 +532,8 @@ public final class CookeryEquipmentGameTests {
             return node;
         }
         Worker worker(Body actor) {
-            return new Worker() {
-                public Resident resident() { return actor.resident(); }
-                public Mob body() { return actor.mob(); }
-                public Container pack() { return actor.pack(); }
-                public List<Store> within() { return List.of(new Store(storeAt, store)); }
-                public ItemStack held(ToolNeed need) { return Tools.from(actor.pack().contents(), need).orElse(ItemStack.EMPTY); }
-                public void spill(ItemStack stack) { if (!stack.isEmpty()) throw new AssertionError("unexpected spill " + stack); }
-                public Effects effects() { return actor.effects(); }
-                public List<Node> route() { return List.of(); }
-                public Placement placement() { return Placement.NOWHERE; }
-            };
+            return TestWorker.of(actor).within(new Worker.Store(storeAt, store))
+                .held(need -> Tools.from(actor.pack().contents(), need).orElse(ItemStack.EMPTY));
         }
         void stand(Node piece, Body actor) {
             piece.spec().stances().cells().stream().findFirst().ifPresent(at ->

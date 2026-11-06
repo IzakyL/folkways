@@ -40,6 +40,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(FolkwaysMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class TravelPlanningGameTests {
+    private static final ResourceLocation KIND = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
@@ -49,14 +50,11 @@ public final class TravelPlanningGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void pendingTravelStaysPendingAndSchedulesWhenKnown(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
-        ResourceLocation kind = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
-        Resident resident = new Resident(UUID.randomUUID(), kind);
-        Crew crew = new Crew(List.of(new Crew.Hand(resident, at, 6, 6, 1,
-            List.of(), List.of(), Optional.empty())));
-        Vertex first = node(at, kind);
-        Vertex second = node(at, kind);
-        WeaveDelta weave = Shown.delta(Map.of(first.id(), first, second.id(), second),
-            List.of(new Before(first.id(), second.id())), List.of());
+        Resident resident = new Resident(UUID.randomUUID(), KIND);
+        Crew crew = new Crew(List.of(hand(resident, at)));
+        Vertex first = node(at, KIND);
+        Vertex second = node(at, KIND);
+        WeaveDelta weave = weave(List.of(new Before(first.id(), second.id())), first, second);
         AtomicReference<Faring> answer = new AtomicReference<>(Faring.LATER);
         Ways ways = new Ways() {
             public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
@@ -89,15 +87,13 @@ public final class TravelPlanningGameTests {
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void repeatedRoutesQueryOnceAcrossResidentsPerSchedule(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
-        ResourceLocation kind = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
         List<Crew.Hand> hands = new ArrayList<>();
         for (int i = 0; i < 500; i++) {
-            hands.add(new Crew.Hand(new Resident(UUID.randomUUID(), kind), at, 6, 6, 1,
-                List.of(), List.of(), Optional.empty()));
+            hands.add(hand(new Resident(UUID.randomUUID(), KIND), at));
         }
         Map<UUID, Vertex> vertices = new LinkedHashMap<>();
         for (int i = 0; i < 100; i++) {
-            Vertex node = node(at, kind);
+            Vertex node = node(at, KIND);
             vertices.put(node.id(), node);
         }
         AtomicInteger queries = new AtomicInteger();
@@ -148,23 +144,15 @@ public final class TravelPlanningGameTests {
         ResourceLocation flying = ResourceLocation.fromNamespaceAndPath("folkways", "flying_test");
         Resident walker = new Resident(UUID.randomUUID(), walking);
         Resident flyer = new Resident(UUID.randomUUID(), flying);
-        Crew crew = new Crew(List.of(
-            new Crew.Hand(walker, at, 6, 6, 1, List.of(), List.of(), Optional.empty()),
-            new Crew.Hand(flyer, at, 6, 6, 1, List.of(), List.of(), Optional.empty())));
+        Crew crew = new Crew(List.of(hand(walker, at), hand(flyer, at)));
         Vertex first = node(at, walking);
         Vertex second = node(at, walking);
-        WeaveDelta weave = Shown.delta(Map.of(first.id(), first, second.id(), second),
-            List.of(new Before(first.id(), second.id())), List.of());
+        WeaveDelta weave = weave(List.of(new Before(first.id(), second.id())), first, second);
         Map<ResourceLocation, Integer> queries = new LinkedHashMap<>();
-        Ways ways = new Ways() {
-            public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
-                queries.merge(who.kind(), 1, Integer::sum);
-                return who.kind().equals(flying) ? Faring.yes(Journey.afoot(1, goals)) : Faring.NO;
-            }
-            public Faring anyoneReaches(Set<WorldPos> goals) {
-                throw new AssertionError("unexpected colony query");
-            }
-        };
+        Ways ways = individual((who, from, goals) -> {
+            queries.merge(who.kind(), 1, Integer::sum);
+            return who.kind().equals(flying) ? Faring.yes(Journey.afoot(1, goals)) : Faring.NO;
+        });
         Schedule result = Shown.schedule(new Tours(), weave, crew, ways, 0, true);
         helper.assertTrue(queries.equals(Map.of(walking, 1, flying, 1)),
             "each kind must query once even at identical origins and destinations: " + queries);
@@ -178,15 +166,13 @@ public final class TravelPlanningGameTests {
     public static void travelReuseFollowsCursorAndStandingRoutesAskNothing(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos away = at.at(at.cell().offset(8, 0, 0));
-        ResourceLocation kind = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
-        Resident resident = new Resident(UUID.randomUUID(), kind);
-        Crew crew = new Crew(List.of(new Crew.Hand(resident, at, 6, 6, 1,
-            List.of(), List.of(), Optional.empty())));
+        Resident resident = new Resident(UUID.randomUUID(), KIND);
+        Crew crew = new Crew(List.of(hand(resident, at)));
         Map<UUID, Vertex> vertices = new LinkedHashMap<>();
         List<Before> links = new ArrayList<>();
         List<UUID> order = new ArrayList<>();
         for (WorldPos goal : List.of(away, at, away, away, away)) {
-            Vertex node = node(goal, kind);
+            Vertex node = node(goal, KIND);
             vertices.put(node.id(), node);
             if (!order.isEmpty()) {
                 links.add(new Before(order.getLast(), node.id()));
@@ -194,16 +180,11 @@ public final class TravelPlanningGameTests {
             order.add(node.id());
         }
         List<WorldPos> origins = new ArrayList<>();
-        Ways ways = new Ways() {
-            public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
-                origins.add(from);
-                return Faring.yes(Journey.afoot(from.equals(goals.iterator().next()) ? 0 : 8, goals));
-            }
-            public Faring anyoneReaches(Set<WorldPos> goals) {
-                throw new AssertionError("unexpected colony query");
-            }
-        };
-        WeaveDelta weave = Shown.delta(vertices, links,  List.of());
+        Ways ways = individual((who, from, goals) -> {
+            origins.add(from);
+            return Faring.yes(Journey.afoot(from.equals(goals.iterator().next()) ? 0 : 8, goals));
+        });
+        WeaveDelta weave = Shown.delta(vertices, links, List.of());
         Tours tours = new Tours();
         Schedule result = Shown.schedule(tours, weave, crew, ways, 0, true);
         helper.assertTrue(result.unassigned().isEmpty()
@@ -222,27 +203,20 @@ public final class TravelPlanningGameTests {
     public static void standingRoutesPlaceOnlyWhatChanged(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos away = at.at(at.cell().offset(8, 0, 0));
-        ResourceLocation kind = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
-        Resident resident = new Resident(UUID.randomUUID(), kind);
-        Crew crew = new Crew(List.of(new Crew.Hand(resident, at, 6, 6, 1,
-            List.of(), List.of(), Optional.empty())));
-        Vertex done = node(at.at(at.cell().offset(2, 0, 0)), kind);
-        Vertex feeds = node(at.at(at.cell().offset(4, 0, 0)), kind);
-        Vertex fed = node(at.at(at.cell().offset(6, 0, 0)), kind);
-        Vertex other = node(away, kind);
-        Vertex added = node(at.at(at.cell().offset(10, 0, 0)), kind);
+        Resident resident = new Resident(UUID.randomUUID(), KIND);
+        Crew crew = new Crew(List.of(hand(resident, at)));
+        Vertex done = node(at.at(at.cell().offset(2, 0, 0)), KIND);
+        Vertex feeds = node(at.at(at.cell().offset(4, 0, 0)), KIND);
+        Vertex fed = node(at.at(at.cell().offset(6, 0, 0)), KIND);
+        Vertex other = node(away, KIND);
+        Vertex added = node(at.at(at.cell().offset(10, 0, 0)), KIND);
         List<Before> chain = List.of(new Before(feeds.id(), fed.id()));
         AtomicInteger queries = new AtomicInteger();
-        Ways ways = new Ways() {
-            public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
-                queries.incrementAndGet();
-                int blocks = goals.stream().mapToInt(goal -> from.cell().distManhattan(goal.cell())).min().orElse(0);
-                return Faring.yes(Journey.afoot(4 * blocks, goals));
-            }
-            public Faring anyoneReaches(Set<WorldPos> goals) {
-                throw new AssertionError("unexpected colony query");
-            }
-        };
+        Ways ways = individual((who, from, goals) -> {
+            queries.incrementAndGet();
+            int blocks = goals.stream().mapToInt(goal -> from.cell().distManhattan(goal.cell())).min().orElse(0);
+            return Faring.yes(Journey.afoot(4 * blocks, goals));
+        });
         Tours tours = new Tours();
         Schedule first = Shown.schedule(tours, weave(chain, done, feeds, fed, other), crew, ways, 0, false);
         helper.assertTrue(first.tours().get(resident.id()).nodes().equals(
@@ -269,12 +243,32 @@ public final class TravelPlanningGameTests {
         helper.succeed();
     }
 
+    private interface Journeys {
+        Faring journey(Resident who, WorldPos from, Set<WorldPos> goals);
+    }
+
+    // Ways asked only for one resident's journeys, never whether anyone at all reaches a place.
+    private static Ways individual(Journeys journeys) {
+        return new Ways() {
+            public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
+                return journeys.journey(who, from, goals);
+            }
+            public Faring anyoneReaches(Set<WorldPos> goals) {
+                throw new AssertionError("unexpected colony query");
+            }
+        };
+    }
+
+    private static Crew.Hand hand(Resident who, WorldPos at) {
+        return new Crew.Hand(who, at, 6, 6, 1, List.of(), List.of(), Optional.empty());
+    }
+
     private static WeaveDelta weave(List<Before> links, Vertex... nodes) {
         Map<UUID, Vertex> vertices = new LinkedHashMap<>();
         for (Vertex node : nodes) {
             vertices.put(node.id(), node);
         }
-        return Shown.delta(vertices, links,  List.of());
+        return Shown.delta(vertices, links, List.of());
     }
 
     private static Vertex node(WorldPos at, ResourceLocation domain) {

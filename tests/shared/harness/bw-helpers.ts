@@ -93,8 +93,6 @@ export async function pressAtHovered(
   return press;
 }
 
-export const PANEL_HOLDERS: PanelHolder[] = ["screen", "container"];
-
 const symbol = (as: string) => {
   const found = LDLIB2_SYMBOLS.find((candidate) => candidate.as === as);
   if (!found) throw new Error(`tests/ldlib2 no longer declares symbol ${as}`);
@@ -113,14 +111,6 @@ export const PANEL_ROUTES: Record<PanelHolder, reflect.SymbolDeclaration[]> = {
 
 export function contentBox(element: Element): Box {
   return { x: element.contentX, y: element.contentY, width: element.contentWidth, height: element.contentHeight };
-}
-
-export async function carriedItem(client: MinecraftClient): Promise<{ id: string; count: number } | null> {
-  const carried = (await input.cursor(client)).carried;
-  if (!carried || typeof carried.id !== "string") {
-    return null;
-  }
-  return { id: carried.id, count: typeof carried.count === "number" ? carried.count : 1 };
 }
 
 export async function clickSlot(client: MinecraftClient, slotIndex: number): Promise<input.ButtonResult> {

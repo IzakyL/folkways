@@ -56,7 +56,7 @@ public final class RailwayPatternGameTests {
     }
 
     static Pattern railway() {
-        return Patterns.find(RAILWAY).orElseThrow(() -> new AssertionError("the railway pattern did not load"));
+        return DraftKit.shipped("railway");
     }
 
     static Drawn lay(Pattern pattern, World world, BlockPos... points) {
@@ -93,40 +93,9 @@ public final class RailwayPatternGameTests {
         return BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString().equals("create:track");
     }
 
-    static String section(Map<BlockPos, BlockState> laid, int z, int fromX, int toX, int fromY, int toY) {
-        StringBuilder drawn = new StringBuilder();
-        for (int y = toY; y >= fromY; y--) {
-            drawn.append(String.format("%4d ", y));
-            for (int x = fromX; x <= toX; x++) {
-                BlockState state = laid.get(new BlockPos(x, y, z));
-                drawn.append(state == null ? '.' : mark(state));
-            }
-            drawn.append('\n');
-        }
-        return drawn.toString();
-    }
-
-    private static char mark(BlockState state) {
-        if (state.isAir()) {
-            return '_';
-        }
-        if (track(state)) {
-            return 'T';
-        }
-        if (state.getBlock() instanceof StairBlock) {
-            return 's';
-        }
-        if (state.getBlock() instanceof SlabBlock) {
-            return state.getValue(SlabBlock.TYPE) == SlabType.TOP ? '^' : 'v';
-        }
-        String name = BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
-        return Character.toUpperCase(name.charAt(0)) == 'T' ? 'B' : name.charAt(0);
-    }
-
     @GameTest(template = TEMPLATE, timeoutTicks = 200)
     public static void aLevelRunLaysStraightTrackOnBallast(GameTestHelper helper) {
         var laid = cells(helper, lay(railway(), new DraftKit.Ground(0), BlockPos.ZERO, new BlockPos(0, 0, 24)));
-        System.out.println("LEVEL\n" + section(laid, 12, -8, 8, -4, 6));
         for (int z = 0; z <= 24; z++) {
             BlockState rail = laid.get(new BlockPos(0, 1, z));
             helper.assertTrue(rail != null && track(rail) && shape(rail).equals("zo"), "straight track at z=" + z);
@@ -185,7 +154,6 @@ public final class RailwayPatternGameTests {
             }
         }
         var laid = cells(helper, lay(railway(), hill, BlockPos.ZERO, new BlockPos(0, 0, 28)));
-        System.out.println("TUNNEL\n" + section(laid, 14, -8, 8, -2, 10));
         helper.assertValueEqual(joined(laid, 0, 1), "", "every rail meets the next");
         for (int y = 2; y <= 4; y++) {
             helper.assertTrue(laid.get(new BlockPos(0, y, 14)).isAir(), "the bore is dug out at y=" + y);
@@ -204,7 +172,6 @@ public final class RailwayPatternGameTests {
             }
         }
         var laid = cells(helper, lay(railway(), river, BlockPos.ZERO, new BlockPos(0, 0, 24)));
-        System.out.println("BRIDGE\n" + section(laid, 9, -8, 8, -8, 3));
         helper.assertValueEqual(joined(laid, 0, 1), "", "every rail meets the next");
         helper.assertTrue(laid.get(new BlockPos(0, -1, 12)).is(Blocks.BRICKS), "a deck under the ballast");
         helper.assertTrue(laid.get(new BlockPos(3, 0, 12)).is(Blocks.BRICK_WALL), "a parapet");

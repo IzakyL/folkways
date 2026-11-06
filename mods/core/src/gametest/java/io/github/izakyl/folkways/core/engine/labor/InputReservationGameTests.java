@@ -15,7 +15,6 @@ import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.ReservedInput;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.plan.Crew;
@@ -29,6 +28,7 @@ import io.github.izakyl.folkways.core.engine.plan.Stock;
 import io.github.izakyl.folkways.core.engine.plan.Situation;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
+import io.github.izakyl.folkways.core.testing.Nodes;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -179,10 +179,7 @@ public final class InputReservationGameTests {
             stands = builder.done();
             var spec = NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(f.target), Stances.at(f.target), Workload.Once.of(1))
                 .vocation(Vocations.required(Vocations.HAULING)).needs(new Need(SEEDS, 129, true)).done();
-            consumer = new Node() {
-                public NodeSpec spec() { return spec; }
-                public Outcome commit(ServerLevel at, Worker who) { return Outcome.done(); }
-            };
+            consumer = Nodes.done(spec);
         }
 
         Planned first() {

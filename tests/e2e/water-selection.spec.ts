@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { defineTask, input, javaTask, media, tick, world } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { commandPos, createColonyViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
-import { setBookGesture } from "../shared/ui/zone-tools";
+import { colonyRegistry, createMarkedZone, setBookGesture, zoneKindAt, ZONE_KIND_ID } from "../shared/ui/zone-tools";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
@@ -127,6 +127,18 @@ for (const stage of twins()) test(stage.title("water selection: the actual marke
       expect(view.visibility.signal, view.name + ": selection pixels exceed independently captured water-animation noise")
         .toBeGreaterThan(view.visibility.noise * 1.25 + 30);
     }
+
+    // The pond refilled and the wall gone, the same submerged box is taken on as a fishery.
+    const wall = { x: plot.min.x, z: origin.z + 1 };
+    await world.command(server, `fill ${block({ ...wall, y: origin.y })} ${block({ x: plot.max.x, y: plot.max.y, z: wall.z })} minecraft:air`);
+    await world.command(server, `fill ${block({ ...wall, y: min.y })} ${block({ x: plot.max.x, y: origin.y - 1, z: wall.z })} minecraft:smooth_stone`);
+    await world.command(server, `fill ${block({ ...pondMin, y: min.y })} ${block({ ...pondMax, y: min.y })} minecraft:dirt`);
+    await world.command(server, `fill ${block(pondMin)} ${block(pondMax)} minecraft:water[level=0]`);
+    await tick.sprint(server, 25);
+    await mark();
+    await createMarkedZone(server, client, player, origin, "fish", stage);
+    expect(await zoneKindAt(server, await colonyRegistry(server), 0), "the box confirmed on the config page as a fishery is one")
+      .toBe(ZONE_KIND_ID.fish);
   } catch (error) { pair?.failing(error); throw error; }
   finally {
     const file = testInfo.outputPath("water-selection-evidence.json");

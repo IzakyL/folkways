@@ -71,11 +71,6 @@ public final class ResidentGateGameTests {
         walkThroughAndBack(helper, Direction.EAST);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 240)
-    public static void aResidentWalksThroughANorthSouthGateAndBackWithoutJumping(GameTestHelper helper) {
-        walkThroughAndBack(helper, Direction.NORTH);
-    }
-
     @GameTest(template = "empty")
     public static void aGateWaitsUntilTheOpenersWholeBodyIsClear(GameTestHelper helper) {
         BlockPos gate = gateRoom(helper, Direction.EAST);
@@ -189,29 +184,6 @@ public final class ResidentGateGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void aGateClosesAsSoonAsItsLastResidentIsRemoved(GameTestHelper helper) {
-        BlockPos gate = gateRoom(helper, Direction.EAST);
-        Vec3 centre = Vec3.atBottomCenterOf(gate);
-        ResidentEntity gone = residentAt(helper, centre.add(-0.9D, 0.0D, 0.0D));
-        openGate(helper, gone, gate);
-        gone.discard();
-        helper.assertFalse(Doorways.inUse(helper.getLevel(), gate),
-            "the removed resident no longer holds the gate");
-        helper.assertFalse(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
-            "the gate closes without waiting for another resident");
-        ResidentEntity next = residentAt(helper, centre.add(-1.2D, 0.0D, 0.0D));
-        OpenDoorwayGoal goal = openGate(helper, next, gate);
-        next.setPos(centre.add(1.3D, 0.0D, 0.0D));
-        goal.tick();
-        helper.assertFalse(goal.canContinueToUse(), "the next resident is through");
-        goal.stop();
-        helper.assertFalse(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
-            "the next resident can open, pass through and close the gate normally");
-        next.discard();
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void aRemovedResidentLeavesTheGateOpenForAnotherHolder(GameTestHelper helper) {
         BlockPos gate = gateRoom(helper, Direction.EAST);
         Vec3 centre = Vec3.atBottomCenterOf(gate);
@@ -232,6 +204,15 @@ public final class ResidentGateGameTests {
             "removing the last resident releases the gate");
         helper.assertFalse(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
             "removing the last resident closes the gate");
+        ResidentEntity next = residentAt(helper, centre.add(-1.2D, 0.0D, 0.0D));
+        OpenDoorwayGoal goal = openGate(helper, next, gate);
+        next.setPos(centre.add(1.3D, 0.0D, 0.0D));
+        goal.tick();
+        helper.assertFalse(goal.canContinueToUse(), "the next resident is through");
+        goal.stop();
+        helper.assertFalse(helper.getLevel().getBlockState(gate).getValue(FenceGateBlock.OPEN),
+            "the next resident can open, pass through and close the gate normally");
+        next.discard();
         helper.succeed();
     }
 

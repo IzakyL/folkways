@@ -17,7 +17,7 @@ const PAD = 20;
 const HEIGHT = 6;
 const SETTLE_TICKS = 200;
 
-test("a colony assembled into a Sable ship keeps every block it held, at the ship's own addresses", async ({}, testInfo) => {
+test("a colony assembled into a Sable ship keeps every block it held, at the ship's own addresses, and a store split off onto a ship of its own stays the colony's", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("sable");
 
@@ -76,6 +76,25 @@ test("a colony assembled into a Sable ship keeps every block it held, at the shi
     evidence.settled = settled;
     expect(cellLines(settled.cells), "the holdings aboard survive the colony's own reconciling").toEqual(cellLines(expected));
     expect(settled.stock).toBe(STOCK);
+
+    // The store and the deck under it, cut out of the ship where the level stores it, become a ship of their own.
+    await tryCommand(server, `tp ${playerName} ${origin.x + 0.5} ${origin.y} ${origin.z - 30.5}`);
+    const storeAboard = shifted(store, ship.offset);
+    const heldStore = settled.cells.find((cell) => cell.x === storeAboard.x && cell.y === storeAboard.y && cell.z === storeAboard.z);
+    expect(heldStore?.frame, "the store is held aboard the first ship").toBe(ship.structure);
+    const cutFrom = shifted({ x: store.x - 1, y: store.y - 1, z: store.z - 1 }, ship.offset);
+    const cutTo = shifted({ x: store.x + 1, y: store.y, z: store.z + 1 }, ship.offset);
+    evidence.split = await tryCommand(server, `sable assemble area ${commandPos(cutFrom)} ${commandPos(cutTo)}`);
+    await tick.sprint(server, 5);
+    const split = await readColony(server, colonyId, STOCK_ITEM);
+    evidence.after_split = split;
+    const moved = split.cells.filter((cell) => cell.owner === heldStore!.owner && cell.frame && cell.frame !== ship.structure);
+    expect(moved.length, `the store's holding moved to the new ship: ${JSON.stringify(split.cells)}`).toBe(1);
+    expect(moved[0].unplaced, "its new address leads to a block the level holds").toBeUndefined();
+    expect(split.cells.filter((cell) => cell.unplaced), "no held cell points at a block that is gone").toEqual([]);
+    expect(split.cells.length, "nothing the colony held was dropped by the split").toBe(settled.cells.length);
+    expect(split.stock, "the colony still counts the store's stock on its new ship").toBe(STOCK);
+    expect(await isColonyMember(server, { x: moved[0].x, y: moved[0].y, z: moved[0].z }), "the member mark went with the store").toBe(true);
   } catch (error) {
     pair?.failing(error);
     throw error;

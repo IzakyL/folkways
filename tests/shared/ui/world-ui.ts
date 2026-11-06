@@ -174,15 +174,7 @@ function round(value: number, digits: number) {
   return Math.round(value * scale) / scale;
 }
 
-export async function prepareSafeWalkway(
-  server: MinecraftServer,
-  origin: { x: number; y: number; z: number },
-  ...points: Array<{ x: number; y: number; z: number }>
-) {
-  return prepareSafeWalkwayOn(server, GROUND, origin, ...points);
-}
-
-/** The cells {@link prepareSafeWalkway} clears, from its floor's level up: what a stage must lay under it. */
+/** The cells {@link prepareSafeWalkwayOn} clears, from its floor's level up: what a stage must lay under it. */
 export function safeWalkwayBox(
   origin: { x: number; y: number; z: number },
   ...points: Array<{ x: number; y: number; z: number }>

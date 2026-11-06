@@ -12,7 +12,6 @@ import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -69,13 +68,6 @@ public final class WarfareWeapons {
             return Math.max(
                 data.get(GunProp.BOLT_ACTION_TIME) + 1,
                 Math.max(3, (int) Math.ceil(1200.0 / Math.max(1, data.get(GunProp.RPM)))));
-        }
-
-        public Optional<ItemSpec> legacyWeapon(CompoundTag options) {
-            return ALL.stream()
-                .filter(weapon -> weapon.id().toString().equals(options.getString("gun")))
-                .map(WarfareWeapon::weapon)
-                .findFirst();
         }
     }
 

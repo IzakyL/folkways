@@ -8,9 +8,7 @@ import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.WorkExertion;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
-import io.github.izakyl.folkways.core.engine.labor.ColonyLabor;
+import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
@@ -208,13 +206,7 @@ public final class DiningSchedulingGameTests {
         public long hungryAt = Long.MAX_VALUE;
         public int foodBefore;
         private final Set<Long> forced = new java.util.HashSet<>();
-        private final ColonyData data;
-        private final ColonyLabor labor;
-        private final Object inline;
-        private final java.lang.reflect.Method run;
-        private final java.lang.reflect.Method census;
-        private final java.lang.reflect.Method stop;
-        private final java.lang.reflect.Field diagnosis;
+        private final LaborFixture labor;
         private boolean closed;
 
         public Rig(GameTestHelper helper, BlockState tableBlock, BlockState chairBlock, ItemStack food) {
@@ -245,21 +237,7 @@ public final class DiningSchedulingGameTests {
             colony = Colonies.mint(level.getServer());
             colony.stores(ResourceLocation.fromNamespaceAndPath("folkways", "dining_test_stock"),
                 level.dimension(), List.of(WorldPos.of(level, chest)));
-            data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
-            labor = new ColonyLabor(data, level.dimension());
-            try {
-                Class<?> lanes = Class.forName("io.github.izakyl.folkways.core.engine.labor.Lanes");
-                var field = lanes.getDeclaredField("INLINE");
-                field.setAccessible(true);
-                inline = field.get(null);
-                run = ColonyLabor.class.getMethod("run", ServerLevel.class, lanes);
-                census = ColonyLabor.class.getDeclaredMethod("census", ServerLevel.class);
-                census.setAccessible(true);
-                stop = ColonyLabor.class.getDeclaredMethod("close");
-                stop.setAccessible(true);
-                diagnosis = ColonyLabor.class.getDeclaredField("diagnosis");
-                diagnosis.setAccessible(true);
-            } catch (ReflectiveOperationException broken) { throw new IllegalStateException(broken); }
+            labor = new LaborFixture(colony, level);
             // Use the normal independent food-setting scopes: bread is pocket ration, while the dining
             // zone selects cake or soup. Its sole table serving is therefore available in real stock.
             ColonyFront.of(colony).setSetting(LivingContent.ID, LivingContent.FOOD.key(),
@@ -276,9 +254,8 @@ public final class DiningSchedulingGameTests {
             living = colony.service(LivingContent.ID, LivingPresence.class).orElseThrow();
             helper.onEachTick(() -> {
                 if (closed) return;
-                ColonyWays.advance(data, level);
-                try { run.invoke(labor, level, inline); }
-                catch (ReflectiveOperationException broken) { throw new IllegalStateException("dining pipeline failed: " + status(), broken); }
+                try { labor.tick(); }
+                catch (RuntimeException broken) { throw new IllegalStateException("dining pipeline failed: " + status(), broken); }
                 setting |= person.doing().filter(doing -> doing.what().equals(LivingContent.SETTING_TABLE)).isPresent();
                 fetching |= person.doing().filter(doing -> doing.what().equals(LivingContent.DINING_DRINKING)).isPresent();
                 dining |= person.leisureMotion().equals("dining");
@@ -301,31 +278,23 @@ public final class DiningSchedulingGameTests {
         }
 
         public int sourceCount() {
-            int count = 0;
-            for (int slot = 0; slot < source.getContainerSize(); slot++) {
-                ItemStack stack = source.getItem(slot);
-                if (stack.is(foodItem)) count += stack.getCount();
-            }
-            return count;
+            return count(source, foodItem);
         }
 
         public String status() {
-            try {
-                return "colony=" + colony.id() + " bodyTicks=" + person.tickCount + " pos=" + person.position()
-                    + " ticking=" + level.isPositionEntityTicking(person.blockPosition()) + " table=" + table
-                    + " doing=" + person.doing() + " balk=" + person.balk() + " mountedTicks=" + mountedTicks
-                    + " sourceCount=" + sourceCount() + " inventory="
-                    + java.util.stream.IntStream.range(0, person.pack().getContainerSize())
-                        .mapToObj(person.pack()::getItem).filter(stack -> !stack.isEmpty()).toList() + " census=" + census.invoke(labor, level)
-                    + " diagnosis=" + diagnosis.get(labor);
-            } catch (ReflectiveOperationException broken) { return broken.toString(); }
+            return "colony=" + colony.id() + " bodyTicks=" + person.tickCount + " pos=" + person.position()
+                + " ticking=" + level.isPositionEntityTicking(person.blockPosition()) + " table=" + table
+                + " doing=" + person.doing() + " balk=" + person.balk() + " mountedTicks=" + mountedTicks
+                + " sourceCount=" + sourceCount() + " inventory="
+                + java.util.stream.IntStream.range(0, person.pack().getContainerSize())
+                    .mapToObj(person.pack()::getItem).filter(stack -> !stack.isEmpty()).toList() + " census=" + labor.census()
+                + " diagnosis=" + labor.diagnosis();
         }
 
         @Override public void close() {
             if (closed) return;
             closed = true;
-            try { stop.invoke(labor); }
-            catch (ReflectiveOperationException broken) { throw new IllegalStateException(broken); }
+            labor.close();
             person.discard();
             colony.raze();
             forced.forEach(chunk -> level.setChunkForced(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), false));

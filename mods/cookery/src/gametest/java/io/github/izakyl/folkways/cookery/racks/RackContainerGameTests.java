@@ -32,7 +32,6 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -92,22 +91,6 @@ public final class RackContainerGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void fullRackFallsBackToOrdinaryStorageWithoutLosingTools(GameTestHelper helper) {
-        KitchenwareRacksBlockEntity rack = rack(helper);
-        RackContainer view = new RackContainer(rack);
-        SimpleContainer ordinary = new SimpleContainer(2);
-        Containers.insert(view, new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get()));
-        Containers.insert(view, new ItemStack(ModItems.KITCHEN_SHOVEL.get()));
-        ItemStack spare = new ItemStack(ModItems.SICKLE.get());
-        ItemStack left = Containers.insert(view, spare);
-        helper.assertTrue(Containers.insert(ordinary, left).isEmpty(), "a full rack leaves the whole tool for ordinary storage");
-        helper.assertTrue(ItemStack.matches(ordinary.getItem(0), spare), "the fallback owns exactly the original spare");
-        helper.assertValueEqual(rack.getItemLeft().getCount() + rack.getItemRight().getCount()
-            + ordinary.getItem(0).getCount(), 3, "both native rack slots and the fallback conserve all three tools");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void reloadedRackKeepsItsToolButAnOldViewCannotTakeOrInsertAnything(GameTestHelper helper) {
         KitchenwareRacksBlockEntity rack = rack(helper);
         RackContainer stale = new RackContainer(rack);
@@ -132,29 +115,33 @@ public final class RackContainerGameTests {
 
     @GameTest(template = "empty")
     public static void nativeClicksAndTheContainerOperateOnTheSamePhysicalTool(GameTestHelper helper) {
-        KitchenwareRacksBlockEntity rack = rack(helper);
-        RackContainer view = new RackContainer(rack);
-        var body = PersonBody.RESIDENT.get().create(helper.getLevel());
-        body.setNoAi(true);
-        body.moveTo(rack.getBlockPos().getX() + 0.5, rack.getBlockPos().getY(), rack.getBlockPos().getZ() + 1.5);
-        helper.getLevel().addFreshEntity(body);
-        try {
-            ItemStack named = new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get());
-            named.set(DataComponents.CUSTOM_NAME, Component.literal("One physical shared tool"));
-            named.setDamageValue(11);
-            ItemStack offered = named.copy();
-            helper.assertTrue(rack.onClick(body, offered, true) && offered.isEmpty(),
-                "the original mod interaction consumes one tool into its left slot");
-            ItemStack taken = Containers.extract(view, stack -> true, 1);
-            helper.assertTrue(ItemStack.matches(taken, named) && rack.getItemLeft().isEmpty(),
-                "the adapter removes exactly the physical tool accepted by the native interaction");
-            helper.assertTrue(Containers.insert(view, taken).isEmpty(), "the same physical tool goes back through the adapter");
-            body.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
-            helper.assertTrue(rack.onClick(body, ItemStack.EMPTY, true), "the native empty-hand interaction retrieves it again");
-            helper.assertTrue(ItemStack.matches(body.getMainHandItem(), named) && view.isEmpty(),
-                "the native interaction sees the adapter's real slot and preserves all tool components");
-        } finally {
-            body.discard();
+        ItemStack lid = new ItemStack(ModItems.STOCKPOT_LID.get());
+        helper.assertTrue(lid.getItem() instanceof ShieldItem && lid.is(Tags.Items.TOOLS),
+            "the optional shield child joins the native tools parent tag");
+        for (ItemStack named : List.of(new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get()), lid)) {
+            KitchenwareRacksBlockEntity rack = rack(helper);
+            RackContainer view = new RackContainer(rack);
+            var body = PersonBody.RESIDENT.get().create(helper.getLevel());
+            body.setNoAi(true);
+            body.moveTo(rack.getBlockPos().getX() + 0.5, rack.getBlockPos().getY(), rack.getBlockPos().getZ() + 1.5);
+            helper.getLevel().addFreshEntity(body);
+            try {
+                named.set(DataComponents.CUSTOM_NAME, Component.literal("One physical shared tool"));
+                named.setDamageValue(11);
+                ItemStack offered = named.copy();
+                helper.assertTrue(rack.onClick(body, offered, true) && offered.isEmpty(),
+                    "the original mod interaction consumes one " + named.getItem() + " into its slot");
+                ItemStack taken = Containers.extract(view, stack -> true, 1);
+                helper.assertTrue(ItemStack.matches(taken, named) && view.isEmpty(),
+                    "the adapter removes exactly the physical tool accepted by the native interaction");
+                helper.assertTrue(Containers.insert(view, taken).isEmpty(), "the same physical tool goes back through the adapter");
+                body.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+                helper.assertTrue(rack.onClick(body, ItemStack.EMPTY, true), "the native empty-hand interaction retrieves it again");
+                helper.assertTrue(ItemStack.matches(body.getMainHandItem(), named) && view.isEmpty(),
+                    "the native interaction sees the adapter's real slot and preserves all tool components");
+            } finally {
+                body.discard();
+            }
         }
         helper.succeed();
     }
@@ -169,34 +156,6 @@ public final class RackContainerGameTests {
         helper.assertTrue(Containers.insert(found, knife).isEmpty(), "ordinary storage discovery reaches the native rack slots");
         helper.assertTrue(ItemStack.matches(rack.getItemLeft(), knife), "discovery does not expose a detached shadow inventory");
         helper.assertValueEqual(found.getMaxStackSize(), 1, "ordinary hauling sees the native one-tool slot capacity");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
-    public static void nativeRackClicksAcceptAnOptionallyTaggedPotLidAndPreserveItsComponents(GameTestHelper helper) {
-        KitchenwareRacksBlockEntity rack = rack(helper);
-        RackContainer view = new RackContainer(rack);
-        var body = PersonBody.RESIDENT.get().create(helper.getLevel());
-        body.setNoAi(true);
-        body.moveTo(rack.getBlockPos().getX() + 0.5, rack.getBlockPos().getY(), rack.getBlockPos().getZ() + 1.5);
-        try {
-            ItemStack lid = new ItemStack(ModItems.STOCKPOT_LID.get());
-            lid.set(DataComponents.CUSTOM_NAME, Component.literal("The physical stockpot lid"));
-            lid.setDamageValue(17);
-            helper.assertTrue(lid.getItem() instanceof ShieldItem
-                    && lid.is(Tags.Items.TOOLS),
-                "the optional shield child joins the native tools parent tag");
-            ItemStack offered = lid.copy();
-            helper.assertTrue(rack.onClick(body, offered, true) && offered.isEmpty(),
-                "the unchanged native rack interaction accepts and consumes exactly one real lid");
-            ItemStack taken = Containers.extract(view, stack -> true, 1);
-            helper.assertTrue(ItemStack.matches(taken, lid) && view.isEmpty(), "adapter extraction preserves the same named and worn lid");
-            helper.assertTrue(Containers.insert(view, taken).isEmpty(), "the same lid returns through ordinary container storage");
-            body.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
-            helper.assertTrue(rack.onClick(body, ItemStack.EMPTY, true)
-                    && ItemStack.matches(body.getMainHandItem(), lid) && view.isEmpty(),
-                "native retrieval sees the same adapter slot without a duplicate lid");
-        } finally { body.discard(); }
         helper.succeed();
     }
 

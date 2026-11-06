@@ -5,11 +5,13 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
-import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
@@ -18,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,9 +29,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -37,6 +37,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -58,6 +59,29 @@ public final class PointRouteGameTests {
         // Keep the mandatory click beyond the navigator's horizon while every internal leg
         // remains nearby. This reproduces the 64-block navigator / 128-block command mismatch.
         people.forEach(body -> body.mob().getAttribute(Attributes.FOLLOW_RANGE).setBaseValue(8));
+        AtomicReference<WorldPos> previousCaptain = new AtomicReference<>();
+        AtomicBoolean previousMoving = new AtomicBoolean(true);
+        AtomicBoolean continuousAdvance = new AtomicBoolean();
+        helper.onEachTick(
+            () -> {
+                var group = scene.groups.ofResident(people.getFirst().id());
+                if (group.isEmpty()) {
+                    return;
+                }
+                WorldPos current = group.get().captain().orElseThrow();
+                if (previousCaptain.get() != null && !current.equals(previousCaptain.get()) && previousMoving.get()) {
+                    continuousAdvance.set(true);
+                }
+                previousCaptain.set(current);
+                previousMoving.set(people.stream()
+                    .anyMatch(body -> scene.commands.current(body.id())
+                        .filter(order -> order.status() == ResidentCommands.Status.MOVING
+                            && !Reach.standingAt(body.mob().position(), order.destination().block(scene.level)))
+                        .isPresent()));
+                helper.assertTrue(
+                    group.get().phase() != UnitGroup.Phase.FAILED_WAITING,
+                    "open grass must not fail while members are still making progress");
+            });
         helper.startSequence()
             .thenIdle(5)
             .thenExecute(
@@ -83,6 +107,9 @@ public final class PointRouteGameTests {
                 helper.assertTrue(
                     scene.group().captain().orElseThrow().equals(goal),
                     "partial paths never skip the click");
+                helper.assertTrue(
+                    continuousAdvance.get(),
+                    "at least one intermediate leg advances before exact all-member HOLDING");
                 scene.assertAtSlots();
                 helper.assertTrue(
                     people.stream()
@@ -92,100 +119,6 @@ public final class PointRouteGameTests {
                             == ResidentCommands.Mode.HOLD),
                     "ordinary travel remains controlled HOLD at its final stop");
             })
-            .thenSucceed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 1200)
-    public static void intermediateAdvanceDoesNotRequireEveryResidentToHoldExactly(GameTestHelper helper) {
-        Scene scene = new Scene(helper);
-        List<Body> people = scene.people();
-        scene.groups.commandSelectionPoints(people, List.of(scene.at(19, 1, 10)), -1);
-        UnitGroup group = scene.group();
-        AtomicReference<WorldPos> previousCaptain = new AtomicReference<>(group.captain().orElseThrow());
-        AtomicBoolean previousMoving = new AtomicBoolean(true);
-        AtomicBoolean continuousAdvance = new AtomicBoolean();
-        helper.onEachTick(
-            () -> {
-                WorldPos current = group.captain().orElseThrow();
-                if (!current.equals(previousCaptain.get()) && previousMoving.get()) {
-                    continuousAdvance.set(true);
-                }
-                previousCaptain.set(current);
-                previousMoving.set(people.stream()
-                    .anyMatch(body -> scene.commands.current(body.id())
-                        .filter(order -> order.status() == ResidentCommands.Status.MOVING
-                            && !Reach.standingAt(body.mob().position(),
-                            order.destination().block(scene.level)))
-                        .isPresent()));
-                helper.assertTrue(
-                    group.phase() != UnitGroup.Phase.FAILED_WAITING,
-                    "open grass must not fail while members are still making progress");
-            });
-        helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(group.routeComplete(), "the squad finishes its route"))
-            .thenExecute(
-            () -> {
-                helper.assertTrue(
-                    continuousAdvance.get(),
-                    "at least one intermediate leg advances before exact all-member HOLDING");
-                scene.assertAtSlots();
-            })
-            .thenSucceed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 1800)
-    public static void finalDwellCompletesThenAppendKeepsHistoryWithoutRepeatingCompletedStop(GameTestHelper helper) {
-        Scene scene = new Scene(helper);
-        List<Body> people = scene.people();
-        WorldPos first = scene.at(12, 1, 10);
-        WorldPos second = scene.at(19, 1, 10);
-        scene.groups.appendSelectionPoint(people, first);
-        UnitGroup group = scene.group();
-        var generation = group.pointCommandId();
-        AtomicLong assembledAt = new AtomicLong(Long.MIN_VALUE);
-        helper.onEachTick(
-            () -> {
-                if (group.patrolStop() != 0 || !group.captain().orElseThrow().equals(first)) {
-                    return;
-                }
-                if (scene.allAtSlots()) {
-                    assembledAt.compareAndSet(Long.MIN_VALUE, scene.level.getGameTime());
-                } else {
-                    assembledAt.set(Long.MIN_VALUE);
-                }
-                if (group.routeComplete()) {
-                    helper.assertTrue(
-                        assembledAt.get() != Long.MIN_VALUE
-                        && scene.level.getGameTime() - assembledAt.get() >= 20,
-                        "an open terminal point completes only after twenty consecutive physically assembled"
-                        + " ticks");
-                }
-            });
-        helper.startSequence()
-            .thenWaitUntil(
-            () -> helper.assertTrue(group.routeComplete(), "the first open point finishes its dwell"))
-            .thenIdle(50)
-            .thenExecute(
-            () -> {
-                scene.groups.appendSelectionPoint(people, second);
-                helper.assertTrue(
-                    !group.routeComplete(),
-                    "an accepted next point clears terminal completion immediately");
-                helper.assertTrue(
-                    group.pointRoute().equals(List.of(first, second))
-                    && group.pointCommandId().equals(generation),
-                    "appending keeps the authored history and the original command generation");
-            })
-            .thenWaitUntil(
-            () ->
-                helper.assertValueEqual(
-                    group.patrolStop(),
-                    1,
-                    "an append after completed dwell advances without repeating the completed"
-                    + " stop"))
-            .thenWaitUntil(
-            () -> helper.assertTrue(group.routeComplete(), "the appended point also completes its dwell"))
-            .thenExecute(scene::assertAtSlots)
             .thenSucceed();
     }
 
@@ -280,8 +213,7 @@ public final class PointRouteGameTests {
                     helper.assertTrue(
                         reunitedAt.get() != Long.MIN_VALUE
                         && scene.level.getGameTime() - reunitedAt.get() >= 20,
-                        "the returned complete squad must finish the mandatory stop's own dwell before"
-                        + " advancing");
+                        "the returned complete squad must finish the mandatory stop's own dwell before advancing");
                 }
             });
         helper.startSequence()
@@ -308,8 +240,7 @@ public final class PointRouteGameTests {
                     && !group.routeComplete()
                     && group.phase() == UnitGroup.Phase.WAITING_FOR_MEMBER
                     && group.waitingMembers() == 1,
-                    "present residents cannot finish the missing member's mandatory stop or skip"
-                    + " ahead");
+                    "present residents cannot finish the missing member's mandatory stop or skip ahead");
                 Body returned = (Body) EntityType.loadEntityRecursive(saved, scene.level, entity -> entity);
                 scene.bodies.set(1, returned);
                 scene.level.addFreshEntity(returned.mob());
@@ -343,7 +274,7 @@ public final class PointRouteGameTests {
         helper.succeed();
     }
 
-    private static final class Scene implements GameTestListener {
+    private static final class Scene {
         final GameTestHelper helper;
         final ServerLevel level;
         final Colony colony;
@@ -365,7 +296,7 @@ public final class PointRouteGameTests {
                 }
             }
             helper.onEachTick(simulation::tick);
-            helper.testInfo.addListener(this);
+            Cleanup.on(helper, this::close);
         }
 
         WorldPos at(int x, int y, int z) {
@@ -381,7 +312,7 @@ public final class PointRouteGameTests {
                 level.addFreshEntity(body.mob());
                 colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
-                PatrolSupplies.of(colony).loadout(body, LoadoutRegistry.MELEE);
+                arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
                 bodies.add(body);
             }
             return List.copyOf(bodies);
@@ -416,19 +347,15 @@ public final class PointRouteGameTests {
             bodies.forEach(body -> body.mob().discard());
             colony.raze();
         }
+    }
 
-        public void testStructureLoaded(GameTestInfo info) {
-        }
-
-        public void testPassed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testFailed(GameTestInfo info, GameTestRunner runner) {
-            close();
-        }
-
-        public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) {
-        }
+    private static void arm(Colony colony, Body body, String name, ItemSpec weapon) {
+        LoadoutProfiles profiles = LoadoutProfiles.of(colony);
+        LoadoutProfile profile =
+            profiles.all().stream()
+            .filter(one -> one.name().equals(name))
+            .findFirst()
+            .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

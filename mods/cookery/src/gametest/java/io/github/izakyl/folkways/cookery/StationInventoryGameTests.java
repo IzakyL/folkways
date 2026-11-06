@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.engine.colony.ColonyRegistry;
 import io.github.izakyl.folkways.core.engine.colony.ColonyWorks;
 import io.github.izakyl.folkways.cookery.racks.KitchenRacks;
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.ArrayList;
 import java.util.List;

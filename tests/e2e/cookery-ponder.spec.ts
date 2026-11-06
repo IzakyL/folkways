@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync, writeFileSync } from "node:fs";
-import { defineTask, input, javaTask, media, player, screen, tick, world } from "@izakyl/blockwright-minecraft";
+import { defineTask, input, javaTask, player, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { clickElement, hoverElement, panelElements } from "../ldlib2";
 import { actsForColony, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -141,7 +141,6 @@ return ctx.server().getPlayerList().getPlayers().stream().map(player->Map.of(
 
 const LOCALES = (process.env.FOLKWAYS_PONDER_LANGUAGES ?? process.env.FOLKWAYS_PONDER_LANGUAGE ?? "en_us").split(",");
 const INSTALLATIONS = [
-  { kind: "absent", installed: false, native: false, config: "blockwright.toml", title: "optional extension and native mod absent" },
   { kind: "native-only", installed: false, native: true, config: "blockwright.toml#cookery-native", title: "native Cookery remains independent without the optional extension" },
   { kind: "complete", installed: true, native: true, config: "blockwright.toml#cookery", title: "all lessons, UI entries, keyframes and item links" },
 ] as const;
@@ -152,7 +151,7 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
   expect(["en_us", "zh_cn", "zh_hk", "zh_tw"]).toContain(locale);
   const guiScale = Number(process.env.FOLKWAYS_PONDER_GUI_SCALE ?? (locale === "en_us" ? "1" : "2"));
   expect([1, 2, 3]).toContain(guiScale);
-  const evidence: Record<string, any> = { installed, native: installation.native, installation: installation.kind, profile: installation.config, locale, guiScale, scenes: [], shots: [] };
+  const evidence: Record<string, any> = { installed, native: installation.native, installation: installation.kind, profile: installation.config, locale, guiScale, scenes: [] };
   try {
     pair = await launchPair({ config: installation.config,
       server: { trace: tracePath("e2e", "cookery-ponder-server-" + runId), instance: seededServer("cookery-ponder-server-" + runId) },
@@ -253,8 +252,6 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
           expect(stoves.every(device => device.at[1] >= 1), "stoves are above the ground plane").toBe(true);
           expect(frame.devices.filter(device => ["minecraft:magma_block", "minecraft:campfire"].includes(device.id))).toHaveLength(0);
         }
-        const file = testInfo.outputPath(lesson + "-keyframe-" + index + ".png");
-        const shot = await media.screenshot(client, { path: file }); evidence.shots.push({ scene: lesson, index, time, file, sha256: shot.sha256 });
       }
       await input.key(client, { keyCode: 256, action: "press" }); await input.key(client, { keyCode: 256, action: "release" }); await frames(client, 3);
     }

@@ -8,7 +8,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -32,7 +31,7 @@ public final class MineGameTests {
     }
 
     private static Pattern mine() {
-        return Patterns.find(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "mine")).orElseThrow();
+        return DraftKit.shipped("mine");
     }
 
     private static DraftKit.Filled settings(Pattern pattern) {

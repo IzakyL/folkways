@@ -581,12 +581,7 @@ public final class LoadoutPage implements Draw {
                 }
                 switch (action) {
                     case "rename" ->
-                    profiles.replace(
-                        new LoadoutProfile(
-                        profile.id(),
-                        request.getString("name"),
-                        profile.entries(),
-                        profile.legacy()));
+                    profiles.replace(new LoadoutProfile(profile.id(), request.getString("name"), profile.entries()));
                     case "duplicate" -> selected = profiles.duplicate(profile.id()).id();
                     case "delete" -> {
                         profiles.delete(profile.id());
@@ -681,7 +676,7 @@ public final class LoadoutPage implements Draw {
             }
             default -> throw new IllegalArgumentException("unknown action");
         }
-        profiles.replace(new LoadoutProfile(profile.id(), profile.name(), entries, Optional.empty()));
+        profiles.replace(new LoadoutProfile(profile.id(), profile.name(), entries));
     }
 
     private Tag reading(Player player) {
@@ -750,12 +745,6 @@ public final class LoadoutPage implements Draw {
                 PatrolStaffing.of(colony).shortageFor(current.id()));
             tag.put("summary", Pages.text(player.registryAccess(), Pages.readText(player.registryAccess(),
                 tag.get("summary")).copy().append(" · ").append(staffing)));
-            if (current.entries().isEmpty() && current.legacy().isPresent()) {
-                tag.put(
-                    "summary",
-                    Pages.text(
-                    player.registryAccess(), text("unavailable", current.legacy().get().id().toString())));
-            }
             entryOffset = page(entryOffset, current.entries().size(), 6);
             for (LoadoutProfile.Entry entry :
                 current.entries().subList(entryOffset, Math.min(current.entries().size(), entryOffset + 6))) {

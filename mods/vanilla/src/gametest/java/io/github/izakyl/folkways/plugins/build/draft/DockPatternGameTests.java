@@ -5,16 +5,10 @@ import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.ready;
 import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.refused;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -43,12 +37,7 @@ public final class DockPatternGameTests {
     }
 
     private static Pattern dock() {
-        try (InputStream bytes = DockPatternGameTests.class.getResourceAsStream(
-                "/data/folkways/folkways/pattern/dock.star")) {
-            return DraftKit.bundled("dock", new String(bytes.readAllBytes(), StandardCharsets.UTF_8));
-        } catch (IOException unreadable) {
-            throw new AssertionError(unreadable);
-        }
+        return DraftKit.shipped("dock");
     }
 
     private static DraftKit.Ground lake(int bank) {
@@ -82,20 +71,6 @@ public final class DockPatternGameTests {
 
     private static long count(Map<BlockPos, BlockState> cells, Block block) {
         return cells.values().stream().filter(state -> state.is(block)).count();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 80)
-    public static void theDockPatternParsesWithItsKnobs(GameTestHelper helper) {
-        Pattern pattern = dock();
-        helper.assertTrue(pattern.accepts(new Hint.Path(List.of(BlockPos.ZERO, new BlockPos(0, 0, 9)))),
-            "a dock is drawn along a path");
-        Set<String> keys = new HashSet<>();
-        for (Schema.Setting setting : pattern.knobs().settings()) {
-            keys.add(setting.key());
-        }
-        helper.assertTrue(keys.containsAll(Set.of("width", "head", "shelter", "deck", "beam", "pile", "rail",
-            "landing", "lantern", "roof")), "every knob is declared, got " + keys);
-        helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 80)

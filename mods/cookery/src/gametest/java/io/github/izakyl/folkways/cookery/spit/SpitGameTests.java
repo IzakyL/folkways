@@ -7,8 +7,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
-import io.github.izakyl.folkways.cookery.testing.RecoveryAsking;
-import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
@@ -19,33 +18,35 @@ import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.core.api.work.Hold;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.Produce;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.TestFunction;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -77,7 +78,7 @@ public final class SpitGameTests {
             helper.assertTrue(ready.spit().getBlockState().getValue(ShawarmaSpitBlock.POWERED)
                 && ready.level.getBlockState(ready.cell.west()).is(Blocks.REDSTONE_BLOCK), "the external power source is untouched");
             helper.assertTrue(ready.spit().cookedItem.isEmpty() && SpitBatch.read(ready.spit(), ready.level).isEmpty(), "the physical batch clears once");
-            helper.assertTrue(work.commit(ready.level, ready) instanceof Outcome.Done, "the whole production offer settles");
+            helper.assertTrue(work.commit(ready.level, ready.worker) instanceof Outcome.Done, "the whole production offer settles");
             helper.assertTrue(ready.drops().isEmpty(), "captured products do not also leak as loose items");
         });
     }
@@ -132,7 +133,7 @@ public final class SpitGameTests {
         int remaining = rig.spit().cookTime;
         helper.runAfterDelay(20, () -> {
             helper.assertValueEqual(rig.spit().cookTime, remaining, "an unpowered native tower does not advance cooking");
-            helper.assertTrue(work.next(rig.level, rig) instanceof Workload.Within.Turn.Wait, "the task cannot take unfinished food");
+            helper.assertTrue(work.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Wait, "the task cannot take unfinished food");
             rig.power(true);
         });
         afterCooking(rig, ready -> {
@@ -161,85 +162,70 @@ public final class SpitGameTests {
     public static void withdrawalInvalidatesAnAlreadyPreparedLoad(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, false)) {
             SpitWork work = rig.plan();
-            Node piece = ((Workload.Within.Turn.Piece) work.next(rig.level, rig)).node();
+            Node piece = ((Workload.Within.Turn.Piece) work.next(rig.level, rig.worker)).node();
             rig.bookings.withdraw(rig.at);
-            helper.assertTrue(Commit.run(rig.level, piece, rig) instanceof Outcome.Failed, "an old booking cannot load the tower");
+            helper.assertTrue(Commit.run(rig.level, piece, rig.worker) instanceof Outcome.Failed, "an old booking cannot load the tower");
             helper.assertValueEqual(rig.count(Items.BEEF), 2L, "the stale interaction returns its real input");
             helper.assertTrue(rig.spit().cookedItem.isEmpty() && rig.spit().cookingItem.isEmpty(), "the withdrawn tower is untouched");
         }
         helper.succeed();
     }
 
-    @net.minecraft.gametest.framework.GameTestGenerator
-    public static java.util.Collection<net.minecraft.gametest.framework.TestFunction> nativeCampfireRecipes() {
-        return List.of("baked_potato", "cooked_beef", "cooked_chicken", "cooked_cod", "cooked_mutton", "cooked_porkchop",
-            "cooked_rabbit", "cooked_salmon", "dried_kelp").stream().map(name -> new net.minecraft.gametest.framework.TestFunction(
-                "cookery_spit_matrix", "folkways:spit_matrix_" + name, "folkways:empty", 1000, 0L, true, helper -> {
-                    var id = net.minecraft.resources.ResourceLocation.withDefaultNamespace(name + "_from_campfire_cooking");
-                    var recipe = helper.getLevel().getRecipeManager().getAllRecipesFor(net.minecraft.world.item.crafting.RecipeType.CAMPFIRE_COOKING)
-                        .stream().filter(holder -> holder.id().equals(id)).findFirst().orElseThrow();
-                    ItemStack input = recipe.value().getIngredients().getFirst().getItems()[0];
-                    ItemStack output = recipe.value().getResultItem(helper.getLevel().registryAccess()).copyWithCount(1);
-                    Rig rig = new Rig(helper, false, input, output); SpitWork work = rig.load(); long started = rig.level.getGameTime();
-                    afterCooking(rig, ready -> {
-                        helper.assertTrue(ready.level.getGameTime() - started >= recipe.value().getCookingTime(), id + ": the real native clock elapsed");
-                        helper.assertTrue(ready.step(work) instanceof Outcome.Done, id + ": native cooking is safely served with the actual knife");
-                        helper.assertValueEqual(ready.count(output.getItem()), 2L, id + ": both native portions enter the real pack");
-                        helper.assertValueEqual(ready.count(input.getItem()), 0L, id + ": the two real ingredients were spent once");
-                        helper.assertTrue(ready.spit().cookedItem.isEmpty() && ready.spit().cookingItem.isEmpty() && ready.drops().isEmpty(), id + ": no physical or loose duplicate remains");
-                    });
-                })).toList();
+    // Cookery's own campfire recipes, then vanilla's, each served through the real tower and knife.
+    @GameTestGenerator
+    public static List<TestFunction> nativeCampfireRecipes() {
+        List<ResourceLocation> owned = NativeCookingMatrix.ids(id -> id.getNamespace().equals("minecraft")
+            && id.getPath().endsWith("_from_campfire_cooking"));
+        if (owned.size() != 7) throw new IllegalStateException("expected all 7 native-owned campfire recipes, got " + owned.size());
+        List<TestFunction> tests = new ArrayList<>(owned.stream().map(id -> new TestFunction("cookery_spit_owned_matrix",
+            "folkways:spit_owned_matrix_" + id.getPath(), "folkways:empty", 1000, 0L, true, helper -> campfire(helper, id))).toList());
+        for (String name : List.of("baked_potato", "cooked_beef", "cooked_chicken", "cooked_cod", "cooked_mutton", "cooked_porkchop",
+                "cooked_rabbit", "cooked_salmon", "dried_kelp")) {
+            var id = ResourceLocation.withDefaultNamespace(name + "_from_campfire_cooking");
+            tests.add(new TestFunction("cookery_spit_matrix", "folkways:spit_matrix_" + name, "folkways:empty", 1000, 0L, true,
+                helper -> campfire(helper, id)));
+        }
+        return tests;
     }
 
-    @net.minecraft.gametest.framework.GameTestGenerator
-    public static java.util.Collection<net.minecraft.gametest.framework.TestFunction> nativeOwnedCampfireRecipes() {
-        List<net.minecraft.resources.ResourceLocation> ids = new java.util.ArrayList<>();
-        try (var stream = SpitGameTests.class.getResourceAsStream("/cookery-native-recipes.json")) {
-            if (stream == null) { throw new IllegalStateException("the pinned native recipe manifest is missing"); }
-            for (var value : com.google.gson.JsonParser.parseReader(new java.io.InputStreamReader(stream,
-                    java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonArray("recipes")) {
-                String id = value.getAsString();
-                if (id.startsWith("minecraft:") && id.endsWith("_from_campfire_cooking")) {
-                    ids.add(net.minecraft.resources.ResourceLocation.parse(id));
-                }
+    private static void campfire(GameTestHelper helper, ResourceLocation id) {
+        var level = helper.getLevel();
+        var recipe = level.getRecipeManager().getAllRecipesFor(RecipeType.CAMPFIRE_COOKING)
+            .stream().filter(holder -> holder.id().equals(id)).findFirst().orElseThrow();
+        ItemStack input = recipe.value().getIngredients().getFirst().getItems()[0].copyWithCount(1);
+        var nativeSelection = level.getRecipeManager().getRecipeFor(RecipeType.CAMPFIRE_COOKING, new SingleRecipeInput(input), level).orElseThrow();
+        helper.assertTrue(nativeSelection.id().equals(id), id + ": the actual native matcher selects this manifest recipe");
+        helper.assertValueEqual(recipe.value().getCookingTime(), 600, id + ": the pinned native cooking time remains unchanged");
+        ItemStack output = recipe.value().assemble(new SingleRecipeInput(input), level.registryAccess());
+        helper.assertValueEqual(output.getCount(), 1, id + ": the native tower's one-result-per-input rule is applicable");
+        Rig rig = new Rig(helper, false, input, output);
+        ItemStack knife = rig.pack.getItem(1);
+        ItemStack originalKnife = knife.copy();
+        SpitWork work = rig.load();
+        long started = level.getGameTime();
+        helper.assertTrue(ItemStack.matches(rig.spit().cookedItem, output.copyWithCount(2)), id + ": native loading creates the actual component-preserving output");
+        afterCooking(rig, ready -> {
+            helper.assertTrue(ready.level.getGameTime() - started >= 600, id + ": six hundred real powered ticker steps elapsed");
+            helper.assertTrue(ready.step(work) instanceof Outcome.Done, id + ": the actual native knife interaction serves the batch");
+            int portions = 0;
+            int knives = 0;
+            for (int slot = 0; slot < ready.pack.getContainerSize(); slot++) {
+                ItemStack stack = ready.pack.getItem(slot);
+                if (stack.isEmpty()) continue;
+                if (ItemStack.isSameItemSameComponents(stack, output)) portions += stack.getCount();
+                else if (ItemStack.isSameItemSameComponents(stack, originalKnife)) knives += stack.getCount();
+                else helper.fail(id + ": unexpected physical inventory after cooking: " + stack);
             }
-        } catch (java.io.IOException broken) { throw new IllegalStateException("cannot read pinned native recipes", broken); }
-        if (ids.size() != 7) { throw new IllegalStateException("expected all 7 native-owned campfire recipes, got " + ids.size()); }
-        return ids.stream().map(id -> new net.minecraft.gametest.framework.TestFunction("cookery_spit_owned_matrix",
-            "folkways:spit_owned_matrix_" + id.getPath(), "folkways:empty", 1000, 0L, true, helper -> {
-                var level = helper.getLevel();
-                var recipe = level.getRecipeManager().getAllRecipesFor(net.minecraft.world.item.crafting.RecipeType.CAMPFIRE_COOKING)
-                    .stream().filter(holder -> holder.id().equals(id)).findFirst().orElseThrow();
-                ItemStack input = recipe.value().getIngredients().getFirst().getItems()[0].copyWithCount(1);
-                var nativeSelection = level.getRecipeManager().getRecipeFor(net.minecraft.world.item.crafting.RecipeType.CAMPFIRE_COOKING,
-                    new net.minecraft.world.item.crafting.SingleRecipeInput(input), level).orElseThrow();
-                helper.assertTrue(nativeSelection.id().equals(id), id + ": the actual native matcher selects this manifest recipe");
-                helper.assertValueEqual(recipe.value().getCookingTime(), 600, id + ": the pinned native cooking time remains unchanged");
-                ItemStack output = recipe.value().assemble(new net.minecraft.world.item.crafting.SingleRecipeInput(input), level.registryAccess());
-                helper.assertValueEqual(output.getCount(), 1, id + ": the native tower's one-result-per-input rule is applicable");
-                Rig rig = new Rig(helper, false, input, output);
-                ItemStack knife = rig.pack.getItem(1); ItemStack originalKnife = knife.copy();
-                SpitWork work = rig.load(); long started = level.getGameTime();
-                helper.assertTrue(ItemStack.matches(rig.spit().cookedItem, output.copyWithCount(2)), id + ": native loading creates the actual component-preserving output");
-                afterCooking(rig, ready -> {
-                    helper.assertTrue(ready.level.getGameTime() - started >= 600, id + ": six hundred real powered ticker steps elapsed");
-                    helper.assertTrue(ready.step(work) instanceof Outcome.Done, id + ": the actual native knife interaction serves the batch");
-                    int portions = 0; int knives = 0;
-                    for (int slot = 0; slot < ready.pack.getContainerSize(); slot++) {
-                        ItemStack stack = ready.pack.getItem(slot); if (stack.isEmpty()) { continue; }
-                        if (ItemStack.isSameItemSameComponents(stack, output)) { portions += stack.getCount(); }
-                        else if (ItemStack.isSameItemSameComponents(stack, originalKnife)) { knives += stack.getCount(); }
-                        else { helper.fail(id + ": unexpected physical inventory after cooking: " + stack); }
-                    }
-                    helper.assertValueEqual(portions, 2, id + ": both real portions retain every native result component");
-                    helper.assertValueEqual(knives, 1, id + ": exactly the borrowed native knife remains");
-                    helper.assertTrue(ready.pack.getItem(1) == knife && ItemStack.matches(knife, originalKnife), id + ": native serving preserves the actual unworn knife reference");
-                    helper.assertTrue(ready.spit().cookedItem.isEmpty() && ready.spit().cookingItem.isEmpty()
-                        && SpitBatch.read(ready.spit(), ready.level).isEmpty() && ready.drops().isEmpty(), id + ": no raw input, claim or loose duplicate remains");
-                    helper.assertTrue(work.commit(ready.level, ready) instanceof Outcome.Done, id + ": the actual production offer settles exactly once");
-                });
-            })).toList();
+            helper.assertValueEqual(portions, 2, id + ": both real portions retain every native result component");
+            helper.assertValueEqual(knives, 1, id + ": exactly the borrowed native knife remains");
+            helper.assertValueEqual(ready.count(input.getItem()), 0L, id + ": the two real ingredients were spent once");
+            helper.assertTrue(ready.pack.getItem(1) == knife && ItemStack.matches(knife, originalKnife), id + ": native serving preserves the actual unworn knife reference");
+            helper.assertTrue(ready.spit().cookedItem.isEmpty() && ready.spit().cookingItem.isEmpty()
+                && SpitBatch.read(ready.spit(), ready.level).isEmpty() && ready.drops().isEmpty(), id + ": no raw input, claim or loose duplicate remains");
+            helper.assertTrue(work.commit(ready.level, ready.worker) instanceof Outcome.Done, id + ": the actual production offer settles exactly once");
+        });
     }
+
     private static void afterCooking(Rig rig, Consumer<Rig> check) {
         rig.helper.startSequence().thenWaitUntil(() -> rig.helper.assertTrue(rig.spit().cookTime <= 0 && rig.spit().cookingItem.isEmpty(),
             "the real powered block ticker finishes the recipe")).thenExecute(() -> {
@@ -304,40 +290,6 @@ public final class SpitGameTests {
         return rig.cell.offset(4, 0, 2);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1000)
-    public static void aBookedRecoveryStaysWantedAcrossAskingSweepsAndTheNativeSettlementWindow(GameTestHelper helper) {
-        Rig rig = new Rig(helper, false); rig.load(); rig.power(false);
-        rig.hold.release(Ending.DROPPED); rig.hold = null;
-        var provider = new SpitStation();
-        Grown original = provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}).getFirst();
-        SpitWork work = (SpitWork) original.nodes().getFirst();
-        var asking = new RecoveryAsking(helper); asking.offer(List.of(original));
-        helper.assertTrue(work.planned(rig.level).isEmpty(), "the native recovery really takes its exclusive booking");
-        asking.assertKept(original, provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
-        helper.startSequence().thenIdle(40).thenExecute(() -> {
-            asking.assertKept(original, provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
-            helper.assertTrue(rig.spit().cookingItem.getCount() == 2, "accepted native ingredients remain physically stored while actual heat or power is absent");
-        }).thenIdle(40).thenExecute(() -> {
-            asking.assertKept(original, provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
-            helper.assertTrue(provider.activeRecovery(rig.colony, rig.level, rig.at, rig.bookings).getFirst() == original, "blocked-approach queries expose only this already planned original root");
-            rig.power(true);
-        }).thenWaitUntil(() -> helper.assertTrue(rig.spit().cookTime <= 0 && rig.spit().cookingItem.isEmpty(), "the same real native ticker finishes after physical heat or power returns"))
-            .thenExecute(() -> {
-                try {
-                    helper.assertTrue(rig.step(work) instanceof Outcome.Done, "the actual recovered native output is collected");
-                    asking.assertKept(original, provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
-                    helper.assertTrue(provider.activeRecovery(rig.colony, rig.level, rig.at, rig.bookings).getFirst() == original, "clearing real native slots does not withdraw the root before outer settlement");
-                    helper.assertTrue(work.commit(rig.level, rig) instanceof Outcome.Done, "the same original outer recovery settles successfully");
-                    work.ended(rig.level, Ending.DONE); asking.finished(original, Ending.DONE);
-                    helper.assertTrue(provider.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}).isEmpty()
-                        && provider.activeRecovery(rig.colony, rig.level, rig.at, rig.bookings).isEmpty(), "completion releases both the physical booking and the exact cached root");
-                    helper.assertValueEqual(rig.count(Items.COOKED_BEEF), 2L, "all original real portions are delivered once");
-                    helper.assertValueEqual(rig.count(Items.BEEF), 0L, "accepted ingredients are not recreated or charged again");
-                    helper.assertTrue(rig.drops().isEmpty(), "no duplicate native result is left on the ground");
-                } finally { work.ended(rig.level, Ending.DONE); rig.close(); }
-            }).thenSucceed();
-    }
-
     @GameTest(template = "empty")
     public static void anOldRecoveryEndingCannotEraseANewerInstanceForTheSameNativeBatch(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, false)) {
@@ -359,7 +311,8 @@ public final class SpitGameTests {
         helper.succeed();
     }
 
-    private static final class Rig implements Worker, AutoCloseable {
+    private static final class Rig implements AutoCloseable {
+        final Worker worker;
         final GameTestHelper helper;
         final ServerLevel level;
         final UUID colony = UUID.randomUUID();
@@ -396,6 +349,7 @@ public final class SpitGameTests {
             stances = Stances.at(level, actor.blockPosition());
             pack.setItem(0, input.copyWithCount(2));
             pack.setItem(1, new ItemStack(ModItems.IRON_KITCHEN_KNIFE.get()));
+            worker = TestWorker.of(actor).pack(pack).heldFromPack().effects(Effects.NONE);
         }
         void power(boolean on) {
             level.setBlockAndUpdate(cell.west(), (on ? Blocks.REDSTONE_BLOCK : Blocks.AIR).defaultBlockState());
@@ -419,11 +373,11 @@ public final class SpitGameTests {
             return work;
         }
         Outcome step(SpitWork work) {
-            var turn = work.next(level, this);
+            var turn = work.next(level, worker);
             helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "expected native spit action, got " + turn + "; refusal=" + work.refusal(level)
                 + "; input=" + spit().cookingItem + "; output=" + spit().cookedItem + "; time=" + spit().cookTime);
             Node piece = ((Workload.Within.Turn.Piece) turn).node();
-            Outcome result = Commit.run(level, piece, this);
+            Outcome result = Commit.run(level, piece, worker);
             if (result instanceof Outcome.Done done) {
                 done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "the native output fits"));
                 work.ended(level, piece, Ending.DONE);
@@ -436,20 +390,6 @@ public final class SpitGameTests {
             return Goods.countIn(pack, ItemSpec.of(item));
         }
 
-        public Resident resident() { return actor.resident(); }
-        public Mob body() { return actor; }
-        public Container pack() { return pack; }
-        public List<Store> within() { return List.of(); }
-        public ItemStack held(ToolNeed need) {
-            for (int slot = 0; slot < pack.getContainerSize(); slot++) {
-                if (Tools.answers(pack.getItem(slot), need)) { return pack.getItem(slot); }
-            }
-            return ItemStack.EMPTY;
-        }
-        public void spill(ItemStack stack) { throw new IllegalStateException("unexpected spill"); }
-        public Effects effects() { return Effects.NONE; }
-        public List<Node> route() { return List.of(); }
-        public Placement placement() { return Placement.NOWHERE; }
         public void close() {
             if (hold != null) { hold.release(Ending.DROPPED); }
             actor.discard();

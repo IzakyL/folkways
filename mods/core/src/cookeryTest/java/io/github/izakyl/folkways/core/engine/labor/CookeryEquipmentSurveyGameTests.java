@@ -14,7 +14,6 @@ import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.api.work.Delivery;
 import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
 import io.github.izakyl.folkways.core.engine.plan.Message;
@@ -58,23 +57,6 @@ public final class CookeryEquipmentSurveyGameTests {
     public static void register(RegisterGameTestsEvent event) { event.register(CookeryEquipmentSurveyGameTests.class); }
 
     @GameTest(template = "empty")
-    public static void togglingTaskClothingDoesNotCreateAPermanentIdleResidentDelivery(GameTestHelper helper) {
-        try (var rig = new Rig(helper)) {
-            rig.flag(false); rig.survey.read(rig.body.id()); rig.read(); rig.messages.clear();
-            long licence = rig.body.licences().revision();
-            rig.flag(true);
-            for (int pass = 0; pass < 10; pass++) rig.read();
-            helper.assertTrue(rig.clothingDeliveries().isEmpty(), "allowing task borrowing creates no standing per-resident delivery");
-            helper.assertValueEqual(rig.body.licences().revision(), licence, "changing permission does not refresh unrelated licences");
-            helper.assertTrue(rig.body.getItemBySlot(EquipmentSlot.HEAD).isEmpty(), "an idle hand remains bare-headed");
-            rig.flag(false); rig.read();
-            helper.assertTrue(rig.clothingDeliveries().isEmpty(), "neither permission transition delivers personal clothing");
-            helper.assertValueEqual(rig.hats(), 1L, "the original shared item remains real store stock");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void changingTheClothingAllowlistDoesNotQueueUnusedPersonalEquipment(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             rig.allow(ModItems.STRAW_HAT.get()); rig.survey.read(rig.body.id()); rig.read();
@@ -101,6 +83,7 @@ public final class CookeryEquipmentSurveyGameTests {
         rig.body.pack().setItem(1, new ItemStack(Items.WOODEN_HOE));
         rig.level.addFreshEntity(rig.body);
         helper.assertTrue(rig.colony.hold(PersonBody.ID, Held.Entity.of(rig.body)).isPresent(), "the real farmer joins the actual colony");
+        long licence = rig.body.licences().revision();
         ColonyLabor labor = new ColonyLabor(rig.data, rig.level.dimension());
         int[] tick = {0}; boolean[] done = {false};
         Runnable close = () -> { if (!done[0]) { done[0] = true; labor.close(); rig.close(); } };
@@ -114,6 +97,8 @@ public final class CookeryEquipmentSurveyGameTests {
                 helper.assertValueEqual(rig.hats(), 1L, "actual store, cargo and armor conserve one physical hat");
                 helper.assertTrue(rig.body.getItemBySlot(EquipmentSlot.HEAD).isEmpty(), "idle native HEAD stays empty through real labor surveys");
                 helper.assertTrue(Equipment.wanted(rig.colony, rig.body).isEmpty(), "no per-resident Cookery clothing kit is published");
+                helper.assertValueEqual(rig.body.licences().revision(), licence,
+                    "changing permission does not refresh unrelated licences");
                 if (tick[0] >= 140) {
                     helper.assertValueEqual(Goods.countIn(rig.store, ItemSpec.of(TagMod.STRAW_HAT)), 1L,
                         "without a beneficial Cookery task the hat remains in the shared store");
@@ -155,10 +140,9 @@ public final class CookeryEquipmentSurveyGameTests {
             ColonyFront.of(colony).setSetting(CookeryContent.ID, "clothing", new ColonySettings.Value.Items(List.of(ItemFilter.item(BuiltInRegistries.ITEM.getKey(item)))));
         }
         void read() { survey.answer(level, data, Map.<UUID, Body>of(body.id(), body), seen -> kits.read(colony, seen, messages::add)); }
-        List<Delivery> clothingDeliveries() {
-            return messages.stream().filter(message -> message instanceof Message.Submitted).map(message -> (Message.Submitted) message)
-                .flatMap(message -> message.work().nodes().stream()).filter(node -> node instanceof Delivery).map(node -> (Delivery) node)
-                .filter(delivery -> Goods.overlap(delivery.goods().spec(), ItemSpec.of(TagMod.STRAW_HAT))).toList();
+        List<ItemSpec> clothingDeliveries() {
+            return CookeryKitGameTests.requested(messages)
+                .filter(goods -> Goods.overlap(goods, ItemSpec.of(TagMod.STRAW_HAT))).toList();
         }
         long hats() { return Goods.countIn(store, ItemSpec.of(TagMod.STRAW_HAT)) + Goods.countIn(body.pack(), ItemSpec.of(TagMod.STRAW_HAT))
             + Equipment.worn(body, ItemSpec.of(TagMod.STRAW_HAT)); }

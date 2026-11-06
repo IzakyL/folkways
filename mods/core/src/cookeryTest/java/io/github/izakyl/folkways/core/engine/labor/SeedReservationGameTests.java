@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.engine.labor;
 
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
@@ -17,20 +18,19 @@ import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Placement;
 import io.github.izakyl.folkways.core.api.work.ReservedInput;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.core.engine.plan.Shown;
 import io.github.izakyl.folkways.core.engine.plan.Vertex;
 import io.github.izakyl.folkways.core.engine.plan.WeaveView;
+import io.github.izakyl.folkways.core.testing.Nodes;
 import io.github.izakyl.folkways.plugins.compost.SeedBudget;
 import io.github.izakyl.folkways.plugins.compost.SeedSupport;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -43,8 +43,6 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.CraftingInput;
@@ -147,14 +145,11 @@ public final class SeedReservationGameTests {
             };
             var consumerSpec = NodeSpec.of(UUID.randomUUID(), OWNER, WorkSite.at(rig.level, rig.body.blockPosition()), Stances.WHEREVER,
                 Workload.Once.of(1)).needs(new Need(seeds, 8, true)).done();
-            Node consumer = new Node() {
-                public NodeSpec spec() { return consumerSpec; }
-                public Outcome commit(ServerLevel at, Worker who) { return Outcome.done(); }
-            };
+            Node consumer = Nodes.done(consumerSpec);
             var graph = new WeaveView();
             var planned = new Placement(Set.of(), List.of(), List.of(), List.of(), List.of(
                 new Placement.Draw(Optional.empty(), seeds, 8, Optional.empty(), Optional.of(parent.id()))));
-            graph.apply(Shown.delta(Map.of(parent.id(), new Vertex(parent.id(), parent, Placement.NOWHERE),
+            graph.apply(Shown.delta(Map.of(parent.id(), Shown.vertex(parent),
                 consumer.id(), new Vertex(consumer.id(), consumer, planned)), List.of(), List.of()));
             Outcome outcome = Commit.run(rig.level, child, rig.worker());
             helper.assertTrue(outcome instanceof Outcome.Done, "the genuine first piece actually spends one pumpkin");
@@ -184,24 +179,14 @@ public final class SeedReservationGameTests {
             body.joinColony(colony.id()); colony.entered(body);
         }
         SeedSupport support() {
-            Colony observed = (Colony)Proxy.newProxyInstance(Colony.class.getClassLoader(), new Class<?>[]{Colony.class}, (proxy, method, args) -> {
+            Colony observed = Proxies.of(Colony.class, (proxy, method, args) -> {
                 if (method.getName().equals("reservedInputs")) return inputs;
                 try { return method.invoke(colony, args); } catch (InvocationTargetException broken) { throw broken.getCause(); }
             });
             return new SeedSupport(observed, level.getServer());
         }
         Worker worker() {
-            return new Worker() {
-                public io.github.izakyl.folkways.core.api.resident.Resident resident() { return body.resident(); }
-                public Mob body() { return body; }
-                public Container pack() { return body.pack(); }
-                public List<Store> within() { return List.of(); }
-                public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-                public void spill(ItemStack stack) { throw new AssertionError("unexpected spill: " + stack); }
-                public Effects effects() { return body.effects(); }
-                public List<Node> route() { return List.of(); }
-                public Placement placement() { return Placement.NOWHERE; }
-            };
+            return TestWorker.of(body);
         }
         public void close() { body.discard(); colony.raze(); }
     }

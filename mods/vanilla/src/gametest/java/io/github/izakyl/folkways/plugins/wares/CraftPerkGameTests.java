@@ -2,8 +2,9 @@ package io.github.izakyl.folkways.plugins.wares;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.work.*;
+import io.github.izakyl.folkways.core.api.work.Placement;
+import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Modifier;
 import java.util.List;
@@ -11,9 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.CraftingRecipe;
@@ -57,11 +56,7 @@ public final class CraftPerkGameTests {
     @GameTest(template = "empty")
     public static void furnaceTrainingAcceleratesOnlyTheLoadedBatchAndSurvivesSaving(GameTestHelper helper) {
         BlockPos pos = helper.absolutePos(new BlockPos(1, 1, 1));
-        helper.getLevel().setBlockAndUpdate(pos, Blocks.FURNACE.defaultBlockState());
-        AbstractFurnaceBlockEntity furnace = (AbstractFurnaceBlockEntity) helper.getLevel().getBlockEntity(pos);
-        furnace.setItem(0, new ItemStack(Items.RAW_IRON));
-        furnace.setItem(1, new ItemStack(Items.COAL));
-        ((FurnaceTraining) furnace).folkways$loaded(0, 1, .5);
+        AbstractFurnaceBlockEntity furnace = trainedFurnace(helper, pos);
         // A player subsequently adds a second input, which receives no training.
         furnace.getItem(0).grow(1);
         for (int tick = 0; tick < 80; tick++) { tick(helper, pos, furnace); }
@@ -84,11 +79,7 @@ public final class CraftPerkGameTests {
     @GameTest(template = "empty")
     public static void removingAndReplacingTheSameInputCannotTransferTraining(GameTestHelper helper) {
         BlockPos pos = helper.absolutePos(new BlockPos(1, 1, 1));
-        helper.getLevel().setBlockAndUpdate(pos, Blocks.FURNACE.defaultBlockState());
-        AbstractFurnaceBlockEntity furnace = (AbstractFurnaceBlockEntity) helper.getLevel().getBlockEntity(pos);
-        furnace.setItem(0, new ItemStack(Items.RAW_IRON));
-        furnace.setItem(1, new ItemStack(Items.COAL));
-        ((FurnaceTraining) furnace).folkways$loaded(0, 1, .5);
+        AbstractFurnaceBlockEntity furnace = trainedFurnace(helper, pos);
         for (int tick = 0; tick < 60; tick++) { tick(helper, pos, furnace); }
         furnace.removeItem(0, 1);
         furnace.setItem(0, new ItemStack(Items.RAW_IRON));
@@ -103,19 +94,27 @@ public final class CraftPerkGameTests {
         AbstractFurnaceBlockEntity.serverTick(helper.getLevel(), pos, helper.getLevel().getBlockState(pos), furnace);
     }
 
+    // A furnace with one raw iron loaded by a trained hand, and coal to burn.
+    private static AbstractFurnaceBlockEntity trainedFurnace(GameTestHelper helper, BlockPos pos) {
+        helper.getLevel().setBlockAndUpdate(pos, Blocks.FURNACE.defaultBlockState());
+        AbstractFurnaceBlockEntity furnace = (AbstractFurnaceBlockEntity) helper.getLevel().getBlockEntity(pos);
+        furnace.setItem(0, new ItemStack(Items.RAW_IRON));
+        furnace.setItem(1, new ItemStack(Items.COAL));
+        ((FurnaceTraining) furnace).folkways$loaded(0, 1, .5);
+        return furnace;
+    }
+
     private static Worker worker() {
-        return new Worker() {
-            public Resident resident() { throw new UnsupportedOperationException(); }
-            public Mob body() { throw new UnsupportedOperationException(); }
-            public Container pack() { return new SimpleContainer(1); }
-            public List<Store> within() { return List.of(); }
-            public ItemStack held(ToolNeed need) { return ItemStack.EMPTY; }
-            public void spill(ItemStack stack) { throw new AssertionError("unexpected spill"); }
-            public Effects effects() { return Effects.of(List.of(
-                new Effects.Part("test", Modifier.add(WaresContent.REFUND, 1)),
-                new Effects.Part("test", Modifier.add(WaresContent.BYPRODUCT, 1)))); }
-            public List<Node> route() { return List.of(); }
-            public Placement placement() { return Placement.NOWHERE; }
-        };
+        Effects effects = Effects.of(List.of(
+            new Effects.Part("test", Modifier.add(WaresContent.REFUND, 1)),
+            new Effects.Part("test", Modifier.add(WaresContent.BYPRODUCT, 1))));
+        return Proxies.of(Worker.class, (proxy, method, args) -> switch (method.getName()) {
+            case "pack" -> new SimpleContainer(1);
+            case "within", "route" -> List.of();
+            case "held" -> ItemStack.EMPTY;
+            case "placement" -> Placement.NOWHERE;
+            case "effects" -> effects;
+            default -> throw new AssertionError(method.getName());
+        });
     }
 }

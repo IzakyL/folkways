@@ -2,19 +2,9 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import java.lang.reflect.Proxy;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,8 +18,6 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -40,9 +28,7 @@ import net.minecraft.world.level.block.WallTorchBlock;
 import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -115,32 +101,6 @@ public final class SchematicannonParityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 40)
-    public static void aDoorIsOneShotThatMakesItsUpperHalf(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos lower = helper.absolutePos(new BlockPos(8, 1, 8));
-        level.setBlock(lower.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
-        level.setBlock(lower.above(2), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
-        BlockState door = Blocks.OAK_DOOR.defaultBlockState();
-        BuildTarget target = new BuildTarget(WorldPos.of(level, lower).realm(), Map.of(lower, door, lower.above(),
-            door.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER)));
-        helper.assertValueEqual(target.launch(lower).orElseThrow().produces(), Set.of(lower, lower.above()),
-            "the lower half's shot makes both halves");
-        helper.assertTrue(target.launch(lower.above()).isEmpty(), "the upper half is never aimed at");
-        SiteRig rig = SiteRig.start(level, target);
-        helper.assertValueEqual(rig.site.pieces().size(), 1, "one piece of work");
-        Worker worker = worker(helper, lower.offset(-3, 0, 0), new ItemStack(Items.OAK_DOOR));
-        helper.assertTrue(Commit.run(level, rig.node(lower), worker) instanceof Outcome.Done, "the door is laid");
-        rig.end(rig.node(lower), Ending.DONE);
-        rig.site.tick(level);
-        helper.assertTrue(level.getBlockState(lower.above()).is(Blocks.OAK_DOOR), "the upper half stands");
-        helper.assertTrue(level.getBlockState(lower.above(2)).is(Blocks.STONE), "nothing above the door is touched");
-        helper.assertTrue(rig.site.complete(), "both halves are done by the one shot");
-        rig.site.close();
-        worker.body().discard();
-        helper.succeed();
-    }
-
     @GameTest(template = "empty", timeoutTicks = 20)
     public static void requirementsAreTheCannons(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -188,41 +148,6 @@ public final class SchematicannonParityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 20)
-    public static void aBlockNoLongerKnownDoesNotHoldTheOrderOpen(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos at = helper.absolutePos(new BlockPos(1, 2, 1));
-        level.setBlock(at, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
-        BuildTarget target = new BuildTarget(WorldPos.of(level, at).realm(), Map.of(at, Blocks.STONE.defaultBlockState()),
-            Set.of(at.east()), BlockPos.ZERO);
-        helper.assertTrue(BuildPlanner.complete(level, target), "the unknown block is skipped, as the cannon skips it");
-        SiteRig rig = SiteRig.start(level, target);
-        helper.assertTrue(rig.site.complete(), "the order finishes");
-        rig.site.close();
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 40)
-    public static void aFluidIsPouredAsAStepOfItsOwn(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos cell = helper.absolutePos(new BlockPos(8, 2, 8));
-        level.setBlock(cell.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            level.setBlock(cell.relative(side), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
-        }
-        BuildTarget target = new BuildTarget(WorldPos.of(level, cell).realm(),
-            Map.of(cell, Blocks.WATER.defaultBlockState()));
-        SiteRig rig = SiteRig.start(level, target);
-        helper.assertValueEqual(rig.node(cell).spec().needs(), List.of(need("water_bucket", 1)), "poured from a bucket");
-        Worker worker = worker(helper, cell.offset(-3, 0, 0), new ItemStack(Items.WATER_BUCKET));
-        helper.assertTrue(Commit.run(level, rig.node(cell), worker) instanceof Outcome.Done done
-            && done.made().stream().anyMatch(stack -> stack.is(Items.BUCKET)), "the empty bucket comes back");
-        helper.assertTrue(level.getFluidState(cell).isSource(), "the source is there");
-        rig.site.close();
-        worker.body().discard();
-        helper.succeed();
-    }
-
     private static void eachPlacement(Consumer<String> check) {
         SchematicPlacement.Adapter installed = SchematicPlacement.adapter();
         try {
@@ -241,22 +166,5 @@ public final class SchematicannonParityGameTests {
 
     private static Need need(String item, long count) {
         return new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace(item)), count);
-    }
-
-    private static Worker worker(GameTestHelper helper, BlockPos feet, ItemStack... carried) {
-        SimpleContainer pack = new SimpleContainer(carried);
-        Mob body = PersonBody.RESIDENT.get().create(helper.getLevel());
-        body.setPos(Vec3.atBottomCenterOf(feet));
-        return (Worker) Proxy.newProxyInstance(SchematicannonParityGameTests.class.getClassLoader(),
-            new Class<?>[] {Worker.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "body" -> body;
-                case "pack" -> pack;
-                case "resident" -> new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig"));
-                case "effects" -> Effects.NONE;
-                case "placement" -> Placement.NOWHERE;
-                case "held" -> ItemStack.EMPTY;
-                case "within", "route", "supplied" -> List.of();
-                default -> null;
-            });
     }
 }

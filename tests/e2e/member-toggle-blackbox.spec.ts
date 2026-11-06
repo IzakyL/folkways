@@ -6,7 +6,7 @@ import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
-import { waitForAnyScreen, waitForElement, safeAction, safeScreen, screenOpen, commandPos, tryCommand, softly } from "../shared/harness/bw-helpers";
+import { waitForAnyScreen, waitForElement, safeAction, safeScreen, screenOpen, isSafeFailure, commandPos, tryCommand, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { around, twins } from "../shared/harness/stage";
 
@@ -15,7 +15,7 @@ const TOGGLE_WIDGET = "folkways.member.toggle";
 const PANEL_WIDGET = "folkways.site.panel";
 const TOGGLE_TICKS = 200;
 
-for (const stage of twins()) test(stage.title("the chest window's member toggle takes a container out of the colony and back in"), async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("either half of a double chest opens its window, whose member toggle takes it out of the colony and back in"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
@@ -53,7 +53,9 @@ for (const stage of twins()) test(stage.title("the chest window's member toggle 
     await tick.sprint(server, 5);
     evidence.create = await createColonyViaBook(server, client, playerName, standBlock, stage);
 
-    await tryCommand(server, `setblock ${commandPos(stage.at(chest))} minecraft:chest{Items:[]}`);
+    const otherHalf: Vec = { x: origin.x + 1, y: origin.y, z: origin.z };
+    await tryCommand(server, `setblock ${commandPos(stage.at(chest))} minecraft:chest[facing=south,type=right]`);
+    await tryCommand(server, `setblock ${commandPos(stage.at(otherHalf))} minecraft:chest[facing=south,type=left]`);
     await tick.sprint(server, 5);
 
     evidence.member_initial = await isColonyMember(server, chest, stage);
@@ -62,20 +64,22 @@ for (const stage of twins()) test(stage.title("the chest window's member toggle 
     evidence.opt_in = await optInViaBook(server, client, playerName, chest, "chest", stage);
     expect(await isColonyMember(server, chest, stage)).toBe(true);
 
-    const seen = stage.stand(chest);
-    await tryCommand(server, `tp ${playerName} ${seen.x + 0.5} ${seen.y} ${seen.z + 1.5} 180 30`);
-    await tick.sprint(server, 5);
-    await screen.dismiss(client);
-    evidence.open = await safeAction(() =>
-      player.useBlock(client, stage.at(chest!), { face: "up" }),
-    );
-    await waitForAnyScreen(client, 10_000);
-    if (!screenOpen(await safeScreen(client))) {
-      throw new Error(`member-toggle: no window opened on the chest at ${commandPos(chest)}`);
+    // The half the book was not pointed at opens the same chest's window; the toggle is then worked from the other.
+    for (const half of [otherHalf, chest]) {
+      const seen = stage.stand(half);
+      await tryCommand(server, `tp ${playerName} ${seen.x + 0.5} ${seen.y} ${seen.z + 1.5} 180 30`);
+      await tick.sprint(server, 5);
+      await screen.dismiss(client);
+      await safeAction(() => player.useBlock(client, stage.at(half), { face: "up" }));
+      await waitForAnyScreen(client, 10_000);
+      if (!screenOpen(await safeScreen(client))) {
+        throw new Error(`member-toggle: no window opened on the chest half at ${commandPos(half)}`);
+      }
+      await tick.sprint(server, 5);
+      const panel = await safeAction(() => waitForElement(client, { id: PANEL_WIDGET }, { timeoutMs: 10_000 }));
+      expect(isSafeFailure(panel), `the half at ${commandPos(half)} should open the colony chest's window with its board`).toBe(false);
     }
-    await tick.sprint(server, 5);
     await waitForElement(client, { id: TOGGLE_WIDGET }, { timeoutMs: 10_000 });
-    await waitForElement(client, { id: PANEL_WIDGET }, { timeoutMs: 10_000 });
 
     evidence.click_leave = await softly(() => clickElement(client, { id: TOGGLE_WIDGET }));
     await safeAction(() => world.waitFor(server, memberCondition(stage.at(chest!), false), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));

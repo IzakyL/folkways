@@ -48,25 +48,15 @@ public final class DiningTableGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void nativeAdapterOffersARecognizedTableSample(GameTestHelper helper) {
-        CookeryDiningTables.register();
-        var sample = DiningTables.sample().orElseThrow();
-        helper.assertTrue(sample.is(ModBlocks.TABLE_OAK.get()), "Cookery offers its oak table for previews");
-        BlockPos at = helper.absolutePos(new BlockPos(3, 2, 3));
-        helper.getLevel().setBlockAndUpdate(at, sample);
-        helper.assertTrue(DiningTables.table(helper.getLevel(), at), "the sample is a recognized dining table");
-        helper.assertValueEqual(DiningTables.inventory(helper.getLevel(), at).orElseThrow().getContainerSize(), 4,
-            "the preview block has the native table's four display slots");
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty")
     public static void nativeDiningTableHasFourRealSingleFoodSlotsAndPreservesComponents(GameTestHelper helper) {
         CookeryDiningTables.register();
         helper.assertTrue(DiningTables.anyTable(), "the common Cookery adapter makes dining available");
+        var sample = DiningTables.sample().orElseThrow();
+        helper.assertTrue(sample.is(ModBlocks.TABLE_OAK.get()), "Cookery offers its oak table for previews");
         var level = helper.getLevel();
         BlockPos at = helper.absolutePos(new BlockPos(3, 2, 3));
-        level.setBlockAndUpdate(at, ModBlocks.TABLE_OAK.get().defaultBlockState());
+        level.setBlockAndUpdate(at, sample);
+        helper.assertTrue(DiningTables.table(level, at), "the sample is a recognized dining table");
         var nativeTable = (TableBlockEntity) level.getBlockEntity(at);
         var inventory = DiningTables.inventory(level, at).orElseThrow();
         ItemStack meal = new ItemStack(Items.COOKED_BEEF, 5);

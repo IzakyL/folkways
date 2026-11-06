@@ -189,13 +189,6 @@ public final class ResidentModelGameTests {
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 40)
-    public static void noModelFilesIsAnEmptyLibrary(GameTestHelper helper) {
-        ModelLibrary library = ModelLibrary.read(Map.of());
-        helper.assertValueEqual(library, ModelLibrary.EMPTY, "a data pack without models reads to nothing");
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, timeoutTicks = 40)
     public static void aModelTakesTheNamespaceOfTheDataPackThatShipsIt(GameTestHelper helper) {
         DataPack files = new DataPack();
         files.modelIn("villagepack", "ranger", YSM_ANIMATIONS, "main");

@@ -12,6 +12,7 @@ import { seededOffThreadServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { frames, safeAction, waitForAnyScreen, clickSlot, safeScreen, screenName, screenOpen, commandPos, tryCommand, waitForElement, clickUnverified, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
+import { waitForResourceReload } from "../shared/harness/resource-reload";
 import { stockColony, stockDispatch, stockRail } from "./colony-stock";
 
 const BOOK_ITEM = "folkways:colony_book";
@@ -22,6 +23,45 @@ const CITIZEN_ROW = "folkways.resident.row.";
 const FARMING = "folkways.farming";
 const PERSON_PAGE = "folkways.person";
 const BREAD_RESULT = "folkways.selector.result.minecraft.bread";
+const LOCALES = ["en_us", "zh_cn"] as const;
+const GUI_SCALE = 3;
+
+const LANGUAGE = defineTask<{ code: string }, { ok: true }>({
+  name: "folkways.panel-layout.language",
+  side: "client",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: ["net.minecraft.client.Minecraft"],
+    body: `
+var mc = Minecraft.getInstance();
+String code = Args.of(ctx).string("code");
+mc.getLanguageManager().setSelected(code);
+mc.options.languageCode = code;
+mc.reloadResourcePacks();
+return Map.of("ok", true);
+`,
+  }),
+});
+
+const SETTLED = defineTask<{ code: string; scale: number }, { settled: boolean; width: number }>({
+  name: "folkways.panel-layout.settled",
+  side: "client",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: ["net.minecraft.client.Minecraft"],
+    body: `
+var mc = Minecraft.getInstance();
+Args args = Args.of(ctx);
+int scale = (int) args.integer("scale");
+if (mc.options.guiScale().get() != scale) {
+    mc.options.guiScale().set(scale);
+    mc.resizeDisplay();
+}
+boolean settled = mc.getOverlay() == null && mc.getLanguageManager().getSelected().equals(args.string("code"));
+return Map.of("settled", settled, "width", mc.getWindow().getGuiScaledWidth());
+`,
+  }),
+});
 
 
 test("panels and item models on camera", async ({}, testInfo) => {
@@ -362,6 +402,28 @@ return true;
       worldState: { screen: screenName(await safeScreen(client)), tokens: await tokensOf(client) },
     });
     await screen.dismiss(client);
+
+    // The tabs above are linted in English at the default scale. Players run Chinese, whose words do not break, on
+    // a large interface: 1280x720 at scale 3 is 427 wide, about what 1920x1080 at its automatic scale 4 leaves.
+    // There the list of pages folds behind the menu button and the cards go one to a line, and a label that only
+    // fits in English must still not draw over its neighbour. A queue at its cap tells the longest line the person
+    // page has: that nobody new is coming.
+    await tryCommand(server, "time add 240000");
+    await tick.sprint(server, 200);
+    for (const code of LOCALES) {
+      await client.run(LANGUAGE, { code });
+      await waitForResourceReload(client);
+      await settle(client, code);
+      await openColonyPanelViaBook(server, client, playerName, founding.standBlock);
+      // A probe of its own: it keeps the screen size and text widths it measured.
+      const scaled = new LayoutProbe(client);
+      for (const tab of tabs) {
+        await clickTab(client, tab.token);
+        await safeAction(() => frames(client, 3));
+        await run.lint(scaled, `${code}@${GUI_SCALE}:${tab.name}`);
+      }
+      await screen.dismiss(client);
+    }
     run.expectTaken([
       ...tabs.map((tab, index) => `page-${tab.name}`),
       "05-1c-citizen-window", "05-5b-metrics-raze-confirm", "05-6-person-looks",
@@ -372,6 +434,7 @@ return true;
       ...tabs.map((tab) => `tab:${tab.name}`),
       "window:citizen", "window:looks", "window:names", "window:selector-tree", "window:selector",
       "page:raze-confirm", "page:site",
+      ...LOCALES.flatMap((code) => tabs.map((tab) => `${code}@${GUI_SCALE}:${tab.name}`)),
     ]);
     run.expectWindows(expectedWindows);
     run.expectLintClean();
@@ -402,4 +465,15 @@ async function openInventory(client: MinecraftClient) {
   await safeAction(() => input.key(client, { keybind: "key.inventory", action: "release" }));
   await waitForAnyScreen(client, 8_000);
   await safeAction(() => frames(client, 3));
+}
+
+async function settle(client: MinecraftClient, code: string) {
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const state = await client.run(SETTLED, { code, scale: GUI_SCALE });
+    if (state.settled) {
+      return;
+    }
+    await frames(client, 5);
+  }
+  throw new Error(`the client never finished switching to ${code} at scale ${GUI_SCALE}`);
 }

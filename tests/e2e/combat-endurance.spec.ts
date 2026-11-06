@@ -21,42 +21,20 @@ type Scene = {
 };
 
 type Reading = {
-  tick: number;
   residentPresent: boolean;
   residentHealth: number;
   x: number;
-  y: number;
   z: number;
-  target: string;
   order: string;
   orderMode: string;
   orderStatus: string;
   doing: string;
-  enemy: string;
   enemyPresent: boolean;
   enemyHealth: number;
   enemyMaxHealth: number;
-  enemyX: number;
-  enemyY: number;
-  enemyZ: number;
-  enemyDistance: number;
-  hasLineOfSight: boolean;
   damageSource: string;
   damageBy: string;
   swordCount: number;
-  swordDamage: number;
-  weaponSession: boolean;
-  weaponArmed: boolean;
-  weaponRange: number;
-  navigationDone: boolean;
-  navigationPathNodes: number;
-  balk: string;
-  orderDestinationX: number;
-  orderDestinationY: number;
-  orderDestinationZ: number;
-  orderDestinationWorldX: number;
-  orderDestinationWorldY: number;
-  orderDestinationWorldZ: number;
   workBlock: string;
   dirtCount: number;
 };
@@ -65,7 +43,6 @@ test("GUARD survives two combat rounds, returns to its slot, then resumes real w
   test.setTimeout(360_000);
   let pair: E2EPair | undefined;
   let scene: Scene | undefined;
-  const evidence: Array<{ step: string; elapsedTicks: number; reading: Reading | Record<string, unknown> }> = [];
   try {
     const run = newRunId();
     pair = await launchPair({
@@ -94,9 +71,8 @@ test("GUARD survives two combat rounds, returns to its slot, then resumes real w
       workX: String(workX), workY: String(workY), workZ: String(workZ),
     });
 
-    async function sample(step: string, elapsedTicks = 0): Promise<Reading> {
+    async function sample(step: string): Promise<Reading> {
       const reading = await server.run(READ, scene!);
-      evidence.push({ step, elapsedTicks, reading });
       expect(reading.residentPresent, `${step}: the same resident must remain loaded`).toBe(true);
       expect(reading.residentHealth, `${step}: the guard must survive`).toBeGreaterThan(0);
       expect(reading.swordCount, `${step}: the physical iron sword must remain unique`).toBe(1);
@@ -109,18 +85,18 @@ test("GUARD survives two combat rounds, returns to its slot, then resumes real w
       budget: number,
       stride = 4,
     ): Promise<Reading> {
+      let last: Reading | undefined;
       for (let elapsed = 0; elapsed < budget; elapsed += stride) {
         await tick.sprint(server, stride);
-        const reading = await sample(step, elapsed + stride);
-        if (predicate(reading)) return reading;
+        last = await sample(step);
+        if (predicate(last)) return last;
       }
-      throw new Error(`${step} timed out after ${budget} ticks: ${JSON.stringify(evidence.at(-1))}`);
+      throw new Error(`${step} timed out after ${budget} ticks: ${JSON.stringify(last)}`);
     }
 
     // Observe a real groundwork node before GUARD takes precedence; don't synthesize doing/navigation state.
-    const laborStarted = await waitFor("groundwork labor begins before combat", reading =>
+    await waitFor("groundwork labor begins before combat", reading =>
       reading.doing.startsWith("folkways:clearing") && reading.workBlock === "minecraft:dirt", 900, 5);
-    evidence.push({ step: "labor-before-combat", elapsedTicks: 0, reading: laborStarted });
 
     let guardOrder = "";
     for (let round = 1; round <= 2; round++) {
@@ -152,30 +128,24 @@ test("GUARD survives two combat rounds, returns to its slot, then resumes real w
       const returned = await waitFor(`round ${round}: resident returns to its original GUARD slot`, reading =>
         reading.order === guardOrder && reading.orderMode === "GUARD" && reading.orderStatus === "HOLDING"
           && Math.hypot(reading.x - scene!.homeX, reading.z - scene!.homeZ) <= 1.1, 500);
-      evidence.push({ step: `round ${round}: returned`, elapsedTicks: 0, reading: returned });
       expect(returned.workBlock, "the work target must remain untouched until GUARD is released").toBe("minecraft:dirt");
     }
 
     const released = await server.run(RELEASE, scene);
-    evidence.push({ step: "explicit GUARD release", elapsedTicks: 0, reading: released });
     expect(released.releasedOrder).toBe(guardOrder);
     expect(released.releaseStatus).toBe("RELEASED");
     expect(released.activeOrder).toBe("NONE");
-    const postRelease: Reading[] = [];
     let laborObservedAgain = false;
     let completed: Reading | undefined;
     for (let elapsed = 0; elapsed < 1200; elapsed += 4) {
       await tick.sprint(server, 4);
-      const reading = await sample("after release: groundwork resumes", elapsed + 4);
-      postRelease.push(reading);
+      const reading = await sample("after release: groundwork resumes");
       laborObservedAgain ||= reading.doing.startsWith("folkways:clearing");
       if (reading.workBlock === "minecraft:air" && reading.dirtCount > 0) {
         completed = reading;
         break;
       }
     }
-    evidence.push({ step: "post-release labor observations", elapsedTicks: postRelease.length * 4,
-      reading: { laborObservedAgain, samples: postRelease } });
     expect(laborObservedAgain, "real clearing work must be selected again after order release").toBe(true);
     expect(completed, "the resident must clear the dirt through its real groundwork task after GUARD release").toBeDefined();
     expect(completed!.dirtCount).toBeGreaterThan(0);
@@ -188,22 +158,12 @@ test("GUARD survives two combat rounds, returns to its slot, then resumes real w
     if (pair && scene) {
       try { await pair.server.run(CLEANUP, scene); } catch { /* Preserve the test failure and pair evidence. */ }
     }
-    await testInfo.attach("combat-endurance-readings.json", {
-      body: JSON.stringify({
-        populations: { residents: 1, enemiesPerRound: 1, combatRounds: 2 },
-        weapon: "one real iron sword, count includes pack and active weapon session",
-        enemies: "native zombie combat AI is disabled to isolate incoming damage; residents retain native AI and must damage/defeat both spawned enemies",
-        labor: "one real Groundwork clear zone over dirt; recorded doing state before combat and again after GUARD release, then block and dirt output",
-        observations: evidence,
-      }, null, 2),
-      contentType: "application/json",
-    });
     await pair?.teardown(testInfo);
   }
 });
 
 const IMPORTS = [
-  "java.util.UUID", "java.util.Set", "java.util.LinkedHashMap", "java.util.Map", "java.util.List", "java.lang.reflect.Proxy",
+  "java.util.UUID", "java.util.Set", "java.util.LinkedHashMap", "java.util.Map", "java.util.List",
   "net.minecraft.server.MinecraftServer", "net.minecraft.server.level.ServerLevel", "net.minecraft.core.BlockPos",
   "net.minecraft.resources.ResourceLocation", "net.minecraft.core.registries.BuiltInRegistries",
   "net.minecraft.world.entity.EntityType", "net.minecraft.world.entity.Mob",
@@ -213,10 +173,9 @@ const IMPORTS = [
   "io.github.izakyl.folkways.core.api.resident.body.Body", "io.github.izakyl.folkways.core.api.terms.WorldSpaces",
   "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry",
+  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
+  "io.github.izakyl.folkways.core.api.terms.ItemSpec", "net.neoforged.neoforge.common.Tags",
   "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
-  "io.github.izakyl.folkways.core.api.work.Worker", "io.github.izakyl.folkways.plugins.combat.weapon.Weapons",
   "io.github.izakyl.folkways.front.engine.colony.ColonyFront", "io.github.izakyl.folkways.front.engine.colony.ColonySchemas",
   "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
 ];
@@ -238,7 +197,9 @@ body.setPersistenceRequired();
 level.addFreshEntity(body);
 colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
 body.joinColony(colony.id());
-PatrolSupplies.of(colony).loadout(body, LoadoutRegistry.MELEE);
+var profiles = LoadoutProfiles.of(colony);
+var melee = profiles.add(profiles.create("Melee").id(), LoadoutProfile.Entry.weapon(ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS)));
+profiles.assign(List.of(body.id()), Optional.of(melee.id()));
 ResourceLocation ground = ResourceLocation.fromNamespaceAndPath("folkways", "ground");
 var settings = ColonySettings.byDefault(ColonySchemas.ofDelegation(ground))
     .with("clear", new ColonySettings.Value.Flag(true));
@@ -286,54 +247,26 @@ var args = Args.of(ctx);
 var level = ((MinecraftServer)ctx.server()).overworld();
 var colony = Colonies.of(level.getServer(), UUID.fromString(args.string("colony"))).orElseThrow();
 var resident = (ResidentEntity)level.getEntity(UUID.fromString(args.string("resident")));
-if (resident == null) return Map.ofEntries(Map.entry("tick", level.getGameTime()), Map.entry("residentPresent", false));
+if (resident == null) return Map.of("residentPresent", false);
 var current = ResidentCommands.of(colony).current(resident.id());
 String enemyId = args.strings("enemies").isEmpty() ? "" : args.strings("enemies").getLast();
 Mob enemy = enemyId.isEmpty() ? null : (Mob)level.getEntity(UUID.fromString(enemyId));
 boolean session = resident.hasWeaponSession();
-Worker weaponWorker = (Worker)Proxy.newProxyInstance(Worker.class.getClassLoader(), new Class<?>[] { Worker.class },
-  (proxy, method, values) -> switch (method.getName()) {
-    case "body" -> resident;
-    case "resident" -> resident.resident();
-    case "pack" -> resident.pack();
-    default -> throw new UnsupportedOperationException("diagnostic Worker method: " + method.getName());
-  });
 var hand = resident.getMainHandItem();
 int swordCount = resident.pack().count(Items.IRON_SWORD) + (session && hand.is(Items.IRON_SWORD) ? hand.getCount() : 0);
 var damage = enemy == null ? null : enemy.getLastDamageSource();
-var path = resident.getNavigation().getPath();
-var order = current.map(value -> value.destination().cell()).orElse(null);
-var orderWorld = current.flatMap(value -> WorldSpaces.world(level, value.destination())).orElse(null);
 var result = new LinkedHashMap<String, Object>();
-result.put("tick", level.getGameTime()); result.put("residentPresent", true); result.put("residentHealth", resident.getHealth());
-result.put("x", resident.getX()); result.put("y", resident.getY()); result.put("z", resident.getZ());
-result.put("target", resident.getTarget() == null ? "NONE" : resident.getTarget().getUUID().toString());
+result.put("residentPresent", true); result.put("residentHealth", resident.getHealth());
+result.put("x", resident.getX()); result.put("z", resident.getZ());
 result.put("order", current.map(value -> value.id().toString()).orElse("NONE"));
 result.put("orderMode", current.map(value -> value.mode().name()).orElse("NONE"));
 result.put("orderStatus", current.map(value -> value.status().name()).orElse("NONE"));
 result.put("doing", resident.doing().map(value -> value.what().toString()).orElse("NONE"));
-result.put("enemy", enemyId); result.put("enemyPresent", enemy != null && enemy.isAlive());
+result.put("enemyPresent", enemy != null && enemy.isAlive());
 result.put("enemyHealth", enemy == null ? 0.0F : enemy.getHealth()); result.put("enemyMaxHealth", enemy == null ? 0.0F : enemy.getMaxHealth());
-result.put("enemyX", enemy == null ? -1.0 : enemy.getX()); result.put("enemyY", enemy == null ? -1.0 : enemy.getY());
-result.put("enemyZ", enemy == null ? -1.0 : enemy.getZ());
-result.put("enemyDistance", enemy == null ? -1.0 : resident.distanceTo(enemy));
-result.put("hasLineOfSight", enemy != null && enemy.isAlive() && resident.hasLineOfSight(enemy));
 result.put("damageSource", damage == null ? "NONE" : damage.getMsgId());
 result.put("damageBy", damage == null || damage.getEntity() == null ? "NONE" : damage.getEntity().getUUID().toString());
-result.put("swordCount", swordCount); result.put("swordDamage", session && hand.is(Items.IRON_SWORD)
-  ? hand.getDamageValue() : resident.pack().contents().stream().filter(stack -> stack.is(Items.IRON_SWORD))
-    .mapToInt(ItemStack::getDamageValue).findFirst().orElse(-1));
-result.put("weaponSession", session);
-result.put("weaponArmed", Weapons.armed(weaponWorker)); result.put("weaponRange", Weapons.range(weaponWorker));
-result.put("navigationDone", resident.getNavigation().isDone());
-result.put("navigationPathNodes", path == null ? 0 : path.getNodeCount());
-result.put("balk", resident.balk().map(Object::toString).orElse("NONE"));
-result.put("orderDestinationX", order == null ? -1 : order.getX());
-result.put("orderDestinationY", order == null ? -1 : order.getY());
-result.put("orderDestinationZ", order == null ? -1 : order.getZ());
-result.put("orderDestinationWorldX", orderWorld == null ? -1.0 : orderWorld.x);
-result.put("orderDestinationWorldY", orderWorld == null ? -1.0 : orderWorld.y);
-result.put("orderDestinationWorldZ", orderWorld == null ? -1.0 : orderWorld.z);
+result.put("swordCount", swordCount);
 result.put("workBlock", BuiltInRegistries.BLOCK.getKey(level.getBlockState(new BlockPos(
   (int)args.integer("workX"), (int)args.integer("workY"), (int)args.integer("workZ")))
   .getBlock()).toString());

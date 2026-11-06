@@ -26,18 +26,24 @@ public final class NativeCookingMatrix {
 
     public static List<TestFunction> recipes(String folder, int expected, int maxTicks,
                                              BiConsumer<GameTestHelper, ResourceLocation> execute) {
+        List<ResourceLocation> recipes = ids(id -> id.getNamespace().equals("kaleidoscope_cookery")
+            && id.getPath().startsWith(folder + "/"));
+        if (recipes.size() != expected) throw new IllegalStateException(folder + ": expected " + expected + " pinned native recipes, found " + recipes.size());
+        return recipes.stream().map(id -> new TestFunction("cookery_" + folder + "_matrix",
+            "folkways:matrix_" + id.getPath().replace('/', '_'), "folkways:empty", maxTicks, 0L, true,
+            helper -> execute.accept(helper, id))).toList();
+    }
+
+    // Every pinned recipe id the filter keeps, in manifest order.
+    public static List<ResourceLocation> ids(Predicate<ResourceLocation> wanted) {
         var stream = Objects.requireNonNull(NativeCookingMatrix.class.getResourceAsStream("/cookery-native-recipes.json"));
         try (var reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
-            var manifest = JsonParser.parseReader(reader).getAsJsonObject().getAsJsonArray("recipes");
-            List<ResourceLocation> recipes = new ArrayList<>();
-            manifest.forEach(value -> {
+            List<ResourceLocation> ids = new ArrayList<>();
+            JsonParser.parseReader(reader).getAsJsonObject().getAsJsonArray("recipes").forEach(value -> {
                 ResourceLocation id = ResourceLocation.parse(value.getAsString());
-                if (id.getNamespace().equals("kaleidoscope_cookery") && id.getPath().startsWith(folder + "/")) recipes.add(id);
+                if (wanted.test(id)) ids.add(id);
             });
-            if (recipes.size() != expected) throw new IllegalStateException(folder + ": expected " + expected + " pinned native recipes, found " + recipes.size());
-            return recipes.stream().map(id -> new TestFunction("cookery_" + folder + "_matrix",
-                "folkways:matrix_" + id.getPath().replace('/', '_'), "folkways:empty", maxTicks, 0L, true,
-                helper -> execute.accept(helper, id))).toList();
+            return ids;
         } catch (java.io.IOException broken) {
             throw new IllegalStateException("cannot read pinned Cookery recipe manifest", broken);
         }

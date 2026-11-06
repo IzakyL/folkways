@@ -11,7 +11,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
@@ -20,38 +19,19 @@ import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.common.Tags;
 
 public final class LoadoutRegistry {
-    public record Selection(ResourceLocation id, CompoundTag options) {
-        public Selection {
-            Objects.requireNonNull(id);
-            options = options.copy();
-        }
-
-        @Override
-        public CompoundTag options() {
-            return options.copy();
-        }
-
-        public Optional<LoadoutProvider> provider() {
-            return find(id);
-        }
-    }
-
-    public static final Selection MELEE = selection("melee");
-    public static final Selection BOW = selection("bow");
-    public static final Selection CROSSBOW = selection("crossbow");
     private static volatile Map<ResourceLocation, LoadoutProvider> providers = Map.of();
 
     static {
-        register(MELEE.id(), new Ordinary("melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS), false));
-        register(BOW.id(), new Ordinary("bow", ItemSpec.of(Items.BOW), true));
-        register(CROSSBOW.id(), new Ordinary("crossbow", ItemSpec.of(Items.CROSSBOW), true));
+        ordinary("melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS), false);
+        ordinary("bow", ItemSpec.of(Items.BOW), true);
+        ordinary("crossbow", ItemSpec.of(Items.CROSSBOW), true);
     }
 
     private LoadoutRegistry() {
     }
 
-    private static Selection selection(String path) {
-        return new Selection(ResourceLocation.fromNamespaceAndPath("folkways", path), new CompoundTag());
+    private static void ordinary(String name, ItemSpec weapon, boolean ranged) {
+        register(ResourceLocation.fromNamespaceAndPath("folkways", name), new Ordinary(name, weapon, ranged));
     }
 
     public static synchronized void register(ResourceLocation id, LoadoutProvider provider) {
@@ -85,26 +65,6 @@ public final class LoadoutRegistry {
         return List.copyOf(stacks);
     }
 
-    public static Component label(Selection selection) {
-        return selection
-            .provider()
-            .map(LoadoutProvider::label)
-            .orElseGet(() -> Component.translatable("folkways.combat.loadout.unavailable"));
-    }
-
-    /** Version one stored Java enum names. Preserve unknown extension IDs so absent mods lose no settings. */
-    public static Selection read(CompoundTag row) {
-        String value = row.getString("loadout");
-        ResourceLocation id =
-            switch (value) {
-                case "MELEE" -> MELEE.id();
-                case "BOW" -> BOW.id();
-                case "CROSSBOW" -> CROSSBOW.id();
-                default -> ResourceLocation.tryParse(value);
-            };
-        return id == null ? null : new Selection(id, row.getCompound("options"));
-    }
-
     private record Ordinary(String name, ItemSpec weapon, boolean ranged) implements LoadoutProvider {
         @Override
         public Component label() {
@@ -132,18 +92,8 @@ public final class LoadoutRegistry {
         }
 
         @Override
-        public List<LegacySupply> legacySupplies(CompoundTag options, ItemStack stack) {
-            return ranged ? List.of(new LegacySupply(ItemSpec.of(ItemTags.ARROWS), 8, 8)) : List.of();
-        }
-
-        @Override
         public Optional<ItemSpec> ammunition(ItemStack stack) {
             return ranged ? Optional.of(ItemSpec.of(ItemTags.ARROWS)) : Optional.empty();
-        }
-
-        @Override
-        public Optional<ItemSpec> legacyWeapon(CompoundTag options) {
-            return options.isEmpty() ? Optional.of(weapon) : Optional.empty();
         }
 
         @Override

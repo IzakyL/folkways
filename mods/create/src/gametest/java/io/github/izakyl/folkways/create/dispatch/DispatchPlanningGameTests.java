@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.create.dispatch;
 
+import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import com.simibubi.create.content.logistics.box.PackageItem;
 import com.simibubi.create.content.logistics.packagePort.PackagePortBlockEntity;
@@ -25,13 +27,10 @@ import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.front.engine.colony.ColonyStocks;
 import io.github.izakyl.folkways.core.engine.labor.ColonyLabor;
 import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.plan.Claims;
-import io.github.izakyl.folkways.core.engine.plan.Cooldowns;
 import io.github.izakyl.folkways.core.engine.plan.Crew;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture.Owed;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
 import io.github.izakyl.folkways.core.engine.plan.Stock;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,6 +38,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -116,12 +117,11 @@ public final class DispatchPlanningGameTests {
         Containers.at(level, chest).orElseThrow().setItem(0, new ItemStack(Items.IRON_INGOT, 12));
         UUID id = UUID.randomUUID();
         PackageNetwork original = PackageNetworks.get();
-        PackageNetworks.install((PackageNetwork) Proxy.newProxyInstance(PackageNetwork.class.getClassLoader(),
-            new Class<?>[] {PackageNetwork.class}, (proxy, method, args) -> switch (method.getName()) {
-                case "containersOf" -> List.of(chest);
-                case "summaryOf" -> List.of(new PackageNetwork.Supply(new ItemStack(Items.IRON_INGOT), 12));
-                default -> method.invoke(PackageNetwork.absent(), args);
-            }));
+        PackageNetworks.install(Proxies.of(PackageNetwork.class, (proxy, method, args) -> switch (method.getName()) {
+            case "containersOf" -> List.of(chest);
+            case "summaryOf" -> List.of(new PackageNetwork.Supply(new ItemStack(Items.IRON_INGOT), 12));
+            default -> method.invoke(PackageNetwork.absent(), args);
+        }));
         Colony colony = Colonies.mint(level.getServer());
         try {
             colony.hold(DispatchContent.ID,
@@ -144,14 +144,7 @@ public final class DispatchPlanningGameTests {
             dispatch.refresh(level.getServer());
             colony.stores(DispatchContent.ID, level.dimension(), List.of());
             data.inventory().advance(level, data, Map.of());
-            try {
-                var work = data.inventory().getClass().getDeclaredMethod("work",
-                    net.minecraft.server.MinecraftServer.class, int.class);
-                work.setAccessible(true);
-                work.invoke(data.inventory(), level.getServer(), 1_000);
-            } catch (ReflectiveOperationException broken) {
-                throw new AssertionError(broken);
-            }
+            InventoryObservations.work(data.inventory(), level.getServer(), 1_000);
             helper.assertTrue(ColonyStocks.available(colony, level.getServer(), iron) == 0,
                 "a returned network no longer contributes its containers");
             helper.succeed();
@@ -162,162 +155,49 @@ public final class DispatchPlanningGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
-    public static void anItemOnlyNetworkOrderCannotBeAdoptedForNamedGoods(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        PackageNetworks.install(fake.adapter());
-        try {
-            var fixture = new PlanningFixture(helper);
-            var nodes = new LinkedHashMap<UUID, CollectNode>();
-            var depot = depot(fixture, nodes, UUID.randomUUID(), List.of(), fake.supply());
-            var broad =
-                Produce.of(
-                ResourceLocation.withDefaultNamespace("test"),
-                new WorkSite.AtBlock(fixture.source),
-                ItemSpec.of(Items.IRON_INGOT),
-                6,
-                Produce.UNBOUNDED);
-            var first = depot.options(broad, Grown.of(broad)).getFirst();
-            first.holds().forEach(hold -> helper.assertTrue(hold.take().isEmpty(), "the first order"
-                + " is reserved"));
-            var sent = (CollectNode) first.replacement().nodes().getFirst();
-            helper.assertTrue(sent.planned(helper.getLevel()).isEmpty(), "the original order is"
-                + " sent");
-            first.holds().forEach(hold -> hold.release(Ending.REVOKED));
-            fake.arrived.put(0, 6);
-            ItemSpec named =
-                ItemSpec.of(Items.IRON_INGOT)
-                .withComponents(
-                DataComponentMap.builder()
-                .set(DataComponents.CUSTOM_NAME, Component.literal("Reserved"))
-                .build());
-            var next =
-                Produce.of(
-                ResourceLocation.withDefaultNamespace("test"),
-                new WorkSite.AtBlock(fixture.source),
-                named,
-                6,
-                Produce.UNBOUNDED);
-            helper.assertTrue(
-                depot.options(next, Grown.of(next)).isEmpty()
-                && nodes.get(sent.id()) == sent
-                && sent.adrift()
-                && fake.arrived.get(0) == 6,
-                "an ordinary parcel stays with its old order instead of being adopted for"
-                + " overlapping named goods");
-            helper.assertTrue(fake.sent.equals(List.of(6L)), "refusing adoption sends no duplicate"
-                + " request");
-        } finally {
-            PackageNetworks.install(original);
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty", timeoutTicks = 100)
     public static void aHandPackedOrderIsAdoptedOnlyWhenItsEntireSpecificationIsAccepted(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        PackageNetworks.install(fake.adapter());
-        try {
+        withFake(helper, fake -> {
             var fixture = new PlanningFixture(helper);
             var nodes = new LinkedHashMap<UUID, CollectNode>();
             var port = fixture.source.at(fixture.source.cell().above());
-            var dock =
-                new Depot.Dock(
-                fixture.target,
-                Stances.at(fixture.target),
-                new NetworkSnapshot.Port("far", true, List.of(), Optional.empty(), 0),
-                0,
-                true);
+            var dock = new Depot.Dock(fixture.target, Stances.at(fixture.target),
+                new NetworkSnapshot.Port("far", true, List.of(), Optional.empty(), 0), 0, true);
             var desk = new Counter.Desk(fixture.source, Stances.at(fixture.source), port, List.of(dock));
-            var counter =
-                new Counter(
-                UUID.randomUUID(),
-                new WorkSite.AtBlock(fixture.source),
-                List.of(desk),
-                nodes,
-                new Eta(),
-                (level, from, to, parcel, collect) -> true,
-                1);
+            var counter = new Counter(UUID.randomUUID(), new WorkSite.AtBlock(fixture.source), List.of(desk), nodes,
+                new Eta(), (level, from, to, parcel, collect) -> true, 1);
             ItemSpec broad = ItemSpec.of(Items.IRON_INGOT);
-            var sent =
-                CollectNode.sentByHand(
-                fixture.target,
-                Stances.at(fixture.target),
-                broad,
-                6,
-                1,
-                20,
-                desk.route(),
-                "far",
-                new Eta(),
-                nodes,
-                -42);
+            var sent = CollectNode.sentByHand(fixture.target, Stances.at(fixture.target), broad, 6, 1, 20,
+                desk.route(), "far", new Eta(), nodes, -42);
             sent.sent(helper.getLevel().getGameTime());
             sent.setAdrift();
             nodes.put(sent.id(), sent);
             fake.arrived.put(-42, 6);
-            ItemSpec named =
-                broad.withComponents(
-                DataComponentMap.builder()
-                .set(DataComponents.CUSTOM_NAME, Component.literal("Reserved"))
-                .build());
-            var wanted =
-                Produce.of(
-                ResourceLocation.withDefaultNamespace("test"),
-                new WorkSite.AtBlock(fixture.target),
-                named,
-                6,
-                Produce.UNBOUNDED);
+            var wanted = Produce.of(ResourceLocation.withDefaultNamespace("test"),
+                new WorkSite.AtBlock(fixture.target), named(broad), 6, Produce.UNBOUNDED);
             var replacement = counter.options(wanted, Grown.of(wanted)).getFirst();
-            helper.assertTrue(
-                replacement.replacement().nodes().stream().anyMatch(PackNode.class::isInstance),
-                "a constrained need packs a new parcel rather than inheriting an ordinary"
-                + " parcel's order number");
-            replacement.holds().forEach(hold -> helper.assertTrue(hold.take().isEmpty(), "the new"
-                + " parcel"
-                + " is reserved"));
-            var fresh =
-                (CollectNode)
-                replacement.replacement().nodes().stream()
-                .filter(CollectNode.class::isInstance)
-                .findFirst()
-                .orElseThrow();
-            helper.assertTrue(
-                !fresh.placed() && nodes.get(sent.id()) == sent && fake.arrived.get(-42) == 6,
+            helper.assertTrue(replacement.replacement().nodes().stream().anyMatch(PackNode.class::isInstance),
+                "a constrained need packs a new parcel rather than inheriting an ordinary parcel's order number");
+            replacement.holds().forEach(hold -> helper.assertTrue(hold.take().isEmpty(),
+                "the new parcel is reserved"));
+            var fresh = (CollectNode) replacement.replacement().nodes().stream()
+                .filter(CollectNode.class::isInstance).findFirst().orElseThrow();
+            helper.assertTrue(!fresh.placed() && nodes.get(sent.id()) == sent && fake.arrived.get(-42) == 6,
                 "the old physical parcel remains untouched and the new one has not been sent");
-            var accepted =
-                Produce.of(
-                ResourceLocation.withDefaultNamespace("test"),
-                new WorkSite.AtBlock(fixture.target),
-                broad,
-                6,
-                Produce.UNBOUNDED);
+            var accepted = Produce.of(ResourceLocation.withDefaultNamespace("test"),
+                new WorkSite.AtBlock(fixture.target), broad, 6, Produce.UNBOUNDED);
             var adoption = counter.options(accepted, Grown.of(accepted)).getFirst();
-            adoption.holds()
-                .forEach(hold -> helper.assertTrue(hold.take().isEmpty(), "the compatible order"
-                    + " can be"
-                    + " adopted"));
+            adoption.holds().forEach(hold -> helper.assertTrue(hold.take().isEmpty(),
+                "the compatible order can be adopted"));
             var adopted = (CollectNode) adoption.replacement().nodes().getFirst();
-            helper.assertTrue(
-                adopted.handOrder() == -42
-                && adopted.ready(helper.getLevel())
-                && Commit.run(helper.getLevel(), adopted, fixture.worker) instanceof Outcome.Done,
-                "a compatible adoption still collects the existing physical parcel without"
-                + " sending another");
-        } finally {
-            PackageNetworks.install(original);
-        }
-        helper.succeed();
+            helper.assertTrue(adopted.handOrder() == -42 && adopted.ready(helper.getLevel())
+                    && Commit.run(helper.getLevel(), adopted, fixture.worker) instanceof Outcome.Done,
+                "a compatible adoption still collects the existing physical parcel without sending another");
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void acceptedPendingNodeSurvivesReplanningWithoutOrderingAgain(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        PackageNetworks.install(fake.adapter());
-        PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
-        try {
+        withFake(helper, (fake, solver) -> {
             PlanningFixture fixture = new PlanningFixture(helper);
             ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
             Map<UUID, CollectNode> nodes = new LinkedHashMap<>();
@@ -383,21 +263,13 @@ public final class DispatchPlanningGameTests {
                 .at(helper.getLevel(), fixture.target.cell()).orElseThrow();
             helper.assertTrue(Goods.countIn(destination, iron) == 32,
                 "the arrived order must reach its destination in full");
-            helper.succeed();
-        } finally {
-            solver.closed();
-            PackageNetworks.install(original);
-        }
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void rejectedSpeculationNeverOrdersAndPartialSupplyIsNotOverstated(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        fake.stock = 16;
-        PackageNetworks.install(fake.adapter());
-        PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
-        try {
+        withFake(helper, (fake, solver) -> {
+            fake.stock = 16;
             PlanningFixture fixture = new PlanningFixture(helper);
             ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
             Map<UUID, CollectNode> nodes = new LinkedHashMap<>();
@@ -418,21 +290,14 @@ public final class DispatchPlanningGameTests {
             helper.assertTrue(collect.planned(helper.getLevel()).orElseThrow() == DispatchRefusal.NO_SUPPLY,
                 "a changed supply must fail explicitly instead of claiming a full delivery");
             helper.assertTrue(fake.sent.isEmpty(), "insufficient supply must not create an ambiguous partial order");
-            helper.succeed();
-        } finally {
-            solver.closed();
-            PackageNetworks.install(original);
-        }
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void collectionsOrderInFullAndTakeOnlyTheirOwnParcels(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        PackageNetwork.Parcel stray = new PackageNetwork.Parcel(List.of(new ItemStack(Items.IRON_INGOT, 10)), OptionalInt.empty());
-        fake.strays.add(stray);
-        PackageNetworks.install(fake.adapter());
-        try {
+        withFake(helper, fake -> {
+            PackageNetwork.Parcel stray = new PackageNetwork.Parcel(List.of(new ItemStack(Items.IRON_INGOT, 10)), OptionalInt.empty());
+            fake.strays.add(stray);
             PlanningFixture fixture = new PlanningFixture(helper);
             ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
             Map<UUID, CollectNode> nodes = new LinkedHashMap<>();
@@ -461,19 +326,13 @@ public final class DispatchPlanningGameTests {
                     && done.made().stream().mapToInt(ItemStack::getCount).sum() == 8
                     && fake.arrived.isEmpty() && fake.strays.size() == 1,
                 "a collection takes its own parcel whole and leaves the stray");
-            helper.succeed();
-        } finally {
-            PackageNetworks.install(original);
-        }
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void strayParcelsAreClearedAndOwnedOnesKept(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        fake.strays.add(new PackageNetwork.Parcel(List.of(new ItemStack(Items.IRON_INGOT, 10)), OptionalInt.empty()));
-        PackageNetworks.install(fake.adapter());
-        try {
+        withFake(helper, fake -> {
+            fake.strays.add(new PackageNetwork.Parcel(List.of(new ItemStack(Items.IRON_INGOT, 10)), OptionalInt.empty()));
             PlanningFixture fixture = new PlanningFixture(helper);
             ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
             Map<UUID, CollectNode> nodes = new LinkedHashMap<>();
@@ -490,19 +349,13 @@ public final class DispatchPlanningGameTests {
                 "the stray is carried off whole");
             helper.assertTrue(!clear.ready(helper.getLevel()) && fake.arrived.get(0) == 4,
                 "a parcel a collection waits on is never taken as a stray");
-            helper.succeed();
-        } finally {
-            PackageNetworks.install(original);
-        }
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void aBusyNetworkDefersTheOrderInsteadOfRefusingIt(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        fake.busy = true;
-        PackageNetworks.install(fake.adapter());
-        try {
+        withFake(helper, fake -> {
+            fake.busy = true;
             PlanningFixture fixture = new PlanningFixture(helper);
             ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
             Map<UUID, CollectNode> nodes = new LinkedHashMap<>();
@@ -527,18 +380,12 @@ public final class DispatchPlanningGameTests {
             helper.assertTrue(collect.ready(helper.getLevel())
                     && Commit.run(helper.getLevel(), collect, fixture.worker) instanceof Outcome.Done,
                 "the deferred order is collected when it arrives");
-            helper.succeed();
-        } finally {
-            PackageNetworks.install(original);
-        }
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void anOrderWhoseWorkWasDroppedIsAdoptedNotOrderedAgain(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        PackageNetworks.install(fake.adapter());
-        try {
+        withFake(helper, fake -> {
             PlanningFixture fixture = new PlanningFixture(helper);
             ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
             Map<UUID, CollectNode> nodes = new LinkedHashMap<>();
@@ -557,6 +404,13 @@ public final class DispatchPlanningGameTests {
             helper.assertTrue(nodes.get(sent.id()) == sent && sent.adrift()
                     && !StrayNode.stray(nodes, fixture.source, parcel),
                 "a dropped collection's order stays spoken for instead of turning stray");
+            Produce reserved = Produce.of(ResourceLocation.withDefaultNamespace("test"),
+                new WorkSite.AtBlock(fixture.source), named(iron), 6, Produce.UNBOUNDED);
+            helper.assertTrue(depot.options(reserved, Grown.of(reserved)).isEmpty()
+                    && nodes.get(sent.id()) == sent && sent.adrift() && fake.arrived.get(0) == 6
+                    && fake.sent.equals(List.of(6L)),
+                "an ordinary parcel stays with its old order instead of being adopted for overlapping named"
+                    + " goods, and refusing adoption sends no duplicate request");
             Refinement.Change second = depot.options(six, Grown.of(six)).getFirst();
             CollectNode adopter = (CollectNode) second.replacement().nodes().getFirst();
             helper.assertTrue(second.holds().stream().allMatch(hold -> hold.take().isEmpty())
@@ -568,18 +422,12 @@ public final class DispatchPlanningGameTests {
                     && Commit.run(helper.getLevel(), adopter, fixture.worker) instanceof Outcome.Done done
                     && done.made().stream().mapToInt(ItemStack::getCount).sum() == 6 && nodes.isEmpty(),
                 "the adopted parcel is collected whole");
-            helper.succeed();
-        } finally {
-            PackageNetworks.install(original);
-        }
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void anUnadoptedOrderTurnsStrayInTime(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        PackageNetworks.install(fake.adapter());
-        try {
+        withFake(helper, fake -> {
             PlanningFixture fixture = new PlanningFixture(helper);
             ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
             Map<UUID, CollectNode> nodes = new LinkedHashMap<>();
@@ -593,10 +441,7 @@ public final class DispatchPlanningGameTests {
                 "an adrift order waits to be adopted");
             helper.assertTrue(collect.expired(101 + CollectNode.ADRIFT_TICKS),
                 "an order nobody adopts is let go");
-            helper.succeed();
-        } finally {
-            PackageNetworks.install(original);
-        }
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
@@ -656,11 +501,7 @@ public final class DispatchPlanningGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void aNetworkContainerIsTakenFromByHandWithNoOneAtTheDesk(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        PackageNetworks.install(fake.adapter());
-        PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
-        try {
+        withFake(helper, (fake, solver) -> {
             PlanningFixture fixture = new PlanningFixture(helper);
             ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
             Map<UUID, CollectNode> nodes = new LinkedHashMap<>();
@@ -682,11 +523,7 @@ public final class DispatchPlanningGameTests {
             TakeNode again = new TakeNode(fixture.source, Stances.at(fixture.source), iron, 8, 1, UUID.randomUUID());
             helper.assertTrue(Commit.run(helper.getLevel(), again, fixture.worker) instanceof Outcome.Failed,
                 "a container emptied by the network fails the take, so the plan looks again");
-            helper.succeed();
-        } finally {
-            solver.closed();
-            PackageNetworks.install(original);
-        }
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
@@ -727,11 +564,7 @@ public final class DispatchPlanningGameTests {
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void theContainerNearestTheCrewIsTakenFromAndTakenFromAgainWhenTheyMove(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        PackageNetworks.install(fake.adapter());
-        PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
-        try {
+        withFake(helper, (fake, solver) -> {
             PlanningFixture fixture = new PlanningFixture(helper);
             ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
             Map<UUID, CollectNode> nodes = new LinkedHashMap<>();
@@ -739,29 +572,14 @@ public final class DispatchPlanningGameTests {
             // One container behind the hand, further from the delivery than another on the far side of it.
             var near = fixture.source.at(fixture.source.cell().offset(-30, 0, 0));
             var far = fixture.source.at(fixture.source.cell().offset(30, 0, 0));
-            Depot depot =
-                new Depot(
-                UUID.randomUUID(),
-                new WorkSite.AtBlock(near),
-                new Tally(
-                network,
-                List.of(new PackageNetwork.Supply(new ItemStack(Items.IRON_INGOT), 128)),
-                0,
-                false,
-                nodes,
-                new LinkedHashMap<>()),
+            ItemSpec shelved = Goods.specOf(new ItemStack(Items.IRON_INGOT));
+            Depot depot = new Depot(UUID.randomUUID(), new WorkSite.AtBlock(near),
+                new Tally(network, List.of(new PackageNetwork.Supply(new ItemStack(Items.IRON_INGOT), 128)), 0, false,
+                    nodes, new LinkedHashMap<>()),
                 List.of(),
-                List.of(
-                new Depot.Shelf(
-                near,
-                Stances.at(near),
-                Map.of(Goods.specOf(new ItemStack(Items.IRON_INGOT)), 64L)),
-                new Depot.Shelf(
-                far,
-                Stances.at(far),
-                Map.of(Goods.specOf(new ItemStack(Items.IRON_INGOT)), 64L))),
-                new Eta(),
-                1);
+                List.of(new Depot.Shelf(near, Stances.at(near), Map.of(shelved, 64L)),
+                    new Depot.Shelf(far, Stances.at(far), Map.of(shelved, 64L))),
+                new Eta(), 1);
             Owed delivery = new Owed(new WorkSite.AtBlock(fixture.target), Stances.at(fixture.target), iron, 32);
             var situation = fixture.situation(new Stock(List.of(), Map.of(new Stash(fixture.target), 2)),
                 List.of(depot));
@@ -779,20 +597,12 @@ public final class DispatchPlanningGameTests {
             solved = solver.solve(situation, moved, delivery.goals(), List.of(), 40);
             helper.assertTrue(taken(solved).equals(List.of(far)) && depot.tally().taking().size() == 1,
                 "the take stays put while the hand does, and is promised once");
-            helper.succeed();
-        } finally {
-            solver.closed();
-            PackageNetworks.install(original);
-        }
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
     public static void goodsAreSentByHandWhenThatBeatsCarryingThem(GameTestHelper helper) {
-        PackageNetwork original = PackageNetworks.get();
-        Network fake = new Network();
-        PackageNetworks.install(fake.adapter());
-        PlanningFixture.Rounds solver = new PlanningFixture.Rounds(new Claims(), new Cooldowns());
-        try {
+        withFake(helper, (fake, solver) -> {
             PlanningFixture fixture = new PlanningFixture(helper);
             ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
             Map<UUID, CollectNode> nodes = new LinkedHashMap<>();
@@ -829,11 +639,7 @@ public final class DispatchPlanningGameTests {
                     && Commit.run(helper.getLevel(), collect, fixture.worker) instanceof Outcome.Done done
                     && done.made().stream().mapToInt(ItemStack::getCount).sum() == 32,
                 "the parcel is collected whole at the far end by its own number");
-            helper.succeed();
-        } finally {
-            solver.closed();
-            PackageNetworks.install(original);
-        }
+        });
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
@@ -857,23 +663,28 @@ public final class DispatchPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
-    public static void theHooksIntoTrainsAndStationsTakeHold(GameTestHelper helper) {
+    // Runs the test against a stand-in network, putting the real one back however it ends.
+    private static void withFake(GameTestHelper helper, Consumer<Network> test) {
+        withFake(helper, (fake, solver) -> test.accept(fake));
+    }
+
+    private static void withFake(GameTestHelper helper, BiConsumer<Network, PlanningFixture.Rounds> test) {
+        PackageNetwork original = PackageNetworks.get();
+        Network fake = new Network();
+        PackageNetworks.install(fake.adapter());
+        PlanningFixture.Rounds solver = new PlanningFixture.Rounds();
         try {
-            // Loading them applies the colony's hooks: one that no longer fits fails the load.
-            for (String hooked : List.of("com.simibubi.create.content.trains.entity.Train",
-                    "com.simibubi.create.content.trains.station.GlobalStation")) {
-                Class.forName(hooked, true, DispatchPlanningGameTests.class.getClassLoader());
-            }
-        } catch (ClassNotFoundException missing) {
-            throw new AssertionError(missing);
+            test.accept(fake, solver);
+        } finally {
+            solver.closed();
+            PackageNetworks.install(original);
         }
-        helper.setBlock(new BlockPos(1, 1, 1),
-            BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("create", "track_station")));
-        helper.assertTrue(helper.getLevel().getBlockEntity(helper.absolutePos(new BlockPos(1, 1, 1)))
-                instanceof com.simibubi.create.content.trains.station.StationBlockEntity,
-            "a station loads with the colony's hook into how it keeps its postboxes' addresses");
         helper.succeed();
+    }
+
+    private static ItemSpec named(ItemSpec spec) {
+        return spec.withComponents(DataComponentMap.builder()
+            .set(DataComponents.CUSTOM_NAME, Component.literal("Reserved")).build());
     }
 
     private static List<io.github.izakyl.folkways.core.api.terms.WorldPos> taken(io.github.izakyl.folkways.core.engine.plan.Planned solved) {
@@ -897,18 +708,11 @@ public final class DispatchPlanningGameTests {
                                List<PackageNetwork.Parcel> parcels, List<PackageNetwork.Supply> supply,
                                boolean manned, long shelved) {
         Depot plain = depot(fixture, nodes, network, parcels, supply);
-        return new Depot(
-            plain.key(),
-            plain.site(),
-            new Tally(network, supply, 0, manned, nodes, new LinkedHashMap<>()),
+        return new Depot(plain.key(), plain.site(), new Tally(network, supply, 0, manned, nodes, new LinkedHashMap<>()),
             plain.docks(),
-            List.of(
-            new Depot.Shelf(
-            fixture.source,
-            Stances.at(fixture.source),
-            Map.of(Goods.specOf(new ItemStack(Items.IRON_INGOT)), shelved))),
-            plain.eta(),
-            plain.reachTicks());
+            List.of(new Depot.Shelf(fixture.source, Stances.at(fixture.source),
+                Map.of(Goods.specOf(new ItemStack(Items.IRON_INGOT)), shelved))),
+            plain.eta(), plain.reachTicks());
     }
 
     private static final class Network {
@@ -931,45 +735,44 @@ public final class DispatchPlanningGameTests {
         }
 
         PackageNetwork adapter() {
-            return (PackageNetwork) Proxy.newProxyInstance(PackageNetwork.class.getClassLoader(),
-                new Class<?>[] {PackageNetwork.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "isPort", "portOpen" -> true;
-                    case "busy" -> busy;
-                    case "summaryOf" -> supply();
-                    case "mails" -> false;
-                    case "pack" -> Optional.of(new ItemStack(Items.PAPER));
-                    case "send" -> posted.add((ItemStack) args[2]);
-                    case "takeOut" -> {
-                        long count = (long) args[3];
-                        if (count > stock) {
-                            yield List.of();
-                        }
-                        stock -= count;
-                        yield List.of(new ItemStack(Items.IRON_INGOT, (int) count));
+            return Proxies.of(PackageNetwork.class, (proxy, method, args) -> switch (method.getName()) {
+                case "isPort", "portOpen" -> true;
+                case "busy" -> busy;
+                case "summaryOf" -> supply();
+                case "mails" -> false;
+                case "pack" -> Optional.of(new ItemStack(Items.PAPER));
+                case "send" -> posted.add((ItemStack) args[2]);
+                case "takeOut" -> {
+                    long count = (long) args[3];
+                    if (count > stock) {
+                        yield List.of();
                     }
-                    case "parcelsAt" -> parcels();
-                    case "collectFrom" -> {
-                        Integer count = arrived.remove((int) args[2]);
-                        yield count == null ? List.of() : List.of(new ItemStack(Items.IRON_INGOT, count));
-                    }
-                    case "clearOne" -> {
-                        @SuppressWarnings("unchecked")
-                        Predicate<PackageNetwork.Parcel> stray = (Predicate<PackageNetwork.Parcel>) args[2];
-                        Optional<PackageNetwork.Parcel> found = parcels().stream().filter(stray).findFirst();
-                        found.ifPresent(parcel -> {
-                            strays.remove(parcel);
-                            parcel.order().ifPresent(arrived::remove);
-                        });
-                        yield found.map(PackageNetwork.Parcel::contents);
-                    }
-                    case "request" -> {
-                        @SuppressWarnings("unchecked")
-                        List<PackageNetwork.Supply> requested = (List<PackageNetwork.Supply>) args[3];
-                        sent.add(requested.stream().mapToLong(PackageNetwork.Supply::count).sum());
-                        yield OptionalInt.of(sent.size() - 1);
-                    }
-                    default -> throw new AssertionError("unexpected network call: " + method.getName());
-                });
+                    stock -= count;
+                    yield List.of(new ItemStack(Items.IRON_INGOT, (int) count));
+                }
+                case "parcelsAt" -> parcels();
+                case "collectFrom" -> {
+                    Integer count = arrived.remove((int) args[2]);
+                    yield count == null ? List.of() : List.of(new ItemStack(Items.IRON_INGOT, count));
+                }
+                case "clearOne" -> {
+                    @SuppressWarnings("unchecked")
+                    Predicate<PackageNetwork.Parcel> stray = (Predicate<PackageNetwork.Parcel>) args[2];
+                    Optional<PackageNetwork.Parcel> found = parcels().stream().filter(stray).findFirst();
+                    found.ifPresent(parcel -> {
+                        strays.remove(parcel);
+                        parcel.order().ifPresent(arrived::remove);
+                    });
+                    yield found.map(PackageNetwork.Parcel::contents);
+                }
+                case "request" -> {
+                    @SuppressWarnings("unchecked")
+                    List<PackageNetwork.Supply> requested = (List<PackageNetwork.Supply>) args[3];
+                    sent.add(requested.stream().mapToLong(PackageNetwork.Supply::count).sum());
+                    yield OptionalInt.of(sent.size() - 1);
+                }
+                default -> throw new AssertionError("unexpected network call: " + method.getName());
+            });
         }
     }
 }

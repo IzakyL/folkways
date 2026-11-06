@@ -60,6 +60,10 @@ public final class KitchenOperatingGameTests {
                     "blocked handle cannot fall back to a remote or opposite-side work position");
                 level.setBlockAndUpdate(feet, Blocks.AIR.defaultBlockState());
                 level.setBlockAndUpdate(feet.above(), Blocks.AIR.defaultBlockState());
+                level.setBlockAndUpdate(feet.below(), Blocks.AIR.defaultBlockState());
+                helper.assertTrue(station.stances(level, at).isEmpty(),
+                    "an unsupported handle approach cannot borrow any of the other reachable floors: " + block + " / " + facing);
+                level.setBlockAndUpdate(feet.below(), Blocks.STONE.defaultBlockState());
             }
         }
         helper.succeed();
