@@ -193,7 +193,7 @@ final class NativeWeaponSession implements WeaponSession {
             switch (kind) {
                 case MELEE -> {
                     body.swing(InteractionHand.MAIN_HAND);
-                    if (body.doHurtTarget(target)
+                    if (MountedMelee.hit(body, target)
                         && !actual.isEmpty()
                         && actual.getItem().hurtEnemy(actual, target, body)) {
                         actual.getItem().postHurtEnemy(actual, target, body);
@@ -272,7 +272,7 @@ final class NativeWeaponSession implements WeaponSession {
             && (kind == Kind.MELEE || FireSafety.clear(body, foe))
             && body.distanceTo(foe) <= LoadoutRegistry.using(weapon())
             .map(provider -> provider.range(weapon())).orElseGet(adapter::range)
-            + (kind == Kind.MELEE ? foe.getBbWidth() : 0);
+            + (kind == Kind.MELEE ? foe.getBbWidth() + MountedMelee.reach(body) : 0);
     }
 
     private boolean valid() {

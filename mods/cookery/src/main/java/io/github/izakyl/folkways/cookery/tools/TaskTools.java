@@ -113,7 +113,6 @@ public final class TaskTools {
 
             public boolean alike() { return original.alike(); }
 
-            public boolean carries() { return original.carries(); }
 
             public ResourceLocation id() { return original.id(); }
 

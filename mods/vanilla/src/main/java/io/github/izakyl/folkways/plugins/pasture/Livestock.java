@@ -17,7 +17,10 @@ record Livestock(ResourceLocation type, ItemSpec feed, Optional<Item> lays) {
         COW,
         of(EntityType.SHEEP, Items.WHEAT),
         of(EntityType.PIG, Items.CARROT),
-        of(EntityType.CHICKEN, Items.WHEAT_SEEDS, Items.EGG));
+        of(EntityType.CHICKEN, Items.WHEAT_SEEDS, Items.EGG),
+        // Kept to draw carts: residents do not tame them, so a pen starts from horses a player tamed; foals bred here
+        // are born tame.
+        of(EntityType.HORSE, Items.GOLDEN_CARROT));
 
     static Optional<Livestock> named(ResourceLocation type) {
         for (Livestock kind : ALL) {

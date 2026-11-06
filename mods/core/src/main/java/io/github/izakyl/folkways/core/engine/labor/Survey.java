@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.engine.labor;
 
+import io.github.izakyl.folkways.core.api.transport.TransportPublication;
 import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
 import io.github.izakyl.folkways.core.api.inventory.SlotSnapshot;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
@@ -27,6 +28,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -57,7 +60,8 @@ final class Survey {
     }
 
     private static boolean sameHand(Crew.Hand one, Crew.Hand other) {
-        return one.at().realm().equals(other.at().realm()) && one.packCells() == other.packCells()
+        return one.who().routeKind().equals(other.who().routeKind())
+            && one.at().realm().equals(other.at().realm()) && one.packCells() == other.packCells()
             && one.packCapacity() == other.packCapacity() && one.pace() == other.pace()
             && one.licences().equals(other.licences()) && sameStacks(one.tools(), other.tools())
             && sameStacks(one.cargo(), other.cargo()) && one.toolRules().equals(other.toolRules());
@@ -66,6 +70,10 @@ final class Survey {
     private ResourceKey<Level> dimension;
     private InventorySnapshot inventory;
     private InventorySnapshot.Version inventoryRead;
+    private Supplier<TransportPublication> transports =
+        () -> new TransportPublication(0, List.of());
+    private LongSupplier transportVersion = () -> 0;
+    private long at;
     private boolean waitingForInventory;
     private final Map<UUID, Crew.Hand> hands = new LinkedHashMap<>();
     private Set<UUID> reserved = Set.of();
@@ -121,10 +129,16 @@ final class Survey {
 
     boolean answer(ServerLevel level, ColonyData colony, Map<UUID, Body> present, BiConsumer<Body, Boolean> seen) {
         dimension = level.dimension();
+        transports = () -> colony.works().transports().in(level.dimension());
+        transportVersion = colony.works()::transportVersion;
+        at = level.getGameTime();
         var toolRules = KitRules.snapshot(colony.works());
         suppliesRead.keySet().retainAll(present.keySet());
         for (Body body : present.values()) {
             Crew.Hand prior = hands.get(body.id());
+            if (prior != null && !prior.who().routeKind().equals(body.routeKind())) {
+                handsOf.add(body.id());
+            }
             if (prior != null && !prior.toolRules().equals(toolRules)) {
                 handsOf.add(body.id());
             }
@@ -225,7 +239,7 @@ final class Survey {
 
     Known known(Ways ways, List<Workshop> workshops) {
         gather();
-        return new Known(new Situation(ways, stock, workshops, stands),
+        return new Known(new Situation(ways, stock, workshops, stands, transports, transportVersion, at),
             List.copyOf(hands.values()));
     }
 

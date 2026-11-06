@@ -135,7 +135,7 @@ final class ExtinguishNode implements Node {
         if (!destinations.isEmpty() && !Reach.standingIn(who.body(), new Stances.Cells(destinations))) {
             if (walking == null) {
                 var body = Bodies.of(who.body()).orElseThrow();
-                walking = body.kind().locomotion().along(1, DamageControlRefusal.NO_REACH);
+                walking = body.locomotion().along(1, DamageControlRefusal.NO_REACH);
                 walking.setOut(level, who.body(), destinations);
             }
             if (walking.step(level, who.body(), destinations) instanceof Going.Failed failure) {

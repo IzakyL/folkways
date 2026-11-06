@@ -119,7 +119,7 @@ final class PatrolPresence implements Facing {
 
     PatrolPresence(Colony colony) {
         this.colony = colony;
-        this.supplies = new PatrolSupplies(colony);
+        this.supplies = new PatrolSupplies(colony, () -> offerPending.set(true));
         this.teams = new PatrolTeams(colony, this);
         this.asking = new Asking(colony, PatrolContent.ID, this::ended);
         this.cron = Cadence.claim(colony, PERIOD);
@@ -159,11 +159,12 @@ final class PatrolPresence implements Facing {
 
     // A lap under way is offered as it was set out; a new one sets out once any stop on the route
     // has half its ward run, so the route is walked again before a ward on it lapses.
+    // Patrollers' supplies are asked along with the laps.
     public List<Grown> goals(ColonyView view) {
         ServerLevel level = view.level();
         long now = level.getGameTime();
         long due = FolkwaysVanillaConfig.patrolWardTicks() / 2;
-        List<Grown> rounds = new ArrayList<>();
+        List<Grown> rounds = new ArrayList<>(supplies.goals(view));
         routes.forEach((route, stops) -> {
             if (PatrolStaffing.of(colony).configured(route)) {
                 return;
@@ -268,6 +269,7 @@ final class PatrolPresence implements Facing {
     }
 
     private void ended(UUID node, Ending how) {
+        supplies.ended(node);
         laps.replaceAll((route, lap) -> lap.open().contains(node) ? lap.without(node) : lap);
         offerPending.set(true);
     }
@@ -296,13 +298,12 @@ final class PatrolPresence implements Facing {
         DefenseControl control = DefenseControl.of(colony);
         Optional<? extends DefenseControl.Order> order = control.current(who.resident().id());
         boolean failedWaiting = order.isEmpty() && control.failedWaiting(who.resident().id());
-        List<Urge> supply =
-            supplies.urges(
+        supplies.resupply(
             who,
             order,
             lastWatch.getOrDefault(who.resident().id(), Long.MIN_VALUE),
             failedWaiting ? Long.MIN_VALUE : dutyUntil.getOrDefault(who.resident().id(), Long.MIN_VALUE));
-        List<Urge> idle = new ArrayList<>(supply);
+        List<Urge> idle = new ArrayList<>();
         idle.addAll(teams.urges(who));
         if (SentryPosts.of(colony).posting(level, resident) && order.isEmpty() && !failedWaiting) {
             return idle;
@@ -430,7 +431,7 @@ final class PatrolPresence implements Facing {
             return candidate != null && level.getGameTime() - candidate.tick() <= 40
                 && Weapons.armed(candidate.worker())
                 && fighting.getOrDefault(id, 0L) < level.getGameTime()
-                && supplies.status(id).state() != PatrolSupplies.State.FETCHING;
+                && !supplies.underway(id);
         }));
         DefenseControl control = DefenseControl.of(colony);
         double radius = FolkwaysVanillaConfig.sentryCallRadius();
@@ -544,7 +545,7 @@ final class PatrolPresence implements Facing {
     }
 
     public void closed(Closing why) {
-        supplies.close();
+        supplies.close(why);
         routes = Map.of();
         laps.clear();
         lastWatch.clear();

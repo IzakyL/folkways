@@ -163,6 +163,39 @@ public final class TravelPlanningGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
+    public static void sharedRoutesKeepCurrentLocomotionsSeparate(GameTestHelper helper) {
+        WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
+        ResourceLocation walking = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
+        ResourceLocation flying = ResourceLocation.fromNamespaceAndPath("folkways", "flying_test");
+        Resident walker = new Resident(UUID.randomUUID(), walking);
+        Resident flyer = new Resident(UUID.randomUUID(), walking, flying);
+        Crew crew = new Crew(List.of(
+            new Crew.Hand(walker, at, 6, 6, 1, List.of(), List.of(), Optional.empty()),
+            new Crew.Hand(flyer, at, 6, 6, 1, List.of(), List.of(), Optional.empty())));
+        Vertex first = node(at, walking);
+        Vertex second = node(at, walking);
+        WeaveDelta weave = Shown.delta(Map.of(first.id(), first, second.id(), second),
+            List.of(new Before(first.id(), second.id())), List.of());
+        Map<ResourceLocation, Integer> queries = new LinkedHashMap<>();
+        Ways ways = new Ways() {
+            public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
+                queries.merge(who.routeKind(), 1, Integer::sum);
+                return who.routeKind().equals(flying) ? Faring.yes(Journey.afoot(1, goals)) : Faring.NO;
+            }
+            public Faring anyoneReaches(Set<WorldPos> goals) {
+                throw new AssertionError("unexpected colony query");
+            }
+        };
+        Schedule result = Shown.schedule(new Tours(), weave, crew, ways, 0, true);
+        helper.assertTrue(queries.equals(Map.of(walking, 1, flying, 1)),
+            "each current locomotion must query once even at identical origins and destinations: " + queries);
+        helper.assertTrue(result.unassigned().isEmpty() && result.tours().size() == 1
+            && result.tours().get(flyer.id()).nodes().equals(List.of(first.id(), second.id())),
+            "one locomotion's denied route must not prevent another kind from taking the work");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
     public static void travelReuseFollowsCursorAndStandingRoutesAskNothing(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos away = at.at(at.cell().offset(8, 0, 0));

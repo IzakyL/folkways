@@ -645,3 +645,41 @@ tectonic = { target = ["server", "client"] }
 
 folkways_chiselsandbits = { target = ["server", "client"] }
 chiselsandbits = { target = ["server", "client"] }
+
+[mods.folkways_carts]
+path = "build/libs/folkways-carts-*.jar"
+target = []
+
+[mods.astikorcartsredux]
+url = "https://cdn.modrinth.com/data/mnLFouB0/versions/JtPCk233/astikorcartsredux-1.2.4.jar"
+sha512 = "d6ecf33be5065cffdd449167396f538bd89bfd8a38d86957bab1551869aebd1c0263504eb06e27d3adb9d7f25698fe9f61bd64f1490c0f6fb8d1c62fb9f5aa25"
+target = []
+
+[profile.carts.mods]
+folkways_carts = { target = ["server", "client"] }
+astikorcartsredux = { target = ["server", "client"] }
+
+# The promo's flat land, light, camera and sound with the cart lines installed, for the mounted promo (riders, mounted
+# combat and horse-drawn supply carts).
+[profile.promo-mounted.neoforge]
+jvm_args = ["-Xmx4G"]
+
+[profile.promo-mounted.neoforge.server]
+world = "vanilla"
+properties = { "level-seed" = "folkways-promo", "view-distance" = "12", "spawn-monsters" = "false", "max-tick-time" = "-1", "entity-broadcast-range-percentage" = "300", "level-type" = "minecraft:flat", "generator-settings" = '{"biome":"minecraft:plains","features":false,"lakes":false,"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":3},{"block":"minecraft:grass_block","height":1}],"structure_overrides":[]}' }
+
+[profile.promo-mounted.neoforge.client]
+game_args = ["--width", "1920", "--height", "1080"]
+options = { lang = "zh_cn", guiScale = "2", overrideWidth = "1920", overrideHeight = "1080", maxFps = "260", renderDistance = "12", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "4.0", biomeBlendRadius = "3", ao = "true", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", fovEffectScale = "0.0", soundCategory_music = "0.0", soundCategory_record = "0.0", soundCategory_ambient = "0.0" }
+
+[profile.promo-mounted.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+[profile.promo-mounted.mods]
+sodium = { target = ["client"] }
+iris = { target = ["client"] }
+folkways_rts = { target = ["server", "client"] }
+folkways_carts = { target = ["server", "client"] }
+astikorcartsredux = { target = ["server", "client"] }

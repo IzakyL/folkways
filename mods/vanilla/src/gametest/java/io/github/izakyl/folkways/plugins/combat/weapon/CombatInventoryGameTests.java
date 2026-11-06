@@ -86,7 +86,7 @@ public final class CombatInventoryGameTests {
             for (int pass = 0; pass < 16; pass++) {
                 ProfileShortages.read(colony, profile, level.getServer());
                 supplies.keeps(body);
-                supplies.urges(worker, Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
+                supplies.resupply(worker, Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
                 Weapons.ranged(worker);
                 ObservationGear.assigned(body);
             }

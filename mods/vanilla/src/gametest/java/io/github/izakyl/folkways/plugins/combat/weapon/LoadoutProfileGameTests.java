@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.plugins.combat.weapon;
 
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
 import io.github.izakyl.folkways.core.api.resident.body.Equipment;
@@ -11,6 +12,8 @@ import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
 import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.api.work.Delivery;
+import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
@@ -28,6 +31,7 @@ import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
@@ -74,8 +78,10 @@ public final class LoadoutProfileGameTests {
             || scene.supplies.observedDeficits(body, profile, observed).get(helmet.id()) == 0,
             "the inventory index must not publish an observed missing helmet after equipping it");
         InventoryObservations.publish(scene.colony, helper.getLevel());
-        helper.assertTrue(scene.supplies.urges(WeaponSessionGameTests.worker(body), Optional.empty(),
-            Long.MIN_VALUE, Long.MIN_VALUE).isEmpty(), "worn armor must not trigger another supply trip");
+        scene.supplies.resupply(WeaponSessionGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
+        helper.assertTrue(scene.supplies.goals(scene.colony.view(helper.getLevel())).isEmpty()
+            && scene.supplies.status(body.id()).state() == PatrolSupplies.State.READY,
+            "worn armor must not ask for another delivery");
         helper.succeed();
     }
 
@@ -255,14 +261,18 @@ public final class LoadoutProfileGameTests {
             () ->
                 helper.assertTrue(
                     scene.supplies.status(scene.body().id()).state()
-                    == PatrolSupplies.State.NO_STOCK,
-                    "plain sword cannot satisfy pinned components"))
+                    == PatrolSupplies.State.FETCHING,
+                    "the pinned sword is asked of the planner"))
+            .thenIdle(100)
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
                     scene.body().pack().count(Items.IRON_SWORD),
                     0,
-                    "nonmatching weapon stays in storage");
+                    "plain sword cannot satisfy pinned components");
+                helper.assertTrue(
+                    scene.supplies.status(scene.body().id()).state() == PatrolSupplies.State.FETCHING,
+                    "the delivery stays asked while no matching stock exists");
                 stock.setItem(1, named.copy());
             })
             .thenWaitUntil(
@@ -281,6 +291,53 @@ public final class LoadoutProfileGameTests {
                     "component identity survives pack retention");
             })
             .thenSucceed();
+    }
+
+    @GameTest(template = "empty_large")
+    public static void eachShortEntryIsOneStableDeliveryToTheResidentWithdrawnWhenDutyEnds(GameTestHelper helper) {
+        Scene scene = new Scene(helper, 1);
+        ResidentEntity body = scene.body();
+        var bow = LoadoutProfile.Entry.weapon(ItemSpec.of(Items.BOW));
+        var helmet = LoadoutProfile.Entry.armor(EquipmentSlot.HEAD, ItemSpec.of(Items.IRON_HELMET));
+        var arrows = LoadoutProfile.Entry.supply(ItemSpec.of(Items.ARROW), 8, 4);
+        body.pack().insert(new ItemStack(Items.ARROW, 2));
+        scene.profile(List.of(bow, helmet, arrows));
+        InventoryObservations.publish(scene.colony, helper.getLevel());
+        Worker worker = WeaponSessionGameTests.worker(body);
+        long now = helper.getLevel().getGameTime();
+        var view = scene.colony.view(helper.getLevel());
+        scene.supplies.resupply(worker, Optional.empty(), now, now + 200);
+        List<Delivery> asked = asked(scene, view);
+        helper.assertValueEqual(asked.size(), 2, "the missing bow and helmet are asked, each on its own");
+        for (Delivery delivery : asked) {
+            helper.assertTrue(delivery.spec().site() instanceof WorkSite.AtEntity into && into.entity().equals(body.id()),
+                "each delivery ends in the resident's own pack");
+        }
+        helper.assertTrue(asked.stream().noneMatch(delivery ->
+                Goods.matches(new ItemStack(Items.ARROW), delivery.goods().spec())),
+            "arrows wait for the bow, whose loaded rounds would count toward them");
+        helper.assertTrue(scene.stores.isEmpty() && scene.supplies.status(body.id()).state()
+            == PatrolSupplies.State.FETCHING, "nothing is sought nearby first: the planner owns sourcing");
+        UUID helmetAsk = asked.stream().filter(delivery ->
+            Goods.matches(new ItemStack(Items.IRON_HELMET), delivery.goods().spec())).findFirst().orElseThrow().id();
+        body.pack().insert(new ItemStack(Items.BOW));
+        InventoryObservations.publish(scene.colony, helper.getLevel());
+        scene.supplies.resupply(worker, Optional.empty(), now, now + 200);
+        asked = asked(scene, view);
+        helper.assertTrue(asked.size() == 2 && asked.stream().anyMatch(delivery -> delivery.id().equals(helmetAsk))
+                && asked.stream().anyMatch(delivery -> delivery.goods().count() == 6
+                && Goods.matches(new ItemStack(Items.ARROW), delivery.goods().spec())),
+            "once the bow is carried the six missing arrows are asked, and the helmet stays the same delivery");
+        scene.supplies.resupply(worker, Optional.empty(), now, now - 1);
+        helper.assertTrue(scene.supplies.goals(view).isEmpty()
+                && scene.supplies.status(body.id()).state() == PatrolSupplies.State.CANCELLED,
+            "an ended duty withdraws every delivery");
+        helper.succeed();
+    }
+
+    private static List<Delivery> asked(Scene scene, ColonyView view) {
+        return scene.supplies.goals(view).stream()
+            .flatMap(goal -> goal.nodes().stream()).map(Delivery.class::cast).toList();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 700)
@@ -304,7 +361,7 @@ public final class LoadoutProfileGameTests {
         helper.startSequence().thenWaitUntil(() -> helper.assertValueEqual(body.pack().count(Items.ARROW), 4,
             "profile logistics deliver the missing physical ammunition"))
             .thenExecute(() -> {
-                scene.supplies.urges(worker, Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
+                scene.supplies.resupply(worker, Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
                 helper.assertTrue(Weapons.armed(worker), "combat resumes once the assigned loadout is ready");
                 WeaponSession session = Weapons.open(worker).orElseThrow();
                 helper.assertTrue(body.getMainHandItem().is(Items.BOW), "the refilled resident opens its real bow");
@@ -313,7 +370,7 @@ public final class LoadoutProfileGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 700)
-    public static void restockingStartsBelowThresholdAndContinuesAcrossPartialTripsUntilTarget(GameTestHelper helper) {
+    public static void restockingStartsBelowThresholdAndFillsToTargetFromEveryStore(GameTestHelper helper) {
         Scene scene = new Scene(helper, 1);
         Container first = scene.store(9), second = scene.store(16);
         first.setItem(0, new ItemStack(Items.ARROW, 2));
@@ -336,22 +393,17 @@ public final class LoadoutProfileGameTests {
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
-                    scene.body().pack().count(Items.ARROW) == 5,
-                    "first partial trip crosses back above threshold"))
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
                     scene.body().pack().count(Items.ARROW) == 12,
-                    "refill remains latched to target after the partial trip"))
+                    "refill below the threshold fills to the target, wherever the arrows are"))
             .thenIdle(30)
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
                     scene.body().pack().count(Items.ARROW), 12, "restock stops at the player target");
                 helper.assertValueEqual(
-                    second.getItem(0).getCount(),
+                    first.getItem(0).getCount() + second.getItem(0).getCount(),
                     13,
-                    "exactly seven additional arrows leave the second store");
+                    "exactly nine arrows leave storage");
             })
             .thenSucceed();
     }
@@ -422,8 +474,9 @@ public final class LoadoutProfileGameTests {
         WeaponSession session = Weapons.open(worker).orElseThrow();
         session.close();
         scene.store(12).setItem(0, new ItemStack(Items.BOW));
+        scene.supplies.resupply(worker, Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
         helper.assertTrue(
-            scene.supplies.urges(worker, Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE).isEmpty(),
+            scene.supplies.goals(scene.colony.view(helper.getLevel())).isEmpty(),
             "at-hand engagement never requests gear");
         helper.assertTrue(
             scene.supplies.keeps(body).isEmpty(), "no profile creates no stock target or retention allowance");
@@ -452,7 +505,7 @@ public final class LoadoutProfileGameTests {
         body.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.GOLDEN_HELMET));
         scene.colony.inventoryFeedback().changedResident(body.id());
         InventoryObservations.publish(scene.colony, helper.getLevel());
-        scene.supplies.urges(WeaponSessionGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
+        scene.supplies.resupply(WeaponSessionGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
         helper.assertValueEqual(
             scene.supplies.status(body.id()).state(),
             PatrolSupplies.State.BLOCKED,
@@ -499,12 +552,13 @@ public final class LoadoutProfileGameTests {
         ResidentEntity body = scene.body();
         body.pack().insert(new ItemStack(Items.BOW));
         scene.profile(List.of(LoadoutProfile.Entry.armor(EquipmentSlot.HEAD, ItemSpec.of(Items.BOW))));
-        scene.supplies.urges(WeaponSessionGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
-        helper.assertTrue(body.getItemBySlot(EquipmentSlot.HEAD).isEmpty(), "a bow can never become a helmet");
+        scene.supplies.resupply(WeaponSessionGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
+        helper.assertTrue(body.getItemBySlot(EquipmentSlot.HEAD).isEmpty(), "a bow can never become"
+            + " a helmet");
         helper.assertValueEqual(
             scene.supplies.status(body.id()).state(), PatrolSupplies.State.UNAVAILABLE, "invalid slot is visible");
         scene.profile(List.of(LoadoutProfile.Entry.weapon(ItemSpec.of(Items.STONE))));
-        scene.supplies.urges(WeaponSessionGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
+        scene.supplies.resupply(WeaponSessionGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, Long.MIN_VALUE);
         helper.assertValueEqual(
             scene.supplies.status(body.id()).state(),
             PatrolSupplies.State.UNAVAILABLE,

@@ -35,6 +35,10 @@ final class CommandNode implements Node {
         return spec;
     }
 
+    public boolean mountedWork() {
+        return true;
+    }
+
     public boolean directTravel() {
         return true;
     }

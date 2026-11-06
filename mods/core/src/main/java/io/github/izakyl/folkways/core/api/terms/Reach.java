@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.api.terms;
 
+import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.work.Stances;
 import java.util.LinkedHashSet;
 import java.util.Optional;
@@ -37,8 +38,9 @@ public final class Reach {
         if (!(stances instanceof Stances.Cells(Set<WorldPos> footings))) {
             return Optional.of(body.blockPosition());
         }
+        Vec3 position = Bodies.of(body).map(who -> who.locomotion().feet(who.mob())).orElse(body.position());
         for (WorldPos footing : footings) {
-            Optional<Vec3> feet = WorldSpaces.relative(body.level(), footing.realm(), body.position());
+            Optional<Vec3> feet = WorldSpaces.relative(body.level(), footing.realm(), position);
             if (feet.isPresent() && standingAt(feet.get(), footing.cell())) {
                 return Optional.of(footing.cell());
             }

@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.rts.combat.command;
 
 import io.github.izakyl.folkways.plugins.combat.WeaponStations;
+import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Reach;
@@ -387,6 +389,10 @@ public final class ResidentCommands {
         if (order == null || !active(order)) {
             return List.of();
         }
+        // The planner lends this same runner to the guard's supply route, then the order takes it back.
+        if (order.guarding() && PatrolSupplies.of(colony).underway(order.resident())) {
+            return List.of();
+        }
         if (order.mode == Mode.ATTACK) {
             order.attackRange = Weapons.range(who);
         }
@@ -583,7 +589,8 @@ public final class ResidentCommands {
             && level.getServer() == server
             && body.mob().isAlive()
             && !body.mob().isRemoved()
-            && (!body.mob().isPassenger() || WeaponStations.ownsSeat(body.mob()))
+            && (!body.mob().isPassenger() || WeaponStations.ownsSeat(body.mob())
+                || ResidentMounts.riding(body.mob()))
             && body.colonyId().filter(colony.id()::equals).isPresent()
             && colony.holdingOf(body.id()).isPresent();
     }

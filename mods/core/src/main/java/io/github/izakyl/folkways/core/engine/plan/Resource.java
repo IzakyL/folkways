@@ -3,8 +3,13 @@ package io.github.izakyl.folkways.core.engine.plan;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import java.util.UUID;
+import net.minecraft.resources.ResourceLocation;
 
 public sealed interface Resource {
+
+    record Transport(ResourceLocation resource, ResourceLocation unit) implements Resource {
+    }
+
 
     record Lot(Stash where, ItemSpec spec) implements Resource {
     }

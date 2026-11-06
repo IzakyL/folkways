@@ -1,5 +1,8 @@
 package io.github.izakyl.folkways.create.dispatch;
 
+import io.github.izakyl.folkways.core.api.transport.TransportPublication;
+import io.github.izakyl.folkways.core.api.transport.TransportSnapshot;
+import io.github.izakyl.folkways.core.api.transport.TransportTravel;
 import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.inventory.InventoryProviders;
@@ -76,6 +79,10 @@ public final class DispatchPresence implements Facing {
     private final Networks networks = new Networks();
     private final ChainNets chains = new ChainNets();
     private final Map<UUID, CollectNode> collecting = new ConcurrentHashMap<>();
+    // One posting for every post offered, so an unchanged post is offered as the same one.
+    private final PackNode.Posting posting = this::send;
+    private final Map<ResourceKey<Level>, TransportPublication.Offering> offered = new java.util.HashMap<>();
+    private long postVersion;
     private final Map<UUID, TakeNode> taking = new ConcurrentHashMap<>();
     private final Mailroom mail = new Mailroom();
     private final Eta eta = new Eta();
@@ -539,14 +546,17 @@ public final class DispatchPresence implements Facing {
                     new Tally(id, reach.supply(), now, reach.manned(), collecting, taking), ours, shelves, eta,
                     reachTicks));
             }
-            counter(network, level, now, reachTicks, found).ifPresent(workshops::add);
+            Optional<Counter> counter = counter(network, level, now, reachTicks, found);
+            counter.ifPresent(one -> workshops.add(one.adrift()));
             colony.publish(DispatchContent.ID, level.dimension(), workshops);
+            colony.publishTransport(DispatchContent.ID, level.dimension(), posted(level.dimension(), counter));
             colony.withhold(DispatchContent.ID, level.dimension(), held);
             withheld.add(level.dimension());
         }
         for (ResourceKey<Level> gone : withholding) {
             if (!withheld.contains(gone)) {
                 colony.withhold(DispatchContent.ID, gone, List.of());
+                colony.publishTransport(DispatchContent.ID, gone, posted(gone, Optional.empty()));
             }
         }
         withholding.clear();
@@ -619,7 +629,24 @@ public final class DispatchPresence implements Facing {
         }
         return Optional.of(new Counter(UUID.nameUUIDFromBytes(("folkways:dispatch/counter/"
                 + level.dimension().location()).getBytes(StandardCharsets.UTF_8)),
-            new WorkSite.AtBlock(desks.getFirst().packager()), desks, collecting, eta, this::send, reachTicks));
+            new WorkSite.AtBlock(desks.getFirst().packager()), desks, collecting, eta, posting, reachTicks));
+    }
+
+    // The post as a way of moving goods. The same post is offered again unchanged, so what was quoted from it holds;
+    // a post that changed is offered under a new version.
+    private List<TransportPublication.Offering> posted(ResourceKey<Level> dimension, Optional<Counter> counter) {
+        if (counter.isEmpty()) {
+            offered.remove(dimension);
+            return List.of();
+        }
+        TransportPublication.Offering before = offered.get(dimension);
+        if (before != null && before.mode().equals(counter.get())) {
+            return List.of(before);
+        }
+        TransportPublication.Offering now = new TransportPublication.Offering(counter.get(),
+            new TransportSnapshot(++postVersion, 0, TransportTravel.UNKNOWN, List.of()), true);
+        offered.put(dimension, now);
+        return List.of(now);
     }
 
     // A parcel packed by hand goes from its port: thrown onto the chain, or left in the postbox on the colony's books
@@ -893,6 +920,7 @@ public final class DispatchPresence implements Facing {
         inventoryReadSnapshot = null;
         observations = Map.of();
         inventoryRead = Map.of();
+        offered.clear();
         if (why == Closing.RAZED) {
             networks.clear();
             collecting.clear();

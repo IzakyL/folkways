@@ -54,6 +54,8 @@ jobs:
             profiles: warfare
           - mod: tacz
             profiles: tacz
+          - mod: carts
+            profiles: carts
           - mod: firefighting
             profiles: firefighting
           - mod: chiselsandbits
@@ -101,6 +103,9 @@ jobs:
             fi
             if [[ "$profile" == tacz ]]; then
               gradle_args+=(-PtaczTests=true)
+            fi
+            if [[ "$profile" == carts ]]; then
+              gradle_args+=(-PcartsTests=true)
             fi
             if [[ "$profile" == firefighting ]]; then
               gradle_args+=(-PfirefightingTests=true)

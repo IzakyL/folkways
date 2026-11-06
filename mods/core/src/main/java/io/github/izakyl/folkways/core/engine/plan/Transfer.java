@@ -4,18 +4,23 @@ import io.github.izakyl.folkways.core.api.terms.Gait;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.TransportIntent;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.world.item.ItemStack;
 
-/**
- * The intent of moving goods from where they are to where they are wanted: to a node that needs them, over an edge
- * the plan has just given a source, or into a store. A {@link Carrying} rule refines it, through what the plan lends
- * it, only ever into takes into a pack and puts out of one - or into nothing at all, when the goods can be reached
- * where they lie or handed on as they are made.
- */
-public record Transfer(From from, To to, ItemSpec goods, long count) {
+// The material bindings of a transport intent: stock, a maker's output or exact carried stacks, and the edge or
+// store they feed. The request itself lives only in the intent.
+public record Transfer(TransportIntent intent, From from, To to) {
+
+    public ItemSpec goods() {
+        return intent.goods();
+    }
+
+    public long count() {
+        return intent.count();
+    }
 
     public sealed interface From {
 

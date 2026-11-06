@@ -151,11 +151,11 @@ final class Expansion {
     }
 
     // How far the growth had got: what it gains after, it can give back.
-    record Mark(int nodes, int links, int flows, int together, int claims, int touches) implements Laying.Mark {
+    record Mark(int nodes, int links, int flows, int together, int claims, int touches, int holds) implements Laying.Mark {
     }
 
     Mark mark() {
-        return new Mark(nodes.size(), links.size(), flows.size(), together.size(), claims.size(), touches.size());
+        return new Mark(nodes.size(), links.size(), flows.size(), together.size(), claims.size(), touches.size(), holds.size());
     }
 
     boolean isRequest() {

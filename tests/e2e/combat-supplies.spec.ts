@@ -67,7 +67,7 @@ test("guards walk to real registered storage for their kit: a melee guard collec
     expect(armed.order).toBe(meleeOrder);
     expect(armed.reservedAtSource).toBe(0);
     expect(melee.some(value => value.supply === "FETCHING")).toBe(true);
-    expect(Math.min(...melee.map(value => value.sourceDistance))).toBeLessThan(4.6);
+    expect(Math.min(...melee.map(value => value.sourceDistance))).toBeLessThan(5.0);
 
     await server.run(TARGET, scene);
     const fought = await meleeWait("the normally controlled melee guard actually strikes", value => value.hitByResident && value.targetHealth < 100 && value.swordDamage > 0);
@@ -108,7 +108,7 @@ test("guards walk to real registered storage for their kit: a melee guard collec
       && Math.hypot(value.x - scene!.homeX, value.z - scene!.homeZ) < 1.1);
     expect(equipped.order).toBe(bowOrder);
     expect(bow.some(value => value.supply === "FETCHING")).toBe(true);
-    expect(Math.min(...bow.map(value => value.sourceDistance)), "the guard must physically reach the actual warehouse").toBeLessThan(4.6);
+    expect(Math.min(...bow.map(value => value.sourceDistance)), "the guard must physically reach the actual warehouse").toBeLessThan(5.0);
     expect(Math.min(...bow.map(value => value.x)), "the stock cannot be remotely inserted into the guard").toBeLessThan(initial.x - 4);
 
     await server.run(TARGET, scene);

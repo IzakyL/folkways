@@ -47,7 +47,6 @@ public final class WorkDecorators {
         public ResourceLocation id() { return original.id(); }
         public WorkSite site() { return original.site(); }
         public boolean alike() { return original.alike(); }
-        public boolean carries() { return original.carries(); }
         public List<Refinement.Change> options(Intent intent, Grown graph) {
             return original.options(intent, graph).stream().map(change -> new Refinement.Change(
                 apply(colony, change.replacement()), change.links(), change.workerGroups(), change.holds())).toList();

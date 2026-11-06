@@ -569,12 +569,12 @@ final class BodyRunner {
         }
         double travelSpeed = speed;
         if (current.directTravel()) {
-            return Trip.afoot(body.kind().locomotion(), footings, travelSpeed, LaborRefusal.NO_WAY_THERE);
+            return Trip.afoot(body.locomotion(), footings, travelSpeed, LaborRefusal.NO_WAY_THERE);
         }
         return labor.ways(level)
-            .map(ways -> Trip.to(() -> labor.ways(level).orElse(ways), body.resident(), body.kind().locomotion(), body.mob(),
+            .map(ways -> Trip.to(() -> labor.ways(level).orElse(ways), body.resident(), body.locomotion(), body.mob(),
                 footings, travelSpeed, LaborRefusal.NO_WAY_THERE))
-            .orElseGet(() -> Trip.afoot(body.kind().locomotion(), footings, travelSpeed,
+            .orElseGet(() -> Trip.afoot(body.locomotion(), footings, travelSpeed,
                 LaborRefusal.NO_WAY_THERE));
     }
 
@@ -611,6 +611,7 @@ final class BodyRunner {
     }
 
     private void startWork(ServerLevel level, Body body) {
+        body.locomotion().stand(body.mob(), current.mountedWork());
         if (own == null && current.spec().workload() instanceof Workload.Within) {
             enter(body);
             return;

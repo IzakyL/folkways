@@ -5,15 +5,16 @@ import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Node;
+import io.github.izakyl.folkways.core.api.work.Refinement;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * What the plan lends a {@link Carrying} rule while it lays one transfer: the plan as it stands this round, and the
+ * What the plan lends a transport refinement while it lays one transfer: the plan as it stands this round, and the
  * one growth the transfer's work goes into, which the rule grows and takes back from but never sees whole.
  */
-public interface Laying {
+public interface Laying extends Refinement.Laying {
 
     // ---- the plan as it stands ----
 
@@ -45,6 +46,7 @@ public interface Laying {
 
     // Whether the store may feed the work the goods at all.
     boolean feeds(Stash from, UUID consumer, ItemSpec concrete);
+
 
     // The most of the goods one carry takes.
     long perTrip(ItemSpec concrete);
@@ -84,9 +86,6 @@ public interface Laying {
     // ---- keeping it whole ----
 
     // How far the growth has got: what it gains after, the rule can take back.
-    interface Mark {
-    }
-
     Mark mark();
 
     // The work laid since the mark, as it still stands.

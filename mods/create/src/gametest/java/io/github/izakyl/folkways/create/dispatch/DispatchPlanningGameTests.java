@@ -1,5 +1,12 @@
 package io.github.izakyl.folkways.create.dispatch;
 
+import java.util.Set;
+import io.github.izakyl.folkways.core.api.terms.Stand;
+import io.github.izakyl.folkways.core.engine.plan.Situation;
+import io.github.izakyl.folkways.core.engine.plan.Stands;
+import io.github.izakyl.folkways.core.api.transport.TransportPublication;
+import io.github.izakyl.folkways.core.api.transport.TransportSnapshot;
+import io.github.izakyl.folkways.core.api.transport.TransportTravel;
 import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
@@ -172,22 +179,34 @@ public final class DispatchPlanningGameTests {
             sent.setAdrift();
             nodes.put(sent.id(), sent);
             fake.arrived.put(-42, 6);
-            var wanted = Produce.of(ResourceLocation.withDefaultNamespace("test"),
-                new WorkSite.AtBlock(fixture.target), named(broad), 6, Produce.UNBOUNDED);
-            var replacement = counter.options(wanted, Grown.of(wanted)).getFirst();
-            helper.assertTrue(replacement.replacement().nodes().stream().anyMatch(PackNode.class::isInstance),
-                "a constrained need packs a new parcel rather than inheriting an ordinary parcel's order number");
-            replacement.holds().forEach(hold -> helper.assertTrue(hold.take().isEmpty(),
-                "the new parcel is reserved"));
-            var fresh = (CollectNode) replacement.replacement().nodes().stream()
-                .filter(CollectNode.class::isInstance).findFirst().orElseThrow();
-            helper.assertTrue(!fresh.placed() && nodes.get(sent.id()) == sent && fake.arrived.get(-42) == 6,
-                "the old physical parcel remains untouched and the new one has not been sent");
-            var accepted = Produce.of(ResourceLocation.withDefaultNamespace("test"),
-                new WorkSite.AtBlock(fixture.target), broad, 6, Produce.UNBOUNDED);
-            var adoption = counter.options(accepted, Grown.of(accepted)).getFirst();
-            adoption.holds().forEach(hold -> helper.assertTrue(hold.take().isEmpty(),
-                "the compatible order can be adopted"));
+            ItemSpec named =
+                broad.withComponents(
+                DataComponentMap.builder()
+                .set(DataComponents.CUSTOM_NAME, Component.literal("Reserved"))
+                .build());
+            var wanted =
+                Produce.of(
+                ResourceLocation.withDefaultNamespace("test"),
+                new WorkSite.AtBlock(fixture.target),
+                named,
+                6,
+                Produce.UNBOUNDED);
+            // Packing anew is a transport, laid by the planner; the post only offers what is already on its way.
+            helper.assertTrue(counter.adrift().options(wanted, Grown.of(wanted)).isEmpty()
+                    && nodes.get(sent.id()) == sent && fake.arrived.get(-42) == 6,
+                "a constrained need does not inherit an ordinary parcel's order number, which stays untouched");
+            var accepted =
+                Produce.of(
+                ResourceLocation.withDefaultNamespace("test"),
+                new WorkSite.AtBlock(fixture.target),
+                broad,
+                6,
+                Produce.UNBOUNDED);
+            var adoption = counter.adrift().options(accepted, Grown.of(accepted)).getFirst();
+            adoption.holds()
+                .forEach(hold -> helper.assertTrue(hold.take().isEmpty(), "the compatible order"
+                    + " can be"
+                    + " adopted"));
             var adopted = (CollectNode) adoption.replacement().nodes().getFirst();
             helper.assertTrue(adopted.handOrder() == -42 && adopted.ready(helper.getLevel())
                     && Commit.run(helper.getLevel(), adopted, fixture.worker) instanceof Outcome.Done,
@@ -606,27 +625,40 @@ public final class DispatchPlanningGameTests {
             PlanningFixture fixture = new PlanningFixture(helper);
             ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
             Map<UUID, CollectNode> nodes = new LinkedHashMap<>();
-            // A packager and its port beside the store the iron lies in, and a pick-up point at the far store.
-            var packager = fixture.source.at(fixture.source.cell().offset(0, 0, 1));
-            var port = fixture.source.at(fixture.source.cell().offset(0, 1, 1));
-            NetworkSnapshot.Port there = new NetworkSnapshot.Port("far", true, List.of(), Optional.empty(), 0);
+            // The iron lies in a store sixty blocks off, with a packager and its port beside it; the port it reaches
+            // is at the store the iron is wanted in, where someone is to collect it.
+            var far = fixture.target.at(fixture.target.cell().offset(60, 0, 0));
+            var packager = far.at(far.cell().offset(0, 0, 1));
+            var port = far.at(far.cell().offset(0, 1, 1));
+            NetworkSnapshot.Port there = new NetworkSnapshot.Port("near", true, List.of(), Optional.empty(), 0);
             Counter counter = new Counter(UUID.randomUUID(), new WorkSite.AtBlock(packager),
                 List.of(new Counter.Desk(packager, Stances.at(packager), port,
                     List.of(new Depot.Dock(fixture.target, Stances.at(fixture.target), there, 0, true)))),
                 nodes, new Eta(), (level, from, to, parcel, collect) -> fake.adapter().send(level, from.block(level),
                     parcel), 1);
             Owed delivery = new Owed(new WorkSite.AtBlock(fixture.target), Stances.at(fixture.target), iron, 32);
-            Stock stock = new Stock(List.of(new Stock.Holding(new Stash(fixture.source),
-                new ItemStack(Items.IRON_INGOT, 64))), Map.of(new Stash(fixture.target), 2, new Stash(fixture.source), 0));
-            var solved = solver.solve(fixture.situation(stock, List.of(counter)), fixture.crew, delivery.goals(),
-                List.of(), 0);
+            Stock stock = new Stock(List.of(new Stock.Holding(new Stash(far), new ItemStack(Items.IRON_INGOT, 64))),
+                Map.of(new Stash(fixture.target), 2, new Stash(far), 0));
+            Stands stands = Stands.building().container(new Stash(far), Set.of(new Stand(far)))
+                .container(new Stash(fixture.target), Set.of(new Stand(fixture.target))).done();
+            var post = new TransportPublication(1, List.of(new TransportPublication.Entry(Counter.ID,
+                helper.getLevel().dimension(), new TransportPublication.Offering(counter,
+                    new TransportSnapshot(1, 0, TransportTravel.UNKNOWN, List.of()), true))));
+            Crew.Hand packer = fixture.crew.hands().getFirst();
+            Crew.Hand collector = new PlanningFixture(helper).crew.hands().getFirst();
+            Crew crew = new Crew(List.of(
+                new Crew.Hand(packer.who(), far, 6, 6, 1, packer.licences(), List.of(), Optional.empty()),
+                new Crew.Hand(collector.who(), fixture.target, 6, 6, 1, collector.licences(), List.of(),
+                    Optional.empty())));
+            var solved = solver.solve(new Situation(fixture.ways, stock, List.of(counter.adrift()), stands, () -> post,
+                0), crew, delivery.goals(), List.of(), 0);
             ColonyLabor labor = new ColonyLabor(new ColonyData(), helper.getLevel().dimension());
             PlanningFixture.apply(labor, helper.getLevel(), solved);
             PackNode pack = solved.weave().vertices().values().stream()
                 .filter(vertex -> vertex.node() instanceof PackNode).map(vertex -> (PackNode) vertex.node())
                 .findFirst().orElse(null);
             helper.assertTrue(pack != null && pack.collection().byHand() && nodes.containsKey(pack.collection().id()),
-                "the iron is packed by the store and sent, not walked to the far store");
+                "the iron is packed by the store and sent, not walked sixty blocks");
             helper.assertTrue(fake.sent.isEmpty() && !pack.collection().placed(),
                 "nothing is asked of any network, and nothing is waited on before it is sent");
             Containers.insert(fixture.worker.pack(), new ItemStack(Items.IRON_INGOT, 32));

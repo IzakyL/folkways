@@ -203,10 +203,12 @@ public final class ChoicePicker {
         float width = screen.getSizeWidth();
         float tall = Math.max(0f, screen.getSizeHeight() - Rows.FOOT);
         float x = width <= 0f || right + wide <= width ? right : Math.max(0f, left);
+        // On a short screen (a large interface) the dialog gives up height rather than its buttons: its list scrolls.
+        float high = tall <= 0f ? height : Math.min(height, tall);
         float y = tall <= 0f
             ? host.getPositionY()
-            : Math.max(0f, Math.min(host.getPositionY(), tall - height));
-        dialog.windowMode(x, y, wide, height);
+            : Math.max(0f, Math.min(host.getPositionY(), tall - high));
+        dialog.windowMode(x, y, wide, high);
     }
 
     private static void mark(List<Button> rows, List<Row> offered, Set<String> picked, Button confirm,

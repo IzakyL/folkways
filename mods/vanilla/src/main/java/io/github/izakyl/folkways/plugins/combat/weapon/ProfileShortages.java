@@ -6,22 +6,24 @@ import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.plugins.pasture.PastureHorses;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 
 /** A stock preview, never a reservation. Loaded members consume preview units once in roster order. */
 public record ProfileShortages(
     int assigned, int incomplete, int unloaded, Map<UUID, Integer> missing, Map<UUID, Integer> unavailableStock,
-    boolean complete) {
+    boolean complete, int missingHorses, int unavailableHorses) {
     public static ProfileShortages read(Colony colony, LoadoutProfile profile, MinecraftServer server) {
         PatrolSupplies supplies = PatrolSupplies.of(colony);
         Map<UUID, Integer> missing = new LinkedHashMap<>();
@@ -33,6 +35,8 @@ public record ProfileShortages(
         }
         boolean complete = !snapshot.coverage().membershipPending();
         int incomplete = 0, unloaded = 0;
+        int missingHorses = 0, unavailableHorses = 0;
+        Set<UUID> previewHorses = new LinkedHashSet<>();
         List<UUID> members = supplies.profiles().residents(profile.id());
         for (UUID member : members) {
             ResidentEntity body = null;
@@ -48,7 +52,6 @@ public record ProfileShortages(
                 unloaded++;
                 continue;
             }
-            ResidentEntity person = body;
             InventorySnapshot.Resident resident = snapshot.residents().get(member);
             if (resident == null || resident.state() != InventorySnapshot.State.OBSERVED) {
                 colony.inventory().ensureObservedResident(member);
@@ -56,44 +59,45 @@ public record ProfileShortages(
                 continue;
             }
             Map<UUID, Integer> deficits = supplies.observedDeficits(body, profile, resident);
+            boolean needsHorse = profile.entries().stream().anyMatch(entry -> entry.kind() == LoadoutProfile.Kind.MOUNT)
+                && !supplies.mounts().assigned(member);
+            if (needsHorse) {
+                missingHorses++;
+                var free = PastureHorses.available(colony, (ServerLevel) body.level()).stream()
+                    .filter(horse -> !previewHorses.contains(horse.getUUID())).findFirst();
+                if (free.isEmpty()) {
+                    unavailableHorses++;
+                } else {
+                    previewHorses.add(free.get().getUUID());
+                }
+            }
+            ResidentEntity loaded = body;
             boolean blocked =
                 profile.entries().stream()
-                .filter(entry -> entry.slot().isPresent())
+                .filter(entry -> entry.kind() == LoadoutProfile.Kind.ARMOR)
                 .anyMatch(
                 entry ->
                     resident.equipment().containsKey(entry.slot().orElseThrow())
                         && !resident.equipment().get(entry.slot().orElseThrow()).stackCopy().isEmpty()
-                        && !entry.matches(resident.equipment().get(entry.slot().orElseThrow()).stackCopy()));
-            if (blocked || deficits.values().stream().anyMatch(count -> count > 0)) {
+                        && !entry.matches(resident.equipment().get(entry.slot().orElseThrow()).stackCopy()))
+                || profile.entries().stream().filter(entry -> entry.kind() == LoadoutProfile.Kind.HORSE_ARMOR)
+                    .anyMatch(entry -> ResidentMounts.horse(loaded).filter(horse ->
+                        !horse.getItemBySlot(EquipmentSlot.BODY).isEmpty()
+                            && !entry.matches(horse.getItemBySlot(EquipmentSlot.BODY)))
+                        .isPresent());
+            if (needsHorse || blocked || deficits.values().stream().anyMatch(count -> count > 0)) {
                 incomplete++;
             }
             ServerLevel level = (ServerLevel) body.level();
             if (supplies.unresolvedReservations(level, snapshot)) {
                 complete = false;
             }
-            List<WorldPos> nearby =
-                colony.storesIn(level.dimension()).stream()
-                .filter(
-                source ->
-                    source.sameRealm(WorldSpaces.at(person))
-                        && WorldSpaces.world(level, source)
-                        .filter(
-                        at ->
-                            at.distanceToSqr(person.position())
-                                <= 32 * 32)
-                        .isPresent())
-                .sorted(
-                Comparator.comparingDouble(
-                source ->
-                    WorldSpaces.world(level, source)
-                        .orElseThrow()
-                        .distanceToSqr(person.position())))
-                .limit(32)
-                .toList();
+            // The planner draws supplies from any of the colony's stores, however far.
+            List<WorldPos> sources = colony.storesIn(level.dimension());
             for (LoadoutProfile.Entry entry : profile.entries()) {
                 int left = deficits.get(entry.id());
                 missing.merge(entry.id(), left, Integer::sum);
-                for (WorldPos source : nearby) {
+                for (WorldPos source : sources) {
                     if (left == 0) {
                         break;
                     }
@@ -122,6 +126,6 @@ public record ProfileShortages(
             }
         }
         return new ProfileShortages(members.size(), incomplete, unloaded, Map.copyOf(missing),
-            Map.copyOf(unavailable), complete);
+            Map.copyOf(unavailable), complete, missingHorses, unavailableHorses);
     }
 }

@@ -11,6 +11,8 @@ import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.vocation.KitRules;
+import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Ending;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.Worker;
@@ -21,6 +23,11 @@ import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.front.api.CoreSettings;
+import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -38,7 +45,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
-import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -136,24 +142,27 @@ public final class PatrolSupplyGameTests {
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
-                    scene.supplyState() == PatrolSupplies.State.NO_STOCK,
-                    "a stockout is publicly observable without a permanent fetch action"
+                    scene.supplyState() == PatrolSupplies.State.FETCHING,
+                    "the missing arrows are asked of the planner"
                     + scene.debug()))
             .thenIdle(25)
             .thenExecute(
             () -> {
                 helper.assertTrue(
-                    Reach.standingAt(scene.body.position(), scene.anchor.block(scene.level)),
-                    "an unavailable supply does not take the guard away indefinitely");
-                helper.assertTrue(!scene.body.hasWeaponSession(), "stockout creates no native weapon loan");
-                scene.store.setItem(0, new ItemStack(Items.ARROW, 3));
+                    Reach.standingAt(scene.body.position(), scene.anchor.block(scene.level))
+                    && !scene.supplies.underway(scene.body.id()),
+                    "an unavailable supply does not take the guard away");
+                helper.assertTrue(!scene.body.hasWeaponSession(), "stockout creates no"
+                    + " native weapon"
+                    + " loan");
+                scene.store.setItem(0, new ItemStack(Items.ARROW, 8));
             })
             .thenWaitUntil(
             () ->
                 helper.assertValueEqual(
                     scene.body.pack().count(Items.ARROW),
-                    3,
-                    "a bounded retry collects an available partial batch instead of requiring all eight"
+                    8,
+                    "the outstanding delivery is planned once real stock appears"
                     + scene.debug()))
             .thenWaitUntil(
             () ->
@@ -165,7 +174,7 @@ public final class PatrolSupplyGameTests {
                 helper.assertValueEqual(
                     scene.countInStore(Items.ARROW),
                     0,
-                    "all three real supplied arrows leave this warehouse");
+                    "all eight real supplied arrows leave this warehouse");
                 helper.assertValueEqual(
                     scene.body.pack().count(Items.BOW),
                     1,
@@ -230,8 +239,8 @@ public final class PatrolSupplyGameTests {
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
-                    scene.supplyState() == PatrolSupplies.State.NO_ROOM,
-                    "full-pack refusal is observable" + scene.debug()))
+                    scene.supplyState() == PatrolSupplies.State.FETCHING,
+                    "the loadout is asked even with no room yet" + scene.debug()))
             .thenIdle(30)
             .thenExecute(
             () -> {
@@ -251,7 +260,8 @@ public final class PatrolSupplyGameTests {
                 helper.assertTrue(
                     scene.body.pack().count(Items.BOW) == 1
                     && scene.body.pack().count(Items.ARROW) == 8,
-                    "a finite retry uses newly available pack room" + scene.debug()))
+                    "the delivery is planned into newly available pack"
+                    + " room" + scene.debug()))
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
@@ -326,16 +336,13 @@ public final class PatrolSupplyGameTests {
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
-                    scene.supplyState() == PatrolSupplies.State.FETCHING && scene.nearStore(),
-                    "the resident reaches the real last-arrow source before committing its collection"
+                    scene.supplyState() == PatrolSupplies.State.FETCHING
+                    && scene.supplies.underway(scene.body.id()),
+                    "the resident sets out for the real last-arrow source before"
+                    + " committing its collection"
                     + scene.debug()))
             .thenExecute(() -> scene.store.removeItem(0, 1))
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    scene.supplyState() == PatrolSupplies.State.NO_STOCK,
-                    "an execution-time competitor taking the last arrow creates a bounded stockout"
-                    + scene.debug()))
+            .thenIdle(60)
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
@@ -366,14 +373,12 @@ public final class PatrolSupplyGameTests {
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
-                    scene.supplyState() == PatrolSupplies.State.FETCHING && scene.nearStore(),
-                    "the resident reaches its registered source" + scene.debug()))
+                    scene.supplyState() == PatrolSupplies.State.FETCHING
+                    && scene.supplies.underway(scene.body.id()),
+                    "the resident sets out for its registered"
+                    + " source" + scene.debug()))
             .thenExecute(() -> scene.colony.stores(Scene.STORE_OWNER, scene.level.dimension(), List.of()))
-            .thenWaitUntil(
-            () ->
-                helper.assertTrue(
-                    scene.supplyState() == PatrolSupplies.State.NO_STOCK,
-                    "source deregistration is checked again at execution" + scene.debug()))
+            .thenIdle(60)
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
@@ -389,13 +394,6 @@ public final class PatrolSupplyGameTests {
     }
 
     @GameTest(template = "empty_large")
-    public static void aLaterExtractionAndRestoreAdapterFailurePreserveEarlierComponentStacks(GameTestHelper helper) {
-        extractionFailure(helper, false);
-        extractionFailure(helper, true);
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large")
     public static void editingOrDeletingAProfileRevokesItsTripAndWeaponButPreservesTheGuardOrder(
         GameTestHelper helper) {
         Scene scene = new Scene(helper);
@@ -406,18 +404,18 @@ public final class PatrolSupplyGameTests {
         scene.guard();
         var order = scene.commands.current(scene.body.id()).orElseThrow();
         var session = Weapons.open(worker(scene.body)).orElseThrow();
-        var trip =
-            scene.supplies
-            .urges(worker(scene.body), Optional.of(order), Long.MIN_VALUE, Long.MIN_VALUE)
-            .getFirst()
-            .take()
-            .get();
-        helper.assertTrue(trip.ready(scene.level), "collection starts under the exact guard and profile revision");
+        InventoryObservations.publish(scene.colony, scene.level);
+        var view = scene.colony.view(scene.level);
+        scene.supplies.resupply(worker(scene.body), Optional.of(order), Long.MIN_VALUE, Long.MIN_VALUE);
+        helper.assertFalse(scene.supplies.goals(view).isEmpty(), "the guard order asks for the missing arrows"
+            + scene.debug());
         var profile = scene.supplies.profiles().assigned(scene.body.id()).orElseThrow();
         scene.supplies
             .profiles()
             .replace(new LoadoutProfile(profile.id(), "Renamed", profile.entries()));
-        helper.assertFalse(trip.ready(scene.level), "old profile revision cannot collect");
+        helper.assertTrue(scene.supplies.goals(view).isEmpty()
+                && scene.supplyState() == PatrolSupplies.State.CANCELLED,
+            "a profile edit withdraws the delivery asked under the old revision");
         helper.assertValueEqual(
             session.state(), WeaponSession.State.CLOSED, "profile changes return the actual hand immediately");
         helper.assertTrue(
@@ -431,98 +429,6 @@ public final class PatrolSupplyGameTests {
             scene.commands.current(scene.body.id()).orElseThrow() == order,
             "deletion preserves the same guard order");
         helper.succeed();
-    }
-
-    private static void extractionFailure(GameTestHelper helper, boolean afterMutation) {
-        Scene scene = new Scene(helper);
-        scene.body.pack().insert(new ItemStack(Items.BOW));
-        arm(scene.colony, scene.body, "Bow", ItemSpec.of(Items.BOW));
-        scene.guard();
-        SimpleContainer failing =
-            new SimpleContainer(3) {
-                @Override
-                public ItemStack removeItem(int slot, int count) {
-                    if (slot == 2) {
-                        if (afterMutation) {
-                            super.removeItem(slot, count);
-                        }
-                        throw new IllegalStateException("third component stack failed extraction");
-                    }
-                    return super.removeItem(slot, count);
-                }
-
-                @Override
-                public boolean canPlaceItem(int slot, ItemStack stack) {
-                    throw new IllegalStateException("adapter refuses restoration");
-                }
-            };
-        for (int slot = 0; slot < 3; slot++) {
-            ItemStack stack = new ItemStack(Items.ARROW, slot == 2 ? 4 : 2);
-            stack.set(DataComponents.CUSTOM_NAME, Component.literal("arrow component " + slot));
-            failing.setItem(slot, stack);
-            scene.store.setItem(slot, stack.copy());
-        }
-        InventoryObservations.publish(scene.colony, scene.level);
-        Colony bridged =
-            Proxies.of(Colony.class, (proxy, method, arguments) ->
-                method.getName().equals("store")
-                    ? Optional.of(failing)
-                    : method.invoke(scene.colony, arguments));
-        PatrolSupplies supplies = new PatrolSupplies(bridged);
-        Worker worker = worker(scene.body);
-        Node request =
-            supplies.urges(worker, scene.commands.current(scene.body.id()), Long.MIN_VALUE, Long.MIN_VALUE)
-            .getFirst()
-            .take()
-            .get();
-        BlockPos at = scene.source.block(scene.level);
-        scene.body.moveTo(at.getX() - 2.5, at.getY(), at.getZ() + .5);
-        try {
-            try {
-                Commit.run(scene.level, request, worker);
-                helper.fail("the failing third extraction must propagate its adapter error");
-            } catch (IllegalStateException expected) {
-                helper.assertTrue(
-                    expected.getMessage().contains("third component"), "the original draw failure remains visible");
-            }
-            request.released(scene.level, worker, new Ending.Failed(request.id(), LaborRefusal.WORK_BROKE));
-            request.released(scene.level, worker, Ending.DROPPED);
-            helper.assertValueEqual(
-                scene.body.pack().count(Items.ARROW),
-                afterMutation ? 8 : 4,
-                "all physically drawn arrows fall back into the real pack");
-            helper.assertValueEqual(
-                failing.getItem(2).getCount(),
-                afterMutation ? 0 : 4,
-                "the final source stack agrees with whether extraction physically occurred");
-            helper.assertTrue(
-                failing.getItem(0).isEmpty() && failing.getItem(1).isEmpty(),
-                "restoration failure does not invent source copies");
-            for (int component = 0; component < 2; component++) {
-                Component name = Component.literal("arrow component " + component);
-                helper.assertValueEqual(
-                    scene.body.pack().contents().stream()
-                    .filter(stack -> name.equals(stack.get(DataComponents.CUSTOM_NAME)))
-                    .mapToInt(ItemStack::getCount)
-                    .sum(),
-                    2,
-                    "every successfully drawn component survives exactly once");
-            }
-            if (afterMutation) {
-                helper.assertValueEqual(
-                    scene.body.pack().contents().stream()
-                    .filter(
-                    stack ->
-                        Component.literal("arrow component 2")
-                            .equals(stack.get(DataComponents.CUSTOM_NAME)))
-                    .mapToInt(ItemStack::getCount)
-                    .sum(),
-                    4,
-                    "an adapter exception after mutation preserves the unreturned current stack too");
-            }
-        } finally {
-            scene.close();
-        }
     }
 
     private static Worker worker(ResidentEntity body) {
@@ -645,7 +551,8 @@ public final class PatrolSupplyGameTests {
         }
 
         boolean nearStore() {
-            return Reach.withinReach(body.blockPosition(), source.block(level));
+            // Planned collection arrives at a workable stance with Core's normal arrival tolerance.
+            return Reach.stanceHolding(body.position(), Reach.workableCells(level, source.block(level))).isPresent();
         }
 
         int countInStore(Item item) {

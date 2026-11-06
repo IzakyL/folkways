@@ -128,7 +128,7 @@ final class PatrolTeams {
                 team.foe = null;
             }
             boolean danger = bodies.stream().anyMatch(body -> body.mob().getHealth() <= body.mob().getMaxHealth() * .35
-                || PatrolSupplies.of(colony).status(body.id()).state() == PatrolSupplies.State.FETCHING);
+                || PatrolSupplies.of(colony).underway(body.id()));
             Map<UUID, WorldPos> old = team.motion.destinations();
             team.motion.tick(bodies, team.foe != null, danger);
             if (team.diversion != null) {
@@ -314,7 +314,8 @@ final class PatrolTeams {
         Team team = found.get();
         UUID resident = worker.resident().id();
         DefenseControl control = DefenseControl.of(colony);
-        if (control.current(resident).isPresent() || control.reserved(resident) || control.failedWaiting(resident)) {
+        if (control.current(resident).isPresent() || control.reserved(resident) || control.failedWaiting(resident)
+            || PatrolSupplies.of(colony).underway(resident)) {
             return List.of();
         }
         GroupMotion motion = team.diversion == null ? team.motion : team.diversion;
@@ -336,6 +337,11 @@ final class PatrolTeams {
             @Override
             public NodeSpec spec() {
                 return spec;
+            }
+
+            @Override
+            public boolean mountedWork() {
+                return true;
             }
 
             @Override

@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.api.participation.Participations;
 import io.github.izakyl.folkways.core.api.participation.Stake;
 import io.github.izakyl.folkways.core.api.passage.Hop;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.transport.TransportTravel;
 import io.github.izakyl.folkways.core.api.terms.Closures;
 import io.github.izakyl.folkways.core.api.terms.Realm;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -79,10 +80,79 @@ public final class WayGraph implements Ways {
     }
 
     @Override
+    public TransportTravel estimates() {
+        return this::estimate;
+    }
+
+    private TransportTravel.Result estimate(ResourceLocation kind, WorldPos from, WorldPos to, long departure) {
+        Sort sort = sorts.get(kind);
+        if (sort == null) {
+            return TransportTravel.LATER;
+        }
+        Web web = webs.computeIfAbsent(sort, this::weave);
+        if (from.equals(to)) {
+            return new TransportTravel.Yes(0, 0);
+        }
+        boolean leaving = closedAt(from);
+        boolean entering = closedAt(to);
+        if (!leaving && !entering && web.shutBetween(from, to)) {
+            return TransportTravel.NO;
+        }
+        long least = Long.MAX_VALUE;
+        long riding = 0;
+        // Native navigation is already the travel system's estimate inside closed work areas.
+        if (from.sameRealm(to) && (leaving || entering)) {
+            least = walk(from, Set.of(to));
+        }
+        IntArrayList starts = leaving ? web.in(from.realm()) : new IntArrayList();
+        IntArrayList ends = entering ? web.in(to.realm()) : new IntArrayList();
+        if (!leaving && web.at(from) >= 0) {
+            starts.add(web.at(from));
+        }
+        if (!entering && web.at(to) >= 0) {
+            ends.add(web.at(to));
+        }
+        int[] lastWalk = new int[ends.size()];
+        for (int at = 0; at < ends.size(); at++) {
+            int end = ends.getInt(at);
+            lastWalk[at] = entering ? walk(web.cellAt(end), Set.of(to)) : web.approach(to, end);
+        }
+        for (int start : starts) {
+            int approach = leaving ? walk(from, Set.of(web.cellAt(start))) : web.approach(from, start);
+            Arrival[] arrivals = new Arrival[ends.size()];
+            route(web, kind, start, ends, Math.addExact(departure, approach), false, arrivals);
+            for (int at = 0; at < ends.size(); at++) {
+                int end = ends.getInt(at);
+                if (!web.joined(start, end)) {
+                    continue;
+                }
+                int last = lastWalk[at];
+                if (start == end) {
+                    long ticks = leaving || entering ? (long) approach + last : walk(from, Set.of(to));
+                    if (ticks < least) {
+                        least = ticks;
+                        riding = 0;
+                    }
+                    continue;
+                }
+                Arrival arrival = arrivals[at];
+                if (arrival != null) {
+                    long ticks = approach + arrival.walked() + arrival.ridden() + last;
+                    if (ticks < least) {
+                        least = ticks;
+                        riding = arrival.ridden();
+                    }
+                }
+            }
+        }
+        return least == Long.MAX_VALUE ? TransportTravel.LATER : new TransportTravel.Yes(least - riding, riding);
+    }
+
+    @Override
     public Faring reckon(Resident who, WorldPos from, Set<WorldPos> goals) {
-        Sort sort = sorts.get(who.kind());
+        Sort sort = sorts.get(who.routeKind());
         return sort == null ? Faring.LATER
-            : fare(new Asker(who.kind(), Urgency.PLANNING, false, true), sort, from, goals);
+            : fare(new Asker(who.routeKind(), Urgency.PLANNING, false, true), sort, from, goals);
     }
 
     @Override
@@ -92,10 +162,10 @@ public final class WayGraph implements Ways {
 
     @Override
     public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals, Urgency urgency) {
-        Sort sort = sorts.get(who.kind());
+        Sort sort = sorts.get(who.routeKind());
 
         return sort == null ? Faring.LATER
-            : fare(new Asker(who.kind(), urgency, true), sort, from, goals);
+            : fare(new Asker(who.routeKind(), urgency, true), sort, from, goals);
     }
 
     @Override
@@ -473,6 +543,21 @@ public final class WayGraph implements Ways {
 
     private static Arrival route(Web web, ResourceLocation kind, int start, IntArrayList goals,
                                  long began) {
+        return route(web, kind, start, goals, began, true);
+    }
+
+    private static Arrival route(Web web, ResourceLocation kind, int start, IntArrayList goals,
+                                 long began, boolean counting) {
+        return route(web, kind, start, goals, began, counting, null);
+    }
+
+    // Estimates keep every goal's arrival; a journey stops at the first.
+    private static Arrival route(Web web, ResourceLocation kind, int start, IntArrayList goals,
+                                 long began, boolean counting, Arrival[] arrivals) {
+        if (goals.isEmpty()) {
+            return null;
+        }
+        int remaining = goals.size();
         int count = web.size();
         long[] best = new long[count];
         int[] cameFrom = new int[count];
@@ -482,7 +567,6 @@ public final class WayGraph implements Ways {
         best[start] = began;
         PriorityQueue<long[]> open = new PriorityQueue<>(Comparator.comparingLong(step -> step[1]));
         open.add(new long[] {start, began});
-        int arrived = -1;
         boolean fareGone = false;
         boolean barred = false;
         while (!open.isEmpty()) {
@@ -493,8 +577,17 @@ public final class WayGraph implements Ways {
             }
             int which = goals.indexOf(here);
             if (which >= 0) {
-                arrived = which;
-                break;
+                Arrival arrival = arrival(here, which, began, best, cameFrom, cameOn);
+                if (arrivals == null) {
+                    return arrival;
+                }
+                if (arrivals[which] == null) {
+                    arrivals[which] = arrival;
+                    remaining--;
+                }
+                if (remaining == 0) {
+                    return null;
+                }
             }
             boolean riding = web.aboard(here);
             if (!riding) {
@@ -543,11 +636,13 @@ public final class WayGraph implements Ways {
                 }
             }
         }
-        if (arrived < 0) {
+        if (counting) {
             PathfindingLoad.laterUnrouted(fareGone, barred);
-            return null;
         }
-        int goal = goals.getInt(arrived);
+        return null;
+    }
+
+    private static Arrival arrival(int goal, int which, long began, long[] best, int[] cameFrom, Crossing[] cameOn) {
         IntArrayList along = new IntArrayList();
         List<Crossing> on = new ArrayList<>();
         LongArrayList reached = new LongArrayList();
@@ -573,7 +668,7 @@ public final class WayGraph implements Ways {
             boardAt[at] = reached.getLong(path.length - 1 - at);
         }
         long whole = best[goal] - began;
-        return new Arrival(arrived, path, via, boardAt, along, whole - riding, riding);
+        return new Arrival(which, path, via, boardAt, along, whole - riding, riding);
     }
 
     private static int ticksOf(long ticks) {

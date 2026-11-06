@@ -32,6 +32,8 @@ Players install these separately. Folkways only compiles against them.
 | Chisels & Bits, Scena                             | MIT                                       | Required by Folkways × Chisels & Bits; the pinned C&B jar supplies Scena and the remaining runtime dependencies                                                 |
 | Touhou Little Maid                                | code MIT, assets CC BY-NC-SA 4.0          | Optional: its maid models are drawn on residents straight from the player's own copy of that mod. Folkways ships none of them and a server sends only their ids |
 
+| [AstikorCarts Redux](https://github.com/jusipat/astikor-carts-redux) | MIT | Required by Folkways × AstikorCarts Redux; native cargo carts and their storage. Installed separately, not bundled |
+
 ## Repository assets, not shipped in the mod
 
 | Path                                                      | License         | Notes                                                                                                                                                 |

@@ -15,7 +15,6 @@ import io.github.izakyl.folkways.core.api.work.Sizing;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.plan.Carrying;
 import io.github.izakyl.folkways.effect.Modifier;
 import io.github.izakyl.folkways.effect.Scope;
 import io.github.izakyl.folkways.effect.Stats;
@@ -57,9 +56,6 @@ public final class Haul {
 
     private Haul() {
     }
-
-    // How goods move on the plan: the core's rule for every transfer.
-    public static final Carrying CARRYING = new Carry();
 
     // A delivery asks for no more than this many at once, however roomy the packs.
     private static final int MOST_AT_ONCE = 64 * 64;

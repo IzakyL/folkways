@@ -1,0 +1,16 @@
+# 骑马宣传片的字幕。改完在仓库根目录运行：python3 tests/promo/film/mounted.py
+# 镜头顺序：骑马出行 → 骑兵出发 → 马上作战 → 马车装货 → 马车运输 → 卸货烤面包。
+# captions = 这一段显示的文字，一项一行；tag = 金色小标签；删掉某段 = 那一段不出字。
+
+[scenes.ride]
+tag = "新功能：骑马"
+captions = ["可以为居民配置马匹和鞍具"]
+
+[scenes.battle]
+captions = ["骑乘时获得攻击距离、伤害和击退加成"]
+
+[scenes.cart-load]
+captions = ["已兼容：AstikorCarts Redux"]
+
+[scenes.cart-haul]
+captions = ["居民可以使用 AstikorCarts 来运输物品"]

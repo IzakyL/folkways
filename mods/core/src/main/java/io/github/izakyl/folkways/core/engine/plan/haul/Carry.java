@@ -7,7 +7,6 @@ import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.engine.plan.Carrying;
 import io.github.izakyl.folkways.core.engine.plan.Edge;
 import io.github.izakyl.folkways.core.engine.plan.Flow;
 import io.github.izakyl.folkways.core.engine.plan.Laying;
@@ -31,9 +30,8 @@ import net.minecraft.world.item.ItemStack;
  * the pack of whoever does it, or handed on as they are made take no work to move; everything else is moved by takes
  * into a pack and puts out of one, as few as one pack's carries allow.
  */
-final class Carry implements Carrying {
+public final class Carry {
 
-    @Override
     public long lay(Transfer transfer, Laying plan) {
         return switch (transfer.to()) {
             case To.Feeding(Edge edge) -> switch (transfer.from()) {

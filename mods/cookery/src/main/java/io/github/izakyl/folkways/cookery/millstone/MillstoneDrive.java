@@ -122,7 +122,7 @@ public final class MillstoneDrive {
     static Optional<WorldPos> exit(ServerLevel level, WorldPos at, Mob actor) {
         var body = Bodies.of(actor);
         if (body.isEmpty()) { return Optional.empty(); }
-        body.get().kind().locomotion().fit(actor);
+        body.get().locomotion().fit(actor);
         List<BlockPos> candidates = new ArrayList<>();
         BlockPos center = at.block(level);
         for (int x = -4; x <= 4; x++) {
@@ -290,8 +290,8 @@ public final class MillstoneDrive {
         if (exit.target == null) { return false; }
         if (exit.path == null) {
             var body = Bodies.of(actor).orElseThrow();
-            body.kind().locomotion().fit(actor);
-            exit.path = body.kind().locomotion().along(1.0, CookeryRefusal.STATION_CHANGED);
+            body.locomotion().fit(actor);
+            exit.path = body.locomotion().along(1.0, CookeryRefusal.STATION_CHANGED);
             exit.started = actor.walkDist;
             exit.path.setOut(level, actor, Set.of(exit.target));
         }

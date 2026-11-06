@@ -42,6 +42,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.Cow;
+import net.minecraft.world.entity.animal.horse.Horse;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -325,6 +326,47 @@ public final class PastureBreedingGameTests {
             stock.getLast().setAge(0);
             helper.assertTrue(rig.nodes(Herd.Job.CULL).size() == 1, type + ": exactly one mature animal is surplus");
             stock.forEach(Animal::discard);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void onlyTameWholeHorsesAreFedAndTheirFoalsAreBornTame(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        rig.target = 4;
+        rig.keeps = Livestock.named(BuiltInRegistries.ENTITY_TYPE.getKey(EntityType.HORSE)).orElseThrow();
+        UUID owner = UUID.randomUUID();
+        List<Horse> horses = new ArrayList<>();
+        for (int index = 0; index < 2; index++) {
+            Horse horse = EntityType.HORSE.create(rig.level);
+            horse.setUUID(new UUID(rig.zone.id().getMostSignificantBits(), index + 1L));
+            horse.setPos(Vec3.atBottomCenterOf(rig.floor.offset(index + 2, 1, 3)));
+            rig.level.addFreshEntity(horse);
+            horses.add(horse);
+        }
+        try {
+            helper.assertTrue(rig.nodes().isEmpty(), "wild horses never breed, so they get no golden carrots");
+            horses.forEach(horse -> {
+                horse.setTamed(true);
+                horse.setOwnerUUID(owner);
+            });
+            horses.getFirst().setHealth(horses.getFirst().getMaxHealth() - 1.0F);
+            helper.assertTrue(rig.nodes().isEmpty(), "a hurt horse cannot breed until it is whole");
+            horses.getFirst().setHealth(horses.getFirst().getMaxHealth());
+            List<Node> feed = rig.nodes();
+            helper.assertTrue(feed.size() == 1, "a tame whole pair is fed");
+            SimpleContainer pack = new SimpleContainer(new ItemStack(Items.GOLDEN_CARROT, 2));
+            helper.assertTrue(Commit.run(rig.level, feed.getFirst(), rig.worker(feed.getFirst(), pack))
+                instanceof Outcome.Done, "the pair takes its golden carrots");
+            var foal = horses.getFirst().getBreedOffspring(rig.level, horses.getLast());
+            helper.assertTrue(foal instanceof Horse, "two horses make a horse");
+            BreedingPerks.born(new BabyEntitySpawnEvent(horses.getFirst(), horses.getLast(), foal));
+            Horse born = (Horse) foal;
+            helper.assertTrue(born.isTamed(), "a foal bred in the pen is born tame");
+            helper.assertValueEqual(born.getOwnerUUID(), owner, "it is tame to its parent's owner");
+        } finally {
+            horses.forEach(Horse::discard);
+            rig.clear();
         }
         helper.succeed();
     }

@@ -14,7 +14,7 @@ import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 
-public final class ResidentMoveControl extends MoveControl {
+public class ResidentMoveControl extends MoveControl {
     private static final double AT_HEIGHT = 0.1;
     private static final double CENTRED = 0.1;
     private static final double RIGHT = 0.19D;
@@ -80,7 +80,7 @@ public final class ResidentMoveControl extends MoveControl {
         double speed = speedModifier;
         try {
             // Each target stays inside its path cell with room for the full block-collision body.
-            double margin = Math.max(0, (1.0D - mob.getBbWidth()) / 2.0D - 0.01D);
+            double margin = Math.max(0, (1.0D - walkingWidth()) / 2.0D - 0.01D);
             wantedX += Mth.clamp(rightX, -margin, margin);
             wantedZ += Mth.clamp(rightZ, -margin, margin);
             speedModifier *= traffic.speed(direction);
@@ -90,6 +90,10 @@ public final class ResidentMoveControl extends MoveControl {
             wantedZ = z;
             speedModifier = speed;
         }
+    }
+
+    protected double walkingWidth() {
+        return mob.getBbWidth();
     }
 
     private boolean ordinaryWalking(Path path) {

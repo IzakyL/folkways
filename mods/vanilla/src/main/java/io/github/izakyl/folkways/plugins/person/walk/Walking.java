@@ -43,7 +43,7 @@ public final class Walking implements Locomotion {
 
     @Override
     public void fit(Mob body) {
-        if (!(body.getNavigation() instanceof ResidentPathNavigation)) {
+        if (body.getNavigation().getClass() != ResidentPathNavigation.class) {
             MobControls.navigation(body, new ResidentPathNavigation(body, body.level()));
             MobControls.moveControl(body, new ResidentMoveControl(body));
         }

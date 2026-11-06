@@ -38,9 +38,10 @@ public final class Weapons {
         }
 
         double range(Worker worker) {
-            return LoadoutRegistry.using(stack)
+            double reach = LoadoutRegistry.using(stack)
                 .map(provider -> provider.range(stack))
                 .orElseGet(() -> adapter.range(worker, stack));
+            return reach + (ranged() ? 0 : MountedMelee.reach(worker.body()));
         }
     }
 
@@ -92,7 +93,8 @@ public final class Weapons {
         if (!(worker.body() instanceof ResidentEntity)) {
             return 4.5;
         }
-        return adapter(worker, null).map(candidate -> candidate.range(worker)).orElse(4.5);
+        return adapter(worker, null).map(candidate -> candidate.range(worker))
+            .orElseGet(() -> 4.5 + MountedMelee.reach(worker.body()));
     }
 
     public static Optional<WeaponSession> open(Worker worker) {
@@ -142,7 +144,8 @@ public final class Weapons {
     }
 
     public static double range(Worker worker, LivingEntity target) {
-        return adapter(worker, target).map(candidate -> candidate.range(worker)).orElse(4.5);
+        return adapter(worker, target).map(candidate -> candidate.range(worker))
+            .orElseGet(() -> 4.5 + MountedMelee.reach(worker.body()));
     }
 
     public static Optional<WeaponSession> open(Worker worker, LivingEntity target) {
@@ -228,7 +231,8 @@ public final class Weapons {
             .min(
             Comparator.comparingInt(
             candidate -> {
-                if (distance <= 4.5) {
+                double meleeReach = candidate.ranged() ? 4.5 + MountedMelee.reach(worker.body()) : candidate.range(worker);
+                if (distance <= meleeReach) {
                     return candidate.ranged() ? 1 : 0;
                 }
                 if (!candidate.ranged()) {

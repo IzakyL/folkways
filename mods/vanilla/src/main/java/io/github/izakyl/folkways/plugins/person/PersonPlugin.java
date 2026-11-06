@@ -20,6 +20,7 @@ import io.github.izakyl.folkways.plugins.person.look.ResidentModelPackets;
 import io.github.izakyl.folkways.plugins.person.look.ResidentModels;
 import io.github.izakyl.folkways.plugins.person.name.NamesPage;
 import io.github.izakyl.folkways.plugins.person.name.ResidentNames;
+import io.github.izakyl.folkways.plugins.person.ride.Riding;
 import io.github.izakyl.folkways.plugins.person.walk.BreathingPresence;
 import io.github.izakyl.folkways.plugins.person.walk.Doorways;
 import io.github.izakyl.folkways.plugins.person.walk.Walking;
@@ -40,6 +41,7 @@ public final class PersonPlugin {
         modBus.addListener(PersonBody::createAttributes);
         modBus.addListener(Declaring.class, event -> {
             event.locomotion(Walking.INSTANCE);
+            event.locomotion(Riding.INSTANCE);
             PersonContent.declare(event);
             PersonBody.declare(event);
             LivingContent.declare(event);

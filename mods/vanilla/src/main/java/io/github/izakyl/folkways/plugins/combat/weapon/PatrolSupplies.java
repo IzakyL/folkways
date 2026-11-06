@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
+import io.github.izakyl.folkways.core.api.colony.Closing;
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
 import io.github.izakyl.folkways.core.api.inventory.SlotSnapshot;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
@@ -8,22 +10,23 @@ import io.github.izakyl.folkways.core.api.resident.body.Equipment;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.StoreRule;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
 import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Ending;
+import io.github.izakyl.folkways.core.api.work.Delivery;
+import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.api.work.NodeSpec;
 import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Urge;
+import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.plugins.combat.DefenseControl;
 import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -33,72 +36,78 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
-/** Finite personal stock, collected locally through the resident's existing work runner. */
+/**
+ * Finite personal stock. Each loadout entry a resident is short of, while it may resupply, is asked of the colony's
+ * planner as a delivery into that resident's pack; the planner finds the goods and the way they come.
+ */
 public final class PatrolSupplies {
-    static final int RETRY_TICKS = 100;
-    static final int TRIP_TICKS = 200;
-    private static final int STORE_RANGE = 32;
+    private static final ResourceLocation RESUPPLYING =
+        ResourceLocation.fromNamespaceAndPath("folkways", "patrol_resupplying");
 
     public enum State {
         INACTIVE,
         READY,
         FETCHING,
-        NO_STOCK,
-        NO_ROOM,
-        FAILED,
         CANCELLED,
-        TIMED_OUT,
         UNAVAILABLE,
         BLOCKED
     }
 
-    public record Status(State state, String reason, long missing, Optional<WorldPos> source, long retryAt) {
-    }
-
-    record Demand(
-        ItemSpec goods,
-        int target,
-        boolean weapon,
-        Optional<UUID> entry,
-        Optional<LoadoutProfile.Entry> equipment) {
-        Demand(ItemSpec goods, int target, boolean weapon) {
-            this(goods, target, weapon, Optional.empty(), Optional.empty());
-        }
-
-        boolean matches(ItemStack stack) {
-            return equipment.map(value -> value.matches(stack)).orElseGet(() -> Goods.matches(stack, goods));
-        }
+    public record Status(State state, String reason, long missing) {
     }
 
     record Authority(ResidentEntity body, DefenseControl.Order order, long duty, long until, long revision) {
     }
 
+    // One entry asked of the planner: its goal is stated unchanged until it ends, and asked afresh after if still short.
+    private record Ask(long count, Grown goal) {
+    }
+
+    private record Asked(Authority authority, ResourceKey<Level> dimension, Map<UUID, Ask> asks) {
+    }
+
     private final Colony colony;
     private final LoadoutProfiles profiles;
+    private final ResidentMounts mounts;
+    private final Runnable changed;
     private final Map<UUID, Set<UUID>> refilling = new HashMap<>();
     private final Map<UUID, Long> revisions = new HashMap<>();
     private final Map<UUID, Long> duties = new HashMap<>();
     private final Map<UUID, Status> statuses = new HashMap<>();
-    private final Map<UUID, PatrolSupplyNode> pending = new HashMap<>();
+    private final Map<UUID, Asked> asked = new HashMap<>();
+    private final Set<UUID> underway = new HashSet<>();
     private final Set<UUID> awaitingWeapon = new HashSet<>();
 
     public PatrolSupplies(Colony colony) {
+        this(colony, () -> { });
+    }
+
+    // `changed` hears that the deliveries asked for differ, so they are offered to the planner again.
+    public PatrolSupplies(Colony colony, Runnable changed) {
         this.colony = colony;
+        this.changed = changed;
+        mounts = new ResidentMounts(colony);
         profiles = new LoadoutProfiles(colony, this::invalidate);
     }
 
     public static PatrolSupplies of(Colony colony) {
         return PatrolContent.suppliesOf(colony).orElseThrow();
+    }
+
+    public ResidentMounts mounts() {
+        return mounts;
     }
 
     public LoadoutProfiles profiles() {
@@ -126,7 +135,32 @@ public final class PatrolSupplies {
     }
 
     public Status status(UUID resident) {
-        return statuses.getOrDefault(resident, new Status(State.INACTIVE, "inactive", 0, Optional.empty(), 0));
+        return statuses.getOrDefault(resident, new Status(State.INACTIVE, "inactive", 0));
+    }
+
+    // Whether the resident's own route, when last seen, went to fetch one of its deliveries: it is away for them.
+    public boolean underway(UUID resident) {
+        return underway.contains(resident);
+    }
+
+    // The deliveries asked for residents in this dimension, to be offered to the planner.
+    public List<Grown> goals(ColonyView view) {
+        List<Grown> goals = new ArrayList<>();
+        for (Asked each : asked.values()) {
+            if (each.dimension().equals(view.dimension())) {
+                each.asks().values().forEach(ask -> goals.add(ask.goal()));
+            }
+        }
+        return List.copyOf(goals);
+    }
+
+    // A delivery ended, delivered or not: it is stated again, for what is then missing, when next read.
+    public void ended(UUID node) {
+        asked.forEach((resident, each) -> {
+            if (each.asks().values().removeIf(ask -> ask.goal().completions().contains(node))) {
+                underway.remove(resident);
+            }
+        });
     }
 
     private void validate(Body body) {
@@ -145,43 +179,62 @@ public final class PatrolSupplies {
 
     private void invalidate(UUID resident) {
         revisions.merge(resident, 1L, Long::sum);
-        pending.remove(resident);
+        withdraw(resident);
         refilling.remove(resident);
         awaitingWeapon.remove(resident);
-        statuses.put(resident, new Status(State.CANCELLED, "profile"
-            + " changed", 0, Optional.empty(), 0));
+        statuses.put(resident, new Status(State.CANCELLED, "profile changed", 0));
         var server = ServerLifecycleHooks.getCurrentServer();
         for (ServerLevel level : server.getAllLevels()) {
             if (level.getEntity(resident) instanceof ResidentEntity body) {
                 body.stopWeaponSession();
+                if (profiles != null) {
+                    mounts.reconcile(level, body, profiles.assigned(resident));
+                }
             }
         }
     }
 
+    // Whatever was asked for the resident is no longer wanted; goods already on their way are the planner's to undo.
+    private boolean withdraw(UUID resident) {
+        underway.remove(resident);
+        if (asked.remove(resident) == null) {
+            return false;
+        }
+        changed.run();
+        return true;
+    }
+
     public void tick(MinecraftServer server) {
+        mounts.tick(server, profiles);
         Set<UUID> roster = new HashSet<>();
         colony.residents().forEach(resident -> roster.add(resident.id()));
         profiles.retain(roster);
         refilling.keySet().retainAll(roster);
         awaitingWeapon.retainAll(roster);
-        for (var entry : List.copyOf(pending.entrySet())) {
+        for (var entry : List.copyOf(asked.entrySet())) {
             Authority authority = entry.getValue().authority();
             if (!valid(authority)
                 || !(authority.body().level() instanceof ServerLevel level)
                 || level.getEntity(entry.getKey()) != authority.body()) {
-                pending.remove(entry.getKey());
-                report(entry.getKey(), State.CANCELLED, "resident or order left", 0, null, 0);
+                withdraw(entry.getKey());
+                report(entry.getKey(), State.CANCELLED, "resident or order left", 0);
             }
         }
-        // Pending cancellation can report one final status. Remove departed residents afterwards,
+        // Withdrawing can report one final status. Remove departed residents afterwards,
         // while retaining unloaded residents whose holdings remain in the colony's roster.
         statuses.keySet().retainAll(roster);
         revisions.keySet().retainAll(roster);
         duties.keySet().retainAll(roster);
     }
 
+    public void close(Closing why) {
+        mounts.close(why);
+        close();
+    }
+
     public void close() {
-        pending.clear();
+        asked.clear();
+        underway.clear();
         statuses.clear();
         duties.clear();
         refilling.clear();
@@ -227,12 +280,16 @@ public final class PatrolSupplies {
             .toList();
     }
 
-    public List<Urge> urges(Worker who, Optional<? extends DefenseControl.Order> order, long duty, long until) {
+    // Reads what the resident is short of while it may resupply, and asks the planner for it; outside its duty or
+    // order everything asked is withdrawn.
+    public void resupply(Worker who, Optional<? extends DefenseControl.Order> order, long duty, long until) {
         if (!(who.body() instanceof ResidentEntity body) || !(body.level() instanceof ServerLevel level)) {
-            return List.of();
+            return;
         }
+        mounts.reconcile(level, body, profiles.assigned(body.id()));
         if (profiles.assigned(body.id()).isEmpty()) {
-            return List.of();
+            withdraw(body.id());
+            return;
         }
         DefenseControl control = DefenseControl.of(colony);
         if (order.isEmpty()
@@ -245,10 +302,10 @@ public final class PatrolSupplies {
         boolean authorized = order.map(DefenseControl.Order::guarding).orElse(level.getGameTime() <= until);
         if (!authorized) {
             duties.remove(body.id());
-            if (pending.remove(body.id()) != null) {
-                report(body.id(), State.CANCELLED, "order changed", 0, null, 0);
+            if (withdraw(body.id())) {
+                report(body.id(), State.CANCELLED, "order changed", 0);
             }
-            return List.of();
+            return;
         }
         if (order.isEmpty()) {
             duties.put(body.id(), duty);
@@ -257,160 +314,129 @@ public final class PatrolSupplies {
         }
         Authority authority =
             new Authority(body, order.orElse(null), duty, until, revisions.getOrDefault(body.id(), 0L));
-        PatrolSupplyNode current = pending.get(body.id());
-        if (current != null && (!current.authority().equals(authority) || !valid(current.authority()))) {
-            pending.remove(body.id());
-            current = null;
+        Asked current = asked.get(body.id());
+        if (current != null) {
+            current = new Asked(authority, current.dimension(), current.asks());
+            asked.put(body.id(), current);
+            Set<UUID> mine = new HashSet<>();
+            current.asks().values().forEach(ask -> mine.addAll(ask.goal().completions()));
+            if (who.route().stream().anyMatch(node -> mine.contains(node.id()))) {
+                underway.add(body.id());
+            } else {
+                underway.remove(body.id());
+            }
         }
-        if (current != null && level.getGameTime() >= current.deadline()) {
-            pending.remove(body.id());
-            report(body.id(), State.TIMED_OUT, "supply trip timed out", 0, current.source(),
-                level.getGameTime() + RETRY_TICKS);
-            return List.of();
-        }
-        InventorySnapshot snapshot = colony.inventory().snapshot();
-        InventorySnapshot.Resident observed = snapshot.residents().get(body.id());
+        InventorySnapshot.Resident observed = colony.inventory().snapshot().residents().get(body.id());
         if (observed == null || observed.state() != InventorySnapshot.State.OBSERVED) {
             colony.inventory().ensureObservedResident(body.id());
-            report(body.id(), State.UNAVAILABLE, "inventory observation pending", 0, null, 0);
-            return List.of();
+            if (current == null || current.asks().isEmpty()) {
+                report(body.id(), State.UNAVAILABLE, "inventory observation pending", 0);
+            }
+            return;
         }
         LoadoutProfile profile = profiles.assigned(body.id()).orElseThrow();
-        Map<UUID, Integer> deficits = observedDeficits(body, profile, observed);
-        if (current != null) {
-            if (deficits.getOrDefault(current.demand().entry().orElse(null), 0) > 0) {
-                return List.of(current.urge());
-            }
-            pending.remove(body.id());
-        }
         for (LoadoutProfile.Entry entry : profile.entries()) {
             if (!entry.available()) {
-                report(body.id(), State.UNAVAILABLE, "entry has no usable equipment for its kind or"
-                    + " slot", 1, null, 0);
-                return List.of();
+                withdraw(body.id());
+                report(body.id(), State.UNAVAILABLE, "entry has no usable equipment for its kind or slot", 1);
+                return;
+            }
+            if (entry.kind() == LoadoutProfile.Kind.HORSE_ARMOR
+                    && mounts.horse(level, body.id()).filter(horse ->
+                        !horse.getItemBySlot(EquipmentSlot.BODY).isEmpty()
+                            && !entry.matches(horse.getItemBySlot(EquipmentSlot.BODY))).isPresent()) {
+                withdraw(body.id());
+                report(body.id(), State.BLOCKED, "horse armor slot occupied", 1);
+                return;
             }
             if (entry.kind() == LoadoutProfile.Kind.ARMOR
                 && observed.equipment().containsKey(entry.slot().orElseThrow())
                 && !observed.equipment().get(entry.slot().orElseThrow()).stackCopy().isEmpty()
                 && !Goods.matches(observed.equipment().get(entry.slot().orElseThrow()).stackCopy(), entry.items())) {
-                report(body.id(), State.BLOCKED, "armor slot occupied", 1, null, 0);
-                return List.of();
+                withdraw(body.id());
+                report(body.id(), State.BLOCKED, "armor slot occupied", 1);
+                return;
             }
         }
-        Demand demand = wanted(body, deficits);
-        if (demand == null) {
+        Map<UUID, Integer> wanted = wanted(body, profile, observedDeficits(body, profile, observed));
+        if (wanted.isEmpty()) {
+            withdraw(body.id());
             awaitingWeapon.remove(body.id());
-            report(body.id(), State.READY, "stock ready", 0, null, 0);
-            return List.of();
-        }
-        if (level.getGameTime() < status(body.id()).retryAt()) {
-            return List.of();
-        }
-        int missing = deficits.getOrDefault(demand.entry().orElse(null), 0);
-        WorldPos noRoom = null;
-        boolean uncertain = snapshot.coverage().membershipPending() || unresolvedReservations(level, snapshot);
-        if (uncertain) {
-            colony.inventory().ensureObserved();
-            report(body.id(), State.UNAVAILABLE, "inventory observation pending", missing, null,
-                level.getGameTime() + RETRY_TICKS);
-            return List.of();
-        }
-        int nearby = 0;
-        int readable = 0;
-        int stocked = 0;
-        for (WorldPos source :
-            colony.storesIn(level.dimension()).stream()
-            .filter(at -> at.sameRealm(WorldSpaces.at(body)))
-            .filter(
-            at ->
-                WorldSpaces.world(level, at)
-                    .filter(
-                    point ->
-                        point.distanceToSqr(body.position())
-                            <= STORE_RANGE * STORE_RANGE)
-                    .isPresent())
-            .sorted(
-            Comparator.comparingDouble(
-            at ->
-                WorldSpaces.world(level, at)
-                    .orElseThrow()
-                    .distanceToSqr(body.position())))
-            .limit(32)
-            .toList()) {
-            nearby++;
-            Optional<InventorySnapshot.Store> store = snapshot.store(source);
-            if (store.isEmpty() || store.get().state() != InventorySnapshot.State.OBSERVED
-                || store.get().approach().state() != InventorySnapshot.State.OBSERVED) {
-                colony.inventory().ensureObserved(Stash.at(source));
-                uncertain = true;
-                continue;
+            if (profile.entries().stream().anyMatch(entry -> entry.kind() == LoadoutProfile.Kind.MOUNT)
+                    && !mounts.assigned(body.id())) {
+                report(body.id(), State.UNAVAILABLE, "no free tame pasture horse", 1);
+            } else {
+                report(body.id(), State.READY, "stock ready", 0);
             }
-            if (!StoreRule.takes(store.get().rules())) {
-                continue;
-            }
-            readable++;
-            List<ItemStack> preview = take(observedUnreserved(level, snapshot, store.get()), demand, missing);
-            if (preview.isEmpty()) {
-                continue;
-            }
-            stocked++;
-            if (!fits(observedPack(observed), preview)) {
-                noRoom = source;
-                continue;
-            }
-            BlockPos target = source.block(level);
-            // The runner may arrive within 0.9 blocks of a stance, rather than its exact centre.
-            // Leave room for that tolerance; draw still checks the body's actual block reach and
-            // sight.
-            Optional<Stances> stances =
-                Stances.of(
-                store.get().approach().stands().stream()
-                .map(stand -> stand.cell())
-                .filter(feet -> feet.in(level) && feet.block(level).distSqr(target) <= 2 * 2)
-                .toList());
-            if (stances.isEmpty()) {
-                continue;
-            }
-            int batch = preview.stream().mapToInt(ItemStack::getCount).sum();
-            PatrolSupplyNode request =
-                new PatrolSupplyNode(
-                this, authority, source, demand, batch, stances.get(), level.getGameTime() + TRIP_TICKS,
-                store.get().stash(), store.get().version());
-            pending.put(body.id(), request);
-            report(body.id(), State.FETCHING, "collecting stock", missing, source, 0);
-            return List.of(request.urge());
+            return;
         }
-        if (uncertain) {
-            report(body.id(), State.UNAVAILABLE, "inventory observation pending", missing, null,
-                level.getGameTime() + RETRY_TICKS);
-            return List.of();
+        // Rounds loaded in a weapon count toward its ammunition, so supplies wait until no weapon is still to come.
+        if (profile.entries().stream().anyMatch(entry -> entry.kind() == LoadoutProfile.Kind.WEAPON
+            && wanted.containsKey(entry.id()))) {
+            profile.entries().stream().filter(entry -> entry.kind() == LoadoutProfile.Kind.SUPPLY)
+                .forEach(entry -> wanted.remove(entry.id()));
         }
-        report(
-            body.id(),
-            noRoom == null ? State.NO_STOCK : State.NO_ROOM,
-            noRoom == null
-            ? "no unclaimed stock within 32 blocks (registered="
-            + colony.storesIn(level.dimension()).size()
-            + ", nearby="
-            + nearby
-            + ", readable="
-            + readable
-            + ", stocked="
-            + stocked
-            + ")"
-            : "pack full",
-            missing,
-            noRoom,
-            level.getGameTime() + RETRY_TICKS);
-        return List.of();
+        Map<UUID, Ask> asks = current == null ? new LinkedHashMap<>() : current.asks();
+        boolean differs = current == null || !asks.keySet().equals(wanted.keySet());
+        asks.keySet().retainAll(wanted.keySet());
+        WorkSite into = new WorkSite.AtEntity(body.id(), WorldSpaces.at(body));
+        for (LoadoutProfile.Entry entry : profile.entries()) {
+            Integer missing = wanted.get(entry.id());
+            if (missing != null && !asks.containsKey(entry.id())) {
+                UUID id = UUID.nameUUIDFromBytes(("folkways:patrol_supply/" + body.id() + "/" + entry.id())
+                    .getBytes(StandardCharsets.UTF_8));
+                Delivery delivery = new Delivery(
+                    NodeSpec.of(id, PatrolContent.ID, into, Stances.WHEREVER, Workload.Once.of(1))
+                        .doing(RESUPPLYING, entry.items()).done(),
+                    new Need(planned(entry, level), missing, true), count -> { });
+                asks.put(entry.id(), new Ask(missing, Grown.of(delivery)));
+            }
+        }
+        asked.put(body.id(), new Asked(authority, level.dimension(), asks));
+        if (differs) {
+            changed.run();
+        }
+        report(body.id(), State.FETCHING, underway(body.id()) ? "collecting stock" : "stock asked for",
+            asks.values().stream().mapToLong(Ask::count).sum());
     }
 
-    void staleStore(Stash store, InventorySnapshot.Version version) {
-        colony.inventoryFeedback().stale(store, version);
+    // The goods the planner looks for. An entry also asks its weapon to be one a provider fights with and its armor
+    // to fit its slot, which goods alone cannot say: only the members that pass are named, or the entry's own goods
+    // when every member does. What a member's components decide beyond that is left to the entry's own matching.
+    static ItemSpec planned(LoadoutProfile.Entry entry) {
+        List<ItemSpec> members = members(entry.items());
+        List<ItemSpec> fit = members.stream().filter(member -> entry.matches(Goods.display(member))).toList();
+        if (fit.isEmpty() || fit.size() == members.size()) {
+            return entry.items();
+        }
+        return fit.size() == 1 ? fit.getFirst() : ItemSpec.anyOf(fit);
     }
 
-    void staleApproach(Stash store, InventorySnapshot.Version version) {
-        colony.inventoryFeedback().staleApproach(store, version);
+    // Where the colony's stores hold goods of the entry it would refuse, such as a gun whose data no provider fights
+    // with, the planner is told the exact stacks it would accept instead, as the stores showed them when asked.
+    private ItemSpec planned(LoadoutProfile.Entry entry, ServerLevel level) {
+        ItemSpec goods = planned(entry);
+        List<ItemStack> seen = colony.inventory().snapshot().stores().values().stream()
+            .filter(store -> store.dimension().equals(level.dimension()))
+            .flatMap(store -> store.slots().stream()).map(SlotSnapshot::stackCopy)
+            .filter(stack -> !stack.isEmpty() && Goods.matches(stack, goods)).toList();
+        if (seen.stream().allMatch(entry::matches)) {
+            return goods;
+        }
+        List<ItemSpec> usable = seen.stream().filter(entry::matches).map(Goods::specOf).distinct().toList();
+        if (usable.isEmpty()) {
+            return goods;
+        }
+        return usable.size() == 1 ? usable.getFirst() : ItemSpec.anyOf(usable);
+    }
+
+    private static List<ItemSpec> members(ItemSpec spec) {
+        if (!spec.anyOf().isEmpty()) {
+            return spec.anyOf().stream().flatMap(one -> members(one).stream()).toList();
+        }
+        return Goods.members(spec).stream()
+            .map(item -> new ItemSpec(ItemSpec.of(item).item(), Optional.empty(), Set.of(), spec.components()))
+            .toList();
     }
 
     boolean valid(Authority authority) {
@@ -433,16 +459,6 @@ public final class PatrolSupplies {
             && level.getGameTime() <= authority.until();
     }
 
-    boolean active(PatrolSupplyNode request) {
-        return pending.get(request.authority().body().id()) == request && valid(request.authority());
-    }
-
-    Optional<Container> source(ServerLevel level, WorldPos source) {
-        return source.in(level) && level.isLoaded(source.block(level)) && StoreRule.takes(colony.storeRules(source))
-            ? colony.store(level, source)
-            : Optional.empty();
-    }
-
     boolean unresolvedReservations(ServerLevel level, InventorySnapshot snapshot) {
         return colony.reservedInputs(level).stream().flatMap(claim -> claim.store().stream())
             .anyMatch(at -> snapshot.store(at).isEmpty());
@@ -457,81 +473,29 @@ public final class PatrolSupplies {
         for (var claim : colony.reservedInputs(level)) {
             if (claim.store().flatMap(snapshot::store)
                 .filter(found -> found.stash().equals(store.stash())).isPresent()) {
-                take(free, claim.goods(), (int) Math.min(Integer.MAX_VALUE, claim.count()), false);
+                take(free, claim.goods(), (int) Math.min(Integer.MAX_VALUE, claim.count()));
             }
         }
         return free;
     }
 
-    List<ItemStack> preview(ServerLevel level, WorldPos source, Container actual, Demand demand, int count) {
-        return take(unreserved(level, source, actual), demand, count);
-    }
-
-    SimpleContainer unreserved(ServerLevel level, WorldPos source, Container actual) {
-        SimpleContainer free = copy(actual);
-        WorldPos canonical = WorldPos.of(level, Containers.anchor(level, source.block(level)));
-        for (var claim : colony.reservedInputs(level)) {
-            if (claim.store()
-                .filter(
-                at ->
-                    at.equals(source)
-                        || at.equals(canonical)
-                        || at.in(level)
-                        && level.isLoaded(at.block(level))
-                        && WorldPos.of(level, Containers.anchor(level, at.block(level)))
-                        .equals(canonical))
-                .isPresent()) {
-                take(free, claim.goods(), (int) Math.min(Integer.MAX_VALUE, claim.count()), false);
-            }
-        }
-        return free;
-    }
-
-    private List<ItemStack> take(Container source, ItemSpec goods, int count, boolean weapon) {
-        return take(source, new Demand(goods, count, weapon), count);
-    }
-
-    private List<ItemStack> take(Container source, Demand demand, int count) {
-        List<ItemStack> taken = new ArrayList<>();
+    // Takes up to `count` of the goods out of the copy, as a claim on them would.
+    private static void take(Container source, ItemSpec goods, int count) {
         int left = count;
         while (left > 0) {
-            ItemStack stack = Containers.extract(source, demand::matches, left);
+            ItemStack stack = Containers.extract(source, item -> Goods.matches(item, goods), left);
             if (stack.isEmpty()) {
-                break;
+                return;
             }
-            taken.add(stack);
             left -= stack.getCount();
         }
-        return List.copyOf(taken);
     }
 
-    static boolean fits(Container pack, List<ItemStack> goods) {
-        SimpleContainer copy = copy(pack);
-        return goods.stream().allMatch(stack -> Containers.insert(copy, stack).isEmpty());
-    }
-
-    private static SimpleContainer copy(Container source) {
-        SimpleContainer copy = new SimpleContainer(source.getContainerSize());
-        for (int slot = 0; slot < source.getContainerSize(); slot++) {
-            copy.setItem(slot, source.getItem(slot).copy());
-        }
-        return copy;
-    }
-
-    private Demand wanted(ResidentEntity body, Map<UUID, Integer> deficits) {
-        Optional<LoadoutProfile> profile = profiles.assigned(body.id());
-        if (profile.isEmpty()) {
-            return null;
-        }
+    // Entries refilled now and how many each is short: an entry starts below its threshold and keeps on until full.
+    private Map<UUID, Integer> wanted(ResidentEntity body, LoadoutProfile profile, Map<UUID, Integer> deficits) {
         Set<UUID> active = refilling.computeIfAbsent(body.id(), ignored -> new HashSet<>());
-        for (LoadoutProfile.Entry entry : profile.get().entries()) {
-            Demand demand =
-                new Demand(
-                entry.items(),
-                entry.target(),
-                entry.kind() == LoadoutProfile.Kind.WEAPON,
-                Optional.of(entry.id()),
-                Optional.of(entry));
+        Map<UUID, Integer> wanted = new LinkedHashMap<>();
+        for (LoadoutProfile.Entry entry : profile.entries()) {
             int missing = deficits.getOrDefault(entry.id(), 0);
             if (missing == 0) {
                 active.remove(entry.id());
@@ -541,18 +505,10 @@ public final class PatrolSupplies {
                 active.add(entry.id());
             }
             if (active.contains(entry.id())) {
-                return demand;
+                wanted.put(entry.id(), missing);
             }
         }
-        return null;
-    }
-
-    private static SimpleContainer observedPack(InventorySnapshot.Resident resident) {
-        SimpleContainer pack = new SimpleContainer(resident.pack().size());
-        for (SlotSnapshot slot : resident.pack()) {
-            pack.setItem(slot.physicalSlot(), slot.stackCopy());
-        }
-        return pack;
+        return wanted;
     }
 
     Map<UUID, Integer> observedDeficits(ResidentEntity body, LoadoutProfile profile,
@@ -562,16 +518,27 @@ public final class PatrolSupplies {
             carried.add(body.getMainHandItem().copy());
         }
         return allocate(profile, carried, slot -> resident.equipment().containsKey(slot)
-            ? resident.equipment().get(slot).stackCopy() : ItemStack.EMPTY);
+            ? resident.equipment().get(slot).stackCopy() : ItemStack.EMPTY, kind -> tack(body, kind));
     }
 
     /** Allocate each physical unit once, in profile order, including matching loaded ammunition. */
     public Map<UUID, Integer> deficits(ResidentEntity body, LoadoutProfile profile) {
-        return allocate(profile, LoadoutRegistry.carried(body), body::getItemBySlot);
+        List<ItemStack> carried = new ArrayList<>(LoadoutRegistry.carried(body));
+        return allocate(profile, carried, body::getItemBySlot, kind -> tack(body, kind));
+    }
+
+    private static ItemStack tack(ResidentEntity body, LoadoutProfile.Kind kind) {
+        return ResidentMounts.horse(body).map(horse -> kind == LoadoutProfile.Kind.MOUNT
+            ? horse.getSlot(400).get() : horse.getItemBySlot(EquipmentSlot.BODY)).orElse(ItemStack.EMPTY);
     }
 
     static Map<UUID, Integer> allocate(LoadoutProfile profile, List<ItemStack> carried,
                                         Function<EquipmentSlot, ItemStack> equipment) {
+        return allocate(profile, carried, equipment, kind -> ItemStack.EMPTY);
+    }
+
+    private static Map<UUID, Integer> allocate(LoadoutProfile profile, List<ItemStack> carried,
+            Function<EquipmentSlot, ItemStack> equipment, Function<LoadoutProfile.Kind, ItemStack> tack) {
         List<ItemStack> available = new ArrayList<>(carried.stream().map(ItemStack::copy).toList());
         List<ItemStack> loaded = new ArrayList<>();
         for (ItemStack weapon : carried) {
@@ -585,6 +552,11 @@ public final class PatrolSupplies {
             if (entry.kind() == LoadoutProfile.Kind.ARMOR) {
                 ItemStack worn = equipment.apply(entry.slot().orElseThrow());
                 if (entry.matches(worn)) {
+                    left--;
+                }
+            }
+            if (entry.kind() == LoadoutProfile.Kind.MOUNT || entry.kind() == LoadoutProfile.Kind.HORSE_ARMOR) {
+                if (entry.matches(tack.apply(entry.kind()))) {
                     left--;
                 }
             }
@@ -615,46 +587,13 @@ public final class PatrolSupplies {
         return Collections.unmodifiableMap(missing);
     }
 
-    int missing(ResidentEntity body, Demand demand) {
-        if (demand.entry().isPresent()) {
-            return profiles.assigned(body.id())
-                .map(profile -> deficits(body, profile).getOrDefault(demand.entry().get(), 0))
-                .orElse(0);
-        }
-        long carried =
-            LoadoutRegistry.carried(body).stream().filter(demand::matches).mapToLong(ItemStack::getCount).sum();
-        return (int) Math.max(0, demand.target() - carried);
-    }
-
     public Component detail(ResidentEntity body) {
         return profiles.assigned(body.id())
             .map(profile -> Component.literal(profile.name()))
             .orElseGet(() -> Component.translatable("folkways.loadouts.none"));
     }
 
-    void finished(PatrolSupplyNode request, Ending how) {
-        UUID resident = request.authority().body().id();
-        if (!pending.remove(resident, request)) {
-            return;
-        }
-        long now = request.authority().body().level().getGameTime();
-        if (how instanceof Ending.Done) {
-            report(resident, State.READY, "stock collected", 0, request.source(), 0);
-        } else if (how instanceof Ending.Failed failed) {
-            State state = request.failure() == null ? State.FAILED : request.failure();
-            report(
-                resident,
-                state,
-                request.failureReason().orElse(failed.why().translationKey()),
-                missing(request.authority().body(), request.demand()),
-                request.source(),
-                now + RETRY_TICKS);
-        } else {
-            report(resident, State.CANCELLED, "supply interrupted", 0, request.source(), now + 20);
-        }
-    }
-
-    private void report(UUID resident, State state, String reason, long missing, WorldPos source, long retry) {
-        statuses.put(resident, new Status(state, reason, missing, Optional.ofNullable(source), retry));
+    private void report(UUID resident, State state, String reason, long missing) {
+        statuses.put(resident, new Status(state, reason, missing));
     }
 }

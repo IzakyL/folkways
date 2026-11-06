@@ -238,6 +238,8 @@ export const NEVER_HERE = new Set([
   "TOO_LARGE", "SETTLED_FOR_GOOD",
   // Only a player-drawn pattern reaches this, and the bench draws none.
   "MISSING_VOXELIZER",
+  // The bench installs no cart lines.
+  "NO_CART", "NO_HORSE", "NOT_HITCHED", "NOT_AT_STATION", "NOT_ABOARD", "NOWHERE_TO_PLACE",
 ]);
 
 export const PASSING = new Set([

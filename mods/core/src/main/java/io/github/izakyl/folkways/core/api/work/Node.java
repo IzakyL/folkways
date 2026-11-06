@@ -49,6 +49,11 @@ public interface Node {
         return false;
     }
 
+    // Whether starting this work can retain the resident's mount.
+    default boolean mountedWork() {
+        return false;
+    }
+
     default boolean staysAtWorkSite() {
         return false;
     }

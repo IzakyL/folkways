@@ -106,6 +106,10 @@ test("loadout panes and immediate assignment work in Chinese and English", async
     await typeCell(server, client, KEY + "target.0", "4096");
     await clickElement(client, { id: KEY + "amount.0" });
     await expect.poll(async () => (await server.run(READ)).target).toBe(4096);
+    await clickElement(client, { id: KEY + "add" });
+    await clickElement(client, { id: KEY + "chest" });
+    await pickItem(client, "minecraft:iron_chestplate");
+    await expect.poll(async () => element(await panelElements(client), KEY + "entry.2").displayed).toBe(true);
     const wide = await panelElements(client);
     const left = element(wide, KEY + "profiles"), right = element(wide, KEY + "details");
     expect(left.x + left.width).toBeLessThanOrEqual(right.x);

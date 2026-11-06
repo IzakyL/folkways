@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.front.api;
 
 import java.util.function.Predicate;
+import net.minecraft.network.chat.Component;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.entity.EntityType;
@@ -70,7 +71,12 @@ public sealed interface Shape {
         public Gesture gesture() { return Gesture.POINT; }
     }
 
-    record Body(Predicate<EntityType<?>> accepts) implements Shape {
+    record Body(Predicate<EntityType<?>> accepts, Component admitted, Component withdrawn) implements Shape {
+
+        public Body(Predicate<EntityType<?>> accepts) {
+            this(accepts, Component.translatable("folkways.member.joined"),
+                Component.translatable("folkways.member.left"));
+        }
 
         @Override
         public Gesture gesture() {

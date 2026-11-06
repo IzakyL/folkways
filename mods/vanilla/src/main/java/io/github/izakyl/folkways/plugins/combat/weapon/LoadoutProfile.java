@@ -11,11 +11,14 @@ import java.util.UUID;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Equipable;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public record LoadoutProfile(UUID id, String name, List<Entry> entries) {
     public enum Kind {
         WEAPON,
         ARMOR,
+        MOUNT,
+        HORSE_ARMOR,
         SUPPLY
     }
 
@@ -30,8 +33,11 @@ public record LoadoutProfile(UUID id, String name, List<Entry> entries) {
                 || threshold < 0
                 || threshold > target
                 || kind != Kind.SUPPLY && (target != 1 || threshold != 1)
-                || (kind == Kind.ARMOR) != slot.isPresent()
-                || slot.filter(value -> value.getType() != EquipmentSlot.Type.HUMANOID_ARMOR).isPresent()) {
+                || (kind == Kind.ARMOR || kind == Kind.HORSE_ARMOR) != slot.isPresent()
+                || kind == Kind.ARMOR && slot.filter(value ->
+                    value.getType() != EquipmentSlot.Type.HUMANOID_ARMOR).isPresent()
+                || kind == Kind.HORSE_ARMOR && slot.orElseThrow() != EquipmentSlot.BODY
+                || kind == Kind.MOUNT && !items.equals(ItemSpec.of(Items.SADDLE))) {
                 throw new IllegalArgumentException("invalid profile entry");
             }
         }
@@ -45,6 +51,9 @@ public record LoadoutProfile(UUID id, String name, List<Entry> entries) {
                 && switch (kind) {
                     case WEAPON -> LoadoutRegistry.using(stack).isPresent();
                     case ARMOR -> equipmentSlot(stack) == slot.orElseThrow();
+                    case MOUNT -> stack.is(Items.SADDLE);
+                    case HORSE_ARMOR -> stack.is(Items.LEATHER_HORSE_ARMOR) || stack.is(Items.IRON_HORSE_ARMOR)
+                        || stack.is(Items.GOLDEN_HORSE_ARMOR) || stack.is(Items.DIAMOND_HORSE_ARMOR);
                     case SUPPLY -> true;
                 };
         }
@@ -55,6 +64,14 @@ public record LoadoutProfile(UUID id, String name, List<Entry> entries) {
 
         public static Entry armor(EquipmentSlot slot, ItemSpec items) {
             return new Entry(UUID.randomUUID(), Kind.ARMOR, items, Optional.of(slot), 1, 1);
+        }
+
+        public static Entry mount() {
+            return new Entry(UUID.randomUUID(), Kind.MOUNT, ItemSpec.of(Items.SADDLE), Optional.empty(), 1, 1);
+        }
+
+        public static Entry horseArmor(ItemSpec items) {
+            return new Entry(UUID.randomUUID(), Kind.HORSE_ARMOR, items, Optional.of(EquipmentSlot.BODY), 1, 1);
         }
 
         public static Entry supply(ItemSpec items, int target, int threshold) {
@@ -72,7 +89,8 @@ public record LoadoutProfile(UUID id, String name, List<Entry> entries) {
             || entries.size() > 128
             || new HashSet<>(entries.stream().map(Entry::id).toList()).size() != entries.size()
             || entries.stream().flatMap(entry -> entry.slot().stream()).distinct().count()
-            != entries.stream().filter(entry -> entry.kind() == Kind.ARMOR).count()) {
+            != entries.stream().filter(entry -> entry.kind() == Kind.ARMOR || entry.kind() == Kind.HORSE_ARMOR).count()
+            || entries.stream().filter(entry -> entry.kind() == Kind.MOUNT).count() > 1) {
             throw new IllegalArgumentException("invalid profile");
         }
     }

@@ -24,7 +24,10 @@
     "promo:combat": "npm run promo:take -- combat-rts.take.ts combat-squads.take.ts combat-emplacements.take.ts combat-damage.take.ts",
     "promo:combat:repair": "npm run promo:take -- combat-repair.take.ts",
     "promo:combat:sites": "npm run promo:take -- combat-site.take.ts",
-    "promo:combat:film": "python3 tests/promo/film/combat.py"
+    "promo:combat:film": "python3 tests/promo/film/combat.py",
+    "promo:mounted": "npm run promo:take -- mounted.take.ts",
+    "promo:mounted:carts": "npm run promo:take -- carts.take.ts",
+    "promo:mounted:film": "python3 tests/promo/film/mounted.py"
   },
   "devDependencies": {
     "@izakyl/blockwright-cinema": "0.1.0-alpha.1",

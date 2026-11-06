@@ -15,6 +15,7 @@ import io.github.izakyl.folkways.core.api.colony.Holding;
 import io.github.izakyl.folkways.core.api.colony.PointSites;
 import io.github.izakyl.folkways.core.api.colony.Release;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.transport.TransportPublication;
 import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
@@ -65,6 +66,7 @@ public final class ColonyWorks extends Stretch implements Colony {
     private MinecraftServer server;
 
     private final Workshops workshops = new Workshops();
+    private final Transports transports = new Transports();
 
     private final Rules rules = new Rules();
 
@@ -275,6 +277,7 @@ public final class ColonyWorks extends Stretch implements Colony {
         colony.inventory().clear();
         inventoryMembershipRevision++;
         workshops.clear();
+        transports.clear();
         stores.clear();
         withheld.clear();
         rules.clear();
@@ -359,6 +362,24 @@ public final class ColonyWorks extends Stretch implements Colony {
             colony.inventory().offered(dimension, colony, inventoryMembershipRevision);
             listener(dimension).ifPresent(Listening::offered);
         }
+    }
+
+    @Override
+    public void publishTransport(ResourceLocation owner, ResourceKey<Level> dimension,
+                                 Collection<TransportPublication.Offering> modes) {
+        if (transports.publish(owner, dimension, List.copyOf(modes))) {
+            List.copyOf(listening.values()).forEach(Listening::offered);
+        }
+    }
+
+    @Override
+    public long transportVersion() {
+        return transports.version();
+    }
+
+    @Override
+    public TransportPublication transports() {
+        return transports.snapshot();
     }
 
     @Override
@@ -779,6 +800,7 @@ public final class ColonyWorks extends Stretch implements Colony {
                 } finally {
                     if (scopes.stream().noneMatch(scope -> scope.owner.equals(owner))) {
                         cleanup.run("workshops", () -> workshops.forget(owner));
+                        cleanup.run("transports", () -> transports.forget(owner));
                         cleanup.run("stores", () -> stores.forget(owner));
                         cleanup.run("withheld stores", () -> withheld.forget(owner));
                         cleanup.run("rules", () -> rules.forget(owner));

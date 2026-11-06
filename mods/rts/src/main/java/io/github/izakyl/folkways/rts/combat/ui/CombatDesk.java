@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.rts.combat.ui;
 
 import io.github.izakyl.folkways.plugins.combat.WeaponStations;
+import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
@@ -215,7 +216,8 @@ public final class CombatDesk {
             body.kind().id().equals(PersonBody.ID)
             && body.mob().isAlive()
             && !body.mob().isRemoved()
-            && (!body.mob().isPassenger() || WeaponStations.ownsSeat(body.mob()))
+            && (!body.mob().isPassenger() || WeaponStations.ownsSeat(body.mob())
+                || ResidentMounts.riding(body.mob()))
             && body.colonyId().filter(colony.id()::equals).isPresent()
             && colony.holdingOf(id).isPresent()
             && WorldSpaces.at(body.mob()).sameRealm(WorldSpaces.at(player)),

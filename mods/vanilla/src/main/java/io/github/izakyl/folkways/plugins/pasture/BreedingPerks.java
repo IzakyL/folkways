@@ -6,7 +6,9 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.event.entity.living.BabyEntitySpawnEvent;
 
@@ -38,6 +40,7 @@ final class BreedingPerks {
         }
         first.getPersistentData().remove(MARK);
         second.getPersistentData().remove(MARK);
+        tamed(event.getChild(), first);
         Set<Long> footprint = new HashSet<>();
         AABB bounds = null;
         for (long packed : mark.getLongArray("floor")) {
@@ -57,9 +60,19 @@ final class BreedingPerks {
         if (living + 1 >= mark.getInt("target") || level.random.nextDouble() >= mark.getDouble("chance")) { return; }
         var extra = first.getBreedOffspring(level, second);
         if (extra != null) {
+            tamed(extra, first);
             extra.setAge(-24000);
             extra.moveTo(first.position());
             level.addFreshEntity(extra);
+        }
+    }
+
+    // A foal bred in a pen is born tame to its parent's owner, so the pen's horses keep breeding and can be put to
+    // carts without a player taming each one.
+    private static void tamed(AgeableMob child, Animal parent) {
+        if (child instanceof AbstractHorse foal && parent instanceof AbstractHorse horse && horse.isTamed()) {
+            foal.setTamed(true);
+            foal.setOwnerUUID(horse.getOwnerUUID());
         }
     }
 

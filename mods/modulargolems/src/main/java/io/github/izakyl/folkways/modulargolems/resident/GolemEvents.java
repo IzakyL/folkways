@@ -50,7 +50,7 @@ public final class GolemEvents {
                     return;
                 }
                 GolemAi.hold(golem);
-                body.kind().locomotion().fit(golem);
+                body.locomotion().fit(golem);
             });
         }
     }

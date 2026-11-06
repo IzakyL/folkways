@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -62,6 +63,11 @@ final class SentryNode implements Node {
     }
 
     @Override
+    public boolean mountedWork() {
+        return stationAnchor.isEmpty();
+    }
+
+    @Override
     public NodeSpec spec() {
         return spec;
     }
@@ -108,7 +114,8 @@ final class SentryNode implements Node {
                     && post.cells().stream()
                     .anyMatch(cell -> post.at(cell).equals(station.station().at()))
                     || posts.stances(level, post, worker.body()).stream()
-                    .anyMatch(cell -> Reach.standingAt(worker.body().position(), cell)))
+                    .anyMatch(cell -> Reach.standingAt(Bodies.of(worker.body())
+                        .map(body -> body.locomotion().feet(body.mob())).orElse(worker.body().position()), cell)))
             .isPresent();
     }
 

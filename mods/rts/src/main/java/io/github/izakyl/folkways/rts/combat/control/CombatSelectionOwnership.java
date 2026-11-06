@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.rts.combat.control;
 
 import io.github.izakyl.folkways.plugins.combat.WeaponStations;
+import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.resident.body.Bodies;
@@ -404,7 +405,8 @@ public final class CombatSelectionOwnership {
                 body.kind().id().equals(PersonBody.ID)
                     && body.mob().isAlive()
                     && !body.mob().isRemoved()
-                    && (!body.mob().isPassenger() || WeaponStations.ownsSeat(body.mob()))
+                    && (!body.mob().isPassenger() || WeaponStations.ownsSeat(body.mob())
+                        || ResidentMounts.riding(body.mob()))
                     && colony.holdingOf(id).isPresent()
                     && body.colonyId().filter(colony.id()::equals).isPresent()
                     && WorldSpaces.at(body.mob()).sameRealm(WorldSpaces.at(player)));

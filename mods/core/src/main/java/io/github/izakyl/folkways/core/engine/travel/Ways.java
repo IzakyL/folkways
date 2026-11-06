@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.engine.travel;
 
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.transport.TransportTravel;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import java.util.Set;
 
@@ -10,6 +11,11 @@ public interface Ways {
 
     default Faring journey(Resident who, WorldPos from, Set<WorldPos> goals, Urgency urgency) {
         return journey(who, from, goals);
+    }
+
+    // Captures only known routes; the default must not fall back to journey or reckon.
+    default TransportTravel estimates() {
+        return TransportTravel.UNKNOWN;
     }
 
     Faring anyoneReaches(Set<WorldPos> goals);

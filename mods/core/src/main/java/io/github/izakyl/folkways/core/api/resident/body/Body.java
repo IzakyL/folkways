@@ -1,14 +1,17 @@
 package io.github.izakyl.folkways.core.api.resident.body;
 
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.effect.perk.Perks;
+import io.github.izakyl.folkways.core.api.resident.Locomotion;
+import io.github.izakyl.folkways.core.api.resident.Locomotions;
 import io.github.izakyl.folkways.core.api.resident.Resident;
 import io.github.izakyl.folkways.core.api.resident.ResidentKind;
 import io.github.izakyl.folkways.core.api.work.Balk;
 import io.github.izakyl.folkways.core.api.work.Doing;
+import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.effect.perk.Perks;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 
@@ -18,12 +21,20 @@ public interface Body {
 
     ResidentKind kind();
 
+    default Locomotion locomotion() {
+        return Locomotions.current(this);
+    }
+
+    default ResourceLocation routeKind() {
+        return Locomotions.routeKind(this);
+    }
+
     default UUID id() {
         return mob().getUUID();
     }
 
     default Resident resident() {
-        return new Resident(id(), kind().id());
+        return new Resident(id(), kind().id(), routeKind());
     }
 
     private BodyState state() {

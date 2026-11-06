@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.engine.plan;
 
+import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.core.api.terms.Gait;
 import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
@@ -7,7 +8,11 @@ import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.transport.TransportEndpoint;
+import io.github.izakyl.folkways.core.api.transport.TransportPublication;
+import io.github.izakyl.folkways.core.api.transport.TransportSnapshot;
 import io.github.izakyl.folkways.core.api.vocation.KitRules;
+import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Amount;
 import io.github.izakyl.folkways.core.api.work.Before;
 import io.github.izakyl.folkways.core.api.work.Ending;
@@ -22,6 +27,8 @@ import io.github.izakyl.folkways.core.api.work.Refinement;
 import io.github.izakyl.folkways.core.api.work.Refinements;
 import io.github.izakyl.folkways.core.api.work.Stall;
 import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.api.work.Sizing;
+import io.github.izakyl.folkways.core.api.work.TransportIntent;
 import io.github.izakyl.folkways.core.api.work.Unmet;
 import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.core.api.work.Workload;
@@ -49,6 +56,7 @@ import java.util.Optional;
 import java.util.SequencedSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -61,8 +69,10 @@ import org.slf4j.LoggerFactory;
  * <p>An intent is expanded into the work a rule gives for it ({@link Refining}). An open edge - goods a node needs
  * that nothing feeds yet - grows a source: goods already in a worker's pack, goods in a store, or goods a workshop
  * offers to make, whose own needs are open edges in turn. Sources are tried cheapest first, by what they would cost
- * ({@link Costs}). The way from a source to the node is a {@link Transfer}, laid by the rule goods move by
- * ({@link Carrying}) as material edges, and as the work that moves the goods when they need moving.
+ * ({@link Costs}). A delivery is an intent; once its source is chosen, the way to its consumer is a
+ * {@link TransportIntent}, priced and laid through the same refinement registry. The transport rule refines it
+ * into direct carrying, or carrying to one trunk and carrying on, with material edges between the legs. Carrying
+ * within a trunk route is always direct: trunks never chain.
  *
  * <p>The graph has two kinds of edge: links, which only order work, and flows, which carry goods into it. A flow
  * whose source goes is fed again some other way; a link whose earlier end goes undone is left to the owner of its
@@ -88,8 +98,8 @@ public final class Weaver {
     private static final long SWITCH_TICKS = 100;
     private static final long SWITCH_SHARE = 4;
 
+    private final Routing transport = new Routing();
     private final Refining refining = new Refining(rules(), this::lent);
-    private final Carrying carrying = Haul.CARRYING;
     private final Claims claims;
     private final Cooldowns cooldowns;
 
@@ -114,7 +124,6 @@ public final class Weaver {
     private final Set<UUID> stowing = new LinkedHashSet<>();
     // Open edges into work that carries goods elsewhere rather than making them, by edge: fed only from stock or a
     // pack, though the goods are the very ones the work gives.
-    private final Set<UUID> stockOnly = new HashSet<>();
     private final Set<UUID> stowFresh = new LinkedHashSet<>();
     // Asked work its owner keeps off the plan, waiting on work it comes after that ended undone, until that work is
     // asked again.
@@ -135,6 +144,7 @@ public final class Weaver {
     private final Set<UUID> grownNow = new LinkedHashSet<>();
     private final List<Expansion> madeNow = new ArrayList<>();
     private Situation now;
+    private TransportPublication publication;
     private Crew crew;
     private Costs costs;
     private List<Workshop> costedFor = List.of();
@@ -194,9 +204,9 @@ public final class Weaver {
         claims.watch(dirty::add);
     }
 
-    // The core's own rules - deliveries - come before anything a plugin declares.
-    private static List<Refinement> rules() {
-        List<Refinement> rules = new ArrayList<>(List.of(Haul.DELIVERIES));
+    // The core's own rules come before anything a plugin declares.
+    private List<Refinement> rules() {
+        List<Refinement> rules = new ArrayList<>(List.of(Haul.DELIVERIES, transport));
         rules.addAll(Refinements.all());
         return List.copyOf(rules);
     }
@@ -230,10 +240,43 @@ public final class Weaver {
 
     // ---- the world this round ----
 
-    // What a rule refining an intent this round is lent: the sizing of this round's crew.
+    // What a rule refining an intent this round is lent, without exposing the live graph.
     private Refinement.Context lent() {
-        PackSizing now = sizing;
-        return () -> now;
+        PackSizing sized = sizing;
+        return new Refinement.Context() {
+            @Override
+            public Sizing sizing() {
+                return sized;
+            }
+
+            @Override
+            public Optional<Refinement.Planning> planning() {
+                return Optional.of(new Refinement.Planning() {
+                    @Override
+                    public long now() {
+                        return now.at();
+                    }
+
+                    @Override
+                    public TransportPublication transports() {
+                        return publication;
+                    }
+
+                    @Override
+                    public TransportSnapshot snapshot(ItemSpec goods) {
+                        List<TransportSnapshot.Carrier> carriers = new ArrayList<>();
+                        for (Crew.Hand hand : crew.hands()) {
+                            long room = (long) hand.packCells() * Math.max(1, Goods.stackSize(goods));
+                            if (hand.takes(Vocations.of(Vocations.HAULING)) && room > 0) {
+                                carriers.add(DirectTransport.carrier(hand.who(), hand.at(), goods, room,
+                                    FolkwaysConfig.haulReachTicks()));
+                            }
+                        }
+                        return new TransportSnapshot(now.at(), now.at(), now.ways().estimates(), carriers);
+                    }
+                });
+            }
+        };
     }
 
     public void know(Situation now, Crew crew) {
@@ -263,6 +306,8 @@ public final class Weaver {
     }
 
     public WeaveDelta grow(boolean retry) {
+        publication = now.transports().get();
+        transport.begin(publication);
         if (weaving) {
             rollBack();
         }
@@ -700,7 +745,6 @@ public final class Weaver {
         reopened.clear();
         stowing.clear();
         stowFresh.clear();
-        stockOnly.clear();
         awaiting.clear();
         going.clear();
         gapsOf.clear();
@@ -1031,13 +1075,19 @@ public final class Weaver {
             lastFed.merge((consumer == null ? "?" : consumer.getClass().getSimpleName()) + "<-"
                 + edge.need().spec().describe() + "x" + edge.count() + " trail=" + edge.trail().size(), 1, Integer::sum);
         }
-        boolean stocked = stockOnly.contains(edge.id());
-        if ((edge.loops() && !stocked) || !nodes.containsKey(edge.consumer())) {
+        if (edge.loops() || !nodes.containsKey(edge.consumer())) {
             return edge.count();
         }
         long whole = edge.count();
         long left = whole - fromPack(edge, whole);
-        if (left > 0 && !restoring && !stocked && joinable(edge.spec())) {
+        while (left > 0 && !publication.entries().isEmpty()) {
+            long carried = fromPack(edge, left);
+            if (carried <= 0) {
+                break;
+            }
+            left -= carried;
+        }
+        if (left > 0 && !restoring && joinable(edge.spec())) {
             List<Source> ranked = sources(edge, left, whole);
             if (!ranked.isEmpty() && ranked.getFirst() instanceof Source.Offered(Costs.Offer cheapest)) {
                 left -= joined(edge, cheapest, left);
@@ -1091,7 +1141,13 @@ public final class Weaver {
         List<Ranked> ranked = new ArrayList<>();
         for (Stock.Lot lot : now.stock().lotsOf(edge.spec())) {
             if (drawable(lot.where(), lot.concrete()) > 0 && feeds(lot.where(), edge.consumer(), lot.concrete())) {
-                long cost = Transfer.walk(lot.where().pos(), near);
+                long cost = !edge.carried() && !reaching(edge.consumer(), lot.where()).isEmpty() ? 0
+                    : carriedTo(edge, lot.where().pos(), now.stands().around(lot.where()),
+                    TransportEndpoint.Form.INVENTORY, lot.concrete(),
+                    Math.min(left, drawable(lot.where(), lot.concrete())));
+                if (cost == Costs.UNREACHABLE) {
+                    continue;
+                }
                 ranked.add(new Ranked(new Source.Lot(lot), cost, 0,
                     now.stock().available(lot.concrete()), lot.where().toString(), ranked.size(), cost));
             }
@@ -1099,7 +1155,7 @@ public final class Weaver {
         Map<UUID, Integer> groups = new HashMap<>();
         Map<UUID, Long> cheapest = new HashMap<>();
         List<WorldPos> hands = null;
-        if (!stockOnly.contains(edge.id()) && consumer.permitsProduction(edge.spec()) && costs.reachable(edge.spec(), near, edge.trail())) {
+        if (consumer.permitsProduction(edge.spec()) && costs.reachable(edge.spec(), near, edge.trail())) {
             for (Costs.Offer offer : costs.offers(Produce.of(OWNER, near, edge.spec(), left,
                     sizing.batching(whole)))) {
                 Grown made = offer.change().replacement();
@@ -1133,32 +1189,55 @@ public final class Weaver {
         return ranked.stream().map(Ranked::source).toList();
     }
 
-    // What an offer would cost the edge: its work and inputs, the walk bringing those to it, and the walk on. Work
-    // that carries the goods rather than making them costs its own work and the walk bringing them from stock, and is
-    // no way at all when no stock holds them.
+    // What an offer would cost the edge: its work and inputs, the walk bringing those to it, and the way on.
     private long priced(Edge edge, WorkSite near, Costs.Offer offer) {
         return priced(edge, near, offer, waitFor(offer));
     }
 
     private long priced(Edge edge, WorkSite near, Costs.Offer offer, long waiting) {
-        Workshop from = offer.from();
         Grown made = offer.change().replacement();
-        long cost;
-        if (from.carries()) {
-            cost = 0;
-            for (Node node : made.nodes()) {
-                cost = Costs.plus(cost, node.spec().estimate());
-                for (Need need : node.spec().needs()) {
-                    if (!drawableAnywhere(need.spec())) {
-                        return Costs.UNREACHABLE;
-                    }
+        long cost = costs.of(made, near, edge.upstream());
+        return cost == Costs.UNREACHABLE ? cost
+            : Costs.plus(Costs.plus(Costs.plus(cost, waiting), walkIn(made)), deliveredFrom(made, edge, near));
+    }
+
+    // The way from where an offer's goods come out on to the consumer: the nearest straight line until a transport
+    // is published, then the cheapest route known for the whole yield, straight there or by one trunk.
+    private long deliveredFrom(Grown made, Edge edge, WorkSite near) {
+        long straight = walkFrom(made, edge.spec(), near);
+        if (publication.entries().isEmpty() || !nodes.containsKey(edge.consumer())) {
+            return straight;
+        }
+        long best = Costs.UNREACHABLE;
+        boolean any = false;
+        for (Node node : made.nodes()) {
+            for (Amount gives : node.spec().gives()) {
+                if (admits(edge.spec(), gives.spec())) {
+                    any = true;
+                    WorldPos at = node.spec().site().where();
+                    // Goods leave with the worker beside the station, not from inside its solid block.
+                    Set<Stand> loading = node.spec().stances() instanceof Stances.Wherever
+                        ? Set.of(new Stand(at)) : Stands.cellsOf(node.spec().stances());
+                    best = Math.min(best, carriedTo(edge, at, loading, TransportEndpoint.Form.PACK,
+                        gives.spec(), Math.min(edge.count(), gives.count())));
                 }
             }
-        } else {
-            cost = costs.of(made, near, edge.upstream());
         }
-        return cost == Costs.UNREACHABLE ? cost
-            : Costs.plus(Costs.plus(Costs.plus(cost, waiting), walkIn(made)), walkFrom(made, edge.spec(), near));
+        return any ? best : straight;
+    }
+
+    // What carrying `count` goods from `from` to the edge's consumer would cost. By straight line while no transport
+    // is published; otherwise the cheapest known route, keeping the straight line while no route is known yet.
+    private long carriedTo(Edge edge, WorldPos from, Set<Stand> loading, TransportEndpoint.Form form,
+                           ItemSpec goods, long count) {
+        WorkSite near = nodes.get(edge.consumer()).spec().site();
+        long straight = Transfer.walk(from, near);
+        Set<Stand> unloading = standsOf(edge.consumer());
+        TransportIntent intent = TransportIntent.of(Routing.endpoint("source", from, loading, form),
+            Routing.endpoint("destination", near.where(),
+                unloading == null ? Set.of(new Stand(near.where())) : unloading, TransportEndpoint.Form.PACK),
+            goods, count, now.at());
+        return refining.estimate(intent).orElse(straight);
     }
 
     // Where whoever could do work for the consumer stands: whoever it is already bound to, or else anyone.
@@ -1222,10 +1301,12 @@ public final class Weaver {
         }
     }
 
-    // Goods already in a worker's pack: whoever carries them does the consumer's work, and nothing is moved.
+    // Without published transport, pack goods stay with the consumer's worker. Routed goods keep their carrier
+    // as a source constraint and the consumer's binding as a separate destination constraint.
     private long fromPack(Edge edge, long count) {
         Node consumer = nodes.get(edge.consumer());
-        if (consumer instanceof Receipt) {
+        boolean routed = !publication.entries().isEmpty();
+        if (!routed && consumer instanceof Receipt) {
             return 0;
         }
         // Whoever the consumer's work is already bound to - through any step it must be done together with -
@@ -1238,7 +1319,7 @@ public final class Weaver {
         // The goods are in the pack already: what it takes is fitness for all of the consumer's group.
         Fitness.Work work = work(together(edge.consumer()), 0);
         for (Crew.Hand hand : crew.hands()) {
-            if (occupied.contains(hand.id()) || Fitness.of(hand, work).isPresent()) {
+            if (occupied.contains(hand.id()) || !routed && Fitness.of(hand, work).isPresent()) {
                 continue;
             }
             Map<ItemSpec, Long> skipped = new LinkedHashMap<>();
@@ -1263,9 +1344,17 @@ public final class Weaver {
                 continue;
             }
             Expansion grown = begin(new Expansion(edge));
-            grown.covers = transfer(grown, new Transfer(new From.Carried(hand.id(), taken), new To.Feeding(edge),
-                edge.spec(), served));
-            return served;
+            try {
+                grown.covers = transfer(grown, new From.Carried(hand.id(), taken), new To.Feeding(edge),
+                    edge.spec(), served);
+            } catch (RuntimeException | LinkageError broken) {
+                undo(grown, Ending.DROPPED);
+                throw broken;
+            }
+            if (grown.covers > 0) {
+                return grown.covers;
+            }
+            undo(grown, Ending.DROPPED);
         }
         return 0;
     }
@@ -1287,8 +1376,8 @@ public final class Weaver {
             Expansion grown = begin(new Expansion(edge));
             long moved;
             try {
-                moved = transfer(grown, new Transfer(new From.Stocked(lot.where()), new To.Feeding(edge),
-                    lot.concrete(), can - got));
+                moved = transfer(grown, new From.Stocked(lot.where()), new To.Feeding(edge),
+                    lot.concrete(), can - got);
             } catch (RuntimeException | LinkageError broken) {
                 undo(grown, Ending.DROPPED);
                 throw broken;
@@ -1355,13 +1444,6 @@ public final class Weaver {
         grown.holds.addAll(holds);
         try {
             place(grown, work);
-            if (offer.from().carries()) {
-                for (Node node : work.nodes()) {
-                    for (int at = 0; at < node.spec().needs().size(); at++) {
-                        stockOnly.add(Edge.idOf(node.id(), at));
-                    }
-                }
-            }
             waitOn(grown, work, after);
             if (!fitsAll(work)) {
                 undo(grown, Ending.DROPPED);
@@ -1374,8 +1456,8 @@ public final class Weaver {
             UUID maker = makerOf(work, made);
             boolean shared = !also.isEmpty();
             if (maker == null
-                    || transfer(grown, new Transfer(new From.Made(maker, yield, shared), new To.Feeding(edge), made,
-                        covers)) < covers) {
+                    || transfer(grown, new From.Made(maker, yield, shared), new To.Feeding(edge), made,
+                        covers) < covers) {
                 undo(grown, Ending.DROPPED);
                 madeShort = maker == null ? "no maker" : "carry to the first consumer: " + lastWhy;
                 return 0;
@@ -1385,8 +1467,8 @@ public final class Weaver {
             Stash out = lying == null ? null : lying.out();
             for (Edge further : also) {
                 attach(grown, further);
-                if (lying == null || transfer(grown, new Transfer(new From.LeftBy(lying.suppliers(), lying.out()),
-                        new To.Feeding(further), made, further.count())) < further.count()) {
+                if (lying == null || transfer(grown, new From.LeftBy(lying.suppliers(), lying.out()),
+                        new To.Feeding(further), made, further.count()) < further.count()) {
                     undo(grown, Ending.DROPPED);
                     madeShort = out == null ? "no store beside the maker: " + grown.flows.stream()
                         .filter(flow -> flow.after().filter(maker::equals).isPresent())
@@ -1624,18 +1706,107 @@ public final class Weaver {
 
     // ---- the transfer ----
 
-    // The one way goods move on the plan: a transfer, laid by the rule goods move by into the growth it is for.
-    private long transfer(Expansion grown, Transfer transfer) {
-        return carrying.lay(transfer, new Lent(grown));
+    // A chosen source becomes an intent; the refinement registry lays its material edges into this growth.
+    private long transfer(Expansion grown, From from, To to, ItemSpec goods, long count) {
+        Lent lent = new Lent(grown, from, to, goods, count);
+        return refining.lay(lent.transfer.intent(), lent);
     }
 
     // What the plan lends the rule while it lays a transfer: the plan this round, and the one growth to lay into.
-    private final class Lent implements Laying {
+    private final class Lent implements Routing.Plan, Refinement.Context {
 
         private final Expansion grown;
+        private final Transfer transfer;
 
-        private Lent(Expansion grown) {
+        private Lent(Expansion grown, From from, To to, ItemSpec goods, long count) {
             this.grown = grown;
+            this.transfer = Routing.request(from, to, goods, count, now.at(), this);
+        }
+
+        @Override
+        public Transfer transfer() {
+            return transfer;
+        }
+
+        @Override
+        public Sizing sizing() {
+            return sizing;
+        }
+
+        @Override
+        public Optional<Refinement.Planning> planning() {
+            return lent().planning();
+        }
+
+        @Override
+        public Optional<Refinement.Laying> laying() {
+            return Optional.of(this);
+        }
+
+        @Override
+        public long attempt(LongSupplier work) {
+            Mark mark = mark();
+            try {
+                long laid = work.getAsLong();
+                if (laid > 0) {
+                    return laid;
+                }
+            } catch (RuntimeException | LinkageError broken) {
+                rollback(mark);
+                throw broken;
+            }
+            rollback(mark);
+            return 0;
+        }
+
+        @Override
+        public Situation situation() {
+            return now;
+        }
+
+        @Override
+        public Crew crew() {
+            return crew;
+        }
+
+        @Override
+        public Set<Stand> stands(UUID node) {
+            Set<Stand> at = standsOf(node);
+            return at == null ? Set.of(new Stand(nodes.get(node).spec().site().where())) : at;
+        }
+
+        @Override
+        public boolean eligible(Crew.Hand hand, UUID node) {
+            return Fitness.of(hand, work(Weaver.this.together(node), peakLoad(Weaver.this.together(node)))).isEmpty();
+        }
+
+        @Override
+        public boolean after(UUID node, Set<UUID> predecessors) {
+            if (reaches(node, predecessors)) {
+                return false;
+            }
+            predecessors.forEach(before -> grown.link(new Before(before, node)));
+            return true;
+        }
+
+        @Override
+        public boolean hold(Hold hold) {
+            if (take(List.of(hold)).isPresent()) {
+                return false;
+            }
+            grown.holds.add(hold);
+            return true;
+        }
+
+        @Override
+        public boolean reserve(ResourceLocation resource, ResourceLocation unit, UUID owner,
+                               long amount, long capacity) {
+            Resource.Transport on = new Resource.Transport(resource, unit);
+            if (amount < 0 || capacity < 0 || amount > capacity - claims.taken(on)) {
+                return false;
+            }
+            book(on, owner, amount);
+            return true;
         }
 
         @Override
@@ -1837,8 +2008,8 @@ public final class Weaver {
                     if (count <= 0) {
                         continue;
                     }
-                    if (transfer(grown, new Transfer(new From.Carried(hand.id(),
-                            List.of(carried.copyWithCount(count))), new To.Stored(store.stash()), spec, count)) <= 0) {
+                    if (transfer(grown, new From.Carried(hand.id(),
+                            List.of(carried.copyWithCount(count))), new To.Stored(store.stash()), spec, count) <= 0) {
                         why = lastWhy;
                         break;
                     }
@@ -2016,6 +2187,9 @@ public final class Weaver {
 
     // Takes back what a growth gained since `mark`, as though it had stopped there.
     private void rollback(Expansion grown, Expansion.Mark mark) {
+        List<Hold> holds = grown.holds.subList(mark.holds(), grown.holds.size());
+        release(List.copyOf(holds), Ending.DROPPED);
+        holds.clear();
         List<UUID> added = List.copyOf(grown.nodes);
         for (UUID id : added.subList(mark.nodes(), added.size())) {
             forget(id);
@@ -2043,7 +2217,6 @@ public final class Weaver {
         Node gone = nodes.remove(node);
         if (gone != null) {
             for (int at = 0; at < gone.spec().needs().size(); at++) {
-                stockOnly.remove(Edge.idOf(node, at));
                 List<Gap> short_ = gapsOf.remove(Edge.idOf(node, at));
                 if (short_ != null && weaving) {
                     endedGaps.addAll(short_);
@@ -2268,6 +2441,8 @@ public final class Weaver {
                     draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount(), Optional.of(resident), Optional.empty()));
                 case Resource.Handed(UUID by, ItemSpec spec) ->
                     draws.add(new Placement.Draw(Optional.empty(), spec, claim.amount(), Optional.empty(), Optional.of(by)));
+                case Resource.Transport ignored -> {
+                }
                 case Resource.Space space -> {
                 }
             }

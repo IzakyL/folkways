@@ -76,6 +76,12 @@ public final class PlanningFixture {
             public Faring anyoneReaches(Set<WorldPos> goals) {
                 return Faring.yes(Journey.afoot(ticks, goals));
             }
+            public io.github.izakyl.folkways.core.api.transport.TransportTravel estimates() {
+                return (kind, from, to, departure) -> from.sameRealm(to)
+                    ? new io.github.izakyl.folkways.core.api.transport.TransportTravel.Yes(
+                        Transfer.walk(from, new io.github.izakyl.folkways.core.api.work.WorkSite.AtBlock(to)), 0)
+                    : io.github.izakyl.folkways.core.api.transport.TransportTravel.LATER;
+            }
         };
     }
 
@@ -92,6 +98,13 @@ public final class PlanningFixture {
 
     public Situation situation(Stock stock, List<Workshop> workshops) {
         return new Situation(ways, stock, workshops, stands);
+    }
+
+    // With transports published as they would be by the colony, at the given time.
+    public Situation situation(Stock stock, List<Workshop> workshops,
+                               io.github.izakyl.folkways.core.api.transport.TransportPublication transports,
+                               long at) {
+        return new Situation(ways, stock, workshops, stands, () -> transports, at);
     }
 
     public static final class Owed {

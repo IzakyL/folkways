@@ -5,30 +5,43 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.plugins.combat.WeaponStations;
 import io.github.izakyl.folkways.plugins.combat.SpottedTargets;
+import io.github.izakyl.folkways.core.api.terms.Reach;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.work.Urge;
 import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.plugins.combat.SpottedTargets;
+import io.github.izakyl.folkways.plugins.combat.WeaponStations;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
+import io.github.izakyl.folkways.plugins.pasture.PastureContent;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.fear.FearContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -602,6 +615,42 @@ public final class ResidentCommandGameTests {
             seat.discard();
         }
         helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 500)
+    public static void moveOrderRidesTheAssignedHorseAndHoldsItsPostMounted(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body body = f.resident(new BlockPos(2, 1, 4));
+        var front = ColonyFront.of(f.colony);
+        front.addZone(f.level, PastureContent.PASTURE,
+            Set.of(f.at(4, 0, 4).cell()),
+            ColonySettings.empty()
+                .with("animal", new ColonySettings.Value.Choice(
+                    ResourceLocation.withDefaultNamespace("horse")))).orElseThrow();
+        var horse = EntityType.HORSE.create(f.level);
+        horse.moveTo(f.at(4, 1, 4).cell().getBottomCenter());
+        horse.setTamed(true);
+        f.level.addFreshEntity(horse);
+        var supplies = PatrolSupplies.of(f.colony);
+        var created = supplies.profiles().create("Mounted move");
+        supplies.profiles().replace(new LoadoutProfile(created.id(),
+            created.name(), List.of(LoadoutProfile.Entry.mount())));
+        body.pack().insert(new ItemStack(Items.SADDLE));
+        supplies.profiles().assign(List.of(body.id()), Optional.of(created.id()));
+        AtomicBoolean rode = new AtomicBoolean();
+        var order = f.commands.hold(body, f.at(18, 1, 4));
+        helper.onEachTick(() -> rode.set(rode.get() || body.mob().getVehicle() == horse));
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(order.status() == ResidentCommands.Status.HOLDING,
+            "RTS movement reaches the destination through the riding gait: " + order.status()
+                + " failure=" + order.failure() + " at=" + body.mob().position() + " horse=" + horse.position()
+                + " rode=" + rode.get() + " doing=" + body.doing()))
+            .thenExecute(() -> {
+                helper.assertTrue(rode.get() && horse.getX() > f.at(12, 1, 4).cell().getX(),
+                    "the move order steers the real horse");
+                helper.assertTrue(body.mob().getVehicle() == horse, "the resident holds its post in the saddle");
+                order.close();
+                horse.discard();
+            }).thenSucceed();
     }
 
     private static final class Fixture {

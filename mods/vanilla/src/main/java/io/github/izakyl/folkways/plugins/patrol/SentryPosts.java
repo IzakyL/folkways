@@ -219,7 +219,9 @@ public final class SentryPosts implements Facing {
     public List<Urge> urges(Worker worker, ColonyView view) {
         UUID resident = worker.resident().id();
         UUID assigned = assignment(resident).orElse(null);
-        if (assigned == null || !valid(view.level(), resident, assigned) || Weapons.awaitingSupply(worker)) {
+        // A sentry sets out for its own supplies when the colony's plan sends it, and takes up its post again after.
+        if (assigned == null || !valid(view.level(), resident, assigned) || Weapons.awaitingSupply(worker)
+            || PatrolContent.suppliesOf(colony).filter(supplies -> supplies.underway(resident)).isPresent()) {
             return List.of();
         }
         ZoneView zone = zone(view.level(), assigned).orElseThrow();

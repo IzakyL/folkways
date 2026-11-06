@@ -1,10 +1,15 @@
 package io.github.izakyl.folkways.core.api.work;
 
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.api.transport.TransportPublication;
+import io.github.izakyl.folkways.core.api.transport.TransportSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 import net.minecraft.resources.ResourceLocation;
 
 public interface Refinement {
@@ -21,10 +26,52 @@ public interface Refinement {
         return rewrite(intent, graph);
     }
 
+    // Empty while the cost is unknown; Long.MAX_VALUE when no way is possible.
+    default OptionalLong estimate(Intent intent, Context context) {
+        return OptionalLong.empty();
+    }
+
+    // Material refinements fulfill an existing edge, which may need no new work node. They grow the lent
+    // expansion, including its flows and reservations. Empty means this rule does not handle the intent;
+    // zero means it tried but could not lay any goods.
+    default OptionalLong lay(Intent intent, Context context) {
+        return OptionalLong.empty();
+    }
+
+    // A read-only view of this round, including the crew's carrying room for the goods being priced.
+    interface Planning {
+        long now();
+
+        TransportPublication transports();
+
+        TransportSnapshot snapshot(ItemSpec goods);
+    }
+
+    // The plan owns the expansion and undoes a failed attempt, including holds and capacity reservations.
+    // Rules may extend this capability with the material operations they need.
+    interface Laying {
+        interface Mark {
+        }
+
+        Mark mark();
+
+        void rollback(Mark mark);
+
+        long attempt(LongSupplier work);
+    }
+
     // What the plan lends a rule while it refines.
     interface Context {
 
         Sizing sizing();
+
+        default Optional<Planning> planning() {
+            return Optional.empty();
+        }
+
+        default Optional<Laying> laying() {
+            return Optional.empty();
+        }
 
         Context NONE = () -> Sizing.UNBOUNDED;
     }

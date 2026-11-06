@@ -14,10 +14,4 @@ public interface Workshop extends Refinement {
     default boolean alike() {
         return false;
     }
-
-    // Whether its work moves the goods it is asked for rather than making them: what it needs is the very goods it
-    // gives, somewhere else. Those are drawn only from stock or a pack, never made or moved again for it.
-    default boolean carries() {
-        return false;
-    }
 }

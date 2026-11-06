@@ -84,6 +84,16 @@ public final class TransferNode implements Node, Staged {
             new TransferNode(UUID.randomUUID(), from, to, goods, stances, new WorkSite.AtBlock(store.pos())));
     }
 
+    public static TransferNode relay(Stash into, Need goods, Set<Stand> stands) {
+        NodeSpec spec = NodeSpec.of(UUID.randomUUID(), Haul.DOMAIN, new WorkSite.AtBlock(into.pos()),
+                new Stances.Cells(stands.stream().map(Stand::cell).collect(java.util.stream.Collectors.toSet())),
+                Workload.Once.of(FolkwaysConfig.haulReachTicks(), Haul::haste))
+            .needs(new Need(goods.spec(), goods.count(), true)).gives(new Amount(goods.spec(), goods.count()))
+            .vocation(Haul.trade()).done();
+        return new TransferNode(spec, Endpoint.pack(), Endpoint.store(into),
+            new Manifest(List.of(), List.of()), true, count -> { });
+    }
+
     // A delivery into a store: a put that needs the goods it puts into `into`, fed like any other need. What it puts
     // down is whatever the steps feeding it hand on, known only as the plan grows them. Done, it tells `landed` how
     // many it put down.

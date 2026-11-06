@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.engine.colony;
 
 import io.github.izakyl.folkways.core.api.passage.Hop;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.transport.TransportTravel;
 import io.github.izakyl.folkways.core.api.resident.body.Body;
 import io.github.izakyl.folkways.core.api.terms.Closures;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -48,6 +49,11 @@ public final class ColonyWays {
         @Override
         public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals, Urgency urgency) {
             return answered(ways -> ways.journey(who, from, goals, urgency));
+        }
+
+        @Override
+        public TransportTravel estimates() {
+            return graph(colony, level).ways().estimates();
         }
 
         @Override
@@ -118,10 +124,10 @@ public final class ColonyWays {
             if (body.mob().isRemoved()) {
                 continue;
             }
-            Roamer current = byKind.get(body.kind().id());
+            Roamer current = byKind.get(body.routeKind());
             if (current == null || current.body().isPassenger() && !body.mob().isPassenger()) {
-                byKind.put(body.kind().id(),
-                    new Roamer(body.kind().id(), body.kind().locomotion(), body.mob()));
+                byKind.put(body.routeKind(),
+                    new Roamer(body.routeKind(), body.locomotion(), body.mob()));
             }
         }
         return List.copyOf(byKind.values());

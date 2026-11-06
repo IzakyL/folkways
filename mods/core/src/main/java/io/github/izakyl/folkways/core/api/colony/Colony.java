@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.api.colony;
 
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.transport.TransportPublication;
 import io.github.izakyl.folkways.core.api.inventory.ColonyInventory;
 import io.github.izakyl.folkways.core.api.inventory.InventoryFeedback;
 import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
@@ -40,6 +41,15 @@ public interface Colony {
     }
 
     void publish(ResourceLocation owner, ResourceKey<Level> dimension, Collection<Workshop> workshops);
+
+    void publishTransport(ResourceLocation owner, ResourceKey<Level> dimension,
+                          Collection<TransportPublication.Offering> modes);
+
+    TransportPublication transports();
+
+    default long transportVersion() {
+        return transports().version();
+    }
 
     // Replaces every store this owner offers the colony's work in that dimension.
     void stores(ResourceLocation owner, ResourceKey<Level> dimension, Collection<WorldPos> stores);

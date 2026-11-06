@@ -8,6 +8,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.data.TextWrap;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignItems;
@@ -45,6 +46,7 @@ import java.util.Locale;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
@@ -59,11 +61,26 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemStack;
 
 /** Commands carry the profile revision shown to the player; a stale editor cannot overwrite another keeper. */
 public final class LoadoutPage implements Draw {
     private static final String KEY = "folkways.loadouts.";
+    private static final int GAP = Rows.GAP;
+    private static final int PROFILES_WIDTH = 150;
+    // Entry columns: kind, icon, item, status, amounts, then the row's buttons.
+    private static final int KIND_WIDTH = 48, STATUS_WIDTH = 56, NUMBER_WIDTH = 30, SAVE_WIDTH = 18;
+    private static final int AMOUNTS_WIDTH = NUMBER_WIDTH * 2 + SAVE_WIDTH + 4;
+    // Replace and remove are worded while the list has room and shrink to a glyph when it has not.
+    private static final int ROW_BUTTON = 44;
+    private static final int ITEM_WIDTH = 36;
+    private static final int TABLE_WIDTH = tableWidth(ROW_BUTTON), COMPACT_WIDTH = tableWidth(Rows.ACT_SIZE);
+    // Past this an item name only pushes its status away from it.
+    private static final int TABLE_MAX_WIDTH = 640;
+    private static final int HEADER_HEIGHT = 14, SCROLLBAR = 8;
+    // The section red of Rows.heading: something the keeper has to act on.
+    private static final int ALERT = 0x9A3324;
     private UUID context;
     private UUID selected;
     private Component message = Component.empty();
@@ -77,6 +94,19 @@ public final class LoadoutPage implements Draw {
     private final List<UIElement> entryRows = new ArrayList<>();
     private final List<Label> entryLabels = new ArrayList<>(), entryStatuses = new ArrayList<>();
     private final List<UIElement> entryIcons = new ArrayList<>(), supplyControls = new ArrayList<>();
+    private final List<Label> entryKinds = new ArrayList<>(), figures = new ArrayList<>();
+    private final List<Button> upButtons = new ArrayList<>(), downButtons = new ArrayList<>();
+    private final List<Button> editButtons = new ArrayList<>(), removeButtons = new ArrayList<>();
+    private UIElement headerButtons;
+    private boolean compact;
+    private final Label profileRange = range(), entryRange = range(), residentRange = range();
+    private final Label profilesEmpty = Rows.note(text("no_profiles"));
+    private final Label entriesEmpty = Rows.note(text("no_entries"));
+    private final Label help = Rows.note(text("help"));
+    private UIElement profilePager, entryPager, residentPager;
+    private Button adding;
+    private ScrollerView entries;
+    private Label title;
     private final List<UIElement> residentRows = new ArrayList<>(), residentJobs = new ArrayList<>();
     private final List<Label> residentNames = new ArrayList<>();
     private Pane assignments;
@@ -146,22 +176,12 @@ public final class LoadoutPage implements Draw {
                 }
             });
         UIElement profiles = Rows.page();
-        profiles.layout(layout -> layout.width(136).flexShrink(0));
+        profiles.layout(layout -> layout.width(PROFILES_WIDTH).flexShrink(0));
         Tokens.name(profiles, KEY + "profiles");
-        name = new TextField();
-        name.setText("");
-        name.textFieldStyle(style -> style.placeholder(Rows.placeholder(text("name"))));
-        name.layout(layout -> layout.widthPercent(100).minWidth(0));
-        Tokens.name(name, KEY + "name");
-        UIElement actions = Rows.strip();
-        actions.layout(layout -> layout.flexWrap(FlexWrap.WRAP).gapAll(2));
-        actions.addChildren(
-            button("create", () -> send(named(request("create")))),
-            button("rename", () -> send(named(request("rename")))),
-            button("duplicate", () -> send(request("duplicate"))),
-            button("delete", () -> send(request("delete"))));
-        profiles.addChildren(Rows.heading(text("profiles")), name, actions,
-            pager("profiles", () -> profileOffset -= 4, () -> profileOffset += 4));
+        // One profile to a line beside the details; laid side by side above them, so the list costs one line.
+        UIElement list = new UIElement().layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
+            .widthPercent(100).gapAll(GAP));
+        profiles.addChildren(Rows.heading(text("profiles")), list);
         for (int n = 0; n < 4; n++) {
             int slot = n;
             Button button = button("profile." + n, () -> {
@@ -175,29 +195,60 @@ public final class LoadoutPage implements Draw {
             button.layout(layout -> layout.widthPercent(100).flexShrink(1).minWidth(0));
             limit(button);
             profileButtons.add(button);
-            profiles.addChildren(button);
+            list.addChildren(button);
         }
+        profilesEmpty.setDisplay(false);
+        profilePager = pager("profiles", () -> profileOffset -= 4, () -> profileOffset += 4, profileRange);
+        name = new TextField();
+        name.setText("");
+        name.textFieldStyle(style -> style.placeholder(Rows.placeholder(text("name"))));
+        name.layout(layout -> layout.widthPercent(100).minWidth(0));
+        Tokens.name(name, KEY + "name");
+        UIElement actions = Rows.strip();
+        actions.layout(layout -> layout.widthAuto().flexWrap(FlexWrap.WRAP).gapAll(2));
+        actions.addChildren(
+            button("create", () -> send(named(request("create")))),
+            button("rename", () -> send(named(request("rename")))),
+            button("duplicate", () -> send(request("duplicate"))),
+            button("delete", () -> send(request("delete"))));
+        UIElement editing = Rows.group(text("edit_profile"));
+        UIElement editor = Rows.strip().addChildren(name, actions);
+        editor.layout(layout -> layout.flexWrap(FlexWrap.WRAP).gapAll(GAP));
+        profiles.addChildren(profilesEmpty, profilePager, editing, editor);
         UIElement details = Rows.page();
         details.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0).width(0));
         Tokens.name(details, KEY + "details");
-        Button adding = button("add", () -> {
+        UIElement heading = Rows.title(text("unselected"));
+        title = (Label) heading.getChildren().getFirst();
+        title.layout(layout -> layout.flexShrink(1).minWidth(0).maxWidth(260));
+        title.textStyle(style -> style.textWrap(TextWrap.HOVER_ROLL));
+        for (int n = 0; n < 4; n++) {
+            Label figure = Rows.figure(Component.empty(), Component.empty());
+            figure.setDisplay(false);
+            figures.add(figure);
+            heading.addChildren(figure);
+        }
+        adding = button("add", () -> {
         });
         adding.setOnClick(event -> addMenu(adding, items));
-        details.addChildren(summary, Rows.strip().addChildren(
-            adding,
-            button("assign_residents", () -> assignments.open())),
-            Rows.note(text("help")),
-            pager("entries", () -> entryOffset -= 6, () -> entryOffset += 6));
+        entryPager = pager("entries", () -> entryOffset -= 6, () -> entryOffset += 6, entryRange);
+        entryPager.layout(layout -> layout.widthAuto().flexShrink(0));
+        UIElement tools = Rows.strip().addChildren(adding, button("assign_residents", () -> assignments.open()),
+            Rows.spacer(), entryPager);
+        tools.layout(layout -> layout.flexWrap(FlexWrap.WRAP).gapAll(GAP));
+        details.addChildren(heading, summary, tools);
         UIElement table = Rows.table();
-        table.layout(layout -> layout.minWidth(500));
+        table.layout(layout -> layout.width(TABLE_WIDTH));
+        table.addChildren(header());
         for (int n = 0; n < 6; n++) {
             int slot = n;
+            Label kind = column(KIND_WIDTH);
+            kind.textStyle(style -> style.textColor(Rows.QUIET));
             UIElement icon = Rows.icon(ItemStack.EMPTY);
             Label label = Rows.name(Component.empty());
-            label.layout(layout -> layout.minWidth(65));
-            Label status = Rows.value(Component.empty());
-            status.layout(layout -> layout.width(54).flexShrink(0));
-            status.textStyle(style -> style.textWrap(TextWrap.HOVER_ROLL).adaptiveWidth(false));
+            label.layout(layout -> layout.minWidth(ITEM_WIDTH));
+            label.setOverflowVisible(false);
+            Label status = column(STATUS_WIDTH);
             TextField amount = number(), low = number();
             amountFields.add(amount);
             thresholdFields.add(low);
@@ -216,28 +267,51 @@ public final class LoadoutPage implements Draw {
             });
             save.setText(Component.literal("✓"));
             save.style(style -> style.tooltips(text("amount")));
-            save.layout(layout -> layout.width(18).paddingAll(0));
-            UIElement supply = Rows.strip().addChildren(low, save);
+            save.layout(layout -> layout.width(SAVE_WIDTH).paddingAll(0));
+            // Weapons and armour keep the cell empty, so every row's buttons line up under one another.
+            UIElement supply = Rows.strip().addChildren(amount, low, save);
             supply.layout(layout -> layout.widthAuto().flexShrink(0).gapAll(2));
-            UIElement row = Rows.row().addChildren(icon, label, status, amount, supply,
-                button("up." + n, () -> send(entry(slot, "up"))),
-                button("down." + n, () -> send(entry(slot, "down"))),
-                button("remove." + n, () -> send(entry(slot, "remove"))),
-                button("edit." + n, () -> pick(content, items, entry(slot, "edit"))));
-            row.layout(layout -> layout.width(500).gapAll(2));
+            UIElement amounts = cell(AMOUNTS_WIDTH).addChildren(supply);
+            Button up = arrow("up." + n, () -> send(entry(slot, "up")));
+            Button down = arrow("down." + n, () -> send(entry(slot, "down")));
+            Button edit = button("edit." + n, () -> pick(content, items, entry(slot, "edit")));
+            Button remove = button("remove." + n, () -> send(entry(slot, "remove")));
+            for (Button press : List.of(edit, remove)) {
+                press.layout(layout -> layout.width(ROW_BUTTON).paddingHorizontal(0));
+                limit(press);
+            }
+            edit.style(style -> style.tooltips(text("edit")));
+            remove.style(style -> style.tooltips(text("remove")));
+            editButtons.add(edit);
+            removeButtons.add(remove);
+            UIElement row = Rows.row().addChildren(kind, icon, label, status, amounts, up, down, edit, remove);
+            row.layout(layout -> layout.gapAll(GAP));
             Tokens.name(row, KEY + "entry." + n);
             entryRows.add(row);
+            entryKinds.add(kind);
             entryLabels.add(label);
             entryStatuses.add(status);
             entryIcons.add(icon);
             supplyControls.add(supply);
+            upButtons.add(up);
+            downButtons.add(down);
             table.addChildren(row);
         }
-        var entries = Rows.wideBox();
-        entries.layout(layout -> layout.height(160).flexShrink(0));
+        entries = Rows.wideBox();
+        entries.layout(layout -> layout.height(boxHeight(0)).flexShrink(0));
         Tokens.name(entries, KEY + "entry_list");
         entries.addScrollViewChild(table);
-        details.addChildren(entries, notice);
+        // Rows span the list when it is wide enough and keep their columns when it is not, scrolling sideways.
+        entries.addEventListener(UIEvents.LAYOUT_CHANGED, event -> {
+            // Some slack: a table exactly as wide as the list feeds back into the stacked layout and collapses it.
+            float space = entries.getContentWidth() - SCROLLBAR;
+            compact(space < TABLE_WIDTH);
+            float room = Math.clamp(space, compact ? COMPACT_WIDTH : TABLE_WIDTH, TABLE_MAX_WIDTH);
+            if (Math.abs(table.getSizeWidth() - room) > 0.5f) {
+                table.layout(layout -> layout.width(room));
+            }
+        });
+        details.addChildren(entries, entriesEmpty, help, notice);
         UIElement panes = Rows.strip().addChildren(profiles, details);
         panes.layout(layout -> layout.alignItems(AlignItems.FLEX_START));
         boolean[] stacked = {false};
@@ -252,7 +326,27 @@ public final class LoadoutPage implements Draw {
                 if (narrow) {
                     layout.widthPercent(100);
                 } else {
-                    layout.width(136);
+                    layout.width(PROFILES_WIDTH);
+                }
+            });
+            list.layout(layout -> layout.flexDirection(narrow ? FlexDirection.ROW : FlexDirection.COLUMN)
+                .flexWrap(narrow ? FlexWrap.WRAP : FlexWrap.NO_WRAP));
+            for (Button button : profileButtons) {
+                button.layout(layout -> {
+                    if (narrow) {
+                        layout.width(PROFILES_WIDTH - 30);
+                    } else {
+                        layout.widthPercent(100);
+                    }
+                });
+            }
+            // The name field and its buttons share a line when stacked; the group label would only repeat them.
+            editing.setDisplay(!narrow);
+            name.layout(layout -> {
+                if (narrow) {
+                    layout.width(PROFILES_WIDTH).flexGrow(1);
+                } else {
+                    layout.widthPercent(100).flexGrow(0);
                 }
             });
             details.layout(layout -> {
@@ -294,7 +388,8 @@ public final class LoadoutPage implements Draw {
         var scroll = Rows.fills(Rows.wideBox());
         scroll.addScrollViewChild(table);
         UIElement body = Rows.fills(Rows.page()).addChildren(scroll,
-            pager("residents", () -> residentOffset -= 8, () -> residentOffset += 8), assignmentNotice);
+            residentPager = pager("residents", () -> residentOffset -= 8, () -> residentOffset += 8, residentRange),
+            assignmentNotice);
         assignments = desk.add("loadout_residents", text("assign_residents"), body);
     }
 
@@ -348,6 +443,13 @@ public final class LoadoutPage implements Draw {
                 dialog.close();
                 pickWeapon(host, base.copy());
             }), menuAdd(dialog, host, items, base, "supply", null),
+            button("mount", () -> {
+                CompoundTag request = base.copy();
+                request.putString("kind", "MOUNT");
+                dialog.close();
+                send(request);
+            }),
+            menuAdd(dialog, host, items, base, "horse_armor", null),
             button("observation_gear", () -> {
                 dialog.close();
                 pickObservationGear(host, base.copy());
@@ -377,7 +479,7 @@ public final class LoadoutPage implements Draw {
     }
 
     private void showMenu(Dialog dialog, UIElement host, Component title, UIElement list, int count) {
-        dialog.titleBar.addChildren(new Label().setText(title));
+        dialog.titleBar.addChildren(new Label().setText(title).textStyle(style -> style.adaptiveWidth(true)));
         var scroll = Rows.fills(Rows.box());
         scroll.addScrollViewChild(list);
         dialog.addContent(Rows.fills(Rows.page()).addChildren(scroll));
@@ -390,7 +492,7 @@ public final class LoadoutPage implements Draw {
         TextField field = new TextField();
         field.setNumbersOnlyInt(0, 4096);
         field.setText("1");
-        field.layout(layout -> layout.width(32).flexShrink(0));
+        field.layout(layout -> layout.width(NUMBER_WIDTH).flexShrink(0));
         return field;
     }
 
@@ -413,22 +515,105 @@ public final class LoadoutPage implements Draw {
         button.textStyle(style -> style.adaptiveWidth(false).adaptiveHeight(false).textWrap(TextWrap.HOVER_ROLL));
     }
 
-    private UIElement pager(String kind, Runnable previous, Runnable next) {
+    // Previous, "1–6 / 9", next; hidden while everything fits on one page.
+    private UIElement pager(String kind, Runnable previous, Runnable next, Label range) {
         // Paging is local UI state; requests still carry the row identities and server revision.
-        return Rows.strip()
-            .addChildren(
-            button(
-            "previous." + kind,
-            () -> {
+        UIElement pager = Rows.strip().addChildren(
+            button("previous." + kind, () -> {
                 previous.run();
                 sendPage(kind);
             }),
-            button(
-            "next." + kind,
-            () -> {
+            range,
+            button("next." + kind, () -> {
                 next.run();
                 sendPage(kind);
             }));
+        pager.layout(layout -> layout.gapAll(GAP));
+        pager.setDisplay(false);
+        return pager;
+    }
+
+    private static Label range() {
+        Label range = Rows.value(Component.empty());
+        range.textStyle(style -> style.textColor(Rows.QUIET));
+        return range;
+    }
+
+    private static void page(UIElement pager, Label range, int offset, int count, int size) {
+        pager.setDisplay(count > size);
+        range.setText(Component.literal((offset + 1) + "–" + Math.min(count, offset + size) + " / " + count));
+    }
+
+    private Button arrow(String action, Runnable click) {
+        Button arrow = button(action, click);
+        arrow.layout(layout -> layout.width(Rows.ACT_SIZE).paddingAll(0));
+        return arrow;
+    }
+
+    private static Label column(int width) {
+        Label label = new Label();
+        label.layout(layout -> layout.width(width).flexShrink(0));
+        label.textStyle(style -> style.textWrap(TextWrap.HOVER_ROLL).adaptiveWidth(false));
+        label.setOverflowVisible(false);
+        return label;
+    }
+
+    private static UIElement cell(int width) {
+        return new UIElement().layout(layout -> layout.flexDirection(FlexDirection.ROW)
+            .width(width).heightPercent(100).flexShrink(0).alignItems(AlignItems.CENTER));
+    }
+
+    // Names the columns once, so a row reads "kind, item, status, target, minimum" without hovering.
+    private UIElement header() {
+        UIElement header = Rows.row();
+        header.removeClass("folkways_row");
+        header.layout(layout -> layout.height(HEADER_HEIGHT).gapAll(GAP));
+        Label kind = column(KIND_WIDTH), item = Rows.name(text("column.item")), status = column(STATUS_WIDTH);
+        kind.setText(text("column.kind"));
+        status.setText(text("column.status"));
+        Label target = column(NUMBER_WIDTH + 2), low = column(NUMBER_WIDTH + SAVE_WIDTH + 2);
+        target.setText(text("column.target"));
+        low.setText(text("column.threshold"));
+        target.style(style -> style.tooltips(text("target")));
+        low.style(style -> style.tooltips(text("threshold")));
+        UIElement amounts = cell(AMOUNTS_WIDTH).addChildren(target, low);
+        UIElement icon = cell(Rows.ICON_SIZE);
+        item.layout(layout -> layout.minWidth(ITEM_WIDTH));
+        for (Label label : List.of(kind, item, status, target, low)) {
+            label.textStyle(style -> style.textColor(Rows.QUIET));
+        }
+        // The row buttons take what is left, so their column needs no title.
+        headerButtons = cell(buttonsWidth(ROW_BUTTON));
+        UIElement buttons = headerButtons;
+        return header.addChildren(kind, icon, item, status, amounts, buttons);
+    }
+
+    private static int buttonsWidth(int rowButton) {
+        return Rows.ACT_SIZE * 2 + rowButton * 2 + GAP * 3;
+    }
+
+    private static int tableWidth(int rowButton) {
+        return KIND_WIDTH + Rows.ICON_SIZE + ITEM_WIDTH + STATUS_WIDTH + AMOUNTS_WIDTH + buttonsWidth(rowButton) + GAP * 5;
+    }
+
+    private void compact(boolean narrow) {
+        if (narrow == compact) {
+            return;
+        }
+        compact = narrow;
+        int width = narrow ? Rows.ACT_SIZE : ROW_BUTTON;
+        for (int n = 0; n < editButtons.size(); n++) {
+            editButtons.get(n).setText(narrow ? Component.literal("✎") : text("edit"));
+            removeButtons.get(n).setText(narrow ? Component.literal("✕") : text("remove"));
+            for (Button press : List.of(editButtons.get(n), removeButtons.get(n))) {
+                press.layout(layout -> layout.width(width));
+            }
+        }
+        headerButtons.layout(layout -> layout.width(buttonsWidth(width)));
+    }
+
+    private static float boxHeight(int rows) {
+        return HEADER_HEIGHT + rows * (Rows.ROW_HEIGHT + 1) + 1 + SCROLLBAR + 2;
     }
 
     private void sendPage(String kind) {
@@ -605,13 +790,16 @@ public final class LoadoutPage implements Draw {
                         profiles.add(profile.id(), LoadoutProfile.Entry.supply(ItemSpec.anyOf(choices), 1, 1));
                     }
                     case "add" -> {
-                        ItemSpec spec = decode(player, request);
                         LoadoutProfile.Kind kind = LoadoutProfile.Kind.valueOf(request.getString("kind"));
+                        ItemSpec spec = kind == LoadoutProfile.Kind.MOUNT ? ItemSpec.of(Items.SADDLE)
+                            : decode(player, request);
                         profiles.add(
                             profile.id(),
                             switch (kind) {
                                 case WEAPON -> LoadoutProfile.Entry.weapon(spec);
                                 case SUPPLY -> LoadoutProfile.Entry.supply(spec, 1, 1);
+                                case MOUNT -> LoadoutProfile.Entry.mount();
+                                case HORSE_ARMOR -> LoadoutProfile.Entry.horseArmor(spec);
                                 case ARMOR ->
                                     LoadoutProfile.Entry.armor(
                                     EquipmentSlot.byName(request.getString("slot")), spec);
@@ -689,6 +877,7 @@ public final class LoadoutPage implements Draw {
         LoadoutProfiles profiles = LoadoutProfiles.of(colony);
         List<LoadoutProfile> all = profiles.all();
         profileOffset = page(profileOffset, all.size(), 4);
+        tag.putInt("profileCount", all.size());
         ListTag profileRows = new ListTag();
         for (LoadoutProfile profile : all.subList(profileOffset, Math.min(all.size(), profileOffset + 4))) {
             CompoundTag row = new CompoundTag();
@@ -734,36 +923,37 @@ public final class LoadoutPage implements Draw {
             }
             ProfileShortages shortages = shortage;
             tag.putString("name", current.name());
-            tag.put(
-                "summary",
-                Pages.text(
-                player.registryAccess(),
-                shortages.complete() ? text(
-                    "summary", current.name(), shortages.assigned(), shortages.incomplete(), shortages.unloaded())
-                    : text("inventory_pending")));
-            Component staffing = Component.translatable("folkways.staffing.shortage", Component.literal(current.name()),
-                PatrolStaffing.of(colony).shortageFor(current.id()));
-            tag.put("summary", Pages.text(player.registryAccess(), Pages.readText(player.registryAccess(),
-                tag.get("summary")).copy().append(" · ").append(staffing)));
+            tag.putBoolean("complete", shortages.complete());
+            tag.putInt("assigned", shortages.assigned());
+            tag.putInt("incomplete", shortages.incomplete());
+            tag.putInt("unloaded", shortages.unloaded());
+            tag.putInt("staffing", PatrolStaffing.of(colony).shortageFor(current.id()));
+            if (!shortages.complete()) {
+                tag.put("summary", Pages.text(player.registryAccess(), text("inventory_pending")));
+            }
+            tag.putInt("entryCount", current.entries().size());
             entryOffset = page(entryOffset, current.entries().size(), 6);
             for (LoadoutProfile.Entry entry :
                 current.entries().subList(entryOffset, Math.min(current.entries().size(), entryOffset + 6))) {
                 CompoundTag row = new CompoundTag();
                 row.putUUID("id", entry.id());
-                Component label = text(entry.kind().name().toLowerCase(Locale.ROOT));
+                // The kind's own name; armour adds its slot. A new kind needs only its lang key.
+                Component kind = text(entry.kind().name().toLowerCase(Locale.ROOT));
                 if (entry.slot().isPresent()) {
-                    label = text(entry.slot().get().getName());
+                    kind = text("kind_slot", kind, text(entry.slot().get().getName()));
                 }
+                int missing = shortages.missing().getOrDefault(entry.id(), 0);
+                int stock = shortages.unavailableStock().getOrDefault(entry.id(), 0);
                 ItemStack display = Goods.display(entry.items());
                 row.put("stack", display.saveOptional(server.registryAccess()));
+                row.put("kind_label", Pages.text(player.registryAccess(), kind));
                 row.put("label", Pages.text(player.registryAccess(), display.getHoverName()));
-                row.put("status", Pages.text(player.registryAccess(), !entry.available() ? text("invalid_entry")
-                    : !shortages.complete() ? text("inventory_pending")
-                    : text("missing_short", shortages.missing().getOrDefault(entry.id(), 0),
-                        shortages.unavailableStock().getOrDefault(entry.id(), 0))));
-                row.put("detail", Pages.text(player.registryAccess(), label.copy().append(" · ").append(
-                    shortages.complete() ? text("missing", shortages.missing().getOrDefault(entry.id(), 0),
-                        shortages.unavailableStock().getOrDefault(entry.id(), 0)) : text("inventory_pending"))));
+                row.put("status", Pages.text(player.registryAccess(), status(entry, shortages, missing, stock)));
+                row.put("detail", Pages.text(player.registryAccess(), kind.copy().append(" · ").append(
+                    !shortages.complete() ? text("inventory_pending")
+                    : entry.kind() == LoadoutProfile.Kind.MOUNT ? text("mount_shortage", shortages.missingHorses(),
+                        shortages.unavailableHorses(), missing, stock)
+                    : text("missing", missing, stock))));
                 row.putString("spec", entry.items().describe());
                 row.putString("kind", entry.kind().name());
                 row.putInt("target", entry.target());
@@ -774,6 +964,7 @@ public final class LoadoutPage implements Draw {
         tag.put("entries", entries);
         var residents = colony.residents().stream().filter(resident -> resident.kind().equals(PersonBody.ID)).toList();
         residentOffset = page(residentOffset, residents.size(), 8);
+        tag.putInt("residentCount", residents.size());
         ListTag residentRows = new ListTag();
         for (var resident : residents.subList(residentOffset, Math.min(residents.size(), residentOffset + 8))) {
             CompoundTag row = new CompoundTag();
@@ -812,6 +1003,28 @@ public final class LoadoutPage implements Draw {
         return tag;
     }
 
+    // One short word a row can show in full: ready, what residents still need, what the warehouse cannot cover.
+    private static Component status(LoadoutProfile.Entry entry, ProfileShortages shortages, int missing, int stock) {
+        if (!entry.available()) {
+            return text("invalid_entry").copy().withColor(ALERT);
+        }
+        if (!shortages.complete()) {
+            return text("status.pending").copy().withColor(Rows.QUIET & 0xFFFFFF);
+        }
+        // A rider's horse comes from the pastures, not the stores: no free tame horse is the thing to fix first.
+        if (entry.kind() == LoadoutProfile.Kind.MOUNT && shortages.unavailableHorses() > 0) {
+            return text("status.no_horse").copy().withColor(ALERT);
+        }
+        if (missing == 0) {
+            return text("status.ready").copy().withColor(Rows.QUIET & 0xFFFFFF);
+        }
+        if (stock == 0) {
+            return text("status.need", missing);
+        }
+        // The warehouse cannot cover it: the one figure the keeper must act on. The tooltip has both.
+        return text("status.short", stock).copy().withColor(ALERT);
+    }
+
     private static int page(int offset, int count, int size) {
         return Math.clamp(offset, 0, Math.max(0, count - 1) / size * size);
     }
@@ -831,10 +1044,24 @@ public final class LoadoutPage implements Draw {
         profileOffset = tag.getInt("profileOffset");
         entryOffset = tag.getInt("entryOffset");
         residentOffset = tag.getInt("residentOffset");
-        summary.setText(Pages.readText(player.registryAccess(), tag.get("summary")));
+        boolean chosen = tag.hasUUID("profile");
+        title.setText((chosen ? Component.literal(tag.getString("name")) : text("unselected"))
+            .copy().withStyle(ChatFormatting.BOLD));
+        title.style(style -> style.tooltips(Component.literal(tag.getString("name"))));
+        boolean counted = chosen && tag.getBoolean("complete");
+        figure(0, counted, "figure.assigned", tag.getInt("assigned"));
+        figure(1, counted, "figure.incomplete", tag.getInt("incomplete"));
+        figure(2, counted, "figure.unloaded", tag.getInt("unloaded"));
+        figure(3, chosen && (counted || tag.getInt("staffing") > 0), "figure.staffing", tag.getInt("staffing"));
+        Component note = chosen ? Pages.readText(player.registryAccess(), tag.get("summary")) : text("choose_profile");
+        summary.setText(note);
+        summary.setDisplay(!note.getString().isEmpty());
+        adding.setDisplay(chosen);
         notice.setText(Pages.readText(player.registryAccess(), tag.get("message")));
         assignmentNotice.setText(Pages.readText(player.registryAccess(), tag.get("message")));
         ListTag profiles = tag.getList("profiles", Tag.TAG_COMPOUND);
+        profilesEmpty.setDisplay(profiles.isEmpty());
+        page(profilePager, profileRange, profileOffset, tag.getInt("profileCount"), 4);
         for (int n = 0; n < profileButtons.size(); n++) {
             Button button = profileButtons.get(n);
             button.setDisplay(n < profiles.size());
@@ -848,6 +1075,12 @@ public final class LoadoutPage implements Draw {
             }
         }
         ListTag entries = tag.getList("entries", Tag.TAG_COMPOUND), old = previous.getList("entries", Tag.TAG_COMPOUND);
+        int count = tag.getInt("entryCount");
+        page(entryPager, entryRange, entryOffset, count, 6);
+        this.entries.setDisplay(!entries.isEmpty());
+        this.entries.layout(layout -> layout.height(boxHeight(entries.size())));
+        entriesEmpty.setDisplay(chosen && entries.isEmpty());
+        help.setDisplay(entries.stream().anyMatch(row -> ((CompoundTag) row).getString("kind").equals("SUPPLY")));
         for (int n = 0; n < 6; n++) {
             boolean visible = n < entries.size();
             entryRows.get(n).setDisplay(visible);
@@ -855,8 +1088,10 @@ public final class LoadoutPage implements Draw {
                 continue;
             }
             CompoundTag row = entries.getCompound(n);
-            entryLabels.get(n).setText(Pages.readText(player.registryAccess(), row.get("label")));
             Component detail = Pages.readText(player.registryAccess(), row.get("detail"));
+            entryKinds.get(n).setText(Pages.readText(player.registryAccess(), row.get("kind_label")));
+            entryKinds.get(n).style(style -> style.tooltips(detail));
+            entryLabels.get(n).setText(Pages.readText(player.registryAccess(), row.get("label")));
             entryLabels.get(n).style(style -> style.tooltips(detail, Component.literal(row.getString("spec"))));
             entryStatuses.get(n).setText(Pages.readText(player.registryAccess(), row.get("status")));
             entryStatuses.get(n).style(style -> style.tooltips(detail));
@@ -865,6 +1100,8 @@ public final class LoadoutPage implements Draw {
             boolean supply = row.getString("kind").equals("SUPPLY");
             supplyControls.get(n).setDisplay(supply);
             amountFields.get(n).setActive(supply);
+            upButtons.get(n).setActive(entryOffset + n > 0);
+            downButtons.get(n).setActive(entryOffset + n < count - 1);
             if (n >= old.size()
                 || !row.getUUID("id").equals(old.getCompound(n).getUUID("id"))
                 || row.getInt("target") != old.getCompound(n).getInt("target")
@@ -874,6 +1111,9 @@ public final class LoadoutPage implements Draw {
             }
         }
         ListTag residents = tag.getList("residents", Tag.TAG_COMPOUND);
+        if (residentPager != null) {
+            page(residentPager, residentRange, residentOffset, tag.getInt("residentCount"), 8);
+        }
         for (int n = 0; n < residentButtons.size(); n++) {
             residentRows.get(n).setDisplay(n < residents.size());
             if (n < residents.size()) {
@@ -885,5 +1125,14 @@ public final class LoadoutPage implements Draw {
                 residentButtons.get(n).style(style -> style.tooltips(assignment));
             }
         }
+    }
+
+    // "Assigned 2" on the title line; hidden until the figure is known.
+    private void figure(int index, boolean shown, String key, int value) {
+        Label figure = figures.get(index);
+        figure.setDisplay(shown);
+        figure.setText(text(key).copy().withColor(Rows.QUIET & 0xFFFFFF).append(" ")
+            .append(Component.literal(Integer.toString(value))
+                .withColor((index > 0 && value > 0 ? ALERT : Rows.INK) & 0xFFFFFF)));
     }
 }

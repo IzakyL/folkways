@@ -26,7 +26,7 @@ import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public final class ResidentNodeEvaluator extends WalkNodeEvaluator {
+public class ResidentNodeEvaluator extends WalkNodeEvaluator {
     // How high a body steps without a jump.
     private static final double STEP = 0.6D;
     // Leave time for slow swimming, a turn at the end and the final climb out.

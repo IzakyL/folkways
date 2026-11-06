@@ -3,6 +3,10 @@ package io.github.izakyl.folkways.core.engine.labor;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.colony.Held;
+import io.github.izakyl.folkways.core.api.transport.TransportPublication;
+import io.github.izakyl.folkways.core.api.transport.TransportSnapshot;
+import io.github.izakyl.folkways.core.api.transport.TransportTravel;
+import io.github.izakyl.folkways.core.engine.plan.DirectTransport;
 import io.github.izakyl.folkways.core.api.resident.body.Keenness;
 import io.github.izakyl.folkways.core.engine.colony.WorkDefaults;
 import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
@@ -19,6 +23,7 @@ import java.util.Map;
 import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -58,6 +63,30 @@ public final class SurveyLicenceGameTests {
         licences.allow(licences.trade(trade).orElseThrow(), true);
         survey.answer(level, new ColonyData(), present, seen -> { });
         helper.assertTrue(holds(survey, trade), "turning it back on is seen too");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void transportPlanningOnlyReadsItsLevel(GameTestHelper helper) {
+        ColonyData colony = new ColonyData();
+        Survey survey = new Survey();
+        survey.answer(helper.getLevel(), colony, Map.of(), seen -> { });
+        var world = survey.known(NOWHERE, List.of()).world();
+        var offering = new TransportPublication.Offering(new DirectTransport(),
+            new TransportSnapshot(1, 0, TransportTravel.UNKNOWN, List.of()), true);
+        colony.works().publishTransport(DirectTransport.ID, Level.NETHER, List.of(offering));
+        helper.assertTrue(world.transports().get().entries().isEmpty(),
+            "a Nether publication leaves the Overworld's transport gate closed");
+        colony.works().publishTransport(DirectTransport.ID, helper.getLevel().dimension(), List.of(offering));
+        var local = world.transports().get();
+        helper.assertTrue(local.entries().size() == 1
+                && local.entries().getFirst().dimension().equals(helper.getLevel().dimension()),
+            "the same mode in this level opens its transport gate");
+        colony.works().publishTransport(DirectTransport.ID, Level.NETHER, List.of());
+        helper.assertTrue(world.transports().get().entries().equals(local.entries())
+                && world.transports().get().version() > local.version()
+                && world.transportVersion().getAsLong() == colony.works().transports().version(),
+            "dimension views keep the publication's global version for stale checks");
         helper.succeed();
     }
 

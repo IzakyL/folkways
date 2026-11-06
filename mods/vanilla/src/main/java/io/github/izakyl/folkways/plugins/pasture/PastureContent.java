@@ -42,6 +42,9 @@ public final class PastureContent {
 
     public static final ResourceLocation PASTURE = ID;
 
+    // The tag an animal taken out of a pen for other work carries, kept with the animal through saves.
+    public static final String CLAIMED = "folkways_claimed";
+
     public static final ResourceLocation APIARY = ResourceLocation.fromNamespaceAndPath("folkways", "apiary");
     public static final ResourceLocation HARVESTING_HONEY =
         ResourceLocation.fromNamespaceAndPath("folkways", "harvesting_honey");

@@ -32,7 +32,7 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 
 ## 模组一览
 
-本仓库构建十个模组，`mods/` 下每个目录对应一个，产物为 `folkways-<目录名>-*.jar`。所有扩展都需要 Core 和 Vanilla。
+本仓库构建十一个模组，`mods/` 下每个目录对应一个，产物为 `folkways-<目录名>-*.jar`。所有扩展都需要 Core；除 Carts 外还需要 Vanilla。
 
 | 模组                                      | 目录                 | 额外依赖                                                                              | 作用                                                                   |
 | ----------------------------------------- | -------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -46,6 +46,11 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 | Folkways × TACZ                           | `mods/tacz`          | TACZ 1.21.1 NeoForge 移植版 1.1.8-hotfix-r7                                            | 居民使用受支持的 TACZ 枪械，弹药取自殖民地库存                         |
 | Folkways × Superb Warfare                 | `mods/warfare`       | 卓越前线 0.8.9.2、Kotlin for Forge 5.12.0+（低于 6）                                   | 居民使用受支持的枪械和火炮阵地，弹药取自殖民地库存                     |
 | Folkways × Create: FireFighting Additions | `mods/firefighting`  | Folkways × Create、机械动力 6.0.10+（低于 6.1）、Create: FireFighting Additions 0.2.5-beta-fix2 | 居民用手提灭火器和消防栓水带灭火，并为灭火器补液                     |
+| Folkways × AstikorCarts Redux | `mods/carts` | AstikorCarts Redux 1.2.4 | 搬运居民套上手推车或运输车，把仓库间的货物装在车厢里，与背包分开 |
+
+手持聚落簿以点选模式左键接纳已放置的货车，再次点击撤回。接纳时车内已有的货物也将存入聚落仓库。
+撤回会立即脱钩，车辆和货物留在原地。拉车使用独立路线，拒绝单格门洞与攀爬路线，入口和转角需留足空间。
+玩家正在牵引的已接纳车辆需等玩家松开后才会被接用。货车不会随居民搭乘列车或升降机。
 
 ## 安装
 
@@ -96,6 +101,7 @@ Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无�
 | [TACZ 1.21.1 NeoForge 移植版](https://modrinth.com/mod/OypNE65K) 1.1.8-hotfix-r7，配合 Folkways × TACZ | 居民使用匹配的实体弹药射击、装填受支持的枪械；武器选择保留枪型，不只匹配共用物品 ID |
 | [Superb Warfare / 卓越前线](https://modrinth.com/mod/superb-warfare) 0.8.9.2，配合 Folkways × Superb Warfare 和 Kotlin for Forge 5.12.0+（低于 6） | 居民使用受支持的枪械和火炮阵地，消耗殖民地库存中的弹药 |
 | [Create: FireFighting Additions / 机械动力：消防附加](https://modrinth.com/mod/create-firefighting-additions) 0.2.5-beta-fix2，配合 Folkways × Create: FireFighting Additions 及上表所列依赖 | 损害管制居民使用装水的手提灭火器并补液，或连接备有水带、喷头和水的消防栓柜 |
+| [AstikorCarts Redux](https://modrinth.com/mod/astikorcarts-redux) 1.2.4，配合 Folkways × AstikorCarts Redux | 手持聚落簿以点选模式左键接纳已放置的货车，再次点击撤回；搬运居民走向空闲的已接纳车辆，并将已有货物入库 |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                                     | 使用基岩版格式的居民模型                                                                                            |
 | [Touhou Little Maid / 车万女仆](https://modrinth.com/mod/touhou-little-maid) 1.5+，需 GeckoLib                                         | 将内置及已安装扩展包中的模型用作居民外观，可逐个或按包选择                                                          |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                                 | 殖民书沿第三人称相机的准星瞄准                                                                                      |

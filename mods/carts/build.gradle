@@ -1,0 +1,22 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_carts"
+ext.modName = "folkways-carts"
+apply from: rootProject.file("gradle/mod.gradle")
+evaluationDependsOn(":core")
+evaluationDependsOn(":vanilla")
+
+dependencies {
+    api project(":core")
+    implementation project(":vanilla")
+    gametestImplementation project(":vanilla")
+    compileOnly lib("astikorcartsredux")
+    compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
+        transitive = false
+    }
+    gametestImplementation project(":core").sourceSets.gameTestFixtures.output
+}

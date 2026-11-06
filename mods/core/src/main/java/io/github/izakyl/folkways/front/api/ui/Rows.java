@@ -10,6 +10,8 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Scroller;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvent;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEventDispatcher;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
@@ -303,6 +305,25 @@ public final class Rows {
         view.addClass(WIDE_SCROLL);
         view.viewContainer(container -> container.layout(layout -> layout
             .flexDirection(FlexDirection.COLUMN).widthAuto().heightAuto()));
+        // With nothing to scroll up or down a wide box still took the wheel, so a page holding one stopped scrolling
+        // under the pointer. An up-down turn it cannot use goes to the scroll view around it.
+        view.viewContainer.addEventListener(UIEvents.MOUSE_WHEEL, event -> {
+            if (event.deltaY == 0 || view.viewContainer.getSizeHeight() > view.viewPort.getSizeHeight() + 0.5f) {
+                return;
+            }
+            for (UIElement up = view.getParent(); up != null; up = up.getParent()) {
+                if (up instanceof ScrollerView outer) {
+                    UIEvent passed = UIEvent.create(UIEvents.MOUSE_WHEEL);
+                    passed.x = event.x;
+                    passed.y = event.y;
+                    passed.deltaY = event.deltaY;
+                    passed.target = outer.viewPort;
+                    UIEventDispatcher.dispatchDirectEvent(passed);
+                    event.stopPropagation();
+                    return;
+                }
+            }
+        });
         return tracked(view);
     }
 

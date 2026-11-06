@@ -173,8 +173,8 @@ public final class LoadoutProfiles {
         if (profile.equals(profiles.get(profile.id()))) {
             return;
         }
-        residents(profile.id()).forEach(changed);
         profiles.put(profile.id(), profile);
+        residents(profile.id()).forEach(changed);
         unavailableItems
             .keySet()
             .removeIf(
@@ -194,9 +194,10 @@ public final class LoadoutProfiles {
         if (!profiles.containsKey(id)) {
             throw new IllegalArgumentException("unknown profile");
         }
-        residents(id).forEach(changed);
+        List<UUID> removed = residents(id);
         assignments.values().removeIf(id::equals);
         profiles.remove(id);
+        removed.forEach(changed);
         unavailableItems.keySet().removeIf(key -> key.profile().equals(id));
         save();
     }
@@ -216,12 +217,12 @@ public final class LoadoutProfiles {
             if (Optional.ofNullable(assignments.get(id)).equals(profile)) {
                 continue;
             }
-            changed.accept(id);
             if (profile.isPresent()) {
                 assignments.put(id, profile.get());
             } else {
                 assignments.remove(id);
             }
+            changed.accept(id);
         }
         save();
     }

@@ -14,6 +14,7 @@ import java.util.function.Function;
 import javax.annotation.Nullable;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.item.ItemStack;
 
 final class FeedNode extends PenNode {
@@ -31,7 +32,15 @@ final class FeedNode extends PenNode {
     }
 
     static boolean willing(Animal beast) {
-        return beast.isAlive() && !beast.isRemoved() && beast.getAge() == 0 && beast.canFallInLove() && !beast.isInLove();
+        return beast.isAlive() && !beast.isRemoved() && beast.getAge() == 0 && beast.canFallInLove() && !beast.isInLove()
+            && parentable(beast);
+    }
+
+    // A horse breeds only tamed, unridden and whole; feeding any other would spend its golden carrots on a love that
+    // never comes to a foal.
+    private static boolean parentable(Animal beast) {
+        return !(beast instanceof AbstractHorse horse) || horse.isTamed() && !horse.isVehicle() && !horse.isPassenger()
+            && horse.getHealth() >= horse.getMaxHealth();
     }
 
     @Override

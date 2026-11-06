@@ -65,8 +65,10 @@ record Pen(UUID zone, Livestock keeps, int target, boolean shear, WorldPos ancho
         return level.getEntitiesOfClass(Animal.class, reach(level), this::keeps);
     }
 
+    // An animal put to other work, such as a horse drawing a cart line, is no longer stock: it is neither counted
+    // nor culled, even while it stands in the pen.
     boolean keeps(Animal beast) {
-        return beast.isAlive() && !beast.isRemoved()
+        return beast.isAlive() && !beast.isRemoved() && !beast.getTags().contains(PastureContent.CLAIMED)
             && BuiltInRegistries.ENTITY_TYPE.getKey(beast.getType()).equals(keeps.type()) && holds(beast);
     }
 

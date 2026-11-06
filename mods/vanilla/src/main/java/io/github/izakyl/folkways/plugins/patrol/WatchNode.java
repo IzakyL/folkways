@@ -36,6 +36,11 @@ final class WatchNode implements Node {
     }
 
     @Override
+    public boolean mountedWork() {
+        return true;
+    }
+
+    @Override
     public NodeSpec spec() {
         return spec;
     }

@@ -728,7 +728,7 @@ final class Tours {
         // Weighing the hands asked for no way: a hand that might have done it sooner, had its way been known, has
         // that way asked for now.
         if (waits != null && !quiet
-                && sought.add(new Route(waits.hand.who().kind(), waits.cursor, waitsFor))) {
+                && sought.add(new Route(waits.hand.who().routeKind(), waits.cursor, waitsFor))) {
             ways.journey(waits.hand.who(), waits.cursor, new LinkedHashSet<>(waitsFor), Urgency.PLANNING);
         }
         if (best == null && worst == Unassigned.Reason.PACK_BUSY && insert(id, seats, mustBe)) {
@@ -1588,7 +1588,7 @@ final class Tours {
         if (goals.isEmpty() || seat.hand.id().equals(heldBy.get(node.id())) && goals.contains(seat.cursor)) {
             return Faring.yes(new Journey(0, 0, List.of()));
         }
-        Route route = new Route(seat.hand.who().kind(), seat.cursor, goals);
+        Route route = new Route(seat.hand.who().routeKind(), seat.cursor, goals);
         Faring known = fares.get(route);
         if (known != null) {
             return known;

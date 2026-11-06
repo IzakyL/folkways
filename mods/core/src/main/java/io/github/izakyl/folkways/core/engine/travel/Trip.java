@@ -6,6 +6,8 @@ import io.github.izakyl.folkways.core.api.resident.Conveyance;
 import io.github.izakyl.folkways.core.api.resident.Going;
 import io.github.izakyl.folkways.core.api.resident.Locomotion;
 import io.github.izakyl.folkways.core.api.resident.Resident;
+import io.github.izakyl.folkways.core.api.resident.body.Bodies;
+import net.minecraft.resources.ResourceLocation;
 import io.github.izakyl.folkways.core.api.terms.RefusalKind;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
@@ -32,6 +34,7 @@ public final class Trip implements Conveyance {
 
     private final List<Stage> stages;
     private int at;
+    private ResourceLocation moving;
     private long setOutAt = -1L;
 
     private Trip(List<Stage> stages) {
@@ -238,6 +241,7 @@ public final class Trip implements Conveyance {
 
     @Override
     public void setOut(ServerLevel level, Mob body, Set<WorldPos> to) {
+        moving = Bodies.of(body).map(resident -> resident.locomotion().id()).orElse(null);
         Stage stage = stages.get(at);
         setOutAt = level.getGameTime();
         stage.carrying().setOut(level, body, at == stages.size() - 1 ? to : stage.to());
@@ -245,6 +249,12 @@ public final class Trip implements Conveyance {
 
     @Override
     public Going step(ServerLevel level, Mob body, Set<WorldPos> to) {
+        if (moving != null && Bodies.of(body)
+                .map(resident -> !moving.equals(resident.locomotion().id())).orElse(false)) {
+            release(level, body);
+            at = stages.size();
+            return new Going.Failed(io.github.izakyl.folkways.core.engine.labor.LaborRefusal.NO_WAY_THERE);
+        }
         while (at < stages.size()) {
             Stage stage = stages.get(at);
             Set<WorldPos> toward = at == stages.size() - 1 ? to : stage.to();

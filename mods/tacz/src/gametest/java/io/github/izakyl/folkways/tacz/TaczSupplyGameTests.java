@@ -42,6 +42,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -150,17 +151,16 @@ public final class TaczSupplyGameTests {
         body.pack().insert(TaczWeaponGameTests.gun("m1911", FireMode.SEMI, 9));
         scene.profile(body, 27, 9);
         scene.store.setItem(0, TaczWeaponGameTests.ammo("45acp", 40));
-        helper.assertTrue(
-            scene.supplies.urges(TaczWeaponGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, 0).isEmpty(),
-            "threshold equality does not collect");
+        var view = scene.colony.view(helper.getLevel());
+        scene.supplies.resupply(TaczWeaponGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, 0);
+        helper.assertTrue(scene.supplies.goals(view).isEmpty(), "threshold equality does not collect");
         ItemStack carried = body.pack().getItem(0);
         ((IGun) carried.getItem()).setCurrentAmmoCount(carried, 7);
         body.pack().setChanged();
-        helper.assertValueEqual(
-            scene.supplies.urges(TaczWeaponGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, 0).size(),
-            1,
+        scene.supplies.resupply(TaczWeaponGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, 0);
+        helper.assertValueEqual(scene.supplies.goals(view).size(), 1,
             "eight total rounds are below the player threshold");
-        helper.assertValueEqual(scene.stockRounds(), 40, "an urge does not teleport stock");
+        helper.assertValueEqual(scene.stockRounds(), 40, "asking for a delivery does not teleport stock");
         helper.succeed();
     }
 
@@ -288,9 +288,9 @@ public final class TaczSupplyGameTests {
                             people.stream()
                             .anyMatch(
                             body ->
-                                Reach.withinReach(
-                                    body.blockPosition(),
-                                    source.block(helper.getLevel()))),
+                                // A planned draw is made from a stance the body stands within IN_THE_CELL of.
+                                body.position().distanceTo(Vec3.atCenterOf(source.block(helper.getLevel())))
+                                    <= Reach.PLAYER_BLOCK_REACH + Reach.IN_THE_CELL),
                             "only on-site collection moves real stock");
                         reached = true;
                     }

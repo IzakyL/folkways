@@ -54,26 +54,27 @@ public final class MemberToggle {
             || !entity.isAlive() || entity.isRemoved() || player.distanceToSqr(entity) > 64) {
             return told(player, Attempt.refused(Refusal.NOT_ENROLLABLE));
         }
-        var held = colony.holdingOf(entity.getUUID());
-        if (held.isPresent()) {
-            colony.release(held.get().id(), Release.LET_GO);
-            player.displayClientMessage(Notice.of(Moved.LEFT).component(), true);
-            return Attempt.went();
-        }
-        if (Colonies.all(player.getServer()).stream()
-            .anyMatch(other -> other.holdingOf(entity.getUUID()).isPresent())) {
-            return told(player, Attempt.refused(Refusal.ANOTHER_COLONY));
-        }
         var delegation = Enrollments.delegations().stream()
             .filter(value -> value.shape() instanceof Shape.Body body && body.accepts().test(entity.getType()))
             .findFirst();
         if (delegation.isEmpty()) {
             return told(player, Attempt.refused(Refusal.NOT_ENROLLABLE));
         }
+        Shape.Body shape = (Shape.Body) delegation.get().shape();
+        var held = colony.holdingOf(entity.getUUID());
+        if (held.isPresent()) {
+            colony.release(held.get().id(), Release.LET_GO);
+            player.displayClientMessage(shape.withdrawn(), true);
+            return Attempt.went();
+        }
+        if (Colonies.all(player.getServer()).stream()
+            .anyMatch(other -> other.holdingOf(entity.getUUID()).isPresent())) {
+            return told(player, Attempt.refused(Refusal.ANOTHER_COLONY));
+        }
         if (colony.hold(delegation.get().id(), Held.Entity.of(entity)).isEmpty()) {
             return told(player, Attempt.refused(Refusal.ANOTHER_COLONY));
         }
-        player.displayClientMessage(Notice.of(Moved.JOINED).component(), true);
+        player.displayClientMessage(shape.admitted(), true);
         return Attempt.went();
     }
 

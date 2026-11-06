@@ -16,7 +16,7 @@ record Walker(Kind kind, Locomotion locomotion, Mob body) {
 
     // A body the colony has no kind for is surveyed as if it walked, when anything walks at all.
     static Optional<Walker> of(Mob body) {
-        return Bodies.of(body).map(Body::kind).map(kind -> kind.locomotion())
+        return Bodies.of(body).map(Body::locomotion)
             .or(() -> Locomotions.of(Locomotions.WALKING))
             .map(locomotion -> new Walker(new Kind(locomotion.id(), Mth.floor(body.getBbWidth() + 1.0F),
                 Mth.floor(body.getBbHeight() + 1.0F)), locomotion, body));

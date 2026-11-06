@@ -13,17 +13,22 @@ import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.pathfinder.PathFinder;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public final class ResidentPathNavigation extends GroundPathNavigation {
+public class ResidentPathNavigation extends GroundPathNavigation {
 
     public ResidentPathNavigation(Mob mob, Level level) {
         super(mob, level);
     }
 
+    protected ResidentNodeEvaluator evaluator() {
+        return new ResidentNodeEvaluator(null);
+    }
+
     @Override
     protected PathFinder createPathFinder(int maxVisitedNodes) {
-        this.nodeEvaluator = new ResidentNodeEvaluator(null);
+        this.nodeEvaluator = evaluator();
         this.nodeEvaluator.setCanPassDoors(true);
         this.nodeEvaluator.setCanOpenDoors(true);
         return new PathFinder(this.nodeEvaluator, maxVisitedNodes);
@@ -55,14 +60,18 @@ public final class ResidentPathNavigation extends GroundPathNavigation {
         evaluator.startingAt(start);
         // Snapshot native colliders once per live search. Block-only paths otherwise walk through vehicles.
         evaluator.avoidingEntities(realm instanceof Realm.Frame ? List.of()
-            : level.getEntityCollisions(mob, mob.getBoundingBox().inflate(range + margin + 1)).stream()
-                .map(VoxelShape::bounds).toList());
+            : obstacles(range + margin + 1));
         try {
             return super.createPath(targets, margin, above, accuracy, range);
         } finally {
             evaluator.startingAt(null);
             evaluator.avoidingEntities(List.of());
         }
+    }
+
+    protected List<AABB> obstacles(double range) {
+        return level.getEntityCollisions(mob, mob.getBoundingBox().inflate(range)).stream()
+            .map(VoxelShape::bounds).toList();
     }
 
     // Where the body is sent for a node: a climbable block under it holds the body at the node's height, as a

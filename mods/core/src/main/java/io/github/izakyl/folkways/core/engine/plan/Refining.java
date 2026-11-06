@@ -14,12 +14,14 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-// The first way the plan grows: an intent is replaced by the work a rule gives for it. The intent's id stays as the
-// work's last step, and whatever came before the intent comes before the work's first steps.
+// The rules that price and refine intents. A node rewrite keeps the intent's id as the work's last step, and
+// whatever came before it comes before the work's first steps. A material refinement lays into the lent expansion:
+// its consumer already exists, and goods within reach may need no new work at all.
 public final class Refining {
     private static final int LIMIT = 256;
     private final List<Refinement> rules;
@@ -36,6 +38,27 @@ public final class Refining {
 
     public record Result(Grown graph, boolean complete, List<Hold> holds) {
         public Result { holds = List.copyOf(holds); }
+    }
+
+    public OptionalLong estimate(Intent intent) {
+        Refinement.Context lent = context.get();
+        for (Refinement rule : rules) {
+            OptionalLong cost = rule.estimate(intent, lent);
+            if (cost.isPresent()) {
+                return cost;
+            }
+        }
+        return OptionalLong.empty();
+    }
+
+    public long lay(Intent intent, Refinement.Context lent) {
+        for (Refinement rule : rules) {
+            OptionalLong laid = rule.lay(intent, lent);
+            if (laid.isPresent()) {
+                return laid.getAsLong();
+            }
+        }
+        return 0;
     }
 
     public Optional<Result> expand(Grown original) {
