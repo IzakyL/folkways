@@ -1,0 +1,18 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_epicfight"
+ext.modName = "folkways-epicfight"
+apply from: rootProject.file("gradle/mod.gradle")
+
+evaluationDependsOn(":vanilla")
+
+dependencies {
+    api project(":vanilla")
+    compileOnly lib("epicfight")
+    compileOnly lib("geckolib")
+    gametestImplementation project(":core").sourceSets.gameTestFixtures.output
+}

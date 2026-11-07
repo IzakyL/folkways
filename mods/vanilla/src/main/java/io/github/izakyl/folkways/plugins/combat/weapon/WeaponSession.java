@@ -34,6 +34,14 @@ public interface WeaponSession extends AutoCloseable {
         return false;
     }
 
+    /**
+     * The owning node's live engagement lease: false once the node stops advancing (suspended, ended or paused)
+     * or its own authorization lapses. Sessions that discharge only inside {@link #tick()} may ignore it; a session
+     * that can discharge outside the node's tick (for example from the entity tick) must recheck it every time.
+     */
+    default void leasedBy(BooleanSupplier lease) {
+    }
+
     /** Load a crossbow without firing it. False means unavailable ammunition or unsupported reload. */
     boolean reload();
 

@@ -261,8 +261,13 @@ public final class Weapons {
                     continue;
                 }
                 for (ItemStack stack : LoadoutProfile.samples(entry.items())) {
-                    registered.stream().map(Registered::adapter).filter(adapter -> adapter.accepts(stack))
-                        .findFirst().ifPresent(adapter -> result.add(new Candidate(adapter, stack, entry.items())));
+                    // Prefer an adapter this body can use now (an extension may refuse a mounted rider),
+                    // so a declined extension falls back to the next adapter instead of disarming the profile.
+                    List<WeaponAdapter> accepting = registered.stream().map(Registered::adapter)
+                        .filter(adapter -> adapter.accepts(stack)).toList();
+                    accepting.stream().filter(adapter -> adapter.usable(worker, stack)).findFirst()
+                        .or(() -> accepting.stream().findFirst())
+                        .ifPresent(adapter -> result.add(new Candidate(adapter, stack, entry.items())));
                 }
             }
         });

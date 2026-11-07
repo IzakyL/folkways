@@ -53,7 +53,7 @@ versions. Back up your world before trying a nightly build.
 
 ## Mods
 
-This repository builds eleven mods, one per directory under `mods/`. Each ships as
+This repository builds twelve mods, one per directory under `mods/`. Each ships as
 `folkways-<directory>-*.jar`. Every extension requires Core; extensions other than Carts also require Vanilla.
 
 | Mod                                       | Directory            | Also requires                                                                       | What it does                                                                                                                    |
@@ -69,6 +69,7 @@ This repository builds eleven mods, one per directory under `mods/`. Each ships 
 | Folkways × Superb Warfare                 | `mods/warfare`       | Superb Warfare 0.8.9.2, Kotlin for Forge 5.12.0+ (below 6)                           | Residents use supported firearms and emplacements with ammunition from colony stores                                        |
 | Folkways × Create: FireFighting Additions | `mods/firefighting`  | Folkways × Create, Create 6.0.10+ (below 6.1), Create: FireFighting Additions 0.2.5-beta-fix2 | Residents fight fires with portable extinguishers and hydrant hoses, and refill extinguishers                                           |
 | Folkways × AstikorCarts Redux | `mods/carts` | AstikorCarts Redux 1.2.4 | Haulers hitch hand and supply carts and carry store deliveries in the cart storage, separately from their packs |
+| Folkways × Epic Fight                     | `mods/epicfite` (jar: `folkways-epicfight`) | Epic Fight 21.17.3.1 exactly; Core and Vanilla from the same Folkways build. RTS is optional and not required | Residents use native Epic Fight melee, hit reactions, everyday movement and GEO rendering |
 
 With the colony book in Point mode, left-click a placed cargo cart to admit it; click again to withdraw it.
 Admission includes putting existing cargo into colony stores. Withdrawal detaches the resident and leaves the cart
@@ -137,6 +138,7 @@ different blocks already occupying a recorded cell are reported as conflicts.
 | [Superb Warfare](https://modrinth.com/mod/superb-warfare) 0.8.9.2, with Folkways × Superb Warfare and Kotlin for Forge 5.12.0+ (below 6) | Residents use supported firearms and emplacements, consuming ammunition from colony stores |
 | [Create: FireFighting Additions](https://modrinth.com/mod/create-firefighting-additions) 0.2.5-beta-fix2, with Folkways × Create: FireFighting Additions and its dependencies listed above | Damage-control workers use and refill water-filled portable extinguishers, or use a hydrant cabinet supplied with a hose, nozzle and water |
 | [AstikorCarts Redux](https://modrinth.com/mod/astikorcarts-redux) 1.2.4, with Folkways × AstikorCarts Redux | Use the colony book to admit placed cargo carts; haulers walk to free admitted carts and stow their existing goods |
+| [Epic Fight](https://modrinth.com/mod/epic-fight) 21.17.3.1 exactly, with Folkways × Epic Fight                            | Residents use native melee strikes, hit reactions and everyday movement animations; Epic Fight renders their Bedrock-format GEO models. RTS is optional                          |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                          | Bedrock-format resident models                                                                                                                                                           |
 | [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib                                       | Built-in and installed add-on models become selectable resident looks, individually or by pack                                                                                           |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                      | Colony Book aiming follows its third-person crosshair                                                                                                                                    |
