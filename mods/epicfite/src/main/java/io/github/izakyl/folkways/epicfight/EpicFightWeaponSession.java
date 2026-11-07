@@ -42,6 +42,7 @@ public final class EpicFightWeaponSession implements WeaponSession {
     private long lastTick = Long.MIN_VALUE;
     private LivingEntity explicitTarget;
     private BooleanSupplier explicitPermission;
+    private BooleanSupplier lease = () -> true;
 
     EpicFightWeaponSession(Worker worker, ResidentEntity resident, ResidentEpicFightPatch patch, ItemStack loan) {
         this.worker = worker;
@@ -68,6 +69,11 @@ public final class EpicFightWeaponSession implements WeaponSession {
         explicitTarget = foe;
         explicitPermission = authorized;
         return true;
+    }
+
+    @Override
+    public void leasedBy(BooleanSupplier lease) {
+        this.lease = java.util.Objects.requireNonNull(lease);
     }
 
     @Override
@@ -148,7 +154,8 @@ public final class EpicFightWeaponSession implements WeaponSession {
     }
 
     boolean permits(LivingEntity victim) {
-        return authorized() && !patch.isStunned() && permitted(victim);
+        // A sweep may pass through other mobs; only the target the owning node admitted can be struck.
+        return authorized() && victim == target && !patch.isStunned() && permitted(victim);
     }
 
     boolean admitHit(EpicFightDamageSource source, LivingEntity victim) {
@@ -184,7 +191,7 @@ public final class EpicFightWeaponSession implements WeaponSession {
     }
 
     private boolean permitted(LivingEntity foe) {
-        return foe instanceof Mob mob && foe.level() == resident.level() && foe.isAlive() && !foe.isRemoved()
+        return lease.getAsBoolean() && foe instanceof Mob mob && foe.level() == resident.level() && foe.isAlive() && !foe.isRemoved()
             && (explicitTarget == null ? Threats.hostile(mob, resident)
                 : explicitTarget == foe && !mob.isAlliedTo(resident) && !resident.isAlliedTo(mob)
                     && io.github.izakyl.folkways.core.resident.api.Bodies.of(mob).isEmpty()

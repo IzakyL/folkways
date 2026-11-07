@@ -32,6 +32,7 @@ final class StrikeNode implements Node {
     private WeaponSession session;
     private boolean attempted;
     private boolean killed;
+    private long advancedAt = Long.MIN_VALUE;
     private final BooleanSupplier authorized;
 
     StrikeNode(ServerLevel level, Mob foe, Stances stances) {
@@ -79,10 +80,14 @@ final class StrikeNode implements Node {
         if (!authorized.getAsBoolean() || !(target instanceof Mob mob) || !Threats.hostile(mob, who.body())) {
             return false;
         }
+        advancedAt = level.getGameTime();
         WeaponSession previous = session;
         session = Weapons.select(who, target, session);
         if (session == null) {
             return false;
+        }
+        if (previous != session) {
+            session.leasedBy(() -> engaged(level));
         }
         if (!attempted || previous != session) {
             attempted = true;
@@ -120,6 +125,11 @@ final class StrikeNode implements Node {
         if (session != null) {
             session.close();
         }
+    }
+
+    // Labor runs after the entity tick, so the lease spans the one tick between two advances.
+    private boolean engaged(ServerLevel level) {
+        return level.getGameTime() - advancedAt <= 1 && authorized.getAsBoolean();
     }
 
     private LivingEntity standing(ServerLevel level) {

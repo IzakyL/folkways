@@ -39,17 +39,26 @@ public final class AnimationPairingEvidence {
     /** The server's decoded packet, immediately before Epic Fight's own validator runs. */
     public static void serverValidate(AnimationManager manager, CPPairingAnimationRegistry packet,
             Object connection) {
+        if (!Evidence.ENABLED) {
+            return;
+        }
         observe(() -> capture(manager, "server-validate", "server", connection, packet.registryNames(), true, true, reloadWindow));
     }
 
     /** The client's actual packet, immediately before Epic Fight sends it unchanged. */
     public static void clientSend(AnimationManager manager, CPPairingAnimationRegistry packet,
             Object connection) {
+        if (!Evidence.ENABLED) {
+            return;
+        }
         observe(() -> capture(manager, "client-send", "client", connection, packet.registryNames(), true, false, reloadWindow));
     }
 
     /** Reload phases deliberately read only scalar map sizes; prepare may run off the game thread. */
     public static void reloadPhase(AnimationManager manager, String phase, String side) {
+        if (!Evidence.ENABLED) {
+            return;
+        }
         observe(() -> {
             ReloadWindow window;
             synchronized (AnimationPairingEvidence.class) {

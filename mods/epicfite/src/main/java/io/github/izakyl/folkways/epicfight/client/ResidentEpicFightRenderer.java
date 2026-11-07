@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.epicfight.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import io.github.izakyl.folkways.epicfight.Evidence;
 import io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLook;
@@ -43,8 +44,10 @@ public final class ResidentEpicFightRenderer extends PatchedEntityRenderer<Resid
         skin.select(resident);
         float entryScale = pose.last().pose().getScale(new Vector3f()).x;
         animated.render(resident, patch, skin, buffers, pose, light, partialTick);
-        ResidentRenderEvidence.drawn(resident, animated.getMeshProvider(patch).registryName(),
-            skin.getTextureLocation(resident), original.getClass().getName(), entryScale);
+        if (Evidence.ENABLED) {
+            ResidentRenderEvidence.drawn(resident, animated.getMeshProvider(patch).registryName(),
+                skin.getTextureLocation(resident), original.getClass().getName(), entryScale);
+        }
     }
 
     @Override

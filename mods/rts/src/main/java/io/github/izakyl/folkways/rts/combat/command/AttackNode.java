@@ -33,6 +33,7 @@ final class AttackNode implements Node {
     private final boolean reachable;
     private WeaponSession session;
     private RefusalKind failure;
+    private long advancedAt = Long.MIN_VALUE;
 
     AttackNode(ResidentCommands commands, ResidentCommands.Order order, Worker who) {
         this.commands = commands;
@@ -77,6 +78,7 @@ final class AttackNode implements Node {
         if (target == null || !commands.permitsAttack(order, step, who, target)) {
             return false;
         }
+        advancedAt = level.getGameTime();
         WeaponSession previous = session;
         session = Weapons.select(who, target, session);
         if (session != previous || session == null) {
@@ -85,6 +87,8 @@ final class AttackNode implements Node {
                 failure = LaborRefusal.GOODS_GONE;
                 return false;
             }
+            // Labor runs after the entity tick, so the lease spans the one tick between two advances.
+            session.leasedBy(() -> level.getGameTime() - advancedAt <= 1);
         }
         if (session.state() == WeaponSession.State.READY && !session.fire(target)) {
             return false;

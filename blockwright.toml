@@ -562,11 +562,19 @@ width = 1280
 height = 720
 
 # Epic Fight remains opt-in for both server and client instances.
+# Pairing and render evidence is test-only; the acceptance specs read it.
+[profile.epicfight.neoforge]
+jvm_args = ["-Xmx2G", "-Dfolkways.epicfight.evidence=true"]
+
 [profile.epicfight.mods]
 epicfight = { target = ["server", "client"] }
 folkways_epicfight = { target = ["server", "client"] }
 
 # The second offline client uses the same native integration for multiplayer pairing coverage.
+# Pairing and render evidence is test-only; the acceptance specs read it.
+[profile.epicfight-guest.neoforge]
+jvm_args = ["-Xmx2G", "-Dfolkways.epicfight.evidence=true"]
+
 [profile.epicfight-guest.neoforge.client]
 account = { username = "EpicFightGuest", uuid = "00000000000000000000000000ef0020" }
 
@@ -575,6 +583,10 @@ epicfight = { target = ["server", "client"] }
 folkways_epicfight = { target = ["server", "client"] }
 
 # RTS input is opt-in for the combined Epic Fight acceptance scenarios.
+# Pairing and render evidence is test-only; the acceptance specs read it.
+[profile.epicfight-acceptance.neoforge]
+jvm_args = ["-Xmx2G", "-Dfolkways.epicfight.evidence=true"]
+
 [profile.epicfight-acceptance.mods]
 epicfight = { target = ["server", "client"] }
 folkways_epicfight = { target = ["server", "client"] }

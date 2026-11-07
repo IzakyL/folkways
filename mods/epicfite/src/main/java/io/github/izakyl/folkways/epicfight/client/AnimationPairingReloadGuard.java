@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.epicfight.client;
 
+import io.github.izakyl.folkways.epicfight.Evidence;
 import io.github.izakyl.folkways.epicfight.FolkwaysEpicFight;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -248,6 +249,11 @@ public final class AnimationPairingReloadGuard {
     }
 
     private static void event(String phase, String reason, Connection connection) {
+        LOGGER.debug("pairing reload guard {} reason={} generation={} session={} queued={} connection={}",
+            phase, reason, generation, session, PENDING.size(), identity(connection));
+        if (!Evidence.ENABLED) {
+            return;
+        }
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("time", Instant.now().toString());
         entry.put("phase", phase);
@@ -260,8 +266,6 @@ public final class AnimationPairingReloadGuard {
         while (EVENTS.size() > EVENT_LIMIT) {
             EVENTS.removeFirst();
         }
-        LOGGER.info("pairing reload guard {} reason={} generation={} session={} queued={} connection={}",
-            phase, reason, generation, session, PENDING.size(), identity(connection));
     }
 
     private static String identity(Connection connection) {

@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.Optional;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.AxeItem;
 import net.minecraft.world.item.ProjectileWeaponItem;
 import net.neoforged.neoforge.common.Tags;
@@ -27,9 +28,17 @@ public final class EpicFightWeaponAdapter implements WeaponAdapter {
         if (stack.isEmpty() || stack.getItem() instanceof ProjectileWeaponItem) {
             return false;
         }
+        // EF also gives digging tools weapon capabilities; upstream never fights with them, so neither do we.
+        if (stack.is(ItemTags.PICKAXES) || stack.is(ItemTags.SHOVELS) || stack.is(ItemTags.HOES)) {
+            return false;
+        }
         CapabilityItem capability = EpicFightCapabilities.getItemStackCapability(stack);
         if (capability instanceof RangedWeaponCapability || capability.isWeaponCategory(WeaponCategories.RANGED)
-                || capability.isWeaponCategory(WeaponCategories.SHIELD)) {
+                || capability.isWeaponCategory(WeaponCategories.SHIELD)
+                || capability.isWeaponCategory(WeaponCategories.PICKAXE)
+                || capability.isWeaponCategory(WeaponCategories.SHOVEL)
+                || capability.isWeaponCategory(WeaponCategories.HOE)
+                || capability.isWeaponCategory(WeaponCategories.NOT_WEAPON)) {
             return false;
         }
         return stack.is(Tags.Items.MELEE_WEAPON_TOOLS) || stack.getItem() instanceof AxeItem
